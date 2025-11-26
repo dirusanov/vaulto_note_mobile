@@ -6,9 +6,15 @@ export interface Note {
     encrypted_content: string;
     created_at?: string;
     updated_at?: string;
+    // Audio fields
+    audio_file_path?: string;
+    audio_duration?: number;
+    encrypted_transcription?: string;
+    has_audio?: boolean;
     // Decrypted fields will be added at runtime by the client hook
     title?: string;
     content?: string;
+    transcription?: string;
 }
 
 export const notesApi = {

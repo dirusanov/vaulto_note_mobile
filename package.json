@@ -16,6 +16,8 @@
     "@react-navigation/native-stack": "^6.9.17",
     "axios": "^1.6.7",
     "expo": "~50.0.14",
+    "expo-av": "^16.0.7",
+    "expo-file-system": "^19.0.19",
     "expo-sqlite": "^16.0.9",
     "expo-status-bar": "~1.11.1",
     "react": "18.2.0",

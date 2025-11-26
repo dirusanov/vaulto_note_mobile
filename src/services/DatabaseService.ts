@@ -58,7 +58,15 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                     return lines[0] || 'Untitled';
                 });
             const content = await decrypt(n.encrypted_content);
-            notes.push({ ...n, title, content });
+            const transcription = n.encrypted_transcription
+                ? await decrypt(n.encrypted_transcription)
+                : undefined;
+            notes.push({
+                ...n,
+                title,
+                content,
+                transcription,
+            });
         } catch (e) {
             console.error(`[DatabaseService] Failed to decrypt web note ${n.id}`, e);
         }
@@ -78,6 +86,7 @@ export const searchNotesLocal = async (query: string): Promise<Note[]> => {
     const lowerQuery = query.toLowerCase();
     return allNotes.filter(note =>
         (note.title && note.title.toLowerCase().includes(lowerQuery)) ||
-        (note.content && note.content.toLowerCase().includes(lowerQuery))
+        (note.content && note.content.toLowerCase().includes(lowerQuery)) ||
+        (note.transcription && note.transcription.toLowerCase().includes(lowerQuery))
     );
 };

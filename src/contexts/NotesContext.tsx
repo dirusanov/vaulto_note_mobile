@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { useNotes } from '../hooks/useNotes';
+import { useNotes, NoteAudio } from '../hooks/useNotes';
 import { Note } from '../api/notes';
 
 interface NotesContextType {
@@ -7,10 +7,12 @@ interface NotesContextType {
     loading: boolean;
     error: string | null;
     fetchNotes: () => Promise<void>;
-    createNote: (content: string) => Promise<Note>;
-    updateNote: (id: string, content: string) => Promise<Note>;
+    createNote: (content: string, audio?: NoteAudio) => Promise<Note>;
+    updateNote: (id: string, content: string, audio?: NoteAudio | null) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
     searchNotes: (query: string) => Promise<void>;
+    attachAudioToNote: (id: string, audio: NoteAudio) => Promise<Note>;
+    removeAudioFromNote: (id: string) => Promise<Note>;
     // decrypt removed – decryption is handled inside useNotes hook
 }
 
