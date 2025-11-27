@@ -5,11 +5,16 @@ import { NoteEditScreen } from '../screens/NoteEditScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { colors } from '../theme/colors';
 
+import { WelcomeScreen } from '../screens/WelcomeScreen';
+import { SignInScreen } from '../screens/SignInScreen';
+import { SignUpScreen } from '../screens/SignUpScreen';
+
 const Stack = createNativeStackNavigator();
 
-export const AppNavigator = () => {
+export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }) => {
     return (
         <Stack.Navigator
+            initialRouteName={initialRouteName}
             screenOptions={{
                 headerShown: true,
                 headerStyle: {
@@ -20,6 +25,21 @@ export const AppNavigator = () => {
             }}
         >
             <Stack.Screen
+                name="Welcome"
+                component={WelcomeScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="SignIn"
+                component={SignInScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="SignUp"
+                component={SignUpScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
                 name="NotesList"
                 component={NotesListScreen}
                 options={{ headerShown: false }}
@@ -28,7 +48,7 @@ export const AppNavigator = () => {
                 name="NoteEdit"
                 component={NoteEditScreen}
                 options={{
-                    title: 'Note',
+                    headerShown: false,
                 }}
             />
             <Stack.Screen

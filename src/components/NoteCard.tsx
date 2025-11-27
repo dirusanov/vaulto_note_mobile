@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import { Note } from '../api/notes';
+import { Note } from '../contexts/NotesContext';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -40,14 +40,14 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
         <TouchableOpacity
             style={styles.card}
             onPress={onPress}
-            activeOpacity={0.7}
+            activeOpacity={0.9}
         >
             <View style={styles.content}>
-                <Text style={styles.title} numberOfLines={2}>
+                <Text style={styles.title}>
                     {title}
                 </Text>
                 {preview && preview !== title && (
-                    <Text style={styles.preview} numberOfLines={4}>
+                    <Text style={styles.preview} numberOfLines={6}>
                         {preview}
                     </Text>
                 )}
@@ -66,46 +66,38 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
 const styles = StyleSheet.create({
     card: {
         backgroundColor: colors.surface,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: 'hidden',
-        // Enhanced shadow for depth
+        borderRadius: 16,
+        marginBottom: spacing.m,
+        // Soft shadow
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
     },
     content: {
-        padding: spacing.s,
-        paddingBottom: spacing.xs,
-        minHeight: 100,
+        padding: spacing.m,
+        paddingBottom: spacing.s,
     },
     title: {
-        ...typography.noteTitle,
-        fontSize: 15,
-        fontWeight: '600',
-        marginBottom: spacing.xxs,
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: spacing.xs,
         color: colors.text,
+        lineHeight: 24,
     },
     preview: {
-        ...typography.notePreview,
-        fontSize: 13,
-        lineHeight: 18,
-        marginTop: spacing.xxs,
+        fontSize: 14,
+        lineHeight: 20,
         color: colors.textSecondary,
     },
     footer: {
-        paddingHorizontal: spacing.s,
-        paddingBottom: spacing.s,
-        borderTopWidth: 0,
+        paddingHorizontal: spacing.m,
+        paddingBottom: spacing.m,
     },
     date: {
-        ...typography.caption,
-        fontSize: 10,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        fontSize: 12,
         color: colors.textTertiary,
+        fontWeight: '500',
     },
 });

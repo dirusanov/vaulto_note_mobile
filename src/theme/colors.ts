@@ -24,6 +24,7 @@ export const colors = {
     accentPink: '#EC4899',
     accentGreen: '#10B981',
     accentOrange: '#F59E0B',
+    accentYellow: '#FFC107', // New yellow accent
 
     // Borders - Subtle but visible
     border: '#DEE2E6',

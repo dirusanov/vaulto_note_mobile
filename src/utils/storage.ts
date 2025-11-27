@@ -28,6 +28,21 @@ export const storage = {
             console.error('Failed to remove token', e);
         }
     },
+    getGuestMode: async (): Promise<boolean> => {
+        try {
+            const value = await AsyncStorage.getItem('vaulto_guest_mode');
+            return value === 'true';
+        } catch (e) {
+            return false;
+        }
+    },
+    setGuestMode: async (isGuest: boolean): Promise<void> => {
+        try {
+            await AsyncStorage.setItem('vaulto_guest_mode', isGuest.toString());
+        } catch (e) {
+            console.error('Failed to set guest mode', e);
+        }
+    },
 };
 
 // OpenAI API Key

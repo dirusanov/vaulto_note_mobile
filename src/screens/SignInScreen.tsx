@@ -10,6 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
+import { storage } from '../utils/storage';
 
 export const SignInScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -28,6 +29,7 @@ export const SignInScreen = () => {
         setLoading(true);
         try {
             const data = await authApi.login(email, password);
+            await storage.setGuestMode(false);
             await signIn(data.access_token);
             // Navigation is handled by RootNavigator based on auth state
         } catch (error: any) {

@@ -15,6 +15,7 @@ export interface Note {
     title?: string;
     content?: string;
     transcription?: string;
+    synced?: number; // 0 = unsynced, 1 = synced
 }
 
 export const notesApi = {

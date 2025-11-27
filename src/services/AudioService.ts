@@ -1,9 +1,18 @@
 import { Audio } from 'expo-av';
-// Use legacy API for stable, typed access to document/cache directories and read/write helpers
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import { encrypt, decrypt } from '../crypto/encryption';
 
 const MAX_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Safe directory access for web
+const getDocumentDirectory = () => {
+    if (Platform.OS === 'web') return null;
+    // @ts-ignore
+    return FileSystem.documentDirectory;
+};
+
+const AUDIO_DIR = Platform.OS === 'web' ? '' : `${getDocumentDirectory()}audio/`;
 
 export interface AudioRecording {
     uri: string;
@@ -14,11 +23,28 @@ export interface AudioRecording {
 class AudioServiceClass {
     private recording: Audio.Recording | null = null;
     private recordingStartTime: number = 0;
-    private getAudioDir(): string {
-        const baseDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-        if (!baseDir) {
-            throw new Error('File system unavailable for audio recording');
+
+    private async getAudioDir(): Promise<string> {
+        if (Platform.OS === 'web') {
+            throw new Error('Audio recording not supported on web');
         }
+
+        // Try to get base directory, with fallback
+        // @ts-ignore
+        let baseDir = FileSystem.documentDirectory;
+
+        if (!baseDir) {
+            // @ts-ignore
+            baseDir = FileSystem.cacheDirectory;
+        }
+
+        if (!baseDir) {
+            // Last resort: use a default path that Expo GO can handle
+            // This path will be created by FileSystem when needed
+            console.warn('Using fallback audio directory');
+            return 'file:///data/user/0/host.exp.exponent/cache/audio/';
+        }
+
         return `${baseDir}audio/`;
     }
 
@@ -26,10 +52,16 @@ class AudioServiceClass {
      * Initialize the audio directory
      */
     async init(): Promise<void> {
-        const audioDir = this.getAudioDir();
-        const dirInfo = await FileSystem.getInfoAsync(audioDir);
-        if (!dirInfo.exists) {
-            await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+        if (Platform.OS === 'web') return;
+        try {
+            const audioDir = await this.getAudioDir();
+            const dirInfo = await FileSystem.getInfoAsync(audioDir);
+            if (!dirInfo.exists) {
+                await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+            }
+        } catch (error) {
+            console.warn('Could not initialize audio directory, will use temp storage:', error);
+            // Don't throw - let Recording handle its own temp storage
         }
     }
 
@@ -37,6 +69,7 @@ class AudioServiceClass {
      * Request audio recording permissions
      */
     async requestPermissions(): Promise<boolean> {
+        if (Platform.OS === 'web') return false;
         try {
             const { status } = await Audio.requestPermissionsAsync();
             return status === 'granted';
@@ -50,10 +83,11 @@ class AudioServiceClass {
      * Start recording audio
      */
     async startRecording(): Promise<void> {
+        if (Platform.OS === 'web') {
+            alert('Audio recording is not supported in the browser. Please use the mobile app.');
+            return;
+        }
         try {
-            // Initialize audio directory
-            await this.init();
-
             // Request permissions
             const hasPermission = await this.requestPermissions();
             if (!hasPermission) {
@@ -66,11 +100,41 @@ class AudioServiceClass {
                 playsInSilentModeIOS: true,
             });
 
-            // Create recording
+            console.log('[V3] Creating audio recording...');
+
+            // Define recording options for AAC/m4a
+            const recordingOptions: Audio.RecordingOptions = {
+                android: {
+                    extension: '.m4a',
+                    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+                    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+                    sampleRate: 44100,
+                    numberOfChannels: 2,
+                    bitRate: 128000,
+                },
+                ios: {
+                    extension: '.m4a',
+                    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+                    audioQuality: Audio.IOSAudioQuality.MAX,
+                    sampleRate: 44100,
+                    numberOfChannels: 2,
+                    bitRate: 128000,
+                    linearPCMBitDepth: 16,
+                    linearPCMIsBigEndian: false,
+                    linearPCMIsFloat: false,
+                },
+                web: {
+                    mimeType: 'audio/webm',
+                    bitsPerSecond: 128000,
+                },
+            };
+
+            // Create recording - it will use its own temp storage
             const { recording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HighQuality
+                recordingOptions
             );
 
+            console.log('[V3] Recording created successfully');
             this.recording = recording;
             this.recordingStartTime = Date.now();
 
@@ -90,6 +154,7 @@ class AudioServiceClass {
      * Stop recording and return the audio file
      */
     async stopRecording(): Promise<AudioRecording | null> {
+        if (Platform.OS === 'web') return null;
         try {
             if (!this.recording) {
                 return null;
@@ -105,16 +170,13 @@ class AudioServiceClass {
             // Calculate duration
             const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
 
-            // Get file info
-            const fileInfo = await FileSystem.getInfoAsync(uri);
-
             this.recording = null;
             this.recordingStartTime = 0;
 
             return {
                 uri,
                 duration,
-                mimeType: 'audio/mp4', // AAC audio in MP4 container
+                mimeType: 'audio/m4a', // AAC audio in M4A container
             };
         } catch (error) {
             console.error('Error stopping recording:', error);
@@ -168,15 +230,24 @@ class AudioServiceClass {
     /**
      * Save audio file permanently with encryption
      */
-    async saveAudioFile(tempUri: string): Promise<string> {
+    async saveAudioFile(tempUri: string, shouldDeleteOriginal: boolean = true): Promise<string> {
+        if (Platform.OS === 'web') return tempUri;
         try {
             // Generate unique filename
             const filename = `audio_${Date.now()}.m4a`;
-            const targetUri = `${this.getAudioDir()}${filename}`;
+            const audioDir = await this.getAudioDir();
+
+            // Ensure directory exists
+            const dirInfo = await FileSystem.getInfoAsync(audioDir);
+            if (!dirInfo.exists) {
+                await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+            }
+
+            const targetUri = `${audioDir}${filename}`;
 
             // Read the audio file
             const audioData = await FileSystem.readAsStringAsync(tempUri, {
-                encoding: FileSystem.EncodingType.Base64,
+                encoding: 'base64',
             });
 
             // Encrypt the audio data
@@ -184,11 +255,13 @@ class AudioServiceClass {
 
             // Save encrypted data
             await FileSystem.writeAsStringAsync(targetUri, encryptedData, {
-                encoding: FileSystem.EncodingType.UTF8,
+                encoding: 'utf8',
             });
 
-            // Delete temp file
-            await FileSystem.deleteAsync(tempUri, { idempotent: true });
+            // Delete temp file if requested
+            if (shouldDeleteOriginal) {
+                await FileSystem.deleteAsync(tempUri, { idempotent: true });
+            }
 
             return targetUri;
         } catch (error) {
@@ -201,23 +274,25 @@ class AudioServiceClass {
      * Read and decrypt audio file
      */
     async readAudioFile(uri: string): Promise<string> {
+        if (Platform.OS === 'web') return uri;
         try {
             // Read encrypted data
             const encryptedData = await FileSystem.readAsStringAsync(uri, {
-                encoding: FileSystem.EncodingType.UTF8,
+                encoding: 'utf8',
             });
 
             // Decrypt
             const decryptedData = await decrypt(encryptedData);
 
             // Create temp file for playback
+            // @ts-ignore
             const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
             if (!cacheDir) {
                 throw new Error('No cache directory available for audio playback');
             }
             const tempUri = `${cacheDir}temp_${Date.now()}.m4a`;
             await FileSystem.writeAsStringAsync(tempUri, decryptedData, {
-                encoding: FileSystem.EncodingType.Base64,
+                encoding: 'base64',
             });
 
             return tempUri;
@@ -231,6 +306,7 @@ class AudioServiceClass {
      * Delete audio file
      */
     async deleteAudioFile(uri: string): Promise<void> {
+        if (Platform.OS === 'web') return;
         try {
             const fileInfo = await FileSystem.getInfoAsync(uri);
             if (fileInfo.exists) {
@@ -246,6 +322,7 @@ class AudioServiceClass {
      * Get audio file size in bytes
      */
     async getFileSize(uri: string): Promise<number> {
+        if (Platform.OS === 'web') return 0;
         try {
             const fileInfo = await FileSystem.getInfoAsync(uri);
             return fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
@@ -259,7 +336,9 @@ class AudioServiceClass {
      * Clean up old temporary files
      */
     async cleanupTempFiles(): Promise<void> {
+        if (Platform.OS === 'web') return;
         try {
+            // @ts-ignore
             const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
             if (!cacheDir) return;
 

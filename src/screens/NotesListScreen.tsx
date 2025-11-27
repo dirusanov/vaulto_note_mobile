@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
 import { Loader } from '../components/Loader';
@@ -14,19 +14,13 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const [searchQuery, setSearchQuery] = React.useState('');
-    const { notes, loading, fetchNotes, searchNotes } = useNotesContext();
+    const { notes, loading, fetchNotes } = useNotesContext();
 
     useEffect(() => {
         if (isFocused) {
             fetchNotes();
         }
     }, [isFocused, fetchNotes]);
-
-    const handleSearch = (text: string) => {
-        setSearchQuery(text);
-        searchNotes(text);
-    };
 
     const handleNotePress = (note: any) => {
         navigation.navigate('NoteEdit', { noteId: note.id });
@@ -36,72 +30,56 @@ export const NotesListScreen = () => {
         navigation.navigate('Settings');
     };
 
-    const renderItem = ({ item }: { item: any }) => (
-        <View style={styles.noteWrapper}>
-            <NoteCard note={item} onPress={() => handleNotePress(item)} />
-        </View>
-    );
-
-    // Determine number of columns based on screen width
-    const { width } = Dimensions.get('window');
-    let numColumns = 2;
-    if (width >= 900) {
-        numColumns = 4;
-    } else if (width >= 600) {
-        numColumns = 3;
-    }
-
     const handleCreateNote = () => {
         navigation.navigate('NoteEdit');
     };
 
+    // Split notes into two columns for masonry layout
+    const leftColumnNotes = notes.filter((_, index) => index % 2 === 0);
+    const rightColumnNotes = notes.filter((_, index) => index % 2 !== 0);
+
     return (
         <ScreenContainer>
             <View style={styles.header}>
-                <View style={styles.headerTop}>
-                    <Text style={styles.title}>Notes</Text>
-                    <TouchableOpacity onPress={handleSettingsPress} style={styles.settingsButton}>
-                        <Text style={styles.settingsIcon}>⚙️</Text>
-                    </TouchableOpacity>
-                </View>
-                <Text style={styles.subtitle}>
-                    {notes.length} {notes.length === 1 ? 'note' : 'notes'}
-                </Text>
-                <TextInput
-                    style={styles.searchBar}
-                    placeholder="Search notes..."
-                    placeholderTextColor={colors.textSecondary}
-                    value={searchQuery}
-                    onChangeText={handleSearch}
-                />
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity onPress={handleSettingsPress} style={styles.minimalSettingsButton}>
+                    <Text style={styles.settingsIcon}>⚙️</Text>
+                </TouchableOpacity>
             </View>
 
             {loading && notes.length === 0 ? (
                 <Loader />
             ) : (
-                <FlatList
-                    data={notes}
-                    keyExtractor={(item) => String(item.id)}
-                    renderItem={renderItem}
-                    numColumns={numColumns}
-                    key={numColumns} // Force re-render when columns change
-                    contentContainerStyle={styles.list}
-                    columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <EmptyState message={searchQuery ? "No matching notes found" : "No notes yet. Tap + to create one."} />
-                        </View>
-                    }
-                    refreshing={loading}
-                    onRefresh={fetchNotes}
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
-                />
+                >
+                    {notes.length === 0 ? (
+                        <View style={styles.emptyContainer}>
+                            <EmptyState message="No notes yet. Tap + to create one." />
+                        </View>
+                    ) : (
+                        <View style={styles.masonryContainer}>
+                            <View style={styles.column}>
+                                {leftColumnNotes.map(note => (
+                                    <NoteCard key={note.id} note={note} onPress={() => handleNotePress(note)} />
+                                ))}
+                            </View>
+                            <View style={styles.column}>
+                                {rightColumnNotes.map(note => (
+                                    <NoteCard key={note.id} note={note} onPress={() => handleNotePress(note)} />
+                                ))}
+                            </View>
+                        </View>
+                    )}
+                    <View style={{ height: 100 }} />
+                </ScrollView>
             )}
 
             <TouchableOpacity
                 style={styles.fab}
                 onPress={handleCreateNote}
-                activeOpacity={0.8}
+                activeOpacity={0.9}
             >
                 <Text style={styles.fabText}>+</Text>
             </TouchableOpacity>
@@ -111,84 +89,56 @@ export const NotesListScreen = () => {
 
 const styles = StyleSheet.create({
     header: {
-        paddingTop: spacing.s,
-        paddingBottom: spacing.m,
-        marginBottom: spacing.xs,
-    },
-    headerTop: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-end',
         alignItems: 'center',
-        marginBottom: spacing.xs,
+        paddingTop: spacing.xl, // Added extra top padding
+        paddingBottom: spacing.m,
+        marginBottom: spacing.s,
     },
-    title: {
-        ...typography.h1,
-        fontSize: 32,
-        fontWeight: '700',
-        letterSpacing: -0.5,
-        color: colors.text,
-    },
-    settingsButton: {
-        padding: spacing.xs,
-        borderRadius: 8,
-        backgroundColor: colors.backgroundSecondary,
+    minimalSettingsButton: {
+        padding: spacing.s,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     settingsIcon: {
         fontSize: 24,
-    },
-    subtitle: {
-        ...typography.bodySmall,
-        fontSize: 13,
         color: colors.textSecondary,
-        marginBottom: spacing.m,
     },
-    searchBar: {
-        backgroundColor: colors.surface,
-        borderRadius: 10,
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s,
-        color: colors.text,
-        fontSize: 15,
-        borderWidth: 1,
-        borderColor: colors.border,
+    scrollContent: {
+        paddingBottom: spacing.xxl,
     },
-    list: {
-        paddingBottom: 100, // Space for FAB
+    masonryContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
     },
-    row: {
-        justifyContent: 'flex-start',
-        marginBottom: spacing.xs,
-    },
-    noteWrapper: {
+    column: {
         flex: 1,
-        maxWidth: `${100 / 2}%`, // Will be adjusted by numColumns
-        padding: spacing.xxs,
+        marginHorizontal: spacing.xs,
     },
     emptyContainer: {
-        flex: 1,
-        width: '100%',
-        marginTop: spacing.xxl,
+        marginTop: spacing.xxl * 2,
     },
     fab: {
         position: 'absolute',
-        bottom: spacing.xl,
+        bottom: spacing.xxl * 1.5, // Moved higher up
         right: spacing.xl,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: colors.primary,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: colors.accentYellow,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowColor: colors.accentYellow,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
         elevation: 8,
     },
     fabText: {
-        fontSize: 32,
+        fontSize: 36,
         fontWeight: '300',
         color: '#FFFFFF',
-        lineHeight: 32,
+        marginTop: -4,
     },
 });

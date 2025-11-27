@@ -1,14 +1,25 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useNotes, NoteAudio } from '../hooks/useNotes';
-import { Note } from '../api/notes';
+
+export interface Note {
+    id: string;
+    title?: string;
+    content?: string;
+    created_at?: string;
+    updated_at?: string;
+    audio_file_path?: string;
+    audio_duration?: number;
+    has_audio?: boolean;
+    encrypted_transcription?: string;
+}
 
 interface NotesContextType {
     notes: Note[];
     loading: boolean;
     error: string | null;
     fetchNotes: () => Promise<void>;
-    createNote: (content: string, audio?: NoteAudio) => Promise<Note>;
-    updateNote: (id: string, content: string, audio?: NoteAudio | null) => Promise<Note>;
+    createNote: (data: { title?: string; content: string; audio?: NoteAudio }) => Promise<Note>;
+    updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
     searchNotes: (query: string) => Promise<void>;
     attachAudioToNote: (id: string, audio: NoteAudio) => Promise<Note>;

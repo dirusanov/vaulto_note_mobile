@@ -55,7 +55,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
 
         await database.runAsync(
             `INSERT OR REPLACE INTO notes (id, encrypted_title, encrypted_content, created_at, updated_at, audio_file_path, audio_duration, encrypted_transcription, has_audio, synced)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1);`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
                 note.id,
                 note.encrypted_title ?? null,
@@ -66,6 +66,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.audio_duration ?? null,
                 note.encrypted_transcription ?? null,
                 note.has_audio ? 1 : 0,
+                (note as any).synced ?? 0
             ]
         );
         console.log(`[DatabaseService] Note saved locally: ${note.id}`);

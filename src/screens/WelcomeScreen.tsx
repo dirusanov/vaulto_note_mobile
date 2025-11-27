@@ -34,6 +34,16 @@ export const WelcomeScreen = () => {
                         variant="secondary"
                         style={styles.button}
                     />
+                    <Button
+                        title="Continue Offline"
+                        onPress={async () => {
+                            const { storage } = require('../utils/storage');
+                            await storage.setGuestMode(true);
+                            navigation.replace('NotesList');
+                        }}
+                        variant="outline"
+                        style={styles.button}
+                    />
                 </View>
             </View>
         </ScreenContainer>

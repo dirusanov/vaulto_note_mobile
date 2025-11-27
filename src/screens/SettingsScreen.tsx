@@ -7,11 +7,13 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useAuth } from '../hooks/useAuth';
+import { useNavigation } from '@react-navigation/native';
 import { getOpenAIApiKey, setOpenAIApiKey, resetPrivacyWarning } from '../utils/storage';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 
 export const SettingsScreen = () => {
-    const { signOut } = useAuth();
+    const navigation = useNavigation<any>();
+    const { signOut, isAuthenticated } = useAuth();
     const [apiKey, setApiKeyState] = useState('');
     const [testingConnection, setTestingConnection] = useState(false);
 
@@ -59,7 +61,18 @@ export const SettingsScreen = () => {
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Account</Text>
-                <Text style={styles.info}>Logged in</Text>
+                {isAuthenticated ? (
+                    <Text style={styles.info}>Logged in</Text>
+                ) : (
+                    <>
+                        <Text style={styles.info}>Guest Mode - Notes stored locally</Text>
+                        <Button
+                            title="Sign In to Sync"
+                            onPress={() => navigation.navigate('SignIn')}
+                            style={styles.signInButton}
+                        />
+                    </>
+                )}
             </View>
 
             <View style={styles.section}>
@@ -95,6 +108,12 @@ export const SettingsScreen = () => {
                     variant="outline"
                     style={styles.resetButton}
                 />
+
+                {!apiKey && !isAuthenticated && (
+                    <Text style={styles.warningText}>
+                        Voice transcription requires either a custom API key or sign in to use our AI provider.
+                    </Text>
+                )}
             </View>
 
             <View style={styles.section}>
@@ -102,14 +121,16 @@ export const SettingsScreen = () => {
                 <Text style={styles.info}>Version 1.0.0</Text>
             </View>
 
-            <View style={styles.footer}>
-                <Button
-                    title="Sign Out"
-                    onPress={signOut}
-                    variant="outline"
-                    style={styles.button}
-                />
-            </View>
+            {isAuthenticated && (
+                <View style={styles.footer}>
+                    <Button
+                        title="Sign Out"
+                        onPress={signOut}
+                        variant="outline"
+                        style={styles.button}
+                    />
+                </View>
+            )}
         </ScreenContainer>
     );
 };
@@ -164,5 +185,15 @@ const styles = StyleSheet.create({
     },
     resetButton: {
         borderColor: colors.textMuted,
+    },
+    signInButton: {
+        marginTop: spacing.m,
+    },
+    warningText: {
+        ...typography.body,
+        color: colors.textMuted,
+        fontSize: 12,
+        marginTop: spacing.m,
+        fontStyle: 'italic',
     },
 });

@@ -15,16 +15,30 @@
             "**/*"
         ],
         "ios": {
-            "supportsTablet": true
+            "supportsTablet": true,
+            "infoPlist": {
+                "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes."
+            }
         },
         "android": {
             "adaptiveIcon": {
                 "foregroundImage": "./assets/adaptive-icon.png",
                 "backgroundColor": "#ffffff"
-            }
+            },
+            "permissions": [
+                "android.permission.RECORD_AUDIO"
+            ]
         },
         "web": {
             "favicon": "./assets/favicon.png"
-        }
+        },
+        "plugins": [
+            [
+                "expo-av",
+                {
+                    "microphonePermission": "Allow Vaulto Note to access your microphone to record voice notes."
+                }
+            ]
+        ]
     }
 }

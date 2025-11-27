@@ -3,6 +3,7 @@ import { notesApi, Note } from '../api/notes';
 import { encrypt, decrypt } from '../crypto/encryption';
 import { initDatabase, saveNoteLocal, getNotesLocal, deleteNoteLocal, searchNotesLocal } from '../services/DatabaseService';
 import React from 'react';
+import { useAuth } from './useAuth';
 
 export interface NoteAudio {
     filePath: string;
@@ -11,6 +12,7 @@ export interface NoteAudio {
 }
 
 export const useNotes = () => {
+    const { isAuthenticated } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -27,16 +29,47 @@ export const useNotes = () => {
         try {
             // Try fetching from API first
             console.log('[useNotes] Fetching encrypted notes from API...');
-            try {
-                const encryptedNotes = await notesApi.getAll();
-                console.log('[useNotes] Received', encryptedNotes.length, 'encrypted notes from API');
+            if (isAuthenticated) {
+                try {
+                    // SYNC UP: Find local notes that need syncing
+                    const allLocal = await getNotesLocal();
+                    const unsynced = allLocal.filter(n => n.id.startsWith('local-') || (n as any).synced === 0);
 
-                // Sync to local DB
-                for (const note of encryptedNotes) {
-                    await saveNoteLocal(note);
+                    if (unsynced.length > 0) {
+                        console.log(`[useNotes] Found ${unsynced.length} unsynced notes. Syncing...`);
+                        for (const localNote of unsynced) {
+                            try {
+                                // Create on server
+                                const newNote = await notesApi.create(localNote.encrypted_title || '', localNote.encrypted_content);
+                                // Delete local temporary note
+                                await deleteNoteLocal(localNote.id);
+                                // Save new server note locally (preserving audio info if any)
+                                const noteWithExtras: Note = {
+                                    ...newNote,
+                                    audio_file_path: localNote.audio_file_path,
+                                    audio_duration: localNote.audio_duration,
+                                    encrypted_transcription: localNote.encrypted_transcription,
+                                    has_audio: localNote.has_audio,
+                                    synced: 1
+                                };
+                                await saveNoteLocal(noteWithExtras);
+                                console.log(`[useNotes] Synced note ${localNote.id} -> ${newNote.id}`);
+                            } catch (syncErr) {
+                                console.error(`[useNotes] Failed to sync note ${localNote.id}`, syncErr);
+                            }
+                        }
+                    }
+
+                    const encryptedNotes = await notesApi.getAll();
+                    console.log('[useNotes] Received', encryptedNotes.length, 'encrypted notes from API');
+
+                    // Sync to local DB
+                    for (const note of encryptedNotes) {
+                        await saveNoteLocal(note);
+                    }
+                } catch (apiError) {
+                    console.warn('[useNotes] API fetch failed, falling back to local DB', apiError);
                 }
-            } catch (apiError) {
-                console.warn('[useNotes] API fetch failed, falling back to local DB', apiError);
             }
 
             // Load from local DB (source of truth for UI to ensure offline support)
@@ -51,43 +84,45 @@ export const useNotes = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isAuthenticated]);
 
-    const createNote = async (content: string, audio?: NoteAudio) => {
+    const createNote = async (data: { title?: string; content: string; audio?: NoteAudio }) => {
         setLoading(true);
         setError(null);
         try {
-            const lines = content.trim().split('\n');
-            const titlePlain = lines[0] || 'Untitled';
-            const encryptedTitle = await encrypt(titlePlain);
+            const { title, content, audio } = data;
+            // If title is not provided, try to extract from content, else 'Untitled'
+            const titleToUse = title || content.trim().split('\n')[0] || 'Untitled';
+
+            const encryptedTitle = await encrypt(titleToUse);
             const encryptedContent = await encrypt(content);
             const encryptedTranscription = audio?.transcription
                 ? await encrypt(audio.transcription)
                 : undefined;
 
-            // Optimistic update or wait for API? 
-            // Let's wait for API to get ID, then save local.
-            // If offline, we might need to generate ID locally (UUID) and sync later.
-            // For now, assuming online for creation as per original scope, but saving local copy.
-
             let newNote: Note;
             try {
                 // Try API first
-                const newEncryptedNote = await notesApi.create(encryptedTitle, encryptedContent);
-                const noteWithAudio: Note = {
-                    ...newEncryptedNote,
-                    audio_file_path: audio?.filePath,
-                    audio_duration: audio?.duration,
-                    encrypted_transcription: encryptedTranscription,
-                    has_audio: !!audio,
-                };
-                await saveNoteLocal(noteWithAudio);
-                newNote = {
-                    ...noteWithAudio,
-                    title: titlePlain,
-                    content,
-                    transcription: audio?.transcription,
-                };
+                if (isAuthenticated) {
+                    const newEncryptedNote = await notesApi.create(encryptedTitle, encryptedContent);
+                    const noteWithAudio: Note = {
+                        ...newEncryptedNote,
+                        audio_file_path: audio?.filePath,
+                        audio_duration: audio?.duration,
+                        encrypted_transcription: encryptedTranscription,
+                        has_audio: !!audio,
+                        synced: 1
+                    };
+                    await saveNoteLocal(noteWithAudio);
+                    newNote = {
+                        ...noteWithAudio,
+                        title: titleToUse,
+                        content,
+                        transcription: audio?.transcription,
+                    };
+                } else {
+                    throw new Error('Offline');
+                }
             } catch (apiError) {
                 console.warn('[useNotes] API create failed, saving locally only', apiError);
                 // Fallback: Generate local ID and save
@@ -102,11 +137,12 @@ export const useNotes = () => {
                     audio_duration: audio?.duration,
                     encrypted_transcription: encryptedTranscription,
                     has_audio: !!audio,
+                    synced: 0
                 };
                 await saveNoteLocal(localNote);
                 newNote = {
                     ...localNote,
-                    title: titlePlain,
+                    title: titleToUse,
                     content,
                     transcription: audio?.transcription,
                 };
@@ -123,59 +159,93 @@ export const useNotes = () => {
         }
     };
 
-    const updateNote = async (id: string, content: string, audio?: NoteAudio | null) => {
+    const updateNote = async (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => {
         setLoading(true);
         setError(null);
         try {
             const existing = notes.find(n => n.id === id);
-            const lines = content.trim().split('\n');
-            const titlePlain = lines[0] || 'Untitled';
-            const encryptedTitle = await encrypt(titlePlain);
-            const encryptedContent = await encrypt(content);
-            const encryptedTranscription = audio === undefined
-                ? existing?.encrypted_transcription
-                : audio?.transcription
-                    ? await encrypt(audio.transcription)
-                    : undefined;
+            if (!existing) throw new Error('Note not found');
+
+            const titleToUse = updates.title ?? existing.title ?? 'Untitled';
+            const contentToUse = updates.content ?? existing.content ?? '';
+
+            // Handle audio updates
+            // If audio is explicitly passed as null, remove it.
+            // If updates has audio_file_path, use it.
+            // If updates.audio is passed (legacy/helper), use it.
+
+            let audioPath = existing.audio_file_path;
+            let audioDuration = existing.audio_duration;
+            let hasAudio = existing.has_audio;
+            let transcription = existing.transcription;
+            let encryptedTranscription = existing.encrypted_transcription;
+
+            if (updates.audio_file_path !== undefined) {
+                audioPath = updates.audio_file_path;
+                audioDuration = updates.audio_duration;
+                hasAudio = updates.has_audio ?? !!audioPath;
+            }
+
+            if (updates.encrypted_transcription !== undefined) {
+                // If we are updating the encrypted transcription directly (e.g. from NoteEditScreen)
+                encryptedTranscription = updates.encrypted_transcription;
+                // We assume the caller handles encryption if they pass this field, 
+                // OR we might need to encrypt it here if it's raw text?
+                // In NoteEditScreen we passed 'transcription.text' to 'encrypted_transcription'.
+                // Wait, NoteEditScreen passed raw text to 'encrypted_transcription'. We should encrypt it here.
+            }
+
+            // If NoteEditScreen passes raw text as 'encrypted_transcription', we need to fix that naming or logic.
+            // NoteEditScreen: encrypted_transcription: transcription.text
+            // That is RAW text. So we should encrypt it here.
+
+            if (updates.encrypted_transcription) {
+                // It's actually raw text coming from the UI, let's encrypt it
+                const rawTrans = updates.encrypted_transcription;
+                encryptedTranscription = await encrypt(rawTrans);
+                transcription = rawTrans; // Update local state with raw text
+            }
+
+            const encryptedTitle = await encrypt(titleToUse);
+            const encryptedContent = await encrypt(contentToUse);
 
             let updatedNote: Note;
             try {
                 const updatedEncryptedNote = await notesApi.update(id, encryptedTitle, encryptedContent);
-                const noteWithAudio: Note = {
+
+                const noteWithExtras: Note = {
                     ...updatedEncryptedNote,
-                    audio_file_path: audio === undefined ? existing?.audio_file_path : audio?.filePath,
-                    audio_duration: audio === undefined ? existing?.audio_duration : audio?.duration,
+                    audio_file_path: audioPath,
+                    audio_duration: audioDuration,
                     encrypted_transcription: encryptedTranscription,
-                    has_audio: audio === undefined ? existing?.has_audio : !!audio,
+                    has_audio: hasAudio,
                 };
-                await saveNoteLocal(noteWithAudio);
+                await saveNoteLocal(noteWithExtras);
+
                 updatedNote = {
-                    ...noteWithAudio,
-                    title: titlePlain,
-                    content,
-                    transcription: audio === undefined ? existing?.transcription : audio?.transcription,
+                    ...noteWithExtras,
+                    title: titleToUse,
+                    content: contentToUse,
+                    transcription: transcription,
                 };
             } catch (apiError) {
                 console.warn('[useNotes] API update failed, saving locally only', apiError);
-                // Update local DB
-                const noteToUpdate = existing;
                 const localNote: Note = {
-                    ...(noteToUpdate || { id, created_at: new Date().toISOString() }),
-                    id,
+                    ...existing,
                     encrypted_title: encryptedTitle,
                     encrypted_content: encryptedContent,
                     updated_at: new Date().toISOString(),
-                    audio_file_path: audio === undefined ? noteToUpdate?.audio_file_path : audio?.filePath,
-                    audio_duration: audio === undefined ? noteToUpdate?.audio_duration : audio?.duration,
+                    audio_file_path: audioPath,
+                    audio_duration: audioDuration,
                     encrypted_transcription: encryptedTranscription,
-                    has_audio: audio === undefined ? noteToUpdate?.has_audio : !!audio,
+                    has_audio: hasAudio,
                 };
                 await saveNoteLocal(localNote);
                 updatedNote = {
                     ...localNote,
-                    title: titlePlain,
-                    content,
-                    transcription: audio === undefined ? noteToUpdate?.transcription : audio?.transcription,
+                    title: titleToUse,
+                    content: contentToUse,
+                    transcription: transcription,
                 };
             }
 
@@ -224,15 +294,11 @@ export const useNotes = () => {
     };
 
     const attachAudioToNote = async (id: string, audio: NoteAudio) => {
-        const note = notes.find(n => n.id === id);
-        const contentToUse = note?.content ?? '';
-        return updateNote(id, contentToUse, audio);
+        return updateNote(id, { audio });
     };
 
     const removeAudioFromNote = async (id: string) => {
-        const note = notes.find(n => n.id === id);
-        const contentToUse = note?.content ?? '';
-        return updateNote(id, contentToUse, null);
+        return updateNote(id, { audio: null, has_audio: false, audio_file_path: undefined });
     };
 
     return {

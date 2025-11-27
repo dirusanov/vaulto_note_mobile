@@ -9,6 +9,7 @@ import { spacing } from '../theme/spacing';
 import { useNavigation } from '@react-navigation/native';
 import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
+import { storage } from '../utils/storage';
 
 export const SignUpScreen = () => {
     const navigation = useNavigation();
@@ -35,6 +36,7 @@ export const SignUpScreen = () => {
             await authApi.register(email, password);
             // Auto login after register
             const data = await authApi.login(email, password);
+            await storage.setGuestMode(false);
             await signIn(data.access_token);
         } catch (error: any) {
             console.error(error);

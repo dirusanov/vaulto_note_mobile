@@ -1,8 +1,9 @@
 /**
  * Transcription service for sending audio to OpenAI Whisper API.
  */
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getOpenAIApiKey } from '../utils/storage';
+import { Platform } from 'react-native';
 
 const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
@@ -35,14 +36,28 @@ export async function transcribeAudio(
                 };
             }
 
-            // Read audio file as base64
-            const fileInfo = await FileSystem.getInfoAsync(audioUri);
-            if (!fileInfo.exists) {
-                return {
-                    text: '',
-                    success: false,
-                    error: 'Audio file not found',
-                };
+
+
+            // Read audio file info
+            if (Platform.OS !== 'web') {
+                const fileInfo = await FileSystem.getInfoAsync(audioUri);
+                console.log('[Transcription] File info:', fileInfo);
+
+                if (!fileInfo.exists) {
+                    return {
+                        text: '',
+                        success: false,
+                        error: 'Audio file not found',
+                    };
+                }
+
+                if (fileInfo.size === 0) {
+                    return {
+                        text: '',
+                        success: false,
+                        error: 'Audio file is empty',
+                    };
+                }
             }
 
             // Create form data
@@ -51,9 +66,11 @@ export async function transcribeAudio(
             // For React Native / Expo, we need to use a special format for file uploads
             const file = {
                 uri: audioUri,
-                type: 'audio/mp4',
+                type: 'audio/m4a', // Changed from audio/mp4
                 name: 'audio.m4a',
             } as any;
+
+            console.log('[Transcription] Uploading file:', file);
 
             formData.append('file', file);
             formData.append('model', 'whisper-1');
