@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     View,
     TextInput,
@@ -13,7 +13,11 @@ import {
     Modal,
     TouchableWithoutFeedback,
     Keyboard,
+    Vibration,
+    FlatList,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -29,7 +33,14 @@ import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio } from '../services/TranscriptionService';
 import { getPrivacyWarningDismissed } from '../utils/storage';
-import { improveText, IMPROVEMENT_OPTIONS, AIImprovementOption } from '../services/AIService';
+import {
+    improveText,
+    loadImprovementOptions,
+    saveImprovementOptions,
+    AIImprovementOption,
+    DEFAULT_IMPROVEMENT_OPTIONS,
+    ensureTemplateHasPlaceholder,
+} from '../services/AIService';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -44,6 +55,7 @@ export const NoteEditScreen = () => {
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
     const route = useRoute<NoteEditScreenRouteProp>();
     const { createNote, updateNote, deleteNote, notes } = useNotesContext();
+    const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
     const existingNote = notes.find(n => n.id === localNoteId);
@@ -68,12 +80,19 @@ export const NoteEditScreen = () => {
 
     const lastSavedTitle = useRef(existingNote?.title || '');
     const lastSavedContent = useRef(existingNote?.content || '');
+    const skipAutoSaveRef = useRef(false);
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
 
     // AI State
     const [showAIModal, setShowAIModal] = useState(false);
     const [isAIProcessing, setIsAIProcessing] = useState(false);
+    const [aiOptions, setAiOptions] = useState<AIImprovementOption[]>(DEFAULT_IMPROVEMENT_OPTIONS);
+    const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
+    const [showPromptBuilder, setShowPromptBuilder] = useState(false);
+    const [newPromptTitle, setNewPromptTitle] = useState('');
+    const [newPromptTemplate, setNewPromptTemplate] = useState('');
+    const [newPromptIcon, setNewPromptIcon] = useState<string>(ICON_CHOICES[0]);
 
     useEffect(() => {
         if (existingNote) {
@@ -86,8 +105,26 @@ export const NoteEditScreen = () => {
                 loadAudio(existingNote.audio_file_path);
                 setAudioDuration(existingNote.audio_duration || 0);
             }
+
+            // Sync refs to prevent unnecessary saves
+            lastSavedTitle.current = existingNote.title || '';
+            lastSavedContent.current = existingNote.content || '';
         }
     }, [existingNote]);
+
+    useEffect(() => {
+        const fetchAiOptions = async () => {
+            setAiOptionsLoading(true);
+            try {
+                const options = await loadImprovementOptions();
+                setAiOptions(options);
+            } finally {
+                setAiOptionsLoading(false);
+            }
+        };
+
+        fetchAiOptions();
+    }, []);
 
     // Handle history updates
     const updateHistory = (newTitle: string, newContent: string) => {
@@ -111,6 +148,17 @@ export const NoteEditScreen = () => {
         setTitle(text);
         updateHistory(text, content);
     };
+
+    const navigateBackToList = useCallback(() => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'NotesList' as never }],
+            });
+        }
+    }, [navigation]);
 
     const handleContentChange = (text: string) => {
         setContent(text);
@@ -146,8 +194,13 @@ export const NoteEditScreen = () => {
         }
     };
 
-    const saveNote = async () => {
-        if ((!title.trim() && !content.trim()) || (title === lastSavedTitle.current && content === lastSavedContent.current)) {
+    const saveNote = useCallback(async () => {
+        if (!title.trim() && !content.trim()) {
+            return;
+        }
+
+        // Avoid duplicate save if nothing changed
+        if (title === lastSavedTitle.current && content === lastSavedContent.current) {
             return;
         }
 
@@ -172,22 +225,60 @@ export const NoteEditScreen = () => {
         } finally {
             setIsSaving(false);
         }
-    };
+    }, [content, createNote, localNoteId, title, updateNote]);
+
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+            if (skipAutoSaveRef.current) {
+                skipAutoSaveRef.current = false;
+                return;
+            }
+
+            const nothingToSave = !title.trim() && !content.trim();
+            const unchanged = title === lastSavedTitle.current && content === lastSavedContent.current;
+
+            if (nothingToSave || unchanged) {
+                return;
+            }
+
+            event.preventDefault();
+            Keyboard.dismiss();
+
+            const saveAndExit = async () => {
+                try {
+                    await saveNote();
+                } catch (error) {
+                    console.error('Error during navigation auto-save:', error);
+                } finally {
+                    const isGoBack = event.data.action?.type === 'GO_BACK';
+                    const canGoBack = navigation.canGoBack();
+                    if (isGoBack && !canGoBack) {
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'NotesList' as never }],
+                        });
+                        return;
+                    }
+                    navigation.dispatch(event.data.action);
+                }
+            };
+
+            saveAndExit();
+        });
+
+        return unsubscribe;
+    }, [content, navigation, saveNote, title]);
 
     const handleBack = async () => {
         Keyboard.dismiss();
-        // Attempt to save, but don't block navigation indefinitely
         try {
-            const savePromise = saveNote();
-            // Wait max 500ms for save check/execution before navigating
-            // If save is actually running (network), it will continue in background
-            // If it's just the early return check, it will be instant
-            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 500));
-            await Promise.race([savePromise, timeoutPromise]);
+            await saveNote();
+            // Skip the beforeRemove check since we just saved
+            skipAutoSaveRef.current = true;
         } catch (error) {
             console.error('Error during back navigation save:', error);
         }
-        navigation.goBack();
+        navigateBackToList();
     };
 
     const handleDelete = async () => {
@@ -204,7 +295,8 @@ export const NoteEditScreen = () => {
                     style: 'destructive',
                     onPress: async () => {
                         // Navigate back immediately for better UX, then perform delete
-                        navigation.goBack();
+                        skipAutoSaveRef.current = true;
+                        navigateBackToList();
                         try {
                             await deleteNote(localNoteId);
                         } catch (error) {
@@ -317,14 +409,96 @@ export const NoteEditScreen = () => {
         setShowAIModal(false);
         setIsAIProcessing(true);
         try {
-            const improvedText = await improveText(content, option.id);
+            const improvedText = await improveText(content, option);
             setContent(improvedText);
             updateHistory(title, improvedText);
         } catch (error) {
-            Alert.alert('Ошибка', 'Не удалось улучшить текст. Проверьте API ключ.');
+            const message = error instanceof Error
+                ? error.message
+                : 'Не удалось улучшить текст. Проверьте настройки AI.';
+            Alert.alert('Ошибка', message);
         } finally {
             setIsAIProcessing(false);
         }
+    };
+
+    const handleReorderEnd = async (data: AIImprovementOption[]) => {
+        setAiOptions(data);
+        await saveImprovementOptions(data);
+    };
+
+    const handleCreatePrompt = async () => {
+        if (!newPromptTitle.trim() || !newPromptTemplate.trim()) {
+            return;
+        }
+
+        const preparedTemplate = ensureTemplateHasPlaceholder(newPromptTemplate.trim());
+
+        const newOption: AIImprovementOption = {
+            id: `custom-${Date.now()}`,
+            label: newPromptTitle.trim(),
+            prompt: preparedTemplate,
+            icon: newPromptIcon,
+            isCustom: true,
+        };
+
+        const updated = [...aiOptions, newOption];
+        setAiOptions(updated);
+        await saveImprovementOptions(updated);
+        closePromptBuilder();
+    };
+
+    const templateWithPlaceholder = useMemo(
+        () => ensureTemplateHasPlaceholder(newPromptTemplate),
+        [newPromptTemplate]
+    );
+
+    const renderTemplateWithPlaceholder = (template: string) => {
+        if (!template.trim()) {
+            return <Text style={styles.promptPreviewPlaceholder}>Начните вводить текст промпта</Text>;
+        }
+
+        const normalized = ensureTemplateHasPlaceholder(template);
+        if (normalized.includes('{text}')) {
+            const segments = normalized.split(/{text}/gi);
+            return (
+                <Text style={styles.promptPreviewText}>
+                    {segments.map((segment, index) => (
+                        <React.Fragment key={`${segment}-${index}`}>
+                            {segment.length > 0 && <Text style={styles.promptPreviewText}>{segment}</Text>}
+                            {index < segments.length - 1 && (
+                                <Text style={styles.promptPlaceholderToken}>{'{text}'}</Text>
+                            )}
+                        </React.Fragment>
+                    ))}
+                </Text>
+            );
+        }
+
+        return <Text style={styles.promptPreviewText}>{normalized}</Text>;
+    };
+
+    const renderPromptPreview = () => renderTemplateWithPlaceholder(templateWithPlaceholder);
+    const renderOptionPrompt = (prompt: string) => {
+        const normalized = ensureTemplateHasPlaceholder(prompt);
+        const segments = normalized.split(/{text}/gi);
+        return (
+            <Text style={styles.aiOptionPrompt} numberOfLines={1}>
+                {segments.map((segment, index) => (
+                    <React.Fragment key={`${segment}-${index}`}>
+                        {segment.length > 0 && <Text style={styles.aiOptionPrompt}>{segment}</Text>}
+                        {index < segments.length - 1 && <Text style={styles.promptPlaceholderToken}>{'{text}'}</Text>}
+                    </React.Fragment>
+                ))}
+            </Text>
+        );
+    };
+
+    const closePromptBuilder = () => {
+        setShowPromptBuilder(false);
+        setNewPromptTemplate('');
+        setNewPromptTitle('');
+        setNewPromptIcon(ICON_CHOICES[0]);
     };
 
     // Format date for display
@@ -345,6 +519,14 @@ export const NoteEditScreen = () => {
         });
 
     const charCount = content.length;
+    const canUseAI = content.trim().length > 0;
+
+    // Handle initial recording passed from navigation
+    useEffect(() => {
+        if (route.params?.initialRecording) {
+            handleRecordingFinish(route.params.initialRecording);
+        }
+    }, [route.params?.initialRecording]);
 
     return (
         <ScreenContainer>
@@ -354,19 +536,21 @@ export const NoteEditScreen = () => {
                 </TouchableOpacity>
                 <View style={styles.headerRight}>
                     {/* AI Improvement Button */}
-                    {isEditing && content.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => setShowAIModal(true)}
-                            style={styles.iconButton}
-                            disabled={isAIProcessing}
-                        >
-                            {isAIProcessing ? (
-                                <ActivityIndicator size="small" color={colors.primary} />
-                            ) : (
-                                <MaterialIcons name="auto-awesome" size={24} color={colors.primary} />
-                            )}
-                        </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                        onPress={() => setShowAIModal(true)}
+                        style={[styles.iconButton, (!canUseAI || isAIProcessing) && styles.disabledIcon]}
+                        disabled={isAIProcessing || !canUseAI}
+                    >
+                        {isAIProcessing ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                            <MaterialIcons
+                                name="auto-awesome"
+                                size={24}
+                                color={canUseAI ? colors.primary : colors.textMuted}
+                            />
+                        )}
+                    </TouchableOpacity>
 
                     {/* Cassette Button for Audio */}
                     {audioUri && (
@@ -416,25 +600,52 @@ export const NoteEditScreen = () => {
                 onRequestClose={() => setShowAIModal(false)}
             >
                 <TouchableWithoutFeedback onPress={() => setShowAIModal(false)}>
-                    <View style={styles.modalOverlay}>
+                    <GestureHandlerRootView style={styles.modalOverlay}>
                         <TouchableWithoutFeedback>
                             <View style={styles.aiModalContent}>
-                                <Text style={styles.aiModalTitle}>Улучшить текст с AI</Text>
-                                <ScrollView showsVerticalScrollIndicator={false}>
-                                    {IMPROVEMENT_OPTIONS.map((option) => (
+                                <View style={styles.aiModalHeader}>
+                                    <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Улучшить текст с AI</Text>
+                                    <View style={styles.aiActions}>
                                         <TouchableOpacity
-                                            key={option.id}
-                                            style={styles.aiOptionItem}
-                                            onPress={() => handleAIImprovement(option)}
+                                            style={styles.aiActionButton}
+                                            onPress={() => setShowPromptBuilder(true)}
                                         >
-                                            <View style={styles.aiOptionIconContainer}>
-                                                <MaterialIcons name={option.icon as any} size={24} color={colors.primary} />
-                                            </View>
-                                            <Text style={styles.aiOptionLabel}>{option.label}</Text>
-                                            <MaterialIcons name="chevron-right" size={20} color={colors.textMuted} />
+                                            <MaterialIcons name="add" size={18} color={colors.primary} />
+                                            <Text style={styles.aiActionText}>Создать</Text>
                                         </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                                    </View>
+                                </View>
+                                {aiOptionsLoading ? (
+                                    <View style={styles.aiLoader}>
+                                        <ActivityIndicator color={colors.primary} />
+                                    </View>
+                                ) : (
+                                    <FlatList
+                                        style={styles.aiList}
+                                        contentContainerStyle={styles.aiListContent}
+                                        data={aiOptions}
+                                        keyExtractor={(item) => item.id}
+                                        renderItem={({ item }) => (
+                                            <TouchableOpacity
+                                                style={[styles.aiOptionItem, styles.aiReorderItem]}
+                                                onPress={() => {
+                                                    handleAIImprovement(item);
+                                                }}
+                                                activeOpacity={0.7}
+                                            >
+                                                <View style={styles.aiOptionIconContainer}>
+                                                    <MaterialIcons name={item.icon as any} size={24} color={colors.primary} />
+                                                </View>
+                                                <View style={styles.aiOptionTextWrapper}>
+                                                    <Text style={styles.aiOptionLabel}>{item.label}</Text>
+                                                    {renderOptionPrompt(item.prompt)}
+                                                </View>
+                                                {/* Drag handle removed for now */}
+                                                {/* <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} /> */}
+                                            </TouchableOpacity>
+                                        )}
+                                    />
+                                )}
                                 <TouchableOpacity
                                     style={styles.aiCloseButton}
                                     onPress={() => setShowAIModal(false)}
@@ -443,7 +654,100 @@ export const NoteEditScreen = () => {
                                 </TouchableOpacity>
                             </View>
                         </TouchableWithoutFeedback>
-                    </View>
+                    </GestureHandlerRootView>
+                </TouchableWithoutFeedback>
+            </Modal>
+
+            {/* Prompt Builder Modal */}
+            <Modal
+                visible={showPromptBuilder}
+                transparent
+                animationType="fade"
+                onRequestClose={closePromptBuilder}
+            >
+                <TouchableWithoutFeedback onPress={closePromptBuilder}>
+                    <GestureHandlerRootView style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                            <KeyboardAvoidingView
+                                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                style={styles.promptBuilderWrapper}
+                            >
+                                <View style={styles.promptBuilderContent}>
+                                    <Text style={styles.aiModalTitle}>Новый промпт</Text>
+                                    <Text style={styles.promptHelper}>
+                                        Используйте {'{text}'} чтобы указать место вставки текста заметки.
+                                    </Text>
+                                    <View>
+                                        <Text style={styles.promptHelper}>Иконка</Text>
+                                        <ScrollView
+                                            horizontal
+                                            showsHorizontalScrollIndicator={false}
+                                            contentContainerStyle={styles.iconPickerRow}
+                                        >
+                                            {ICON_CHOICES.map((icon) => {
+                                                const selected = newPromptIcon === icon;
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={icon}
+                                                        style={[
+                                                            styles.iconChoice,
+                                                            selected && styles.iconChoiceSelected,
+                                                        ]}
+                                                        onPress={() => setNewPromptIcon(icon)}
+                                                    >
+                                                        <MaterialIcons
+                                                            name={icon as any}
+                                                            size={22}
+                                                            color={selected ? colors.surface : colors.text}
+                                                        />
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </ScrollView>
+                                    </View>
+                                    <TextInput
+                                        style={styles.promptInput}
+                                        placeholder="Название промпта"
+                                        placeholderTextColor={colors.textMuted}
+                                        value={newPromptTitle}
+                                        onChangeText={setNewPromptTitle}
+                                    />
+                                    <TextInput
+                                        style={[styles.promptInput, styles.promptTextarea]}
+                                        placeholder="Текст промпта"
+                                        placeholderTextColor={colors.textMuted}
+                                        value={newPromptTemplate}
+                                        onChangeText={setNewPromptTemplate}
+                                        multiline
+                                        textAlignVertical="top"
+                                    />
+                                    <View style={styles.promptPreviewBox}>
+                                        <Text style={styles.promptPreviewLabel}>Предпросмотр</Text>
+                                        {renderPromptPreview()}
+                                    </View>
+
+                                    <View style={styles.promptActions}>
+                                        <TouchableOpacity
+                                            style={styles.promptCancel}
+                                            onPress={closePromptBuilder}
+                                        >
+                                            <Text style={styles.aiCloseButtonText}>Отмена</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.savePromptButton,
+                                                (!newPromptTitle.trim() || !newPromptTemplate.trim()) && styles.savePromptDisabled,
+                                            ]}
+                                            disabled={!newPromptTitle.trim() || !newPromptTemplate.trim()}
+                                            onPress={handleCreatePrompt}
+                                        >
+                                            <Text style={styles.savePromptText}>Сохранить</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </KeyboardAvoidingView>
+                        </TouchableWithoutFeedback>
+                    </GestureHandlerRootView>
                 </TouchableWithoutFeedback>
             </Modal>
 
@@ -535,6 +839,7 @@ export const NoteEditScreen = () => {
                 visible={showVoiceRecorder}
                 onFinish={handleRecordingFinish}
                 onCancel={() => setShowVoiceRecorder(false)}
+                autoStart={true}
             />
         </ScreenContainer>
     );
@@ -661,6 +966,44 @@ const styles = StyleSheet.create({
         marginBottom: spacing.l,
         textAlign: 'center',
     },
+    aiModalTitleInline: {
+        marginBottom: 0,
+    },
+    aiModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.m,
+    },
+    aiActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    aiActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.xs,
+        borderRadius: 8,
+        backgroundColor: colors.background,
+        gap: spacing.xs,
+    },
+    aiActionText: {
+        ...typography.caption,
+        color: colors.primary,
+    },
+    aiLoader: {
+        paddingVertical: spacing.xl,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    aiList: {
+        maxHeight: 420,
+    },
+    aiListContent: {
+        paddingBottom: spacing.m,
+    },
     aiOptionItem: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -682,6 +1025,21 @@ const styles = StyleSheet.create({
         ...typography.body,
         fontWeight: '500',
     },
+    aiOptionTextWrapper: {
+        flex: 1,
+        gap: 4,
+    },
+    aiOptionPrompt: {
+        ...typography.caption,
+        color: colors.textMuted,
+    },
+    aiReorderItem: {
+        paddingVertical: spacing.s,
+    },
+    aiOptionActive: {
+        backgroundColor: colors.background,
+        borderRadius: 12,
+    },
     aiCloseButton: {
         marginTop: spacing.l,
         paddingVertical: spacing.m,
@@ -690,5 +1048,102 @@ const styles = StyleSheet.create({
     aiCloseButtonText: {
         ...typography.body,
         color: colors.textMuted,
+    },
+    promptBuilderWrapper: {
+        flex: 1,
+        justifyContent: 'flex-end',
+    },
+    promptBuilderContent: {
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: spacing.l,
+        gap: spacing.m,
+    },
+    promptHelper: {
+        ...typography.caption,
+        color: colors.textMuted,
+    },
+    promptInput: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
+        ...typography.body,
+        color: colors.text,
+    },
+    promptTextarea: {
+        minHeight: 120,
+        textAlignVertical: 'top',
+    },
+    promptPreviewBox: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        padding: spacing.m,
+        backgroundColor: colors.background,
+        gap: spacing.s,
+    },
+    promptPreviewLabel: {
+        ...typography.caption,
+        color: colors.textMuted,
+    },
+    promptPreviewText: {
+        ...typography.body,
+        color: colors.text,
+    },
+    promptPlaceholderToken: {
+        ...typography.body,
+        color: colors.primary,
+        fontWeight: '600',
+    },
+    promptPreviewPlaceholder: {
+        ...typography.body,
+        color: colors.textMuted,
+    },
+    promptActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: spacing.m,
+    },
+    promptCancel: {
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+    },
+    savePromptButton: {
+        flex: 1,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        backgroundColor: colors.primary,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    savePromptDisabled: {
+        opacity: 0.5,
+    },
+    savePromptText: {
+        ...typography.body,
+        color: colors.surface,
+        fontWeight: '600',
+    },
+    iconPickerRow: {
+        gap: spacing.s,
+        paddingVertical: spacing.xs,
+    },
+    iconChoice: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+    },
+    iconChoiceSelected: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
 });

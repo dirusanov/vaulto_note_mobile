@@ -17,6 +17,13 @@ export const useNotes = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const buildTitle = useCallback((title?: string | null) => {
+        if (title && title.trim().length > 0) {
+            return title.trim();
+        }
+        return '';
+    }, []);
+
     // Initialize DB on mount
     React.useEffect(() => {
         initDatabase().catch(err => console.error('[useNotes] Failed to init DB:', err));
@@ -91,8 +98,7 @@ export const useNotes = () => {
         setError(null);
         try {
             const { title, content, audio } = data;
-            // If title is not provided, try to extract from content, else 'Untitled'
-            const titleToUse = title || content.trim().split('\n')[0] || 'Untitled';
+            const titleToUse = buildTitle(title);
 
             const encryptedTitle = await encrypt(titleToUse);
             const encryptedContent = await encrypt(content);
@@ -166,7 +172,7 @@ export const useNotes = () => {
             const existing = notes.find(n => n.id === id);
             if (!existing) throw new Error('Note not found');
 
-            const titleToUse = updates.title ?? existing.title ?? 'Untitled';
+            const titleToUse = buildTitle(updates.title ?? existing.title);
             const contentToUse = updates.content ?? existing.content ?? '';
 
             // Handle audio updates

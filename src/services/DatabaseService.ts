@@ -1,9 +1,11 @@
+import { Platform } from 'react-native';
+import * as SQLite from 'expo-sqlite';
 import { Note } from '../api/notes';
 import { decrypt } from '../crypto/encryption';
 
 const STORAGE_KEY = 'vaulto_notes_local_store';
 
-// Helper to get notes from localStorage
+// Web Store Implementation
 const getWebStore = (): Note[] => {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
@@ -14,7 +16,6 @@ const getWebStore = (): Note[] => {
     }
 };
 
-// Helper to save notes to localStorage
 const saveWebStore = (notes: Note[]) => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
@@ -23,55 +24,147 @@ const saveWebStore = (notes: Note[]) => {
     }
 };
 
+// Native Store Implementation
+let db: SQLite.SQLiteDatabase | null = null;
+
+const getDb = async () => {
+    if (Platform.OS === 'web') return null;
+    if (!db) {
+        db = await SQLite.openDatabaseAsync('vaulto.db');
+        await db.execAsync(`
+            CREATE TABLE IF NOT EXISTS notes (
+                id TEXT PRIMARY KEY,
+                encrypted_title TEXT,
+                encrypted_content TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                audio_file_path TEXT,
+                audio_duration REAL,
+                encrypted_transcription TEXT,
+                has_audio INTEGER,
+                synced INTEGER DEFAULT 0
+            );
+        `);
+    }
+    return db;
+};
+
 export const initDatabase = async (): Promise<void> => {
-    console.log('[DatabaseService] Web detected, using localStorage');
+    if (Platform.OS === 'web') {
+        console.log('[DatabaseService] Web detected, using localStorage');
+        return;
+    }
+    try {
+        await getDb();
+        console.log('[DatabaseService] Native DB initialized');
+    } catch (e) {
+        console.error('[DatabaseService] Failed to init native DB', e);
+    }
 };
 
 export const saveNoteLocal = async (note: Note): Promise<void> => {
-    const notes = getWebStore();
-    const index = notes.findIndex(n => n.id === note.id);
-    if (index >= 0) {
-        notes[index] = { ...note, synced: 1 } as any;
-    } else {
-        notes.push({ ...note, synced: 1 } as any);
+    if (Platform.OS === 'web') {
+        const notes = getWebStore();
+        const index = notes.findIndex(n => n.id === note.id);
+        if (index >= 0) {
+            notes[index] = { ...note, synced: 1 } as any;
+        } else {
+            notes.push({ ...note, synced: 1 } as any);
+        }
+        saveWebStore(notes);
+        console.log(`[DatabaseService] Note saved to web store: ${note.id}`);
+        return;
     }
-    saveWebStore(notes);
-    console.log(`[DatabaseService] Note saved to web store: ${note.id}`);
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        await database.runAsync(
+            `INSERT OR REPLACE INTO notes (
+                id, encrypted_title, encrypted_content, created_at, updated_at, 
+                audio_file_path, audio_duration, encrypted_transcription, has_audio, synced
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                note.id,
+                note.encrypted_title || '',
+                note.encrypted_content,
+                note.created_at || new Date().toISOString(),
+                note.updated_at || new Date().toISOString(),
+                note.audio_file_path || null,
+                note.audio_duration || 0,
+                note.encrypted_transcription || null,
+                note.has_audio ? 1 : 0,
+                note.synced ?? 1
+            ]
+        );
+        console.log(`[DatabaseService] Note saved to native DB: ${note.id}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to save to native DB', e);
+    }
 };
 
 export const deleteNoteLocal = async (id: string): Promise<void> => {
-    let notes = getWebStore();
-    notes = notes.filter(n => n.id !== id);
-    saveWebStore(notes);
-    console.log(`[DatabaseService] Note deleted from web store: ${id}`);
+    if (Platform.OS === 'web') {
+        let notes = getWebStore();
+        notes = notes.filter(n => n.id !== id);
+        saveWebStore(notes);
+        console.log(`[DatabaseService] Note deleted from web store: ${id}`);
+        return;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('DELETE FROM notes WHERE id = ?', [id]);
+        console.log(`[DatabaseService] Note deleted from native DB: ${id}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to delete from native DB', e);
+    }
 };
 
 export const getNotesLocal = async (): Promise<Note[]> => {
-    const rawNotes = getWebStore();
+    if (Platform.OS === 'web') {
+        const rawNotes = getWebStore();
+        return processNotes(rawNotes);
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return [];
+        const rawNotes = await database.getAllAsync<any>('SELECT * FROM notes ORDER BY updated_at DESC');
+        return processNotes(rawNotes);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to get notes from native DB', e);
+        return [];
+    }
+};
+
+const processNotes = async (rawNotes: any[]): Promise<Note[]> => {
     const notes: Note[] = [];
     for (const n of rawNotes) {
         try {
-            const title = n.encrypted_title
+            const hasEncryptedTitle = n.encrypted_title !== undefined && n.encrypted_title !== null;
+            const title = hasEncryptedTitle
                 ? await decrypt(n.encrypted_title)
-                : await decrypt(n.encrypted_content).then(content => {
-                    const lines = content.trim().split('\n');
-                    return lines[0] || 'Untitled';
-                });
+                : '';
             const content = await decrypt(n.encrypted_content);
             const transcription = n.encrypted_transcription
                 ? await decrypt(n.encrypted_transcription)
                 : undefined;
+
             notes.push({
                 ...n,
                 title,
                 content,
                 transcription,
+                has_audio: !!n.has_audio, // Ensure boolean
             });
         } catch (e) {
-            console.error(`[DatabaseService] Failed to decrypt web note ${n.id}`, e);
+            console.error(`[DatabaseService] Failed to decrypt note ${n.id}`, e);
         }
     }
-    // Sort by updated_at desc
+    // Sort by updated_at desc (in case DB sort wasn't enough or for web)
     return notes.sort((a, b) => {
         const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
         const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;

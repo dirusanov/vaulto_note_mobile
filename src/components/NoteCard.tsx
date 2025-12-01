@@ -12,8 +12,15 @@ interface NoteCardProps {
 
 export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     const content = note.content || '';
+    const buildTitle = () => {
+        if (note.title && note.title.trim().length > 0) return note.title.trim();
+        const words = content.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+        if (words.length === 0) return '';
+        return words.slice(0, 2).join(' ');
+    };
+
     // Extract title and preview
-    const title = note.title || content.split('\n')[0] || 'Untitled Note';
+    const title = buildTitle();
     const preview = content.length > 120
         ? content.substring(0, 120).replace(/\n/g, ' ') + '...'
         : content.replace(/\n/g, ' ');
@@ -43,10 +50,10 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
             activeOpacity={0.9}
         >
             <View style={styles.content}>
-                <Text style={styles.title}>
-                    {title}
+                <Text style={styles.title} numberOfLines={1}>
+                    {title || ' '}
                 </Text>
-                {preview && preview !== title && (
+                {(preview && preview !== title) && (
                     <Text style={styles.preview} numberOfLines={6}>
                         {preview}
                     </Text>

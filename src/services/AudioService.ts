@@ -82,7 +82,10 @@ class AudioServiceClass {
     /**
      * Start recording audio
      */
-    async startRecording(): Promise<void> {
+    /**
+     * Start recording audio
+     */
+    async startRecording(onMeteringUpdate?: (level: number) => void): Promise<void> {
         if (Platform.OS === 'web') {
             alert('Audio recording is not supported in the browser. Please use the mobile app.');
             return;
@@ -131,7 +134,13 @@ class AudioServiceClass {
 
             // Create recording - it will use its own temp storage
             const { recording } = await Audio.Recording.createAsync(
-                recordingOptions
+                recordingOptions,
+                (status) => {
+                    if (onMeteringUpdate && status.isRecording && status.metering !== undefined) {
+                        onMeteringUpdate(status.metering);
+                    }
+                },
+                100 // Update interval in ms
             );
 
             console.log('[V3] Recording created successfully');

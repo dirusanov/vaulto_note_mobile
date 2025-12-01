@@ -102,10 +102,7 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                 // Decrypt on load
                 const title = row.encrypted_title
                     ? await decrypt(row.encrypted_title)
-                    : await decrypt(row.encrypted_content).then(content => {
-                        const lines = content.trim().split('\n');
-                        return lines[0] || 'Untitled';
-                    });
+                    : '';
                 const content = await decrypt(row.encrypted_content);
                 const transcription = row.encrypted_transcription
                     ? await decrypt(row.encrypted_transcription)

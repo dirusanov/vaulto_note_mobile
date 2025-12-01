@@ -1,13 +1,16 @@
 /**
  * Transcription service for sending audio to OpenAI Whisper API.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
-import { getOpenAIApiKey } from '../utils/storage';
 import { Platform } from 'react-native';
+import { API_URL } from '../utils/env';
+import { storage, getAIProvider, getOpenAIApiKey } from '../utils/storage';
 
 const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
+const BACKEND_TRANSCRIBE_URL = `${API_URL}/ai/transcribe`;
 
 export interface TranscriptionResult {
     text: string;
@@ -22,6 +25,11 @@ export async function transcribeAudio(
     audioUri: string,
     language: string = 'ru'
 ): Promise<TranscriptionResult> {
+    const provider = await getAIProvider();
+    if (provider === 'local') {
+        return transcribeViaBackend(audioUri, language);
+    }
+
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -32,7 +40,7 @@ export async function transcribeAudio(
                 return {
                     text: '',
                     success: false,
-                    error: 'OpenAI API key not configured',
+                    error: 'Не найден API ключ OpenAI',
                 };
             }
 
@@ -114,11 +122,97 @@ export async function transcribeAudio(
     };
 }
 
+async function transcribeViaBackend(audioUri: string, language: string): Promise<TranscriptionResult> {
+    // Check if self-hosted mode is enabled
+    const selfHostedEnabled = await AsyncStorage.getItem('vaulto_self_hosted_enabled');
+
+    let token: string | null;
+    let baseUrl: string;
+
+    if (selfHostedEnabled === 'true') {
+        // Use self-hosted configuration
+        const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
+        const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
+
+        if (!selfHostedUrl || !selfHostedApiKey) {
+            return {
+                text: '',
+                success: false,
+                error: 'Self-hosted настройки не заполнены. Проверьте URL и API Key.',
+            };
+        }
+
+        token = selfHostedApiKey;
+        baseUrl = `${selfHostedUrl}/ai/transcribe`;
+    } else {
+        // Use default backend
+        token = await storage.getToken();
+        baseUrl = BACKEND_TRANSCRIBE_URL;
+
+        if (!token) {
+            return {
+                text: '',
+                success: false,
+                error: 'Нужно войти в аккаунт, чтобы использовать локальный Whisper.',
+            };
+        }
+    }
+
+    try {
+        if (Platform.OS !== 'web') {
+            const fileInfo = await FileSystem.getInfoAsync(audioUri);
+            if (!fileInfo.exists || fileInfo.size === 0) {
+                return {
+                    text: '',
+                    success: false,
+                    error: 'Аудиофайл не найден или пустой',
+                };
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: audioUri,
+            type: 'audio/m4a',
+            name: 'audio.m4a',
+        } as any);
+        formData.append('language', language);
+
+        const response = await fetch(baseUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        return {
+            text: result.text || '',
+            success: true,
+        };
+    } catch (error) {
+        console.error('[Transcription] Backend call failed', error);
+        const message = error instanceof Error ? error.message : 'Не удалось получить транскрибацию с сервера';
+        return { text: '', success: false, error: message };
+    }
+}
+
 /**
  * Test connection to OpenAI API
  */
 export async function testOpenAIConnection(): Promise<boolean> {
     try {
+        const provider = await getAIProvider();
+        if (provider !== 'openai') {
+            return false;
+        }
+
         const apiKey = await getOpenAIApiKey();
         if (!apiKey) {
             return false;
