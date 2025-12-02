@@ -5,7 +5,7 @@ import { getAIProvider, getOpenAIApiKey, storage } from '../utils/storage';
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const BACKEND_IMPROVE_URL = `${API_URL}/ai/improve`;
 const AI_PROMPTS_STORAGE_KEY = 'vaulto_ai_prompts_v1';
-const FALLBACK_SAMPLE_TEXT = 'ваш текст';
+const FALLBACK_SAMPLE_TEXT = 'your text';
 const PLACEHOLDER = '{text}';
 export const ensureTemplateHasPlaceholder = (template: string) => {
     if (!template.trim()) return template;
@@ -26,33 +26,33 @@ export interface AIImprovementOption {
 export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
     {
         id: 'grammar',
-        label: 'Исправить грамматику',
+        label: 'Fix Grammar',
         icon: 'spellcheck',
-        prompt: 'Исправь грамматические и орфографические ошибки в следующем тексте, сохранив исходный язык и стиль: {text}'
+        prompt: 'Fix grammatical and spelling errors in the following text, preserving the original language and style: {text}'
     },
     {
         id: 'professional',
-        label: 'Сделать профессиональным',
+        label: 'Make Professional',
         icon: 'business-center',
-        prompt: 'Перепиши следующий текст в более профессиональном и деловом стиле: {text}'
+        prompt: 'Rewrite the following text in a more professional and business style: {text}'
     },
     {
         id: 'simplify',
-        label: 'Упростить текст',
+        label: 'Simplify Text',
         icon: 'child-care',
-        prompt: 'Упрости следующий текст, чтобы он был понятен даже ребенку, используй простые слова: {text}'
+        prompt: 'Simplify the following text so it is understandable to a child, use simple words: {text}'
     },
     {
         id: 'summarize',
-        label: 'Кратко пересказать',
+        label: 'Summarize',
         icon: 'short-text',
-        prompt: 'Сделай краткий пересказ (summary) следующего текста, выделив только самое главное: {text}'
+        prompt: 'Make a brief summary of the following text, highlighting only the most important points: {text}'
     },
     {
         id: 'structure',
-        label: 'Структурировать',
+        label: 'Structure',
         icon: 'format-list-bulleted',
-        prompt: 'Организуй следующий текст, добавив заголовки и маркированные списки там, где это уместно, для лучшей читаемости: {text}'
+        prompt: 'Organize the following text, adding headings and bullet lists where appropriate, for better readability: {text}'
     }
 ];
 
@@ -127,7 +127,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     }
 
     const apiKey = await getOpenAIApiKey();
-    if (!apiKey) throw new Error('Не найден API ключ OpenAI');
+    if (!apiKey) throw new Error('OpenAI API key not found');
 
     try {
         const promptForModel = buildPromptForRequest(option.prompt, text);
@@ -181,7 +181,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
 
         if (!selfHostedUrl || !selfHostedApiKey) {
-            throw new Error('Self-hosted настройки не заполнены. Проверьте URL и API Key.');
+            throw new Error('Self-hosted settings missing. Check URL and API Key.');
         }
 
         token = selfHostedApiKey;
@@ -192,7 +192,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         baseUrl = BACKEND_IMPROVE_URL;
 
         if (!token) {
-            throw new Error('Нужно войти в аккаунт, чтобы использовать локальный LLM.');
+            throw new Error('Sign in required to use local LLM.');
         }
     }
 
@@ -217,7 +217,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
 
     const data = await response.json();
     if (!data.text) {
-        throw new Error('LLM вернул пустой ответ');
+        throw new Error('LLM returned empty response');
     }
 
     return data.text as string;

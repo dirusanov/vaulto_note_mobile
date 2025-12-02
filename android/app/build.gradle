@@ -97,9 +97,6 @@ android {
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
-    buildFeatures {
-        prefab true
-    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')

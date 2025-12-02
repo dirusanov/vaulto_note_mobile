@@ -81,6 +81,7 @@ export const NoteEditScreen = () => {
     const lastSavedTitle = useRef(existingNote?.title || '');
     const lastSavedContent = useRef(existingNote?.content || '');
     const skipAutoSaveRef = useRef(false);
+    const isMounted = useRef(true);
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
 
@@ -124,6 +125,13 @@ export const NoteEditScreen = () => {
         };
 
         fetchAiOptions();
+    }, []);
+
+    useEffect(() => {
+        isMounted.current = true;
+        return () => {
+            isMounted.current = false;
+        };
     }, []);
 
     // Handle history updates
@@ -201,7 +209,9 @@ export const NoteEditScreen = () => {
             if (localNoteId) {
                 try {
                     await deleteNote(localNoteId);
-                    setLocalNoteId(undefined);
+                    if (isMounted.current) {
+                        setLocalNoteId(undefined);
+                    }
                     lastSavedTitle.current = '';
                     lastSavedContent.current = '';
                 } catch (error) {
@@ -216,7 +226,9 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        setIsSaving(true);
+        if (isMounted.current) {
+            setIsSaving(true);
+        }
         try {
             if (localNoteId) {
                 await updateNote(localNoteId, {
@@ -228,14 +240,18 @@ export const NoteEditScreen = () => {
                     title,
                     content,
                 });
-                setLocalNoteId(newNote.id);
+                if (isMounted.current) {
+                    setLocalNoteId(newNote.id);
+                }
             }
             lastSavedTitle.current = title;
             lastSavedContent.current = content;
         } catch (error) {
             console.error('Failed to save note:', error);
         } finally {
-            setIsSaving(false);
+            if (isMounted.current) {
+                setIsSaving(false);
+            }
         }
     }, [audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, title, updateNote]);
 
@@ -281,16 +297,16 @@ export const NoteEditScreen = () => {
         return unsubscribe;
     }, [content, navigation, saveNote, title]);
 
-    const handleBack = async () => {
+    const handleBack = () => {
         Keyboard.dismiss();
-        try {
-            await saveNote();
-            // Skip the beforeRemove check since we just saved
-            skipAutoSaveRef.current = true;
-        } catch (error) {
-            console.error('Error during back navigation save:', error);
-        }
+        // Skip the beforeRemove check since we're handling save here
+        skipAutoSaveRef.current = true;
+        // Navigate immediately without waiting for save to complete
         navigateBackToList();
+        // Save in background (fire-and-forget)
+        saveNote().catch(error => {
+            console.error('Error during back navigation save:', error);
+        });
     };
 
     const handleDelete = async () => {
@@ -381,7 +397,25 @@ export const NoteEditScreen = () => {
                     lastSavedContent.current = newContent;
                 }
             } else {
-                Alert.alert('Транскрибация не удалась', transcription.error || 'Неизвестная ошибка');
+                // Transcription failed
+
+                // Check if we should discard this recording
+                // If it's a new note AND has no text content, we shouldn't create a "phantom" note
+                const isNewNote = !localNoteId;
+                const isEmptyNote = !title.trim() && !content.trim();
+
+                if (isNewNote && isEmptyNote) {
+                    // Cleanup the saved audio file since we aren't keeping the note
+                    await AudioService.deleteAudioFile(savedPath);
+                    Alert.alert(
+                        'Transcription Failed',
+                        'Note was not created because transcription failed.'
+                    );
+                    setIsTranscribing(false);
+                    return;
+                }
+
+                Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
                 if (localNoteId) {
                     await updateNote(localNoteId, {
                         audio_file_path: savedPath,
@@ -389,7 +423,7 @@ export const NoteEditScreen = () => {
                         has_audio: true
                     });
                 } else {
-                    // Create new note with audio but no transcription
+                    // Create new note with audio but no transcription (only if it has other content)
                     const newNote = await createNote({
                         title,
                         content,
@@ -406,7 +440,7 @@ export const NoteEditScreen = () => {
 
         } catch (error) {
             console.error('Error processing recording:', error);
-            Alert.alert('Ошибка', 'Не удалось сохранить запись');
+            Alert.alert('Error', 'Failed to save recording');
             setIsTranscribing(false);
         }
     };
@@ -427,8 +461,8 @@ export const NoteEditScreen = () => {
         } catch (error) {
             const message = error instanceof Error
                 ? error.message
-                : 'Не удалось улучшить текст. Проверьте настройки AI.';
-            Alert.alert('Ошибка', message);
+                : 'Failed to improve text. Check AI settings.';
+            Alert.alert('Error', message);
         } finally {
             setIsAIProcessing(false);
         }
@@ -467,7 +501,7 @@ export const NoteEditScreen = () => {
 
     const renderTemplateWithPlaceholder = (template: string) => {
         if (!template.trim()) {
-            return <Text style={styles.promptPreviewPlaceholder}>Начните вводить текст промпта</Text>;
+            return <Text style={styles.promptPreviewPlaceholder}>Start typing prompt text</Text>;
         }
 
         const normalized = ensureTemplateHasPlaceholder(template);
@@ -616,14 +650,14 @@ export const NoteEditScreen = () => {
                         <TouchableWithoutFeedback>
                             <View style={styles.aiModalContent}>
                                 <View style={styles.aiModalHeader}>
-                                    <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Улучшить текст с AI</Text>
+                                    <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Improve Text with AI</Text>
                                     <View style={styles.aiActions}>
                                         <TouchableOpacity
                                             style={styles.aiActionButton}
                                             onPress={() => setShowPromptBuilder(true)}
                                         >
                                             <MaterialIcons name="add" size={18} color={colors.primary} />
-                                            <Text style={styles.aiActionText}>Создать</Text>
+                                            <Text style={styles.aiActionText}>Create</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -662,7 +696,7 @@ export const NoteEditScreen = () => {
                                     style={styles.aiCloseButton}
                                     onPress={() => setShowAIModal(false)}
                                 >
-                                    <Text style={styles.aiCloseButtonText}>Отмена</Text>
+                                    <Text style={styles.aiCloseButtonText}>Cancel</Text>
                                 </TouchableOpacity>
                             </View>
                         </TouchableWithoutFeedback>
@@ -685,12 +719,12 @@ export const NoteEditScreen = () => {
                                 style={styles.promptBuilderWrapper}
                             >
                                 <View style={styles.promptBuilderContent}>
-                                    <Text style={styles.aiModalTitle}>Новый промпт</Text>
+                                    <Text style={styles.aiModalTitle}>New Prompt</Text>
                                     <Text style={styles.promptHelper}>
-                                        Используйте {'{text}'} чтобы указать место вставки текста заметки.
+                                        Use {'{text}'} to indicate where to insert note text.
                                     </Text>
                                     <View>
-                                        <Text style={styles.promptHelper}>Иконка</Text>
+                                        <Text style={styles.promptHelper}>Icon</Text>
                                         <ScrollView
                                             horizontal
                                             showsHorizontalScrollIndicator={false}
@@ -719,14 +753,14 @@ export const NoteEditScreen = () => {
                                     </View>
                                     <TextInput
                                         style={styles.promptInput}
-                                        placeholder="Название промпта"
+                                        placeholder="Prompt name"
                                         placeholderTextColor={colors.textMuted}
                                         value={newPromptTitle}
                                         onChangeText={setNewPromptTitle}
                                     />
                                     <TextInput
                                         style={[styles.promptInput, styles.promptTextarea]}
-                                        placeholder="Текст промпта"
+                                        placeholder="Prompt text"
                                         placeholderTextColor={colors.textMuted}
                                         value={newPromptTemplate}
                                         onChangeText={setNewPromptTemplate}
@@ -734,7 +768,7 @@ export const NoteEditScreen = () => {
                                         textAlignVertical="top"
                                     />
                                     <View style={styles.promptPreviewBox}>
-                                        <Text style={styles.promptPreviewLabel}>Предпросмотр</Text>
+                                        <Text style={styles.promptPreviewLabel}>Preview</Text>
                                         {renderPromptPreview()}
                                     </View>
 
@@ -743,7 +777,7 @@ export const NoteEditScreen = () => {
                                             style={styles.promptCancel}
                                             onPress={closePromptBuilder}
                                         >
-                                            <Text style={styles.aiCloseButtonText}>Отмена</Text>
+                                            <Text style={styles.aiCloseButtonText}>Cancel</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[
@@ -753,7 +787,7 @@ export const NoteEditScreen = () => {
                                             disabled={!newPromptTitle.trim() || !newPromptTemplate.trim()}
                                             onPress={handleCreatePrompt}
                                         >
-                                            <Text style={styles.savePromptText}>Сохранить</Text>
+                                            <Text style={styles.savePromptText}>Save</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -812,7 +846,7 @@ export const NoteEditScreen = () => {
                     {isTranscribing && (
                         <View style={styles.transcribingContainer}>
                             <ActivityIndicator color={colors.primary} />
-                            <Text style={styles.transcribingText}>Транскрибация...</Text>
+                            <Text style={styles.transcribingText}>Transcribing...</Text>
                         </View>
                     )}
 

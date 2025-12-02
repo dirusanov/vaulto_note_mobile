@@ -40,7 +40,7 @@ export async function transcribeAudio(
                 return {
                     text: '',
                     success: false,
-                    error: 'Не найден API ключ OpenAI',
+                    error: 'OpenAI API key not found',
                 };
             }
 
@@ -139,7 +139,7 @@ async function transcribeViaBackend(audioUri: string, language: string): Promise
             return {
                 text: '',
                 success: false,
-                error: 'Self-hosted настройки не заполнены. Проверьте URL и API Key.',
+                error: 'Self-hosted settings missing. Check URL and API Key.',
             };
         }
 
@@ -154,7 +154,7 @@ async function transcribeViaBackend(audioUri: string, language: string): Promise
             return {
                 text: '',
                 success: false,
-                error: 'Нужно войти в аккаунт, чтобы использовать локальный Whisper.',
+                error: 'Sign in required to use local Whisper.',
             };
         }
     }
@@ -166,7 +166,7 @@ async function transcribeViaBackend(audioUri: string, language: string): Promise
                 return {
                     text: '',
                     success: false,
-                    error: 'Аудиофайл не найден или пустой',
+                    error: 'Audio file not found or empty',
                 };
             }
         }
@@ -199,7 +199,7 @@ async function transcribeViaBackend(audioUri: string, language: string): Promise
         };
     } catch (error) {
         console.error('[Transcription] Backend call failed', error);
-        const message = error instanceof Error ? error.message : 'Не удалось получить транскрибацию с сервера';
+        const message = error instanceof Error ? error.message : 'Failed to get transcription from server';
         return { text: '', success: false, error: message };
     }
 }

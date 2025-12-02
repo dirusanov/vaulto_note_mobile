@@ -40,16 +40,16 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
         >
             <View style={styles.overlay}>
                 <View style={styles.modal}>
-                    <Text style={styles.title}>🔒 Приватность</Text>
+                    <Text style={styles.title}>🔒 Privacy</Text>
 
                     <Text style={styles.message}>
-                        Аудиозапись будет отправлена на сервер OpenAI для
-                        транскрибации в текст.
+                        Audio recording will be sent to OpenAI server for
+                        transcription to text.
                     </Text>
 
                     <Text style={styles.message}>
-                        Пожалуйста, не записывайте конфиденциальную информацию,
-                        если не доверяете OpenAI.
+                        Please don't record confidential information
+                        if you don't trust OpenAI.
                     </Text>
 
                     <TouchableOpacity
@@ -63,7 +63,7 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
                             {dontShowAgain && <Text style={styles.checkmark}>✓</Text>}
                         </View>
                         <Text style={styles.checkboxLabel}>
-                            Не показывать снова
+                            Don't show again
                         </Text>
                     </TouchableOpacity>
 
@@ -72,14 +72,14 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
                             style={[styles.button, styles.cancelButton]}
                             onPress={onCancel}
                         >
-                            <Text style={styles.cancelButtonText}>Отмена</Text>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.button, styles.acceptButton]}
                             onPress={handleAccept}
                         >
-                            <Text style={styles.acceptButtonText}>Понятно</Text>
+                            <Text style={styles.acceptButtonText}>Got it</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

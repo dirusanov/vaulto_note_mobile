@@ -229,8 +229,8 @@ export const useNotes = () => {
             if (updates.encrypted_transcription) {
                 // It's actually raw text coming from the UI, let's encrypt it
                 const rawTrans = updates.encrypted_transcription;
-                encryptedTranscription = await encrypt(rawTrans);
                 transcription = rawTrans; // Update local state with raw text
+                // Will encrypt below
             }
 
             // If note becomes empty (no title/content/audio), delete it instead of saving
@@ -246,8 +246,33 @@ export const useNotes = () => {
                 return existing;
             }
 
+            // OPTIMISTIC UPDATE: Update UI immediately with plain text values
+            const optimisticNote: Note = {
+                ...existing,
+                title: titleToUse,
+                content: contentToUse,
+                updated_at: new Date().toISOString(),
+                audio_file_path: audioPath,
+                audio_duration: audioDuration,
+                has_audio: hasAudio,
+                transcription: transcription,
+            };
+            setNotes((prev) => {
+                const updatedList = prev.map((n) => (n.id === id ? optimisticNote : n));
+                return updatedList.sort((a, b) => {
+                    const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+                    const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+                    return dateB - dateA;
+                });
+            });
+
+            // Background: Encrypt and save
             const encryptedTitle = await encrypt(titleToUse);
             const encryptedContent = await encrypt(contentToUse);
+
+            if (updates.encrypted_transcription) {
+                encryptedTranscription = await encrypt(updates.encrypted_transcription);
+            }
 
             let updatedNote: Note;
             try {
@@ -289,7 +314,15 @@ export const useNotes = () => {
                 };
             }
 
-            setNotes((prev) => prev.map((n) => (n.id === id ? updatedNote : n)));
+            // Update again with server response (in case timestamps or other fields changed)
+            setNotes((prev) => {
+                const updatedList = prev.map((n) => (n.id === id ? updatedNote : n));
+                return updatedList.sort((a, b) => {
+                    const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+                    const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+                    return dateB - dateA;
+                });
+            });
             return updatedNote;
         } catch (err) {
             setError('Failed to update note');

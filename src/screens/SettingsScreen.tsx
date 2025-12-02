@@ -14,11 +14,11 @@ import {
     getOpenAIApiKey,
     getSelfHostedUrl,
     getSelfHostedApiKey,
-        resetPrivacyWarning,
-        setAIProvider,
-        setOpenAIApiKey,
-        setSelfHostedUrl,
-        setSelfHostedApiKey
+    resetPrivacyWarning,
+    setAIProvider,
+    setOpenAIApiKey,
+    setSelfHostedUrl,
+    setSelfHostedApiKey
 } from '../utils/storage';
 import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -72,8 +72,8 @@ export const SettingsScreen = () => {
         {
             key: 'local',
             title: 'Secure LLM',
-            blurb: 'Локально и приватно',
-            description: 'Whisper + LLaMA на вашем сервере (Docker). Всё остаётся у вас.',
+            blurb: 'Local & Private',
+            description: 'Whisper + LLaMA on your server (Docker). Everything stays with you.',
             icon: 'security',
             accent: colors.primary,
             chips: ['Zero retention', 'Docker ready'],
@@ -81,8 +81,8 @@ export const SettingsScreen = () => {
         {
             key: 'openai',
             title: 'OpenAI API',
-            blurb: 'Быстро и удобно',
-            description: 'Audio → Whisper, Chat → Completions. Требуется API ключ.',
+            blurb: 'Fast & Convenient',
+            description: 'Audio → Whisper, Chat → Completions. API Key required.',
             icon: 'cloud-queue',
             accent: colors.accentPurple,
             chips: ['Whisper', 'GPT', 'Fast'],
@@ -90,11 +90,11 @@ export const SettingsScreen = () => {
         {
             key: 'selfhosted',
             title: 'Self Hosted',
-            blurb: 'Полный контроль',
-            description: 'Подключитесь к своему серверу с помощью Docker Compose.',
+            blurb: 'Full Control',
+            description: 'Connect to your server using Docker Compose.',
             icon: 'dns',
             accent: colors.accentGreen,
-            chips: ['Ваш сервер', 'VPN/SSL'],
+            chips: ['Your Server', 'VPN/SSL'],
         },
     ];
 
@@ -162,12 +162,12 @@ export const SettingsScreen = () => {
 
     const handleTestConnection = async () => {
         if (!usingOpenAI) {
-            setOpenAITestStatus({ type: 'error', message: 'Выберите OpenAI, чтобы протестировать соединение.' });
+            setOpenAITestStatus({ type: 'error', message: 'Select OpenAI to test connection.' });
             return;
         }
 
         if (!apiKey) {
-            setOpenAITestStatus({ type: 'error', message: 'Введите API ключ.' });
+            setOpenAITestStatus({ type: 'error', message: 'Enter API Key.' });
             return;
         }
 
@@ -178,25 +178,25 @@ export const SettingsScreen = () => {
         setTestingConnection(false);
 
         if (isConnected) {
-            setOpenAITestStatus({ type: 'success', message: 'Подключение к OpenAI работает.' });
+            setOpenAITestStatus({ type: 'success', message: 'OpenAI connection working.' });
         } else {
-            setOpenAITestStatus({ type: 'error', message: 'Не удалось подключиться. Проверьте API ключ.' });
+            setOpenAITestStatus({ type: 'error', message: 'Connection failed. Check API Key.' });
         }
     };
 
     const handleTestSelfHostedConnection = async () => {
         if (!usingSelfHosted) {
-            setSelfHostedTestStatus({ type: 'error', message: 'Выберите Self-Hosted, чтобы протестировать соединение.' });
+            setSelfHostedTestStatus({ type: 'error', message: 'Select Self-Hosted to test connection.' });
             return;
         }
 
         if (!selfHostedUrl) {
-            setSelfHostedTestStatus({ type: 'error', message: 'Введите Server URL.' });
+            setSelfHostedTestStatus({ type: 'error', message: 'Enter Server URL.' });
             return;
         }
 
         if (!selfHostedApiKey) {
-            setSelfHostedTestStatus({ type: 'error', message: 'Введите API Secret Key.' });
+            setSelfHostedTestStatus({ type: 'error', message: 'Enter API Secret Key.' });
             return;
         }
 
@@ -210,24 +210,13 @@ export const SettingsScreen = () => {
         setTestingSelfHosted(false);
 
         if (isConnected) {
-            setSelfHostedTestStatus({ type: 'success', message: 'Подключение к вашему серверу работает.' });
+            setSelfHostedTestStatus({ type: 'success', message: 'Connection to your server working.' });
         } else {
-            setSelfHostedTestStatus({ type: 'error', message: 'Не удалось подключиться. Проверьте URL и ключ.' });
+            setSelfHostedTestStatus({ type: 'error', message: 'Connection failed. Check URL and Key.' });
         }
     };
 
-    const handleResetPrivacyWarning = async () => {
-        setResettingPrivacy(true);
-        setPrivacyStatus({ type: 'idle', message: '' });
-        try {
-            await resetPrivacyWarning();
-            setPrivacyStatus({ type: 'success', message: 'Предупреждение будет показано снова.' });
-        } catch (error) {
-            setPrivacyStatus({ type: 'error', message: 'Не удалось сбросить предупреждение.' });
-        } finally {
-            setResettingPrivacy(false);
-        }
-    };
+
 
     return (
         <ScreenContainer>
@@ -258,10 +247,10 @@ export const SettingsScreen = () => {
                         <Text style={styles.sectionTitle}>Account</Text>
                     </View>
                     {isAuthenticated ? (
-                        <Text style={styles.info}>Подключено. Заметки синхронизируются.</Text>
+                        <Text style={styles.info}>Connected. Notes are syncing.</Text>
                     ) : (
                         <>
-                            <Text style={styles.info}>Guest Mode — заметки на устройстве.</Text>
+                            <Text style={styles.info}>Guest Mode — notes are local.</Text>
                             <Button
                                 title="Sign In to Sync"
                                 onPress={() => navigation.navigate('SignIn')}
@@ -275,7 +264,7 @@ export const SettingsScreen = () => {
                     <View style={styles.cardHeader}>
                         <Text style={styles.sectionTitle}>AI Provider</Text>
                     </View>
-                    <Text style={styles.sectionHint}>Выберите, где обрабатываются подсказки и транскрибация.</Text>
+                    <Text style={styles.sectionHint}>Choose where prompts and transcription are processed.</Text>
 
                     <View style={styles.providerSwitcher}>
                         {providerOptions.map((option) => {
@@ -327,7 +316,7 @@ export const SettingsScreen = () => {
                                     color={colors.textSecondary}
                                 />
                                 <Text style={styles.infoToggleText}>
-                                    {showProviderInfo ? 'Скрыть детали' : 'Подробнее о провайдере'}
+                                    {showProviderInfo ? 'Hide details' : 'More about provider'}
                                 </Text>
                             </TouchableOpacity>
                             {showProviderInfo && (
@@ -357,7 +346,7 @@ export const SettingsScreen = () => {
                                         {aiProvider === 'selfhosted' && (
                                             <View style={styles.microRow}>
                                                 <MaterialIcons name="router" size={14} color={colors.textSecondary} />
-                                                <Text style={styles.microText}>Ваш сервер</Text>
+                                                <Text style={styles.microText}>Your Server</Text>
                                                 <MaterialIcons name="east" size={14} color={colors.textSecondary} />
                                                 <MaterialIcons name="verified-user" size={14} color={colors.textSecondary} />
                                                 <Text style={styles.microText}>Private</Text>
@@ -374,7 +363,7 @@ export const SettingsScreen = () => {
                             <View style={styles.settingsPanelHeader}>
                                 <View style={styles.inlineTitle}>
                                     <MaterialIcons name="key" size={18} color={colors.primary} />
-                                    <Text style={styles.panelTitle}>OpenAI доступ</Text>
+                                    <Text style={styles.panelTitle}>OpenAI Access</Text>
                                 </View>
                             </View>
                             <TouchableOpacity
@@ -388,16 +377,16 @@ export const SettingsScreen = () => {
                                     color={colors.textSecondary}
                                 />
                                 <Text style={styles.infoToggleText}>
-                                    {showOpenAIInfo ? 'Скрыть детали' : 'Как это работает?'}
+                                    {showOpenAIInfo ? 'Hide details' : 'How it works?'}
                                 </Text>
                             </TouchableOpacity>
                             {showOpenAIInfo && (
                                 <View style={styles.infoBox}>
                                     <Text style={styles.infoBoxText}>
-                                        API ключ хранится на устройстве и используется только для запросов к OpenAI.
+                                        API key is stored on device and used only for OpenAI requests.
                                     </Text>
                                     <Text style={styles.infoBoxText}>
-                                        Ключ можно менять в любой момент — сохранение происходит автоматически.
+                                        Key can be changed anytime — saves automatically.
                                     </Text>
                                 </View>
                             )}
@@ -410,7 +399,7 @@ export const SettingsScreen = () => {
                                         placeholder="sk-..."
                                         secureTextEntry={!showOpenAIKey}
                                         style={[styles.compactInput, styles.flex]}
-                                        containerStyle={[styles.inputContainer, styles.noMarginContainer]}
+                                        containerStyle={[styles.inputContainer, styles.noMarginContainer, styles.flex]}
                                     />
                                     <TouchableOpacity
                                         style={styles.eyeButton}
@@ -438,7 +427,7 @@ export const SettingsScreen = () => {
                                     ) : (
                                         <>
                                             <MaterialIcons name="bolt" size={18} color={colors.surface} />
-                                            <Text style={styles.testActionText}>Тест подключения</Text>
+                                            <Text style={styles.testActionText}>Test Connection</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
@@ -468,7 +457,7 @@ export const SettingsScreen = () => {
                             <View style={styles.settingsPanelHeader}>
                                 <View style={styles.inlineTitle}>
                                     <MaterialIcons name="router" size={18} color={colors.accentGreen} />
-                                    <Text style={styles.panelTitle}>Self-Hosted доступ</Text>
+                                    <Text style={styles.panelTitle}>Self-Hosted Access</Text>
                                 </View>
                             </View>
                             <TouchableOpacity
@@ -482,16 +471,16 @@ export const SettingsScreen = () => {
                                     color={colors.textSecondary}
                                 />
                                 <Text style={styles.infoToggleText}>
-                                    {showSelfHostedInfo ? 'Скрыть детали' : 'Как это настроить?'}
+                                    {showSelfHostedInfo ? 'Hide details' : 'How to setup?'}
                                 </Text>
                             </TouchableOpacity>
                             {showSelfHostedInfo && (
                                 <View style={styles.infoBox}>
                                     <Text style={styles.infoBoxText}>
-                                        Укажите полный URL до вашего API (с портом и /api/v1), чтобы приложение знало, куда отправлять запросы.
+                                        Enter full URL to your API (with port and /api/v1).
                                     </Text>
                                     <Text style={styles.infoBoxText}>
-                                        API Secret Key берётся из вашего .env. Он шифруется и сохраняется на устройстве автоматически.
+                                        API Secret Key comes from your .env. It is encrypted and stored automatically.
                                     </Text>
                                 </View>
                             )}
@@ -513,7 +502,7 @@ export const SettingsScreen = () => {
                                         placeholder="your_secret_api_key_here"
                                         secureTextEntry={!showSelfHostedKey}
                                         style={[styles.compactInput, styles.flex]}
-                                        containerStyle={[styles.inputContainer, styles.noMarginContainer]}
+                                        containerStyle={[styles.inputContainer, styles.noMarginContainer, styles.flex]}
                                     />
                                     <TouchableOpacity
                                         style={styles.eyeButton}
@@ -541,7 +530,7 @@ export const SettingsScreen = () => {
                                     ) : (
                                         <>
                                             <MaterialIcons name="bolt" size={18} color={colors.surface} />
-                                            <Text style={styles.testActionText}>Тест подключения</Text>
+                                            <Text style={styles.testActionText}>Test Connection</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
@@ -568,51 +557,12 @@ export const SettingsScreen = () => {
                 </View>
 
 
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>Privacy</Text>
-                    </View>
-                    <Text style={styles.info}>
-                        Транскрибация и улучшения не логируются. Вы можете повторно увидеть предупреждение о приватности для голосовых заметок.
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.resetActionButton}
-                        onPress={handleResetPrivacyWarning}
-                        activeOpacity={0.9}
-                        disabled={resettingPrivacy}
-                    >
-                        {resettingPrivacy ? (
-                            <ActivityIndicator color={colors.error} />
-                        ) : (
-                            <>
-                                <MaterialIcons name="restart-alt" size={18} color={colors.error} />
-                                <Text style={styles.resetActionText}>Сбросить предупреждение</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                    {privacyStatus.type !== 'idle' && (
-                        <View style={styles.statusRow}>
-                            <MaterialIcons
-                                name={privacyStatus.type === 'success' ? 'check-circle' : 'error-outline'}
-                                size={18}
-                                color={privacyStatus.type === 'success' ? colors.accentGreen : colors.error}
-                            />
-                            <Text
-                                style={[
-                                    styles.statusText,
-                                    privacyStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError,
-                                ]}
-                            >
-                                {privacyStatus.message}
-                            </Text>
-                        </View>
-                    )}
-                </View>
+
 
                 <View style={styles.card}>
                     <Text style={styles.sectionTitle}>App Info</Text>
                     <Text style={styles.info}>Version 1.0.0</Text>
-                    <Text style={styles.info}>Данные не хранятся, не анализируются.</Text>
+                    <Text style={styles.info}>Data is not stored or analyzed.</Text>
                 </View>
 
                 {isAuthenticated && (
@@ -871,19 +821,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
+        flex: 1,
+        minWidth: 0, // Prevents flex item from overflowing
     },
     flex: {
         flex: 1,
     },
     eyeButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
+        width: 40, // Reduced from 44 to give more space to input
+        height: 40,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.backgroundSecondary,
         borderWidth: 1,
         borderColor: colors.border,
+        flexShrink: 0, // Prevents button from being squeezed outside container
     },
     noMarginContainer: {
         marginBottom: 0,

@@ -29,17 +29,30 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
         const now = new Date();
-        const diff = now.getTime() - date.getTime();
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-        if (days === 0) {
-            return 'Today';
-        } else if (days === 1) {
-            return 'Yesterday';
-        } else if (days < 7) {
-            return `${days} days ago`;
+        const isToday = date.getDate() === now.getDate() &&
+            date.getMonth() === now.getMonth() &&
+            date.getFullYear() === now.getFullYear();
+
+        const isThisYear = date.getFullYear() === now.getFullYear();
+
+        if (isToday) {
+            return date.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        } else if (isThisYear) {
+            return date.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short'
+            });
         } else {
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return date.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
         }
     };
 
@@ -59,10 +72,10 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
                     </Text>
                 )}
             </View>
-            {note.updated_at && (
+            {(note.updated_at || note.created_at) && (
                 <View style={styles.footer}>
                     <Text style={styles.date}>
-                        {formatDate(note.updated_at)}
+                        {formatDate(note.updated_at || note.created_at || '')}
                     </Text>
                 </View>
             )}
