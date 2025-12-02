@@ -26,7 +26,7 @@ export async function transcribeAudio(
     language: string = 'ru'
 ): Promise<TranscriptionResult> {
     const provider = await getAIProvider();
-    if (provider === 'local') {
+    if (provider === 'local' || provider === 'selfhosted') {
         return transcribeViaBackend(audioUri, language);
     }
 
@@ -123,13 +123,14 @@ export async function transcribeAudio(
 }
 
 async function transcribeViaBackend(audioUri: string, language: string): Promise<TranscriptionResult> {
-    // Check if self-hosted mode is enabled
-    const selfHostedEnabled = await AsyncStorage.getItem('vaulto_self_hosted_enabled');
+    // Check if self-hosted provider is selected
+    const provider = await getAIProvider();
+    const isSelfHosted = provider === 'selfhosted';
 
     let token: string | null;
     let baseUrl: string;
 
-    if (selfHostedEnabled === 'true') {
+    if (isSelfHosted) {
         // Use self-hosted configuration
         const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
         const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
@@ -228,6 +229,30 @@ export async function testOpenAIConnection(): Promise<boolean> {
         return response.ok;
     } catch (error) {
         console.error('OpenAI connection test failed:', error);
+        return false;
+    }
+}
+
+/**
+ * Test connection to Self-Hosted backend healthcheck
+ */
+export async function testSelfHostedConnection(url: string, apiKey: string): Promise<boolean> {
+    try {
+        if (!url || !apiKey) return false;
+
+        const normalizedUrl = url.replace(/\/+$/, '');
+        const healthUrl = `${normalizedUrl}/health`;
+
+        const response = await fetch(healthUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+            },
+        });
+
+        return response.ok;
+    } catch (error) {
+        console.error('Self-hosted connection test failed:', error);
         return false;
     }
 }

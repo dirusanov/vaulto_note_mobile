@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Vibration, Alert } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Vibration, Alert, Animated, TextInput } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -10,7 +10,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useNotesContext } from '../contexts/NotesContext';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,19 +21,31 @@ const DOCK_PREF_KEY = 'vaulto_dock_preference';
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { notes, loading, fetchNotes } = useNotesContext();
+    const { notes, loading, fetchNotes, searchNotes } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // true = Mic is Center (Primary), Note is Right (Secondary)
     // false = Note is Center (Primary), Mic is Right (Secondary)
     const [isMicPrimary, setIsMicPrimary] = useState(true);
 
+    // Search Bar Animation
+    const searchBarHeight = useRef(new Animated.Value(0)).current;
+    const lastScrollY = useRef(0);
+    const isSearchVisible = useRef(false);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchNotes();
+        }, [fetchNotes])
+    );
+
+    // Load dock preference when screen is focused
     useEffect(() => {
         if (isFocused) {
-            fetchNotes();
             loadDockPreference();
         }
-    }, [isFocused, fetchNotes]);
+    }, [isFocused]);
 
     const loadDockPreference = async () => {
         try {
@@ -72,6 +84,41 @@ export const NotesListScreen = () => {
     const handleVoiceFinish = (recording: AudioRecording) => {
         setIsVoiceRecorderVisible(false);
         navigation.navigate('NoteEdit', { initialRecording: recording });
+    };
+
+    const handleSearch = (text: string) => {
+        setSearchQuery(text);
+        searchNotes(text);
+    };
+
+    const handleScroll = (event: any) => {
+        const currentScrollY = event.nativeEvent.contentOffset.y;
+        const diff = currentScrollY - lastScrollY.current;
+
+        // Pulling down (scrolling up) or at the very top
+        if (diff < -5 || currentScrollY < -20) {
+            if (!isSearchVisible.current) {
+                Animated.timing(searchBarHeight, {
+                    toValue: 60,
+                    duration: 200,
+                    useNativeDriver: false,
+                }).start();
+                isSearchVisible.current = true;
+            }
+        }
+        // Scrolling down
+        else if (diff > 5 && currentScrollY > 0) {
+            if (isSearchVisible.current && searchQuery === '') { // Only hide if empty
+                Animated.timing(searchBarHeight, {
+                    toValue: 0,
+                    duration: 200,
+                    useNativeDriver: false,
+                }).start();
+                isSearchVisible.current = false;
+            }
+        }
+
+        lastScrollY.current = currentScrollY;
     };
 
     // Split notes into two columns for masonry layout
@@ -140,10 +187,23 @@ export const NotesListScreen = () => {
 
     return (
         <ScreenContainer>
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>My Notes</Text>
-            </View>
+            <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, 60], outputRange: [0, 1] }) }]}>
+                <View style={styles.searchBar}>
+                    <MaterialIcons name="search" size={20} color={colors.textTertiary} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search notes..."
+                        placeholderTextColor={colors.textTertiary}
+                        value={searchQuery}
+                        onChangeText={handleSearch}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => handleSearch('')}>
+                            <MaterialIcons name="close" size={20} color={colors.textTertiary} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </Animated.View>
 
             {loading && notes.length === 0 ? (
                 <Loader />
@@ -151,6 +211,8 @@ export const NotesListScreen = () => {
                 <ScrollView
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
+                    onScroll={handleScroll}
+                    scrollEventThrottle={16}
                 >
                     {notes.length === 0 ? (
                         <View style={styles.emptyContainer}>
@@ -206,19 +268,29 @@ export const NotesListScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    header: {
-        paddingTop: spacing.xl,
-        paddingBottom: spacing.m,
-        paddingHorizontal: spacing.m,
-        marginBottom: spacing.s,
-    },
-    headerTitle: {
-        ...typography.h1,
-        fontSize: 32,
-        color: colors.text,
-    },
     scrollContent: {
+        paddingTop: spacing.m,
         paddingBottom: spacing.xxl,
+    },
+    searchContainer: {
+        overflow: 'hidden',
+        paddingHorizontal: spacing.m,
+        justifyContent: 'center',
+        marginTop: spacing.xxl + spacing.l, // Move down to be visible on phones
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        paddingHorizontal: spacing.m,
+        height: 56, // Increased for better usability on mobile
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: spacing.s,
+        color: colors.text,
+        fontSize: 16,
     },
     masonryContainer: {
         flexDirection: 'row',
@@ -229,11 +301,11 @@ const styles = StyleSheet.create({
         marginHorizontal: spacing.xs,
     },
     emptyContainer: {
-        marginTop: spacing.xxl * 2,
+        marginTop: spacing.xl,
     },
     dockContainer: {
         position: 'absolute',
-        bottom: spacing.xl,
+        bottom: spacing.xl + spacing.m, // Moved up significantly
         left: 0,
         right: 0,
         alignItems: 'center',
@@ -266,7 +338,7 @@ const styles = StyleSheet.create({
     centerButton: {
         width: 88,
         height: 88,
-        marginTop: -44, // Pull it up to float above the dock
+        marginTop: -20, // Pull it up slightly; dock sits lower now
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: colors.background, // Gap filler

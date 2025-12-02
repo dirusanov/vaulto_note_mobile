@@ -29,6 +29,13 @@ export const useNotes = () => {
         initDatabase().catch(err => console.error('[useNotes] Failed to init DB:', err));
     }, []);
 
+    const isEmptyNote = (note: Partial<Note>) => {
+        const plainTitle = (note.title || '').trim();
+        const plainContent = (note.content || '').trim();
+        const hasAudio = !!note.has_audio || !!note.audio_file_path;
+        return !plainTitle && !plainContent && !hasAudio;
+    };
+
     const fetchNotes = useCallback(async () => {
         console.log('[useNotes] fetchNotes called');
         setLoading(true);
@@ -40,7 +47,7 @@ export const useNotes = () => {
                 try {
                     // SYNC UP: Find local notes that need syncing
                     const allLocal = await getNotesLocal();
-                    const unsynced = allLocal.filter(n => n.id.startsWith('local-') || (n as any).synced === 0);
+                    const unsynced = allLocal.filter(n => (n.id.startsWith('local-') || (n as any).synced === 0) && !isEmptyNote(n));
 
                     if (unsynced.length > 0) {
                         console.log(`[useNotes] Found ${unsynced.length} unsynced notes. Syncing...`);
@@ -81,8 +88,16 @@ export const useNotes = () => {
 
             // Load from local DB (source of truth for UI to ensure offline support)
             const localNotes = await getNotesLocal();
-            setNotes(localNotes);
-            console.log('[useNotes] State updated with', localNotes.length, 'notes from local DB');
+            const filtered = [];
+            for (const n of localNotes) {
+                if (isEmptyNote(n)) {
+                    await deleteNoteLocal(n.id);
+                    continue;
+                }
+                filtered.push(n);
+            }
+            setNotes(filtered);
+            console.log('[useNotes] State updated with', filtered.length, 'notes from local DB');
 
         } catch (err) {
             console.error('[useNotes] Error fetching/decrypting notes:', err);
@@ -94,14 +109,20 @@ export const useNotes = () => {
     }, [isAuthenticated]);
 
     const createNote = async (data: { title?: string; content: string; audio?: NoteAudio }) => {
+        const { title, content, audio } = data;
+        const titleToUse = buildTitle(title);
+        const contentToUse = content || '';
+        const isEmpty = !titleToUse.trim() && !contentToUse.trim() && !audio;
+        if (isEmpty) {
+            console.warn('[useNotes] Skipping creation of empty note');
+            return Promise.reject(new Error('Cannot create empty note'));
+        }
+
         setLoading(true);
         setError(null);
         try {
-            const { title, content, audio } = data;
-            const titleToUse = buildTitle(title);
-
             const encryptedTitle = await encrypt(titleToUse);
-            const encryptedContent = await encrypt(content);
+            const encryptedContent = await encrypt(contentToUse);
             const encryptedTranscription = audio?.transcription
                 ? await encrypt(audio.transcription)
                 : undefined;
@@ -210,6 +231,19 @@ export const useNotes = () => {
                 const rawTrans = updates.encrypted_transcription;
                 encryptedTranscription = await encrypt(rawTrans);
                 transcription = rawTrans; // Update local state with raw text
+            }
+
+            // If note becomes empty (no title/content/audio), delete it instead of saving
+            const willBeEmpty = !titleToUse.trim() && !contentToUse.trim() && !hasAudio && !updates.audio_file_path && !updates.audio;
+            if (willBeEmpty) {
+                try {
+                    await notesApi.delete(id);
+                } catch (apiError) {
+                    console.warn('[useNotes] API delete during empty-update failed, deleting locally only', apiError);
+                }
+                await deleteNoteLocal(id);
+                setNotes((prev) => prev.filter((n) => n.id !== id));
+                return existing;
             }
 
             const encryptedTitle = await encrypt(titleToUse);

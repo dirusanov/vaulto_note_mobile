@@ -195,7 +195,19 @@ export const NoteEditScreen = () => {
     };
 
     const saveNote = useCallback(async () => {
-        if (!title.trim() && !content.trim()) {
+        const hasAudio = !!audioUri || existingNote?.has_audio;
+        const emptyText = !title.trim() && !content.trim();
+        if (emptyText && !hasAudio) {
+            if (localNoteId) {
+                try {
+                    await deleteNote(localNoteId);
+                    setLocalNoteId(undefined);
+                    lastSavedTitle.current = '';
+                    lastSavedContent.current = '';
+                } catch (error) {
+                    console.error('Failed to delete empty note:', error);
+                }
+            }
             return;
         }
 
@@ -225,7 +237,7 @@ export const NoteEditScreen = () => {
         } finally {
             setIsSaving(false);
         }
-    }, [content, createNote, localNoteId, title, updateNote]);
+    }, [audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, title, updateNote]);
 
     useEffect(() => {
         const unsubscribe = navigation.addListener('beforeRemove', (event) => {

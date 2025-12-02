@@ -9,7 +9,7 @@ const SELF_HOSTED_ENABLED_KEY = 'vaulto_self_hosted_enabled';
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
 
-export type AIProvider = 'local' | 'openai';
+export type AIProvider = 'local' | 'openai' | 'selfhosted';
 
 export const storage = {
     getToken: async (): Promise<string | null> => {
@@ -32,21 +32,6 @@ export const storage = {
             await AsyncStorage.removeItem(TOKEN_KEY);
         } catch (e) {
             console.error('Failed to remove token', e);
-        }
-    },
-    getGuestMode: async (): Promise<boolean> => {
-        try {
-            const value = await AsyncStorage.getItem('vaulto_guest_mode');
-            return value === 'true';
-        } catch (e) {
-            return false;
-        }
-    },
-    setGuestMode: async (isGuest: boolean): Promise<void> => {
-        try {
-            await AsyncStorage.setItem('vaulto_guest_mode', isGuest.toString());
-        } catch (e) {
-            console.error('Failed to set guest mode', e);
         }
     },
 };
@@ -73,7 +58,7 @@ export const setOpenAIApiKey = async (apiKey: string): Promise<void> => {
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
-        if (value === 'openai' || value === 'local') {
+        if (value === 'openai' || value === 'local' || value === 'selfhosted') {
             return value;
         }
         return 'local';
@@ -138,24 +123,6 @@ export const setMaxRecordingDuration = async (seconds: number): Promise<void> =>
 };
 
 // Self-Hosted Backend Settings
-export const getSelfHostedEnabled = async (): Promise<boolean> => {
-    try {
-        const value = await AsyncStorage.getItem(SELF_HOSTED_ENABLED_KEY);
-        return value === 'true';
-    } catch (e) {
-        console.error('Failed to get self-hosted enabled', e);
-        return false;
-    }
-};
-
-export const setSelfHostedEnabled = async (enabled: boolean): Promise<void> => {
-    try {
-        await AsyncStorage.setItem(SELF_HOSTED_ENABLED_KEY, enabled.toString());
-    } catch (e) {
-        console.error('Failed to set self-hosted enabled', e);
-    }
-};
-
 export const getSelfHostedUrl = async (): Promise<string | null> => {
     try {
         return await AsyncStorage.getItem(SELF_HOSTED_URL_KEY);
@@ -189,4 +156,3 @@ export const setSelfHostedApiKey = async (apiKey: string): Promise<void> => {
         console.error('Failed to set self-hosted API key', e);
     }
 };
-

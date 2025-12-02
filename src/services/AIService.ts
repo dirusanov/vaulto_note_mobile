@@ -122,7 +122,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     if (!option) throw new Error('Invalid option');
 
     const provider = await getAIProvider();
-    if (provider === 'local') {
+    if (provider === 'local' || provider === 'selfhosted') {
         return improveViaBackend(text, option);
     }
 
@@ -168,13 +168,14 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
 }
 
 async function improveViaBackend(text: string, option: AIImprovementOption): Promise<string> {
-    // Check if self-hosted mode is enabled
-    const selfHostedEnabled = await AsyncStorage.getItem('vaulto_self_hosted_enabled');
+    // Check if self-hosted provider is selected
+    const provider = await getAIProvider();
+    const isSelfHosted = provider === 'selfhosted';
 
     let token: string | null;
     let baseUrl: string;
 
-    if (selfHostedEnabled === 'true') {
+    if (isSelfHosted) {
         // Use self-hosted configuration
         const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
         const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');

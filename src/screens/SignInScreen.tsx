@@ -10,7 +10,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
-import { storage } from '../utils/storage';
 
 export const SignInScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -29,7 +28,6 @@ export const SignInScreen = () => {
         setLoading(true);
         try {
             const data = await authApi.login(email, password);
-            await storage.setGuestMode(false);
             await signIn(data.access_token);
             // Navigation is handled by RootNavigator based on auth state
         } catch (error: any) {
@@ -43,7 +41,6 @@ export const SignInScreen = () => {
     return (
         <ScreenContainer>
             <View style={styles.header}>
-                <Text style={styles.title}>Welcome back</Text>
                 <Text style={styles.subtitle}>Sign in to access your notes</Text>
             </View>
 
@@ -85,10 +82,6 @@ const styles = StyleSheet.create({
     header: {
         marginTop: spacing.xl,
         marginBottom: spacing.xl,
-    },
-    title: {
-        ...typography.h1,
-        marginBottom: spacing.xs,
     },
     subtitle: {
         ...typography.body,
