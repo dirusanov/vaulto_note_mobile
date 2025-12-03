@@ -43,7 +43,10 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
             <Stack.Screen
                 name="NotesList"
                 component={NotesListScreen}
-                options={{ headerShown: false }}
+                options={{
+                    headerShown: false,
+                    animation: 'none', // Disable animation for the initial screen
+                }}
             />
             <Stack.Screen
                 name="NoteEdit"
