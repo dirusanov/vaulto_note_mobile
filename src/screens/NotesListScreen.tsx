@@ -209,7 +209,8 @@ export const NotesListScreen = () => {
                 <Loader />
             ) : (
                 <ScrollView
-                    contentContainerStyle={styles.scrollContent}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]}
                     showsVerticalScrollIndicator={false}
                     onScroll={handleScroll}
                     scrollEventThrottle={16}
