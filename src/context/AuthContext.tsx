@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { storage } from '../utils/storage';
-import { authApi } from '../api/auth';
 
 interface AuthContextType {
     token: string | null;

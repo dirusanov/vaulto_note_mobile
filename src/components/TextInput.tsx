@@ -1,5 +1,5 @@
 import React from 'react';
-import { TextInput as RNTextInput, View, Text, StyleSheet, TextInputProps, ViewStyle } from 'react-native';
+import { TextInput as RNTextInput, View, Text, StyleSheet, TextInputProps, ViewStyle, StyleProp } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -7,7 +7,7 @@ import { typography } from '../theme/typography';
 interface Props extends TextInputProps {
     label?: string;
     error?: string;
-    containerStyle?: ViewStyle;
+    containerStyle?: StyleProp<ViewStyle>;
 }
 
 export const TextInput = ({ label, error, containerStyle, style, ...props }: Props) => {

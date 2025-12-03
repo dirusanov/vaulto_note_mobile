@@ -1,20 +1,62 @@
-import client from './client';
+import authClient from './authClient';
+
+export interface AuthTokens {
+    access_token: string;
+    token_type: string;
+    expires_in: number;
+}
+
+export interface UserProfile {
+    id: string;
+    email: string;
+    full_name?: string | null;
+    is_verified: boolean;
+    status: string;
+    provider: string;
+}
+
+export interface GoogleAuthInit {
+    authorization_url: string;
+    state: string;
+}
 
 export const authApi = {
-    register: async (email: string, password: string): Promise<any> => {
-        const response = await client.post('/auth/register', { email, password });
+    register: async (params: { email: string; password: string; fullName?: string | null }): Promise<UserProfile> => {
+        const response = await authClient.post('/auth/register', {
+            email: params.email,
+            password: params.password,
+            full_name: params.fullName,
+        });
         return response.data;
     },
 
-    login: async (email: string, password: string): Promise<{ access_token: string; token_type: string }> => {
-        // The backend expects form data or json? The prompt says "POST /api/v1/auth/login".
-        // Usually FastAPI OAuth2PasswordRequestForm expects form data, but let's assume JSON based on "JWT auth (email + password)" description
-        // If it fails, we might need to switch to URLSearchParams for form-urlencoded.
-        // Let's assume JSON for now as it's a "modern" API description.
-        // Actually, standard FastAPI /token endpoint uses form-data.
-        // But the prompt says "POST /api/v1/auth/login", which might be a custom endpoint.
-        // I will try JSON first.
-        const response = await client.post('/auth/login', { email, password });
+    login: async (email: string, password: string): Promise<AuthTokens> => {
+        const response = await authClient.post('/auth/login', { email, password });
+        return response.data;
+    },
+
+    confirmEmail: async (token: string): Promise<UserProfile> => {
+        const response = await authClient.post('/auth/confirm', { token });
+        return response.data;
+    },
+
+    getProfile: async (): Promise<UserProfile> => {
+        const response = await authClient.get('/auth/me');
+        return response.data;
+    },
+
+    initGoogleLogin: async (): Promise<GoogleAuthInit> => {
+        const response = await authClient.get('/auth/google/login');
+        return response.data;
+    },
+
+    completeGoogleLogin: async (params: { code: string; state: string }): Promise<AuthTokens> => {
+        const response = await authClient.get('/auth/google/callback', {
+            params: {
+                code: params.code,
+                state: params.state,
+            },
+        });
         return response.data;
     },
 };

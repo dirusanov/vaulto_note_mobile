@@ -7,6 +7,7 @@ import { colors } from '../theme/colors';
 
 import { SignInScreen } from '../screens/SignInScreen';
 import { SignUpScreen } from '../screens/SignUpScreen';
+import { EmailVerificationScreen } from '../screens/EmailVerificationScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -32,6 +33,11 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
             <Stack.Screen
                 name="SignUp"
                 component={SignUpScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="EmailVerification"
+                component={EmailVerificationScreen}
                 options={{ headerShown: false }}
             />
             <Stack.Screen
