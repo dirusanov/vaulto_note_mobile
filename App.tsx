@@ -7,6 +7,10 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/context/AuthContext';
 import { NotesProvider } from './src/contexts/NotesContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
 
 export default function App() {
     return (
