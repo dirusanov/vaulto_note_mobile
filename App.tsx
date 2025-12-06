@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -26,14 +26,20 @@ export default function App() {
         void prepare();
     }, []);
 
-    const onLayoutRootView = useCallback(async () => {
-        if (appIsReady) {
+    useEffect(() => {
+        if (!appIsReady) {
+            return;
+        }
+
+        const hideSplash = async () => {
             try {
                 await SplashScreen.hideAsync();
             } catch (error) {
                 console.warn('[App] Failed to hide splash screen', error);
             }
-        }
+        };
+
+        void hideSplash();
     }, [appIsReady]);
 
     if (!appIsReady) {
@@ -41,7 +47,7 @@ export default function App() {
     }
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <AuthProvider>
                     <NotesProvider>
