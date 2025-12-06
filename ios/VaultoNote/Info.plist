@@ -27,6 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>vaultonote</string>
           <string>com.anonymous.vaultonotemobile</string>
         </array>
       </dict>
@@ -44,6 +45,8 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow Vaulto Note to access your microphone to record voice notes.</string>
     <key>RCTNewArchEnabled</key>
