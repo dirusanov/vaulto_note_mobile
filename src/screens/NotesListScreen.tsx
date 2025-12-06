@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Vibration, Alert, Animated, TextInput } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -21,7 +21,7 @@ const DOCK_PREF_KEY = 'vaulto_dock_preference';
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { notes, loading, fetchNotes, searchNotes } = useNotesContext();
+    const { notes, loading, fetchNotes, searchNotes, syncNotes } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -33,9 +33,11 @@ export const NotesListScreen = () => {
     const searchBarHeight = useRef(new Animated.Value(0)).current;
     const lastScrollY = useRef(0);
     const isSearchVisible = useRef(false);
+    const scrollAccumulator = useRef(0);
+    const lastToggleTime = useRef(0); // Cooldown to prevent rapid toggling
 
     useFocusEffect(
-        React.useCallback(() => {
+        useCallback(() => {
             fetchNotes();
         }, [fetchNotes])
     );
@@ -91,34 +93,85 @@ export const NotesListScreen = () => {
         searchNotes(text);
     };
 
+    const onRefresh = useCallback(async () => {
+        await syncNotes();
+    }, [syncNotes]);
+
+
+    const { height: screenHeight } = Dimensions.get('window');
+
+    // Reset search bar on mount
+    useEffect(() => {
+        searchBarHeight.setValue(0);
+        isSearchVisible.current = false;
+    }, []);
+
     const handleScroll = (event: any) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
         const diff = currentScrollY - lastScrollY.current;
+        const now = Date.now();
 
-        // Pulling down (scrolling up) or at the very top
-        if (diff < -5 || currentScrollY < -20) {
-            if (!isSearchVisible.current) {
-                Animated.timing(searchBarHeight, {
-                    toValue: 60,
-                    duration: 200,
-                    useNativeDriver: false,
-                }).start();
-                isSearchVisible.current = true;
-            }
-        }
-        // Scrolling down
-        else if (diff > 5 && currentScrollY > 0) {
-            if (isSearchVisible.current && searchQuery === '') { // Only hide if empty
-                Animated.timing(searchBarHeight, {
-                    toValue: 0,
-                    duration: 200,
-                    useNativeDriver: false,
-                }).start();
-                isSearchVisible.current = false;
-            }
-        }
-
+        // Update lastScrollY early
         lastScrollY.current = currentScrollY;
+
+        // Don't show search bar if there are 5 or fewer notes
+        const minNotesForSearch = 6;
+        if (notes.length < minNotesForSearch) {
+            return;
+        }
+
+        // Dead zone - ignore very small movements (micro-jitter)
+        const deadZone = 1;
+        if (Math.abs(diff) < deadZone) {
+            return;
+        }
+
+        // Cooldown period after toggle (300ms)
+        const cooldownMs = 300;
+        if (now - lastToggleTime.current < cooldownMs) {
+            return;
+        }
+
+        // Hysteresis threshold
+        const toggleThreshold = 12;
+
+        // If direction changes, decay the accumulator instead of flipping instantly
+        const currentDirection = diff > 0 ? 1 : -1;
+        const accumulatorDirection = scrollAccumulator.current > 0 ? 1 : scrollAccumulator.current < 0 ? -1 : 0;
+
+        if (accumulatorDirection !== 0 && currentDirection !== accumulatorDirection) {
+            // Direction changed - decay accumulator by half
+            scrollAccumulator.current *= 0.5;
+        }
+
+        // Accumulate scroll delta
+        scrollAccumulator.current += diff;
+
+        // Clamp accumulator
+        scrollAccumulator.current = Math.max(-100, Math.min(100, scrollAccumulator.current));
+
+        // Show search bar when accumulated downward scroll (negative) exceeds threshold
+        if (scrollAccumulator.current < -toggleThreshold && !isSearchVisible.current) {
+            Animated.timing(searchBarHeight, {
+                toValue: 60,
+                duration: 180,
+                useNativeDriver: false,
+            }).start();
+            isSearchVisible.current = true;
+            scrollAccumulator.current = 0;
+            lastToggleTime.current = now;
+        }
+        // Hide search bar when accumulated upward scroll (positive) exceeds threshold
+        else if (scrollAccumulator.current > toggleThreshold && isSearchVisible.current && searchQuery === '') {
+            Animated.timing(searchBarHeight, {
+                toValue: 0,
+                duration: 100,
+                useNativeDriver: false,
+            }).start();
+            isSearchVisible.current = false;
+            scrollAccumulator.current = 0;
+            lastToggleTime.current = now;
+        }
     };
 
     // Split notes into two columns for masonry layout
@@ -187,6 +240,23 @@ export const NotesListScreen = () => {
 
     return (
         <ScreenContainer>
+            <View style={styles.topBar}>
+                {/* <Text style={styles.topTitle}>Notes</Text> */}
+                <View style={styles.topActions}>
+                    {/* <TouchableOpacity
+                        style={[styles.syncButton, loading && styles.syncButtonDisabled]}
+                        onPress={handleSyncPress}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                            <MaterialIcons name="sync" size={20} color={colors.primary} />
+                        )}
+                        <Text style={styles.syncButtonText}>Sync</Text>
+                    </TouchableOpacity> */}
+                </View>
+            </View>
             <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, 60], outputRange: [0, 1] }) }]}>
                 <View style={styles.searchBar}>
                     <MaterialIcons name="search" size={20} color={colors.textTertiary} />
@@ -210,10 +280,16 @@ export const NotesListScreen = () => {
             ) : (
                 <ScrollView
                     style={{ flex: 1 }}
-                    contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]}
+                    contentContainerStyle={[
+                        styles.scrollContent,
+                        { flexGrow: 1, minHeight: screenHeight + 20 } // Ensure scrollable even with few notes
+                    ]}
                     showsVerticalScrollIndicator={false}
                     onScroll={handleScroll}
-                    scrollEventThrottle={16}
+                    scrollEventThrottle={4}
+                    refreshControl={
+                        <RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={colors.primary} />
+                    }
                 >
                     {notes.length === 0 ? (
                         <View style={styles.emptyContainer}>
@@ -269,6 +345,41 @@ export const NotesListScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    topBar: {
+        paddingTop: spacing.s, // Slight padding to push search bar down a bit
+        paddingHorizontal: spacing.m,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    topTitle: {
+        ...typography.h2,
+        color: colors.text,
+        fontSize: 28,
+        fontWeight: '700',
+    },
+    topActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    syncButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.xs,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        backgroundColor: colors.surface,
+    },
+    syncButtonDisabled: {
+        opacity: 0.6,
+    },
+    syncButtonText: {
+        ...typography.button,
+        color: colors.primary,
+        marginLeft: spacing.xs,
+    },
     scrollContent: {
         paddingTop: spacing.m,
         paddingBottom: spacing.xxl,
@@ -277,7 +388,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         paddingHorizontal: spacing.m,
         justifyContent: 'center',
-        marginTop: spacing.xxl + spacing.l, // Move down to be visible on phones
+        marginTop: 0, // No margin, highest possible position
     },
     searchBar: {
         flexDirection: 'row',
@@ -361,9 +472,9 @@ const styles = StyleSheet.create({
     },
     hintText: {
         ...typography.caption,
-        color: colors.textMuted,
+        color: colors.text,
         marginTop: spacing.xs,
-        opacity: 0.6,
+        opacity: 0.75,
         fontSize: 10,
     },
 });

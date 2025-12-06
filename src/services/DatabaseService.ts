@@ -42,9 +42,23 @@ const getDb = async () => {
                 audio_duration REAL,
                 encrypted_transcription TEXT,
                 has_audio INTEGER,
-                synced INTEGER DEFAULT 0
+                synced INTEGER DEFAULT 0,
+                dirty INTEGER DEFAULT 0,
+                deleted INTEGER DEFAULT 0
             );
         `);
+
+        // Migration for existing tables
+        try {
+            await db.execAsync('ALTER TABLE notes ADD COLUMN dirty INTEGER DEFAULT 0;');
+        } catch (e) {
+            // Ignore if column exists
+        }
+        try {
+            await db.execAsync('ALTER TABLE notes ADD COLUMN deleted INTEGER DEFAULT 0;');
+        } catch (e) {
+            // Ignore if column exists
+        }
     }
     return db;
 };
@@ -66,10 +80,20 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
     if (Platform.OS === 'web') {
         const notes = getWebStore();
         const index = notes.findIndex(n => n.id === note.id);
+        const normalizedNote = {
+            ...note,
+            synced: note.synced ?? 1,
+            dirty: note.dirty ?? false,
+            deleted: note.deleted ?? false,
+            version: note.version ?? (index >= 0 ? notes[index].version ?? 0 : 0),
+            server_updated_at: note.server_updated_at ?? note.updated_at,
+            content_nonce: note.content_nonce ?? null,
+            pending_delete: note.pending_delete ?? false,
+        } as Note;
         if (index >= 0) {
-            notes[index] = { ...note, synced: 1 } as any;
+            notes[index] = normalizedNote;
         } else {
-            notes.push({ ...note, synced: 1 } as any);
+            notes.push(normalizedNote);
         }
         saveWebStore(notes);
         console.log(`[DatabaseService] Note saved to web store: ${note.id}`);
@@ -80,11 +104,14 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
         const database = await getDb();
         if (!database) return;
 
+        const isDirty = note.dirty ? 1 : 0;
+        const isDeleted = note.deleted || note.pending_delete ? 1 : 0;
+
         await database.runAsync(
             `INSERT OR REPLACE INTO notes (
                 id, encrypted_title, encrypted_content, created_at, updated_at, 
-                audio_file_path, audio_duration, encrypted_transcription, has_audio, synced
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                audio_file_path, audio_duration, encrypted_transcription, has_audio, synced, dirty, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 note.id,
                 note.encrypted_title || '',
@@ -95,10 +122,12 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.audio_duration || 0,
                 note.encrypted_transcription || null,
                 note.has_audio ? 1 : 0,
-                note.synced ?? 1
+                note.synced ?? 1,
+                isDirty,
+                isDeleted
             ]
         );
-        console.log(`[DatabaseService] Note saved to native DB: ${note.id}`);
+        console.log(`[DatabaseService] Note saved to native DB: ${note.id} (dirty=${isDirty}, deleted=${isDeleted})`);
     } catch (e) {
         console.error('[DatabaseService] Failed to save to native DB', e);
     }
@@ -158,7 +187,14 @@ const processNotes = async (rawNotes: any[]): Promise<Note[]> => {
                 title,
                 content,
                 transcription,
-                has_audio: !!n.has_audio, // Ensure boolean
+                has_audio: !!n.has_audio,
+                synced: n.synced ?? 1,
+                dirty: !!n.dirty,
+                deleted: !!n.deleted,
+                version: n.version ?? 0,
+                server_updated_at: n.server_updated_at,
+                content_nonce: n.content_nonce ?? null,
+                pending_delete: !!n.deleted || !!n.pending_delete,
             });
         } catch (e) {
             console.error(`[DatabaseService] Failed to decrypt note ${n.id}`, e);
@@ -182,4 +218,27 @@ export const searchNotesLocal = async (query: string): Promise<Note[]> => {
         (note.content && note.content.toLowerCase().includes(lowerQuery)) ||
         (note.transcription && note.transcription.toLowerCase().includes(lowerQuery))
     );
+};
+
+export const wipeLocalDatabase = async (): Promise<void> => {
+    if (Platform.OS === 'web') {
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+            console.log('[DatabaseService] Web store cleared');
+        } catch (e) {
+            console.error('[DatabaseService] Failed to clear web store', e);
+            throw e;
+        }
+        return;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('DELETE FROM notes;');
+        console.log('[DatabaseService] Native DB wiped');
+    } catch (e) {
+        console.error('[DatabaseService] Failed to wipe native DB', e);
+        throw e;
+    }
 };

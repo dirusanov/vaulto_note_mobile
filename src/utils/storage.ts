@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TOKEN_KEY = 'vaulto_auth_token';
+const USER_ID_KEY = 'vaulto_user_id';
 const OPENAI_API_KEY = 'vaulto_openai_api_key';
 const PRIVACY_WARNING_DISMISSED_KEY = 'vaulto_privacy_warning_dismissed';
 const MAX_RECORDING_DURATION_KEY = 'vaulto_max_recording_duration';
@@ -32,6 +33,28 @@ export const storage = {
             await AsyncStorage.removeItem(TOKEN_KEY);
         } catch (e) {
             console.error('Failed to remove token', e);
+        }
+    },
+    getUserId: async (): Promise<string | null> => {
+        try {
+            return await AsyncStorage.getItem(USER_ID_KEY);
+        } catch (e) {
+            console.error('Failed to get user id', e);
+            return null;
+        }
+    },
+    setUserId: async (userId: string): Promise<void> => {
+        try {
+            await AsyncStorage.setItem(USER_ID_KEY, userId);
+        } catch (e) {
+            console.error('Failed to set user id', e);
+        }
+    },
+    removeUserId: async (): Promise<void> => {
+        try {
+            await AsyncStorage.removeItem(USER_ID_KEY);
+        } catch (e) {
+            console.error('Failed to remove user id', e);
         }
     },
 };

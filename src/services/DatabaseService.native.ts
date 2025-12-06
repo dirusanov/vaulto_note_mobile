@@ -26,21 +26,44 @@ export const initDatabase = async (): Promise<void> => {
                 audio_duration INTEGER,
                 encrypted_transcription TEXT,
                 has_audio INTEGER DEFAULT 0,
-                synced INTEGER DEFAULT 0
+                synced INTEGER DEFAULT 0,
+                dirty INTEGER DEFAULT 0,
+                deleted INTEGER DEFAULT 0,
+                version INTEGER DEFAULT 0,
+                server_updated_at TEXT,
+                content_nonce TEXT,
+                pending_delete INTEGER DEFAULT 0
             );
         `);
         // Ensure new columns exist for existing installs
         const columns = await database.getAllAsync<any>('PRAGMA table_info(notes);');
         const columnNames = columns.map((c: any) => c.name);
-        const ensureColumn = async (name: string, type: string) => {
+        const ensureColumn = async (name: string, type: string): Promise<boolean> => {
             if (!columnNames.includes(name)) {
                 await database.execAsync(`ALTER TABLE notes ADD COLUMN ${name} ${type};`);
+                return true;
             }
+            return false;
         };
         await ensureColumn('audio_file_path', 'TEXT');
         await ensureColumn('audio_duration', 'INTEGER');
         await ensureColumn('encrypted_transcription', 'TEXT');
         await ensureColumn('has_audio', 'INTEGER DEFAULT 0');
+        const addedDirty = await ensureColumn('dirty', 'INTEGER DEFAULT 0');
+        const addedDeleted = await ensureColumn('deleted', 'INTEGER DEFAULT 0');
+        await ensureColumn('version', 'INTEGER DEFAULT 0');
+        await ensureColumn('server_updated_at', 'TEXT');
+        await ensureColumn('content_nonce', 'TEXT');
+        await ensureColumn('pending_delete', 'INTEGER DEFAULT 0');
+
+        // Mark previously unsynced rows as dirty so they are picked up on the next sync
+        if (addedDirty) {
+            await database.execAsync('UPDATE notes SET dirty = 1 WHERE synced = 0 OR pending_delete = 1;');
+        }
+        // Keep deleted in sync with pending_delete for older installs
+        if (addedDeleted) {
+            await database.execAsync('UPDATE notes SET deleted = pending_delete WHERE pending_delete = 1;');
+        }
         console.log('[DatabaseService] Database initialized');
     } catch (error) {
         console.error('[DatabaseService] Failed to initialize database', error);
@@ -53,9 +76,16 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
         const database = await getDb();
         if (!database) return;
 
+        const isDirty = note.dirty ? 1 : 0;
+        const isDeleted = note.deleted || note.pending_delete ? 1 : 0;
+        const isPendingDelete = note.pending_delete || note.deleted ? 1 : 0;
+
         await database.runAsync(
-            `INSERT OR REPLACE INTO notes (id, encrypted_title, encrypted_content, created_at, updated_at, audio_file_path, audio_duration, encrypted_transcription, has_audio, synced)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            `INSERT OR REPLACE INTO notes (
+                id, encrypted_title, encrypted_content, created_at, updated_at,
+                audio_file_path, audio_duration, encrypted_transcription, has_audio,
+                synced, dirty, deleted, version, server_updated_at, content_nonce, pending_delete
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
                 note.id,
                 note.encrypted_title ?? null,
@@ -66,7 +96,13 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.audio_duration ?? null,
                 note.encrypted_transcription ?? null,
                 note.has_audio ? 1 : 0,
-                (note as any).synced ?? 0
+                note.synced ?? 1,
+                isDirty,
+                isDeleted,
+                note.version ?? 0,
+                note.server_updated_at ?? note.updated_at ?? null,
+                note.content_nonce ?? null,
+                isPendingDelete ? 1 : 0,
             ]
         );
         console.log(`[DatabaseService] Note saved locally: ${note.id}`);
@@ -121,6 +157,13 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                     audio_duration: row.audio_duration ?? undefined,
                     encrypted_transcription: row.encrypted_transcription ?? undefined,
                     has_audio: !!row.audio_file_path,
+                    synced: row.synced ?? 1,
+                    dirty: row.dirty === 1,
+                    deleted: row.deleted === 1,
+                    version: row.version ?? 0,
+                    server_updated_at: row.server_updated_at ?? undefined,
+                    content_nonce: row.content_nonce ?? null,
+                    pending_delete: row.pending_delete === 1 || row.deleted === 1,
                 });
             } catch (e) {
                 console.error(`[DatabaseService] Failed to decrypt note ${row.id}`, e);
@@ -145,4 +188,17 @@ export const searchNotesLocal = async (query: string): Promise<Note[]> => {
         (note.content && note.content.toLowerCase().includes(lowerQuery)) ||
         (note.transcription && note.transcription.toLowerCase().includes(lowerQuery))
     );
+};
+
+export const wipeLocalDatabase = async (): Promise<void> => {
+    try {
+        await initDatabase();
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('DELETE FROM notes;');
+        console.log('[DatabaseService] Local DB wiped');
+    } catch (error) {
+        console.error('[DatabaseService] Failed to wipe local DB', error);
+        throw error;
+    }
 };

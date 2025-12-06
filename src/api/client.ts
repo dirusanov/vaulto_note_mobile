@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_URL } from '../utils/env';
 import { storage } from '../utils/storage';
+import { onUnauthorized } from '../utils/authEvents';
 
 const client = axios.create({
     baseURL: API_URL,
@@ -30,8 +31,10 @@ client.interceptors.response.use(
     async (error) => {
         if (error.response && error.response.status === 401) {
             // Token might be expired or invalid
+            console.log('[client] 401 received, emitting unauthorized event');
             await storage.removeToken();
-            // In a real app, we might trigger a navigation to login or refresh token
+            // Notify AuthContext to recreate session
+            onUnauthorized.emit();
         }
         return Promise.reject(error);
     }

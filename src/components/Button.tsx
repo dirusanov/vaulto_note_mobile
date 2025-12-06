@@ -1,5 +1,4 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -7,10 +6,10 @@ import { typography } from '../theme/typography';
 interface ButtonProps {
     title: string;
     onPress: () => void;
-    variant?: 'primary' | 'secondary' | 'outline';
+    variant?: 'primary' | 'secondary' | 'outline' | 'destructive';
     loading?: boolean;
     disabled?: boolean;
-    style?: ViewStyle;
+    style?: StyleProp<ViewStyle>;
 }
 
 export const Button = ({
@@ -25,18 +24,26 @@ export const Button = ({
         if (disabled) return colors.textMuted;
         if (variant === 'primary') return colors.primary;
         if (variant === 'secondary') return colors.surface;
+        if (variant === 'destructive') return 'transparent'; // Outline style
+        if (variant === 'outline') return 'transparent';
         return 'transparent';
     };
 
     const getTextColor = () => {
         if (variant === 'primary') return colors.surface;
         if (variant === 'secondary') return colors.text;
+        if (variant === 'destructive') return colors.error;
         return colors.primary;
     };
 
     const getBorderWidth = () => {
-        if (variant === 'outline') return 1;
+        if (variant === 'outline' || variant === 'destructive') return 1;
         return 0;
+    };
+
+    const getBorderColor = () => {
+        if (variant === 'destructive') return colors.error;
+        return colors.primary;
     };
 
     return (
@@ -45,8 +52,11 @@ export const Button = ({
                 styles.button,
                 {
                     backgroundColor: getBackgroundColor(),
-                    borderColor: colors.primary,
+                    borderColor: getBorderColor(),
                     borderWidth: getBorderWidth(),
+                    // Remove shadow/elevation for transparent buttons to avoid gray frame
+                    elevation: (variant === 'destructive' || variant === 'outline') ? 0 : 2,
+                    shadowOpacity: (variant === 'destructive' || variant === 'outline') ? 0 : 0.05,
                 },
                 style,
             ]}

@@ -42,7 +42,8 @@
         {
           "microphonePermission": "Allow Vaulto Note to access your microphone to record voice notes."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

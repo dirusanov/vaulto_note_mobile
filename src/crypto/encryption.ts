@@ -49,6 +49,7 @@ function xorDecrypt(ciphertext: string, key: string): string {
 }
 
 export async function encrypt(plaintext: string): Promise<string> {
+    if (!plaintext) return '';
     console.log('[encrypt] Encrypting text, length:', plaintext.length);
     try {
         const key = await deriveKey();
@@ -62,6 +63,7 @@ export async function encrypt(plaintext: string): Promise<string> {
 }
 
 export async function decrypt(ciphertext: string): Promise<string> {
+    if (!ciphertext) return '';
     console.log('[decrypt] Decrypting text, length:', ciphertext.length);
     try {
         const key = await deriveKey();

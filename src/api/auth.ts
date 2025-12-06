@@ -13,11 +13,25 @@ export interface UserProfile {
     is_verified: boolean;
     status: string;
     provider: string;
+    trial_total_credits: number;
+    trial_used_credits: number;
+    trial_expires_at?: string;
+}
+
+export interface GuestProfile {
+    access_token: string;
+    expires_in: number;
+    user_id: string;
+    is_verified: boolean;
+    trial_total_credits: number;
+    trial_used_credits: number;
+    trial_expires_at?: string;
 }
 
 export interface GoogleAuthInit {
     authorization_url: string;
     state: string;
+    code_verifier: string;
 }
 
 export const authApi = {
@@ -45,17 +59,31 @@ export const authApi = {
         return response.data;
     },
 
+    checkVerificationStatus: async (email: string): Promise<UserProfile> => {
+        const response = await authClient.get('/auth/status', { params: { email } });
+        return response.data;
+    },
+
     initGoogleLogin: async (): Promise<GoogleAuthInit> => {
         const response = await authClient.get('/auth/google/login');
         return response.data;
     },
 
-    completeGoogleLogin: async (params: { code: string; state: string }): Promise<AuthTokens> => {
+    completeGoogleLogin: async (params: { code: string; state: string; code_verifier: string }): Promise<AuthTokens> => {
         const response = await authClient.get('/auth/google/callback', {
             params: {
                 code: params.code,
                 state: params.state,
+                code_verifier: params.code_verifier,
             },
+        });
+        return response.data;
+    },
+
+    anonymousAuth: async (deviceKey: string, platform: string): Promise<GuestProfile> => {
+        const response = await authClient.post('/auth/anonymous', {
+            device_key: deviceKey,
+            platform: platform,
         });
         return response.data;
     },

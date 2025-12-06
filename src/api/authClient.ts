@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { AUTH_API_URL } from '../utils/env';
 import { storage } from '../utils/storage';
+import { onUnauthorized } from '../utils/authEvents';
 
 const authClient = axios.create({
     baseURL: AUTH_API_URL,
@@ -25,10 +26,13 @@ authClient.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response && error.response.status === 401) {
+            console.log('[authClient] 401 received, emitting unauthorized event');
             await storage.removeToken();
+            onUnauthorized.emit();
         }
         return Promise.reject(error);
     },
 );
 
 export default authClient;
+

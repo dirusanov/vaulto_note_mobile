@@ -1,9 +1,31 @@
-import { useState, useCallback } from 'react';
-import { notesApi, Note } from '../api/notes';
-import { encrypt, decrypt } from '../crypto/encryption';
-import { initDatabase, saveNoteLocal, getNotesLocal, deleteNoteLocal, searchNotesLocal } from '../services/DatabaseService';
-import React from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Note } from '../api/notes';
+import { encrypt } from '../crypto/encryption';
+import {
+    initDatabase,
+    saveNoteLocal,
+    getNotesLocal,
+    deleteNoteLocal,
+    searchNotesLocal,
+} from '../services/DatabaseService';
 import { useAuth } from './useAuth';
+import { generateUUID } from '../utils/uuid';
+import { syncService } from '../services/SyncService';
+
+const DEMO_SEEDED_KEY = 'vaulto_demo_seeded_v1';
+const demoSeedNotes = [
+    {
+        title: 'Focus list for today',
+        content: ['Morning sync highlights', 'Review Vaulto mobile design', 'Investor call at 15:00', 'Capture idea for tomorrow']
+            .map((item, index) => `${index + 1}. ${item}`)
+            .join('\n'),
+    },
+    {
+        title: 'Idea: Calm onboarding',
+        content: 'Guide new users with a warm intro, highlight secure sync, and keep the mic button one tap away. Maybe show a quick animation when a transcript arrives.',
+    },
+];
 
 export interface NoteAudio {
     filePath: string;
@@ -12,10 +34,27 @@ export interface NoteAudio {
 }
 
 export const useNotes = () => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, userId } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const notesRef = useRef<Note[]>([]);
+
+    // Update SyncService auth state
+    useEffect(() => {
+        syncService.setAuthenticated(isAuthenticated);
+        // Inform sync service about current user to migrate local notes if needed
+        void syncService.setCurrentUser(userId ?? null);
+    }, [isAuthenticated, userId]);
+
+    // Initialize DB on mount
+    useEffect(() => {
+        initDatabase().catch(err => console.error('[useNotes] Failed to init DB:', err));
+    }, []);
+
+    useEffect(() => {
+        notesRef.current = notes;
+    }, [notes]);
 
     const buildTitle = useCallback((title?: string | null) => {
         if (title && title.trim().length > 0) {
@@ -24,89 +63,143 @@ export const useNotes = () => {
         return '';
     }, []);
 
-    // Initialize DB on mount
-    React.useEffect(() => {
-        initDatabase().catch(err => console.error('[useNotes] Failed to init DB:', err));
-    }, []);
+    const isEmptyNote = useCallback(
+        (note: Partial<Note>) => {
+            const plainTitle = (note.title || '').trim();
+            const plainContent = (note.content || '').trim();
+            const hasAudio = !!note.has_audio || !!note.audio_file_path;
+            return !plainTitle && !plainContent && !hasAudio;
+        },
+        [],
+    );
 
-    const isEmptyNote = (note: Partial<Note>) => {
-        const plainTitle = (note.title || '').trim();
-        const plainContent = (note.content || '').trim();
-        const hasAudio = !!note.has_audio || !!note.audio_file_path;
-        return !plainTitle && !plainContent && !hasAudio;
-    };
+    const filterAndCleanupNotes = useCallback(
+        async (source: Note[]) => {
+            const visible: Note[] = [];
+            for (const note of source) {
+                if (note.deleted || note.pending_delete) {
+                    continue;
+                }
+                if (isEmptyNote(note)) {
+                    await deleteNoteLocal(note.id);
+                    continue;
+                }
+                visible.push(note);
+            }
+            return visible;
+        },
+        [isEmptyNote],
+    );
+
+    const buildLocalNote = useCallback(
+        async (params: {
+            id: string;
+            title: string;
+            content: string;
+            audio?: NoteAudio;
+            transcription?: string;
+        }) => {
+            const { id, title, content, audio, transcription } = params;
+            const encryptedTitle = await encrypt(title);
+            const encryptedContent = await encrypt(content);
+            const encryptedTranscription = transcription ? await encrypt(transcription) : undefined;
+            const now = new Date().toISOString();
+            const localNote: Note = {
+                id,
+                encrypted_title: encryptedTitle,
+                encrypted_content: encryptedContent,
+                created_at: now,
+                updated_at: now,
+                audio_file_path: audio?.filePath,
+                audio_duration: audio?.duration,
+                encrypted_transcription: encryptedTranscription,
+                transcription,
+                has_audio: !!audio,
+                title,
+                content,
+                synced: 0,
+                dirty: true,
+                deleted: false,
+                version: 0,
+            };
+            await saveNoteLocal(localNote);
+            return localNote;
+        },
+        []
+    );
+
+    const seedDemoNotes = useCallback(async () => {
+        try {
+            const alreadySeeded = await AsyncStorage.getItem(DEMO_SEEDED_KEY);
+            if (alreadySeeded === '1') {
+                return false;
+            }
+            for (const demo of demoSeedNotes) {
+                const id = await generateUUID();
+                await buildLocalNote({ id, title: demo.title, content: demo.content });
+            }
+            await AsyncStorage.setItem(DEMO_SEEDED_KEY, '1');
+            return true;
+        } catch (error) {
+            console.error('[useNotes] Failed to seed demo notes:', error);
+            return false;
+        }
+    }, [buildLocalNote]);
+
+    const refreshFromLocal = useCallback(async () => {
+        let localNotes = await getNotesLocal();
+        let visible = await filterAndCleanupNotes(localNotes);
+
+        if (visible.length === 0) {
+            const seeded = await seedDemoNotes();
+            if (seeded) {
+                localNotes = await getNotesLocal();
+                visible = await filterAndCleanupNotes(localNotes);
+            }
+        }
+
+        setNotes(visible);
+        return visible;
+    }, [filterAndCleanupNotes, seedDemoNotes]);
+
+    // Subscribe to SyncService updates
+    useEffect(() => {
+        const unsubscribe = syncService.subscribe(() => {
+            console.log('[useNotes] Sync finished, refreshing local notes');
+            refreshFromLocal();
+        });
+        return unsubscribe;
+    }, [refreshFromLocal]);
 
     const fetchNotes = useCallback(async () => {
         console.log('[useNotes] fetchNotes called');
         setLoading(true);
         setError(null);
         try {
-            // Try fetching from API first
-            console.log('[useNotes] Fetching encrypted notes from API...');
+            await refreshFromLocal();
+            // Trigger sync on fetch (e.g. screen mount)
             if (isAuthenticated) {
-                try {
-                    // SYNC UP: Find local notes that need syncing
-                    const allLocal = await getNotesLocal();
-                    const unsynced = allLocal.filter(n => (n.id.startsWith('local-') || (n as any).synced === 0) && !isEmptyNote(n));
-
-                    if (unsynced.length > 0) {
-                        console.log(`[useNotes] Found ${unsynced.length} unsynced notes. Syncing...`);
-                        for (const localNote of unsynced) {
-                            try {
-                                // Create on server
-                                const newNote = await notesApi.create(localNote.encrypted_title || '', localNote.encrypted_content);
-                                // Delete local temporary note
-                                await deleteNoteLocal(localNote.id);
-                                // Save new server note locally (preserving audio info if any)
-                                const noteWithExtras: Note = {
-                                    ...newNote,
-                                    audio_file_path: localNote.audio_file_path,
-                                    audio_duration: localNote.audio_duration,
-                                    encrypted_transcription: localNote.encrypted_transcription,
-                                    has_audio: localNote.has_audio,
-                                    synced: 1
-                                };
-                                await saveNoteLocal(noteWithExtras);
-                                console.log(`[useNotes] Synced note ${localNote.id} -> ${newNote.id}`);
-                            } catch (syncErr) {
-                                console.error(`[useNotes] Failed to sync note ${localNote.id}`, syncErr);
-                            }
-                        }
-                    }
-
-                    const encryptedNotes = await notesApi.getAll();
-                    console.log('[useNotes] Received', encryptedNotes.length, 'encrypted notes from API');
-
-                    // Sync to local DB
-                    for (const note of encryptedNotes) {
-                        await saveNoteLocal(note);
-                    }
-                } catch (apiError) {
-                    console.warn('[useNotes] API fetch failed, falling back to local DB', apiError);
-                }
+                syncService.syncNow('app_start');
             }
-
-            // Load from local DB (source of truth for UI to ensure offline support)
-            const localNotes = await getNotesLocal();
-            const filtered = [];
-            for (const n of localNotes) {
-                if (isEmptyNote(n)) {
-                    await deleteNoteLocal(n.id);
-                    continue;
-                }
-                filtered.push(n);
-            }
-            setNotes(filtered);
-            console.log('[useNotes] State updated with', filtered.length, 'notes from local DB');
-
         } catch (err) {
-            console.error('[useNotes] Error fetching/decrypting notes:', err);
+            console.error('[useNotes] Error fetching notes:', err);
             setError('Failed to fetch notes');
-            console.error(err);
         } finally {
             setLoading(false);
         }
-    }, [isAuthenticated]);
+    }, [refreshFromLocal, isAuthenticated]);
+
+    // Manual sync (pull-to-refresh)
+    const syncNotes = useCallback(async () => {
+        if (!isAuthenticated) return;
+        setLoading(true);
+        try {
+            await syncService.syncNow('manual');
+            await refreshFromLocal();
+        } finally {
+            setLoading(false);
+        }
+    }, [isAuthenticated, refreshFromLocal]);
 
     const createNote = async (data: { title?: string; content: string; audio?: NoteAudio }) => {
         const { title, content, audio } = data;
@@ -120,63 +213,22 @@ export const useNotes = () => {
 
         setLoading(true);
         setError(null);
+
         try {
-            const encryptedTitle = await encrypt(titleToUse);
-            const encryptedContent = await encrypt(contentToUse);
-            const encryptedTranscription = audio?.transcription
-                ? await encrypt(audio.transcription)
-                : undefined;
+            const id = await generateUUID();
+            const newLocal = await buildLocalNote({
+                id,
+                title: titleToUse,
+                content: contentToUse,
+                audio,
+                transcription: audio?.transcription,
+            });
+            await refreshFromLocal();
 
-            let newNote: Note;
-            try {
-                // Try API first
-                if (isAuthenticated) {
-                    const newEncryptedNote = await notesApi.create(encryptedTitle, encryptedContent);
-                    const noteWithAudio: Note = {
-                        ...newEncryptedNote,
-                        audio_file_path: audio?.filePath,
-                        audio_duration: audio?.duration,
-                        encrypted_transcription: encryptedTranscription,
-                        has_audio: !!audio,
-                        synced: 1
-                    };
-                    await saveNoteLocal(noteWithAudio);
-                    newNote = {
-                        ...noteWithAudio,
-                        title: titleToUse,
-                        content,
-                        transcription: audio?.transcription,
-                    };
-                } else {
-                    throw new Error('Offline');
-                }
-            } catch (apiError) {
-                console.warn('[useNotes] API create failed, saving locally only', apiError);
-                // Fallback: Generate local ID and save
-                const localId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                const localNote: Note = {
-                    id: localId,
-                    encrypted_title: encryptedTitle,
-                    encrypted_content: encryptedContent,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                    audio_file_path: audio?.filePath,
-                    audio_duration: audio?.duration,
-                    encrypted_transcription: encryptedTranscription,
-                    has_audio: !!audio,
-                    synced: 0
-                };
-                await saveNoteLocal(localNote);
-                newNote = {
-                    ...localNote,
-                    title: titleToUse,
-                    content,
-                    transcription: audio?.transcription,
-                };
-            }
+            // Schedule auto-sync
+            syncService.scheduleAutoSync();
 
-            setNotes((prev) => [newNote, ...prev]);
-            return newNote;
+            return newLocal;
         } catch (err) {
             setError('Failed to create note');
             console.error(err);
@@ -190,16 +242,11 @@ export const useNotes = () => {
         setLoading(true);
         setError(null);
         try {
-            const existing = notes.find(n => n.id === id);
+            const existing = notesRef.current.find(n => n.id === id);
             if (!existing) throw new Error('Note not found');
 
             const titleToUse = buildTitle(updates.title ?? existing.title);
             const contentToUse = updates.content ?? existing.content ?? '';
-
-            // Handle audio updates
-            // If audio is explicitly passed as null, remove it.
-            // If updates has audio_file_path, use it.
-            // If updates.audio is passed (legacy/helper), use it.
 
             let audioPath = existing.audio_file_path;
             let audioDuration = existing.audio_duration;
@@ -207,123 +254,69 @@ export const useNotes = () => {
             let transcription = existing.transcription;
             let encryptedTranscription = existing.encrypted_transcription;
 
+            if (updates.audio) {
+                audioPath = updates.audio.filePath;
+                audioDuration = updates.audio.duration;
+                hasAudio = true;
+                if (updates.audio.transcription) {
+                    transcription = updates.audio.transcription;
+                    encryptedTranscription = await encrypt(updates.audio.transcription);
+                }
+            } else if (updates.audio === null) {
+                audioPath = undefined;
+                audioDuration = undefined;
+                hasAudio = false;
+                transcription = undefined;
+                encryptedTranscription = undefined;
+            }
+
             if (updates.audio_file_path !== undefined) {
                 audioPath = updates.audio_file_path;
+            }
+            if (updates.audio_duration !== undefined) {
                 audioDuration = updates.audio_duration;
-                hasAudio = updates.has_audio ?? !!audioPath;
+            }
+            if (updates.has_audio !== undefined) {
+                hasAudio = updates.has_audio;
             }
 
-            if (updates.encrypted_transcription !== undefined) {
-                // If we are updating the encrypted transcription directly (e.g. from NoteEditScreen)
-                encryptedTranscription = updates.encrypted_transcription;
-                // We assume the caller handles encryption if they pass this field, 
-                // OR we might need to encrypt it here if it's raw text?
-                // In NoteEditScreen we passed 'transcription.text' to 'encrypted_transcription'.
-                // Wait, NoteEditScreen passed raw text to 'encrypted_transcription'. We should encrypt it here.
-            }
-
-            // If NoteEditScreen passes raw text as 'encrypted_transcription', we need to fix that naming or logic.
-            // NoteEditScreen: encrypted_transcription: transcription.text
-            // That is RAW text. So we should encrypt it here.
-
-            if (updates.encrypted_transcription) {
-                // It's actually raw text coming from the UI, let's encrypt it
-                const rawTrans = updates.encrypted_transcription;
-                transcription = rawTrans; // Update local state with raw text
-                // Will encrypt below
-            }
-
-            // If note becomes empty (no title/content/audio), delete it instead of saving
-            const willBeEmpty = !titleToUse.trim() && !contentToUse.trim() && !hasAudio && !updates.audio_file_path && !updates.audio;
-            if (willBeEmpty) {
-                try {
-                    await notesApi.delete(id);
-                } catch (apiError) {
-                    console.warn('[useNotes] API delete during empty-update failed, deleting locally only', apiError);
-                }
-                await deleteNoteLocal(id);
-                setNotes((prev) => prev.filter((n) => n.id !== id));
-                return existing;
-            }
-
-            // OPTIMISTIC UPDATE: Update UI immediately with plain text values
-            const optimisticNote: Note = {
-                ...existing,
-                title: titleToUse,
-                content: contentToUse,
-                updated_at: new Date().toISOString(),
-                audio_file_path: audioPath,
-                audio_duration: audioDuration,
-                has_audio: hasAudio,
-                transcription: transcription,
-            };
-            setNotes((prev) => {
-                const updatedList = prev.map((n) => (n.id === id ? optimisticNote : n));
-                return updatedList.sort((a, b) => {
-                    const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                    const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                    return dateB - dateA;
-                });
-            });
-
-            // Background: Encrypt and save
-            const encryptedTitle = await encrypt(titleToUse);
-            const encryptedContent = await encrypt(contentToUse);
-
-            if (updates.encrypted_transcription) {
+            if (typeof updates.encrypted_transcription === 'string') {
+                transcription = updates.encrypted_transcription;
                 encryptedTranscription = await encrypt(updates.encrypted_transcription);
             }
 
-            let updatedNote: Note;
-            try {
-                const updatedEncryptedNote = await notesApi.update(id, encryptedTitle, encryptedContent);
-
-                const noteWithExtras: Note = {
-                    ...updatedEncryptedNote,
-                    audio_file_path: audioPath,
-                    audio_duration: audioDuration,
-                    encrypted_transcription: encryptedTranscription,
-                    has_audio: hasAudio,
-                };
-                await saveNoteLocal(noteWithExtras);
-
-                updatedNote = {
-                    ...noteWithExtras,
-                    title: titleToUse,
-                    content: contentToUse,
-                    transcription: transcription,
-                };
-            } catch (apiError) {
-                console.warn('[useNotes] API update failed, saving locally only', apiError);
-                const localNote: Note = {
-                    ...existing,
-                    encrypted_title: encryptedTitle,
-                    encrypted_content: encryptedContent,
-                    updated_at: new Date().toISOString(),
-                    audio_file_path: audioPath,
-                    audio_duration: audioDuration,
-                    encrypted_transcription: encryptedTranscription,
-                    has_audio: hasAudio,
-                };
-                await saveNoteLocal(localNote);
-                updatedNote = {
-                    ...localNote,
-                    title: titleToUse,
-                    content: contentToUse,
-                    transcription: transcription,
-                };
+            const willBeEmpty = !titleToUse.trim() && !contentToUse.trim() && !hasAudio;
+            if (willBeEmpty) {
+                await deleteNote(id);
+                return existing;
             }
 
-            // Update again with server response (in case timestamps or other fields changed)
-            setNotes((prev) => {
-                const updatedList = prev.map((n) => (n.id === id ? updatedNote : n));
-                return updatedList.sort((a, b) => {
-                    const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                    const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                    return dateB - dateA;
-                });
-            });
-            return updatedNote;
+            const encryptedTitle = await encrypt(titleToUse);
+            const encryptedContent = await encrypt(contentToUse);
+            const updatedAt = new Date().toISOString();
+            const updatedLocal: Note = {
+                ...existing,
+                title: titleToUse,
+                content: contentToUse,
+                encrypted_title: encryptedTitle,
+                encrypted_content: encryptedContent,
+                encrypted_transcription: encryptedTranscription,
+                transcription,
+                audio_file_path: audioPath,
+                audio_duration: audioDuration,
+                has_audio: hasAudio,
+                updated_at: updatedAt,
+                synced: 0,
+                dirty: true,
+                deleted: false,
+            };
+            await saveNoteLocal(updatedLocal);
+            await refreshFromLocal();
+
+            // Schedule auto-sync
+            syncService.scheduleAutoSync();
+
+            return updatedLocal;
         } catch (err) {
             setError('Failed to update note');
             console.error(err);
@@ -337,13 +330,26 @@ export const useNotes = () => {
         setLoading(true);
         setError(null);
         try {
-            try {
-                await notesApi.delete(id);
-            } catch (apiError) {
-                console.warn('[useNotes] API delete failed, deleting locally only', apiError);
+            const existing = notesRef.current.find(n => n.id === id);
+            if (!existing) {
+                // If not in memory, try to delete from DB anyway (maybe it's hidden)
+                await deleteNoteLocal(id);
+                await refreshFromLocal();
+                return;
             }
-            await deleteNoteLocal(id);
-            setNotes((prev) => prev.filter((n) => n.id !== id));
+
+            const marked: Note = {
+                ...existing,
+                deleted: true, // Soft delete
+                synced: 0,
+                dirty: true,
+                updated_at: new Date().toISOString(),
+            };
+            await saveNoteLocal(marked);
+            await refreshFromLocal();
+
+            // Schedule auto-sync
+            syncService.scheduleAutoSync();
         } catch (err) {
             setError('Failed to delete note');
             console.error(err);
@@ -357,7 +363,8 @@ export const useNotes = () => {
         setLoading(true);
         try {
             const results = await searchNotesLocal(query);
-            setNotes(results);
+            const filtered = results.filter(note => !note.deleted && !note.pending_delete && !isEmptyNote(note));
+            setNotes(filtered);
         } catch (err) {
             console.error('[useNotes] Search failed', err);
             setError('Search failed');
@@ -379,6 +386,7 @@ export const useNotes = () => {
         loading,
         error,
         fetchNotes,
+        syncNotes,
         createNote,
         updateNote,
         deleteNote,

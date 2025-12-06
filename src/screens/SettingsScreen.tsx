@@ -22,10 +22,11 @@ import {
 } from '../utils/storage';
 import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
+import { UsageCard } from '../components/UsageCard';
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
-    const { signOut, isAuthenticated } = useAuth();
+    const { signOut, isAuthenticated, isGuest, user } = useAuth();
 
     const [apiKey, setApiKeyState] = useState('');
     const [testingConnection, setTestingConnection] = useState(false);
@@ -72,11 +73,11 @@ export const SettingsScreen = () => {
         {
             key: 'local',
             title: 'Secure LLM',
-            blurb: 'Local & Private',
-            description: 'Whisper + LLaMA on your server (Docker). Everything stays with you.',
+            blurb: 'Private & Anonymous',
+            description: 'Whisper + LLM on our server. No data stored or analyzed. Fully anonymous and secure.',
             icon: 'security',
             accent: colors.primary,
-            chips: ['Zero retention', 'Docker ready'],
+            chips: ['Zero retention', 'Anonymous', 'Secure'],
         },
         {
             key: 'openai',
@@ -216,8 +217,6 @@ export const SettingsScreen = () => {
         }
     };
 
-
-
     return (
         <ScreenContainer>
             <View style={styles.topBar}>
@@ -246,18 +245,37 @@ export const SettingsScreen = () => {
                     <View style={styles.cardHeader}>
                         <Text style={styles.sectionTitle}>Account</Text>
                     </View>
-                    {isAuthenticated ? (
-                        <Text style={styles.info}>Connected. Notes are syncing.</Text>
+                    {isAuthenticated && user ? (
+                        <View style={styles.userInfoContainer}>
+                            <View style={styles.userAvatar}>
+                                <Text style={styles.userAvatarText}>
+                                    {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                            <View style={styles.userInfoText}>
+                                {user.full_name && (
+                                    <Text style={styles.userName}>{user.full_name}</Text>
+                                )}
+                                <Text style={user.full_name ? styles.userEmail : styles.userEmailPrimary}>
+                                    {user.email || 'Signed in'}
+                                </Text>
+                                <View style={styles.syncStatusRow}>
+                                    <MaterialIcons name="cloud-done" size={14} color={colors.accentGreen} />
+                                    <Text style={styles.syncStatusText}>Notes syncing</Text>
+                                </View>
+                            </View>
+                        </View>
                     ) : (
                         <>
-                            <Text style={styles.info}>Guest Mode — notes are local.</Text>
+                            <Text style={styles.syncHint}>Sign in to sync encrypted notes across devices</Text>
                             <Button
-                                title="Sign In to Sync"
+                                title="Sign In"
                                 onPress={() => navigation.navigate('SignIn')}
                                 style={styles.signInButton}
                             />
                         </>
                     )}
+                    <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} />
                 </View>
 
                 <View style={styles.card}>
@@ -566,12 +584,12 @@ export const SettingsScreen = () => {
                 </View>
 
                 {isAuthenticated && (
-                    <View style={styles.footer}>
+                    <View style={[styles.footer, { marginBottom: spacing.xxl + spacing.l }]}>
                         <Button
                             title="Sign Out"
                             onPress={signOut}
-                            variant="outline"
-                            style={styles.button}
+                            variant="destructive"
+                            style={[styles.button, { backgroundColor: 'transparent' }]}
                         />
                     </View>
                 )}
@@ -866,22 +884,6 @@ const styles = StyleSheet.create({
     labelSpacing: {
         marginTop: spacing.s,
     },
-    resetActionButton: {
-        marginTop: spacing.s,
-        height: 50,
-        borderRadius: 14,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.error,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-    },
-    resetActionText: {
-        ...typography.button,
-        color: colors.error,
-    },
     statusRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -932,7 +934,15 @@ const styles = StyleSheet.create({
         marginTop: spacing.s,
     },
     signInButton: {
+        marginTop: spacing.s,
+    },
+    createAccountButton: {
         marginTop: spacing.m,
+    },
+    syncHint: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginBottom: spacing.xs,
     },
     footer: {
         marginTop: spacing.m,
@@ -940,5 +950,63 @@ const styles = StyleSheet.create({
     },
     button: {
         borderColor: colors.error,
+    },
+    // User info styles for Account section
+    userInfoContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+        paddingVertical: spacing.xs,
+        marginBottom: spacing.s,
+    },
+    userAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    userAvatarText: {
+        ...typography.h2,
+        color: colors.surface,
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    userInfoText: {
+        flex: 1,
+        gap: 2,
+    },
+    userName: {
+        ...typography.h3,
+        fontSize: 17,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    userEmail: {
+        ...typography.bodySmall,
+        color: colors.textSecondary,
+    },
+    userEmailPrimary: {
+        ...typography.body,
+        fontSize: 16,
+        fontWeight: '500',
+        color: colors.text,
+    },
+    syncStatusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    syncStatusText: {
+        ...typography.caption,
+        color: colors.accentGreen,
+        fontWeight: '600',
     },
 });

@@ -21,7 +21,7 @@ import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 
 export const SignInScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -81,10 +81,13 @@ export const SignInScreen = () => {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboard}
             >
-                <View style={styles.header}>
-                    <Text style={styles.title}>Welcome back</Text>
-                    <Text style={styles.subtitle}>Sign in to sync encrypted notes across devices.</Text>
-                </View>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                    activeOpacity={0.8}
+                >
+                    <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+                </TouchableOpacity>
 
                 <View style={styles.form}>
                     <TextInput
@@ -121,6 +124,13 @@ export const SignInScreen = () => {
                         loading={googleLoading}
                     />
 
+                    <View style={styles.inlineFooter}>
+                        <Text style={styles.footerText}>New here?</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('SignUp')} activeOpacity={0.8}>
+                            <Text style={[styles.link, styles.footerLink]}>Create account</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     {showVerificationHint && (
                         <TouchableOpacity
                             style={styles.verifyHint}
@@ -131,19 +141,6 @@ export const SignInScreen = () => {
                     )}
                 </View>
 
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>New here?</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('SignUp')} activeOpacity={0.8}>
-                        <Text style={styles.link}>Create account</Text>
-                    </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                    style={styles.verifyLink}
-                    onPress={() => navigation.navigate('EmailVerification', { email })}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.link}>Need to confirm your email?</Text>
-                </TouchableOpacity>
             </KeyboardAvoidingView>
         </ScreenContainer>
     );
@@ -153,13 +150,23 @@ const styles = StyleSheet.create({
     keyboard: {
         flex: 1,
     },
-    header: {
-        marginTop: spacing.xl,
-        marginBottom: spacing.l,
+    backButton: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+        marginTop: spacing.l,
+        marginBottom: spacing.s,
+        alignSelf: 'flex-start',
     },
     title: {
         ...typography.h1,
         marginBottom: spacing.xs,
+        display: 'none', // Hidden as per request
     },
     subtitle: {
         ...typography.body,
@@ -167,6 +174,7 @@ const styles = StyleSheet.create({
     },
     form: {
         flex: 1,
+        marginTop: spacing.xs,
     },
     dividerRow: {
         flexDirection: 'row',
@@ -185,12 +193,6 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginHorizontal: spacing.s,
     },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: spacing.l,
-    },
     footerText: {
         ...typography.body,
         color: colors.textSecondary,
@@ -199,6 +201,17 @@ const styles = StyleSheet.create({
     link: {
         ...typography.button,
         color: colors.primary,
+    },
+    footerLink: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    inlineFooter: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: spacing.s,
+        marginBottom: spacing.xs,
     },
     errorText: {
         ...typography.caption,

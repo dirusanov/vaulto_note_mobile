@@ -3,6 +3,7 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -25,7 +26,6 @@ export const SignUpScreen = () => {
     const navigation = useNavigation<any>();
     const { signInWithGoogle, loading: googleLoading } = useGoogleOAuth();
 
-    const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -52,6 +52,8 @@ export const SignUpScreen = () => {
         return true;
     };
 
+    const isFormFilled = email.trim().length > 0 && password.length > 0 && confirmPassword.length > 0;
+
     const handleSignUp = async () => {
         if (!validate()) return;
         setLoading(true);
@@ -61,10 +63,10 @@ export const SignUpScreen = () => {
             await authApi.register({
                 email: email.trim().toLowerCase(),
                 password,
-                fullName: fullName.trim() || undefined,
             });
             navigation.navigate('EmailVerification', {
                 email: email.trim().toLowerCase(),
+                password,
                 justRegistered: true,
             });
         } catch (err) {
@@ -91,76 +93,89 @@ export const SignUpScreen = () => {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboard}
             >
-                <View style={styles.header}>
-                    <Text style={styles.title}>Create secure account</Text>
-                    <Text style={styles.subtitle}>Only verified emails can sync encrypted data.</Text>
-                </View>
-
-                <View style={styles.form}>
-                    <TextInput
-                        label="Full name"
-                        placeholder="Optional"
-                        value={fullName}
-                        onChangeText={setFullName}
-                        autoCapitalize="words"
-                    />
-                    <TextInput
-                        label="Email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                    />
-                    <TextInput
-                        label="Password"
-                        placeholder="Use at least 8 characters"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                    />
-                    <TextInput
-                        label="Confirm password"
-                        placeholder="Re-enter password"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        secureTextEntry
-                    />
-
-                    {error && <Text style={styles.errorText}>{error}</Text>}
-
-                    <Button title="Create account" onPress={handleSignUp} loading={loading} />
-
-                    <View style={styles.dividerRow}>
-                        <View style={styles.divider} />
-                        <Text style={styles.dividerLabel}>or</Text>
-                        <View style={styles.divider} />
-                    </View>
-
-                    <AuthProviderButton
-                        title="Sign up with Google"
-                        icon={<MaterialCommunityIcons name="google" size={20} color={colors.text} />}
-                        onPress={handleGoogleSignUp}
-                        loading={googleLoading}
-                    />
-                </View>
-
-                <View style={styles.infoCard}>
-                    <MaterialIcons name="verified-user" size={22} color={colors.primary} />
-                    <View style={styles.infoTextWrapper}>
-                        <Text style={styles.infoTitle}>Verify to activate</Text>
-                        <Text style={styles.infoText}>
-                            We send a one-time token to your inbox. Finish verification before signing in.
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>Already have an account?</Text>
-                    <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.8}>
-                        <Text style={styles.link}>Sign in</Text>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => navigation.goBack()}
+                        activeOpacity={0.8}
+                    >
+                        <MaterialIcons name="arrow-back" size={22} color={colors.text} />
                     </TouchableOpacity>
-                </View>
+
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Create account</Text>
+                        <Text style={styles.subtitle}>Only verified emails can sync encrypted data.</Text>
+                    </View>
+
+                    <View style={styles.form}>
+                        <TextInput
+                            label="Email"
+                            placeholder="name@example.com"
+                            value={email}
+                            onChangeText={setEmail}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                        />
+                        <TextInput
+                            label="Password"
+                            placeholder="Use at least 8 characters"
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                        />
+                        <TextInput
+                            label="Confirm password"
+                            placeholder="Re-enter password"
+                            value={confirmPassword}
+                            onChangeText={setConfirmPassword}
+                            secureTextEntry
+                        />
+
+                        {error && <Text style={styles.errorText}>{error}</Text>}
+
+                        <Button
+                            title="Create account"
+                            onPress={handleSignUp}
+                            loading={loading}
+                            disabled={!isFormFilled || loading}
+                            style={{ height: 58 }}
+                        />
+
+                        <View style={styles.dividerRow}>
+                            <View style={styles.divider} />
+                            <Text style={styles.dividerLabel}>or</Text>
+                            <View style={styles.divider} />
+                        </View>
+
+                        <AuthProviderButton
+                            title="Sign up with Google"
+                            icon={<MaterialCommunityIcons name="google" size={20} color={colors.text} />}
+                            onPress={handleGoogleSignUp}
+                            loading={googleLoading}
+                        />
+                    </View>
+
+                    <View style={styles.infoCard}>
+                        <MaterialIcons name="verified-user" size={22} color={colors.primary} />
+                        <View style={styles.infoTextWrapper}>
+                            <Text style={styles.infoTitle}>Verify to activate</Text>
+                            <Text style={styles.infoText}>
+                                We send a one-time token to your inbox. Finish verification before signing in.
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.footer}>
+                        <Text style={styles.footerText}>Already have an account?</Text>
+                        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.8}>
+                            <Text style={styles.link}>Sign in</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </ScreenContainer>
     );
@@ -170,8 +185,25 @@ const styles = StyleSheet.create({
     keyboard: {
         flex: 1,
     },
+    scrollContent: {
+        flexGrow: 1,
+        paddingBottom: spacing.l,
+    },
+    backButton: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+        marginTop: spacing.l,
+        marginBottom: spacing.m,
+        alignSelf: 'flex-start',
+    },
     header: {
-        marginTop: spacing.xl,
+        marginTop: spacing.s,
         marginBottom: spacing.l,
     },
     title: {
@@ -183,7 +215,7 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
     },
     form: {
-        flex: 1,
+        marginBottom: spacing.l,
     },
     errorText: {
         ...typography.caption,
@@ -215,7 +247,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
-        marginTop: spacing.l,
+        marginBottom: spacing.l,
     },
     infoTextWrapper: {
         flex: 1,
@@ -234,7 +266,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: spacing.l,
+        marginBottom: spacing.l,
     },
     footerText: {
         ...typography.body,

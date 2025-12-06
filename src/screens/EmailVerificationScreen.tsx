@@ -1,158 +1,210 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { TextInput } from '../components/TextInput';
-import { Button } from '../components/Button';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { authApi } from '../api/auth';
-import { getErrorMessage } from '../utils/errorMessage';
 import { MaterialIcons } from '@expo/vector-icons';
-
-const extractToken = (value: string): string => {
-    const trimmed = value.trim();
-    if (!trimmed) return '';
-
-    try {
-        const url = new URL(trimmed);
-        const fromQuery = url.searchParams.get('token');
-        if (fromQuery) return fromQuery;
-    } catch {
-        // Not a valid URL
-    }
-
-    const tokenMatch = trimmed.match(/token=([^&]+)/);
-    if (tokenMatch?.[1]) {
-        return tokenMatch[1];
-    }
-    return trimmed;
-};
+import { useAuth } from '../hooks/useAuth';
 
 export const EmailVerificationScreen = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
-    const prefilledEmail = route.params?.email;
-    const hasJustRegistered = route.params?.justRegistered;
+    const { signIn } = useAuth();
 
-    const [token, setToken] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const email = route.params?.email;
+    const password = route.params?.password;
 
-    const headline = useMemo(() => {
-        if (hasJustRegistered) {
-            return 'Confirm your email';
-        }
-        return 'Enter confirmation token';
-    }, [hasJustRegistered]);
+    const [isChecking, setIsChecking] = useState(true);
+    const [isVerified, setIsVerified] = useState(false);
+    const pollInterval = useRef<NodeJS.Timeout | null>(null);
 
-    const handleVerify = async () => {
-        if (!token.trim()) {
-            setError('Paste the confirmation token from your email.');
+    useEffect(() => {
+        if (!email) {
+            console.log('EmailVerificationScreen: No email provided in params');
             return;
         }
-        setSubmitting(true);
-        setError(null);
-        try {
-            const profile = await authApi.confirmEmail(token.trim());
-            Alert.alert('Email confirmed', 'You can now sign in with your password.');
-            navigation.navigate('SignIn', { email: profile.email });
-        } catch (err) {
-            const message = getErrorMessage(err, 'Unable to verify email.');
-            setError(message);
-        } finally {
-            setSubmitting(false);
+
+        const checkStatus = async () => {
+            try {
+                console.log(`Polling verification status for: ${email}`);
+                const profile = await authApi.checkVerificationStatus(email);
+                console.log('Verification status response:', profile);
+
+                if (profile.is_verified) {
+                    console.log('User is verified!');
+                    stopPolling();
+                    setIsVerified(true);
+                    setIsChecking(false);
+                    // Auto-login after a short delay to show success message
+                    setTimeout(() => handleVerified(), 3000);
+                }
+            } catch (error) {
+                // Ignore errors during polling (e.g. network issues)
+                console.log('Polling error:', error);
+            }
+        };
+
+        // Initial check
+        checkStatus();
+
+        // Start polling
+        pollInterval.current = setInterval(checkStatus, 3000);
+
+        return () => stopPolling();
+    }, [email]);
+
+    const stopPolling = () => {
+        if (pollInterval.current) {
+            clearInterval(pollInterval.current);
+            pollInterval.current = null;
         }
     };
 
+    const handleVerified = async () => {
+        if (password) {
+            try {
+                console.log('Attempting auto-login...');
+                const tokens = await authApi.login(email, password);
+                await signIn(tokens.access_token);
+                console.log('Auto-login successful');
+
+                // Reset navigation stack to Main screen
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'NotesList' }],
+                });
+            } catch (e) {
+                // Fallback if auto-login fails
+                console.log('Auto-login failed:', e);
+                navigation.navigate('SignIn', { email });
+            }
+        } else {
+            navigation.navigate('SignIn', { email });
+        }
+    };
+
+    if (isVerified) {
+        return (
+            <ScreenContainer>
+                <View style={styles.content}>
+                    <View style={[styles.iconContainer, { borderColor: colors.success }]}>
+                        <MaterialIcons name="check-circle" size={64} color={colors.success} />
+                    </View>
+                    <Text style={styles.title}>Email Verified!</Text>
+                    <Text style={styles.subtitle}>
+                        Your account has been successfully verified.
+                    </Text>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.statusText, { marginTop: spacing.m }]}>
+                        Logging you in...
+                    </Text>
+                </View>
+            </ScreenContainer>
+        );
+    }
+
     return (
         <ScreenContainer>
-            <View style={styles.header}>
-                <MaterialIcons name="mark-email-read" size={32} color={colors.primary} />
-                <Text style={styles.title}>{headline}</Text>
+            <View style={styles.content}>
+                <View style={styles.iconContainer}>
+                    <MaterialIcons name="mark-email-unread" size={64} color={colors.primary} />
+                </View>
+
+                <Text style={styles.title}>Check your inbox</Text>
+
                 <Text style={styles.subtitle}>
-                    {prefilledEmail
-                        ? `We sent a secure link to ${prefilledEmail}. Paste the token or the full link below.`
-                        : 'Paste the token or the full link you received via email.'}
+                    We sent a verification link to{'\n'}
+                    <Text style={styles.email}>{email}</Text>
                 </Text>
-            </View>
 
-            <View style={styles.card}>
-                <TextInput
-                    label="Confirmation token"
-                    placeholder="e.g. 4f8c2f3e-aa07..."
-                    value={token}
-                    onChangeText={(value) => setToken(extractToken(value))}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    multiline
-                    numberOfLines={3}
-                    error={error || undefined}
-                />
-                <Button title="Activate account" onPress={handleVerify} loading={submitting} />
-            </View>
+                <View style={styles.statusContainer}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.statusText}>Waiting for verification...</Text>
+                </View>
 
-            <View style={styles.hintBox}>
-                <MaterialIcons name="info" size={18} color={colors.primary} />
-                <Text style={styles.hintText}>
-                    Tap the link in your inbox from any device — the token parameter at the end of the URL is all you
-                    need. Tokens expire after 30 minutes for security.
-                </Text>
-            </View>
+                <View style={styles.infoBox}>
+                    <Text style={styles.infoText}>
+                        Tap the link in the email to verify your account.
+                        Once verified, this screen will automatically update.
+                    </Text>
+                </View>
 
-            <TouchableOpacity
-                onPress={() => navigation.navigate('SignIn', { email: prefilledEmail })}
-                style={styles.secondaryAction}
-                activeOpacity={0.8}
-            >
-                <Text style={styles.secondaryActionText}>Back to sign in</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('SignIn', { email })}
+                    style={styles.backButton}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.backButtonText}>Back to sign in</Text>
+                </TouchableOpacity>
+            </View>
         </ScreenContainer>
     );
 };
 
 const styles = StyleSheet.create({
-    header: {
-        marginTop: spacing.xl,
+    content: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: spacing.l,
+    },
+    iconContainer: {
         marginBottom: spacing.l,
-        alignItems: 'flex-start',
-    },
-    title: {
-        ...typography.h1,
-        marginTop: spacing.s,
-    },
-    subtitle: {
-        ...typography.body,
-        color: colors.textMuted,
-        marginTop: spacing.xs,
-    },
-    card: {
         backgroundColor: colors.surface,
-        borderRadius: 16,
         padding: spacing.l,
+        borderRadius: 32,
         borderWidth: 1,
         borderColor: colors.border,
     },
-    hintBox: {
+    title: {
+        ...typography.h1,
+        textAlign: 'center',
+        marginBottom: spacing.m,
+    },
+    subtitle: {
+        ...typography.body,
+        textAlign: 'center',
+        color: colors.textSecondary,
+        marginBottom: spacing.xl,
+    },
+    email: {
+        color: colors.text,
+        fontWeight: '600',
+    },
+    statusContainer: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
+        marginBottom: spacing.xl,
+        padding: spacing.m,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    statusText: {
+        ...typography.body,
+        marginLeft: spacing.s,
+        color: colors.textSecondary,
+    },
+    infoBox: {
+        backgroundColor: colors.backgroundSecondary,
         padding: spacing.m,
         borderRadius: 12,
-        backgroundColor: colors.backgroundSecondary,
-        marginTop: spacing.l,
+        marginBottom: spacing.xl,
     },
-    hintText: {
+    infoText: {
         ...typography.caption,
+        textAlign: 'center',
         color: colors.textSecondary,
-        flex: 1,
-        marginLeft: spacing.s,
+        lineHeight: 20,
     },
-    secondaryAction: {
-        marginTop: spacing.xl,
-        alignItems: 'center',
+    backButton: {
+        padding: spacing.m,
     },
-    secondaryActionText: {
+    backButtonText: {
         ...typography.button,
         color: colors.primary,
     },

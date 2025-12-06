@@ -33,6 +33,7 @@ export const useGoogleOAuth = () => {
     const { signIn } = useAuth();
     const [loading, setLoading] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
+    const codeVerifierRef = useRef<string | null>(null);
     const subscriptionRef = useRef<ReturnType<typeof Linking.addEventListener> | null>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -93,7 +94,8 @@ export const useGoogleOAuth = () => {
         setLoading(true);
         setLastError(null);
         try {
-            const { authorization_url, state } = await authApi.initGoogleLogin();
+            const { authorization_url, state, code_verifier } = await authApi.initGoogleLogin();
+            codeVerifierRef.current = code_verifier;
             const redirectPromise = waitForRedirect(state);
 
             const supported = await Linking.canOpenURL(authorization_url);
@@ -103,7 +105,13 @@ export const useGoogleOAuth = () => {
 
             await Linking.openURL(authorization_url);
             const payload = await redirectPromise;
-            const tokens = await authApi.completeGoogleLogin(payload);
+            if (!codeVerifierRef.current) {
+                throw new Error('Missing code verifier for Google sign-in.');
+            }
+            const tokens = await authApi.completeGoogleLogin({
+                ...payload,
+                code_verifier: codeVerifierRef.current,
+            });
             await signIn(tokens.access_token);
         } catch (error) {
             const message = getErrorMessage(error, 'Unable to complete Google sign-in.');

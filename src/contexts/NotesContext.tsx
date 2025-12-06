@@ -18,6 +18,7 @@ interface NotesContextType {
     loading: boolean;
     error: string | null;
     fetchNotes: () => Promise<void>;
+    syncNotes: () => Promise<void>;
     createNote: (data: { title?: string; content: string; audio?: NoteAudio }) => Promise<Note>;
     updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
