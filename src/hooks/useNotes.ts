@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Note } from '../api/notes';
+import { Note, NoteImprovement } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
 import {
     initDatabase,
@@ -8,6 +8,7 @@ import {
     getNotesLocal,
     deleteNoteLocal,
     searchNotesLocal,
+    saveImprovementLocal,
 } from '../services/DatabaseService';
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
@@ -124,6 +125,37 @@ export const useNotes = () => {
             };
             await saveNoteLocal(localNote);
             return localNote;
+        },
+        []
+    );
+
+    const buildLocalImprovement = useCallback(
+        async (params: {
+            id: string;
+            noteId: string;
+            content: string;
+            label?: string;
+            optionId?: string;
+        }): Promise<NoteImprovement> => {
+            const { id, noteId, content, label, optionId } = params;
+            const encryptedContent = await encrypt(content);
+            const now = new Date().toISOString();
+            const improvement: NoteImprovement = {
+                id,
+                note_id: noteId,
+                encrypted_content: encryptedContent,
+                label,
+                option_id: optionId,
+                content,
+                created_at: now,
+                updated_at: now,
+                synced: 0,
+                dirty: true,
+                deleted: false,
+                version: 0,
+            };
+            await saveImprovementLocal(improvement);
+            return improvement;
         },
         []
     );
@@ -381,6 +413,73 @@ export const useNotes = () => {
         return updateNote(id, { audio: null, has_audio: false, audio_file_path: undefined });
     };
 
+    const createImprovement = useCallback(
+        async (
+            noteId: string,
+            params: { content: string; label?: string; optionId?: string }
+        ): Promise<NoteImprovement> => {
+            const note = notesRef.current.find(n => n.id === noteId);
+            if (!note) throw new Error('Note not found');
+            const id = await generateUUID();
+            const improvement = await buildLocalImprovement({
+                id,
+                noteId,
+                content: params.content,
+                label: params.label,
+                optionId: params.optionId,
+            });
+            await refreshFromLocal();
+            syncService.scheduleAutoSync();
+            return improvement;
+        },
+        [buildLocalImprovement, refreshFromLocal]
+    );
+
+    const updateImprovement = useCallback(
+        async (
+            noteId: string,
+            improvementId: string,
+            updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
+        ): Promise<NoteImprovement> => {
+            const note = notesRef.current.find(n => n.id === noteId);
+            if (!note) throw new Error('Note not found');
+            const improvement = note.improvements?.find(imp => imp.id === improvementId);
+            if (!improvement) throw new Error('Improvement not found');
+
+            let encryptedContent = improvement.encrypted_content;
+            let plainContent = improvement.content ?? '';
+            if (typeof updates.content === 'string') {
+                encryptedContent = await encrypt(updates.content);
+                plainContent = updates.content;
+            }
+
+            const updated: NoteImprovement = {
+                ...improvement,
+                encrypted_content: encryptedContent,
+                content: plainContent,
+                label: updates.label ?? improvement.label,
+                option_id: updates.optionId ?? improvement.option_id,
+                deleted: updates.deleted ?? improvement.deleted ?? false,
+                updated_at: new Date().toISOString(),
+                synced: 0,
+                dirty: true,
+            };
+
+            await saveImprovementLocal(updated);
+            await refreshFromLocal();
+            syncService.scheduleAutoSync();
+            return updated;
+        },
+        [refreshFromLocal]
+    );
+
+    const deleteImprovement = useCallback(
+        async (noteId: string, improvementId: string) => {
+            await updateImprovement(noteId, improvementId, { deleted: true });
+        },
+        [updateImprovement]
+    );
+
     return {
         notes,
         loading,
@@ -393,5 +492,8 @@ export const useNotes = () => {
         searchNotes,
         attachAudioToNote,
         removeAudioFromNote,
+        createImprovement,
+        updateImprovement,
+        deleteImprovement,
     };
 };

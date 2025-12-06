@@ -1,4 +1,5 @@
 import React, { createContext, useContext, ReactNode } from 'react';
+import { NoteImprovement } from '../api/notes';
 import { useNotes, NoteAudio } from '../hooks/useNotes';
 
 export interface Note {
@@ -11,6 +12,7 @@ export interface Note {
     audio_duration?: number;
     has_audio?: boolean;
     encrypted_transcription?: string;
+    improvements?: NoteImprovement[];
 }
 
 interface NotesContextType {
@@ -25,6 +27,13 @@ interface NotesContextType {
     searchNotes: (query: string) => Promise<void>;
     attachAudioToNote: (id: string, audio: NoteAudio) => Promise<Note>;
     removeAudioFromNote: (id: string) => Promise<Note>;
+    createImprovement: (noteId: string, params: { content: string; label?: string; optionId?: string }) => Promise<NoteImprovement>;
+    updateImprovement: (
+        noteId: string,
+        improvementId: string,
+        updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
+    ) => Promise<NoteImprovement>;
+    deleteImprovement: (noteId: string, improvementId: string) => Promise<void>;
     // decrypt removed – decryption is handled inside useNotes hook
 }
 

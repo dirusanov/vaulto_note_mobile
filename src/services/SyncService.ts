@@ -1,7 +1,20 @@
 import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { notesApi, Note, ServerNote, SyncChangeRequest } from '../api/notes';
-import { getNotesLocal, saveNoteLocal, deleteNoteLocal } from './DatabaseService';
+import {
+    notesApi,
+    Note,
+    ServerNote,
+    ServerImprovement,
+    SyncChangeRequest,
+    SyncImprovementChangeRequest,
+} from '../api/notes';
+import {
+    getNotesLocal,
+    saveNoteLocal,
+    deleteNoteLocal,
+    getAllImprovementsLocal,
+    saveImprovementLocal,
+} from './DatabaseService';
 import { decrypt, encrypt } from '../crypto/encryption';
 import { isUUID, generateUUID } from '../utils/uuid';
 
@@ -102,12 +115,16 @@ class SyncService {
         try {
             // 1. Gather local changes
             const allNotes = await getNotesLocal();
+            const allImprovements = await getAllImprovementsLocal();
             const dirtyNotes = allNotes.filter(n => n.dirty || n.deleted || n.pending_delete);
+            const dirtyImprovements = allImprovements.filter(imp => imp.dirty || imp.deleted);
             const hasLocalNotes = allNotes.length > 0;
 
             // 2. Prepare changes for server
             const changes: SyncChangeRequest[] = [];
+            const improvementChanges: SyncImprovementChangeRequest[] = [];
             const noteMap = new Map<string, Note>();
+            const improvementMap = new Map<string, typeof dirtyImprovements[number]>();
 
             for (const note of dirtyNotes) {
                 // Ensure UUID
@@ -137,6 +154,22 @@ class SyncService {
                 });
             }
 
+            for (const improvement of dirtyImprovements) {
+                improvementMap.set(improvement.id, improvement);
+                improvementChanges.push({
+                    id: improvement.id,
+                    note_id: improvement.note_id,
+                    content_ciphertext: improvement.encrypted_content,
+                    content_nonce: improvement.content_nonce ?? null,
+                    encrypted_title: improvement.encrypted_title ?? null,
+                    label: improvement.label ?? null,
+                    option_id: improvement.option_id ?? null,
+                    deleted: !!improvement.deleted,
+                    base_version: improvement.version ?? 0,
+                    client_updated_at: improvement.updated_at || new Date().toISOString(),
+                });
+            }
+
             // 3. Send to server
             // We always ask for server changes if it's not just a quick save (or maybe always?)
             // User said: "Отправляем на сервер одним батчем... Сервер возвращает обновлённые заметки"
@@ -150,6 +183,7 @@ class SyncService {
 
             const response = await notesApi.sync({
                 changes,
+                improvement_changes: improvementChanges,
                 since_updated_at: since,
             });
 
@@ -166,6 +200,14 @@ class SyncService {
 
             if (uniqueIncoming.size > 0) {
                 await this.applyServerChanges(Array.from(uniqueIncoming.values()));
+            }
+
+            const incomingImprovements = [
+                ...(response.improvement_updates || []),
+                ...(response.improvement_changes || []),
+            ];
+            if (incomingImprovements.length > 0) {
+                await this.applyServerImprovements(incomingImprovements);
             }
 
             // 5. Mark local dirty notes as synced (if they were in the request and not in conflict/update response?)
@@ -222,6 +264,27 @@ class SyncService {
                 }
             }
 
+            if (improvementChanges.length > 0) {
+                const processedImprovementIds = new Set(
+                    [
+                        ...(response.improvement_updates || []),
+                        ...(response.improvement_changes || []),
+                    ].map(imp => imp.id)
+                );
+                for (const change of improvementChanges) {
+                    if (processedImprovementIds.has(change.id)) {
+                        continue;
+                    }
+                    const localImprovement = improvementMap.get(change.id);
+                    if (!localImprovement) continue;
+                    await saveImprovementLocal({
+                        ...localImprovement,
+                        dirty: false,
+                        synced: 1,
+                    });
+                }
+            }
+
             this.lastSyncAt = Date.now();
             await AsyncStorage.setItem(SYNC_SINCE_KEY, this.lastSyncAt.toString());
 
@@ -267,6 +330,26 @@ class SyncService {
             console.log('[SyncService] Migration complete. All notes will be uploaded on next sync.');
         } catch (e) {
             console.error('[SyncService] Failed to migrate notes to new user', e);
+        }
+    }
+
+    private async applyServerImprovements(improvements: ServerImprovement[]) {
+        for (const improvement of improvements) {
+            await saveImprovementLocal({
+                id: improvement.id,
+                note_id: improvement.note_id,
+                encrypted_content: improvement.content_ciphertext,
+                encrypted_title: improvement.encrypted_title ?? null,
+                content_nonce: improvement.content_nonce ?? null,
+                label: improvement.label ?? null,
+                option_id: improvement.option_id ?? null,
+                deleted: improvement.deleted,
+                version: improvement.version,
+                created_at: improvement.updated_at,
+                updated_at: improvement.updated_at,
+                synced: 1,
+                dirty: false,
+            });
         }
     }
 

@@ -54,11 +54,20 @@ interface HistoryState {
 export const NoteEditScreen = () => {
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
     const route = useRoute<NoteEditScreenRouteProp>();
-    const { createNote, updateNote, deleteNote, notes } = useNotesContext();
+    const {
+        createNote,
+        updateNote,
+        deleteNote,
+        notes,
+        createImprovement,
+        updateImprovement,
+        deleteImprovement,
+    } = useNotesContext();
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
     const existingNote = notes.find(n => n.id === localNoteId);
+    const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
 
     const [title, setTitle] = useState(existingNote?.title || '');
     const [content, setContent] = useState(existingNote?.content || '');
@@ -94,24 +103,57 @@ export const NoteEditScreen = () => {
     const [newPromptTitle, setNewPromptTitle] = useState('');
     const [newPromptTemplate, setNewPromptTemplate] = useState('');
     const [newPromptIcon, setNewPromptIcon] = useState<string>(ICON_CHOICES[0]);
+    const [activeVariantId, setActiveVariantId] = useState<string>('original');
+    const improvementDraftsRef = useRef<Record<string, string>>({});
+    const improvementSavedRef = useRef<Record<string, string>>({});
 
     useEffect(() => {
-        if (existingNote) {
-            // Only update if we haven't modified it locally (basic conflict avoidance)
-            if (lastSavedTitle.current === title) setTitle(existingNote.title || '');
-            if (lastSavedContent.current === content) setContent(existingNote.content || '');
-
-            // Load audio if exists
-            if (existingNote.has_audio && existingNote.audio_file_path && !audioUri) {
-                loadAudio(existingNote.audio_file_path);
-                setAudioDuration(existingNote.audio_duration || 0);
-            }
-
-            // Sync refs to prevent unnecessary saves
-            lastSavedTitle.current = existingNote.title || '';
-            lastSavedContent.current = existingNote.content || '';
+        if (!existingNote) {
+            return;
         }
-    }, [existingNote]);
+
+        // Sync drafts for improvements
+        if (noteImprovements.length > 0) {
+            const drafts = { ...improvementDraftsRef.current };
+            const saved = { ...improvementSavedRef.current };
+            noteImprovements.forEach(imp => {
+                const value = imp.content ?? '';
+                if (saved[imp.id] === undefined) {
+                    drafts[imp.id] = value;
+                    saved[imp.id] = value;
+                } else if (saved[imp.id] === drafts[imp.id]) {
+                    drafts[imp.id] = value;
+                    saved[imp.id] = value;
+                }
+                if (activeVariantId === imp.id && drafts[imp.id] !== undefined) {
+                    setContent(drafts[imp.id]);
+                }
+            });
+            improvementDraftsRef.current = drafts;
+            improvementSavedRef.current = saved;
+        } else {
+            improvementDraftsRef.current = {};
+            improvementSavedRef.current = {};
+        }
+
+        if (activeVariantId === 'original') {
+            if (lastSavedTitle.current === title) {
+                setTitle(existingNote.title || '');
+            }
+            if (lastSavedContent.current === content) {
+                setContent(existingNote.content || '');
+            }
+        }
+
+        // Load audio if exists
+        if (existingNote.has_audio && existingNote.audio_file_path && !audioUri) {
+            loadAudio(existingNote.audio_file_path);
+            setAudioDuration(existingNote.audio_duration || 0);
+        }
+
+        lastSavedTitle.current = existingNote.title || '';
+        lastSavedContent.current = existingNote.content || '';
+    }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri]);
 
     useEffect(() => {
         const fetchAiOptions = async () => {
@@ -128,11 +170,29 @@ export const NoteEditScreen = () => {
     }, []);
 
     useEffect(() => {
+        if (activeVariantId === 'original') {
+            setContent(existingNote?.content || '');
+        } else {
+            setContent(improvementDraftsRef.current[activeVariantId] ?? '');
+        }
+    }, [activeVariantId]);
+
+    useEffect(() => {
         isMounted.current = true;
         return () => {
             isMounted.current = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (activeVariantId !== 'original') {
+            const exists = noteImprovements.some(imp => imp.id === activeVariantId);
+            if (!exists) {
+                setActiveVariantId('original');
+                setContent(existingNote?.content || '');
+            }
+        }
+    }, [activeVariantId, noteImprovements, existingNote?.content]);
 
     // Handle history updates
     const updateHistory = (newTitle: string, newContent: string) => {
@@ -154,7 +214,9 @@ export const NoteEditScreen = () => {
 
     const handleTitleChange = (text: string) => {
         setTitle(text);
-        updateHistory(text, content);
+        if (activeVariantId === 'original') {
+            updateHistory(text, content);
+        }
     };
 
     const navigateBackToList = useCallback(() => {
@@ -170,10 +232,46 @@ export const NoteEditScreen = () => {
 
     const handleContentChange = (text: string) => {
         setContent(text);
-        updateHistory(title, text);
+        if (activeVariantId === 'original') {
+            updateHistory(title, text);
+        } else {
+            improvementDraftsRef.current[activeVariantId] = text;
+        }
+    };
+
+    const handleDeleteImprovementVariant = useCallback(async (improvementId: string) => {
+        if (!localNoteId) return;
+        try {
+            await deleteImprovement(localNoteId, improvementId);
+            delete improvementDraftsRef.current[improvementId];
+            delete improvementSavedRef.current[improvementId];
+            if (activeVariantId === improvementId) {
+                setActiveVariantId('original');
+                setContent(existingNote?.content || '');
+            }
+        } catch (error) {
+            console.error('Failed to delete improvement', error);
+            Alert.alert('Error', 'Failed to delete improvement');
+        }
+    }, [activeVariantId, deleteImprovement, existingNote?.content, localNoteId]);
+
+    const confirmDeleteImprovement = (improvementId: string) => {
+        Alert.alert(
+            'Delete Improvement',
+            'This version will be removed. You can always regenerate it later.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => handleDeleteImprovementVariant(improvementId),
+                },
+            ]
+        );
     };
 
     const handleUndo = () => {
+        if (activeVariantId !== 'original') return;
         if (historyIndex > 0) {
             const prevIndex = historyIndex - 1;
             const prevState = history[prevIndex];
@@ -184,6 +282,7 @@ export const NoteEditScreen = () => {
     };
 
     const handleRedo = () => {
+        if (activeVariantId !== 'original') return;
         if (historyIndex < history.length - 1) {
             const nextIndex = historyIndex + 1;
             const nextState = history[nextIndex];
@@ -202,7 +301,35 @@ export const NoteEditScreen = () => {
         }
     };
 
+    const saveImprovementDraft = useCallback(async () => {
+        if (activeVariantId === 'original' || !localNoteId) {
+            return;
+        }
+        const draft = improvementDraftsRef.current[activeVariantId] ?? '';
+        const saved = improvementSavedRef.current[activeVariantId] ?? '';
+        if (draft === saved) {
+            return;
+        }
+        if (isMounted.current) {
+            setIsSaving(true);
+        }
+        try {
+            await updateImprovement(localNoteId, activeVariantId, { content: draft });
+            improvementSavedRef.current[activeVariantId] = draft;
+        } catch (error) {
+            console.error('Failed to save improvement:', error);
+        } finally {
+            if (isMounted.current) {
+                setIsSaving(false);
+            }
+        }
+    }, [activeVariantId, localNoteId, updateImprovement]);
+
     const saveNote = useCallback(async () => {
+        if (activeVariantId !== 'original') {
+            await saveImprovementDraft();
+            return;
+        }
         const hasAudio = !!audioUri || existingNote?.has_audio;
         const emptyText = !title.trim() && !content.trim();
         if (emptyText && !hasAudio) {
@@ -253,7 +380,30 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, title, updateNote]);
+    }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, saveImprovementDraft, title, updateNote]);
+
+    const handleVariantSelect = useCallback(async (variantId: string) => {
+        if (variantId === activeVariantId) {
+            return;
+        }
+        try {
+            await saveNote();
+        } catch (error) {
+            console.error('Failed to save before switching variant:', error);
+        }
+        setActiveVariantId(variantId);
+        if (variantId === 'original') {
+            setContent(existingNote?.content || '');
+        } else {
+            const draft = improvementDraftsRef.current[variantId];
+            if (draft !== undefined) {
+                setContent(draft);
+            } else {
+                const imp = noteImprovements.find(i => i.id === variantId);
+                setContent(imp?.content || '');
+            }
+        }
+    }, [activeVariantId, existingNote?.content, noteImprovements, saveNote]);
 
     useEffect(() => {
         const unsubscribe = navigation.addListener('beforeRemove', (event) => {
@@ -264,8 +414,13 @@ export const NoteEditScreen = () => {
 
             const nothingToSave = !title.trim() && !content.trim();
             const unchanged = title === lastSavedTitle.current && content === lastSavedContent.current;
+            const improvementDraft = improvementDraftsRef.current[activeVariantId] ?? '';
+            const improvementSaved = improvementSavedRef.current[activeVariantId] ?? '';
+            const hasChanges = activeVariantId === 'original'
+                ? !(nothingToSave || unchanged)
+                : improvementDraft !== improvementSaved;
 
-            if (nothingToSave || unchanged) {
+            if (!hasChanges) {
                 return;
             }
 
@@ -339,6 +494,10 @@ export const NoteEditScreen = () => {
     };
 
     const handleMicPress = async () => {
+        if (activeVariantId !== 'original') {
+            Alert.alert('Switch to Original', 'Voice recording is only available for the original version of the note.');
+            return;
+        }
         const dismissed = await getPrivacyWarningDismissed();
         if (dismissed) {
             setShowVoiceRecorder(true);
@@ -353,6 +512,10 @@ export const NoteEditScreen = () => {
     };
 
     const handleRecordingFinish = async (recording: AudioRecording) => {
+        if (activeVariantId !== 'original') {
+            Alert.alert('Switch to Original', 'Voice notes can only be attached to the original text.');
+            return;
+        }
         setShowVoiceRecorder(false);
 
         try {
@@ -455,9 +618,42 @@ export const NoteEditScreen = () => {
         setShowAIModal(false);
         setIsAIProcessing(true);
         try {
-            const improvedText = await improveText(content, option);
+            const sourceText = content.trim();
+            if (!sourceText) {
+                Alert.alert('Empty Text', 'Enter some text before requesting an improvement.');
+                return;
+            }
+            const improvedText = await improveText(sourceText, option);
+
+            let targetNoteId = localNoteId;
+            if (!targetNoteId) {
+                const newNote = await createNote({
+                    title,
+                    content: content,
+                });
+                targetNoteId = newNote.id;
+                setLocalNoteId(newNote.id);
+                lastSavedTitle.current = title;
+                lastSavedContent.current = content;
+            } else if (activeVariantId === 'original') {
+                await saveNote();
+            } else {
+                await saveImprovementDraft();
+            }
+
+            if (!targetNoteId) {
+                throw new Error('Failed to resolve note ID for improvement');
+            }
+
+            const improvement = await createImprovement(targetNoteId, {
+                content: improvedText,
+                label: option.label,
+                optionId: option.id,
+            });
+            improvementDraftsRef.current[improvement.id] = improvedText;
+            improvementSavedRef.current[improvement.id] = improvedText;
+            setActiveVariantId(improvement.id);
             setContent(improvedText);
-            updateHistory(title, improvedText);
         } catch (error) {
             const message = error instanceof Error
                 ? error.message
@@ -835,6 +1031,68 @@ export const NoteEditScreen = () => {
                         <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
                     </View>
 
+                    <View style={styles.variantContainer}>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.variantScrollContent}
+                        >
+                            <TouchableOpacity
+                                style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
+                                onPress={() => handleVariantSelect('original')}
+                            >
+                                <MaterialIcons
+                                    name="lock"
+                                    size={14}
+                                    color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
+                                    style={styles.variantChipIcon}
+                                />
+                                <Text
+                                    style={[
+                                        styles.variantChipText,
+                                        activeVariantId === 'original' && styles.variantChipTextActive,
+                                    ]}
+                                >
+                                    Original
+                                </Text>
+                            </TouchableOpacity>
+
+                            {noteImprovements.map((imp) => (
+                                <View style={styles.variantChipWrapper} key={imp.id}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.variantChip,
+                                            activeVariantId === imp.id && styles.variantChipActive,
+                                        ]}
+                                        onPress={() => handleVariantSelect(imp.id)}
+                                    >
+                                        <MaterialIcons
+                                            name="auto-awesome"
+                                            size={14}
+                                            color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
+                                            style={styles.variantChipIcon}
+                                        />
+                                        <Text
+                                            numberOfLines={1}
+                                            style={[
+                                                styles.variantChipText,
+                                                activeVariantId === imp.id && styles.variantChipTextActive,
+                                            ]}
+                                        >
+                                            {imp.label || 'Improvement'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.variantDeleteButton}
+                                        onPress={() => confirmDeleteImprovement(imp.id)}
+                                    >
+                                        <MaterialIcons name="close" size={14} color={colors.textMuted} />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+
                     {showAudioPlayer && audioUri && (
                         <AudioPlayer
                             audioUri={audioUri}
@@ -958,6 +1216,47 @@ const styles = StyleSheet.create({
     metaText: {
         fontSize: 12,
         color: colors.textTertiary,
+    },
+    variantContainer: {
+        marginBottom: spacing.m,
+    },
+    variantScrollContent: {
+        alignItems: 'center',
+        paddingVertical: spacing.xs,
+    },
+    variantChipWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: spacing.xs,
+    },
+    variantChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 18,
+        paddingVertical: 6,
+        paddingHorizontal: spacing.m,
+        backgroundColor: colors.surface,
+    },
+    variantChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    variantChipText: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        fontWeight: '500',
+    },
+    variantChipTextActive: {
+        color: colors.background,
+    },
+    variantChipIcon: {
+        marginRight: 6,
+    },
+    variantDeleteButton: {
+        paddingHorizontal: 4,
+        paddingVertical: 4,
     },
     contentInput: {
         fontSize: 16,

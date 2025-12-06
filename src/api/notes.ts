@@ -1,5 +1,23 @@
 import client from './client';
 
+export interface NoteImprovement {
+    id: string;
+    note_id: string;
+    encrypted_content: string;
+    encrypted_title?: string | null;
+    content_nonce?: string | null;
+    label?: string | null;
+    option_id?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    deleted?: boolean;
+    synced?: number;
+    version?: number;
+    content?: string;
+    dirty?: boolean;
+    server_updated_at?: string;
+}
+
 export interface Note {
     id: string;
     encrypted_title?: string;
@@ -21,6 +39,7 @@ export interface Note {
     pending_delete?: boolean;
     dirty?: boolean;
     deleted?: boolean;
+    improvements?: NoteImprovement[];
 }
 
 export interface SyncChangeRequest {
@@ -33,8 +52,22 @@ export interface SyncChangeRequest {
     client_updated_at: string;
 }
 
+export interface SyncImprovementChangeRequest {
+    id: string;
+    note_id: string;
+    content_ciphertext: string;
+    content_nonce?: string | null;
+    encrypted_title?: string | null;
+    label?: string | null;
+    option_id?: string | null;
+    deleted: boolean;
+    base_version: number;
+    client_updated_at: string;
+}
+
 export interface SyncNotesRequest {
     changes: SyncChangeRequest[];
+    improvement_changes?: SyncImprovementChangeRequest[];
     since_updated_at?: string;
 }
 
@@ -49,10 +82,26 @@ export interface ServerNote {
     updated_at: string;
 }
 
+export interface ServerImprovement {
+    id: string;
+    note_id: string;
+    label?: string | null;
+    option_id?: string | null;
+    encrypted_title?: string | null;
+    content_ciphertext: string;
+    content_nonce?: string | null;
+    deleted: boolean;
+    version: number;
+    updated_at: string;
+}
+
 export interface SyncNotesResponse {
     updated: ServerNote[];
     conflicts: ServerNote[];
     server_changes: ServerNote[];
+    improvement_updates: ServerImprovement[];
+    improvement_conflicts: ServerImprovement[];
+    improvement_changes: ServerImprovement[];
 }
 
 export const notesApi = {
