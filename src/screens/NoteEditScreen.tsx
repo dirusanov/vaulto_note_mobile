@@ -117,6 +117,11 @@ export const NoteEditScreen = () => {
     const [newPromptTemplate, setNewPromptTemplate] = useState('');
     const [newPromptIcon, setNewPromptIcon] = useState<string>(ICON_CHOICES[0]);
 
+    // Custom Instruction State
+    const [customInstruction, setCustomInstruction] = useState('');
+    const [isRecordingInstruction, setIsRecordingInstruction] = useState(false);
+    const [showCustomInput, setShowCustomInput] = useState(false);
+
     // Determine initial active variant based on is_active flags
     const getInitialActiveVariantId = () => {
         if (!existingNote) return 'original';
@@ -621,12 +626,7 @@ export const NoteEditScreen = () => {
             Alert.alert('Switch to Original', 'Voice recording is only available for the original version of the note.');
             return;
         }
-        const dismissed = await getPrivacyWarningDismissed();
-        if (dismissed) {
-            setShowVoiceRecorder(true);
-        } else {
-            setShowPrivacyWarning(true);
-        }
+        setShowVoiceRecorder(true);
     };
 
     const handlePrivacyAccept = () => {
@@ -729,6 +729,52 @@ export const NoteEditScreen = () => {
             Alert.alert('Error', 'Failed to save recording');
             setIsTranscribing(false);
         }
+    };
+
+    const handleInstructionRecordingFinish = async (recording: AudioRecording) => {
+        setShowVoiceRecorder(false);
+        // Don't close AI modal, just fill the input
+
+        // Show local loading state if needed, or re-use isTranscribing but that shows a global spinner
+        // Let's use isAIProcessing to block interaction while transcribing instruction
+        setIsAIProcessing(true);
+
+        try {
+            const transcription = await transcribeAudio(recording.uri);
+            await AudioService.deleteAudioFile(recording.uri);
+
+            if (transcription.success && transcription.text) {
+                setCustomInstruction(transcription.text);
+            } else {
+                Alert.alert('Transcription Failed', transcription.error || 'Could not recognize speech');
+            }
+        } catch (error) {
+            console.error('Instruction transcription failed:', error);
+            Alert.alert('Error', 'Failed to transcribe instruction');
+        } finally {
+            setIsAIProcessing(false);
+            setIsRecordingInstruction(false);
+        }
+    };
+
+    const handleApplyCustomInstruction = () => {
+        if (!customInstruction.trim()) return;
+
+        const customOption: AIImprovementOption = {
+            id: 'custom_instruction',
+            label: 'Custom Instruction',
+            icon: 'edit',
+            prompt: ensureTemplateHasPlaceholder(customInstruction),
+            isCustom: true
+        };
+
+        handleAIImprovement(customOption);
+    };
+
+    const handleVoiceInstructionStart = async () => {
+        setIsRecordingInstruction(true);
+        setShowCustomInput(true);
+        setShowVoiceRecorder(true);
     };
 
     const handleCheckPress = () => {
@@ -1020,6 +1066,59 @@ export const NoteEditScreen = () => {
                                         </TouchableOpacity>
                                     </View>
                                 </View>
+
+                                {/* Custom Instruction Input */}
+                                <View style={styles.customInstructionContainer}>
+                                    <View style={styles.customHeaderRow}>
+                                        <TouchableOpacity
+                                            style={styles.customLabelContainer}
+                                            onPress={() => setShowCustomInput(!showCustomInput)}
+                                        >
+                                            <MaterialIcons
+                                                name={showCustomInput ? "expand-less" : "expand-more"}
+                                                size={24}
+                                                color={colors.textMuted}
+                                            />
+                                            <Text style={styles.customBoxLabel}>Custom Instruction</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={styles.customMicHeaderButton}
+                                            onPress={handleVoiceInstructionStart}
+                                        >
+                                            <MaterialIcons name="mic" size={22} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {showCustomInput && (
+                                        <View style={styles.customExpandedContent}>
+                                            <View style={styles.customInputRow}>
+                                                <TextInput
+                                                    style={styles.customInstructionInput}
+                                                    placeholder="e.g. 'Make it funnier' or 'Translate to Spanish'"
+                                                    placeholderTextColor={colors.textMuted}
+                                                    value={customInstruction}
+                                                    onChangeText={setCustomInstruction}
+                                                    multiline
+                                                    maxLength={200}
+                                                />
+                                            </View>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.runCustomButton,
+                                                    !customInstruction.trim() && styles.runCustomButtonDisabled
+                                                ]}
+                                                onPress={handleApplyCustomInstruction}
+                                                disabled={!customInstruction.trim() || isAIProcessing}
+                                            >
+                                                <Text style={styles.runCustomButtonText}>Apply Instruction</Text>
+                                                <MaterialIcons name="arrow-forward" size={16} color="white" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <View style={styles.divider} />
                                 {aiOptionsLoading ? (
                                     <View style={styles.aiLoader}>
                                         <ActivityIndicator color={colors.primary} />
@@ -1304,8 +1403,17 @@ export const NoteEditScreen = () => {
 
             <VoiceRecorder
                 visible={showVoiceRecorder}
-                onFinish={handleRecordingFinish}
-                onCancel={() => setShowVoiceRecorder(false)}
+                onFinish={(rec) => {
+                    if (isRecordingInstruction) {
+                        handleInstructionRecordingFinish(rec);
+                    } else {
+                        handleRecordingFinish(rec);
+                    }
+                }}
+                onCancel={() => {
+                    setShowVoiceRecorder(false);
+                    setIsRecordingInstruction(false);
+                }}
                 autoStart={true}
             />
         </ScreenContainer>
@@ -1635,6 +1743,80 @@ const styles = StyleSheet.create({
         ...typography.body,
         color: colors.surface,
         fontWeight: '600',
+    },
+    customInstructionContainer: {
+        marginBottom: spacing.l,
+    },
+    customHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.xs,
+        paddingVertical: spacing.xs,
+    },
+    customLabelContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    customMicHeaderButton: {
+        padding: spacing.s,
+        backgroundColor: colors.surface,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    customBoxLabel: {
+        ...typography.body,
+        fontWeight: '500',
+        color: colors.text,
+    },
+    customExpandedContent: {
+        paddingTop: spacing.xs,
+    },
+    customInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        backgroundColor: colors.background,
+        paddingHorizontal: spacing.s,
+        marginBottom: spacing.s,
+    },
+    customInstructionInput: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        ...typography.body,
+        fontSize: 15,
+        color: colors.text,
+        maxHeight: 80,
+    },
+
+    runCustomButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.primary,
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: spacing.s,
+    },
+    runCustomButtonDisabled: {
+        opacity: 0.5,
+        backgroundColor: colors.textMuted,
+    },
+    runCustomButtonText: {
+        ...typography.body,
+        fontWeight: '600',
+        color: colors.surface,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: colors.border,
+        marginHorizontal: -spacing.l,
+        marginBottom: 0,
     },
     iconPickerRow: {
         gap: spacing.s,
