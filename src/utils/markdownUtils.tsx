@@ -59,9 +59,29 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
     // User content often uses '*' for lists. 
     // Let's include `\*([^*]+?)\*` but strict: must have closing `*`.
 
-    const fullPattern = /(\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
+    // We also want to capture checkboxes: "- [ ] " or "- [x] "
+    // But for completed items "- [x] text...", we want to capture the whole line to strike it through.
+    // The previous implementation splits by token. 
+    // If we want to style the content of a todo item, we have to capture it as a block.
+    // However, the `split` logic is flat.
+    // Let's modify the strategy:
+    // Capture "Completed Todo Line":  `-\s\[[xX]\]\s[^-\n]+` (until newline or next dash)
+    // But since `text` is single line (newlines replaced by spaces in NoteCard), we just go until next token or end?
+    // Actually, `NoteCard` replaces newlines with space. So the content is one long string "foo - [ ] bar - [x] baz...".
+
+    // We need to match "- [x] ... " carefully.
+    // Let's match: `(-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$)))`  -> Match "- [x] content" until next "- [" or End of String.
+    // And for unchecked: `(-\s\[ \]\s)` -> Just the checkbox itself is fine, or match the whole thing to be consistent, but we don't style unchecked text special.
+    // Matches:
+    // 1. Completed Todo Block
+    // 2. Unchecked Todo Marker (we'll just render the box)
+    // 3. Bold, Italic, Code etc (for parts outside the Todo Block)
+
+    // Pattern order matters! Longer specific matches first.
+    const fullPattern = /((?:^|\s)-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$))|(?:\s|^)-\s\[ \]\s|\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
 
     // Split text by pattern
+    // Note: capturing group causes split to include the separator.
     const split = text.split(fullPattern);
 
     return split.map((chunk, index) => {
@@ -69,6 +89,31 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
 
         let content = chunk;
         const style: TextStyle[] = [StyleSheet.flatten(baseStyle)];
+
+        // Completed Todo Block: "- [x] content..."
+        const completedMatch = chunk.match(/^\s*-\s\[[xX]\]\s(.*)$/);
+        if (completedMatch) {
+            // Render checkbox
+            // Then recursively parse the content with strikethrough style
+            const innerContent = completedMatch[1];
+            return (
+                <Text key={index} style={style}>
+                    <Text>☑ </Text>
+                    <Text style={{ textDecorationLine: 'line-through', opacity: 0.6 }}>
+                        {parseMarkdownText(innerContent, baseStyle)}
+                    </Text>
+                </Text>
+            );
+        }
+
+        // Unchecked Todo Marker: "- [ ] " (with optional leading space)
+        if (chunk.match(/^\s*-\s\[ \]\s$/)) {
+            return (
+                <Text key={index} style={style}>
+                    ☐{" "}
+                </Text>
+            );
+        }
 
         // Bold
         if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
@@ -90,13 +135,8 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
             content = chunk.substring(1, chunk.length - 1);
             style.push({ fontStyle: 'italic' });
         }
-        // Italic (asterisk) - Check length and that it's not actually bold (already handled by priority in split if regex works right)
-        // But `split` separates them. If regex matched `**foo**`, it comes here as `**foo**`.
-        // If it matched `*foo*`, it comes here as `*foo*`.
+        // Italic (asterisk)
         else if (chunk.startsWith('*') && chunk.endsWith('*') && chunk.length >= 2) {
-            // Edge case: is it bold? `**` starts with `*`. 
-            // BUT earlier Bold check caught `**...**`.
-            // So this must be single `*`.
             content = chunk.substring(1, chunk.length - 1);
             style.push({ fontStyle: 'italic' });
         }

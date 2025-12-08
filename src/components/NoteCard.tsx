@@ -5,6 +5,8 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
+import { parseMarkdownText } from '../utils/markdownUtils';
+
 interface NoteCardProps {
     note: Note;
     onPress: () => void;
@@ -27,9 +29,22 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
 
     // Extract title and preview
     const title = buildTitle();
-    const preview = content.length > 120
+    // We want to keep the raw text length check for truncation logic, 
+    // but we can't easily truncate *after* parsing markdown without breaking tags.
+    // For a simple preview, we will truncate the string first (carefully) or rely on Text props if possible.
+    // However, parseMarkdownText returns an array of Text nodes. 
+    // If we pass a long string to parseMarkdownText, it returns nodes.
+    // We should truncate the string *before* parsing, but we must be careful not to split inside a tag.
+    // Given the simple regex parser, splitting `**bold**` into `**bo...` might show raw chars if the closer is missing.
+    // Let's just truncate as string first. If it breaks a tag, it renders as text, which is acceptable for a preview.
+
+    const previewTextRaw = content.length > 120
         ? content.substring(0, 120).replace(/\n/g, ' ') + '...'
         : content.replace(/\n/g, ' ');
+
+    // Use parseMarkdownText for the preview
+    // We pass styles.preview as baseStyle
+    const previewNodes = parseMarkdownText(previewTextRaw, styles.preview);
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -72,9 +87,9 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
                 <Text style={styles.title} numberOfLines={1}>
                     {title || ' '}
                 </Text>
-                {(preview && preview !== title) && (
+                {(previewTextRaw && previewTextRaw !== title) && (
                     <Text style={styles.preview} numberOfLines={6}>
-                        {preview}
+                        {previewNodes}
                     </Text>
                 )}
             </View>
