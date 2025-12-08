@@ -1293,67 +1293,69 @@ export const NoteEditScreen = () => {
                         <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
                     </View>
 
-                    <View style={styles.variantContainer}>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.variantScrollContent}
-                        >
-                            <TouchableOpacity
-                                style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
-                                onPress={() => handleVariantSelect('original')}
+                    {noteImprovements.length > 0 && (
+                        <View style={styles.variantContainer}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.variantScrollContent}
                             >
-                                <MaterialIcons
-                                    name="lock"
-                                    size={14}
-                                    color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
-                                    style={styles.variantChipIcon}
-                                />
-                                <Text
-                                    style={[
-                                        styles.variantChipText,
-                                        activeVariantId === 'original' && styles.variantChipTextActive,
-                                    ]}
+                                <TouchableOpacity
+                                    style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
+                                    onPress={() => handleVariantSelect('original')}
                                 >
-                                    Original
-                                </Text>
-                            </TouchableOpacity>
-
-                            {noteImprovements.map((imp: any) => (
-                                <View style={styles.variantChipWrapper} key={imp.id}>
-                                    <TouchableOpacity
+                                    <MaterialIcons
+                                        name="lock"
+                                        size={14}
+                                        color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
+                                        style={styles.variantChipIcon}
+                                    />
+                                    <Text
                                         style={[
-                                            styles.variantChip,
-                                            activeVariantId === imp.id && styles.variantChipActive,
+                                            styles.variantChipText,
+                                            activeVariantId === 'original' && styles.variantChipTextActive,
                                         ]}
-                                        onPress={() => handleVariantSelect(imp.id)}
                                     >
-                                        <MaterialIcons
-                                            name="auto-awesome"
-                                            size={14}
-                                            color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
-                                            style={styles.variantChipIcon}
-                                        />
-                                        <Text
-                                            numberOfLines={1}
+                                        Original
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {noteImprovements.map((imp: any) => (
+                                    <View style={styles.variantChipWrapper} key={imp.id}>
+                                        <TouchableOpacity
                                             style={[
-                                                styles.variantChipText,
-                                                activeVariantId === imp.id && styles.variantChipTextActive,
+                                                styles.variantChip,
+                                                activeVariantId === imp.id && styles.variantChipActive,
                                             ]}
+                                            onPress={() => handleVariantSelect(imp.id)}
                                         >
-                                            {imp.label || 'Improvement'}
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.variantDeleteButton}
-                                        onPress={() => confirmDeleteImprovement(imp.id)}
-                                    >
-                                        <MaterialIcons name="close" size={14} color={colors.textMuted} />
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
+                                            <MaterialIcons
+                                                name="auto-awesome"
+                                                size={14}
+                                                color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
+                                                style={styles.variantChipIcon}
+                                            />
+                                            <Text
+                                                numberOfLines={1}
+                                                style={[
+                                                    styles.variantChipText,
+                                                    activeVariantId === imp.id && styles.variantChipTextActive,
+                                                ]}
+                                            >
+                                                {imp.label || 'Improvement'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.variantDeleteButton}
+                                            onPress={() => confirmDeleteImprovement(imp.id)}
+                                        >
+                                            <MaterialIcons name="close" size={14} color={colors.textMuted} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
 
                     {showAudioPlayer && audioUri && (
                         <AudioPlayer
