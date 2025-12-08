@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -41,6 +42,8 @@ import {
     DEFAULT_IMPROVEMENT_OPTIONS,
     ensureTemplateHasPlaceholder,
 } from '../services/AIService';
+import { NoteContentRenderer } from '../components/NoteContentRenderer';
+import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -138,6 +141,9 @@ export const NoteEditScreen = () => {
     };
 
     const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
+    const [selection, setSelection] = useState({ start: 0, end: 0 });
+    const editorRef = useRef<RichTextEditorHandle>(null);
+    const contentInputRef = useRef<TextInput>(null);
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
 
@@ -259,6 +265,20 @@ export const NoteEditScreen = () => {
         }
     }, [activeVariantId, noteImprovements, existingNote?.content]);
 
+    useEffect(() => {
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                // User closed keyboard, exit edit mode so toolbar hides
+                setIsEditing(false);
+            }
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+        };
+    }, []);
+
     // Handle history updates for current variant
     const updateHistory = (newTitle: string, newContent: string) => {
         // Clear existing timeout to debounce history updates
@@ -308,14 +328,79 @@ export const NoteEditScreen = () => {
         }
     }, [navigation]);
 
+    // Debounced save
+    const saveTimeoutRef = useRef<NodeJS.Timeout>();
+    const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            saveNote();
+        }, 2000);
+    }, [saveNote]);
+
     const handleContentChange = (text: string) => {
-        setContent(text);
+        let newContent = text;
+
+        // Auto-continuation logic for lists:
+        // Detect if a newline was inserted
+        if (text.length > content.length && selection.start !== undefined) {
+            // Heuristic: check if we added a newline compared to old content
+            // Identifying exact insertion index is ideal but tricky with just 'text' and 'content'
+            // We'll rely on finding the first diff.
+            let i = 0;
+            while (i < content.length && text[i] === content[i]) i++;
+
+            const inserted = text.slice(i, i + (text.length - content.length));
+
+            if (inserted.includes('\n')) {
+                const textBefore = text.slice(0, i);
+                const lines = textBefore.split('\n');
+                const lastLine = lines[lines.length - 1]; // This is the line *before* the newline
+
+                // Check if it's a list item
+                const todoMatch = lastLine.match(/^(\s*-\s\[[ xX]?\]\s)(.*)$/);
+                const listMatch = lastLine.match(/^(\s*-\s)(.*)$/);
+
+                let prefix = '';
+                let isEmptyItem = false;
+
+                if (todoMatch) {
+                    prefix = todoMatch[1]; // e.g. "- [ ] "
+                    if (todoMatch[2].trim() === '') isEmptyItem = true;
+                } else if (listMatch) {
+                    prefix = listMatch[1]; // e.g. "- "
+                    if (listMatch[2].trim() === '') isEmptyItem = true;
+                }
+
+                if (prefix) {
+                    if (isEmptyItem) {
+                        // Enter on empty list item -> Remove the bucket/prefix (Exit list)
+                        // Remove `prefix` from `textBefore`.
+                        const lineStart = textBefore.lastIndexOf(prefix);
+                        if (lineStart !== -1) {
+                            const newTextBefore = textBefore.slice(0, lineStart) + textBefore.slice(lineStart + prefix.length);
+                            const textAfter = text.slice(i + inserted.length);
+                            // New content: textBefore (without prefix) + inserted (\n) + textAfter.
+                            newContent = newTextBefore + inserted + textAfter;
+                        }
+                    } else {
+                        // Enter on populated list item -> Continue list
+                        // Insert prefix on new line.
+                        const nextPrefix = todoMatch ? prefix.replace(/\[[ xX]\]/, '[ ]') : prefix; // ensure unchecked
+                        const textAfter = text.slice(i + inserted.length);
+                        newContent = textBefore + inserted + nextPrefix + textAfter;
+                    }
+                }
+            }
+        }
+
+        setContent(newContent);
+        if (existingNote) debouncedSave(newContent, title);
         if (activeVariantId === 'original') {
-            updateHistory(title, text);
+            updateHistory(title, newContent);
         } else {
-            improvementDraftsRef.current[activeVariantId] = text;
+            improvementDraftsRef.current[activeVariantId] = newContent;
             // Update history for improvements too
-            updateHistory('', text);
+            updateHistory(title, newContent); // Using title for consistency, though variants share parent title
         }
     };
 
@@ -805,6 +890,55 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(true);
     };
 
+    const handleToggleTodo = useCallback((index: number) => {
+        const lines = content.split('\n');
+        if (index < 0 || index >= lines.length) return;
+
+        const line = lines[index];
+        // Check if it's a todo line
+        const todoMatch = line.match(/^(\s*-\s\[)([ xX])(\]\s.*)$/);
+
+        if (todoMatch) {
+            // Toggle checkbox
+            const currentState = todoMatch[2].toLowerCase() === 'x';
+            const newState = currentState ? ' ' : 'x';
+            lines[index] = `${todoMatch[1]}${newState}${todoMatch[3]}`;
+        } else {
+            // Convert to todo? Or do nothing?
+            // For now, let's just toggle existing ones via this handler.
+            return;
+        }
+
+        const newContent = lines.join('\n');
+        handleContentChange(newContent);
+        // We don't trigger save immediately, let the auto-save or back button handle it?
+        // Actually, users expect immediate feedback for checkboxes usually.
+        // But handleContentChange updates state, and we have auto-save on back.
+        // We might want to force save if we want it to persist crash-proof.
+        // But for now reliance on effect/hooks is fine.
+    }, [content, handleContentChange]);
+
+    const handleAddTodo = useCallback(() => {
+        // Insert '- [ ] ' at cursor position or append
+        const prefix = '\n- [ ] ';
+
+        const newText =
+            content.substring(0, selection.start) +
+            prefix +
+            content.substring(selection.end);
+
+        handleContentChange(newText);
+
+        // Update selection to be after the inserted text
+        // Need to wait for render check?
+        // Note: TextInput selection update might be tricky without ref focus
+    }, [content, selection, handleContentChange]);
+
+    const handleFormat = useCallback((type: MarkdownFormatType) => {
+        editorRef.current?.handleFormat(type);
+    }, []);
+
+
     const handleCheckPress = () => {
         Keyboard.dismiss();
         setIsEditing(false);
@@ -914,7 +1048,7 @@ export const NoteEditScreen = () => {
         const preparedTemplate = ensureTemplateHasPlaceholder(newPromptTemplate.trim());
 
         const newOption: AIImprovementOption = {
-            id: `custom-${Date.now()}`,
+            id: `custom - ${Date.now()}`,
             label: newPromptTitle.trim(),
             prompt: preparedTemplate,
             icon: newPromptIcon,
@@ -943,7 +1077,7 @@ export const NoteEditScreen = () => {
             return (
                 <Text style={styles.promptPreviewText}>
                     {segments.map((segment, index) => (
-                        <React.Fragment key={`${segment}-${index}`}>
+                        <React.Fragment key={`${segment} - ${index}`}>
                             {segment.length > 0 && <Text style={styles.promptPreviewText}>{segment}</Text>}
                             {index < segments.length - 1 && (
                                 <Text style={styles.promptPlaceholderToken}>{'{text}'}</Text>
@@ -964,7 +1098,7 @@ export const NoteEditScreen = () => {
         return (
             <Text style={styles.aiOptionPrompt} numberOfLines={1}>
                 {segments.map((segment, index) => (
-                    <React.Fragment key={`${segment}-${index}`}>
+                    <React.Fragment key={`${segment} - ${index}`}>
                         {segment.length > 0 && <Text style={styles.aiOptionPrompt}>{segment}</Text>}
                         {index < segments.length - 1 && <Text style={styles.promptPlaceholderToken}>{'{text}'}</Text>}
                     </React.Fragment>
@@ -1007,6 +1141,105 @@ export const NoteEditScreen = () => {
         }
     }, [route.params?.initialRecording]);
 
+    const renderHeader = () => (
+        <View>
+            <TextInput
+                style={styles.titleInput}
+                placeholder="Title"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={handleTitleChange}
+                onFocus={() => setIsEditing(true)}
+                maxLength={100}
+                multiline
+            />
+
+            <View style={styles.metaInfo}>
+                <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
+            </View>
+
+            {noteImprovements.length > 0 && (
+                <View style={styles.variantContainer}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.variantScrollContent}
+                        keyboardShouldPersistTaps="always"
+                    >
+                        <TouchableOpacity
+                            style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
+                            onPress={() => handleVariantSelect('original')}
+                        >
+                            <MaterialIcons
+                                name="lock"
+                                size={14}
+                                color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
+                                style={styles.variantChipIcon}
+                            />
+                            <Text
+                                style={[
+                                    styles.variantChipText,
+                                    activeVariantId === 'original' && styles.variantChipTextActive,
+                                ]}
+                            >
+                                Original
+                            </Text>
+                        </TouchableOpacity>
+
+                        {noteImprovements.map((imp: any) => (
+                            <View style={styles.variantChipWrapper} key={imp.id}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.variantChip,
+                                        activeVariantId === imp.id && styles.variantChipActive,
+                                    ]}
+                                    onPress={() => handleVariantSelect(imp.id)}
+                                >
+                                    <MaterialIcons
+                                        name="auto-awesome"
+                                        size={14}
+                                        color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
+                                        style={styles.variantChipIcon}
+                                    />
+                                    <Text
+                                        numberOfLines={1}
+                                        style={[
+                                            styles.variantChipText,
+                                            activeVariantId === imp.id && styles.variantChipTextActive,
+                                        ]}
+                                    >
+                                        {imp.label || 'Improvement'}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.variantDeleteButton}
+                                    onPress={() => confirmDeleteImprovement(imp.id)}
+                                >
+                                    <MaterialIcons name="close" size={14} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
+            {showAudioPlayer && audioUri && (
+                <AudioPlayer
+                    audioUri={audioUri}
+                    duration={audioDuration}
+                    onClose={() => setShowAudioPlayer(false)}
+                />
+            )}
+
+            {isTranscribing && (
+                <View style={styles.transcribingContainer}>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text style={styles.transcribingText}>Transcribing...</Text>
+                </View>
+            )}
+        </View>
+    );
+
     return (
         <ScreenContainer>
             <View style={styles.header}>
@@ -1043,20 +1276,20 @@ export const NoteEditScreen = () => {
 
                     {isEditing ? (
                         <>
-                            <TouchableOpacity
-                                onPress={handleUndo}
-                                style={[styles.iconButton, (!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0) && styles.disabledIcon]}
-                                disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0}
-                            >
+                            <TouchableOpacity onPress={handleUndo} style={styles.iconButton}>
                                 <MaterialIcons name="undo" size={24} color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0) ? colors.textMuted : colors.text} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={handleRedo}
-                                style={[styles.iconButton, (!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1) && styles.disabledIcon]}
+                                style={styles.iconButton}
                                 disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1}
                             >
                                 <MaterialIcons name="redo" size={24} color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1) ? colors.textMuted : colors.text} />
                             </TouchableOpacity>
+                            {/* Removed Checklist button here since checks are available in toolbar now. 
+                                 Can keep if user wants to insert todo without toolbar? 
+                                 User request implies toolbar is THE way. Clean header is better.
+                             */}
                             <TouchableOpacity onPress={handleCheckPress} style={styles.iconButton}>
                                 <MaterialIcons name="check" size={24} color={colors.text} />
                             </TouchableOpacity>
@@ -1301,117 +1534,49 @@ export const NoteEditScreen = () => {
                 </TouchableWithoutFeedback>
             </Modal>
 
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 50}
                 style={{ flex: 1 }}
             >
-                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                    <TextInput
-                        style={styles.titleInput}
-                        placeholder="Title"
-                        placeholderTextColor={colors.textMuted}
-                        value={title}
-                        onChangeText={handleTitleChange}
-                        onFocus={() => setIsEditing(true)}
-                        maxLength={100}
-                        multiline
-                    />
-
-                    <View style={styles.metaInfo}>
-                        <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
-                    </View>
-
-                    {noteImprovements.length > 0 && (
-                        <View style={styles.variantContainer}>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.variantScrollContent}
-                            >
-                                <TouchableOpacity
-                                    style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
-                                    onPress={() => handleVariantSelect('original')}
-                                >
-                                    <MaterialIcons
-                                        name="lock"
-                                        size={14}
-                                        color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
-                                        style={styles.variantChipIcon}
-                                    />
-                                    <Text
-                                        style={[
-                                            styles.variantChipText,
-                                            activeVariantId === 'original' && styles.variantChipTextActive,
-                                        ]}
-                                    >
-                                        Original
-                                    </Text>
-                                </TouchableOpacity>
-
-                                {noteImprovements.map((imp: any) => (
-                                    <View style={styles.variantChipWrapper} key={imp.id}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.variantChip,
-                                                activeVariantId === imp.id && styles.variantChipActive,
-                                            ]}
-                                            onPress={() => handleVariantSelect(imp.id)}
-                                        >
-                                            <MaterialIcons
-                                                name="auto-awesome"
-                                                size={14}
-                                                color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
-                                                style={styles.variantChipIcon}
-                                            />
-                                            <Text
-                                                numberOfLines={1}
-                                                style={[
-                                                    styles.variantChipText,
-                                                    activeVariantId === imp.id && styles.variantChipTextActive,
-                                                ]}
-                                            >
-                                                {imp.label || 'Improvement'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.variantDeleteButton}
-                                            onPress={() => confirmDeleteImprovement(imp.id)}
-                                        >
-                                            <MaterialIcons name="close" size={14} color={colors.textMuted} />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    )}
-
-                    {showAudioPlayer && audioUri && (
-                        <AudioPlayer
-                            audioUri={audioUri}
-                            duration={audioDuration}
-                            onClose={() => setShowAudioPlayer(false)}
+                {isEditing ? (
+                    <View style={{ flex: 1 }}>
+                        <RichTextEditor
+                            ref={editorRef}
+                            initialContent={content}
+                            onChange={(text) => {
+                                setContent(text);
+                                if (existingNote) debouncedSave(text, title);
+                                if (activeVariantId === 'original') {
+                                    updateHistory(title, text);
+                                } else {
+                                    improvementDraftsRef.current[activeVariantId] = text;
+                                    updateHistory(title, text);
+                                }
+                            }}
+                            placeholder="Start typing..."
+                            ListHeaderComponent={renderHeader()}
                         />
-                    )}
+                    </View>
+                ) : (
+                    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                        {renderHeader()}
+                        <NoteContentRenderer
+                            content={content}
+                            onToggleTodo={handleToggleTodo}
+                            onTextPress={() => setIsEditing(true)}
+                        />
+                        <View style={{ height: 100 }} />
+                    </ScrollView>
+                )}
 
-                    {isTranscribing && (
-                        <View style={styles.transcribingContainer}>
-                            <ActivityIndicator color={colors.primary} />
-                            <Text style={styles.transcribingText}>Transcribing...</Text>
-                        </View>
-                    )}
-
-                    <TextInput
-                        style={styles.contentInput}
-                        placeholder="Start typing..."
-                        placeholderTextColor={colors.textMuted}
-                        value={content}
-                        onChangeText={handleContentChange}
-                        onFocus={() => setIsEditing(true)}
-                        multiline
-                        textAlignVertical="top"
-                    />
-                    <View style={{ height: 100 }} />
-                </ScrollView>
+                {/* Formatting Toolbar - Show when in Edit Mode. */}
+                {isEditing && (
+                    <View style={styles.toolbarContainer}>
+                        <MarkdownToolbar onFormat={handleFormat} />
+                    </View>
+                )}
             </KeyboardAvoidingView>
 
             {/* Floating Mic Button */}
@@ -1423,7 +1588,8 @@ export const NoteEditScreen = () => {
                 >
                     <MaterialIcons name="mic" size={28} color="white" />
                 </TouchableOpacity>
-            )}
+            )
+            }
 
             <PrivacyWarningModal
                 visible={showPrivacyWarning}
@@ -1454,6 +1620,13 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing.m,
+        marginBottom: spacing.xs,
+        marginTop: 0,
+    },
+    headerLeft: {
+        flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: spacing.m,
         marginBottom: spacing.xs,
@@ -1878,5 +2051,10 @@ const styles = StyleSheet.create({
     iconChoiceSelected: {
         backgroundColor: colors.primary,
         borderColor: colors.primary,
+    },
+    toolbarContainer: {
+        width: '100%',
+        backgroundColor: colors.surface,
+        paddingBottom: spacing.s,
     },
 });
