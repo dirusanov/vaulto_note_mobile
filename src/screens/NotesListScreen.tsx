@@ -316,22 +316,24 @@ export const NotesListScreen = () => {
             {/* Floating Dock */}
             <View style={styles.dockContainer}>
                 <View style={styles.dock}>
-                    {/* Settings Button (Left) */}
-                    <TouchableOpacity
-                        style={styles.dockButton}
-                        onPress={handleSettingsPress}
-                        activeOpacity={0.7}
-                    >
-                        <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
-                    </TouchableOpacity>
+                    <View style={styles.dockButtonRow}>
+                        {/* Settings Button (Left) */}
+                        <TouchableOpacity
+                            style={styles.dockButton}
+                            onPress={handleSettingsPress}
+                            activeOpacity={0.7}
+                        >
+                            <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
+                        </TouchableOpacity>
 
-                    {/* Center Primary Button */}
-                    <PrimaryButton />
+                        {/* Center Primary Button */}
+                        <PrimaryButton />
 
-                    {/* Right Secondary Button */}
-                    <SecondaryButton />
+                        {/* Right Secondary Button */}
+                        <SecondaryButton />
+                    </View>
+                    <Text style={styles.hintText}>Long press to swap</Text>
                 </View>
-                <Text style={styles.hintText}>Long press to swap</Text>
             </View>
 
             <VoiceRecorder
@@ -424,12 +426,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     dock: {
-        flexDirection: 'row',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'space-between',
         backgroundColor: colors.surface,
         borderRadius: 32,
-        paddingVertical: spacing.s,
+        paddingTop: 8, // Push contents down for vertical centering
+        paddingBottom: 4,
         paddingHorizontal: spacing.xl,
         width: Math.min(width * 0.85, 360),
         shadowColor: '#000',
@@ -439,6 +441,13 @@ const styles = StyleSheet.create({
         elevation: 10,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
+        height: 70, // Fixed height
+    },
+    dockButtonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
     },
     dockButton: {
         width: 48,
@@ -450,7 +459,7 @@ const styles = StyleSheet.create({
     centerButton: {
         width: 88,
         height: 88,
-        marginTop: -20, // Pull it up slightly; dock sits lower now
+        marginTop: -35, // Lowered blue icon
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: colors.background, // Gap filler
@@ -473,8 +482,9 @@ const styles = StyleSheet.create({
     hintText: {
         ...typography.caption,
         color: colors.text,
-        marginTop: spacing.xs,
+        marginTop: -8, // Pull text up more to avoid bottom overflow
+        marginBottom: 2,
         opacity: 0.75,
-        fontSize: 10,
+        fontSize: 9, // Reduced size
     },
 });

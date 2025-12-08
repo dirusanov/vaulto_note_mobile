@@ -1,8 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { UserProfile } from '../api/auth';
+
+export type AIProvider = 'local' | 'openai' | 'selfhosted';
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
+const USER_PROFILE_KEY = 'vaulto_user_profile';
 const OPENAI_API_KEY = 'vaulto_openai_api_key';
 const PRIVACY_WARNING_DISMISSED_KEY = 'vaulto_privacy_warning_dismissed';
 const MAX_RECORDING_DURATION_KEY = 'vaulto_max_recording_duration';
@@ -10,8 +14,6 @@ const AI_PROVIDER_KEY = 'vaulto_ai_provider';
 const SELF_HOSTED_ENABLED_KEY = 'vaulto_self_hosted_enabled';
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
-
-export type AIProvider = 'local' | 'openai' | 'selfhosted';
 
 export const storage = {
     getToken: async (): Promise<string | null> => {
@@ -78,6 +80,29 @@ export const storage = {
             await AsyncStorage.removeItem(USER_ID_KEY);
         } catch (e) {
             console.error('Failed to remove user id', e);
+        }
+    },
+    getUserProfile: async (): Promise<UserProfile | null> => {
+        try {
+            const json = await AsyncStorage.getItem(USER_PROFILE_KEY);
+            return json ? JSON.parse(json) : null;
+        } catch (e) {
+            console.error('Failed to get user profile', e);
+            return null;
+        }
+    },
+    setUserProfile: async (profile: UserProfile): Promise<void> => {
+        try {
+            await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+        } catch (e) {
+            console.error('Failed to set user profile', e);
+        }
+    },
+    removeUserProfile: async (): Promise<void> => {
+        try {
+            await AsyncStorage.removeItem(USER_PROFILE_KEY);
+        } catch (e) {
+            console.error('Failed to remove user profile', e);
         }
     },
 };

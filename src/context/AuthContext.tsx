@@ -59,12 +59,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             await storage.setToken(guestData.access_token);
             await storage.setUserId(guestData.user_id);
 
-            setToken(guestData.access_token);
-            setUserId(guestData.user_id);
-            setIsGuest(true);
-
             // Build a UserProfile-like object from GuestProfile
-            setUser({
+            const guestUser: UserProfile = {
                 id: guestData.user_id,
                 email: '',
                 full_name: null,
@@ -74,7 +70,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 trial_total_credits: guestData.trial_total_credits,
                 trial_used_credits: guestData.trial_used_credits,
                 trial_expires_at: guestData.trial_expires_at,
-            });
+            };
+
+            await storage.setUserProfile(guestUser);
+
+            setToken(guestData.access_token);
+            setUserId(guestData.user_id);
+            setIsGuest(true);
+
+            setUser(guestUser);
         } catch (err) {
             console.error('[AuthContext] Failed to create guest session', err);
             // App will still work locally, just without trial tracking
@@ -103,9 +107,39 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             const storedToken = await storage.getToken();
             const storedRefreshToken = await storage.getRefreshToken();
             const storedUserId = await storage.getUserId();
+            const storedProfile = await storage.getUserProfile();
 
-            if (storedToken) {
-                console.log('[AuthContext] Token found, loading profile...');
+            if (storedToken && storedProfile) {
+                console.log('[AuthContext] cached profile found, loading immediately...');
+                setToken(storedToken);
+                if (storedRefreshToken) {
+                    setRefreshToken(storedRefreshToken);
+                }
+                setUserId(storedProfile.id);
+                setUser(storedProfile);
+                setIsGuest(!storedProfile.is_verified && storedProfile.provider === 'anonymous');
+
+                // IMPORTANT: Unblock UI immediately
+                setIsLoading(false);
+
+                // Refresh in background
+                try {
+                    console.log('[AuthContext] Refreshing profile in background...');
+                    const profile = await authApi.getProfile();
+                    setUserId(profile.id);
+                    setUser(profile);
+                    setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
+                    await storage.setUserId(profile.id);
+                    await storage.setUserProfile(profile);
+                    await syncService.setCurrentUser(profile.id, storedUserId);
+                    console.log('[AuthContext] Profile refreshed:', profile.id);
+                } catch (err) {
+                    console.error('[AuthContext] Background profile refresh failed', err);
+                    // If refresh fails (e.g. offline), we are still good with cached data
+                }
+            } else if (storedToken) {
+                // Fallback for migration or cleared cache
+                console.log('[AuthContext] Token found but no profile, loading from network...');
                 setToken(storedToken);
                 if (storedRefreshToken) {
                     setRefreshToken(storedRefreshToken);
@@ -116,17 +150,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     setUser(profile);
                     setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
                     await storage.setUserId(profile.id);
+                    await storage.setUserProfile(profile);
                     await syncService.setCurrentUser(profile.id, storedUserId);
                     console.log('[AuthContext] Profile loaded:', profile.id, 'isGuest:', !profile.is_verified);
                 } catch (err) {
                     console.error('[AuthContext] Failed to load profile, creating guest session', err);
                     await createGuestSession();
                 }
+                setIsLoading(false);
             } else {
                 console.log('[AuthContext] No token, creating guest session');
                 await createGuestSession();
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
         loadSession();
     }, []);
@@ -143,6 +179,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             const profile = await authApi.getProfile();
             const previousUserId = await storage.getUserId();
             await storage.setUserId(profile.id);
+            await storage.setUserProfile(profile);
             setUserId(profile.id);
             setUser(profile);
             await syncService.setCurrentUser(profile.id, previousUserId);
@@ -161,6 +198,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         await storage.removeToken();
         await storage.removeRefreshToken();
         await storage.removeUserId();
+        await storage.removeUserProfile();
         setToken(null);
         setRefreshToken(null);
         setUserId(null);
@@ -178,6 +216,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         try {
             const profile = await authApi.getProfile();
             setUser(profile);
+            await storage.setUserProfile(profile);
             setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
         } catch (err) {
             console.error('[AuthContext] Failed to refresh profile', err);

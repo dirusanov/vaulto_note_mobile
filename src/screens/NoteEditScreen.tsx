@@ -622,10 +622,8 @@ export const NoteEditScreen = () => {
     };
 
     const handleMicPress = async () => {
-        if (activeVariantId !== 'original') {
-            Alert.alert('Switch to Original', 'Voice recording is only available for the original version of the note.');
-            return;
-        }
+        // Check removed to allow recording for improvements
+        // if (activeVariantId !== 'original') { ... }
         setShowVoiceRecorder(true);
     };
 
@@ -635,92 +633,122 @@ export const NoteEditScreen = () => {
     };
 
     const handleRecordingFinish = async (recording: AudioRecording) => {
-        if (activeVariantId !== 'original') {
-            Alert.alert('Switch to Original', 'Voice notes can only be attached to the original text.');
-            return;
-        }
         setShowVoiceRecorder(false);
 
         try {
-            const savedPath = await AudioService.saveAudioFile(recording.uri, false);
-            const playbackUri = await AudioService.readAudioFile(savedPath);
-            setAudioUri(playbackUri);
-            setAudioDuration(recording.duration);
-            setShowAudioPlayer(true); // Show player after recording
+            // If it's the original note, we follow the full flow: Save Audio -> Show Player -> Transcribe -> Save to DB
+            if (activeVariantId === 'original') {
+                const savedPath = await AudioService.saveAudioFile(recording.uri, false);
+                const playbackUri = await AudioService.readAudioFile(savedPath);
+                setAudioUri(playbackUri);
+                setAudioDuration(recording.duration);
+                setShowAudioPlayer(true); // Show player after recording
 
-            setIsTranscribing(true);
-            const transcription = await transcribeAudio(recording.uri);
-            setIsTranscribing(false);
+                setIsTranscribing(true);
+                const transcription = await transcribeAudio(recording.uri);
+                setIsTranscribing(false);
 
-            await AudioService.deleteAudioFile(recording.uri);
+                // We can delete the temporary recording uri now that we saved the permanent one?
+                // Actually the original code was: await AudioService.deleteAudioFile(recording.uri);
+                // But we used recording.uri for transcription. Ideally we use the file we just saved?
+                // The original code passed recording.uri (temp) to transcribe. That's fine.
+                await AudioService.deleteAudioFile(recording.uri);
 
-            if (transcription.success && transcription.text) {
-                const newContent = content + (content ? '\n\n' : '') + transcription.text;
-                setContent(newContent);
-                updateHistory(title, newContent);
+                if (transcription.success && transcription.text) {
+                    const newContent = content + (content ? '\n\n' : '') + transcription.text;
+                    setContent(newContent);
+                    updateHistory(title, newContent);
 
-                if (localNoteId) {
-                    await updateNote(localNoteId, {
-                        content: newContent,
-                        audio_file_path: savedPath,
-                        audio_duration: recording.duration,
-                        has_audio: true,
-                        encrypted_transcription: transcription.text
-                    });
+                    if (localNoteId) {
+                        await updateNote(localNoteId, {
+                            content: newContent,
+                            audio_file_path: savedPath,
+                            audio_duration: recording.duration,
+                            has_audio: true,
+                            encrypted_transcription: transcription.text
+                        });
+                    } else {
+                        // Create new note if it doesn't exist
+                        const newNote = await createNote({
+                            title,
+                            content: newContent,
+                            audio: {
+                                filePath: savedPath,
+                                duration: recording.duration,
+                                transcription: transcription.text
+                            }
+                        });
+                        setLocalNoteId(newNote.id);
+                        lastSavedTitle.current = title;
+                        lastSavedContent.current = newContent;
+                    }
                 } else {
-                    // Create new note if it doesn't exist
-                    const newNote = await createNote({
-                        title,
-                        content: newContent,
-                        audio: {
-                            filePath: savedPath,
-                            duration: recording.duration,
-                            transcription: transcription.text
-                        }
-                    });
-                    setLocalNoteId(newNote.id);
-                    lastSavedTitle.current = title;
-                    lastSavedContent.current = newContent;
+                    // Transcription failed
+                    const isNewNote = !localNoteId;
+                    const isEmptyNote = !title.trim() && !content.trim();
+
+                    if (isNewNote && isEmptyNote) {
+                        await AudioService.deleteAudioFile(savedPath);
+                        Alert.alert(
+                            'Transcription Failed',
+                            'Note was not created because transcription failed.'
+                        );
+                        setIsTranscribing(false);
+                        return;
+                    }
+
+                    Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
+                    if (localNoteId) {
+                        await updateNote(localNoteId, {
+                            audio_file_path: savedPath,
+                            audio_duration: recording.duration,
+                            has_audio: true
+                        });
+                    } else {
+                        const newNote = await createNote({
+                            title,
+                            content,
+                            audio: {
+                                filePath: savedPath,
+                                duration: recording.duration,
+                            }
+                        });
+                        setLocalNoteId(newNote.id);
+                        lastSavedTitle.current = title;
+                        lastSavedContent.current = content;
+                    }
                 }
             } else {
-                // Transcription failed
+                // For child notes (Improvements), we ONLY do dictation (transcription -> append text).
+                // We do NOT save the audio file permanently, nor do we attach it to the note in DB.
+                setIsTranscribing(true);
 
-                // Check if we should discard this recording
-                // If it's a new note AND has no text content, we shouldn't create a "phantom" note
-                const isNewNote = !localNoteId;
-                const isEmptyNote = !title.trim() && !content.trim();
+                // Transcribe directly from the temp recording
+                const transcription = await transcribeAudio(recording.uri);
+                setIsTranscribing(false);
 
-                if (isNewNote && isEmptyNote) {
-                    // Cleanup the saved audio file since we aren't keeping the note
-                    await AudioService.deleteAudioFile(savedPath);
-                    Alert.alert(
-                        'Transcription Failed',
-                        'Note was not created because transcription failed.'
-                    );
-                    setIsTranscribing(false);
-                    return;
-                }
+                // Always clean up the temp file
+                await AudioService.deleteAudioFile(recording.uri);
 
-                Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
-                if (localNoteId) {
-                    await updateNote(localNoteId, {
-                        audio_file_path: savedPath,
-                        audio_duration: recording.duration,
-                        has_audio: true
-                    });
-                } else {
-                    // Create new note with audio but no transcription (only if it has other content)
-                    const newNote = await createNote({
-                        title,
-                        content,
-                        audio: {
-                            filePath: savedPath,
-                            duration: recording.duration,
+                if (transcription.success && transcription.text) {
+                    const newContent = content + (content ? '\n\n' : '') + transcription.text;
+                    setContent(newContent);
+
+                    // Update drafts and history
+                    improvementDraftsRef.current[activeVariantId] = newContent;
+                    updateHistory('', newContent);
+
+                    // Helper to save improvement immediately
+                    if (localNoteId) {
+                        try {
+                            await updateImprovement(localNoteId, activeVariantId, { content: newContent });
+                            improvementSavedRef.current[activeVariantId] = newContent;
+                        } catch (error) {
+                            console.error('Failed to save improvement after dictation:', error);
                         }
-                    });
-                    setLocalNoteId(newNote.id);
-                    lastSavedTitle.current = title;
-                    lastSavedContent.current = content;
+                    }
+                } else {
+                    Alert.alert('Transcription Failed', transcription.error || 'Could not recognize speech');
                 }
             }
 
