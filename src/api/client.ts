@@ -29,10 +29,43 @@ client.interceptors.request.use(
 client.interceptors.response.use(
     (response) => response,
     async (error) => {
-        if (error.response && error.response.status === 401) {
-            // Token might be expired or invalid
-            console.log('[client] 401 received, emitting unauthorized event');
+        const originalRequest = error.config;
+
+        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+            console.log('[client] 401 received, attempting refresh...');
+            originalRequest._retry = true;
+
+            const refreshToken = await storage.getRefreshToken();
+            if (refreshToken) {
+                try {
+                    // Create a new axios instance to avoid interceptor loops
+                    const refreshResponse = await axios.post(`${API_URL}/auth/refresh`, {
+                        refresh_token: refreshToken
+                    });
+
+                    const { access_token, refresh_token } = refreshResponse.data;
+
+                    console.log('[client] Token refresh successful');
+
+                    await storage.setToken(access_token);
+                    await storage.setRefreshToken(refresh_token);
+
+                    // Update auth headers for the original request
+                    originalRequest.headers.Authorization = `Bearer ${access_token}`;
+
+                    return client(originalRequest);
+                } catch (refreshError) {
+                    console.error('[client] Refresh failed:', refreshError);
+                    // Fall through to logout logic
+                }
+            } else {
+                console.log('[client] No refresh token available');
+            }
+
+            // Token might be expired or invalid and refresh failed
+            console.log('[client] 401 unrecoverable, emitting unauthorized event');
             await storage.removeToken();
+            await storage.removeRefreshToken();
             // Notify AuthContext to recreate session
             onUnauthorized.emit();
         }

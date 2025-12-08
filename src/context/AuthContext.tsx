@@ -12,7 +12,7 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isGuest: boolean;
     isLoading: boolean;
-    signIn: (token: string) => Promise<void>;
+    signIn: (accessToken: string, refreshToken: string) => Promise<void>;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
 }
@@ -35,6 +35,7 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
     const [token, setToken] = useState<string | null>(null);
+    const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isGuest, setIsGuest] = useState(false);
@@ -100,11 +101,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const loadSession = async () => {
             console.log('[AuthContext] Loading session...');
             const storedToken = await storage.getToken();
+            const storedRefreshToken = await storage.getRefreshToken();
             const storedUserId = await storage.getUserId();
 
             if (storedToken) {
                 console.log('[AuthContext] Token found, loading profile...');
                 setToken(storedToken);
+                if (storedRefreshToken) {
+                    setRefreshToken(storedRefreshToken);
+                }
                 try {
                     const profile = await authApi.getProfile();
                     setUserId(profile.id);
@@ -126,10 +131,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         loadSession();
     }, []);
 
-    const signIn = async (newToken: string) => {
+    const signIn = async (newAccessToken: string, newRefreshToken: string) => {
         console.log('[AuthContext] Signing in with verified account...');
-        await storage.setToken(newToken);
-        setToken(newToken);
+        await storage.setToken(newAccessToken);
+        await storage.setRefreshToken(newRefreshToken);
+        setToken(newAccessToken);
+        setRefreshToken(newRefreshToken);
         setIsGuest(false);
 
         try {
@@ -152,8 +159,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const signOut = async () => {
         console.log('[AuthContext] Signing out, reverting to guest...');
         await storage.removeToken();
+        await storage.removeRefreshToken();
         await storage.removeUserId();
         setToken(null);
+        setRefreshToken(null);
         setUserId(null);
         setUser(null);
         setIsGuest(false);

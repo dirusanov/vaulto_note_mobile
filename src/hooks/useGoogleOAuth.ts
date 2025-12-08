@@ -112,7 +112,7 @@ export const useGoogleOAuth = () => {
                 ...payload,
                 code_verifier: codeVerifierRef.current,
             });
-            await signIn(tokens.access_token);
+            await signIn(tokens.access_token, tokens.refresh_token);
         } catch (error) {
             const message = getErrorMessage(error, 'Unable to complete Google sign-in.');
             setLastError(message);

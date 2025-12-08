@@ -68,7 +68,7 @@ export const EmailVerificationScreen = () => {
             try {
                 console.log('Attempting auto-login...');
                 const tokens = await authApi.login(email, password);
-                await signIn(tokens.access_token);
+                await signIn(tokens.access_token, tokens.refresh_token);
                 console.log('Auto-login successful');
 
                 // Reset navigation stack to Main screen

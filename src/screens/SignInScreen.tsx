@@ -52,7 +52,7 @@ export const SignInScreen = () => {
         setShowVerificationHint(false);
         try {
             const tokens = await authApi.login(email.trim().toLowerCase(), password);
-            await signIn(tokens.access_token);
+            await signIn(tokens.access_token, tokens.refresh_token);
             navigation.goBack();
         } catch (err) {
             const message = getErrorMessage(err, 'Unable to sign in.');
