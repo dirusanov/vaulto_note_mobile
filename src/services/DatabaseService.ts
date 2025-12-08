@@ -10,6 +10,7 @@ const IMPROVEMENTS_STORAGE_KEY = 'vaulto_note_improvements_store';
 const getWebStore = (): Note[] => {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
+        // Migration check only when loading? Or explicit init?
         return stored ? JSON.parse(stored) : [];
     } catch (e) {
         console.error('[DatabaseService] Failed to load from localStorage', e);
@@ -25,22 +26,18 @@ const saveWebStore = (notes: Note[]) => {
     }
 };
 
-const getWebImprovementsStore = (): NoteImprovement[] => {
+// Improvements store is deprecated, but we keep helper to migrate
+const getWebImprovementsStore_DEPRECATED = (): any[] => {
     try {
         const stored = localStorage.getItem(IMPROVEMENTS_STORAGE_KEY);
         return stored ? JSON.parse(stored) : [];
     } catch (e) {
-        console.error('[DatabaseService] Failed to load improvements from localStorage', e);
         return [];
     }
 };
 
-const saveWebImprovementsStore = (improvements: NoteImprovement[]) => {
-    try {
-        localStorage.setItem(IMPROVEMENTS_STORAGE_KEY, JSON.stringify(improvements));
-    } catch (e) {
-        console.error('[DatabaseService] Failed to save improvements to localStorage', e);
-    }
+const clearWebImprovementsStore = () => {
+    localStorage.removeItem(IMPROVEMENTS_STORAGE_KEY);
 };
 
 // Native Store Implementation
@@ -112,6 +109,27 @@ const getDb = async () => {
 export const initDatabase = async (): Promise<void> => {
     if (Platform.OS === 'web') {
         console.log('[DatabaseService] Web detected, using localStorage');
+
+        // MIGRATION for Web
+        const improvements = getWebImprovementsStore_DEPRECATED();
+        if (improvements.length > 0) {
+            console.log('[DatabaseService] Migrating web improvements to notes...');
+            const notes = getWebStore();
+            for (const imp of improvements) {
+                // Check if already migrated?
+                if (notes.some(n => n.id === imp.id)) continue;
+
+                const childNote: Note = {
+                    ...imp,
+                    parent_id: imp.note_id || imp.noteId,
+                    improvements: [], // Children don't have children in this model yet
+                };
+                notes.push(childNote);
+            }
+            saveWebStore(notes);
+            clearWebImprovementsStore();
+            console.log('[DatabaseService] Web migration complete.');
+        }
         return;
     }
     try {
@@ -135,12 +153,16 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
             server_updated_at: note.server_updated_at ?? note.updated_at,
             content_nonce: note.content_nonce ?? null,
             pending_delete: note.pending_delete ?? false,
+            parent_id: note.parent_id ?? null,
+            // active_child_id removed from API
+            label: note.label ?? null,
+            option_id: note.option_id ?? null,
         } as Note;
         if (index >= 0) {
             notes[index] = {
                 ...notes[index],
                 ...normalizedNote,
-                improvements: normalizedNote.improvements ?? notes[index].improvements ?? [],
+                improvements: normalizedNote.improvements ?? notes[index].improvements ?? [], // Should we recurse? simple replace for now.
             };
         } else {
             notes.push(normalizedNote);
@@ -186,10 +208,20 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
 export const deleteNoteLocal = async (id: string): Promise<void> => {
     if (Platform.OS === 'web') {
         let notes = getWebStore();
-        notes = notes.filter(n => n.id !== id);
+        // Delete note and its children
+        const toDeleteIds = new Set<string>();
+        toDeleteIds.add(id);
+
+        // Find children
+        notes.forEach(n => {
+            if (n.parent_id === id) {
+                toDeleteIds.add(n.id);
+            }
+        });
+
+        notes = notes.filter(n => !toDeleteIds.has(n.id));
         saveWebStore(notes);
-        const improvements = getWebImprovementsStore().filter(imp => imp.note_id !== id);
-        saveWebImprovementsStore(improvements);
+        // Improvements store is gone
         console.log(`[DatabaseService] Note deleted from web store: ${id}`);
         return;
     }
@@ -207,10 +239,38 @@ export const deleteNoteLocal = async (id: string): Promise<void> => {
 
 export const getNotesLocal = async (): Promise<Note[]> => {
     if (Platform.OS === 'web') {
-        const rawNotes = getWebStore();
-        const rawImprovements = getWebImprovementsStore();
-        const improvementsMap = await processImprovements(rawImprovements);
-        return processNotes(rawNotes, improvementsMap);
+        const allNotes = getWebStore();
+        // Separate parents and children
+        const parents = allNotes.filter(n => !n.parent_id);
+        const children = allNotes.filter(n => n.parent_id);
+
+        // Group children
+        const childrenMap = new Map<string, Note[]>();
+        children.forEach(c => {
+            const pid = c.parent_id!;
+            const list = childrenMap.get(pid) ?? [];
+            list.push(c);
+            childrenMap.set(pid, list);
+        });
+
+        const processedNotes: Note[] = [];
+
+        for (const parent of parents) {
+            const childNotes = childrenMap.get(parent.id) ?? [];
+            childNotes.sort((a, b) => (new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()));
+
+            processedNotes.push({
+                ...parent,
+                improvements: childNotes
+            });
+        }
+
+        // Sort
+        return processedNotes.sort((a, b) => {
+            const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return dateB - dateA;
+        });
     }
 
     try {
@@ -354,25 +414,37 @@ export const wipeLocalDatabase = async (): Promise<void> => {
     }
 };
 
-export const saveImprovementLocal = async (improvement: NoteImprovement): Promise<void> => {
+export const saveImprovementLocal = async (improvement: NoteImprovement, useDbActiveState = false): Promise<void> => {
     if (Platform.OS === 'web') {
-        const improvements = getWebImprovementsStore();
-        const index = improvements.findIndex(imp => imp.id === improvement.id);
-        const normalized: NoteImprovement = {
-            ...improvement,
-            synced: improvement.synced ?? 1,
-            dirty: improvement.dirty ?? false,
-            deleted: improvement.deleted ?? false,
-            version: improvement.version ?? (index >= 0 ? improvements[index].version ?? 0 : 0),
-            server_updated_at: improvement.server_updated_at ?? improvement.updated_at,
+        const notes = getWebStore();
+        const index = notes.findIndex(n => n.id === improvement.id);
+
+        const childNote: Note = {
+            id: improvement.id,
+            parent_id: improvement.note_id,
+            encrypted_content: improvement.encrypted_content,
+            encrypted_title: improvement.encrypted_title || undefined,
+            content_nonce: improvement.content_nonce,
+            label: improvement.label || undefined,
+            option_id: improvement.option_id || undefined,
+            created_at: improvement.created_at,
+            updated_at: improvement.updated_at,
+            synced: improvement.synced,
+            dirty: improvement.dirty,
+            version: improvement.version,
+            server_updated_at: improvement.server_updated_at,
+            content: improvement.content,
+            is_active: false, // Default for web store
         };
+
+        // We need to merge if exists
         if (index >= 0) {
-            improvements[index] = { ...improvements[index], ...normalized };
+            notes[index] = { ...notes[index], ...childNote };
         } else {
-            improvements.push(normalized);
+            notes.push(childNote);
         }
-        saveWebImprovementsStore(improvements);
-        console.log(`[DatabaseService] Improvement saved to web store: ${improvement.id}`);
+        saveWebStore(notes);
+        console.log(`[DatabaseService] Improvement saved to web store as child note: ${improvement.id}`);
         return;
     }
 
@@ -411,10 +483,7 @@ export const saveImprovementLocal = async (improvement: NoteImprovement): Promis
 
 export const deleteImprovementLocal = async (id: string): Promise<void> => {
     if (Platform.OS === 'web') {
-        const improvements = getWebImprovementsStore().filter(imp => imp.id !== id);
-        saveWebImprovementsStore(improvements);
-        console.log(`[DatabaseService] Improvement deleted from web store: ${id}`);
-        return;
+        return deleteNoteLocal(id);
     }
 
     try {
@@ -429,9 +498,8 @@ export const deleteImprovementLocal = async (id: string): Promise<void> => {
 
 export const getAllImprovementsLocal = async (): Promise<NoteImprovement[]> => {
     if (Platform.OS === 'web') {
-        const raw = getWebImprovementsStore();
-        const map = await processImprovements(raw, true);
-        return Array.from(map.values()).flat();
+        const allNotes = getWebStore();
+        return allNotes.filter(n => n.parent_id) as any[]; // Cast back to NoteImprovement[]
     }
     try {
         const database = await getDb();
@@ -443,4 +511,49 @@ export const getAllImprovementsLocal = async (): Promise<NoteImprovement[]> => {
         console.error('[DatabaseService] Failed to fetch improvements', e);
         return [];
     }
+};
+
+/**
+ * Set the active variant for a note (web implementation).
+ * Ensures only one note (parent or child) is marked as active at a time.
+ * @param parentNoteId - The parent note ID
+ * @param activeChildId - The child note ID to mark as active, or null for parent/original
+ */
+export const setActiveVariant = async (parentNoteId: string, activeChildId: string | null): Promise<void> => {
+    if (Platform.OS === 'web') {
+        const notes = getWebStore();
+
+        // Find parent and children
+        const parentIndex = notes.findIndex(n => n.id === parentNoteId);
+        if (parentIndex === -1) {
+            console.warn(`[DatabaseService] Parent note ${parentNoteId} not found`);
+            return;
+        }
+
+        if (activeChildId === null) {
+            // Set parent as active, all children as inactive
+            notes[parentIndex].is_active = true;
+            notes.forEach((n, i) => {
+                if (n.parent_id === parentNoteId) {
+                    notes[i].is_active = false;
+                }
+            });
+            console.log(`[DatabaseService] Set parent ${parentNoteId} as active (web)`);
+        } else {
+            // Set specific child as active, parent and other children as inactive
+            notes[parentIndex].is_active = false;
+            notes.forEach((n, i) => {
+                if (n.parent_id === parentNoteId) {
+                    notes[i].is_active = (n.id === activeChildId);
+                }
+            });
+            console.log(`[DatabaseService] Set child ${activeChildId} as active for parent ${parentNoteId} (web)`);
+        }
+
+        saveWebStore(notes);
+        return;
+    }
+
+    // For native, this file shouldn't be used, but provide a stub
+    console.warn('[DatabaseService] setActiveVariant called on non-web platform in DatabaseService.ts');
 };

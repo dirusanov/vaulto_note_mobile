@@ -9,6 +9,7 @@ import {
     deleteNoteLocal,
     searchNotesLocal,
     saveImprovementLocal,
+    setActiveVariant as setActiveVariantDB,
 } from '../services/DatabaseService';
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
@@ -122,6 +123,7 @@ export const useNotes = () => {
                 dirty: true,
                 deleted: false,
                 version: 0,
+                is_active: true, // New parent notes are active by default
             };
             await saveNoteLocal(localNote);
             return localNote;
@@ -441,10 +443,35 @@ export const useNotes = () => {
             improvementId: string,
             updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
         ): Promise<NoteImprovement> => {
+            console.log('[useNotes] updateImprovement called:', {
+                noteId,
+                improvementId,
+                updates: { ...updates, content: updates.content ? `${updates.content.substring(0, 50)}...` : undefined }
+            });
+
             const note = notesRef.current.find(n => n.id === noteId);
-            if (!note) throw new Error('Note not found');
+            if (!note) {
+                console.error('[useNotes] Parent note not found:', noteId);
+                throw new Error('Note not found');
+            }
+
+            console.log('[useNotes] Parent note found, improvements count:', note.improvements?.length || 0);
+
             const improvement = note.improvements?.find(imp => imp.id === improvementId);
-            if (!improvement) throw new Error('Improvement not found');
+            if (!improvement) {
+                console.error('[useNotes] Improvement not found:', {
+                    improvementId,
+                    availableImprovements: note.improvements?.map(i => ({ id: i.id, label: i.label }))
+                });
+                throw new Error('Improvement not found');
+            }
+
+            console.log('[useNotes] Found improvement to update:', {
+                id: improvement.id,
+                currentLabel: improvement.label,
+                newLabel: updates.label,
+                newOptionId: updates.optionId
+            });
 
             let encryptedContent = improvement.encrypted_content;
             let plainContent = improvement.content ?? '';
@@ -455,6 +482,7 @@ export const useNotes = () => {
 
             const updated: NoteImprovement = {
                 ...improvement,
+                note_id: noteId, // Ensure parent ID is preserved
                 encrypted_content: encryptedContent,
                 content: plainContent,
                 label: updates.label ?? improvement.label,
@@ -465,9 +493,19 @@ export const useNotes = () => {
                 dirty: true,
             };
 
-            await saveImprovementLocal(updated);
+            console.log('[useNotes] Saving updated improvement:', {
+                id: updated.id,
+                label: updated.label,
+                option_id: updated.option_id,
+                deleted: updated.deleted,
+                is_active: updated.is_active
+            });
+
+            await saveImprovementLocal(updated, true);
             await refreshFromLocal();
             syncService.scheduleAutoSync();
+
+            console.log('[useNotes] Improvement update complete');
             return updated;
         },
         [refreshFromLocal]
@@ -478,6 +516,27 @@ export const useNotes = () => {
             await updateImprovement(noteId, improvementId, { deleted: true });
         },
         [updateImprovement]
+    );
+
+    const setActiveVariant = useCallback(
+        async (noteId: string, variantId: string | null) => {
+            try {
+                await setActiveVariantDB(noteId, variantId);
+                await refreshFromLocal();
+
+                // Immediate sync for logged-in users (is_active is user preference)
+                if (isAuthenticated) {
+                    console.log('[useNotes] Triggering immediate sync for is_active change');
+                    syncService.syncNow('variant_switch');
+                } else {
+                    syncService.scheduleAutoSync();
+                }
+            } catch (error) {
+                console.error('[useNotes] Failed to set active variant', error);
+                throw error;
+            }
+        },
+        [refreshFromLocal, isAuthenticated]
     );
 
     return {
@@ -495,5 +554,6 @@ export const useNotes = () => {
         createImprovement,
         updateImprovement,
         deleteImprovement,
+        setActiveVariant,
     };
 };

@@ -22,7 +22,7 @@ const SYNC_SINCE_KEY = 'vaulto_last_sync_time';
 const SYNC_DEBOUNCE_MS = 5000;
 const RESUME_SYNC_THRESHOLD_MS = 30000; // 30 seconds
 
-type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual';
+type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch';
 type SyncListener = () => void;
 
 class SyncService {
@@ -151,11 +151,18 @@ class SyncService {
                     deleted: !!note.deleted || !!note.pending_delete,
                     base_version: note.version ?? 0,
                     client_updated_at: note.updated_at || new Date().toISOString(),
+                    is_active: note.is_active,
+                    last_variant_id: null, // Deprecated: using is_active now
                 });
             }
 
             for (const improvement of dirtyImprovements) {
                 improvementMap.set(improvement.id, improvement);
+                // Fetch parent note to check for is_active
+                const parentNote = allNotes.find(n => n.id === improvement.note_id);
+                const activeChild = parentNote?.improvements?.find(imp => imp.is_active);
+                const isActive = activeChild?.id === improvement.id;
+
                 improvementChanges.push({
                     id: improvement.id,
                     note_id: improvement.note_id,
@@ -167,6 +174,7 @@ class SyncService {
                     deleted: !!improvement.deleted,
                     base_version: improvement.version ?? 0,
                     client_updated_at: improvement.updated_at || new Date().toISOString(),
+                    is_active: isActive,
                 });
             }
 
@@ -349,7 +357,8 @@ class SyncService {
                 updated_at: improvement.updated_at,
                 synced: 1,
                 dirty: false,
-            });
+                is_active: improvement.is_active ?? false,
+            } as any);
         }
     }
 
@@ -436,6 +445,7 @@ class SyncService {
                 server_updated_at: serverNote.updated_at,
                 content_nonce: serverNote.content_nonce ?? null,
                 conflict_of: serverNote.conflict_of ?? null,
+                is_active: serverNote.is_active ?? existing?.is_active ?? false,
             };
 
             await saveNoteLocal(merged);

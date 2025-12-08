@@ -45,10 +45,15 @@ import {
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
 
-// Simple history stack implementation
+// History stack implementation - separate history for each variant
 interface HistoryState {
     content: string;
     title: string;
+}
+
+interface VariantHistory {
+    history: HistoryState[];
+    index: number;
 }
 
 export const NoteEditScreen = () => {
@@ -62,6 +67,7 @@ export const NoteEditScreen = () => {
         createImprovement,
         updateImprovement,
         deleteImprovement,
+        setActiveVariant,
     } = useNotesContext();
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
@@ -75,10 +81,17 @@ export const NoteEditScreen = () => {
     const [showMenu, setShowMenu] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
 
-    // History for Undo/Redo
-    const [history, setHistory] = useState<HistoryState[]>([{ title: existingNote?.title || '', content: existingNote?.content || '' }]);
-    const [historyIndex, setHistoryIndex] = useState(0);
+    // History for Undo/Redo - separate for each variant
+    const variantHistories = useRef<Record<string, VariantHistory>>({});
     const historyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Initialize history for original variant
+    if (!variantHistories.current['original']) {
+        variantHistories.current['original'] = {
+            history: [{ title: existingNote?.title || '', content: existingNote?.content || '' }],
+            index: 0
+        };
+    }
 
     // Audio state
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
@@ -103,7 +116,23 @@ export const NoteEditScreen = () => {
     const [newPromptTitle, setNewPromptTitle] = useState('');
     const [newPromptTemplate, setNewPromptTemplate] = useState('');
     const [newPromptIcon, setNewPromptIcon] = useState<string>(ICON_CHOICES[0]);
-    const [activeVariantId, setActiveVariantId] = useState<string>('original');
+
+    // Determine initial active variant based on is_active flags
+    const getInitialActiveVariantId = () => {
+        if (!existingNote) return 'original';
+
+        // Check if parent is active
+        if (existingNote.is_active) return 'original';
+
+        // Check if any child is active
+        const activeChild = existingNote.improvements?.find(imp => imp.is_active);
+        if (activeChild) return activeChild.id;
+
+        // Default to original if no is_active flags set
+        return 'original';
+    };
+
+    const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
 
@@ -155,6 +184,37 @@ export const NoteEditScreen = () => {
         lastSavedContent.current = existingNote.content || '';
     }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri]);
 
+    // Restore active variant from is_active flags when note loads
+    useEffect(() => {
+        if (!existingNote) return;
+
+        const correctActiveVariantId = getInitialActiveVariantId();
+        if (correctActiveVariantId !== activeVariantId) {
+            console.log('[NoteEditScreen] Restoring active variant from is_active flags:', {
+                current: activeVariantId,
+                correct: correctActiveVariantId,
+                parentActive: existingNote.is_active,
+                improvementsCount: existingNote.improvements?.length || 0
+            });
+
+            setActiveVariantId(correctActiveVariantId);
+
+            // Update content to show the correct variant
+            if (correctActiveVariantId === 'original') {
+                setTitle(existingNote.title || '');
+                setContent(existingNote.content || '');
+            } else {
+                const improvement = existingNote.improvements?.find(i => i.id === correctActiveVariantId);
+                if (improvement) {
+                    const improvementContent = improvement.content || '';
+                    setContent(improvementContent);
+                    improvementDraftsRef.current[correctActiveVariantId] = improvementContent;
+                    improvementSavedRef.current[correctActiveVariantId] = improvementContent;
+                }
+            }
+        }
+    }, [existingNote?.id, existingNote?.is_active, JSON.stringify(existingNote?.improvements?.map(i => ({ id: i.id, is_active: i.is_active })))]);
+
     useEffect(() => {
         const fetchAiOptions = async () => {
             setAiOptionsLoading(true);
@@ -194,7 +254,7 @@ export const NoteEditScreen = () => {
         }
     }, [activeVariantId, noteImprovements, existingNote?.content]);
 
-    // Handle history updates
+    // Handle history updates for current variant
     const updateHistory = (newTitle: string, newContent: string) => {
         // Clear existing timeout to debounce history updates
         if (historyTimeoutRef.current) {
@@ -202,18 +262,31 @@ export const NoteEditScreen = () => {
         }
 
         historyTimeoutRef.current = setTimeout(() => {
-            setHistory(prev => {
-                const newHistory = prev.slice(0, historyIndex + 1);
-                newHistory.push({ title: newTitle, content: newContent });
-                // Limit history size if needed, e.g., 50 items
-                return newHistory;
-            });
-            setHistoryIndex(prev => prev + 1);
+            const variantId = activeVariantId;
+            const currentHistory = variantHistories.current[variantId] || {
+                history: [],
+                index: -1
+            };
+
+            const newHistory = currentHistory.history.slice(0, currentHistory.index + 1);
+            newHistory.push({ title: newTitle, content: newContent });
+            // Limit history size to 50 items
+            if (newHistory.length > 50) {
+                newHistory.shift();
+            } else {
+                currentHistory.index++;
+            }
+
+            variantHistories.current[variantId] = {
+                history: newHistory,
+                index: currentHistory.index
+            };
         }, 500); // 500ms debounce
     };
 
     const handleTitleChange = (text: string) => {
         setTitle(text);
+        // Only original variant has a title
         if (activeVariantId === 'original') {
             updateHistory(text, content);
         }
@@ -236,6 +309,8 @@ export const NoteEditScreen = () => {
             updateHistory(title, text);
         } else {
             improvementDraftsRef.current[activeVariantId] = text;
+            // Update history for improvements too
+            updateHistory('', text);
         }
     };
 
@@ -245,15 +320,19 @@ export const NoteEditScreen = () => {
             await deleteImprovement(localNoteId, improvementId);
             delete improvementDraftsRef.current[improvementId];
             delete improvementSavedRef.current[improvementId];
+
+            // If deleting active variant, switch to original
             if (activeVariantId === improvementId) {
                 setActiveVariantId('original');
                 setContent(existingNote?.content || '');
+                // Set parent as active
+                await setActiveVariant(localNoteId, null);
             }
         } catch (error) {
             console.error('Failed to delete improvement', error);
             Alert.alert('Error', 'Failed to delete improvement');
         }
-    }, [activeVariantId, deleteImprovement, existingNote?.content, localNoteId]);
+    }, [activeVariantId, deleteImprovement, existingNote?.content, localNoteId, setActiveVariant]);
 
     const confirmDeleteImprovement = (improvementId: string) => {
         Alert.alert(
@@ -271,25 +350,47 @@ export const NoteEditScreen = () => {
     };
 
     const handleUndo = () => {
-        if (activeVariantId !== 'original') return;
-        if (historyIndex > 0) {
-            const prevIndex = historyIndex - 1;
-            const prevState = history[prevIndex];
+        const variantHistory = variantHistories.current[activeVariantId];
+        if (!variantHistory || variantHistory.index <= 0) return;
+
+        const prevIndex = variantHistory.index - 1;
+        const prevState = variantHistory.history[prevIndex];
+
+        if (activeVariantId === 'original') {
             setTitle(prevState.title);
-            setContent(prevState.content);
-            setHistoryIndex(prevIndex);
         }
+        setContent(prevState.content);
+
+        if (activeVariantId !== 'original') {
+            improvementDraftsRef.current[activeVariantId] = prevState.content;
+        }
+
+        variantHistories.current[activeVariantId] = {
+            ...variantHistory,
+            index: prevIndex
+        };
     };
 
     const handleRedo = () => {
-        if (activeVariantId !== 'original') return;
-        if (historyIndex < history.length - 1) {
-            const nextIndex = historyIndex + 1;
-            const nextState = history[nextIndex];
+        const variantHistory = variantHistories.current[activeVariantId];
+        if (!variantHistory || variantHistory.index >= variantHistory.history.length - 1) return;
+
+        const nextIndex = variantHistory.index + 1;
+        const nextState = variantHistory.history[nextIndex];
+
+        if (activeVariantId === 'original') {
             setTitle(nextState.title);
-            setContent(nextState.content);
-            setHistoryIndex(nextIndex);
         }
+        setContent(nextState.content);
+
+        if (activeVariantId !== 'original') {
+            improvementDraftsRef.current[activeVariantId] = nextState.content;
+        }
+
+        variantHistories.current[activeVariantId] = {
+            ...variantHistory,
+            index: nextIndex
+        };
     };
 
     const loadAudio = async (path: string) => {
@@ -387,10 +488,32 @@ export const NoteEditScreen = () => {
             return;
         }
         try {
+            // Save current content before switching
             await saveNote();
+
+            // Update is_active flags in database
+            if (localNoteId) {
+                await setActiveVariant(
+                    localNoteId,
+                    variantId === 'original' ? null : variantId
+                );
+            }
         } catch (error) {
             console.error('Failed to save before switching variant:', error);
         }
+
+        // Initialize history for new variant if needed
+        if (!variantHistories.current[variantId]) {
+            const content = variantId === 'original'
+                ? existingNote?.content || ''
+                : improvementDraftsRef.current[variantId] || noteImprovements.find(i => i.id === variantId)?.content || '';
+
+            variantHistories.current[variantId] = {
+                history: [{ title: existingNote?.title || '', content }],
+                index: 0
+            };
+        }
+
         setActiveVariantId(variantId);
         if (variantId === 'original') {
             setContent(existingNote?.content || '');
@@ -403,7 +526,7 @@ export const NoteEditScreen = () => {
                 setContent(imp?.content || '');
             }
         }
-    }, [activeVariantId, existingNote?.content, noteImprovements, saveNote]);
+    }, [activeVariantId, existingNote?.content, existingNote?.title, noteImprovements, saveNote, localNoteId, setActiveVariant]);
 
     useEffect(() => {
         const unsubscribe = navigation.addListener('beforeRemove', (event) => {
@@ -645,15 +768,55 @@ export const NoteEditScreen = () => {
                 throw new Error('Failed to resolve note ID for improvement');
             }
 
-            const improvement = await createImprovement(targetNoteId, {
-                content: improvedText,
-                label: option.label,
-                optionId: option.id,
+            // Check if we're on the original note or a child variant
+            console.log('[NoteEditScreen] Applying improvement:', {
+                activeVariant: activeVariantId,
+                isOriginal: activeVariantId === 'original',
+                parentNoteId: targetNoteId,
+                optionLabel: option.label,
+                optionId: option.id
             });
-            improvementDraftsRef.current[improvement.id] = improvedText;
-            improvementSavedRef.current[improvement.id] = improvedText;
-            setActiveVariantId(improvement.id);
-            setContent(improvedText);
+
+            if (activeVariantId === 'original') {
+                // Create new child variant from parent
+                console.log('[NoteEditScreen] Creating new improvement variant');
+                const improvement = await createImprovement(targetNoteId, {
+                    content: improvedText,
+                    label: option.label,
+                    optionId: option.id,
+                });
+                improvementDraftsRef.current[improvement.id] = improvedText;
+                improvementSavedRef.current[improvement.id] = improvedText;
+
+                // Set this improvement as active in the database
+                await setActiveVariant(targetNoteId, improvement.id);
+
+                setActiveVariantId(improvement.id);
+                setContent(improvedText);
+            } else {
+                // Update existing child variant in-place (no new children from children)
+                console.log('[NoteEditScreen] Updating existing improvement in-place:', {
+                    improvementId: activeVariantId,
+                    parentNoteId: targetNoteId,
+                    newLabel: option.label,
+                    newOptionId: option.id
+                });
+                const updatedImprovement = await updateImprovement(targetNoteId, activeVariantId, {
+                    content: improvedText,
+                    label: option.label,
+                    optionId: option.id,
+                });
+
+                console.log('[NoteEditScreen] Improvement updated successfully');
+
+                // Update refs and UI with new content
+                improvementDraftsRef.current[activeVariantId] = improvedText;
+                improvementSavedRef.current[activeVariantId] = improvedText;
+                setContent(improvedText);
+
+                // Update history for this variant
+                updateHistory('', improvedText);
+            }
         } catch (error) {
             const message = error instanceof Error
                 ? error.message
@@ -808,17 +971,17 @@ export const NoteEditScreen = () => {
                         <>
                             <TouchableOpacity
                                 onPress={handleUndo}
-                                style={[styles.iconButton, historyIndex === 0 && styles.disabledIcon]}
-                                disabled={historyIndex === 0}
+                                style={[styles.iconButton, (!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0) && styles.disabledIcon]}
+                                disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0}
                             >
-                                <MaterialIcons name="undo" size={24} color={historyIndex === 0 ? colors.textMuted : colors.text} />
+                                <MaterialIcons name="undo" size={24} color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0) ? colors.textMuted : colors.text} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={handleRedo}
-                                style={[styles.iconButton, historyIndex === history.length - 1 && styles.disabledIcon]}
-                                disabled={historyIndex === history.length - 1}
+                                style={[styles.iconButton, (!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1) && styles.disabledIcon]}
+                                disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1}
                             >
-                                <MaterialIcons name="redo" size={24} color={historyIndex === history.length - 1 ? colors.textMuted : colors.text} />
+                                <MaterialIcons name="redo" size={24} color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1) ? colors.textMuted : colors.text} />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleCheckPress} style={styles.iconButton}>
                                 <MaterialIcons name="check" size={24} color={colors.text} />
@@ -1057,7 +1220,7 @@ export const NoteEditScreen = () => {
                                 </Text>
                             </TouchableOpacity>
 
-                            {noteImprovements.map((imp) => (
+                            {noteImprovements.map((imp: any) => (
                                 <View style={styles.variantChipWrapper} key={imp.id}>
                                     <TouchableOpacity
                                         style={[
@@ -1155,8 +1318,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: spacing.m,
-        marginBottom: spacing.s,
-        marginTop: spacing.xl,
+        marginBottom: spacing.xs,
+        marginTop: 0,
     },
     headerRight: {
         flexDirection: 'row',

@@ -16,9 +16,16 @@ export interface NoteImprovement {
     content?: string;
     dirty?: boolean;
     server_updated_at?: string;
+    is_active?: boolean; // Added: Track which improvement is currently active
 }
 
 export interface Note {
+    is_active: boolean;
+    parent_id?: string | null;
+    label?: string | null;
+    option_id?: string | null;
+
+    // Existing fields
     id: string;
     encrypted_title?: string;
     encrypted_content: string;
@@ -39,7 +46,7 @@ export interface Note {
     pending_delete?: boolean;
     dirty?: boolean;
     deleted?: boolean;
-    improvements?: NoteImprovement[];
+    improvements?: Note[]; // Changed from NoteImprovement[] to Note[]
 }
 
 export interface SyncChangeRequest {
@@ -50,6 +57,8 @@ export interface SyncChangeRequest {
     deleted: boolean;
     base_version: number;
     client_updated_at: string;
+    is_active?: boolean;
+    last_variant_id?: string | null;
 }
 
 export interface SyncImprovementChangeRequest {
@@ -63,6 +72,7 @@ export interface SyncImprovementChangeRequest {
     deleted: boolean;
     base_version: number;
     client_updated_at: string;
+    is_active?: boolean;
 }
 
 export interface SyncNotesRequest {
@@ -80,6 +90,8 @@ export interface ServerNote {
     version: number;
     conflict_of?: string | null;
     updated_at: string;
+    last_variant_id?: string | null;
+    is_active?: boolean;
 }
 
 export interface ServerImprovement {
@@ -93,6 +105,7 @@ export interface ServerImprovement {
     deleted: boolean;
     version: number;
     updated_at: string;
+    is_active?: boolean;
 }
 
 export interface SyncNotesResponse {

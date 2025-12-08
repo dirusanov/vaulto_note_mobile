@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import { Note } from '../contexts/NotesContext';
+import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -11,7 +11,13 @@ interface NoteCardProps {
 }
 
 export const NoteCard = ({ note, onPress }: NoteCardProps) => {
-    const content = note.content || '';
+    let content = note.content || '';
+    if (note.active_child_id && note.active_child_id && note.active_child_id !== 'original' && note.improvements) {
+        const activeChild = note.improvements.find(imp => imp.id === note.active_child_id);
+        if (activeChild?.content) {
+            content = activeChild.content;
+        }
+    }
     const buildTitle = () => {
         if (note.title && note.title.trim().length > 0) return note.title.trim();
         const words = content.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);

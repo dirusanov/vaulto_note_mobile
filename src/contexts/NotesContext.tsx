@@ -1,19 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { NoteImprovement } from '../api/notes';
+import { Note, NoteImprovement } from '../api/notes';
 import { useNotes, NoteAudio } from '../hooks/useNotes';
-
-export interface Note {
-    id: string;
-    title?: string;
-    content?: string;
-    created_at?: string;
-    updated_at?: string;
-    audio_file_path?: string;
-    audio_duration?: number;
-    has_audio?: boolean;
-    encrypted_transcription?: string;
-    improvements?: NoteImprovement[];
-}
 
 interface NotesContextType {
     notes: Note[];
@@ -34,6 +21,7 @@ interface NotesContextType {
         updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
     ) => Promise<NoteImprovement>;
     deleteImprovement: (noteId: string, improvementId: string) => Promise<void>;
+    setActiveVariant: (noteId: string, variantId: string | null) => Promise<void>;
     // decrypt removed – decryption is handled inside useNotes hook
 }
 
