@@ -1095,8 +1095,8 @@ export const NoteEditScreen = () => {
                                     </View>
                                 </View>
 
-                                {/* Custom Instruction Input */}
-                                <View style={styles.customInstructionContainer}>
+                                {/* Custom Instruction Box */}
+                                <View style={styles.customInstructionBox}>
                                     <View style={styles.customHeaderRow}>
                                         <TouchableOpacity
                                             style={styles.customLabelContainer}
@@ -1105,7 +1105,7 @@ export const NoteEditScreen = () => {
                                             <MaterialIcons
                                                 name={showCustomInput ? "expand-less" : "expand-more"}
                                                 size={24}
-                                                color={colors.textMuted}
+                                                color={colors.text}
                                             />
                                             <Text style={styles.customBoxLabel}>Custom Instruction</Text>
                                         </TouchableOpacity>
@@ -1114,7 +1114,7 @@ export const NoteEditScreen = () => {
                                             style={styles.customMicHeaderButton}
                                             onPress={handleVoiceInstructionStart}
                                         >
-                                            <MaterialIcons name="mic" size={22} color={colors.primary} />
+                                            <MaterialIcons name="mic" size={24} color={colors.primary} />
                                         </TouchableOpacity>
                                     </View>
 
@@ -1629,15 +1629,19 @@ const styles = StyleSheet.create({
     aiActionButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
-        borderRadius: 8,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
+        borderRadius: 12,
         backgroundColor: colors.background,
         gap: spacing.xs,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     aiActionText: {
-        ...typography.caption,
+        ...typography.body,
+        fontWeight: '600',
         color: colors.primary,
+        fontSize: 15,
     },
     aiLoader: {
         paddingVertical: spacing.xl,
@@ -1687,13 +1691,14 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     aiCloseButton: {
-        marginTop: spacing.l,
-        paddingVertical: spacing.m,
+        marginTop: spacing.s,
+        paddingVertical: spacing.xs,
         alignItems: 'center',
     },
     aiCloseButtonText: {
         ...typography.body,
-        color: colors.textMuted,
+        fontWeight: '600',
+        color: colors.primary,
     },
     promptBuilderWrapper: {
         flex: 1,
@@ -1774,15 +1779,20 @@ const styles = StyleSheet.create({
         color: colors.surface,
         fontWeight: '600',
     },
-    customInstructionContainer: {
+    customInstructionBox: {
         marginBottom: spacing.l,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 16,
+        padding: spacing.s,
+        backgroundColor: colors.background,
+        marginHorizontal: spacing.s,
     },
     customHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: spacing.xs,
-        paddingVertical: spacing.xs,
+        marginBottom: 0,
     },
     customLabelContainer: {
         flexDirection: 'row',
@@ -1793,8 +1803,10 @@ const styles = StyleSheet.create({
         padding: spacing.s,
         backgroundColor: colors.surface,
         borderRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
+        // borderWidth: 1,
+        // borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     customBoxLabel: {
         ...typography.body,
@@ -1802,7 +1814,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     customExpandedContent: {
-        paddingTop: spacing.xs,
+        marginTop: spacing.m,
     },
     customInputRow: {
         flexDirection: 'row',
@@ -1810,9 +1822,10 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: 12,
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
         paddingHorizontal: spacing.s,
         marginBottom: spacing.s,
+        minHeight: 60,
     },
     customInstructionInput: {
         flex: 1,

@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     },
     dockContainer: {
         position: 'absolute',
-        bottom: spacing.xl + spacing.m, // Moved up significantly
+        bottom: spacing.xxl + spacing.l, // Moved up significantly
         left: 0,
         right: 0,
         alignItems: 'center',

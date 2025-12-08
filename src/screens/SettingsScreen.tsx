@@ -602,13 +602,14 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingVertical: spacing.s,
         gap: spacing.m,
+        paddingBottom: spacing.xxl, // Ensure bottom content is visible
     },
     topBar: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
         marginBottom: spacing.m,
-        marginTop: spacing.xxl,
+        marginTop: spacing.xl,
     },
     backButton: {
         width: 42,
