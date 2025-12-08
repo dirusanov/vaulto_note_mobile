@@ -57,7 +57,8 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             has_audio INTEGER,
             synced INTEGER DEFAULT 0,
             dirty INTEGER DEFAULT 0,
-            deleted INTEGER DEFAULT 0
+            deleted INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 0
         );
     `);
 
@@ -75,6 +76,7 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             synced INTEGER DEFAULT 0,
             dirty INTEGER DEFAULT 0,
             deleted INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 0,
             version INTEGER DEFAULT 0,
             server_updated_at TEXT,
             FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
@@ -101,6 +103,16 @@ const getDb = async () => {
             await db.execAsync('ALTER TABLE notes ADD COLUMN deleted INTEGER DEFAULT 0;');
         } catch (e) {
             // Ignore if column exists
+        }
+        try {
+            await db.execAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
+        } catch (e) {
+            // Ignore
+        }
+        try {
+            await db.execAsync('ALTER TABLE note_improvements ADD COLUMN is_active INTEGER DEFAULT 0;');
+        } catch (e) {
+            // Ignore
         }
     }
     return db;
@@ -182,8 +194,8 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
         await database.runAsync(
             `INSERT OR REPLACE INTO notes (
                 id, encrypted_title, encrypted_content, created_at, updated_at, 
-                audio_file_path, audio_duration, encrypted_transcription, has_audio, synced, dirty, deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                audio_file_path, audio_duration, encrypted_transcription, has_audio, synced, dirty, deleted, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 note.id,
                 note.encrypted_title || '',
@@ -196,7 +208,8 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.has_audio ? 1 : 0,
                 note.synced ?? 1,
                 isDirty,
-                isDeleted
+                isDeleted,
+                note.is_active ? 1 : 0
             ]
         );
         console.log(`[DatabaseService] Note saved to native DB: ${note.id} (dirty=${isDirty}, deleted=${isDeleted})`);
@@ -390,6 +403,28 @@ export const searchNotesLocal = async (query: string): Promise<Note[]> => {
     );
 };
 
+export const getNoteById = async (id: string): Promise<Note | null> => {
+    if (Platform.OS === 'web') {
+        const allNotes = await getNotesLocal();
+        return allNotes.find(n => n.id === id) || null;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return null;
+        const rawNote = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ?', [id]);
+        if (!rawNote) return null;
+
+        const rawImprovements = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE note_id = ?', [id]);
+        const improvementsMap = await processImprovements(rawImprovements);
+        const processed = await processNotes([rawNote], improvementsMap);
+        return processed[0] || null;
+    } catch (e) {
+        console.error('[DatabaseService] Failed to get note by id', e);
+        return null;
+    }
+};
+
 export const wipeLocalDatabase = async (): Promise<void> => {
     if (Platform.OS === 'web') {
         try {
@@ -456,8 +491,8 @@ export const saveImprovementLocal = async (improvement: NoteImprovement, useDbAc
         await database.runAsync(
             `INSERT OR REPLACE INTO note_improvements (
                 id, note_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
-                created_at, updated_at, synced, dirty, deleted, version, server_updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                created_at, updated_at, synced, dirty, deleted, version, server_updated_at, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 improvement.id,
                 improvement.note_id,
@@ -473,6 +508,7 @@ export const saveImprovementLocal = async (improvement: NoteImprovement, useDbAc
                 isDeleted,
                 improvement.version ?? 0,
                 improvement.server_updated_at || null,
+                improvement.is_active ? 1 : 0
             ]
         );
         console.log(`[DatabaseService] Improvement saved to native DB: ${improvement.id} (dirty=${isDirty}, deleted=${isDeleted})`);
@@ -554,6 +590,40 @@ export const setActiveVariant = async (parentNoteId: string, activeChildId: stri
         return;
     }
 
-    // For native, this file shouldn't be used, but provide a stub
-    console.warn('[DatabaseService] setActiveVariant called on non-web platform in DatabaseService.ts');
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        // Transaction to update flags
+        await database.withTransactionAsync(async () => {
+            // 1. Reset all for this note family
+            // Reset parent
+            await database.runAsync('UPDATE notes SET is_active = 0, dirty = 1, updated_at = ? WHERE id = ?', [
+                new Date().toISOString(),
+                parentNoteId
+            ]);
+            // Reset children
+            await database.runAsync('UPDATE note_improvements SET is_active = 0, dirty = 1, updated_at = ? WHERE note_id = ?', [
+                new Date().toISOString(),
+                parentNoteId
+            ]);
+
+            // 2. Set new active
+            if (activeChildId) {
+                await database.runAsync('UPDATE note_improvements SET is_active = 1, dirty = 1, updated_at = ? WHERE id = ?', [
+                    new Date().toISOString(),
+                    activeChildId
+                ]);
+                console.log(`[DatabaseService] Set child ${activeChildId} as active (native)`);
+            } else {
+                await database.runAsync('UPDATE notes SET is_active = 1, dirty = 1, updated_at = ? WHERE id = ?', [
+                    new Date().toISOString(),
+                    parentNoteId
+                ]);
+                console.log(`[DatabaseService] Set parent ${parentNoteId} as active (native)`);
+            }
+        });
+    } catch (e) {
+        console.error('[DatabaseService] Failed to set active variant (native)', e);
+    }
 };

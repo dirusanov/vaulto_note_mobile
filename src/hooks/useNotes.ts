@@ -10,6 +10,7 @@ import {
     searchNotesLocal,
     saveImprovementLocal,
     setActiveVariant as setActiveVariantDB,
+    getNoteById,
 } from '../services/DatabaseService';
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
@@ -420,7 +421,12 @@ export const useNotes = () => {
             noteId: string,
             params: { content: string; label?: string; optionId?: string }
         ): Promise<NoteImprovement> => {
-            const note = notesRef.current.find(n => n.id === noteId);
+            let note = notesRef.current.find(n => n.id === noteId);
+            if (!note) {
+                // Fallback to DB for fast-following updates
+                const dbNote = await getNoteById(noteId);
+                if (dbNote) note = dbNote;
+            }
             if (!note) throw new Error('Note not found');
             const id = await generateUUID();
             const improvement = await buildLocalImprovement({
@@ -449,7 +455,12 @@ export const useNotes = () => {
                 updates: { ...updates, content: updates.content ? `${updates.content.substring(0, 50)}...` : undefined }
             });
 
-            const note = notesRef.current.find(n => n.id === noteId);
+            let note = notesRef.current.find(n => n.id === noteId);
+            if (!note) {
+                const dbNote = await getNoteById(noteId);
+                if (dbNote) note = dbNote;
+            }
+
             if (!note) {
                 console.error('[useNotes] Parent note not found:', noteId);
                 throw new Error('Note not found');

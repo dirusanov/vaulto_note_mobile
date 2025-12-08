@@ -452,6 +452,92 @@ export const searchNotesLocal = async (query: string): Promise<Note[]> => {
     );
 };
 
+export const getNoteById = async (id: string): Promise<Note | null> => {
+    try {
+        const database = await getDb();
+        if (!database) return null;
+
+        // Try to find as a parent note first
+        let row = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ?', [id]);
+        if (!row) return null;
+
+        // If it's a child note (improvement), we might need its content decrypted differently?
+        // Actually the logic for decryption is shared.
+        // We'll reuse the logic from getNotesLocal but scoped to one item.
+
+        const parentId = row.parent_id;
+        let children: any[] = [];
+        if (!parentId) {
+            // It's a parent, fetch its children
+            children = await database.getAllAsync<any>('SELECT * FROM notes WHERE parent_id = ?', [row.id]);
+        }
+
+        const title = row.encrypted_title ? await decrypt(row.encrypted_title) : '';
+        const content = await decrypt(row.encrypted_content);
+        const transcription = row.encrypted_transcription ? await decrypt(row.encrypted_transcription) : undefined;
+
+        // Process children
+        const childNotes: Note[] = [];
+        if (children.length > 0) {
+            // Sort children by updated_at desc
+            children.sort((a, b) => {
+                return (new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            });
+
+            for (const cRow of children) {
+                if (cRow.deleted === 1) continue;
+                const childContent = await decrypt(cRow.encrypted_content);
+                childNotes.push({
+                    id: cRow.id,
+                    encrypted_title: cRow.encrypted_title,
+                    encrypted_content: cRow.encrypted_content,
+                    title: cRow.encrypted_title ? await decrypt(cRow.encrypted_title) : undefined,
+                    content: childContent,
+                    created_at: cRow.created_at,
+                    updated_at: cRow.updated_at,
+                    parent_id: cRow.parent_id,
+                    label: cRow.label,
+                    option_id: cRow.option_id,
+                    synced: cRow.synced ?? 1,
+                    dirty: cRow.dirty === 1,
+                    deleted: cRow.deleted === 1,
+                    version: cRow.version ?? 0,
+                    is_active: cRow.is_active === 1,
+                });
+            }
+        }
+
+        const note: Note = {
+            id: row.id,
+            encrypted_title: row.encrypted_title,
+            encrypted_content: row.encrypted_content,
+            title,
+            content,
+            transcription,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            audio_file_path: row.audio_file_path ?? undefined,
+            audio_duration: row.audio_duration ?? undefined,
+            encrypted_transcription: row.encrypted_transcription ?? undefined,
+            has_audio: !!row.audio_file_path,
+            synced: row.synced ?? 1,
+            dirty: row.dirty === 1,
+            deleted: row.deleted === 1,
+            version: row.version ?? 0,
+            server_updated_at: row.server_updated_at ?? undefined,
+            content_nonce: row.content_nonce ?? null,
+            pending_delete: row.pending_delete === 1 || row.deleted === 1,
+            is_active: row.is_active === 1,
+            parent_id: row.parent_id,
+            improvements: childNotes,
+        };
+        return note;
+    } catch (e) {
+        console.error('[DatabaseService] Failed to get note by id', e);
+        return null;
+    }
+};
+
 export const wipeLocalDatabase = async (): Promise<void> => {
     try {
         await initDatabase();
