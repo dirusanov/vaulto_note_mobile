@@ -32,7 +32,7 @@ import { VoiceRecorder } from '../components/VoiceRecorder';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { AudioService, AudioRecording } from '../services/AudioService';
-import { transcribeAudio } from '../services/TranscriptionService';
+import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
 import { getPrivacyWarningDismissed } from '../utils/storage';
 import {
     improveText,
@@ -721,52 +721,94 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(false);
 
         try {
-            // If it's the original note, we follow the full flow: Save Audio -> Show Player -> Transcribe -> Save to DB
+            // If it's the original note, we use the Smart Agent flow
             if (activeVariantId === 'original') {
                 const savedPath = await AudioService.saveAudioFile(recording.uri, false);
                 const playbackUri = await AudioService.readAudioFile(savedPath);
                 setAudioUri(playbackUri);
                 setAudioDuration(recording.duration);
-                setShowAudioPlayer(true); // Show player after recording
+                setShowAudioPlayer(true);
 
                 setIsTranscribing(true);
-                const transcription = await transcribeAudio(recording.uri);
+                // Call the Smart Agent
+                const agentResult = await processVoiceNote(recording.uri);
                 setIsTranscribing(false);
 
-                // We can delete the temporary recording uri now that we saved the permanent one?
-                // Actually the original code was: await AudioService.deleteAudioFile(recording.uri);
-                // But we used recording.uri for transcription. Ideally we use the file we just saved?
-                // The original code passed recording.uri (temp) to transcribe. That's fine.
+                // Clean up temp file
                 await AudioService.deleteAudioFile(recording.uri);
 
-                if (transcription.success && transcription.text) {
-                    const newContent = content + (content ? '\n\n' : '') + transcription.text;
-                    setContent(newContent);
-                    updateHistory(title, newContent);
+                if (agentResult.success) {
+                    const originalText = agentResult.originalText;
+                    const newOriginalContent = content + (content ? '\n\n' : '') + originalText;
 
-                    if (localNoteId) {
-                        await updateNote(localNoteId, {
-                            content: newContent,
+                    // 1. Update Original Note
+                    setContent(newOriginalContent);
+                    updateHistory(title, newOriginalContent);
+
+                    let noteId = localNoteId;
+
+                    if (noteId) {
+                        await updateNote(noteId, {
+                            content: newOriginalContent,
                             audio_file_path: savedPath,
                             audio_duration: recording.duration,
                             has_audio: true,
-                            encrypted_transcription: transcription.text
+                            encrypted_transcription: originalText
                         });
                     } else {
-                        // Create new note if it doesn't exist
+                        // Create new note
                         const newNote = await createNote({
                             title,
-                            content: newContent,
+                            content: newOriginalContent,
                             audio: {
                                 filePath: savedPath,
                                 duration: recording.duration,
-                                transcription: transcription.text
+                                transcription: originalText
                             }
                         });
                         setLocalNoteId(newNote.id);
+                        noteId = newNote.id;
                         lastSavedTitle.current = title;
-                        lastSavedContent.current = newContent;
+                        lastSavedContent.current = newOriginalContent;
                     }
+
+                    // 2. Handle Instruction (Create Improvement)
+                    if (agentResult.hasInstruction && agentResult.processedText && noteId) {
+                        try {
+                            setIsAIProcessing(true);
+                            // Determine label for new tab
+                            const label = agentResult.mode
+                                ? `AI (${agentResult.mode})`
+                                : 'AI Improvement';
+
+                            // Create the improvement
+                            const newImprovement = await createImprovement(noteId, {
+                                content: agentResult.processedText,
+                                label: label,
+                                optionId: 'voice_instruction'
+                            });
+
+                            // Setup drafts/history for new variant
+                            improvementDraftsRef.current[newImprovement.id] = agentResult.processedText;
+                            improvementSavedRef.current[newImprovement.id] = agentResult.processedText;
+                            variantHistories.current[newImprovement.id] = {
+                                history: [{ title: title || '', content: agentResult.processedText }],
+                                index: 0
+                            };
+
+                            // Switch to new variant
+                            setActiveVariantId(newImprovement.id);
+                            setContent(agentResult.processedText);
+                            await setActiveVariant(noteId, newImprovement.id);
+
+                        } catch (err) {
+                            console.error('Failed to create improvement from voice agent:', err);
+                            Alert.alert('Error', 'Original text saved, but failed to create AI improvement.');
+                        } finally {
+                            setIsAIProcessing(false);
+                        }
+                    }
+
                 } else {
                     // Transcription failed
                     const isNewNote = !localNoteId;
@@ -782,7 +824,7 @@ export const NoteEditScreen = () => {
                         return;
                     }
 
-                    Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
+                    Alert.alert('Transcription Failed', agentResult.error || 'Unknown error');
                     if (localNoteId) {
                         await updateNote(localNoteId, {
                             audio_file_path: savedPath,
@@ -805,10 +847,10 @@ export const NoteEditScreen = () => {
                 }
             } else {
                 // For child notes (Improvements), we ONLY do dictation (transcription -> append text).
-                // We do NOT save the audio file permanently, nor do we attach it to the note in DB.
+                // We do NOT use the smart agent logic here, just simple transcription.
                 setIsTranscribing(true);
 
-                // Transcribe directly from the temp recording
+                // Use simple transcription for edits to existing variants
                 const transcription = await transcribeAudio(recording.uri);
                 setIsTranscribing(false);
 

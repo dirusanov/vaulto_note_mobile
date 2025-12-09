@@ -11,9 +11,14 @@ const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
 const BACKEND_TRANSCRIBE_URL = `${API_URL}/ai/transcribe`;
+const BACKEND_PROCESS_NOTE_URL = `${API_URL}/ai/process_voice_note`;
 
-export interface TranscriptionResult {
-    text: string;
+export interface VoiceNoteResult {
+    originalText: string;
+    processedText?: string | null;
+    hasInstruction: boolean;
+    instruction?: string | null;
+    mode?: string | null;
     success: boolean;
     error?: string;
 }
@@ -254,5 +259,115 @@ export async function testSelfHostedConnection(url: string, apiKey: string): Pro
     } catch (error) {
         console.error('Self-hosted connection test failed:', error);
         return false;
+    }
+}
+/**
+ * Process voice note using the Smart Agent backend
+ */
+export async function processVoiceNote(
+    audioUri: string,
+    language: string = 'ru'
+): Promise<VoiceNoteResult> {
+    const provider = await getAIProvider();
+    console.log('[VoiceAgent] Provider:', provider);
+
+    // Fallback for non-backend providers (e.g. direct OpenAI on client)
+    // If not using the gateway, we can't use the agent logic easily without re-implementing it here.
+    // For now, if provider is 'openai' (client-side), we just transcribe and return no instruction.
+    if (provider === 'openai') {
+        console.log('[VoiceAgent] Provider is OpenAI. Falling back to simple transcription (no agents).');
+        const transResult = await transcribeAudio(audioUri, language);
+        return {
+            originalText: transResult.text,
+            processedText: null,
+            hasInstruction: false,
+            instruction: null,
+            mode: null,
+            success: transResult.success,
+            error: transResult.error
+        };
+    }
+
+    // Use Backend (Self-hosted or Cloud)
+    let token: string | null;
+    let baseUrl: string;
+    const isSelfHosted = provider === 'selfhosted';
+
+    if (isSelfHosted) {
+        const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
+        const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
+        if (!selfHostedUrl || !selfHostedApiKey) {
+            return { originalText: '', success: false, error: 'Self-hosted settings missing', hasInstruction: false };
+        }
+        token = selfHostedApiKey;
+        baseUrl = `${selfHostedUrl}/ai/process_voice_note`;
+    } else {
+        token = await storage.getToken();
+        baseUrl = BACKEND_PROCESS_NOTE_URL;
+        if (!token) {
+            console.log('[VoiceAgent] No auth token found.');
+            return { originalText: '', success: false, error: 'Sign in required', hasInstruction: false };
+        }
+    }
+
+    try {
+        console.log('[VoiceAgent] Request URL:', baseUrl);
+        if (Platform.OS !== 'web') {
+            const fileInfo = await FileSystem.getInfoAsync(audioUri);
+            if (!fileInfo.exists || fileInfo.size === 0) {
+                return { originalText: '', success: false, error: 'Audio file error', hasInstruction: false };
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: audioUri,
+            type: 'audio/m4a',
+            name: 'audio.m4a',
+        } as any);
+        formData.append('language', language);
+
+        const response = await fetch(baseUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            // Fallback: If endpoint 404s (old backend), try standard transcribe
+            if (response.status === 404) {
+                const transResult = await transcribeAudio(audioUri, language);
+                return {
+                    originalText: transResult.text,
+                    processedText: null,
+                    hasInstruction: false,
+                    success: transResult.success,
+                    error: transResult.error
+                };
+            }
+            const errorText = await response.text();
+            throw new Error(`API error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "..." }
+
+        return {
+            originalText: result.raw_note || '',
+            processedText: result.improved_markdown,
+            hasInstruction: result.mode !== "none",
+            instruction: null, // Backend doesn't strictly return instruction text anymore, just mode and result
+            mode: result.mode,
+            success: true
+        };
+
+    } catch (error) {
+        console.error('[VoiceAgent] Failed', error);
+        return {
+            originalText: '',
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            hasInstruction: false
+        };
     }
 }

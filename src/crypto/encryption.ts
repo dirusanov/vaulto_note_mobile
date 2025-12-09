@@ -35,7 +35,16 @@ function xorEncrypt(plaintext: string, key: string): string {
     for (let i = 0; i < encoded.length; i++) {
         result.push(encoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
     }
-    return btoa(String.fromCharCode(...result));
+
+    // Process in chunks to avoid "Maximum call stack size exceeded"
+    let binary = '';
+    const CHUNK_SIZE = 8192;
+    for (let i = 0; i < result.length; i += CHUNK_SIZE) {
+        const chunk = result.slice(i, i + CHUNK_SIZE);
+        binary += String.fromCharCode(...chunk);
+    }
+
+    return btoa(binary);
 }
 
 function xorDecrypt(ciphertext: string, key: string): string {
@@ -44,8 +53,17 @@ function xorDecrypt(ciphertext: string, key: string): string {
     for (let i = 0; i < decoded.length; i++) {
         result.push(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
     }
+
+    // Process in chunks to avoid "Maximum call stack size exceeded"
+    let output = '';
+    const CHUNK_SIZE = 8192;
+    for (let i = 0; i < result.length; i += CHUNK_SIZE) {
+        const chunk = result.slice(i, i + CHUNK_SIZE);
+        output += String.fromCharCode(...chunk);
+    }
+
     // Decode back from percent-encoded string
-    return decodeURIComponent(String.fromCharCode(...result));
+    return decodeURIComponent(output);
 }
 
 export async function encrypt(plaintext: string): Promise<string> {
