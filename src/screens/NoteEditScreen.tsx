@@ -17,6 +17,7 @@ import {
     FlatList,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -62,6 +63,7 @@ interface VariantHistory {
 export const NoteEditScreen = () => {
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
     const route = useRoute<NoteEditScreenRouteProp>();
+    const insets = useSafeAreaInsets();
     const {
         createNote,
         updateNote,
@@ -1479,7 +1481,7 @@ export const NoteEditScreen = () => {
                                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                                 style={styles.promptBuilderWrapper}
                             >
-                                <View style={styles.promptBuilderContent}>
+                                <View style={[styles.promptBuilderContent, { paddingBottom: insets.bottom + spacing.m }]}>
                                     <Text style={styles.aiModalTitle}>New Prompt</Text>
                                     <Text style={styles.promptHelper}>
                                         Use {'{text}'} to indicate where to insert note text.
@@ -1923,7 +1925,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        padding: spacing.l,
+        padding: spacing.m,
         gap: spacing.m,
     },
     promptHelper: {

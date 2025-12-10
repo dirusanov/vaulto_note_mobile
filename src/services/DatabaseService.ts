@@ -190,12 +190,26 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
 
         const isDirty = note.dirty ? 1 : 0;
         const isDeleted = note.deleted || note.pending_delete ? 1 : 0;
+        const isActive = note.is_active ? 1 : 0;
 
         await database.runAsync(
-            `INSERT OR REPLACE INTO notes (
+            `INSERT INTO notes (
                 id, encrypted_title, encrypted_content, created_at, updated_at, 
                 audio_file_path, audio_duration, encrypted_transcription, has_audio, synced, dirty, deleted, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                encrypted_title=excluded.encrypted_title,
+                encrypted_content=excluded.encrypted_content,
+                updated_at=excluded.updated_at,
+                audio_file_path=excluded.audio_file_path,
+                audio_duration=excluded.audio_duration,
+                encrypted_transcription=excluded.encrypted_transcription,
+                has_audio=excluded.has_audio,
+                synced=excluded.synced,
+                dirty=excluded.dirty,
+                deleted=excluded.deleted,
+                is_active=excluded.is_active
+            `,
             [
                 note.id,
                 note.encrypted_title || '',
@@ -209,7 +223,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.synced ?? 1,
                 isDirty,
                 isDeleted,
-                note.is_active ? 1 : 0
+                isActive
             ]
         );
         console.log(`[DatabaseService] Note saved to native DB: ${note.id} (dirty=${isDirty}, deleted=${isDeleted})`);
@@ -488,11 +502,29 @@ export const saveImprovementLocal = async (improvement: NoteImprovement, useDbAc
         if (!database) return;
         const isDirty = improvement.dirty ? 1 : 0;
         const isDeleted = improvement.deleted ? 1 : 0;
+        const isActive = improvement.is_active ? 1 : 0;
+
         await database.runAsync(
-            `INSERT OR REPLACE INTO note_improvements (
+            `INSERT INTO note_improvements (
                 id, note_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
                 created_at, updated_at, synced, dirty, deleted, version, server_updated_at, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                note_id=excluded.note_id,
+                encrypted_content=excluded.encrypted_content,
+                encrypted_title=excluded.encrypted_title,
+                content_nonce=excluded.content_nonce,
+                label=excluded.label,
+                option_id=excluded.option_id,
+                created_at=excluded.created_at,
+                updated_at=excluded.updated_at,
+                synced=excluded.synced,
+                dirty=excluded.dirty,
+                deleted=excluded.deleted,
+                version=excluded.version,
+                server_updated_at=excluded.server_updated_at,
+                is_active=excluded.is_active
+            `,
             [
                 improvement.id,
                 improvement.note_id,
@@ -508,7 +540,7 @@ export const saveImprovementLocal = async (improvement: NoteImprovement, useDbAc
                 isDeleted,
                 improvement.version ?? 0,
                 improvement.server_updated_at || null,
-                improvement.is_active ? 1 : 0
+                isActive
             ]
         );
         console.log(`[DatabaseService] Improvement saved to native DB: ${improvement.id} (dirty=${isDirty}, deleted=${isDeleted})`);
