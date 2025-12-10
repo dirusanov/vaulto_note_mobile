@@ -50,7 +50,7 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
 
     const parts: { key: string; match: string; type: 'bold' | 'italic' | 'strike' | 'code' | 'text' }[] = [];
 
-    // Let's assume text is a single line for now as per NoteContentRenderer logic.
+    // Assume text is processed line-by-line by the renderer.
 
     // Simple parser: Text -> Tokens
     const pattern = /(\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_)/g;

@@ -6,7 +6,6 @@ import {
     TouchableOpacity,
     NativeSyntheticEvent,
     TextInputKeyPressEventData,
-    Keyboard,
     Platform,
     TextInputSelectionChangeEventData,
     Text
@@ -18,7 +17,7 @@ import { typography } from '../theme/typography';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MarkdownFormatType } from './MarkdownToolbar';
-import { parseMarkdownText, parseMarkdownForInput } from '../utils/markdownUtils';
+import { parseMarkdownForInput } from '../utils/markdownUtils';
 
 interface RichTextEditorProps {
     initialContent: string;
@@ -31,6 +30,7 @@ interface RichTextEditorProps {
 
 export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
+    focusBlockAt: (lineIndex: number, ratio?: number) => void;
 }
 
 interface Block {
@@ -58,6 +58,25 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
     // Track selection for each block to support inline formatting
     const blockSelections = useRef<Record<string, { start: number; end: number }>>({});
+    const pendingFocusRef = useRef<{ index: number; ratio: number } | null>(null);
+
+    const focusBlockByIndex = (blockIndex: number, ratio: number) => {
+        const targetBlock = blocks[blockIndex];
+        if (!targetBlock) return false;
+
+        const caretPosition = Math.round(targetBlock.content.length * ratio);
+        const selection = { start: caretPosition, end: caretPosition };
+        blockSelections.current[targetBlock.id] = selection;
+        setFocusedBlockId(targetBlock.id);
+
+        requestAnimationFrame(() => {
+            const input = inputRefs.current[targetBlock.id];
+            input?.focus();
+            input?.setNativeProps({ selection });
+        });
+
+        return true;
+    };
 
     useImperativeHandle(ref, () => ({
         handleFormat: (type: MarkdownFormatType) => {
@@ -168,6 +187,22 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             setTimeout(() => {
                 inputRefs.current[focusedBlockId]?.focus();
             }, 10);
+        },
+        focusBlockAt: (lineIndex: number, ratio: number = 1) => {
+            if (blocks.length === 0) {
+                pendingFocusRef.current = { index: lineIndex, ratio };
+                return;
+            }
+
+            const clampedIndex = Math.min(Math.max(lineIndex, 0), blocks.length - 1);
+            const clampedRatio = Math.min(Math.max(ratio, 0), 1);
+            const focused = focusBlockByIndex(clampedIndex, clampedRatio);
+
+            if (!focused) {
+                pendingFocusRef.current = { index: clampedIndex, ratio: clampedRatio };
+            } else {
+                pendingFocusRef.current = null;
+            }
         }
     }));
 
@@ -332,10 +367,21 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
     };
 
+    useEffect(() => {
+        if (pendingFocusRef.current && blocks.length > 0) {
+            const { index, ratio } = pendingFocusRef.current;
+            const clampedIndex = Math.min(Math.max(index, 0), blocks.length - 1);
+            const clampedRatio = Math.min(Math.max(ratio, 0), 1);
+            const success = focusBlockByIndex(clampedIndex, clampedRatio);
+            if (success) {
+                pendingFocusRef.current = null;
+            }
+        }
+    }, [blocks]);
+
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
         const isHeader = item.type === 'h1' || item.type === 'h2' || item.type === 'h3';
-        const isFocused = focusedBlockId === item.id;
 
         // Base text styles for consistency
         const textStyles = [
@@ -364,46 +410,35 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         </TouchableOpacity>
                     )}
 
-                    {isFocused ? (
-                        <TextInput
-                            ref={ref => { if (ref) inputRefs.current[item.id] = ref; }}
-                            style={textStyles}
-                            // Value removed in favor of children for formatting?
-                            // React Native 0.70+ TextInput supports children for mixed formatting.
-                            // We must pass `children` OR `value`.
-                            // If we pass children, we should set value to undefined BUT we need to handle controlled input.
-                            // Official docs say: <TextInput>{textComponents}</TextInput> works.
-                            // But keeping `value` prop alongside children might be conflicting.
-                            // Let's rely on `children` solely.
-                            // children={parseMarkdownForInput(item.content, textStyles)}
-                            onChangeText={(text) => handleBlockChange(item.id, text)}
-                            onKeyPress={(e) => handleKeyPress(item.id, e)}
-                            onSelectionChange={(e) => handleSelectionChange(item.id, e)}
-                            placeholder={placeholder && blocks.length === 1 ? placeholder : undefined}
-                            placeholderTextColor={colors.textMuted}
-                            multiline={true} // Needed for scroll, but we intercept Enter
-                            scrollEnabled={false} // Allow container to scroll
-                            onFocus={() => setFocusedBlockId(item.id)}
-                            onBlur={() => {
-                                setFocusedBlockId(null);
-                            }}
-                        >
-                            {parseMarkdownForInput(item.content, textStyles)}
-                        </TextInput>
-                    ) : (
-                        <TouchableOpacity
-                            style={styles.textRenderContainer}
-                            activeOpacity={1}
-                            onPress={() => {
-                                setFocusedBlockId(item.id);
-                                setTimeout(() => inputRefs.current[item.id]?.focus(), 10);
-                            }}
-                        >
-                            <Text style={textStyles}>
-                                {item.content ? parseMarkdownText(item.content, textStyles) : (blocks.length === 1 && placeholder ? <Text style={{ color: colors.textMuted }}>{placeholder}</Text> : null)}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
+                    <TextInput
+                        ref={ref => { if (ref) inputRefs.current[item.id] = ref; }}
+                        style={textStyles}
+                        onChangeText={(text) => handleBlockChange(item.id, text)}
+                        onKeyPress={(e) => handleKeyPress(item.id, e)}
+                        onSelectionChange={(e) => handleSelectionChange(item.id, e)}
+                        placeholder={placeholder && blocks.length === 1 ? placeholder : undefined}
+                        placeholderTextColor={colors.textMuted}
+                        multiline={true}
+                        scrollEnabled={false}
+                        onFocus={() => {
+                            setFocusedBlockId(item.id);
+                            const selection = blockSelections.current[item.id];
+                            if (selection) {
+                                requestAnimationFrame(() => {
+                                    inputRefs.current[item.id]?.setNativeProps({ selection });
+                                });
+                            }
+                        }}
+                        onBlur={() => {
+                            setFocusedBlockId(null);
+                        }}
+                    >
+                        {item.content
+                            ? parseMarkdownForInput(item.content, textStyles)
+                            : (blocks.length === 1 && placeholder
+                                ? <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
+                                : null)}
+                    </TextInput>
                 </View>
             </ScaleDecorator>
         );

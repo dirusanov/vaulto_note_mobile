@@ -43,7 +43,6 @@ import {
     DEFAULT_IMPROVEMENT_OPTIONS,
     ensureTemplateHasPlaceholder,
 } from '../services/AIService';
-import { NoteContentRenderer } from '../components/NoteContentRenderer';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
@@ -266,20 +265,6 @@ export const NoteEditScreen = () => {
             }
         }
     }, [activeVariantId, noteImprovements, existingNote?.content]);
-
-    useEffect(() => {
-        const keyboardDidHideListener = Keyboard.addListener(
-            'keyboardDidHide',
-            () => {
-                // User closed keyboard, exit edit mode so toolbar hides
-                setIsEditing(false);
-            }
-        );
-
-        return () => {
-            keyboardDidHideListener.remove();
-        };
-    }, []);
 
     // Handle history updates for current variant
     const updateHistory = (newTitle: string, newContent: string) => {
@@ -934,34 +919,6 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(true);
     };
 
-    const handleToggleTodo = useCallback((index: number) => {
-        const lines = content.split('\n');
-        if (index < 0 || index >= lines.length) return;
-
-        const line = lines[index];
-        // Check if it's a todo line
-        const todoMatch = line.match(/^(\s*-\s\[)([ xX])(\]\s.*)$/);
-
-        if (todoMatch) {
-            // Toggle checkbox
-            const currentState = todoMatch[2].toLowerCase() === 'x';
-            const newState = currentState ? ' ' : 'x';
-            lines[index] = `${todoMatch[1]}${newState}${todoMatch[3]}`;
-        } else {
-            // Convert to todo? Or do nothing?
-            // For now, let's just toggle existing ones via this handler.
-            return;
-        }
-
-        const newContent = lines.join('\n');
-        handleContentChange(newContent);
-        // We don't trigger save immediately, let the auto-save or back button handle it?
-        // Actually, users expect immediate feedback for checkboxes usually.
-        // But handleContentChange updates state, and we have auto-save on back.
-        // We might want to force save if we want it to persist crash-proof.
-        // But for now reliance on effect/hooks is fine.
-    }, [content, handleContentChange]);
-
     const handleAddTodo = useCallback(() => {
         // Insert '- [ ] ' at cursor position or append
         const prefix = '\n- [ ] ';
@@ -1184,6 +1141,16 @@ export const NoteEditScreen = () => {
             handleRecordingFinish(route.params.initialRecording);
         }
     }, [route.params?.initialRecording]);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener('keyboardDidShow', () => setIsEditing(true));
+        const hideSub = Keyboard.addListener('keyboardDidHide', () => setIsEditing(false));
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     const renderHeader = () => (
         <View>
@@ -1584,36 +1551,24 @@ export const NoteEditScreen = () => {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 50}
                 style={{ flex: 1 }}
             >
-                {isEditing ? (
-                    <View style={{ flex: 1 }}>
-                        <RichTextEditor
-                            ref={editorRef}
-                            initialContent={content}
-                            onChange={(text) => {
-                                setContent(text);
-                                if (existingNote) debouncedSave(text, title);
-                                if (activeVariantId === 'original') {
-                                    updateHistory(title, text);
-                                } else {
-                                    improvementDraftsRef.current[activeVariantId] = text;
-                                    updateHistory(title, text);
-                                }
-                            }}
-                            placeholder="Start typing..."
-                            ListHeaderComponent={renderHeader()}
-                        />
-                    </View>
-                ) : (
-                    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                        {renderHeader()}
-                        <NoteContentRenderer
-                            content={content}
-                            onToggleTodo={handleToggleTodo}
-                            onTextPress={() => setIsEditing(true)}
-                        />
-                        <View style={{ height: 100 }} />
-                    </ScrollView>
-                )}
+                <View style={{ flex: 1 }}>
+                    <RichTextEditor
+                        ref={editorRef}
+                        initialContent={content}
+                        onChange={(text) => {
+                            setContent(text);
+                            if (existingNote) debouncedSave(text, title);
+                            if (activeVariantId === 'original') {
+                                updateHistory(title, text);
+                            } else {
+                                improvementDraftsRef.current[activeVariantId] = text;
+                                updateHistory(title, text);
+                            }
+                        }}
+                        placeholder="Start typing..."
+                        ListHeaderComponent={renderHeader()}
+                    />
+                </View>
 
                 {/* Formatting Toolbar - Show when in Edit Mode. */}
                 {isEditing && (
