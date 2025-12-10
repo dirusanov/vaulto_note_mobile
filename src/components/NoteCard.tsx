@@ -22,9 +22,22 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     }
     const buildTitle = () => {
         if (note.title && note.title.trim().length > 0) return note.title.trim();
-        const words = content.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-        if (words.length === 0) return '';
-        return words.slice(0, 2).join(' ');
+        const cleanedTokens = content
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ')
+            .map(token => token.trim())
+            .filter(token => {
+                if (!token) return false;
+                if (/^#+$/.test(token)) return false;
+                if (/^[-*_]+$/.test(token)) return false;
+                if (/^-?\[\s*(x|X)?\s*\]$/.test(token)) return false;
+                return true;
+            })
+            .map(token => token.replace(/^[\[\](){}<>*_\-#+]+/, '').replace(/[\[\](){}<>*_\-#+]+$/, ''))
+            .filter(token => !!token);
+        if (cleanedTokens.length === 0) return '';
+        return cleanedTokens.slice(0, 2).join(' ');
     };
 
     // Extract title and preview
