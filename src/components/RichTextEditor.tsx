@@ -340,13 +340,55 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             onChange(serializeBlocks(newBlocks));
         } else if (key === 'Backspace') {
             const index = blocks.findIndex(b => b.id === id);
-            if (index > 0 && blocks[index].content === '') {
-                // Merge with previous if empty
+            if (index === -1) return;
+
+            const currentBlock = blocks[index];
+            const selection = blockSelections.current[id];
+            const isCursorAtStart = selection?.start === 0 && selection?.end === 0;
+            const hasPrevBlock = index > 0;
+            const isEffectivelyEmpty = currentBlock.content.trim().length === 0;
+
+            if (!hasPrevBlock) return;
+
+            if (isEffectivelyEmpty) {
                 e.preventDefault();
                 const prevId = blocks[index - 1].id;
                 const newBlocks = blocks.filter(b => b.id !== id);
                 setBlocks(newBlocks);
-                setTimeout(() => inputRefs.current[prevId]?.focus(), 10);
+                blockSelections.current[prevId] = {
+                    start: blocks[index - 1].content.length,
+                    end: blocks[index - 1].content.length,
+                };
+                setTimeout(() => {
+                    const ref = inputRefs.current[prevId];
+                    ref?.focus();
+                    ref?.setNativeProps({ selection: blockSelections.current[prevId] });
+                }, 10);
+                isInternalUpdate.current = true;
+                onChange(serializeBlocks(newBlocks));
+            } else if (isCursorAtStart) {
+                e.preventDefault();
+                const prevIndex = index - 1;
+                const prevBlock = blocks[prevIndex];
+                const prevLength = prevBlock.content.length;
+                const mergedContent = prevBlock.content + currentBlock.content;
+
+                const newBlocks = [...blocks];
+                newBlocks[prevIndex] = { ...prevBlock, content: mergedContent };
+                newBlocks.splice(index, 1);
+                setBlocks(newBlocks);
+
+                blockSelections.current[prevBlock.id] = {
+                    start: prevLength,
+                    end: prevLength,
+                };
+
+                setTimeout(() => {
+                    const ref = inputRefs.current[prevBlock.id];
+                    ref?.focus();
+                    ref?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
+                }, 10);
+
                 isInternalUpdate.current = true;
                 onChange(serializeBlocks(newBlocks));
             }
