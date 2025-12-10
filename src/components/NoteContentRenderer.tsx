@@ -32,6 +32,35 @@ export const NoteContentRenderer: React.FC<NoteContentRendererProps> = ({
     return (
         <TouchableOpacity onPress={onTextPress} activeOpacity={1} style={styles.container}>
             {lines.map((line, index) => {
+                // Check for headers (H1-H3)
+                const h1Match = line.match(/^#\s+(.*)$/);
+                const h2Match = line.match(/^##\s+(.*)$/);
+                const h3Match = line.match(/^###\s+(.*)$/);
+
+                if (h1Match) {
+                    return (
+                        <Text key={index} style={[styles.text, typography.h2, styles.headerMetadata]}>
+                            {parseMarkdownText(h1Match[1], [styles.text, typography.h2])}
+                        </Text>
+                    );
+                }
+
+                if (h2Match) {
+                    return (
+                        <Text key={index} style={[styles.text, typography.h3, styles.headerMetadata]}>
+                            {parseMarkdownText(h2Match[1], [styles.text, typography.h3])}
+                        </Text>
+                    );
+                }
+
+                if (h3Match) {
+                    return (
+                        <Text key={index} style={[styles.text, typography.bodyLarge, { fontWeight: 'bold' }, styles.headerMetadata]}>
+                            {parseMarkdownText(h3Match[1], [styles.text, typography.bodyLarge, { fontWeight: 'bold' }])}
+                        </Text>
+                    );
+                }
+
                 // Check for todo pattern: "- [ ] " or "- [x] "
                 // We use a regex that handles optional whitespace
                 const todoMatch = line.match(/^\s*-\s\[([ xX])\]\s(.*)$/);
@@ -117,5 +146,9 @@ const styles = StyleSheet.create({
     todoTextChecked: {
         textDecorationLine: 'line-through',
         color: colors.textTertiary,
+    },
+    headerMetadata: {
+        marginTop: 8,
+        marginBottom: 4,
     },
 });
