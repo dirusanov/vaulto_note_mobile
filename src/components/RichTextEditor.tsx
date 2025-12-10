@@ -67,15 +67,26 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         const targetBlock = blocks[blockIndex];
         if (!targetBlock) return false;
 
-        const caretPosition = Math.round(targetBlock.content.length * ratio);
-        const selection = { start: caretPosition, end: caretPosition };
+        const maxIndex = targetBlock.content.length;
+        const caretPosition = Math.min(Math.round(targetBlock.content.length * ratio), maxIndex);
+
+        // Ensure valid selection range
+        const selection = {
+            start: caretPosition,
+            end: caretPosition
+        };
+
         blockSelections.current[targetBlock.id] = selection;
         setFocusedBlockId(targetBlock.id);
 
         requestAnimationFrame(() => {
             const input = inputRefs.current[targetBlock.id];
             input?.focus();
-            input?.setNativeProps({ selection });
+            // Small delay to ensure focus is active before setting selection
+            // otherwise it might be ignored on some devices
+            setTimeout(() => {
+                input?.setNativeProps({ selection });
+            }, 10);
         });
 
         return true;
@@ -103,11 +114,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             while ((match = regex.exec(text)) !== null) {
                 const matchStart = match.index;
                 const matchEnd = matchStart + match[0].length;
-                const innerStart = matchStart + dLen;
-                const innerEnd = matchEnd - dLen;
 
                 // Check if selection is fully within the styled range (inclusive of boundaries for user feel)
-                if (selection.start >= matchStart && selection.end <= matchEnd) {
+                // For multiline, we just check intersection
+                if ((selection.start >= matchStart && selection.start <= matchEnd) ||
+                    (selection.end >= matchStart && selection.end <= matchEnd) ||
+                    (selection.start <= matchStart && selection.end >= matchEnd)) {
                     styles.push(type);
                     return; // Found one instance causing activation
                 }
@@ -149,74 +161,95 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             const block = blocks[blockIndex];
             const selection = blockSelections.current[focusedBlockId] || { start: block.content.length, end: block.content.length };
             let newBlocks = [...blocks];
-            let shouldWaitRefocus = false;
 
             if (['h1', 'h2', 'h3', 'todo', 'list'].includes(type)) {
-                // Block-level formatting
-                let newType: Block['type'] = 'text';
-                let newPrefix = '';
 
-                if (type === 'h1') { newType = 'h1'; newPrefix = '# '; }
-                else if (type === 'h2') { newType = 'h2'; newPrefix = '## '; }
-                else if (type === 'h3') { newType = 'h3'; newPrefix = '### '; }
-                else if (type === 'todo') { newType = 'todo'; newPrefix = '- [ ] '; }
-                else if (type === 'list') { newType = 'text'; newPrefix = '- '; } // List is just text with bullet
+                if (block.type === 'text' && block.content.includes('\n')) {
+                    // Split multiline block logic
+                    const text = block.content;
+                    const cursor = selection.start;
 
-                // Toggle logic: If already this type, revert to text. 
-                // Note: For list and todo, we might want to toggle simply by removing the prefix if it exists.
+                    // Find line boundaries
+                    let lineStart = text.lastIndexOf('\n', cursor - 1);
+                    if (lineStart === -1) lineStart = 0;
+                    else lineStart += 1; // skip \n
 
-                if (type === 'list') {
-                    if (block.content.startsWith('- ')) {
-                        newBlocks[blockIndex] = { ...block, content: block.content.substring(2) };
-                    } else {
-                        newBlocks[blockIndex] = { ...block, content: '- ' + block.content };
+                    let lineEnd = text.indexOf('\n', cursor);
+                    if (lineEnd === -1) lineEnd = text.length;
+
+                    const lineContent = text.substring(lineStart, lineEnd);
+                    const beforeContent = text.substring(0, lineStart > 0 ? lineStart - 1 : 0);
+                    const afterContent = text.substring(lineEnd + 1);
+
+                    const newBlockId = generateId();
+                    const targetBlock: Block = {
+                        id: newBlockId,
+                        type: 'text', // to be converted below
+                        content: lineContent
+                    };
+
+                    // Construct new blocks list
+                    const replacementBlocks: Block[] = [];
+                    if (beforeContent) replacementBlocks.push({ id: block.id, type: 'text', content: beforeContent });
+                    replacementBlocks.push(targetBlock);
+                    if (afterContent) replacementBlocks.push({ id: generateId(), type: 'text', content: afterContent });
+
+                    // Replace the original block
+                    newBlocks.splice(blockIndex, 1, ...replacementBlocks);
+
+                    // Convert targetBlock
+                    let newType: Block['type'] = 'text';
+                    let newContent = lineContent;
+
+                    if (type === 'h1') newType = 'h1';
+                    else if (type === 'h2') newType = 'h2';
+                    else if (type === 'h3') newType = 'h3';
+                    else if (type === 'todo') { newType = 'todo'; }
+                    else if (type === 'list') {
+                        if (newContent.startsWith('- ')) newContent = newContent.substring(2);
+                        else newContent = '- ' + newContent;
                     }
-                } else if (block.type === type) {
-                    // Revert to text
-                    newBlocks[blockIndex] = { ...block, type: 'text' };
-                } else {
-                    // Change type
-                    newBlocks[blockIndex] = { ...block, type: newType as any };
-                }
 
-                // For todo/headers, we usually don't need to add prefix to content if the type dictates styling,
-                // BUT current implementation seems to parse prefixes.
-                // Let's stick to the parsing logic: the type is derived from content in `handleBlockChange`.
-                // So we should modify CONTENT to trigger the type change logic or explicitly set type + content.
-                // The existing `handleBlockChange` logic parses `text` inputs.
-                // If we explicitly set `type` in state, we must ensure content matches or we strip prefix.
-                // SIMPLIFICATION: current implementation parses content to determine block look.
-                // We should probably just update `type` and let the renderer handle styles, 
-                // OR update content to include markdown syntax which `serializeBlocks` expects.
-
-                // Looking at `serializeBlocks`:
-                // h1 -> `# content`
-                // todo -> `- [x] content`
-
-                // Looking at `handleBlockChange`:
-                // It auto-detects type from regex.
-
-                // So best approach: Update the block properties directly.
-                // If we want to switch to H1, we set type='h1' AND perhaps strip existing markers from content if we want clean content.
-                // The `input` value is `block.content`.
-                // `handleBlockChange` separates `type` and `content`.
-                // e.g. type='h1', content='Title'.
-
-                // So on Toggle:
-                if (block.type === type) {
-                    newBlocks[blockIndex] = { ...block, type: 'text' };
-                } else if (type === 'list') {
-                    // List isn't a separate type in Block interface, it's just text starting with '- '
-                    if (block.content.startsWith('- ')) {
-                        newBlocks[blockIndex] = { ...block, content: block.content.substring(2) };
+                    if (type !== 'list') {
+                        if (type === 'todo') {
+                            targetBlock.type = 'todo';
+                            targetBlock.checked = false;
+                        } else {
+                            targetBlock.type = newType as any;
+                        }
                     } else {
-                        newBlocks[blockIndex] = { ...block, content: '- ' + block.content };
+                        targetBlock.content = newContent;
                     }
+
+                    blockSelections.current[newBlockId] = {
+                        start: selection.start - lineStart,
+                        end: selection.end - lineStart
+                    };
+                    setFocusedBlockId(newBlockId);
+
                 } else {
-                    newBlocks[blockIndex] = { ...block, type: type as any };
-                    // If converting to Todo, default to unchecked
-                    if (type === 'todo' && block.type !== 'todo') {
-                        newBlocks[blockIndex].checked = false;
+                    // Simple Case: Block is single line or non-text
+                    let newType: Block['type'] = 'text';
+
+                    if (type === 'h1') { newType = 'h1'; }
+                    else if (type === 'h2') { newType = 'h2'; }
+                    else if (type === 'h3') { newType = 'h3'; }
+                    else if (type === 'todo') { newType = 'todo'; }
+                    else if (type === 'list') { newType = 'text'; }
+
+                    if (type === 'list') {
+                        if (block.content.startsWith('- ')) {
+                            newBlocks[blockIndex] = { ...block, content: block.content.substring(2) };
+                        } else {
+                            newBlocks[blockIndex] = { ...block, content: '- ' + block.content };
+                        }
+                    } else if (block.type === type) {
+                        newBlocks[blockIndex] = { ...block, type: 'text' };
+                    } else {
+                        newBlocks[blockIndex] = { ...block, type: newType as any };
+                        if (type === 'todo' && block.type !== 'todo') {
+                            newBlocks[blockIndex].checked = false;
+                        }
                     }
                 }
             } else {
@@ -228,11 +261,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
                 if (type === 'bold') { wrapper = '**'; regex = /\*\*(.*?)\*\*/g; }
                 else if (type === 'italic') {
-                    // Italic can be _ or *
-                    // To remove, we need to match what is there.
-                    // We'll use a combined regex to find the match, then determine wrapper from match.
                     regex = /(_(.*?)_|\*(.*?)\*)/g;
-                    wrapper = '_'; // Default for adding
+                    wrapper = '_';
                 }
                 else if (type === 'strikethrough') { wrapper = '~~'; regex = /~~(.*?)~~/g; }
 
@@ -242,21 +272,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 const activeStyles = detectActiveStyles(block, selection);
                 if (activeStyles.includes(type) && regex) {
                     // Remove formatting
-                    // Use regex to find the match containing the selection
                     let match;
                     let found = false;
                     while ((match = regex.exec(text)) !== null) {
                         const matchStart = match.index;
                         const matchEnd = matchStart + match[0].length;
-                        const matchContent = match[0]; // e.g., "**bold**" or "_italic_"
+                        const matchContent = match[0];
 
-                        // Determine current wrapper length for this specific match
-                        // Italic: _ or * (len 1). Bold/Strike (len 2).
-                        // If type is italic, check char at matchStart.
-                        let currentWrapperLen = wrapper.length; // Default to the 'add' wrapper length
-                        let currentWrapperStr = wrapper; // Default to the 'add' wrapper string
+                        let currentWrapperLen = wrapper.length;
+                        let currentWrapperStr = wrapper;
                         if (type === 'italic') {
-                            // Check the actual wrapper used in the match
                             if (matchContent.startsWith('_')) {
                                 currentWrapperLen = 1;
                                 currentWrapperStr = '_';
@@ -266,80 +291,34 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             }
                         } else if (type === 'bold' || type === 'strikethrough') {
                             currentWrapperLen = 2;
-                            currentWrapperStr = matchContent.substring(0, 2); // Get the actual wrapper string
+                            currentWrapperStr = matchContent.substring(0, 2);
                         }
 
-                        // Check if selection intersects this match
-                        if (start >= matchStart && end <= matchEnd) {
+                        if ((start >= matchStart && start <= matchEnd) ||
+                            (end >= matchStart && end <= matchEnd) ||
+                            (start <= matchStart && end >= matchEnd)) {
                             found = true;
 
-                            // Reconstruct text
-                            // We want to keep the content but remove wrappers AROUND the selection intersection?
-                            // Actually we want to removing the formatting for the SELECTED range.
-                            // If selected range covers the whole formatted block, we remove wrappers.
-                            // If selected range is partial, we split.
-
-                            // Content limits (inner text)
                             const innerStart = matchStart + currentWrapperLen;
                             const innerEnd = matchEnd - currentWrapperLen;
 
-                            // Calculate the intersection of Selection and Inner Content
-                            // This gives us the text that should be "Unwrapped"
-                            const intersectionStart = Math.max(start, innerStart);
-                            const intersectionEnd = Math.min(end, innerEnd);
-
-                            // Get the text pieces
-
-                            // 1. Text BEFORE the match (preserved)
                             const prefix = text.substring(0, matchStart);
+                            const content = text.substring(innerStart, innerEnd);
+                            const suffix = text.substring(matchEnd);
 
-                            // 2. Inner Content BEFORE the selection (needs to stay wrapped)
-                            let beforeContent = '';
-                            if (intersectionStart > innerStart) {
-                                // There is content before selection inside the wrappers. 
-                                // We must wrap it.
-                                beforeContent = currentWrapperStr + text.substring(innerStart, intersectionStart) + currentWrapperStr;
-                            }
-
-                            // 3. Inner Content INSIDE the selection (Unwrapped!)
-                            // But wait, if selection includes the wrappers (start < innerStart), we just want the content.
-                            // intersectionStart/End handles the clamping to content.
-                            let middleContent = '';
-                            if (intersectionEnd > intersectionStart) {
-                                middleContent = text.substring(intersectionStart, intersectionEnd);
-                            } else if (start === end) {
-                                // Zero-length selection inside (cursor). Toggling off means... splitting?
-                                // Usually means "start writing normal text here".
-                                // e.g. **bold|** -> click B -> **bold**| (move out?) or **bold**| (normal).
-                                // Complex for simple editor. Logic implies splitting: **bold** -> **bol**d**d** ?? No.
-                                // If cursor is inside, we usually split the block.
-                                // **bo|ld** -> **bo**|**ld**. New char inserted will be normal.
-                                // So we insert empty gap?
-                                // For now, let's just assume selection range > 0 or handle splitting logic.
-                                // If selection is empty, we just split.
-                                // middleContent is empty.
-                            }
-
-                            // 4. Inner Content AFTER the selection (stay wrapped)
-                            let afterContent = '';
-                            if (intersectionEnd < innerEnd) {
-                                afterContent = currentWrapperStr + text.substring(intersectionEnd, innerEnd) + currentWrapperStr;
-                            }
-
-                            // 5. Text AFTER the match (preserved)
-                            const realSuffix = text.substring(matchEnd);
-
-                            newText = prefix + beforeContent + middleContent + afterContent + realSuffix;
-
+                            newText = prefix + content + suffix;
                             break;
                         }
-                    } if (!found) {
-                        // Fallback/Should handle error? Just ignore
                     }
                 } else {
                     // Add formatting
                     const selectedText = text.substring(start, end);
                     newText = text.substring(0, start) + wrapper + selectedText + wrapper + text.substring(end);
+
+                    blockSelections.current[block.id] = {
+                        start: start + wrapper.length,
+                        end: end + wrapper.length
+                    };
                 }
 
                 newBlocks[blockIndex] = { ...block, content: newText };
@@ -349,12 +328,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             isInternalUpdate.current = true;
             onChange(serializeBlocks(newBlocks));
 
-            // Determine active styles after change?
-            // It's async due to state, but we can guess or wait for effect?
-            // Effect will trigger block change -> we can trigger update.
-            // But immediate update is better.
-
-            // Maintain focus
             setTimeout(() => {
                 inputRefs.current[focusedBlockId]?.focus();
             }, 10);
@@ -367,9 +340,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
             const clampedIndex = Math.min(Math.max(lineIndex, 0), blocks.length - 1);
             const clampedRatio = Math.min(Math.max(ratio, 0), 1);
-            const focused = focusBlockByIndex(clampedIndex, clampedRatio);
+            const success = focusBlockByIndex(clampedIndex, clampedRatio);
 
-            if (!focused) {
+            if (!success) {
                 pendingFocusRef.current = { index: clampedIndex, ratio: clampedRatio };
             } else {
                 pendingFocusRef.current = null;
@@ -378,32 +351,62 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     }));
 
     // Initial parsing
+    // Initial parsing
     useEffect(() => {
         if (isInternalUpdate.current) {
             isInternalUpdate.current = false;
             return;
         }
 
-        const parsedBlocks: Block[] = initialContent.split('\n').map(line => {
-            const id = generateId();
+        const lines = initialContent.split('\n');
+        const parsedBlocks: Block[] = [];
+        let currentTextBlock: Block | null = null;
 
-            // Todo Check
+        lines.forEach(line => {
+            // Check for structured types
             const todoMatch = line.match(/^(\s*-\s\[([ xX])\]\s)(.*)$/);
-            if (todoMatch) {
-                return {
-                    id,
-                    type: 'todo',
-                    checked: todoMatch[2].toLowerCase() === 'x',
-                    content: todoMatch[3]
-                };
+            const header1Match = line.startsWith('# ');
+            const header2Match = line.startsWith('## ');
+            const header3Match = line.startsWith('### ');
+
+            const isStructure = todoMatch || header1Match || header2Match || header3Match;
+
+            if (isStructure) {
+                // Determine type
+                let type: Block['type'] = 'text'; // Fallback
+                let content = line;
+                let checked = false;
+
+                if (todoMatch) {
+                    type = 'todo';
+                    checked = todoMatch[2].toLowerCase() === 'x';
+                    content = todoMatch[3];
+                } else if (header3Match) {
+                    type = 'h3';
+                    content = line.substring(4);
+                } else if (header2Match) {
+                    type = 'h2';
+                    content = line.substring(3);
+                } else if (header1Match) {
+                    type = 'h1';
+                    content = line.substring(2);
+                }
+
+                const id = generateId();
+                parsedBlocks.push({ id, type, content, checked });
+                currentTextBlock = null; // Break text continuity
+
+            } else {
+                // It's text.
+                // Do we merge with previous text block?
+                if (currentTextBlock) {
+                    currentTextBlock.content += '\n' + line;
+                } else {
+                    const id = generateId();
+                    currentTextBlock = { id, type: 'text', content: line };
+                    parsedBlocks.push(currentTextBlock);
+                }
             }
-
-            // Headers
-            if (line.startsWith('# ')) return { id, type: 'h1', content: line.substring(2) };
-            if (line.startsWith('## ')) return { id, type: 'h2', content: line.substring(3) };
-            if (line.startsWith('### ')) return { id, type: 'h3', content: line.substring(4) };
-
-            return { id, type: 'text', content: line };
         });
 
         // Ensure at least one block
@@ -469,14 +472,22 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const handleKeyPress = (id: string, e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
         const key = e.nativeEvent.key;
         if (key === 'Enter') {
-            e.preventDefault(); // Prevent default newline in input if possible
             const index = blocks.findIndex(b => b.id === id);
             if (index === -1) return;
 
             const currentBlock = blocks[index];
+
+            // Multiline Text Logic:
+            // If Text block, Enter = New line in same block.
+            if (currentBlock.type === 'text') {
+                // ALLOW DEFAULT BEHAVIOR.
+                return;
+            }
+
+            e.preventDefault();
             const newBlockId = generateId();
 
-            // Should next block inherit type?
+            // Structure Block Logic (Todo/Header): Split/Create new
             let nextType: Block['type'] = 'text';
             let nextChecked = false;
 
@@ -504,43 +515,56 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             newBlocks.splice(index + 1, 0, newBlock);
             setBlocks(newBlocks);
 
-            // Focus next
             setTimeout(() => inputRefs.current[newBlockId]?.focus(), 10);
-
             isInternalUpdate.current = true;
             onChange(serializeBlocks(newBlocks));
+
         } else if (key === 'Backspace') {
             const index = blocks.findIndex(b => b.id === id);
             if (index === -1) return;
 
             const currentBlock = blocks[index];
             const selection = blockSelections.current[id];
+            // Only merge if cursor is at the very beginning (0,0)
             const isCursorAtStart = selection?.start === 0 && selection?.end === 0;
             const hasPrevBlock = index > 0;
-            const isEffectivelyEmpty = currentBlock.content.trim().length === 0;
+            const isEffectivelyEmpty = currentBlock.content.length === 0;
+
+            if (!hasPrevBlock && isCursorAtStart) {
+                // At very start of doc, nothing to do
+                return;
+            }
 
             if (!hasPrevBlock) return;
 
             if (isEffectivelyEmpty) {
+                // Delete empty block
                 e.preventDefault();
                 const prevId = blocks[index - 1].id;
+                const prevBlock = blocks[index - 1];
                 const newBlocks = blocks.filter(b => b.id !== id);
                 setBlocks(newBlocks);
+
                 blockSelections.current[prevId] = {
-                    start: blocks[index - 1].content.length,
-                    end: blocks[index - 1].content.length,
+                    start: prevBlock.content.length,
+                    end: prevBlock.content.length,
                 };
+                setFocusedBlockId(prevId);
+
                 setTimeout(() => {
                     const ref = inputRefs.current[prevId];
                     ref?.focus();
                     ref?.setNativeProps({ selection: blockSelections.current[prevId] });
                 }, 10);
+
                 isInternalUpdate.current = true;
                 onChange(serializeBlocks(newBlocks));
             } else if (isCursorAtStart) {
+                // Merge with previous block
                 e.preventDefault();
                 const prevIndex = index - 1;
                 const prevBlock = blocks[prevIndex];
+
                 const prevLength = prevBlock.content.length;
                 const mergedContent = prevBlock.content + currentBlock.content;
 
@@ -553,11 +577,15 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     start: prevLength,
                     end: prevLength,
                 };
+                setFocusedBlockId(prevBlock.id);
 
                 setTimeout(() => {
                     const ref = inputRefs.current[prevBlock.id];
                     ref?.focus();
-                    ref?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
+                    // setTimeout again to be safe with Layout
+                    setTimeout(() => {
+                        ref?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
+                    }, 10);
                 }, 10);
 
                 isInternalUpdate.current = true;
@@ -619,12 +647,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
         return (
             <ScaleDecorator>
-                <TouchableOpacity
-                    activeOpacity={1}
+                <View
                     style={[styles.blockContainer, isActive && styles.draggingBlock]}
-                    onPress={() => {
-                        inputRefs.current[item.id]?.focus();
-                    }}
                 >
                     {isTodo && (
                         <TouchableOpacity
@@ -669,7 +693,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                 ? <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
                                 : null)}
                     </TextInput>
-                </TouchableOpacity>
+                </View>
             </ScaleDecorator >
         );
     };
