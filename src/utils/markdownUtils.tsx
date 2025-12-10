@@ -87,26 +87,56 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
     return split.map((chunk, index) => {
         if (!chunk) return null; // Empty splits
 
-        let content = chunk;
+        // We must flatten baseStyle to avoid nested array issues, but we shouldn't keep re-applying it deeply if inherited?
+        // Actually, RN Text inheritance works by nesting.
+        // If we just output <Text style={addedStyle}>{recursive}</Text>, recursive children inherit addedStyle+parent.
+        // But `parseMarkdownText` wraps non-matches in `Text` with `style`.
+        // If we pass `baseStyle` recursively, the inner-most text gets `baseStyle` N times?
+        // Actually, if we pass `style` (accumulated) to recursive call?
+        // No, we should NOT pass any style to recursive call if we want pure nesting, 
+        // OR we pass nothing and rely on inheritance.
+        // However, `parseMarkdownText` *always* applies `baseStyle` to chunks it creates.
+        // If we pass nothing: `parse(content)` -> creates Text with `baseStyle` (undefined).
+        // Parent `<Text style={bold}> <RecursiveChild> </Text>`
+        // RecursiveChild = `<Text style={undefined}>content</Text>`
+        // Result: Bold -> Undefined.
+        // In RN, nested Text inherits. So Child inherits Bold.
+        // If we passed `baseStyle` again: Child has `baseStyle`.
+        // If `baseStyle` has color red. Parent (Red+Bold) -> Child (Red).
+        // Result: Red+Bold. Consistent.
+        // But if we have overlapping font sizes etc, it might be an issue. 
+        // Usually safer to pass nothing or minimal props recursively and rely on context/inheritance.
+        // Let's pass `[]` or `undefined` to recursive calls to strictly rely on inheritance for attributes established by PARENTS,
+        // BUT we must preserve the original `baseStyle` for the "leaf" text nodes if they are not nested?
+        // Actually, every node returned by parseMarkdownText is a Text node.
+        // If we pass `undefined`, the leaf node is `<Text style={undefined}>text</Text>`.
+        // Nested in `<Text style={Bold}>...</Text>`.
+        // Uses Bold.
+        // If `baseStyle` had {color: 'red'}.
+        // The top-level call wraps in `<Text style={red}>`.
+        // Recursion returns `<Text>{inner}</Text>`.
+        // Nesting: `<Text style={red}> <Text style={bold}> <Text>inner</Text> </Text> </Text>`.
+        // Inner inherits Bold and Red. Correct.
+        // So we pass `undefined` (or skip arg) for recursive calls.
+
+        let content: React.ReactNode = chunk;
         const style: TextStyle[] = [StyleSheet.flatten(baseStyle)];
 
         // Completed Todo Block: "- [x] content..."
         const completedMatch = chunk.match(/^\s*-\s\[[xX]\]\s(.*)$/);
         if (completedMatch) {
-            // Render checkbox
-            // Then recursively parse the content with strikethrough style
             const innerContent = completedMatch[1];
             return (
                 <Text key={index} style={style}>
                     <Text>☑ </Text>
                     <Text style={{ textDecorationLine: 'line-through', opacity: 0.6 }}>
-                        {parseMarkdownText(innerContent, baseStyle)}
+                        {parseMarkdownText(innerContent)}
                     </Text>
                 </Text>
             );
         }
 
-        // Unchecked Todo Marker: "- [ ] " (with optional leading space)
+        // Unchecked Todo Marker
         if (chunk.match(/^\s*-\s\[ \]\s$/)) {
             return (
                 <Text key={index} style={style}>
@@ -117,28 +147,53 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
 
         // Bold
         if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
-            content = chunk.substring(2, chunk.length - 2);
+            const innerText = chunk.substring(2, chunk.length - 2);
             style.push({ fontWeight: 'bold' });
+            return (
+                <Text key={index} style={style}>
+                    {parseMarkdownText(innerText)}
+                </Text>
+            );
         }
         // Strikethrough
         else if (chunk.startsWith('~~') && chunk.endsWith('~~') && chunk.length >= 4) {
-            content = chunk.substring(2, chunk.length - 2);
+            const innerText = chunk.substring(2, chunk.length - 2);
             style.push({ textDecorationLine: 'line-through' });
+            return (
+                <Text key={index} style={style}>
+                    {parseMarkdownText(innerText)}
+                </Text>
+            );
         }
         // Code
         else if (chunk.startsWith('`') && chunk.endsWith('`') && chunk.length >= 2) {
-            content = chunk.substring(1, chunk.length - 1);
+            const innerText = chunk.substring(1, chunk.length - 1);
             style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
+            return (
+                <Text key={index} style={style}>
+                    {innerText}
+                </Text>
+            );
         }
         // Italic (underscore)
         else if (chunk.startsWith('_') && chunk.endsWith('_') && chunk.length >= 2) {
-            content = chunk.substring(1, chunk.length - 1);
+            const innerText = chunk.substring(1, chunk.length - 1);
             style.push({ fontStyle: 'italic' });
+            return (
+                <Text key={index} style={style}>
+                    {parseMarkdownText(innerText)}
+                </Text>
+            );
         }
         // Italic (asterisk)
         else if (chunk.startsWith('*') && chunk.endsWith('*') && chunk.length >= 2) {
-            content = chunk.substring(1, chunk.length - 1);
+            const innerText = chunk.substring(1, chunk.length - 1);
             style.push({ fontStyle: 'italic' });
+            return (
+                <Text key={index} style={style}>
+                    {parseMarkdownText(innerText)}
+                </Text>
+            );
         }
 
         return (
@@ -178,7 +233,7 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
             return (
                 <Text key={index} style={style}>
                     <Text style={hiddenStyle}>**</Text>
-                    {content}
+                    {parseMarkdownForInput(content)}
                     <Text style={hiddenStyle}>**</Text>
                 </Text>
             );
@@ -190,7 +245,7 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
             return (
                 <Text key={index} style={style}>
                     <Text style={hiddenStyle}>~~</Text>
-                    {content}
+                    {parseMarkdownForInput(content)}
                     <Text style={hiddenStyle}>~~</Text>
                 </Text>
             );
@@ -199,6 +254,8 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
         else if (chunk.startsWith('`') && chunk.endsWith('`') && chunk.length >= 2) {
             const content = chunk.substring(1, chunk.length - 1);
             style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
+            // Code usually doesn't nest other markdown?
+            // Let's assume no recursion for code to preserve syntax if user types `**` inside code.
             return (
                 <Text key={index} style={style}>
                     <Text style={hiddenStyle}>`</Text>
@@ -214,7 +271,7 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
             return (
                 <Text key={index} style={style}>
                     <Text style={hiddenStyle}>_</Text>
-                    {content}
+                    {parseMarkdownForInput(content)}
                     <Text style={hiddenStyle}>_</Text>
                 </Text>
             );
@@ -226,7 +283,7 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
             return (
                 <Text key={index} style={style}>
                     <Text style={hiddenStyle}>*</Text>
-                    {content}
+                    {parseMarkdownForInput(content)}
                     <Text style={hiddenStyle}>*</Text>
                 </Text>
             );

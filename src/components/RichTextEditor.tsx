@@ -23,6 +23,7 @@ interface RichTextEditorProps {
     initialContent: string;
     onChange: (text: string) => void;
     onSelectionChange?: (selection: { start: number; end: number }) => void;
+    onActiveStylesChange?: (styles: MarkdownFormatType[]) => void;
     placeholder?: string;
     editable?: boolean;
     ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
@@ -43,14 +44,16 @@ interface Block {
 // Simple ID generator for blocks to avoid async uuid overhead during typing
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
-    initialContent,
-    onChange,
-    onSelectionChange,
-    placeholder,
-    editable = true,
-    ListHeaderComponent,
-}, ref) => {
+export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>((props, ref) => {
+    const {
+        initialContent,
+        onChange,
+        onSelectionChange,
+        onActiveStylesChange,
+        placeholder,
+        editable = true,
+        ListHeaderComponent,
+    } = props;
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
     const inputRefs = useRef<Record<string, TextInput>>({});
@@ -76,6 +79,64 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         });
 
         return true;
+    };
+
+    const detectActiveStyles = (block: Block, selection: { start: number; end: number }) => {
+        const styles: MarkdownFormatType[] = [];
+
+        // Block types
+        if (block.type === 'h1') styles.push('h1');
+        if (block.type === 'h2') styles.push('h2');
+        if (block.type === 'h3') styles.push('h3');
+        if (block.type === 'todo') styles.push('todo');
+        if (block.content.startsWith('- ')) styles.push('list');
+
+        // Inline styles
+        const text = block.content;
+
+        // Helper to check overlap
+        const checkOverlap = (regex: RegExp, type: MarkdownFormatType, dLen: number) => {
+            let match;
+            // Reset regex lastIndex just in case
+            regex.lastIndex = 0;
+
+            while ((match = regex.exec(text)) !== null) {
+                const matchStart = match.index;
+                const matchEnd = matchStart + match[0].length;
+                const innerStart = matchStart + dLen;
+                const innerEnd = matchEnd - dLen;
+
+                // Check if selection is fully within the styled range (inclusive of boundaries for user feel)
+                if (selection.start >= matchStart && selection.end <= matchEnd) {
+                    styles.push(type);
+                    return; // Found one instance causing activation
+                }
+            }
+        };
+
+        // Bold (**...**)
+        checkOverlap(/\*\*(.*?)\*\*/g, 'bold', 2);
+
+        // Italic (_..._ or *...*)
+        // checkOverlap(/_(.*?)_/g, 'italic', 1);
+        // We need to check both. But we can combine regex or check individually.
+        checkOverlap(/(_(.*?)_|\*(.*?)\*)/g, 'italic', 1);
+
+        // Strikethrough (~~...~~)
+        checkOverlap(/~~(.*?)~~/g, 'strikethrough', 2);
+
+        return styles;
+    };
+
+    const updateActiveStyles = (blockId: string, selection?: { start: number; end: number }) => {
+        if (!blockId || !onActiveStylesChange) return;
+
+        const block = blocks.find(b => b.id === blockId);
+        if (!block) return;
+
+        const sel = selection || blockSelections.current[blockId] || { start: block.content.length, end: block.content.length };
+        const styles = detectActiveStyles(block, sel);
+        onActiveStylesChange(styles);
     };
 
     useImperativeHandle(ref, () => ({
@@ -162,28 +223,138 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 // Inline formatting (bold, italic, strikethrough)
                 const { start, end } = selection;
                 let text = block.content;
-                const selectedText = text.substring(start, end);
-
                 let wrapper = '';
-                if (type === 'bold') wrapper = '**';
-                else if (type === 'italic') wrapper = '_';
-                else if (type === 'strikethrough') wrapper = '~~';
+                let regex: RegExp | null = null;
 
-                const newText = text.substring(0, start) + wrapper + selectedText + wrapper + text.substring(end);
+                if (type === 'bold') { wrapper = '**'; regex = /\*\*(.*?)\*\*/g; }
+                else if (type === 'italic') {
+                    // Italic can be _ or *
+                    // To remove, we need to match what is there.
+                    // We'll use a combined regex to find the match, then determine wrapper from match.
+                    regex = /(_(.*?)_|\*(.*?)\*)/g;
+                    wrapper = '_'; // Default for adding
+                }
+                else if (type === 'strikethrough') { wrapper = '~~'; regex = /~~(.*?)~~/g; }
+
+                let newText = text;
+
+                // Check if active (toggle off)
+                const activeStyles = detectActiveStyles(block, selection);
+                if (activeStyles.includes(type) && regex) {
+                    // Remove formatting
+                    // Use regex to find the match containing the selection
+                    let match;
+                    let found = false;
+                    while ((match = regex.exec(text)) !== null) {
+                        const matchStart = match.index;
+                        const matchEnd = matchStart + match[0].length;
+                        const matchContent = match[0]; // e.g., "**bold**" or "_italic_"
+
+                        // Determine current wrapper length for this specific match
+                        // Italic: _ or * (len 1). Bold/Strike (len 2).
+                        // If type is italic, check char at matchStart.
+                        let currentWrapperLen = wrapper.length; // Default to the 'add' wrapper length
+                        let currentWrapperStr = wrapper; // Default to the 'add' wrapper string
+                        if (type === 'italic') {
+                            // Check the actual wrapper used in the match
+                            if (matchContent.startsWith('_')) {
+                                currentWrapperLen = 1;
+                                currentWrapperStr = '_';
+                            } else if (matchContent.startsWith('*')) {
+                                currentWrapperLen = 1;
+                                currentWrapperStr = '*';
+                            }
+                        } else if (type === 'bold' || type === 'strikethrough') {
+                            currentWrapperLen = 2;
+                            currentWrapperStr = matchContent.substring(0, 2); // Get the actual wrapper string
+                        }
+
+                        // Check if selection intersects this match
+                        if (start >= matchStart && end <= matchEnd) {
+                            found = true;
+
+                            // Reconstruct text
+                            // We want to keep the content but remove wrappers AROUND the selection intersection?
+                            // Actually we want to removing the formatting for the SELECTED range.
+                            // If selected range covers the whole formatted block, we remove wrappers.
+                            // If selected range is partial, we split.
+
+                            // Content limits (inner text)
+                            const innerStart = matchStart + currentWrapperLen;
+                            const innerEnd = matchEnd - currentWrapperLen;
+
+                            // Calculate the intersection of Selection and Inner Content
+                            // This gives us the text that should be "Unwrapped"
+                            const intersectionStart = Math.max(start, innerStart);
+                            const intersectionEnd = Math.min(end, innerEnd);
+
+                            // Get the text pieces
+
+                            // 1. Text BEFORE the match (preserved)
+                            const prefix = text.substring(0, matchStart);
+
+                            // 2. Inner Content BEFORE the selection (needs to stay wrapped)
+                            let beforeContent = '';
+                            if (intersectionStart > innerStart) {
+                                // There is content before selection inside the wrappers. 
+                                // We must wrap it.
+                                beforeContent = currentWrapperStr + text.substring(innerStart, intersectionStart) + currentWrapperStr;
+                            }
+
+                            // 3. Inner Content INSIDE the selection (Unwrapped!)
+                            // But wait, if selection includes the wrappers (start < innerStart), we just want the content.
+                            // intersectionStart/End handles the clamping to content.
+                            let middleContent = '';
+                            if (intersectionEnd > intersectionStart) {
+                                middleContent = text.substring(intersectionStart, intersectionEnd);
+                            } else if (start === end) {
+                                // Zero-length selection inside (cursor). Toggling off means... splitting?
+                                // Usually means "start writing normal text here".
+                                // e.g. **bold|** -> click B -> **bold**| (move out?) or **bold**| (normal).
+                                // Complex for simple editor. Logic implies splitting: **bold** -> **bol**d**d** ?? No.
+                                // If cursor is inside, we usually split the block.
+                                // **bo|ld** -> **bo**|**ld**. New char inserted will be normal.
+                                // So we insert empty gap?
+                                // For now, let's just assume selection range > 0 or handle splitting logic.
+                                // If selection is empty, we just split.
+                                // middleContent is empty.
+                            }
+
+                            // 4. Inner Content AFTER the selection (stay wrapped)
+                            let afterContent = '';
+                            if (intersectionEnd < innerEnd) {
+                                afterContent = currentWrapperStr + text.substring(intersectionEnd, innerEnd) + currentWrapperStr;
+                            }
+
+                            // 5. Text AFTER the match (preserved)
+                            const realSuffix = text.substring(matchEnd);
+
+                            newText = prefix + beforeContent + middleContent + afterContent + realSuffix;
+
+                            break;
+                        }
+                    } if (!found) {
+                        // Fallback/Should handle error? Just ignore
+                    }
+                } else {
+                    // Add formatting
+                    const selectedText = text.substring(start, end);
+                    newText = text.substring(0, start) + wrapper + selectedText + wrapper + text.substring(end);
+                }
 
                 newBlocks[blockIndex] = { ...block, content: newText };
-
-                // Update selection to wrap around? or stay inside?
-                // Ideally move cursor to end of inserted wrapper if no selection, or keep selection if wrapping.
-                // For simplicity, just update content.
             }
 
             setBlocks(newBlocks);
             isInternalUpdate.current = true;
             onChange(serializeBlocks(newBlocks));
 
+            // Determine active styles after change?
+            // It's async due to state, but we can guess or wait for effect?
+            // Effect will trigger block change -> we can trigger update.
+            // But immediate update is better.
+
             // Maintain focus
-            // Need to wait for render if we changed layout significantly
             setTimeout(() => {
                 inputRefs.current[focusedBlockId]?.focus();
             }, 10);
@@ -404,6 +575,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
     const handleSelectionChange = (id: string, event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
         blockSelections.current[id] = event.nativeEvent.selection;
+        updateActiveStyles(id, event.nativeEvent.selection);
         if (onSelectionChange) {
             onSelectionChange(event.nativeEvent.selection);
         }
@@ -421,6 +593,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
     }, [blocks]);
 
+    useEffect(() => {
+        if (focusedBlockId) {
+            // Use current selection ref if available, safely
+            const selection = blockSelections.current[focusedBlockId];
+            if (selection) {
+                updateActiveStyles(focusedBlockId, selection);
+            }
+        }
+    }, [blocks, focusedBlockId]);
+
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
         const isHeader = item.type === 'h1' || item.type === 'h2' || item.type === 'h3';
@@ -437,7 +619,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
         return (
             <ScaleDecorator>
-                <View style={[styles.blockContainer, isActive && styles.draggingBlock]}>
+                <TouchableOpacity
+                    activeOpacity={1}
+                    style={[styles.blockContainer, isActive && styles.draggingBlock]}
+                    onPress={() => {
+                        inputRefs.current[item.id]?.focus();
+                    }}
+                >
                     {isTodo && (
                         <TouchableOpacity
                             style={styles.checkbox}
@@ -481,10 +669,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                 ? <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
                                 : null)}
                     </TextInput>
-                </View>
-            </ScaleDecorator>
+                </TouchableOpacity>
+            </ScaleDecorator >
         );
     };
+
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -500,6 +689,21 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 renderItem={renderItem}
                 keyboardShouldPersistTaps="always"
                 removeClippedSubviews={Platform.OS === 'android'} // Optimize android
+                contentContainerStyle={{ flexGrow: 1 }}
+                ListFooterComponent={
+                    <>
+                        <TouchableOpacity
+                            style={{ flex: 1, minHeight: 100 }}
+                            activeOpacity={1}
+                            onPress={() => {
+                                if (blocks.length > 0) {
+                                    const lastId = blocks[blocks.length - 1].id;
+                                    inputRefs.current[lastId]?.focus();
+                                }
+                            }}
+                        />
+                    </>
+                }
             />
         </GestureHandlerRootView>
     );
@@ -509,7 +713,7 @@ const styles = StyleSheet.create({
     blockContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start', // Align top for multiline
-        marginBottom: 2,
+        // marginBottom: 2, // Removed for unified feel
         paddingHorizontal: spacing.xs,
         minHeight: 30,
         backgroundColor: 'transparent',

@@ -142,6 +142,7 @@ export const NoteEditScreen = () => {
     };
 
     const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
+    const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const editorRef = useRef<RichTextEditorHandle>(null);
     const contentInputRef = useRef<TextInput>(null);
@@ -1565,6 +1566,7 @@ export const NoteEditScreen = () => {
                                 updateHistory(title, text);
                             }
                         }}
+                        onActiveStylesChange={setActiveFormats}
                         placeholder="Start typing..."
                         ListHeaderComponent={renderHeader()}
                     />
@@ -1573,7 +1575,7 @@ export const NoteEditScreen = () => {
                 {/* Formatting Toolbar - Show when in Edit Mode. */}
                 {isEditing && (
                     <View style={styles.toolbarContainer}>
-                        <MarkdownToolbar onFormat={handleFormat} />
+                        <MarkdownToolbar onFormat={handleFormat} activeFormats={activeFormats} />
                     </View>
                 )}
             </KeyboardAvoidingView>

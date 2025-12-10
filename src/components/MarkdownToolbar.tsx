@@ -8,9 +8,20 @@ export type MarkdownFormatType = 'bold' | 'italic' | 'strikethrough' | 'list' | 
 
 interface MarkdownToolbarProps {
     onFormat: (type: MarkdownFormatType) => void;
+    activeFormats?: MarkdownFormatType[];
 }
 
-export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat }) => {
+export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [] }) => {
+    const isActive = (type: MarkdownFormatType) => activeFormats.includes(type);
+
+    const getButtonStyle = (type: MarkdownFormatType) => [
+        styles.button,
+        isActive(type) && styles.activeButton
+    ];
+
+    const getIconColor = (type: MarkdownFormatType) =>
+        isActive(type) ? colors.primary : colors.text;
+
     return (
         <View style={styles.container}>
             <ScrollView
@@ -20,73 +31,73 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat }) =>
                 keyboardShouldPersistTaps="always"
             >
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('todo')}
                     onPress={() => onFormat('todo')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="check-box" size={24} color={colors.text} />
+                    <MaterialIcons name="check-box" size={24} color={getIconColor('todo')} />
                 </TouchableOpacity>
 
                 <View style={styles.divider} />
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('h1')}
                     onPress={() => onFormat('h1')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="looks-one" size={24} color={colors.text} />
+                    <MaterialIcons name="looks-one" size={24} color={getIconColor('h1')} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('h2')}
                     onPress={() => onFormat('h2')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="looks-two" size={24} color={colors.text} />
+                    <MaterialIcons name="looks-two" size={24} color={getIconColor('h2')} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('h3')}
                     onPress={() => onFormat('h3')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="looks-3" size={24} color={colors.text} />
+                    <MaterialIcons name="looks-3" size={24} color={getIconColor('h3')} />
                 </TouchableOpacity>
 
                 <View style={styles.divider} />
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('bold')}
                     onPress={() => onFormat('bold')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="format-bold" size={24} color={colors.text} />
+                    <MaterialIcons name="format-bold" size={24} color={getIconColor('bold')} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('italic')}
                     onPress={() => onFormat('italic')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="format-italic" size={24} color={colors.text} />
+                    <MaterialIcons name="format-italic" size={24} color={getIconColor('italic')} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('strikethrough')}
                     onPress={() => onFormat('strikethrough')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="format-strikethrough" size={24} color={colors.text} />
+                    <MaterialIcons name="format-strikethrough" size={24} color={getIconColor('strikethrough')} />
                 </TouchableOpacity>
 
                 <View style={styles.divider} />
 
                 <TouchableOpacity
-                    style={styles.button}
+                    style={getButtonStyle('list')}
                     onPress={() => onFormat('list')}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <MaterialIcons name="format-list-bulleted" size={24} color={colors.text} />
+                    <MaterialIcons name="format-list-bulleted" size={24} color={getIconColor('list')} />
                 </TouchableOpacity>
             </ScrollView>
         </View>
@@ -123,6 +134,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 4,
+    },
+    activeButton: {
+        backgroundColor: colors.background, // Or a light primary tint
     },
     divider: {
         width: 1,
