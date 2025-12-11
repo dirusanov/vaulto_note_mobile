@@ -20,7 +20,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
@@ -43,6 +43,7 @@ import {
     DEFAULT_IMPROVEMENT_OPTIONS,
     ensureTemplateHasPlaceholder,
 } from '../services/AIService';
+import { getAgentModeEnabled } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
@@ -142,12 +143,24 @@ export const NoteEditScreen = () => {
     };
 
     const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
+    const [agentModeEnabled, setAgentModeEnabled] = useState(true);
     const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const editorRef = useRef<RichTextEditorHandle>(null);
     const contentInputRef = useRef<TextInput>(null);
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
+
+    const loadSettings = async () => {
+        const enabled = await getAgentModeEnabled();
+        setAgentModeEnabled(enabled);
+    };
+
+    useFocusEffect(
+        useCallback(() => {
+            loadSettings();
+        }, [])
+    );
 
     useEffect(() => {
         if (!existingNote) {
@@ -707,6 +720,87 @@ export const NoteEditScreen = () => {
 
     const handleRecordingFinish = async (recording: AudioRecording) => {
         setShowVoiceRecorder(false);
+
+        // ---------------------------------------------------------
+        // 1. SIMPLE MODE (Agent disabled)
+        // ---------------------------------------------------------
+        if (!agentModeEnabled) {
+            setIsTranscribing(true);
+            const transcription = await transcribeAudio(recording.uri);
+            setIsTranscribing(false);
+
+            // Save audio file if it is an original note (to keep record)
+            // Or delete if it's transient?
+            // The logic below for "original" saved the audio file.
+            // For improvements, it deleted it.
+            // Let's standardise: if it works, append text.
+
+            // If it's a new "original" note, we need to create it.
+            if (activeVariantId === 'original') {
+                const savedPath = await AudioService.saveAudioFile(recording.uri, false);
+                if (transcription.success && transcription.text) {
+                    const newOriginalContent = content + (content ? '\n\n' : '') + transcription.text;
+                    setContent(newOriginalContent);
+                    updateHistory(title, newOriginalContent);
+
+                    if (localNoteId) {
+                        await updateNote(localNoteId, {
+                            content: newOriginalContent,
+                            audio_file_path: savedPath,
+                            audio_duration: recording.duration,
+                            has_audio: true,
+                            encrypted_transcription: transcription.text
+                        });
+                    } else {
+                        const newNote = await createNote({
+                            title,
+                            content: newOriginalContent,
+                            audio: {
+                                filePath: savedPath,
+                                duration: recording.duration,
+                                transcription: transcription.text
+                            }
+                        });
+                        setLocalNoteId(newNote.id);
+                        lastSavedTitle.current = title;
+                        lastSavedContent.current = newOriginalContent;
+                    }
+                } else {
+                    // Transcription failed
+                    await AudioService.deleteAudioFile(savedPath);
+                    Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
+                }
+                // Set audio for playback
+                const playbackUri = await AudioService.readAudioFile(savedPath);
+                setAudioUri(playbackUri);
+                setAudioDuration(recording.duration);
+                setShowAudioPlayer(true);
+            } else {
+                // Improvement / Variant: Just append text and delete audio
+                await AudioService.deleteAudioFile(recording.uri);
+                if (transcription.success && transcription.text) {
+                    const newContent = content + (content ? '\n\n' : '') + transcription.text;
+                    setContent(newContent);
+                    improvementDraftsRef.current[activeVariantId] = newContent;
+                    updateHistory('', newContent);
+                    if (localNoteId) {
+                        try {
+                            await updateImprovement(localNoteId, activeVariantId, { content: newContent });
+                            improvementSavedRef.current[activeVariantId] = newContent;
+                        } catch (error) {
+                            console.error('Failed to save improvement:', error);
+                        }
+                    }
+                } else {
+                    Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
+                }
+            }
+            return;
+        }
+
+        // ---------------------------------------------------------
+        // 2. AGENT MODE (Intelligent Processing)
+        // ---------------------------------------------------------
 
         try {
             // If it's the original note, we use the Smart Agent flow

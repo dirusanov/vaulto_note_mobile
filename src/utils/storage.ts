@@ -227,3 +227,25 @@ export const setSelfHostedApiKey = async (apiKey: string): Promise<void> => {
         console.error('Failed to set self-hosted API key', e);
     }
 };
+
+// Agent Mode
+const AGENT_MODE_KEY = 'vaulto_agent_mode_enabled';
+
+export const getAgentModeEnabled = async (): Promise<boolean> => {
+    try {
+        const value = await AsyncStorage.getItem(AGENT_MODE_KEY);
+        // Default to true if not set
+        return value === null ? true : value === 'true';
+    } catch (e) {
+        console.error('Failed to get agent mode setting', e);
+        return true;
+    }
+};
+
+export const setAgentModeEnabled = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(AGENT_MODE_KEY, enabled.toString());
+    } catch (e) {
+        console.error('Failed to set agent mode setting', e);
+    }
+};

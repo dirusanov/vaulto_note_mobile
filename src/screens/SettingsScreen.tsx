@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -18,7 +18,9 @@ import {
     setAIProvider,
     setOpenAIApiKey,
     setSelfHostedUrl,
-    setSelfHostedApiKey
+    setSelfHostedApiKey,
+    getAgentModeEnabled,
+    setAgentModeEnabled
 } from '../utils/storage';
 import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -29,6 +31,7 @@ export const SettingsScreen = () => {
     const { signOut, isAuthenticated, isGuest, user } = useAuth();
 
     const [apiKey, setApiKeyState] = useState('');
+    const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [testingConnection, setTestingConnection] = useState(false);
     const [testingSelfHosted, setTestingSelfHosted] = useState(false);
     const [aiProvider, setAiProviderState] = useState<AIProvider>('local');
@@ -107,17 +110,19 @@ export const SettingsScreen = () => {
 
     const loadPreferences = async () => {
         try {
-            const [storedOpenAIKey, provider, url, storedSelfHostedApiKey] = await Promise.all([
+            const [storedOpenAIKey, provider, url, storedSelfHostedApiKey, agentMode] = await Promise.all([
                 getOpenAIApiKey(),
                 getAIProvider(),
                 getSelfHostedUrl(),
-                getSelfHostedApiKey()
+                getSelfHostedApiKey(),
+                getAgentModeEnabled()
             ]);
 
             if (storedOpenAIKey) setApiKeyState(storedOpenAIKey);
             setAiProviderState(provider);
             if (url) setSelfHostedUrlState(url);
             if (storedSelfHostedApiKey) setSelfHostedApiKeyState(storedSelfHostedApiKey);
+            setAgentModeEnabledState(agentMode);
         } catch (error) {
             console.error('Failed to load settings', error);
         } finally {
@@ -132,6 +137,11 @@ export const SettingsScreen = () => {
         } catch (e) {
             console.error('Failed to persist AI provider', e);
         }
+    };
+
+    const toggleAgentMode = async (value: boolean) => {
+        setAgentModeEnabledState(value);
+        await setAgentModeEnabled(value);
     };
 
     useEffect(() => {
@@ -283,6 +293,30 @@ export const SettingsScreen = () => {
                         <Text style={styles.sectionTitle}>AI Provider</Text>
                     </View>
                     <Text style={styles.sectionHint}>Choose where prompts and transcription are processed.</Text>
+
+                    {/* Agent Mode Toggle */}
+                    <View style={styles.agentModeCard}>
+                        <View style={styles.agentModeHeader}>
+                            <View style={styles.agentModeTitleRow}>
+                                <View style={styles.agentModeIcon}>
+                                    <MaterialIcons name="auto-awesome" size={20} color={colors.primary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.agentModeTitle}>Agent Mode</Text>
+                                    <Text style={styles.agentModeDescription}>
+                                        Use AI to intelligently edit notes and create to-do lists from voice commands.
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={agentModeEnabled}
+                                    onValueChange={toggleAgentMode}
+                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    thumbColor={colors.surface}
+                                    ios_backgroundColor={colors.border}
+                                />
+                            </View>
+                        </View>
+                    </View>
 
                     <View style={styles.providerSwitcher}>
                         {providerOptions.map((option) => {
@@ -798,6 +832,46 @@ const styles = StyleSheet.create({
         ...typography.body,
         fontWeight: '600',
         marginBottom: spacing.xs,
+    },
+    agentModeCard: {
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        padding: spacing.m,
+        marginBottom: spacing.m,
+        borderWidth: 1,
+        borderColor: colors.border,
+        // Add subtle shine/elevation to make it stand out
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    agentModeHeader: {
+        flexDirection: 'column',
+    },
+    agentModeTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+    },
+    agentModeIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: colors.backgroundSecondary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    agentModeTitle: {
+        ...typography.h3,
+        fontSize: 16,
+        marginBottom: 2,
+    },
+    agentModeDescription: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        lineHeight: 18,
     },
     settingsPanel: {
         marginTop: spacing.l,
