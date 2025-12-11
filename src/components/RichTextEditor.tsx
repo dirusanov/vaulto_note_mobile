@@ -27,6 +27,8 @@ interface RichTextEditorProps {
     placeholder?: string;
     editable?: boolean;
     ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
+    baseFontSize?: number;
+    autoScalingEnabled?: boolean;
 }
 
 export interface RichTextEditorHandle {
@@ -53,6 +55,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         placeholder,
         editable = true,
         ListHeaderComponent,
+        baseFontSize = 16,
+        autoScalingEnabled = true,
     } = props;
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
@@ -631,34 +635,82 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
     }, [blocks, focusedBlockId]);
 
+    // Dynamic scaling logic based on content density
+    const getScaleFactor = () => {
+        if (!autoScalingEnabled) return 1.0;
+        const count = blocks.length;
+        if (count <= 8) return 1.25; // Large Mode
+        if (count <= 15) return 1.15; // Medium Mode
+        return 1.0; // Standard Mode
+    };
+
+    const scaleFactor = getScaleFactor();
+
+    // Derived font sizes
+    const fontSizeBody = baseFontSize * (scaleFactor); // Base body also scales if it's todo, treated below
+    // Headers scale based on baseFontSize but NOT the density scaleFactor (usually) 
+    // OR we might want everything to scale? 
+    // Let's scale text only for todos via scaleFactor as before, but Headers relative to baseFontSize.
+    const fontSizeH1 = baseFontSize * 1.5; // e.g. 16 -> 24
+    const fontSizeH2 = baseFontSize * 1.25; // e.g. 16 -> 20
+    const fontSizeH3 = baseFontSize * 1.125; // e.g. 16 -> 18
+
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
         const isHeader = item.type === 'h1' || item.type === 'h2' || item.type === 'h3';
 
+        // Font size logic:
+        // Todo: base * scaleFactor
+        // Text: base
+        // Headers: proportional
+        let currentFontSize = baseFontSize;
+        if (isTodo) {
+            currentFontSize = baseFontSize * scaleFactor;
+        } else if (item.type === 'h1') currentFontSize = fontSizeH1;
+        else if (item.type === 'h2') currentFontSize = fontSizeH2;
+        else if (item.type === 'h3') currentFontSize = fontSizeH3;
+
         // Base text styles for consistency
         const textStyles = [
             styles.input,
-            isTodo && styles.todoInput,
+            { fontSize: currentFontSize },
+            isTodo && {
+                ...styles.todoInput,
+                minHeight: (baseFontSize * 1.8) * scaleFactor, // Scale height with font
+                paddingTop: 4 * scaleFactor,
+                paddingBottom: 4 * scaleFactor
+            },
             item.checked && styles.todoInputChecked,
-            item.type === 'h1' && styles.h1,
-            item.type === 'h2' && styles.h2,
-            item.type === 'h3' && styles.h3,
+            item.type === 'h1' && { ...styles.h1, fontSize: fontSizeH1, marginBottom: 8 * (baseFontSize / 16) },
+            item.type === 'h2' && { ...styles.h2, fontSize: fontSizeH2, marginBottom: 6 * (baseFontSize / 16) },
+            item.type === 'h3' && { ...styles.h3, fontSize: fontSizeH3, marginBottom: 4 * (baseFontSize / 16) },
         ];
 
         return (
             <ScaleDecorator>
                 <View
-                    style={[styles.blockContainer, isActive && styles.draggingBlock]}
+                    style={[
+                        styles.blockContainer,
+                        isActive && styles.draggingBlock,
+                        isTodo && {
+                            minHeight: (baseFontSize * 2.5) * scaleFactor, // Touch target
+                            paddingVertical: 4 * scaleFactor,
+                            // alignItems: 'center' // Removed to support multiline text top-alignment
+                        }
+                    ]}
                 >
                     {isTodo && (
                         <TouchableOpacity
-                            style={styles.checkbox}
+                            style={[styles.checkbox, {
+                                marginTop: (4 * scaleFactor) + (baseFontSize * 0.1), // Heuristic alignment
+                                marginRight: spacing.s * scaleFactor
+                            }]}
                             onPress={() => toggleTodo(item.id)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         >
                             <MaterialIcons
                                 name={item.checked ? 'check-box' : 'check-box-outline-blank'}
-                                size={24}
+                                size={(baseFontSize * 1.5) * scaleFactor} // Scales with font
                                 color={item.checked ? colors.primary : colors.textTertiary}
                             />
                         </TouchableOpacity>

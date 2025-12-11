@@ -43,8 +43,15 @@ import {
     DEFAULT_IMPROVEMENT_OPTIONS,
     ensureTemplateHasPlaceholder,
 } from '../services/AIService';
-import { getAgentModeEnabled } from '../utils/storage';
+import {
+    getAgentModeEnabled,
+    getFontSize,
+    setFontSize,
+    getAutoScalingEnabled,
+    setAutoScalingEnabled
+} from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
+import { TextAppearanceModal } from '../components/TextAppearanceModal';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -144,6 +151,12 @@ export const NoteEditScreen = () => {
 
     const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
     const [agentModeEnabled, setAgentModeEnabled] = useState(true);
+
+    // Text Appearance State
+    const [fontSize, setFontSizeState] = useState(16);
+    const [autoScalingEnabled, setAutoScalingEnabledState] = useState(true);
+    const [showAppearanceModal, setShowAppearanceModal] = useState(false);
+
     const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const editorRef = useRef<RichTextEditorHandle>(null);
@@ -154,6 +167,20 @@ export const NoteEditScreen = () => {
     const loadSettings = async () => {
         const enabled = await getAgentModeEnabled();
         setAgentModeEnabled(enabled);
+        const size = await getFontSize();
+        setFontSizeState(size);
+        const scaling = await getAutoScalingEnabled();
+        setAutoScalingEnabledState(scaling);
+    };
+
+    const handleFontSizeChange = (size: number) => {
+        setFontSizeState(size);
+        setFontSize(size);
+    };
+
+    const handleAutoScalingChange = (enabled: boolean) => {
+        setAutoScalingEnabledState(enabled);
+        setAutoScalingEnabled(enabled);
     };
 
     useFocusEffect(
@@ -331,12 +358,6 @@ export const NoteEditScreen = () => {
 
     // Debounced save
     const saveTimeoutRef = useRef<NodeJS.Timeout>();
-    const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => {
-            saveNote();
-        }, 2000);
-    }, [saveNote]);
 
     const handleContentChange = (text: string) => {
         let newContent = text;
@@ -573,6 +594,13 @@ export const NoteEditScreen = () => {
             }
         }
     }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, saveImprovementDraft, title, updateNote]);
+
+    const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            saveNote();
+        }, 2000);
+    }, [saveNote]);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
         if (variantId === activeVariantId) {
@@ -1386,6 +1414,13 @@ export const NoteEditScreen = () => {
                     <MaterialIcons name="arrow-back" size={28} color={colors.text} />
                 </TouchableOpacity>
                 <View style={styles.headerRight}>
+                    {/* Text Appearance Button */}
+                    <TouchableOpacity
+                        onPress={() => setShowAppearanceModal(true)}
+                        style={styles.iconButton}
+                    >
+                        <MaterialIcons name="text-fields" size={24} color={colors.text} />
+                    </TouchableOpacity>
                     {/* AI Improvement Button */}
                     <TouchableOpacity
                         onPress={() => setShowAIModal(true)}
@@ -1683,6 +1718,8 @@ export const NoteEditScreen = () => {
                     <RichTextEditor
                         ref={editorRef}
                         initialContent={content}
+                        baseFontSize={fontSize}
+                        autoScalingEnabled={autoScalingEnabled}
                         onChange={(text) => {
                             setContent(text);
                             if (existingNote) debouncedSave(text, title);
@@ -1740,6 +1777,16 @@ export const NoteEditScreen = () => {
                 }}
                 autoStart={true}
             />
+
+            <TextAppearanceModal
+                visible={showAppearanceModal}
+                onClose={() => setShowAppearanceModal(false)}
+                fontSize={fontSize}
+                onFontSizeChange={handleFontSizeChange}
+                autoScalingEnabled={autoScalingEnabled}
+                onAutoScalingChange={handleAutoScalingChange}
+            />
+
         </ScreenContainer>
     );
 };

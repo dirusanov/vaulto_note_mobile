@@ -249,3 +249,43 @@ export const setAgentModeEnabled = async (enabled: boolean): Promise<void> => {
         console.error('Failed to set agent mode setting', e);
     }
 };
+
+// Text Appearance Settings
+const FONT_SIZE_KEY = 'vaulto_font_size';
+const AUTO_SCALING_KEY = 'vaulto_auto_scaling_enabled';
+
+export const getFontSize = async (): Promise<number> => {
+    try {
+        const value = await AsyncStorage.getItem(FONT_SIZE_KEY);
+        return value ? parseInt(value, 10) : 16; // Default 16
+    } catch (e) {
+        console.error('Failed to get font size', e);
+        return 16;
+    }
+};
+
+export const setFontSize = async (size: number): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(FONT_SIZE_KEY, size.toString());
+    } catch (e) {
+        console.error('Failed to set font size', e);
+    }
+};
+
+export const getAutoScalingEnabled = async (): Promise<boolean> => {
+    try {
+        const value = await AsyncStorage.getItem(AUTO_SCALING_KEY);
+        return value === null ? true : value === 'true'; // Default true
+    } catch (e) {
+        console.error('Failed to get auto scaling setting', e);
+        return true;
+    }
+};
+
+export const setAutoScalingEnabled = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(AUTO_SCALING_KEY, enabled.toString());
+    } catch (e) {
+        console.error('Failed to set auto scaling setting', e);
+    }
+};
