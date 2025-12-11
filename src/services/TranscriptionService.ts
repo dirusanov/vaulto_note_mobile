@@ -266,7 +266,8 @@ export async function testSelfHostedConnection(url: string, apiKey: string): Pro
  */
 export async function processVoiceNote(
     audioUri: string,
-    language: string = 'ru'
+    language: string = 'ru',
+    currentContent?: string
 ): Promise<VoiceNoteResult> {
     const provider = await getAIProvider();
     console.log('[VoiceAgent] Provider:', provider);
@@ -326,6 +327,9 @@ export async function processVoiceNote(
             name: 'audio.m4a',
         } as any);
         formData.append('language', language);
+        if (currentContent) {
+            formData.append('current_content', currentContent);
+        }
 
         const response = await fetch(baseUrl, {
             method: 'POST',

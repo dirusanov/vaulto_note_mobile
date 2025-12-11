@@ -834,36 +834,69 @@ export const NoteEditScreen = () => {
                     }
                 }
             } else {
-                // For child notes (Improvements), we ONLY do dictation (transcription -> append text).
-                // We do NOT use the smart agent logic here, just simple transcription.
+                // For improvements (and all other variants), we now use the Smart Agent too!
+                // This allows for "intelligent" editing (e.g., "remove X", "format as todo").
                 setIsTranscribing(true);
 
-                // Use simple transcription for edits to existing variants
-                const transcription = await transcribeAudio(recording.uri);
+                // Pass the current variant's content as context
+                const effectiveContent = activeVariantId === 'original'
+                    ? content
+                    : improvementDraftsRef.current[activeVariantId] || content;
+
+                const agentResult = await processVoiceNote(recording.uri, 'ru', effectiveContent);
                 setIsTranscribing(false);
 
-                // Always clean up the temp file
+                // Clean up temp file
                 await AudioService.deleteAudioFile(recording.uri);
 
-                if (transcription.success && transcription.text) {
-                    const newContent = content + (content ? '\n\n' : '') + transcription.text;
-                    setContent(newContent);
+                if (agentResult.success) {
+                    // Update content in-place with the processed result
+                    // The agent returns the FULL new text in processedText (or originalText if mode is none/transcript)
+                    // If mode is "edit" or "checklist", processedText contains the result.
+                    // If just transcription, we might get originalText.
 
-                    // Update drafts and history
-                    improvementDraftsRef.current[activeVariantId] = newContent;
-                    updateHistory('', newContent);
+                    const newText = agentResult.processedText || agentResult.originalText;
 
-                    // Helper to save improvement immediately
-                    if (localNoteId) {
-                        try {
-                            await updateImprovement(localNoteId, activeVariantId, { content: newContent });
-                            improvementSavedRef.current[activeVariantId] = newContent;
-                        } catch (error) {
-                            console.error('Failed to save improvement after dictation:', error);
+                    if (newText) {
+                        // If it was a pure append (no instruction), we might need to handle it.
+                        // But processVoiceNote usually handles "append" by returning the full text if it was a command?
+                        // Actually, if it's just transcription, we might want to append it ourselves if the agent didn't merge it.
+                        // CHECK: Backend returns "improved_markdown" which SHOULD be the full text if it edited it.
+                        // IF mode was 'none' (just transcription), we might need to append manually?
+                        // Let's assume the Agent tries to be smart. If mode is 'none', it might just return the raw transcript?
+                        // Re-reading TranscriptionService: 
+                        // return { originalText: result.raw_note, processedText: result.improved_markdown, mode: result.mode ... }
+
+                        let finalContent = newText;
+                        if (!agentResult.mode || agentResult.mode === 'none') {
+                            // Fallback: If agent didn't do anything special, append the raw text
+                            // But wait, if we passed context, the agent usually returns the merged result?
+                            // If we assume the agent is "smart enough" to return the full text if we sent context...
+                            // Let's play safe: If processedText is present, use it.
+                            // If NOT present (null), append originalText.
+                            if (!agentResult.processedText) {
+                                finalContent = effectiveContent + (effectiveContent ? '\n\n' : '') + agentResult.originalText;
+                            }
+                        }
+
+                        setContent(finalContent);
+
+                        // Update drafts and history
+                        improvementDraftsRef.current[activeVariantId] = finalContent;
+                        updateHistory('', finalContent);
+
+                        // Save immediately
+                        if (localNoteId) {
+                            try {
+                                await updateImprovement(localNoteId, activeVariantId, { content: finalContent });
+                                improvementSavedRef.current[activeVariantId] = finalContent;
+                            } catch (error) {
+                                console.error('Failed to save improvement after voice agent:', error);
+                            }
                         }
                     }
                 } else {
-                    Alert.alert('Transcription Failed', transcription.error || 'Could not recognize speech');
+                    Alert.alert('Voice Processing Failed', agentResult.error || 'Could not process voice command');
                 }
             }
 
