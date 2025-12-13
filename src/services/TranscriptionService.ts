@@ -13,6 +13,12 @@ const INITIAL_RETRY_DELAY = 2000; // 2 seconds
 const BACKEND_TRANSCRIBE_URL = `${API_URL}/ai/transcribe`;
 const BACKEND_PROCESS_NOTE_URL = `${API_URL}/ai/process_voice_note`;
 
+export interface TranscriptionResult {
+    text: string;
+    success: boolean;
+    error?: string;
+}
+
 export interface VoiceNoteResult {
     originalText: string;
     processedText?: string | null;

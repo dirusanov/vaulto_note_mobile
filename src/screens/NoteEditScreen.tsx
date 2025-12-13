@@ -56,6 +56,12 @@ import { TextAppearanceModal } from '../components/TextAppearanceModal';
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
 
+const normalizeTextForComparison = (value: string): string =>
+    value.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim();
+
+const areTextsEquivalent = (a: string, b: string): boolean =>
+    normalizeTextForComparison(a) === normalizeTextForComparison(b);
+
 // History stack implementation - separate history for each variant
 interface HistoryState {
     content: string;
@@ -361,7 +367,7 @@ export const NoteEditScreen = () => {
     }, [navigation]);
 
     // Debounced save
-    const saveTimeoutRef = useRef<NodeJS.Timeout>();
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const handleContentChange = (text: string) => {
         let newContent = text;
@@ -885,48 +891,61 @@ export const NoteEditScreen = () => {
                         noteId = newNote.id;
                         lastSavedTitle.current = title;
                         lastSavedContent.current = newOriginalContent;
-                    }
+	                    }
+	
+	                    // 2. Handle Instruction (Create Improvement)
+	                    const shouldCreateVoiceImprovement =
+	                        agentResult.hasInstruction &&
+	                        typeof agentResult.processedText === 'string' &&
+	                        agentResult.processedText.trim().length > 0 &&
+	                        !!noteId &&
+	                        !areTextsEquivalent(agentResult.processedText, originalText) &&
+	                        !areTextsEquivalent(agentResult.processedText, newOriginalContent);
 
-                    // 2. Handle Instruction (Create Improvement)
-                    if (agentResult.hasInstruction && agentResult.processedText && noteId) {
-                        try {
-                            setIsAIProcessing(true);
-                            // Determine label for new tab
-                            const label = agentResult.mode
-                                ? `AI (${agentResult.mode})`
+	                    if (shouldCreateVoiceImprovement && noteId) {
+	                        try {
+	                            setIsAIProcessing(true);
+	                            // Determine label for new tab
+	                            const label = agentResult.mode
+	                                ? `AI (${agentResult.mode})`
                                 : 'AI Improvement';
 
                             // Create the improvement
                             const newImprovement = await createImprovement(noteId, {
-                                content: agentResult.processedText,
+                                content: agentResult.processedText!,
                                 label: label,
                                 optionId: 'voice_instruction'
                             });
 
                             // Setup drafts/history for new variant
-                            improvementDraftsRef.current[newImprovement.id] = agentResult.processedText;
-                            improvementSavedRef.current[newImprovement.id] = agentResult.processedText;
+                            improvementDraftsRef.current[newImprovement.id] = agentResult.processedText!;
+                            improvementSavedRef.current[newImprovement.id] = agentResult.processedText!;
                             variantHistories.current[newImprovement.id] = {
-                                history: [{ title: title || '', content: agentResult.processedText }],
+                                history: [{ title: title || '', content: agentResult.processedText! }],
                                 index: 0
                             };
 
                             // Switch to new variant
                             setActiveVariantId(newImprovement.id);
-                            setContent(agentResult.processedText);
+                            setContent(agentResult.processedText!);
                             await setActiveVariant(noteId, newImprovement.id);
 
                         } catch (err) {
                             console.error('Failed to create improvement from voice agent:', err);
                             Alert.alert('Error', 'Original text saved, but failed to create AI improvement.');
                         } finally {
-                            setIsAIProcessing(false);
-                        }
-                    }
-
-                } else {
-                    // Transcription failed
-                    const isNewNote = !localNoteId;
+	                            setIsAIProcessing(false);
+	                        }
+	                    } else if (agentResult.hasInstruction && agentResult.processedText && noteId) {
+	                        console.log(
+	                            '[NoteEditScreen] Skipping voice improvement creation: processed text matches original',
+	                            { mode: agentResult.mode }
+	                        );
+	                    }
+	
+	                } else {
+	                    // Transcription failed
+	                    const isNewNote = !localNoteId;
                     const isEmptyNote = !title.trim() && !content.trim();
 
                     if (isNewNote && isEmptyNote) {
