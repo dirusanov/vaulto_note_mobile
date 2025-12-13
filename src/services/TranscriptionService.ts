@@ -31,7 +31,7 @@ export async function transcribeAudio(
     language: string = 'ru'
 ): Promise<TranscriptionResult> {
     const provider = await getAIProvider();
-    if (provider === 'local' || provider === 'selfhosted') {
+    if (provider === 'secure_llm' || provider === 'selfhosted') {
         return transcribeViaBackend(audioUri, language);
     }
 

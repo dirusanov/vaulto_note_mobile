@@ -122,7 +122,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     if (!option) throw new Error('Invalid option');
 
     const provider = await getAIProvider();
-    if (provider === 'local' || provider === 'selfhosted') {
+    if (provider === 'secure_llm' || provider === 'selfhosted') {
         return improveViaBackend(text, option);
     }
 

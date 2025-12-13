@@ -34,7 +34,7 @@ export const SettingsScreen = () => {
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [testingConnection, setTestingConnection] = useState(false);
     const [testingSelfHosted, setTestingSelfHosted] = useState(false);
-    const [aiProvider, setAiProviderState] = useState<AIProvider>('local');
+    const [aiProvider, setAiProviderState] = useState<AIProvider>('secure_llm');
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showOpenAIInfo, setShowOpenAIInfo] = useState(false);
     const [showSelfHostedInfo, setShowSelfHostedInfo] = useState(false);
@@ -74,7 +74,7 @@ export const SettingsScreen = () => {
 
     const providerOptions: ProviderOption[] = [
         {
-            key: 'local',
+            key: 'secure_llm',
             title: 'Secure LLM',
             blurb: 'Private & Anonymous',
             description: 'Whisper + LLM on our server. No data stored or analyzed. Fully anonymous and secure.',
@@ -304,15 +304,21 @@ export const SettingsScreen = () => {
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.agentModeTitle}>Agent Mode</Text>
                                     <Text style={styles.agentModeDescription}>
-                                        Use AI to intelligently edit notes and create to-do lists from voice commands.
+                                        Intellectual assistant for note creation
                                     </Text>
+                                    {aiProvider !== 'secure_llm' && (
+                                        <Text style={styles.agentModeWarning}>
+                                            Requires Secure LLM
+                                        </Text>
+                                    )}
                                 </View>
                                 <Switch
-                                    value={agentModeEnabled}
+                                    value={agentModeEnabled && aiProvider === 'secure_llm'}
                                     onValueChange={toggleAgentMode}
                                     trackColor={{ false: colors.border, true: colors.primary }}
                                     thumbColor={colors.surface}
                                     ios_backgroundColor={colors.border}
+                                    disabled={aiProvider !== 'secure_llm'}
                                 />
                             </View>
                         </View>
@@ -633,6 +639,12 @@ export const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    agentModeWarning: {
+        ...typography.caption,
+        color: colors.error,
+        marginTop: 4,
+        fontWeight: '600',
+    },
     scrollContent: {
         paddingVertical: spacing.s,
         gap: spacing.m,

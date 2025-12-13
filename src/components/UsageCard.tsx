@@ -12,7 +12,7 @@ interface UsageCardProps {
 
 export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest }) => {
     // Only show for Secure LLM provider
-    if (aiProvider !== 'local') return null;
+    if (aiProvider !== 'secure_llm') return null;
     if (!user) return null;
 
     console.log('[UsageCard] Rendering for user:', user.email || 'Guest');

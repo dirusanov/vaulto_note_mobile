@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { UserProfile } from '../api/auth';
 
-export type AIProvider = 'local' | 'openai' | 'selfhosted';
+export type AIProvider = 'secure_llm' | 'openai' | 'selfhosted';
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
@@ -129,13 +129,14 @@ export const setOpenAIApiKey = async (apiKey: string): Promise<void> => {
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
-        if (value === 'openai' || value === 'local' || value === 'selfhosted') {
-            return value;
+        if (value === 'openai' || value === 'secure_llm' || value === 'selfhosted') {
+            return value as AIProvider;
         }
-        return 'local';
+        // Fallback or migration: mapping 'local' to 'secure_llm' logic could go here, but for now default to 'secure_llm'
+        return 'secure_llm';
     } catch (e) {
         console.error('Failed to get AI provider', e);
-        return 'local';
+        return 'secure_llm';
     }
 };
 
