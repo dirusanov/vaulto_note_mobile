@@ -71,7 +71,8 @@ export const useNotes = () => {
             const plainTitle = (note.title || '').trim();
             const plainContent = (note.content || '').trim();
             const hasAudio = !!note.has_audio || !!note.audio_file_path;
-            return !plainTitle && !plainContent && !hasAudio;
+            const hasImprovements = note.improvements && note.improvements.length > 0;
+            return !plainTitle && !plainContent && !hasAudio && !hasImprovements;
         },
         [],
     );
@@ -320,8 +321,9 @@ export const useNotes = () => {
                 encryptedTranscription = await encrypt(updates.encrypted_transcription);
             }
 
+            const hasImprovements = (existing.improvements?.length ?? 0) > 0;
             const willBeEmpty = !titleToUse.trim() && !contentToUse.trim() && !hasAudio;
-            if (willBeEmpty) {
+            if (willBeEmpty && !hasImprovements) {
                 await deleteNote(id);
                 return existing;
             }

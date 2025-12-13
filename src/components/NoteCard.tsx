@@ -14,9 +14,11 @@ interface NoteCardProps {
 
 export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     let content = note.content || '';
-    if (note.active_child_id && note.active_child_id && note.active_child_id !== 'original' && note.improvements) {
-        const activeChild = note.improvements.find(imp => imp.id === note.active_child_id);
-        if (activeChild?.content) {
+
+    // Check if there is an active improvement (child note)
+    if (note.improvements && note.improvements.length > 0) {
+        const activeChild = note.improvements.find(imp => imp.is_active);
+        if (activeChild && activeChild.content) {
             content = activeChild.content;
         }
     }

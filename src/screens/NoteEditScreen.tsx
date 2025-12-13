@@ -87,8 +87,24 @@ export const NoteEditScreen = () => {
     const existingNote = notes.find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
 
+    // Determine initial active variant based on is_active flags
+    const getInitialActiveVariantId = () => {
+        if (!existingNote) return 'original';
+        if (existingNote.is_active) return 'original';
+        const activeChild = existingNote.improvements?.find(imp => imp.is_active);
+        if (activeChild) return activeChild.id;
+        return 'original';
+    };
+
+    const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
+
     const [title, setTitle] = useState(existingNote?.title || '');
-    const [content, setContent] = useState(existingNote?.content || '');
+    const [content, setContent] = useState(() => {
+        const initialId = getInitialActiveVariantId();
+        if (initialId === 'original') return existingNote?.content || '';
+        const imp = existingNote?.improvements?.find(i => i.id === initialId);
+        return imp?.content || existingNote?.content || '';
+    });
     const [isSaving, setIsSaving] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -135,21 +151,9 @@ export const NoteEditScreen = () => {
     const [showCustomInput, setShowCustomInput] = useState(false);
 
     // Determine initial active variant based on is_active flags
-    const getInitialActiveVariantId = () => {
-        if (!existingNote) return 'original';
 
-        // Check if parent is active
-        if (existingNote.is_active) return 'original';
 
-        // Check if any child is active
-        const activeChild = existingNote.improvements?.find(imp => imp.is_active);
-        if (activeChild) return activeChild.id;
 
-        // Default to original if no is_active flags set
-        return 'original';
-    };
-
-    const [activeVariantId, setActiveVariantId] = useState<string>(getInitialActiveVariantId());
     const [agentModeEnabled, setAgentModeEnabled] = useState(true);
 
     // Text Appearance State
@@ -538,18 +542,19 @@ export const NoteEditScreen = () => {
         }
     }, [activeVariantId, localNoteId, updateImprovement]);
 
-    const saveNote = useCallback(async () => {
-        if (activeVariantId !== 'original') {
-            await saveImprovementDraft();
-            return;
-        }
-        const hasAudio = !!audioUri || existingNote?.has_audio;
-        const emptyText = !title.trim() && !content.trim();
-        if (emptyText && !hasAudio) {
-            if (localNoteId) {
-                try {
-                    await deleteNote(localNoteId);
-                    if (isMounted.current) {
+	    const saveNote = useCallback(async () => {
+	        if (activeVariantId !== 'original') {
+	            await saveImprovementDraft();
+	            return;
+	        }
+	        const hasAudio = !!audioUri || existingNote?.has_audio;
+	        const hasImprovements = noteImprovements.length > 0;
+	        const emptyText = !title.trim() && !content.trim();
+	        if (emptyText && !hasAudio && !hasImprovements) {
+	            if (localNoteId) {
+	                try {
+	                    await deleteNote(localNoteId);
+	                    if (isMounted.current) {
                         setLocalNoteId(undefined);
                     }
                     lastSavedTitle.current = '';
@@ -557,9 +562,9 @@ export const NoteEditScreen = () => {
                 } catch (error) {
                     console.error('Failed to delete empty note:', error);
                 }
-            }
-            return;
-        }
+	            }
+	            return;
+	        }
 
         // Avoid duplicate save if nothing changed
         if (title === lastSavedTitle.current && content === lastSavedContent.current) {
@@ -593,7 +598,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, saveImprovementDraft, title, updateNote]);
+	    }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, noteImprovements.length, saveImprovementDraft, title, updateNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);

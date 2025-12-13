@@ -87,10 +87,23 @@ export const initDatabase = async (): Promise<void> => {
             for (const imp of improvements) {
                 // Insert as child note
                 await database.runAsync(
-                    `INSERT OR REPLACE INTO notes (
+                    `INSERT INTO notes (
                         id, parent_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
                         created_at, updated_at, synced, dirty, deleted, version, server_updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        parent_id=excluded.parent_id,
+                        encrypted_content=excluded.encrypted_content,
+                        encrypted_title=excluded.encrypted_title,
+                        content_nonce=excluded.content_nonce,
+                        label=excluded.label,
+                        option_id=excluded.option_id,
+                        updated_at=excluded.updated_at,
+                        synced=excluded.synced,
+                        dirty=excluded.dirty,
+                        deleted=excluded.deleted,
+                        version=excluded.version,
+                        server_updated_at=excluded.server_updated_at`,
                     [
                         imp.id,
                         imp.note_id, // parent_id
@@ -163,9 +176,9 @@ export const setActiveVariant = async (parentNoteId: string, activeChildId: stri
                     // Ensure all children are inactive even if none was previously active
                     await database.runAsync(
                         `UPDATE notes 
-                         SET is_active = 0 
+                         SET is_active = 0, dirty = 1, synced = 0, updated_at = ? 
                          WHERE parent_id = ?;`,
-                        [parentNoteId]
+                        [now, parentNoteId]
                     );
                 }
                 console.log(`[DatabaseService] Set parent ${parentNoteId} as active`);
@@ -191,8 +204,8 @@ export const setActiveVariant = async (parentNoteId: string, activeChildId: stri
                 } else if (!previousActiveChildId) {
                     // Make sure all other children are inactive if none tracked before
                     await database.runAsync(
-                        'UPDATE notes SET is_active = 0 WHERE parent_id = ? AND id != ?;',
-                        [parentNoteId, activeChildId]
+                        'UPDATE notes SET is_active = 0, dirty = 1, synced = 0, updated_at = ? WHERE parent_id = ? AND id != ?;',
+                        [now, parentNoteId, activeChildId]
                     );
                 }
 
@@ -222,17 +235,36 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
         const isPendingDelete = note.pending_delete || note.deleted ? 1 : 0;
 
         await database.runAsync(
-            `INSERT OR REPLACE INTO notes (
+            `INSERT INTO notes (
                 id, encrypted_title, encrypted_content, created_at, updated_at,
                 audio_file_path, audio_duration, encrypted_transcription, has_audio,
                 synced, dirty, deleted, version, server_updated_at, content_nonce, pending_delete,
                 parent_id, is_active, label, option_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                encrypted_title=excluded.encrypted_title,
+                encrypted_content=excluded.encrypted_content,
+                updated_at=excluded.updated_at,
+                audio_file_path=excluded.audio_file_path,
+                audio_duration=excluded.audio_duration,
+                encrypted_transcription=excluded.encrypted_transcription,
+                has_audio=excluded.has_audio,
+                synced=excluded.synced,
+                dirty=excluded.dirty,
+                deleted=excluded.deleted,
+                version=excluded.version,
+                server_updated_at=excluded.server_updated_at,
+                content_nonce=excluded.content_nonce,
+                pending_delete=excluded.pending_delete,
+                parent_id=excluded.parent_id,
+                is_active=excluded.is_active,
+                label=excluded.label,
+                option_id=excluded.option_id;`,
             [
                 note.id,
                 note.encrypted_title ?? null,
                 note.encrypted_content,
-                note.created_at ?? null,
+                note.created_at ?? note.updated_at ?? new Date().toISOString(),
                 note.updated_at ?? null,
                 note.audio_file_path ?? null,
                 note.audio_duration ?? null,
@@ -331,10 +363,12 @@ export const getNotesLocal = async (): Promise<Note[]> => {
 
         // Get all notes (parents and children)
         const rows = await database.getAllAsync<any>('SELECT * FROM notes;');
+        console.log(`[DatabaseService] Fetched ${rows.length} total rows from notes table`);
 
-        // Separate parents and children
         const parents = rows.filter((r: any) => !r.parent_id);
         const children = rows.filter((r: any) => r.parent_id);
+
+        console.log(`[DatabaseService] Found ${parents.length} parents and ${children.length} children`);
 
         // Group children by parent_id
         const childrenMap = new Map<string, any[]>();
@@ -361,6 +395,10 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                 childRows.sort((a, b) => {
                     return (new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
                 });
+
+                if (childRows.length > 0) {
+                    console.log(`[DatabaseService] Note ${row.id} has ${childRows.length} raw children`);
+                }
 
                 const childNotes: Note[] = [];
                 for (const cRow of childRows) {
@@ -390,11 +428,13 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                     });
                 }
 
-                // Logic to display selected child content in main list
-                const activeChild = childNotes.find(c => c.is_active);
-                if (activeChild && activeChild.content) {
-                    content = activeChild.content;
+                if (childRows.length > 0) {
+                    console.log(`[DatabaseService] Note ${row.id} attached ${childNotes.length} active (non-deleted) children`);
                 }
+
+                // Logic to display selected child content in main list -> Removed to prevent data loss of original content
+                // Content selection will be handled in the UI (NoteCard/NotesList)
+
 
                 notes.push({
                     id: row.id,
