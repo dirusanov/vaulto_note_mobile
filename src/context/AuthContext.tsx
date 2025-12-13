@@ -133,8 +133,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     await storage.setUserProfile(profile);
                     await syncService.setCurrentUser(profile.id, storedUserId);
                     console.log('[AuthContext] Profile refreshed:', profile.id);
-                } catch (err) {
-                    console.error('[AuthContext] Background profile refresh failed', err);
+                } catch (err: any) {
+                    if (err?.response?.status === 401) {
+                        console.log('[AuthContext] Background refresh unauthorized (401) - session likely expired');
+                    } else {
+                        console.error('[AuthContext] Background profile refresh failed', err);
+                    }
                     // If refresh fails (e.g. offline), we are still good with cached data
                 }
             } else if (storedToken) {
