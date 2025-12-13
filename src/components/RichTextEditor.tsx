@@ -741,9 +741,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     >
                         {item.content
                             ? parseMarkdownForInput(item.content, textStyles)
-                            : (blocks.length === 1 && placeholder
-                                ? <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
-                                : null)}
+                            : null}
                     </TextInput>
                 </View>
             </ScaleDecorator >
