@@ -45,6 +45,7 @@ import {
 } from '../services/AIService';
 import {
     getAgentModeEnabled,
+    getAIProvider,
     getFontSize,
     setFontSize,
     getAutoScalingEnabled,
@@ -160,8 +161,6 @@ export const NoteEditScreen = () => {
 
 
 
-    const [agentModeEnabled, setAgentModeEnabled] = useState(true);
-
     // Text Appearance State
     const [fontSize, setFontSizeState] = useState(16);
     const [autoScalingEnabled, setAutoScalingEnabledState] = useState(true);
@@ -175,11 +174,11 @@ export const NoteEditScreen = () => {
     const improvementSavedRef = useRef<Record<string, string>>({});
 
     const loadSettings = async () => {
-        const enabled = await getAgentModeEnabled();
-        setAgentModeEnabled(enabled);
-        const size = await getFontSize();
+        const [size, scaling] = await Promise.all([
+            getFontSize(),
+            getAutoScalingEnabled(),
+        ]);
         setFontSizeState(size);
-        const scaling = await getAutoScalingEnabled();
         setAutoScalingEnabledState(scaling);
     };
 
@@ -548,19 +547,19 @@ export const NoteEditScreen = () => {
         }
     }, [activeVariantId, localNoteId, updateImprovement]);
 
-	    const saveNote = useCallback(async () => {
-	        if (activeVariantId !== 'original') {
-	            await saveImprovementDraft();
-	            return;
-	        }
-	        const hasAudio = !!audioUri || existingNote?.has_audio;
-	        const hasImprovements = noteImprovements.length > 0;
-	        const emptyText = !title.trim() && !content.trim();
-	        if (emptyText && !hasAudio && !hasImprovements) {
-	            if (localNoteId) {
-	                try {
-	                    await deleteNote(localNoteId);
-	                    if (isMounted.current) {
+    const saveNote = useCallback(async () => {
+        if (activeVariantId !== 'original') {
+            await saveImprovementDraft();
+            return;
+        }
+        const hasAudio = !!audioUri || existingNote?.has_audio;
+        const hasImprovements = noteImprovements.length > 0;
+        const emptyText = !title.trim() && !content.trim();
+        if (emptyText && !hasAudio && !hasImprovements) {
+            if (localNoteId) {
+                try {
+                    await deleteNote(localNoteId);
+                    if (isMounted.current) {
                         setLocalNoteId(undefined);
                     }
                     lastSavedTitle.current = '';
@@ -568,9 +567,9 @@ export const NoteEditScreen = () => {
                 } catch (error) {
                     console.error('Failed to delete empty note:', error);
                 }
-	            }
-	            return;
-	        }
+            }
+            return;
+        }
 
         // Avoid duplicate save if nothing changed
         if (title === lastSavedTitle.current && content === lastSavedContent.current) {
@@ -604,7 +603,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-	    }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, noteImprovements.length, saveImprovementDraft, title, updateNote]);
+    }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, noteImprovements.length, saveImprovementDraft, title, updateNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -760,10 +759,17 @@ export const NoteEditScreen = () => {
     const handleRecordingFinish = async (recording: AudioRecording) => {
         setShowVoiceRecorder(false);
 
+        // Always decide based on persisted settings to avoid races with async preference loading.
+        const [storedAgentModeEnabled, provider] = await Promise.all([
+            getAgentModeEnabled(),
+            getAIProvider(),
+        ]);
+        const shouldUseAgentMode = storedAgentModeEnabled && provider === 'secure_llm';
+
         // ---------------------------------------------------------
         // 1. SIMPLE MODE (Agent disabled)
         // ---------------------------------------------------------
-        if (!agentModeEnabled) {
+        if (!shouldUseAgentMode) {
             setIsTranscribing(true);
             const transcription = await transcribeAudio(recording.uri);
             setIsTranscribing(false);
@@ -891,23 +897,23 @@ export const NoteEditScreen = () => {
                         noteId = newNote.id;
                         lastSavedTitle.current = title;
                         lastSavedContent.current = newOriginalContent;
-	                    }
-	
-	                    // 2. Handle Instruction (Create Improvement)
-	                    const shouldCreateVoiceImprovement =
-	                        agentResult.hasInstruction &&
-	                        typeof agentResult.processedText === 'string' &&
-	                        agentResult.processedText.trim().length > 0 &&
-	                        !!noteId &&
-	                        !areTextsEquivalent(agentResult.processedText, originalText) &&
-	                        !areTextsEquivalent(agentResult.processedText, newOriginalContent);
+                    }
 
-	                    if (shouldCreateVoiceImprovement && noteId) {
-	                        try {
-	                            setIsAIProcessing(true);
-	                            // Determine label for new tab
-	                            const label = agentResult.mode
-	                                ? `AI (${agentResult.mode})`
+                    // 2. Handle Instruction (Create Improvement)
+                    const shouldCreateVoiceImprovement =
+                        agentResult.hasInstruction &&
+                        typeof agentResult.processedText === 'string' &&
+                        agentResult.processedText.trim().length > 0 &&
+                        !!noteId &&
+                        !areTextsEquivalent(agentResult.processedText, originalText) &&
+                        !areTextsEquivalent(agentResult.processedText, newOriginalContent);
+
+                    if (shouldCreateVoiceImprovement && noteId) {
+                        try {
+                            setIsAIProcessing(true);
+                            // Determine label for new tab
+                            const label = agentResult.mode
+                                ? `AI (${agentResult.mode})`
                                 : 'AI Improvement';
 
                             // Create the improvement
@@ -934,18 +940,18 @@ export const NoteEditScreen = () => {
                             console.error('Failed to create improvement from voice agent:', err);
                             Alert.alert('Error', 'Original text saved, but failed to create AI improvement.');
                         } finally {
-	                            setIsAIProcessing(false);
-	                        }
-	                    } else if (agentResult.hasInstruction && agentResult.processedText && noteId) {
-	                        console.log(
-	                            '[NoteEditScreen] Skipping voice improvement creation: processed text matches original',
-	                            { mode: agentResult.mode }
-	                        );
-	                    }
-	
-	                } else {
-	                    // Transcription failed
-	                    const isNewNote = !localNoteId;
+                            setIsAIProcessing(false);
+                        }
+                    } else if (agentResult.hasInstruction && agentResult.processedText && noteId) {
+                        console.log(
+                            '[NoteEditScreen] Skipping voice improvement creation: processed text matches original',
+                            { mode: agentResult.mode }
+                        );
+                    }
+
+                } else {
+                    // Transcription failed
+                    const isNewNote = !localNoteId;
                     const isEmptyNote = !title.trim() && !content.trim();
 
                     if (isNewNote && isEmptyNote) {

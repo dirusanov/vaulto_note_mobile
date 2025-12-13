@@ -107,6 +107,7 @@ class AudioServiceClass {
 
             // Define recording options for AAC/m4a
             const recordingOptions: Audio.RecordingOptions = {
+                isMeteringEnabled: true,
                 android: {
                     extension: '.m4a',
                     outputFormat: Audio.AndroidOutputFormat.MPEG_4,

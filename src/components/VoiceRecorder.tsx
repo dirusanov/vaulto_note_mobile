@@ -24,6 +24,8 @@ interface VoiceRecorderProps {
 
 const { width } = Dimensions.get('window');
 const BAR_COUNT = 20;
+const SILENCE_THRESHOLD_DB = -60;
+const MIN_VOICE_SAMPLES = 3;
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     visible,
@@ -35,6 +37,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
     const currentMetering = useRef(-160); // Default low dB
+    const meteringSamples = useRef(0);
+    const voiceSamples = useRef(0);
 
     // Waveform animations
     const animations = useRef([...Array(BAR_COUNT)].map(() => new Animated.Value(0.3))).current;
@@ -50,6 +54,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsPaused(false);
             setDuration(0);
             currentMetering.current = -160;
+            meteringSamples.current = 0;
+            voiceSamples.current = 0;
         }
     }, [visible]);
 
@@ -125,8 +131,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     const handleStartRecording = async () => {
         try {
+            currentMetering.current = -160;
+            meteringSamples.current = 0;
+            voiceSamples.current = 0;
             await AudioService.startRecording((level) => {
                 currentMetering.current = level;
+                meteringSamples.current += 1;
+                if (level > SILENCE_THRESHOLD_DB) {
+                    voiceSamples.current += 1;
+                }
             });
             setIsRecording(true);
             setIsPaused(false);
@@ -156,6 +169,17 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsRecording(false);
             setIsPaused(false);
             if (recording) {
+                const hasMetering = meteringSamples.current > 0;
+                const hasVoiceSignal = !hasMetering || voiceSamples.current >= MIN_VOICE_SAMPLES;
+                if (!hasVoiceSignal) {
+                    await AudioService.deleteAudioFile(recording.uri);
+                    Alert.alert(
+                        'No audio captured',
+                        'It looks like the microphone is being used by another app (e.g. WhatsApp call) or the input is muted. Please stop the other recording/call and try again.'
+                    );
+                    onCancel();
+                    return;
+                }
                 onFinish(recording);
             }
         } catch (error) {

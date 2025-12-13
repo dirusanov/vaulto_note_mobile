@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { API_URL } from '../utils/env';
-import { storage, getAIProvider, getOpenAIApiKey } from '../utils/storage';
+import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey } from '../utils/storage';
 
 const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
@@ -275,8 +275,27 @@ export async function processVoiceNote(
     language: string = 'ru',
     currentContent?: string
 ): Promise<VoiceNoteResult> {
-    const provider = await getAIProvider();
-    console.log('[VoiceAgent] Provider:', provider);
+    const [provider, agentModeEnabled] = await Promise.all([
+        getAIProvider(),
+        getAgentModeEnabled(),
+    ]);
+    console.log('[VoiceAgent] Provider:', provider, 'Agent mode enabled:', agentModeEnabled);
+
+    // Hard guard: /ai/process_voice_note must only be called when Agent Mode is enabled.
+    // When Agent Mode is OFF, always fall back to normal transcription (/ai/transcribe or client-side Whisper).
+    if (!agentModeEnabled) {
+        console.log('[VoiceAgent] Agent mode disabled. Falling back to simple transcription.');
+        const transResult = await transcribeAudio(audioUri, language);
+        return {
+            originalText: transResult.text,
+            processedText: null,
+            hasInstruction: false,
+            instruction: null,
+            mode: 'none',
+            success: transResult.success,
+            error: transResult.error,
+        };
+    }
 
     // Fallback for non-backend providers (e.g. direct OpenAI on client)
     // If not using the gateway, we can't use the agent logic easily without re-implementing it here.
