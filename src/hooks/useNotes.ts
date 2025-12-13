@@ -438,6 +438,17 @@ export const useNotes = () => {
                 label: params.label,
                 optionId: params.optionId,
             });
+
+
+            // Update parent note's updated_at so it moves to top of list
+            const parentUpdate: Note = {
+                ...note,
+                updated_at: new Date().toISOString(),
+                synced: 0,
+                dirty: true,
+            };
+            await saveNoteLocal(parentUpdate);
+
             await refreshFromLocal();
             syncService.scheduleAutoSync();
             return improvement;
@@ -515,6 +526,17 @@ export const useNotes = () => {
             });
 
             await saveImprovementLocal(updated, true);
+
+
+            // Update parent note's updated_at so it moves to top of list
+            const parentUpdate: Note = {
+                ...note,
+                updated_at: new Date().toISOString(),
+                synced: 0,
+                dirty: true,
+            };
+            await saveNoteLocal(parentUpdate);
+
             await refreshFromLocal();
             syncService.scheduleAutoSync();
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, TextStyle, StyleProp, StyleSheet } from 'react-native';
+import { colors } from '../theme/colors';
 
 /**
  * Basic markdown parser for inline formatting.
@@ -78,7 +79,7 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
     // 3. Bold, Italic, Code etc (for parts outside the Todo Block)
 
     // Pattern order matters! Longer specific matches first.
-    const fullPattern = /((?:^|\s)-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$))|(?:\s|^)-\s\[ \]\s|\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
+    const fullPattern = /(==(?:(?:red|orange|yellow|green|blue|purple):)?.+?==|<u>.*?<\/u>|(?:^|\s)-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$))|(?:\s|^)-\s\[ \]\s|\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
 
     // Split text by pattern
     // Note: capturing group causes split to include the separator.
@@ -87,40 +88,43 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
     return split.map((chunk, index) => {
         if (!chunk) return null; // Empty splits
 
-        // We must flatten baseStyle to avoid nested array issues, but we shouldn't keep re-applying it deeply if inherited?
-        // Actually, RN Text inheritance works by nesting.
-        // If we just output <Text style={addedStyle}>{recursive}</Text>, recursive children inherit addedStyle+parent.
-        // But `parseMarkdownText` wraps non-matches in `Text` with `style`.
-        // If we pass `baseStyle` recursively, the inner-most text gets `baseStyle` N times?
-        // Actually, if we pass `style` (accumulated) to recursive call?
-        // No, we should NOT pass any style to recursive call if we want pure nesting, 
-        // OR we pass nothing and rely on inheritance.
-        // However, `parseMarkdownText` *always* applies `baseStyle` to chunks it creates.
-        // If we pass nothing: `parse(content)` -> creates Text with `baseStyle` (undefined).
-        // Parent `<Text style={bold}> <RecursiveChild> </Text>`
-        // RecursiveChild = `<Text style={undefined}>content</Text>`
-        // Result: Bold -> Undefined.
-        // In RN, nested Text inherits. So Child inherits Bold.
-        // If we passed `baseStyle` again: Child has `baseStyle`.
-        // If `baseStyle` has color red. Parent (Red+Bold) -> Child (Red).
-        // Result: Red+Bold. Consistent.
-        // But if we have overlapping font sizes etc, it might be an issue. 
-        // Usually safer to pass nothing or minimal props recursively and rely on context/inheritance.
-        // Let's pass `[]` or `undefined` to recursive calls to strictly rely on inheritance for attributes established by PARENTS,
-        // BUT we must preserve the original `baseStyle` for the "leaf" text nodes if they are not nested?
-        // Actually, every node returned by parseMarkdownText is a Text node.
-        // If we pass `undefined`, the leaf node is `<Text style={undefined}>text</Text>`.
-        // Nested in `<Text style={Bold}>...</Text>`.
-        // Uses Bold.
-        // If `baseStyle` had {color: 'red'}.
-        // The top-level call wraps in `<Text style={red}>`.
-        // Recursion returns `<Text>{inner}</Text>`.
-        // Nesting: `<Text style={red}> <Text style={bold}> <Text>inner</Text> </Text> </Text>`.
-        // Inner inherits Bold and Red. Correct.
-        // So we pass `undefined` (or skip arg) for recursive calls.
-
         let content: React.ReactNode = chunk;
         const style: TextStyle[] = [StyleSheet.flatten(baseStyle)];
+
+        // Highlight: ==...==
+        if (chunk.startsWith('==') && chunk.endsWith('==') && chunk.length >= 4) {
+            const inner = chunk.substring(2, chunk.length - 2);
+            let colorKey = 'yellow';
+            let innerText = inner;
+
+            // Check for color prefix
+            const colorMatch = inner.match(/^(red|orange|yellow|green|blue|purple):(.*)$/);
+            if (colorMatch) {
+                colorKey = colorMatch[1];
+                innerText = colorMatch[2];
+            }
+
+            // Apply background color from theme
+            const highlightColor = (colors.highlight as any)[colorKey] || colors.highlight.yellow;
+            style.push({ backgroundColor: highlightColor });
+
+            return (
+                <Text key={index} style={style}>
+                    {parseMarkdownText(innerText)}
+                </Text>
+            );
+        }
+
+        // Underline: <u>...</u>
+        if (chunk.startsWith('<u>') && chunk.endsWith('</u>') && chunk.length >= 7) {
+            const innerText = chunk.substring(3, chunk.length - 4);
+            style.push({ textDecorationLine: 'underline' });
+            return (
+                <Text key={index} style={style}>
+                    {parseMarkdownText(innerText)}
+                </Text>
+            );
+        }
 
         // Completed Todo Block: "- [x] content..."
         const completedMatch = chunk.match(/^\s*-\s\[[xX]\]\s(.*)$/);
@@ -208,11 +212,26 @@ export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>
  * Parses markdown for TextInput children.
  * Syntax markers are rendered with almost-zero size to hide them but keep them in the DOM.
  */
-export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {
+export const parseMarkdownForInput = (
+    text: string,
+    baseStyle?: StyleProp<TextStyle>
+): React.ReactNode[] => {
     if (!text) return [];
 
-    // Same pattern as above
-    const fullPattern = /(\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
+    // Patterns
+    // Highlight (Color): ==color:content==
+    // Highlight (Default): ==content==
+    // Bold: **content**
+    // Strike: ~~content~~
+    // Code: `content`
+    // Italic: _content_ or *content*
+
+    // We need to capture the color key if present.
+    // Regex for highlight: ==((?:[a-z]+:)?.+?)==
+    // But split doesn't give us captured groups easily if we want to differentiate.
+    // Let's stick to the list of token types.
+
+    const fullPattern = /(==(?:(?:red|orange|yellow|green|blue|purple):)?.+?==|<u>.*?<\/u>|\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
     const split = text.split(fullPattern);
 
     // Hidden style for markers
@@ -221,13 +240,52 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
         color: 'transparent',
     };
 
+
     return split.map((chunk, index) => {
         if (!chunk) return null;
 
         const style: TextStyle[] = [StyleSheet.flatten(baseStyle)];
 
+        // Highlight: ==...==
+        if (chunk.startsWith('==') && chunk.endsWith('==') && chunk.length >= 4) {
+            const inner = chunk.substring(2, chunk.length - 2);
+            let colorKey = 'yellow';
+            let content = inner;
+
+            // Check for color prefix
+            const colorMatch = inner.match(/^(red|orange|yellow|green|blue|purple):(.*)$/);
+            if (colorMatch) {
+                colorKey = colorMatch[1];
+                content = colorMatch[2];
+            }
+
+            // Apply background color from theme
+            const highlightColor = (colors.highlight as any)[colorKey] || colors.highlight.yellow;
+            style.push({ backgroundColor: highlightColor });
+
+            return (
+                <Text key={index} style={style}>
+                    <Text style={hiddenStyle}>=={colorMatch ? colorKey + ':' : ''}</Text>
+                    {parseMarkdownForInput(content)}
+                    {/* Note: Recursive highlight active word? Maybe too distinct. Let's disable for nested for now or pass relative offset? */}
+                    <Text style={hiddenStyle}>==</Text>
+                </Text>
+            );
+        }
+        // Underline: <u>content</u>
+        else if (chunk.startsWith('<u>') && chunk.endsWith('</u>') && chunk.length >= 7) {
+            const content = chunk.substring(3, chunk.length - 4);
+            style.push({ textDecorationLine: 'underline' });
+            return (
+                <Text key={index} style={style}>
+                    <Text style={hiddenStyle}>&lt;u&gt;</Text>
+                    {parseMarkdownForInput(content)}
+                    <Text style={hiddenStyle}>&lt;/u&gt;</Text>
+                </Text>
+            );
+        }
         // Bold: **content**
-        if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
+        else if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
             const content = chunk.substring(2, chunk.length - 2);
             style.push({ fontWeight: 'bold' });
             return (
@@ -254,8 +312,6 @@ export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextSt
         else if (chunk.startsWith('`') && chunk.endsWith('`') && chunk.length >= 2) {
             const content = chunk.substring(1, chunk.length - 1);
             style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
-            // Code usually doesn't nest other markdown?
-            // Let's assume no recursion for code to preserve syntax if user types `**` inside code.
             return (
                 <Text key={index} style={style}>
                     <Text style={hiddenStyle}>`</Text>

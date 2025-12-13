@@ -8,7 +8,9 @@ import {
     TextInputKeyPressEventData,
     Platform,
     TextInputSelectionChangeEventData,
-    Text
+    Text,
+    StyleProp,
+    TextStyle
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -134,12 +136,76 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         checkOverlap(/\*\*(.*?)\*\*/g, 'bold', 2);
 
         // Italic (_..._ or *...*)
-        // checkOverlap(/_(.*?)_/g, 'italic', 1);
-        // We need to check both. But we can combine regex or check individually.
-        checkOverlap(/(_(.*?)_|\*(.*?)\*)/g, 'italic', 1);
+        // Italic (_..._)
+        checkOverlap(/_(.*?)_/g, 'italic', 1);
+
+        // Italic (*...*) - Strict check to avoid overlap with Bold (**)
+        const starItalicRegex = /\*((?:.|\n)*?)\*/g; // Match *content* non-greedy
+        let starMatch;
+        while ((starMatch = starItalicRegex.exec(text)) !== null) {
+            const mStart = starMatch.index;
+            const mText = starMatch[0];
+            const mEnd = mStart + mText.length;
+
+            // Check overlap
+            if ((selection.start >= mStart && selection.start <= mEnd) ||
+                (selection.end >= mStart && selection.end <= mEnd) ||
+                (selection.start <= mStart && selection.end >= mEnd)) {
+
+                // Verify strictness: The delimiter * must be part of an ODD sequence of stars
+                // to be Italic. If it is part of Even (2, 4), it is Bold.
+
+                // Count contiguous stars around start
+                let startRunStart = mStart;
+                while (startRunStart > 0 && text[startRunStart - 1] === '*') startRunStart--;
+                let startRunEnd = mStart;
+                while (startRunEnd < text.length && text[startRunEnd] === '*') startRunEnd++;
+                const starCount = startRunEnd - startRunStart;
+
+                if (starCount % 2 !== 0) {
+                    styles.push('italic');
+                    break; // Found valid italic
+                }
+            }
+        }
 
         // Strikethrough (~~...~~)
         checkOverlap(/~~(.*?)~~/g, 'strikethrough', 2);
+
+        // Underline (<u>...</u>)
+        checkOverlap(/<u>(.*?)<\/u>/g, 'underline', 3);
+
+        // Highlight (==...==)
+        // Check for specific colors or default
+        // We need to return the SPECIFIC color type if detected, e.g. 'highlight:red'
+        // But the checkOverlap helper applies a single type.
+        // Let's do custom logic for highlight.
+        const highlightRegex = /==((?:[a-z]+:)?.+?)==/g;
+        // checkOverlap(highlightRegex, 'highlight', 2); 
+        // We need to know specific color. 
+        highlightRegex.lastIndex = 0;
+        let match;
+        while ((match = highlightRegex.exec(text)) !== null) {
+            const matchStart = match.index;
+            const matchEnd = matchStart + match[0].length; // ==red:foo==
+            if ((selection.start >= matchStart && selection.start <= matchEnd) ||
+                (selection.end >= matchStart && selection.end <= matchEnd) ||
+                (selection.start <= matchStart && selection.end >= matchEnd)) {
+
+                // Determine color
+                const inner = match[1]; // red:foo
+                let color = 'yellow';
+                if (inner.includes(':')) {
+                    const parts = inner.split(':');
+                    if (parts[0] && ['red', 'orange', 'yellow', 'green', 'blue', 'purple'].includes(parts[0])) {
+                        color = parts[0];
+                    }
+                }
+                styles.push(`highlight:${color}` as MarkdownFormatType);
+                styles.push('highlight' as MarkdownFormatType); // Generic indicator
+                return styles; // Return early if strict? Or continue? Usually one style per range kind.
+            }
+        }
 
         return styles;
     };
@@ -163,7 +229,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (blockIndex === -1) return;
 
             const block = blocks[blockIndex];
-            const selection = blockSelections.current[focusedBlockId] || { start: block.content.length, end: block.content.length };
+            let selection = blockSelections.current[focusedBlockId] || { start: block.content.length, end: block.content.length };
             let newBlocks = [...blocks];
 
             if (['h1', 'h2', 'h3', 'todo', 'list'].includes(type)) {
@@ -257,9 +323,36 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     }
                 }
             } else {
-                // Inline formatting (bold, italic, strikethrough)
-                const { start, end } = selection;
-                let text = block.content;
+                // Inline formatting (bold, italic, strikethrough, highlight)
+                let { start, end } = selection;
+                const text = block.content;
+
+                // Smart Selection: If cursor is collapsed, expand to word boundaries
+                if (start === end) {
+                    // Find word start: stop at whitespace OR punctuation
+                    const wordCharRegex = /[^\s.,;:!?(){}\[\]"']/;
+                    let wordStart = start;
+                    while (wordStart > 0 && wordCharRegex.test(text[wordStart - 1])) {
+                        wordStart--;
+                    }
+                    // Find word end
+                    let wordEnd = end;
+                    while (wordEnd < text.length && wordCharRegex.test(text[wordEnd])) {
+                        wordEnd++;
+                    }
+
+                    // Only expand if we found a non-empty word
+                    if (wordEnd > wordStart) {
+                        start = wordStart;
+                        end = wordEnd;
+                        // Update selection for later use in this scope
+                        selection = { start, end };
+                        // Note: We don't update component state selection immediately here, 
+                        // as the formatting logic below will use these new indices to apply the format.
+                        // The final setBlocks will update the content with the format applied to this range.
+                    }
+                }
+
                 let wrapper = '';
                 let regex: RegExp | null = null;
 
@@ -269,42 +362,127 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     wrapper = '_';
                 }
                 else if (type === 'strikethrough') { wrapper = '~~'; regex = /~~(.*?)~~/g; }
+                else if (type === 'underline') { wrapper = '<u>'; regex = /<u>(.*?)<\/u>/g; }
+                else if (typeof type === 'string' && type.startsWith('highlight')) {
+                    // Extract color if present "highlight:red" or just "highlight" (default)
+                    const chunks = type.split(':');
+                    const color = chunks.length > 1 ? chunks[1] : 'yellow';
+                    wrapper = `==${color}:`; // e.g. ==red:
+                    // Regex to find ANY highlight
+                    regex = /==((?:[a-z]+:)?.+?)==/g;
+                }
 
                 let newText = text;
 
                 // Check if active (toggle off)
                 const activeStyles = detectActiveStyles(block, selection);
-                if (activeStyles.includes(type) && regex) {
-                    // Remove formatting
+                // "highlight:red" vs "highlight" logic
+                // If we want to toggle RED highlight:
+                // If RED is active -> Remove it.
+                // If YELLOW is active -> Change to RED? Or add Red too? (No, replacement).
+                // Let's say: if ANY highlight is detected, we check:
+                // 1. Is it the exact same color? -> Toggle Off.
+                // 2. Is it a different color? -> Replace Color.
+                // 3. No highlight? -> Toggle On.
+
+                const highlightMatch = activeStyles.find(s => s.startsWith('highlight'));
+
+                if (highlightMatch && regex && type.startsWith('highlight')) {
+                    // We have an existing highlight.
+                    // The 'highlightMatch' might be 'highlight:red'.
+                    // The 'type' is what we are applying, e.g. 'highlight:blue'.
+                    const chunks = type.split(':');
+                    const targetColor = chunks.length > 1 ? chunks[1] : 'yellow'; // default
+
+                    const existingChunks = highlightMatch.split(':');
+                    const existingColor = existingChunks.length > 1 ? existingChunks[1] : 'yellow';
+
+                    // Remove EXISTING highlight first
                     let match;
-                    let found = false;
+                    while ((match = regex.exec(text)) !== null) {
+                        const matchStart = match.index;
+                        const matchEnd = matchStart + match[0].length;
+                        const matchContent = match[0]; // e.g. ==red:text== or ==text==
+
+                        // Determine current wrapper length logic for this match
+                        // It can be `==` or `==color:`
+                        let currentWrapperLenStart = 2; // '=='
+                        const innerStart = matchContent.indexOf(':');
+                        if (innerStart !== -1 && innerStart < 10) { // arbitrary safety check for "color:"
+                            // It has a color prefix.
+                            // Actually, logic is: '==' + 'color' + ':' 
+                            // We scan for first ':'?
+                            currentWrapperLenStart = innerStart + 1; // ==red: is index of : + 1 length
+                            // Wait, matchContent contains the outer ==.
+                            // ==red:foo==.  inner matches "red:foo". match[1] matches "red:foo".
+                            // My regex: `==((?:[a-z]+:)?.+?)==`
+                            // match[0] is `==red:foo==`.
+                            // match[1] is `red:foo`.
+                            // We want to remove outer `==` and potential `color:` prefix.
+                            // If match[1] starts with "red:", remove it.
+                        }
+                        const currentWrapperLenEnd = 2; // '=='
+
+                        if ((start >= matchStart && start <= matchEnd) ||
+                            (end >= matchStart && end <= matchEnd) ||
+                            (start <= matchStart && end >= matchEnd)) {
+
+                            // Found the overlapping highlight.
+                            const prefix = text.substring(0, matchStart);
+                            // Extract just the text content
+                            const innerRaw = match[1]; // "red:text" or "text"
+                            let cleanContent = innerRaw;
+                            const colMatch = innerRaw.match(/^([a-z]+):(.+)$/);
+                            if (colMatch) {
+                                cleanContent = colMatch[2];
+                            }
+
+                            const suffix = text.substring(matchEnd);
+
+                            // If colors match (Toggle OFF)
+                            if (targetColor === existingColor) {
+                                newText = prefix + cleanContent + suffix;
+                            } else {
+                                // Colors differ (Replace Color/Toggle ON new color)
+                                // Wrap cleanContent with new wrapper
+                                const newWrapper = `==${targetColor}:`;
+                                newText = prefix + newWrapper + cleanContent + '==' + suffix;
+                            }
+                            break;
+                        }
+                    }
+
+                } else if (activeStyles.includes(type) && regex && !type.startsWith('highlight')) {
+                    // Standard toggle off for bold/italic...
+                    // ... (existing logic) ...
+                    let match;
                     while ((match = regex.exec(text)) !== null) {
                         const matchStart = match.index;
                         const matchEnd = matchStart + match[0].length;
                         const matchContent = match[0];
 
-                        let currentWrapperLen = wrapper.length;
-                        let currentWrapperStr = wrapper;
+                        let startWrapperLen = wrapper.length;
+                        let endWrapperLen = wrapper.length;
+
                         if (type === 'italic') {
-                            if (matchContent.startsWith('_')) {
-                                currentWrapperLen = 1;
-                                currentWrapperStr = '_';
-                            } else if (matchContent.startsWith('*')) {
-                                currentWrapperLen = 1;
-                                currentWrapperStr = '*';
+                            if (matchContent.startsWith('_') || matchContent.startsWith('*')) {
+                                startWrapperLen = 1;
+                                endWrapperLen = 1;
                             }
                         } else if (type === 'bold' || type === 'strikethrough') {
-                            currentWrapperLen = 2;
-                            currentWrapperStr = matchContent.substring(0, 2);
+                            startWrapperLen = 2;
+                            endWrapperLen = 2;
+                        } else if (type === 'underline') {
+                            startWrapperLen = 3; // <u>
+                            endWrapperLen = 4;   // </u>
                         }
 
                         if ((start >= matchStart && start <= matchEnd) ||
                             (end >= matchStart && end <= matchEnd) ||
                             (start <= matchStart && end >= matchEnd)) {
-                            found = true;
 
-                            const innerStart = matchStart + currentWrapperLen;
-                            const innerEnd = matchEnd - currentWrapperLen;
+                            const innerStart = matchStart + startWrapperLen;
+                            const innerEnd = matchEnd - endWrapperLen;
 
                             const prefix = text.substring(0, matchStart);
                             const content = text.substring(innerStart, innerEnd);
@@ -317,12 +495,34 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 } else {
                     // Add formatting
                     const selectedText = text.substring(start, end);
-                    newText = text.substring(0, start) + wrapper + selectedText + wrapper + text.substring(end);
 
-                    blockSelections.current[block.id] = {
-                        start: start + wrapper.length,
-                        end: end + wrapper.length
-                    };
+                    if (type.startsWith('highlight')) {
+                        const chunks = type.split(':');
+                        const color = chunks.length > 1 ? chunks[1] : 'yellow';
+                        // Apply full wrapper
+                        // If I just select 'foo' -> ==red:foo==
+                        newText = text.substring(0, start) + `==${color}:${selectedText}==` + text.substring(end);
+
+                        blockSelections.current[block.id] = {
+                            start: start + `==${color}:`.length,
+                            end: end + `==${color}:`.length
+                        };
+
+                    } else {
+                        // Apply new formatting (wrapping)
+                        let endWrapper = wrapper;
+                        if (type === 'underline') {
+                            endWrapper = '</u>';
+                        } else if (type.startsWith('highlight')) {
+                            endWrapper = '==';
+                        }
+
+                        newText = text.substring(0, start) + wrapper + selectedText + endWrapper + text.substring(end);
+                        blockSelections.current[block.id] = {
+                            start: start + wrapper.length,
+                            end: end + wrapper.length
+                        };
+                    }
                 }
 
                 newBlocks[blockIndex] = { ...block, content: newText };
@@ -726,6 +926,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         placeholderTextColor={colors.textMuted}
                         multiline={true}
                         scrollEnabled={false}
+                        autoCorrect={false}
+                        spellCheck={false}
                         onFocus={() => {
                             setFocusedBlockId(item.id);
                             const selection = blockSelections.current[item.id];
@@ -739,6 +941,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             setFocusedBlockId(null);
                         }}
                     >
+
                         {item.content
                             ? parseMarkdownForInput(item.content, textStyles)
                             : null}

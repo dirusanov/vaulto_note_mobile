@@ -138,6 +138,7 @@ export const NoteEditScreen = () => {
     const lastSavedTitle = useRef(existingNote?.title || '');
     const lastSavedContent = useRef(existingNote?.content || '');
     const skipAutoSaveRef = useRef(false);
+    const isColorPickerOpen = useRef(false);
     const isMounted = useRef(true);
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
@@ -1328,9 +1329,20 @@ export const NoteEditScreen = () => {
         }
     }, [route.params?.initialRecording]);
 
+    // Track keyboard visibility to handle color picker interactions
+    const isKeyboardVisible = useRef(false);
+
     useEffect(() => {
-        const showSub = Keyboard.addListener('keyboardDidShow', () => setIsEditing(true));
-        const hideSub = Keyboard.addListener('keyboardDidHide', () => setIsEditing(false));
+        const showSub = Keyboard.addListener('keyboardDidShow', () => {
+            setIsEditing(true);
+            isKeyboardVisible.current = true;
+        });
+        const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+            isKeyboardVisible.current = false;
+            if (!isColorPickerOpen.current) {
+                setIsEditing(false);
+            }
+        });
 
         return () => {
             showSub.remove();
@@ -1769,7 +1781,17 @@ export const NoteEditScreen = () => {
                 {/* Formatting Toolbar - Show when in Edit Mode. */}
                 {isEditing && (
                     <View style={styles.toolbarContainer}>
-                        <MarkdownToolbar onFormat={handleFormat} activeFormats={activeFormats} />
+                        <MarkdownToolbar
+                            onFormat={handleFormat}
+                            activeFormats={activeFormats}
+                            onColorPickerToggle={(visible) => {
+                                isColorPickerOpen.current = visible;
+                                // If picker closes and keyboard is already hidden, hide the toolbar
+                                if (!visible && !isKeyboardVisible.current) {
+                                    setIsEditing(false);
+                                }
+                            }}
+                        />
                     </View>
                 )}
             </KeyboardAvoidingView>
@@ -2260,6 +2282,6 @@ const styles = StyleSheet.create({
     toolbarContainer: {
         width: '100%',
         backgroundColor: colors.surface,
-        paddingBottom: spacing.s,
+        // paddingBottom removed to bring closer to keyboard
     },
 });

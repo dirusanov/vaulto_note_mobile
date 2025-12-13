@@ -38,4 +38,15 @@ export const colors = {
     // Overlays
     overlay: 'rgba(0, 0, 0, 0.5)',
     cardShadow: 'rgba(0, 0, 0, 0.06)',
+    activeWordHighlight: 'rgba(0, 102, 255, 0.1)', // Subtle primary highlight
+
+    // Highlight Colors - Pastel Palette
+    highlight: {
+        yellow: '#FFFFBA',
+        red: '#FFB3BA',
+        orange: '#FFDFBA',
+        green: '#BAFFC9',
+        blue: '#BAE1FF',
+        purple: '#E2BAFF',
+    }
 };
