@@ -1329,6 +1329,25 @@ export const NoteEditScreen = () => {
         await saveImprovementOptions(data);
     };
 
+    const handleDeletePrompt = (id: string) => {
+        Alert.alert(
+            'Delete Prompt',
+            'Are you sure you want to delete this prompt?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        const updated = aiOptions.filter(opt => opt.id !== id);
+                        setAiOptions(updated);
+                        await saveImprovementOptions(updated);
+                    }
+                }
+            ]
+        );
+    };
+
     const handleCreatePrompt = async () => {
         if (!newPromptTitle.trim() || !newPromptTemplate.trim()) {
             return;
@@ -1747,6 +1766,15 @@ export const NoteEditScreen = () => {
                                                         <Text style={styles.aiOptionLabel}>{item.label}</Text>
                                                         {renderOptionPrompt(item.prompt)}
                                                     </View>
+                                                    {item.isCustom && (
+                                                        <TouchableOpacity
+                                                            onPress={() => handleDeletePrompt(item.id)}
+                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                            style={{ padding: 8, marginRight: 4 }}
+                                                        >
+                                                            <MaterialIcons name="delete-outline" size={22} color={colors.error} />
+                                                        </TouchableOpacity>
+                                                    )}
                                                     <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
                                                 </TouchableOpacity>
                                             </ScaleDecorator>
