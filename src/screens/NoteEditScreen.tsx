@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -34,6 +34,7 @@ import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
+import * as Haptics from 'expo-haptics';
 import { getPrivacyWarningDismissed } from '../utils/storage';
 import {
     improveText,
@@ -1715,29 +1716,40 @@ export const NoteEditScreen = () => {
                                         <ActivityIndicator color={colors.primary} />
                                     </View>
                                 ) : (
-                                    <FlatList
+                                    <DraggableFlatList
                                         style={styles.aiList}
                                         contentContainerStyle={styles.aiListContent}
                                         data={aiOptions}
                                         keyExtractor={(item) => item.id}
-                                        renderItem={({ item }) => (
-                                            <TouchableOpacity
-                                                style={[styles.aiOptionItem, styles.aiReorderItem]}
-                                                onPress={() => {
-                                                    handleAIImprovement(item);
-                                                }}
-                                                activeOpacity={0.7}
-                                            >
-                                                <View style={styles.aiOptionIconContainer}>
-                                                    <MaterialIcons name={item.icon as any} size={24} color={colors.primary} />
-                                                </View>
-                                                <View style={styles.aiOptionTextWrapper}>
-                                                    <Text style={styles.aiOptionLabel}>{item.label}</Text>
-                                                    {renderOptionPrompt(item.prompt)}
-                                                </View>
-                                                {/* Drag handle removed for now */}
-                                                {/* <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} /> */}
-                                            </TouchableOpacity>
+                                        onDragEnd={({ data }) => handleReorderEnd(data)}
+                                        renderItem={({ item, drag, isActive }: RenderItemParams<AIImprovementOption>) => (
+                                            <ScaleDecorator>
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.aiOptionItem,
+                                                        styles.aiReorderItem,
+                                                        isActive && styles.aiOptionActive
+                                                    ]}
+                                                    onPress={() => {
+                                                        if (!isActive) handleAIImprovement(item);
+                                                    }}
+                                                    onLongPress={() => {
+                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                        drag();
+                                                    }}
+                                                    disabled={isActive}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <View style={styles.aiOptionIconContainer}>
+                                                        <MaterialIcons name={item.icon as any} size={24} color={isActive ? colors.primary : colors.primary} />
+                                                    </View>
+                                                    <View style={styles.aiOptionTextWrapper}>
+                                                        <Text style={styles.aiOptionLabel}>{item.label}</Text>
+                                                        {renderOptionPrompt(item.prompt)}
+                                                    </View>
+                                                    <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
+                                                </TouchableOpacity>
+                                            </ScaleDecorator>
                                         )}
                                     />
                                 )}
