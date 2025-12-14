@@ -28,7 +28,7 @@ export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
         id: 'grammar',
         label: 'Fix Grammar',
         icon: 'spellcheck',
-        prompt: 'Fix grammatical and spelling errors in the following text, preserving the original language and style: {text}'
+        prompt: 'Check the following text for grammatical and spelling errors. You MUST return a specific JSON object. Response format: JSON object with keys "is_correct" (boolean) and "fixed_text" (string). You MUST ignore all stylistic choices, including dashes, quotes, and spacing. Only correct actual grammar or spelling mistakes. If the only differences are stylistic or punctuation preferences, or if the text is already correct, set "is_correct": true and "fixed_text": "". If there are errors, set "is_correct": false and "fixed_text": "YOUR_CORRECTED_TEXT_HERE". Do not include markdown formatting or code blocks. Return ONLY the JSON string. Text to check: {text}'
     },
     {
         id: 'professional',
@@ -132,26 +132,33 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     try {
         const promptForModel = buildPromptForRequest(option.prompt, text);
 
+        const requestBody: any = {
+            model: 'gpt-3.5-turbo-1106',
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are a helpful writing assistant. Return ONLY the improved text, without any conversational filler or explanations.'
+                },
+                {
+                    role: 'user',
+                    content: promptForModel
+                }
+            ],
+            temperature: 0.7,
+        };
+
+        if (option.id === 'grammar') {
+            requestBody.response_format = { type: 'json_object' };
+            requestBody.temperature = 0.2;
+        }
+
         const response = await fetch(OPENAI_CHAT_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({
-                model: 'gpt-3.5-turbo',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a helpful writing assistant. Return ONLY the improved text, without any conversational filler or explanations.'
-                    },
-                    {
-                        role: 'user',
-                        content: promptForModel
-                    }
-                ],
-                temperature: 0.7,
-            }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {

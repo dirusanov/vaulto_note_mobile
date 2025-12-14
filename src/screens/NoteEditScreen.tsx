@@ -1190,6 +1190,53 @@ export const NoteEditScreen = () => {
             }
             const improvedText = await improveText(sourceText, option);
 
+            let finalText = improvedText;
+
+            if (option.id === 'grammar') {
+                try {
+                    let jsonString = improvedText;
+                    const jsonStart = improvedText.indexOf('{');
+                    const jsonEnd = improvedText.lastIndexOf('}');
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        jsonString = improvedText.substring(jsonStart, jsonEnd + 1);
+                    }
+                    const jsonRes = JSON.parse(jsonString);
+
+                    // If the AI says it's correct, we stop here.
+                    if (jsonRes.is_correct) {
+                        Alert.alert('✨ Perfect!', 'No grammar errors found.');
+                        setIsAIProcessing(false);
+                        return;
+                    }
+
+                    // Otherwise, we expect fixed_text
+                    if (jsonRes.fixed_text) {
+                        finalText = jsonRes.fixed_text;
+                    } else if (jsonRes.corrected_text) {
+                        // Fallback in case AI hallucinates the old key
+                        finalText = jsonRes.corrected_text;
+                    }
+                } catch (e) {
+                    // Use warn instead of error to avoid RedBox in development
+                    console.warn('Failed to parse grammar correction JSON', e);
+                    console.log('Raw AI response:', improvedText);
+
+                    // Fallback: if the response looks like just the corrected text (no JSON structure), use it
+                    // But for grammar, we expect JSON. If parsing failed, it might be a chatty response.
+                    // If it's chatty, we probably shouldn't blindly use it. 
+                    // However, we verify if it matches source text to avoid false positives.
+                    if (areTextsEquivalent(sourceText, improvedText)) {
+                        Alert.alert('✨ Perfect!', 'No grammar errors found.');
+                        setIsAIProcessing(false);
+                        return;
+                    }
+                }
+            } else if (areTextsEquivalent(sourceText, improvedText)) {
+                Alert.alert('No changes', 'The text remains unchanged.');
+                setIsAIProcessing(false);
+                return;
+            }
+
             let targetNoteId = localNoteId;
             if (!targetNoteId) {
                 const newNote = await createNote({
@@ -1223,16 +1270,16 @@ export const NoteEditScreen = () => {
                 // Create new child variant from parent
                 console.log('[NoteEditScreen] Creating new improvement variant');
                 const improvement = await createImprovement(targetNoteId, {
-                    content: improvedText,
+                    content: finalText,
                     label: option.label,
                     optionId: option.id,
                 });
-                improvementDraftsRef.current[improvement.id] = improvedText;
-                improvementSavedRef.current[improvement.id] = improvedText;
+                improvementDraftsRef.current[improvement.id] = finalText;
+                improvementSavedRef.current[improvement.id] = finalText;
 
                 // Initialize history for new variant
                 variantHistories.current[improvement.id] = {
-                    history: [{ title: title || '', content: improvedText }],
+                    history: [{ title: title || '', content: finalText }],
                     index: 0
                 };
                 // No need to call setHistoryUpdateCount because index 0 means no undo yet, which is correct for new "file"
@@ -1241,7 +1288,7 @@ export const NoteEditScreen = () => {
                 await setActiveVariant(targetNoteId, improvement.id);
 
                 setActiveVariantId(improvement.id);
-                setContent(improvedText);
+                setContent(finalText);
             } else {
                 // Update existing child variant in-place (no new children from children)
                 console.log('[NoteEditScreen] Updating existing improvement in-place:', {
@@ -1251,7 +1298,7 @@ export const NoteEditScreen = () => {
                     newOptionId: option.id
                 });
                 const updatedImprovement = await updateImprovement(targetNoteId, activeVariantId, {
-                    content: improvedText,
+                    content: finalText,
                     label: option.label,
                     optionId: option.id,
                 });
@@ -1259,12 +1306,12 @@ export const NoteEditScreen = () => {
                 console.log('[NoteEditScreen] Improvement updated successfully');
 
                 // Update refs and UI with new content
-                improvementDraftsRef.current[activeVariantId] = improvedText;
-                improvementSavedRef.current[activeVariantId] = improvedText;
-                setContent(improvedText);
+                improvementDraftsRef.current[activeVariantId] = finalText;
+                improvementSavedRef.current[activeVariantId] = finalText;
+                setContent(finalText);
 
                 // Update history for this variant
-                updateHistoryImmediate('', improvedText);
+                updateHistoryImmediate('', finalText);
             }
         } catch (error) {
             const message = error instanceof Error
