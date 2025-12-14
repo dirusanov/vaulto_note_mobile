@@ -143,6 +143,9 @@ export const NoteEditScreen = () => {
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
 
+    // Force re-render on history update to show undo/redo arrows
+    const [historyUpdateCount, setHistoryUpdateCount] = useState(0);
+
     // AI State
     const [showAIModal, setShowAIModal] = useState(false);
     const [isAIProcessing, setIsAIProcessing] = useState(false);
@@ -359,7 +362,36 @@ export const NoteEditScreen = () => {
                 history: newHistory,
                 index: currentHistory.index
             };
+            setHistoryUpdateCount(prev => prev + 1);
         }, 500); // 500ms debounce
+    };
+
+    // Immediate history update for discrete actions (AI, Voice)
+    const updateHistoryImmediate = (newTitle: string, newContent: string) => {
+        if (historyTimeoutRef.current) {
+            clearTimeout(historyTimeoutRef.current);
+        }
+
+        const variantId = activeVariantId;
+        const currentHistory = variantHistories.current[variantId] || {
+            history: [],
+            index: -1
+        };
+
+        const newHistory = currentHistory.history.slice(0, currentHistory.index + 1);
+        newHistory.push({ title: newTitle, content: newContent });
+
+        if (newHistory.length > 50) {
+            newHistory.shift();
+        } else {
+            currentHistory.index++;
+        }
+
+        variantHistories.current[variantId] = {
+            history: newHistory,
+            index: currentHistory.index
+        };
+        setHistoryUpdateCount(prev => prev + 1);
     };
 
     const handleTitleChange = (text: string) => {
@@ -802,7 +834,7 @@ export const NoteEditScreen = () => {
                 if (transcription.success && transcription.text) {
                     const newOriginalContent = content + (content ? '\n\n' : '') + transcription.text;
                     setContent(newOriginalContent);
-                    updateHistory(title, newOriginalContent);
+                    updateHistoryImmediate(title, newOriginalContent);
 
                     if (localNoteId) {
                         await updateNote(localNoteId, {
@@ -842,8 +874,7 @@ export const NoteEditScreen = () => {
                 if (transcription.success && transcription.text) {
                     const newContent = content + (content ? '\n\n' : '') + transcription.text;
                     setContent(newContent);
-                    improvementDraftsRef.current[activeVariantId] = newContent;
-                    updateHistory('', newContent);
+                    updateHistoryImmediate('', newContent);
                     if (localNoteId) {
                         try {
                             await updateImprovement(localNoteId, activeVariantId, { content: newContent });
@@ -886,7 +917,7 @@ export const NoteEditScreen = () => {
 
                     // 1. Update Original Note
                     setContent(newOriginalContent);
-                    updateHistory(title, newOriginalContent);
+                    updateHistoryImmediate(title, newOriginalContent);
 
                     let noteId = localNoteId;
 
@@ -1051,7 +1082,7 @@ export const NoteEditScreen = () => {
 
                         // Update drafts and history
                         improvementDraftsRef.current[activeVariantId] = finalContent;
-                        updateHistory('', finalContent);
+                        updateHistoryImmediate('', finalContent);
 
                         // Save immediately
                         if (localNoteId) {
@@ -1199,6 +1230,13 @@ export const NoteEditScreen = () => {
                 improvementDraftsRef.current[improvement.id] = improvedText;
                 improvementSavedRef.current[improvement.id] = improvedText;
 
+                // Initialize history for new variant
+                variantHistories.current[improvement.id] = {
+                    history: [{ title: title || '', content: improvedText }],
+                    index: 0
+                };
+                // No need to call setHistoryUpdateCount because index 0 means no undo yet, which is correct for new "file"
+
                 // Set this improvement as active in the database
                 await setActiveVariant(targetNoteId, improvement.id);
 
@@ -1226,7 +1264,7 @@ export const NoteEditScreen = () => {
                 setContent(improvedText);
 
                 // Update history for this variant
-                updateHistory('', improvedText);
+                updateHistoryImmediate('', improvedText);
             }
         } catch (error) {
             const message = error instanceof Error

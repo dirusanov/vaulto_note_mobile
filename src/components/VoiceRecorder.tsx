@@ -211,7 +211,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             <View style={styles.overlay}>
                 <View style={styles.container}>
                     {/* Header */}
-                    <Text style={styles.title}>{isPaused ? 'PAUSED' : 'RECORDING...'}</Text>
+                    <Text style={styles.title}>{isPaused ? 'Recording Paused' : 'Recording Audio...'}</Text>
 
                     {/* Timer */}
                     <Text style={styles.timer} numberOfLines={1} adjustsFontSizeToFit>{formatDuration(duration)}</Text>
@@ -238,21 +238,21 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={styles.cancelButton}
                             onPress={handleCancel}
                         >
-                            <MaterialIcons name="close" size={28} color={colors.textMuted} />
+                            <MaterialIcons name="close" size={36} color="white" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={styles.pauseButton}
                             onPress={handlePauseResume}
                         >
-                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={32} color="white" />
+                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={40} color={colors.text} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={styles.stopButton}
+                            style={styles.finishButton}
                             onPress={handleStopRecording}
                         >
-                            <View style={styles.stopIcon} />
+                            <MaterialIcons name="check" size={36} color="white" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -285,7 +285,6 @@ const styles = StyleSheet.create({
         color: colors.primary,
         marginBottom: spacing.s,
         letterSpacing: 1,
-        textTransform: 'uppercase',
     },
     timer: {
         ...typography.h1,
@@ -316,49 +315,42 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.l, // Reduced gap to fit more buttons
+        gap: spacing.xxl, // Increased gap for perceived minimalism
         width: '100%',
     },
-    stopButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#ef4444', // Red
+    finishButton: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: colors.success,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#ef4444',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    stopIcon: {
-        width: 24,
-        height: 24,
-        borderRadius: 4,
-        backgroundColor: 'white',
+        shadowColor: colors.success,
+        shadowOffset: { width: 0, height: 8 }, // Softer, deeper shadow
+        shadowOpacity: 0.2, // Reduced opacity
+        shadowRadius: 16, // Smoother blur
+        elevation: 12,
     },
     pauseButton: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#3b82f6', // Blue
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: colors.backgroundSecondary,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#3b82f6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
+        // Minimalistic: No heavy shadow for neutral action
     },
     cancelButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: colors.background,
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: colors.error,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
+        shadowColor: colors.error,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 12,
     },
 });
