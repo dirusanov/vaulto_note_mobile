@@ -23,7 +23,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
 
     // Check if any highlight is active
     const activeHighlight = activeFormats.find(f => f.startsWith('highlight:'));
-    const activeColor = activeHighlight ? activeHighlight.split(':')[1] : 'yellow';
+    const activeColor = activeHighlight ? activeHighlight.split(':')[1] : 'white';
     const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
 
     const getButtonStyle = (type: MarkdownFormatType) => [
@@ -41,6 +41,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
         { name: 'purple', value: colors.highlight.purple },
         { name: 'red', value: colors.highlight.red },
         { name: 'orange', value: colors.highlight.orange },
+        { name: 'white', value: colors.highlight.white },
     ];
 
     const handleHighlightPress = () => {
@@ -82,20 +83,32 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
 
                     {/* Group 2: Headers */}
                     <TouchableOpacity
-                        style={getButtonStyle('h1')}
-                        onPress={() => onFormat('h1')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <Text style={[styles.headingIcon, { fontSize: 18, fontWeight: 'bold', color: getIconColor('h1') }]}>H1</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
                         style={getButtonStyle('h2')}
                         onPress={() => onFormat('h2')}
                         hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                     >
-                        <Text style={[styles.headingIcon, { fontSize: 16, fontWeight: 'bold', color: getIconColor('h2') }]}>H2</Text>
+                        <Text style={[styles.headingIcon, { fontSize: 18, fontWeight: 'bold', color: getIconColor('h2') }]}>H</Text>
                     </TouchableOpacity>
+
+                    <View style={styles.divider} />
+
+                    {/* Highlight Button */}
+                    <TouchableOpacity
+                        style={[
+                            styles.button,
+                            isHighlightActive && { backgroundColor: (colors.highlight as any)[activeColor] }
+                        ]}
+                        onPress={handleHighlightPress}
+                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                    >
+                        <MaterialIcons
+                            name="border-color"
+                            size={20}
+                            color={isHighlightActive ? colors.text : colors.text}
+                        />
+                        <View style={[styles.colorIndicator, { backgroundColor: (colors.highlight as any)[activeColor] }]} />
+                    </TouchableOpacity>
+
 
                     <View style={styles.divider} />
 
@@ -132,22 +145,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                         <MaterialIcons name="format-strikethrough" size={24} color={getIconColor('strikethrough')} />
                     </TouchableOpacity>
 
-                    {/* Highlight Button */}
-                    <TouchableOpacity
-                        style={[
-                            styles.button,
-                            isHighlightActive && { backgroundColor: (colors.highlight as any)[activeColor] }
-                        ]}
-                        onPress={handleHighlightPress}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons
-                            name="border-color"
-                            size={20}
-                            color={isHighlightActive ? colors.text : colors.text}
-                        />
-                        <View style={[styles.colorIndicator, { backgroundColor: (colors.highlight as any)[activeColor] }]} />
-                    </TouchableOpacity>
+
 
                 </ScrollView>
             </View>
@@ -192,8 +190,8 @@ const styles = StyleSheet.create({
         backgroundColor: colors.surface,
         borderTopWidth: 1,
         borderTopColor: colors.border,
-        paddingVertical: 2, // Thinner vertical padding
-        paddingBottom: 0,   // Removed bottom padding
+        paddingVertical: 0, // Removed vertical padding
+        marginHorizontal: -spacing.m, // Extend to screen edges
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
@@ -211,10 +209,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     scrollContent: {
-        paddingHorizontal: 0, // Removed padding
+        paddingHorizontal: spacing.s, // Add small padding for content
         alignItems: 'center',
         gap: spacing.s,
-        height: 45, // Reduced height (was 50)
+        height: 44, // Tighter height
     },
     button: {
         width: 40,

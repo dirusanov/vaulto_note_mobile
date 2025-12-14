@@ -204,6 +204,21 @@ export const NoteEditScreen = () => {
             return;
         }
 
+        // Initialize history with loaded content if it was empty (fixes Undo wiping content)
+        const currentOriginalHist = variantHistories.current['original'];
+        if (currentOriginalHist && currentOriginalHist.history.length === 1 && currentOriginalHist.index === 0) {
+            const firstState = currentOriginalHist.history[0];
+            if (!firstState.title && !firstState.content && (existingNote.title || existingNote.content)) {
+                variantHistories.current['original'] = {
+                    history: [{
+                        title: existingNote.title || '',
+                        content: existingNote.content || ''
+                    }],
+                    index: 0
+                };
+            }
+        }
+
         // Sync drafts for improvements
         if (noteImprovements.length > 0) {
             const drafts = { ...improvementDraftsRef.current };
@@ -1490,22 +1505,36 @@ export const NoteEditScreen = () => {
                         </TouchableOpacity>
                     )}
 
-                    {isEditing ? (
+                    {/* Redo/Undo Buttons - Visible if editing or if history exists */}
+                    {(isEditing || (variantHistories.current[activeVariantId]?.index > 0) || (variantHistories.current[activeVariantId]?.index < (variantHistories.current[activeVariantId]?.history?.length || 0) - 1)) && (
                         <>
-                            <TouchableOpacity onPress={handleUndo} style={styles.iconButton}>
-                                <MaterialIcons name="undo" size={24} color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0) ? colors.textMuted : colors.text} />
+                            <TouchableOpacity
+                                onPress={handleUndo}
+                                style={styles.iconButton}
+                                disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0}
+                            >
+                                <MaterialIcons
+                                    name="undo"
+                                    size={24}
+                                    color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0) ? colors.textMuted : colors.text}
+                                />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={handleRedo}
                                 style={styles.iconButton}
-                                disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1}
+                                disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === (variantHistories.current[activeVariantId].history.length - 1)}
                             >
-                                <MaterialIcons name="redo" size={24} color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === variantHistories.current[activeVariantId].history.length - 1) ? colors.textMuted : colors.text} />
+                                <MaterialIcons
+                                    name="redo"
+                                    size={24}
+                                    color={(!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === (variantHistories.current[activeVariantId].history.length - 1)) ? colors.textMuted : colors.text}
+                                />
                             </TouchableOpacity>
-                            {/* Removed Checklist button here since checks are available in toolbar now. 
-                                 Can keep if user wants to insert todo without toolbar? 
-                                 User request implies toolbar is THE way. Clean header is better.
-                             */}
+                        </>
+                    )}
+
+                    {isEditing ? (
+                        <>
                             <TouchableOpacity onPress={handleCheckPress} style={styles.iconButton}>
                                 <MaterialIcons name="check" size={24} color={colors.text} />
                             </TouchableOpacity>

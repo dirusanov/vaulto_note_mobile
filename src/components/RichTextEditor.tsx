@@ -439,8 +439,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
                             const suffix = text.substring(matchEnd);
 
-                            // If colors match (Toggle OFF)
-                            if (targetColor === existingColor) {
+                            // If colors match OR target is 'white' (Toggle OFF/Remove)
+                            if (targetColor === existingColor || targetColor === 'white') {
                                 newText = prefix + cleanContent + suffix;
                             } else {
                                 // Colors differ (Replace Color/Toggle ON new color)
@@ -499,6 +499,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     if (type.startsWith('highlight')) {
                         const chunks = type.split(':');
                         const color = chunks.length > 1 ? chunks[1] : 'yellow';
+
+                        if (color === 'white') {
+                            // Do nothing if trying to apply white highlight to unhighlighted text (it effectively cleans it)
+                            return;
+                        }
+
                         // Apply full wrapper
                         // If I just select 'foo' -> ==red:foo==
                         newText = text.substring(0, start) + `==${color}:${selectedText}==` + text.substring(end);
