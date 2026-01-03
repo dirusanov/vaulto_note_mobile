@@ -47,6 +47,8 @@ export interface Note {
     dirty?: boolean;
     deleted?: boolean;
     improvements?: Note[]; // Changed from NoteImprovement[] to Note[]
+    conversation_summary?: string;
+    encrypted_conversation_summary?: string;
 }
 
 export interface SyncChangeRequest {

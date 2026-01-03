@@ -102,11 +102,13 @@ export const useNotes = () => {
             content: string;
             audio?: NoteAudio;
             transcription?: string;
+            conversation_summary?: string;
         }) => {
-            const { id, title, content, audio, transcription } = params;
+            const { id, title, content, audio, transcription, conversation_summary } = params;
             const encryptedTitle = await encrypt(title);
             const encryptedContent = await encrypt(content);
             const encryptedTranscription = transcription ? await encrypt(transcription) : undefined;
+            const encryptedConversationSummary = conversation_summary ? await encrypt(conversation_summary) : undefined;
             const now = new Date().toISOString();
             const localNote: Note = {
                 id,
@@ -118,6 +120,8 @@ export const useNotes = () => {
                 audio_duration: audio?.duration,
                 encrypted_transcription: encryptedTranscription,
                 transcription,
+                encrypted_conversation_summary: encryptedConversationSummary,
+                conversation_summary,
                 has_audio: !!audio,
                 title,
                 content,
@@ -237,8 +241,8 @@ export const useNotes = () => {
         }
     }, [isAuthenticated, refreshFromLocal]);
 
-    const createNote = async (data: { title?: string; content: string; audio?: NoteAudio }) => {
-        const { title, content, audio } = data;
+    const createNote = async (data: { title?: string; content: string; audio?: NoteAudio; conversation_summary?: string }) => {
+        const { title, content, audio, conversation_summary } = data;
         const titleToUse = buildTitle(title);
         const contentToUse = content || '';
         const isEmpty = !titleToUse.trim() && !contentToUse.trim() && !audio;
@@ -258,6 +262,7 @@ export const useNotes = () => {
                 content: contentToUse,
                 audio,
                 transcription: audio?.transcription,
+                conversation_summary,
             });
             await refreshFromLocal();
 
@@ -289,6 +294,8 @@ export const useNotes = () => {
             let hasAudio = existing.has_audio;
             let transcription = existing.transcription;
             let encryptedTranscription = existing.encrypted_transcription;
+            let conversation_summary = existing.conversation_summary;
+            let encryptedConversationSummary = existing.encrypted_conversation_summary;
 
             if (updates.audio) {
                 audioPath = updates.audio.filePath;
@@ -321,6 +328,11 @@ export const useNotes = () => {
                 encryptedTranscription = await encrypt(updates.encrypted_transcription);
             }
 
+            if (updates.conversation_summary !== undefined) {
+                conversation_summary = updates.conversation_summary;
+                encryptedConversationSummary = updates.conversation_summary ? await encrypt(updates.conversation_summary) : undefined;
+            }
+
             const hasImprovements = (existing.improvements?.length ?? 0) > 0;
             const willBeEmpty = !titleToUse.trim() && !contentToUse.trim() && !hasAudio;
             if (willBeEmpty && !hasImprovements) {
@@ -346,6 +358,8 @@ export const useNotes = () => {
                 synced: 0,
                 dirty: true,
                 deleted: false,
+                encrypted_conversation_summary: encryptedConversationSummary,
+                conversation_summary,
             };
             await saveNoteLocal(updatedLocal);
             await refreshFromLocal();
