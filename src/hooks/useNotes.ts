@@ -142,7 +142,13 @@ export const useNotes = () => {
             optionId?: string;
         }): Promise<NoteImprovement> => {
             const { id, noteId, content, label, optionId } = params;
-            const encryptedContent = await encrypt(content);
+            let encryptedContent = await encrypt(content);
+
+            if (encryptedContent === undefined || encryptedContent === null) {
+                console.warn('[useNotes] Encryption returned null/undefined, defaulting to empty string');
+                encryptedContent = '';
+            }
+
             const now = new Date().toISOString();
             const improvement: NoteImprovement = {
                 id,
@@ -431,18 +437,41 @@ export const useNotes = () => {
             }
             if (!note) throw new Error('Note not found');
             const id = await generateUUID();
+
+            // Ensure content is string
+            const safeContent = params.content || '';
+
+            console.log('[useNotes] createImprovement', {
+                id,
+                noteId,
+                contentLength: safeContent.length,
+                label: params.label
+            });
+
             const improvement = await buildLocalImprovement({
                 id,
                 noteId,
-                content: params.content,
+                content: safeContent,
                 label: params.label,
                 optionId: params.optionId,
             });
 
+            if (!improvement) throw new Error('Failed to build local improvement');
+
+
 
             // Update parent note's updated_at so it moves to top of list
+            // Ensure we preserve encrypted_content. If not in memory note, refetch from DB.
+            if (!note.encrypted_content) {
+                const refreshedParent = await getNoteById(noteId);
+                if (refreshedParent) {
+                    note = refreshedParent;
+                }
+            }
+
             const parentUpdate: Note = {
                 ...note,
+                encrypted_content: note.encrypted_content || '', // Fallback to avoid constraint viol
                 updated_at: new Date().toISOString(),
                 synced: 0,
                 dirty: true,

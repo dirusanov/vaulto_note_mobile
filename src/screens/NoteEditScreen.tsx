@@ -144,6 +144,18 @@ export const NoteEditScreen = () => {
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
 
+    // Add state to track if audio holds a transcription
+    const [hasTranscription, setHasTranscription] = useState(!!existingNote?.encrypted_transcription);
+
+    // Ref to track the intentionally selected variant to avoid flickering during async updates
+    const optimisticActiveVariant = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (existingNote) {
+            setHasTranscription(!!existingNote.encrypted_transcription);
+        }
+    }, [existingNote?.encrypted_transcription]);
+
     // Force re-render on history update to show undo/redo arrows
     const [historyUpdateCount, setHistoryUpdateCount] = useState(0);
 
@@ -271,6 +283,23 @@ export const NoteEditScreen = () => {
         if (!existingNote) return;
 
         const correctActiveVariantId = getInitialActiveVariantId();
+
+        // Check if we are waiting for an optimistic update to settle (prevents flickering)
+        if (optimisticActiveVariant.current) {
+            if (correctActiveVariantId === optimisticActiveVariant.current) {
+                // Server state matches our optimistic selection, we are synced
+                optimisticActiveVariant.current = null;
+            } else if (activeVariantId === optimisticActiveVariant.current) {
+                // We are currently showing our optimistic choice, but server disagrees (lag).
+                // Ignore the server update to prevent "flickering" back to original.
+                console.log('[NoteEditScreen] Ignoring variant revert due to optimistic state:', {
+                    current: activeVariantId,
+                    serverSays: correctActiveVariantId
+                });
+                return;
+            }
+        }
+
         if (correctActiveVariantId !== activeVariantId) {
             console.log('[NoteEditScreen] Restoring active variant from is_active flags:', {
                 current: activeVariantId,
@@ -693,6 +722,7 @@ export const NoteEditScreen = () => {
         }
 
         setActiveVariantId(variantId);
+        optimisticActiveVariant.current = variantId;
         if (variantId === 'original') {
             setContent(existingNote?.content || '');
         } else {
@@ -805,306 +835,196 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(true);
     };
 
-    const handleRecordingFinish = async (recording: AudioRecording) => {
-        setShowVoiceRecorder(false);
 
-        // Always decide based on persisted settings to avoid races with async preference loading.
+
+    const executeAgentFlow = async (
+        recordingUri: string,
+        transcribedText: string,
+        currentContextContent: string,
+        currentNoteId: string | undefined,
+        variantId: string
+    ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
             getAgentModeEnabled(),
             getAIProvider(),
         ]);
         const shouldUseAgentMode = storedAgentModeEnabled && provider === 'secure_llm';
 
-        // ---------------------------------------------------------
-        // 1. SIMPLE MODE (Agent disabled)
-        // ---------------------------------------------------------
         if (!shouldUseAgentMode) {
-            setIsTranscribing(true);
-            const transcription = await transcribeAudio(recording.uri);
-            setIsTranscribing(false);
-
-            // Save audio file if it is an original note (to keep record)
-            // Or delete if it's transient?
-            // The logic below for "original" saved the audio file.
-            // For improvements, it deleted it.
-            // Let's standardise: if it works, append text.
-
-            // If it's a new "original" note, we need to create it.
-            if (activeVariantId === 'original') {
-                const savedPath = await AudioService.saveAudioFile(recording.uri, false);
-                if (transcription.success && transcription.text) {
-                    const newOriginalContent = content + (content ? '\n\n' : '') + transcription.text;
-                    setContent(newOriginalContent);
-                    updateHistoryImmediate(title, newOriginalContent);
-
-                    if (localNoteId) {
-                        await updateNote(localNoteId, {
-                            content: newOriginalContent,
-                            audio_file_path: savedPath,
-                            audio_duration: recording.duration,
-                            has_audio: true,
-                            encrypted_transcription: transcription.text
-                        });
-                    } else {
-                        const newNote = await createNote({
-                            title,
-                            content: newOriginalContent,
-                            audio: {
-                                filePath: savedPath,
-                                duration: recording.duration,
-                                transcription: transcription.text
-                            }
-                        });
-                        setLocalNoteId(newNote.id);
-                        lastSavedTitle.current = title;
-                        lastSavedContent.current = newOriginalContent;
-                    }
-                } else {
-                    // Transcription failed
-                    await AudioService.deleteAudioFile(savedPath);
-                    Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
-                }
-                // Set audio for playback
-                const playbackUri = await AudioService.readAudioFile(savedPath);
-                setAudioUri(playbackUri);
-                setAudioDuration(recording.duration);
-                setShowAudioPlayer(true);
-            } else {
-                // Improvement / Variant: Just append text and delete audio
-                await AudioService.deleteAudioFile(recording.uri);
-                if (transcription.success && transcription.text) {
-                    const newContent = content + (content ? '\n\n' : '') + transcription.text;
-                    setContent(newContent);
-                    updateHistoryImmediate('', newContent);
-                    if (localNoteId) {
-                        try {
-                            await updateImprovement(localNoteId, activeVariantId, { content: newContent });
-                            improvementSavedRef.current[activeVariantId] = newContent;
-                        } catch (error) {
-                            console.error('Failed to save improvement:', error);
-                        }
-                    }
-                } else {
-                    Alert.alert('Transcription Failed', transcription.error || 'Unknown error');
-                }
-            }
             return;
         }
 
-        // ---------------------------------------------------------
-        // 2. AGENT MODE (Intelligent Processing)
-        // ---------------------------------------------------------
-
         try {
-            // If it's the original note, we use the Smart Agent flow
-            if (activeVariantId === 'original') {
-                const savedPath = await AudioService.saveAudioFile(recording.uri, false);
-                const playbackUri = await AudioService.readAudioFile(savedPath);
-                setAudioUri(playbackUri);
-                setAudioDuration(recording.duration);
-                setShowAudioPlayer(true);
+            setIsAIProcessing(true);
 
-                setIsTranscribing(true);
-                // Call the Smart Agent
-                const agentResult = await processVoiceNote(recording.uri);
-                setIsTranscribing(false);
+            // Pass the text we just got, so we don't need to re-transcribe or upload audio
+            const agentResult = await processVoiceNote(recordingUri, 'ru', currentContextContent, transcribedText);
 
-                // Clean up temp file
-                await AudioService.deleteAudioFile(recording.uri);
+            if (agentResult.success) {
+                const originalText = agentResult.originalText || transcribedText;
 
-                if (agentResult.success) {
-                    const originalText = agentResult.originalText;
-                    const newOriginalContent = content + (content ? '\n\n' : '') + originalText;
-
-                    // 1. Update Original Note
-                    setContent(newOriginalContent);
-                    updateHistoryImmediate(title, newOriginalContent);
-
-                    let noteId = localNoteId;
-
-                    if (noteId) {
-                        await updateNote(noteId, {
-                            content: newOriginalContent,
-                            audio_file_path: savedPath,
-                            audio_duration: recording.duration,
-                            has_audio: true,
-                            encrypted_transcription: originalText
-                        });
-                    } else {
-                        // Create new note
-                        const newNote = await createNote({
-                            title,
-                            content: newOriginalContent,
-                            audio: {
-                                filePath: savedPath,
-                                duration: recording.duration,
-                                transcription: originalText
-                            }
-                        });
-                        setLocalNoteId(newNote.id);
-                        noteId = newNote.id;
-                        lastSavedTitle.current = title;
-                        lastSavedContent.current = newOriginalContent;
-                    }
-
-                    // 2. Handle Instruction (Create Improvement)
+                if (variantId === 'original') {
+                    // Check if the agent wants to create a separate improvement
                     const shouldCreateVoiceImprovement =
                         agentResult.hasInstruction &&
                         typeof agentResult.processedText === 'string' &&
                         agentResult.processedText.trim().length > 0 &&
-                        !!noteId &&
-                        !areTextsEquivalent(agentResult.processedText, originalText) &&
-                        !areTextsEquivalent(agentResult.processedText, newOriginalContent);
+                        !!currentNoteId &&
+                        !areTextsEquivalent(agentResult.processedText, originalText);
+                    // Removed check against finalTranscribedContent as we don't have it easily here, 
+                    // but agentResult.originalText should be close enough to what was appended.
 
-                    if (shouldCreateVoiceImprovement && noteId) {
-                        try {
-                            setIsAIProcessing(true);
-                            // Determine label for new tab
-                            const label = agentResult.mode
-                                ? `AI (${agentResult.mode})`
-                                : 'AI Improvement';
+                    if (shouldCreateVoiceImprovement && currentNoteId) {
+                        const label = agentResult.mode
+                            ? `AI (${agentResult.mode})`
+                            : 'AI Improvement';
 
-                            // Create the improvement
-                            const newImprovement = await createImprovement(noteId, {
-                                content: agentResult.processedText!,
+                        const contentToSave = agentResult.processedText?.trim();
+                        if (contentToSave) {
+                            const newImprovement = await createImprovement(currentNoteId, {
+                                content: contentToSave,
                                 label: label,
                                 optionId: 'voice_instruction'
                             });
 
-                            // Setup drafts/history for new variant
-                            improvementDraftsRef.current[newImprovement.id] = agentResult.processedText!;
-                            improvementSavedRef.current[newImprovement.id] = agentResult.processedText!;
-                            variantHistories.current[newImprovement.id] = {
-                                history: [{ title: title || '', content: agentResult.processedText! }],
-                                index: 0
-                            };
+                            if (newImprovement?.id) {
+                                improvementDraftsRef.current[newImprovement.id] = contentToSave;
+                                improvementSavedRef.current[newImprovement.id] = contentToSave;
+                                variantHistories.current[newImprovement.id] = {
+                                    history: [{ title: title || '', content: contentToSave }],
+                                    index: 0
+                                };
 
-                            // Switch to new variant
-                            setActiveVariantId(newImprovement.id);
-                            setContent(agentResult.processedText!);
-                            await setActiveVariant(noteId, newImprovement.id);
-
-                        } catch (err) {
-                            console.error('Failed to create improvement from voice agent:', err);
-                            Alert.alert('Error', 'Original text saved, but failed to create AI improvement.');
-                        } finally {
-                            setIsAIProcessing(false);
-                        }
-                    } else if (agentResult.hasInstruction && agentResult.processedText && noteId) {
-                        console.log(
-                            '[NoteEditScreen] Skipping voice improvement creation: processed text matches original',
-                            { mode: agentResult.mode }
-                        );
-                    }
-
-                } else {
-                    // Transcription failed
-                    const isNewNote = !localNoteId;
-                    const isEmptyNote = !title.trim() && !content.trim();
-
-                    if (isNewNote && isEmptyNote) {
-                        await AudioService.deleteAudioFile(savedPath);
-                        Alert.alert(
-                            'Transcription Failed',
-                            'Note was not created because transcription failed.'
-                        );
-                        setIsTranscribing(false);
-                        return;
-                    }
-
-                    Alert.alert('Transcription Failed', agentResult.error || 'Unknown error');
-                    if (localNoteId) {
-                        await updateNote(localNoteId, {
-                            audio_file_path: savedPath,
-                            audio_duration: recording.duration,
-                            has_audio: true
-                        });
-                    } else {
-                        const newNote = await createNote({
-                            title,
-                            content,
-                            audio: {
-                                filePath: savedPath,
-                                duration: recording.duration,
+                                setActiveVariantId(newImprovement.id);
+                                optimisticActiveVariant.current = newImprovement.id;
+                                setContent(contentToSave);
+                                await setActiveVariant(currentNoteId, newImprovement.id);
                             }
-                        });
-                        setLocalNoteId(newNote.id);
-                        lastSavedTitle.current = title;
-                        lastSavedContent.current = content;
+                        }
+                    }
+                } else {
+                    // Variant In-Place Update
+                    const newText = agentResult.processedText;
+                    if (newText && !areTextsEquivalent(newText, currentContextContent + (currentContextContent ? '\n\n' : '') + transcribedText)) {
+                        // Approximate check
+                        setContent(newText);
+                        updateHistoryImmediate('', newText);
+                        improvementDraftsRef.current[variantId] = newText;
+                        if (localNoteId) {
+                            try {
+                                await updateImprovement(localNoteId, variantId, { content: newText });
+                                improvementSavedRef.current[variantId] = newText;
+                            } catch (e) {
+                                console.error('Failed to save updated improvement', e);
+                            }
+                        }
                     }
                 }
             } else {
-                // For improvements (and all other variants), we now use the Smart Agent too!
-                // This allows for "intelligent" editing (e.g., "remove X", "format as todo").
-                setIsTranscribing(true);
+                console.error('[NoteEditScreen] Agent processing failed:', agentResult.error);
+            }
+        } catch (error) {
+            console.error('[NoteEditScreen] Agent flow error:', error);
+        } finally {
+            setIsAIProcessing(false);
+        }
+    };
 
-                // Pass the current variant's content as context
-                const effectiveContent = activeVariantId === 'original'
-                    ? content
-                    : improvementDraftsRef.current[activeVariantId] || content;
+    const handleRecordingFinish = async (recording: AudioRecording) => {
+        setShowVoiceRecorder(false);
 
-                const agentResult = await processVoiceNote(recording.uri, 'ru', effectiveContent);
-                setIsTranscribing(false);
+        // 1. ALWAYS TRANSCRIBE FIRST (Client-side effect)
+        setIsTranscribing(true);
+        const transcription = await transcribeAudio(recording.uri);
+        setIsTranscribing(false);
 
-                // Clean up temp file
-                await AudioService.deleteAudioFile(recording.uri);
+        const isTranscriptionSuccess = transcription.success && !!transcription.text;
+        const transcribedText = isTranscriptionSuccess ? transcription.text : '';
 
-                if (agentResult.success) {
-                    // Update content in-place with the processed result
-                    // The agent returns the FULL new text in processedText (or originalText if mode is none/transcript)
-                    // If mode is "edit" or "checklist", processedText contains the result.
-                    // If just transcription, we might get originalText.
+        // Handle failure but SAVE audio
+        if (!isTranscriptionSuccess) {
+            // Silently fail to transcribe but proceed to save audio below
+        }
 
-                    const newText = agentResult.processedText || agentResult.originalText;
+        const contentForAgentContext = content;
+        let finalTranscribedContent = content; // Default to existing
 
-                    if (newText) {
-                        // If it was a pure append (no instruction), we might need to handle it.
-                        // But processVoiceNote usually handles "append" by returning the full text if it was a command?
-                        // Actually, if it's just transcription, we might want to append it ourselves if the agent didn't merge it.
-                        // CHECK: Backend returns "improved_markdown" which SHOULD be the full text if it edited it.
-                        // IF mode was 'none' (just transcription), we might need to append manually?
-                        // Let's assume the Agent tries to be smart. If mode is 'none', it might just return the raw transcript?
-                        // Re-reading TranscriptionService: 
-                        // return { originalText: result.raw_note, processedText: result.improved_markdown, mode: result.mode ... }
+        // Track the current note ID locally to avoid closure stale state issues
+        let currentNoteId = localNoteId;
 
-                        let finalContent = newText;
-                        if (!agentResult.mode || agentResult.mode === 'none') {
-                            // Fallback: If agent didn't do anything special, append the raw text
-                            // But wait, if we passed context, the agent usually returns the merged result?
-                            // If we assume the agent is "smart enough" to return the full text if we sent context...
-                            // Let's play safe: If processedText is present, use it.
-                            // If NOT present (null), append originalText.
-                            if (!agentResult.processedText) {
-                                finalContent = effectiveContent + (effectiveContent ? '\n\n' : '') + agentResult.originalText;
-                            }
-                        }
+        // 2. IMMEDIATE UI UPDATE (Append Text)
+        if (activeVariantId === 'original') {
+            const savedPath = await AudioService.saveAudioFile(recording.uri, false);
 
-                        setContent(finalContent);
-
-                        // Update drafts and history
-                        improvementDraftsRef.current[activeVariantId] = finalContent;
-                        updateHistoryImmediate('', finalContent);
-
-                        // Save immediately
-                        if (localNoteId) {
-                            try {
-                                await updateImprovement(localNoteId, activeVariantId, { content: finalContent });
-                                improvementSavedRef.current[activeVariantId] = finalContent;
-                            } catch (error) {
-                                console.error('Failed to save improvement after voice agent:', error);
-                            }
-                        }
-                    }
-                } else {
-                    Alert.alert('Voice Processing Failed', agentResult.error || 'Could not process voice command');
-                }
+            if (transcribedText) {
+                finalTranscribedContent = content + (content ? '\n\n' : '') + transcribedText;
             }
 
-        } catch (error) {
-            console.error('Error processing recording:', error);
-            Alert.alert('Error', 'Failed to save recording');
-            setIsTranscribing(false);
+            setContent(finalTranscribedContent);
+            updateHistoryImmediate(title, finalTranscribedContent);
+
+            if (currentNoteId) {
+                await updateNote(currentNoteId, {
+                    content: finalTranscribedContent,
+                    audio_file_path: savedPath,
+                    audio_duration: recording.duration,
+                    has_audio: true,
+                    encrypted_transcription: transcribedText || undefined
+                });
+            } else {
+                const newNote = await createNote({
+                    title,
+                    content: finalTranscribedContent,
+                    audio: {
+                        filePath: savedPath,
+                        duration: recording.duration,
+                        transcription: transcribedText
+                    }
+                });
+                setLocalNoteId(newNote.id);
+                currentNoteId = newNote.id;
+
+                lastSavedTitle.current = title;
+                lastSavedContent.current = finalTranscribedContent;
+            }
+
+            const playbackUri = await AudioService.readAudioFile(savedPath);
+            setAudioUri(playbackUri);
+            setAudioDuration(recording.duration);
+            setShowAudioPlayer(true);
+            setHasTranscription(!!transcribedText);
+        } else {
+            // Improvements/Variants: Append text, delete audio
+            // If transcription failed here, we can't really do much since improvements are text-based
+            if (!isTranscriptionSuccess) {
+                await AudioService.deleteAudioFile(recording.uri);
+                Alert.alert('Transcription Failed', 'Could not add voice text to improvement.');
+                return;
+            }
+
+            await AudioService.deleteAudioFile(recording.uri);
+
+            finalTranscribedContent = content + (content ? '\n\n' : '') + transcribedText;
+            setContent(finalTranscribedContent);
+            updateHistoryImmediate('', finalTranscribedContent);
+
+            if (currentNoteId) {
+                try {
+                    await updateImprovement(currentNoteId, activeVariantId, { content: finalTranscribedContent });
+                    improvementSavedRef.current[activeVariantId] = finalTranscribedContent;
+                } catch (error) {
+                    console.error('Failed to save improvement:', error);
+                }
+            }
         }
+
+        // 3. STOP IF NO TEXT (OFFLINE MODE) OR AGENT MODE CHECK
+        if (!isTranscriptionSuccess) {
+            return;
+        }
+
+        // 4. AGENT PROCESSING (If enabled)
+        await executeAgentFlow(recording.uri, transcribedText, contentForAgentContext, currentNoteId, activeVariantId);
     };
 
     const handleInstructionRecordingFinish = async (recording: AudioRecording) => {
@@ -1289,6 +1209,7 @@ export const NoteEditScreen = () => {
                 await setActiveVariant(targetNoteId, improvement.id);
 
                 setActiveVariantId(improvement.id);
+                optimisticActiveVariant.current = improvement.id;
                 setContent(finalText);
             } else {
                 // Update existing child variant in-place (no new children from children)
@@ -1470,6 +1391,48 @@ export const NoteEditScreen = () => {
         };
     }, []);
 
+    const handleRetryTranscription = async () => {
+        if (!audioUri) return;
+
+        const contentForAgent = content;
+
+        setIsTranscribing(true);
+        try {
+            const transcription = await transcribeAudio(audioUri);
+
+            if (!transcription.success || !transcription.text) {
+                Alert.alert('Transcription Failed', transcription.error || 'Check internet connection');
+                return;
+            }
+
+            const text = transcription.text;
+
+            // Append text
+            const newContent = content + (content ? '\n\n' : '') + text;
+            setContent(newContent);
+            updateHistoryImmediate(title, newContent);
+
+            // Update DB
+            if (localNoteId) {
+                await updateNote(localNoteId, {
+                    content: newContent,
+                    encrypted_transcription: text
+                });
+            }
+
+            setHasTranscription(true);
+
+            // Trigger Agent Flow
+            await executeAgentFlow(audioUri, text, contentForAgent, localNoteId, activeVariantId);
+
+        } catch (error) {
+            setIsTranscribing(false);
+            Alert.alert('Error', 'Failed to retry transcription');
+        } finally {
+            setIsTranscribing(false);
+        }
+    };
+
     const renderHeader = () => (
         <View>
             <TextInput
@@ -1553,11 +1516,21 @@ export const NoteEditScreen = () => {
             )}
 
             {showAudioPlayer && audioUri && (
-                <AudioPlayer
-                    audioUri={audioUri}
-                    duration={audioDuration}
-                    onClose={() => setShowAudioPlayer(false)}
-                />
+                <View>
+                    <AudioPlayer
+                        audioUri={audioUri}
+                        duration={audioDuration}
+                        onClose={() => setShowAudioPlayer(false)}
+                    />
+                    {!hasTranscription && (
+                        <TouchableOpacity
+                            style={styles.retryTranscriptionButton}
+                            onPress={handleRetryTranscription}
+                        >
+                            <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
             )}
 
             {isTranscribing && (
@@ -2437,5 +2410,22 @@ const styles = StyleSheet.create({
         width: '100%',
         backgroundColor: colors.surface,
         // paddingBottom removed to bring closer to keyboard
+    },
+    retryTranscriptionButton: {
+        marginTop: spacing.xs,
+        marginBottom: spacing.m,
+        backgroundColor: colors.primary,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    retryTranscriptionText: {
+        color: colors.background,
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

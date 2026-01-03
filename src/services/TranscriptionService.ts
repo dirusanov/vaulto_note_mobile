@@ -273,7 +273,8 @@ export async function testSelfHostedConnection(url: string, apiKey: string): Pro
 export async function processVoiceNote(
     audioUri: string,
     language: string = 'ru',
-    currentContent?: string
+    currentContent?: string,
+    preTranscribedText?: string
 ): Promise<VoiceNoteResult> {
     const [provider, agentModeEnabled] = await Promise.all([
         getAIProvider(),
@@ -285,6 +286,17 @@ export async function processVoiceNote(
     // When Agent Mode is OFF, always fall back to normal transcription (/ai/transcribe or client-side Whisper).
     if (!agentModeEnabled) {
         console.log('[VoiceAgent] Agent mode disabled. Falling back to simple transcription.');
+        // If we already have text, return it
+        if (preTranscribedText) {
+            return {
+                originalText: preTranscribedText,
+                processedText: null,
+                hasInstruction: false,
+                instruction: null,
+                mode: 'none',
+                success: true,
+            };
+        }
         const transResult = await transcribeAudio(audioUri, language);
         return {
             originalText: transResult.text,
@@ -302,6 +314,16 @@ export async function processVoiceNote(
     // For now, if provider is 'openai' (client-side), we just transcribe and return no instruction.
     if (provider === 'openai') {
         console.log('[VoiceAgent] Provider is OpenAI. Falling back to simple transcription (no agents).');
+        if (preTranscribedText) {
+            return {
+                originalText: preTranscribedText,
+                processedText: null,
+                hasInstruction: false,
+                instruction: null,
+                mode: null,
+                success: true
+            };
+        }
         const transResult = await transcribeAudio(audioUri, language);
         return {
             originalText: transResult.text,
@@ -338,7 +360,9 @@ export async function processVoiceNote(
 
     try {
         console.log('[VoiceAgent] Request URL:', baseUrl);
-        if (Platform.OS !== 'web') {
+
+        // If we don't have text, ensure audio file exists
+        if (!preTranscribedText && Platform.OS !== 'web') {
             const fileInfo = await FileSystem.getInfoAsync(audioUri);
             if (!fileInfo.exists || fileInfo.size === 0) {
                 return { originalText: '', success: false, error: 'Audio file error', hasInstruction: false };
@@ -346,14 +370,25 @@ export async function processVoiceNote(
         }
 
         const formData = new FormData();
-        formData.append('file', {
-            uri: audioUri,
-            type: 'audio/m4a',
-            name: 'audio.m4a',
-        } as any);
+
+        // Only append file if we don't have the text script
+        if (!preTranscribedText) {
+            formData.append('file', {
+                uri: audioUri,
+                type: 'audio/m4a',
+                name: 'audio.m4a',
+            } as any);
+        }
+
         formData.append('language', language);
         if (currentContent) {
             formData.append('current_content', currentContent);
+        }
+        if (preTranscribedText) {
+            formData.append('transcript', preTranscribedText);
+            // We might need to send a dummy file or omit it. 
+            // Our backend now supports optional file if transcript is present.
+            // But to be safe with some fetch implementations, let's just NOT send 'file' key at all.
         }
 
         const response = await fetch(baseUrl, {
@@ -365,6 +400,15 @@ export async function processVoiceNote(
         if (!response.ok) {
             // Fallback: If endpoint 404s (old backend), try standard transcribe
             if (response.status === 404) {
+                if (preTranscribedText) {
+                    return {
+                        originalText: preTranscribedText,
+                        processedText: null,
+                        hasInstruction: false,
+                        success: true,
+                        error: 'Backend endpoint not found, using local transcript'
+                    };
+                }
                 const transResult = await transcribeAudio(audioUri, language);
                 return {
                     originalText: transResult.text,
@@ -379,13 +423,13 @@ export async function processVoiceNote(
         }
 
         const result = await response.json();
-        // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "..." }
+        // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool }
 
         return {
-            originalText: result.raw_note || '',
+            originalText: result.raw_note || preTranscribedText || '',
             processedText: result.improved_markdown,
-            hasInstruction: result.mode !== "none",
-            instruction: null, // Backend doesn't strictly return instruction text anymore, just mode and result
+            hasInstruction: typeof result.has_instruction === 'boolean' ? result.has_instruction : (result.mode !== "none"),
+            instruction: null,
             mode: result.mode,
             success: true
         };
@@ -393,7 +437,7 @@ export async function processVoiceNote(
     } catch (error) {
         console.error('[VoiceAgent] Failed', error);
         return {
-            originalText: '',
+            originalText: preTranscribedText || '',
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
             hasInstruction: false

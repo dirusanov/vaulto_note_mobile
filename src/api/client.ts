@@ -5,7 +5,7 @@ import { onUnauthorized } from '../utils/authEvents';
 
 const client = axios.create({
     baseURL: API_URL,
-    timeout: 5000, // 5 seconds timeout
+    timeout: 30000, // 30 seconds timeout
     headers: {
         'Content-Type': 'application/json',
     },
@@ -69,6 +69,20 @@ client.interceptors.response.use(
             // Notify AuthContext to recreate session
             onUnauthorized.emit();
         }
+
+        // Expanded logging for Network Errors
+        if (axios.isAxiosError(error)) {
+            console.error('[client] Axios Error:', {
+                message: error.message,
+                code: error.code,
+                url: originalRequest?.url,
+                baseURL: originalRequest?.baseURL,
+                finalUrl: originalRequest?.baseURL ? `${originalRequest.baseURL}${originalRequest.url}` : originalRequest?.url,
+                method: originalRequest?.method,
+                status: error.response?.status
+            });
+        }
+
         return Promise.reject(error);
     }
 );

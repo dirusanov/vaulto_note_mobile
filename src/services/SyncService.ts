@@ -141,7 +141,7 @@ class SyncService {
                 // Encrypt title for valid E2E
                 // Ideally note.encrypted_title is already set/up-to-date.
                 // If not, we generate it now.
-                const titleToSync = note.encrypted_title || await encrypt(note.title || 'Untitled');
+                const titleToSync = note.encrypted_title || await encrypt(note.title || '');
 
                 changes.push({
                     id: note.id,
@@ -413,9 +413,8 @@ class SyncService {
                     }
                 }
 
-                if (!title || title === 'Untitled') {
-                    // Try to extract title from content if missing
-                    title = content.split('\n')[0]?.substring(0, 50) || 'Untitled';
+                if (!title) {
+                    title = '';
                     encryptedTitle = await encrypt(title);
                 }
             } catch (e) {
@@ -429,7 +428,7 @@ class SyncService {
                 title,
                 content,
                 encrypted_title: encryptedTitle,
-                encrypted_content: serverNote.content_ciphertext,
+                encrypted_content: serverNote.content_ciphertext ?? (await encrypt(content)),
                 updated_at: serverNote.updated_at,
                 created_at: existing?.created_at ?? serverNote.updated_at,
                 transcription: existing?.transcription,

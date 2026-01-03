@@ -31,15 +31,17 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
             .map(token => token.trim())
             .filter(token => {
                 if (!token) return false;
-                if (/^#+$/.test(token)) return false;
-                if (/^[-*_]+$/.test(token)) return false;
-                if (/^-?\[\s*(x|X)?\s*\]$/.test(token)) return false;
+                if (/^#+$/.test(token)) return false; // Headings
+                if (/^[-*_]+$/.test(token)) return false; // Separators
+                if (/^-?\[\s*(x|X)?\s*\]$/.test(token)) return false; // Checkboxes
                 return true;
             })
+            // Clean markdown syntax from tokens
             .map(token => token.replace(/^[\[\](){}<>*_\-#+]+/, '').replace(/[\[\](){}<>*_\-#+]+$/, ''))
             .filter(token => !!token);
+
         if (cleanedTokens.length === 0) return '';
-        return cleanedTokens.slice(0, 2).join(' ');
+        return cleanedTokens.slice(0, 3).join(' ');
     };
 
     // Extract title and preview
