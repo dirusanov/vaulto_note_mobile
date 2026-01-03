@@ -906,7 +906,8 @@ export const NoteEditScreen = () => {
 
                 setIsTranscribing(true);
                 // Call the Smart Agent
-                const agentResult = await processVoiceNote(recording.uri);
+                const conversationSummary = existingNote?.conversation_summary;
+                const agentResult = await processVoiceNote(recording.uri, 'ru', content, conversationSummary);
                 setIsTranscribing(false);
 
                 // Clean up temp file
@@ -928,7 +929,9 @@ export const NoteEditScreen = () => {
                             audio_file_path: savedPath,
                             audio_duration: recording.duration,
                             has_audio: true,
-                            encrypted_transcription: originalText
+
+                            encrypted_transcription: originalText,
+                            conversation_summary: agentResult.conversationSummary
                         });
                     } else {
                         // Create new note
@@ -939,7 +942,8 @@ export const NoteEditScreen = () => {
                                 filePath: savedPath,
                                 duration: recording.duration,
                                 transcription: originalText
-                            }
+                            },
+                            conversation_summary: agentResult.conversationSummary
                         });
                         setLocalNoteId(newNote.id);
                         noteId = newNote.id;

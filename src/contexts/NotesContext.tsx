@@ -8,7 +8,7 @@ interface NotesContextType {
     error: string | null;
     fetchNotes: () => Promise<void>;
     syncNotes: () => Promise<void>;
-    createNote: (data: { title?: string; content: string; audio?: NoteAudio }) => Promise<Note>;
+    createNote: (data: { title?: string; content: string; audio?: NoteAudio; conversation_summary?: string }) => Promise<Note>;
     updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
     searchNotes: (query: string) => Promise<void>;

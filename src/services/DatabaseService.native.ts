@@ -76,7 +76,9 @@ export const initDatabase = async (): Promise<void> => {
         await ensureColumnExists(database, 'notes', 'version', 'INTEGER DEFAULT 0');
         await ensureColumnExists(database, 'notes', 'server_updated_at', 'TEXT');
         await ensureColumnExists(database, 'notes', 'content_nonce', 'TEXT');
+        await ensureColumnExists(database, 'notes', 'content_nonce', 'TEXT');
         await ensureColumnExists(database, 'notes', 'pending_delete', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(database, 'notes', 'encrypted_conversation_summary', 'TEXT');
 
         // MIGRATION: Move note_improvements to notes
         // Check if note_improvements table exists
@@ -239,8 +241,9 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 id, encrypted_title, encrypted_content, created_at, updated_at,
                 audio_file_path, audio_duration, encrypted_transcription, has_audio,
                 synced, dirty, deleted, version, server_updated_at, content_nonce, pending_delete,
-                parent_id, is_active, label, option_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+                parent_id, is_active, label, option_id, encrypted_conversation_summary
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 encrypted_title=excluded.encrypted_title,
                 encrypted_content=excluded.encrypted_content,
@@ -259,7 +262,8 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 parent_id=excluded.parent_id,
                 is_active=excluded.is_active,
                 label=excluded.label,
-                option_id=excluded.option_id;`,
+                option_id=excluded.option_id,
+                encrypted_conversation_summary=excluded.encrypted_conversation_summary;`,
             [
                 note.id,
                 note.encrypted_title ?? null,
@@ -281,6 +285,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.is_active ? 1 : 0,
                 note.label ?? null,
                 note.option_id ?? null,
+                note.encrypted_conversation_summary ?? null,
             ]
         );
         console.log(`[DatabaseService] Note saved locally: ${note.id}`);
@@ -389,6 +394,10 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                     ? await decrypt(row.encrypted_transcription)
                     : undefined;
 
+                const conversation_summary = row.encrypted_conversation_summary
+                    ? await decrypt(row.encrypted_conversation_summary)
+                    : undefined;
+
                 // Process children
                 const childRows = childrenMap.get(row.id) ?? [];
                 // Sort children by updated_at desc
@@ -409,6 +418,10 @@ export const getNotesLocal = async (): Promise<Note[]> => {
 
                     // Decrypt child content
                     const childContent = await decrypt(cRow.encrypted_content);
+                    const childConversationSummary = cRow.encrypted_conversation_summary
+                        ? await decrypt(cRow.encrypted_conversation_summary)
+                        : undefined;
+
                     childNotes.push({
                         id: cRow.id,
                         encrypted_title: cRow.encrypted_title,
@@ -425,6 +438,8 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                         deleted: cRow.deleted === 1,
                         version: cRow.version ?? 0,
                         is_active: cRow.is_active === 1,
+                        encrypted_conversation_summary: cRow.encrypted_conversation_summary,
+                        conversation_summary: childConversationSummary,
                     });
                 }
 
@@ -459,6 +474,8 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                     is_active: row.is_active === 1,
                     parent_id: row.parent_id,
                     improvements: childNotes,
+                    encrypted_conversation_summary: row.encrypted_conversation_summary,
+                    conversation_summary,
                 });
             } catch (e) {
                 console.error(`[DatabaseService] Failed to decrypt note ${row.id}`, e);
@@ -515,6 +532,7 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
         const title = row.encrypted_title ? await decrypt(row.encrypted_title) : '';
         const content = await decrypt(row.encrypted_content);
         const transcription = row.encrypted_transcription ? await decrypt(row.encrypted_transcription) : undefined;
+        const conversation_summary = row.encrypted_conversation_summary ? await decrypt(row.encrypted_conversation_summary) : undefined;
 
         // Process children
         const childNotes: Note[] = [];
@@ -527,6 +545,7 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
             for (const cRow of children) {
                 if (cRow.deleted === 1) continue;
                 const childContent = await decrypt(cRow.encrypted_content);
+                const childConversationSummary = cRow.encrypted_conversation_summary ? await decrypt(cRow.encrypted_conversation_summary) : undefined;
                 childNotes.push({
                     id: cRow.id,
                     encrypted_title: cRow.encrypted_title,
@@ -543,6 +562,8 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
                     deleted: cRow.deleted === 1,
                     version: cRow.version ?? 0,
                     is_active: cRow.is_active === 1,
+                    encrypted_conversation_summary: cRow.encrypted_conversation_summary,
+                    conversation_summary: childConversationSummary,
                 });
             }
         }
@@ -570,6 +591,8 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
             is_active: row.is_active === 1,
             parent_id: row.parent_id,
             improvements: childNotes,
+            encrypted_conversation_summary: row.encrypted_conversation_summary,
+            conversation_summary,
         };
         return note;
     } catch (e) {

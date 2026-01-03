@@ -27,6 +27,7 @@ export interface VoiceNoteResult {
     mode?: string | null;
     success: boolean;
     error?: string;
+    conversationSummary?: string;
 }
 
 /**
@@ -273,7 +274,8 @@ export async function testSelfHostedConnection(url: string, apiKey: string): Pro
 export async function processVoiceNote(
     audioUri: string,
     language: string = 'ru',
-    currentContent?: string
+    currentContent?: string,
+    conversationSummary?: string
 ): Promise<VoiceNoteResult> {
     const [provider, agentModeEnabled] = await Promise.all([
         getAIProvider(),
@@ -355,6 +357,9 @@ export async function processVoiceNote(
         if (currentContent) {
             formData.append('current_content', currentContent);
         }
+        if (conversationSummary) {
+            formData.append('conversation_summary', conversationSummary);
+        }
 
         const response = await fetch(baseUrl, {
             method: 'POST',
@@ -387,7 +392,8 @@ export async function processVoiceNote(
             hasInstruction: result.mode !== "none",
             instruction: null, // Backend doesn't strictly return instruction text anymore, just mode and result
             mode: result.mode,
-            success: true
+            success: true,
+            conversationSummary: result.conversation_summary
         };
 
     } catch (error) {
