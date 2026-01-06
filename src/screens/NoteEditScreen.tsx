@@ -1880,7 +1880,7 @@ export const NoteEditScreen = () => {
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 50}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 36}
                 style={{ flex: 1 }}
             >
                 <View style={{ flex: 1 }}>

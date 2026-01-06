@@ -31,7 +31,7 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconNa
             {iconName && (
                 <MaterialIcons
                     name={iconName}
-                    size={24}
+                    size={22}
                     color={isActive ? colors.primary : colors.textSecondary}
                 />
             )}
@@ -148,7 +148,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                 >
                     <MaterialIcons
                         name="border-color"
-                        size={22} // Slightly smaller optical size for this icon
+                        size={20} // Slightly smaller optical size for this icon
                         color={isHighlightActive ? colors.primary : colors.textSecondary}
                     />
                     <View style={[
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.surface,
         borderTopWidth: 1,
         borderTopColor: 'rgba(0,0,0,0.05)',
-        paddingVertical: spacing.s,
+        paddingVertical: spacing.xs,
         marginHorizontal: -spacing.m,
         ...Platform.select({
             ios: {
@@ -222,37 +222,37 @@ const styles = StyleSheet.create({
         }),
     },
     scrollContent: {
-        paddingHorizontal: spacing.m,
+        paddingHorizontal: spacing.s,
         alignItems: 'center',
-        height: 48,
+        height: 44,
         gap: 4, // Material Design dense toolbar gap
     },
     button: {
-        width: 44,
-        height: 44,
+        width: 40,
+        height: 40,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 12, // Modern rounded square
+        borderRadius: 10, // Modern rounded square
         backgroundColor: 'transparent',
     },
     activeButton: {
         backgroundColor: colors.backgroundSecondary,
     },
     spacer: {
-        width: 8,
+        width: 4,
     },
     textIcon: {
-        fontSize: 17,
+        fontSize: 15,
         fontWeight: '700',
         includeFontPadding: false,
     },
     colorDot: {
         position: 'absolute',
-        bottom: 6,
-        right: 6,
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        bottom: 4,
+        right: 4,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.05)',
     },
