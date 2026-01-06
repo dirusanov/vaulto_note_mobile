@@ -18,337 +18,260 @@ interface MarkdownPart {
 export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {
     if (!text) return [];
 
-    // Regex for tokens:
-    // 1. Bold: \*\*([^*]+)\*\*
-    // 2. Italic: _([^_]+)_ or \*([^*]+)\*
-    // 3. Strikethrough: ~~([^~]+)~~
-    // 4. Code: `([^`]+)` (Optional, but good to have)
+    // Consolidated pattern for tokens
+    // Simplified Highlight to ==...== to avoid complex nested grouping issues in regex engine
+    // Bold, Strike, Code, Italic _, Italic *, Highlight, Checkboxes, Underline
+    const fullPattern = /(\*\*(?:[\s\S]+?)\*\*|~~(?:[\s\S]+?)~~|`[^`]+?`|_(?:==(?:[\s\S]+?)==|[^_]+?)+?_|\*(?:[\s\S]+?)\*|==(?:[\s\S]+?)==|<u>(?:[\s\S]*?)<\/u>|(?:^|\s)-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$))|(?:\s|^)-\s\[ \]\s)/g;
 
-    // We need to split and tokenise.
-    // A simple way is to use a master regex and matching groups.
-    // Order matters. Bold should check ** before * checks italic.
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
 
-    // Regex Explanation:
-    // (\*\*[^*]+\*\*)  -> Capture Bold chunks
-    // (~~[^~]+~~)      -> Capture Strikethrough chunks
-    // (`[^`]+`)        -> Capture Code chunks
-    // (_[^_]+_)        -> Capture Italic chunks (underscore)
-    // (\*[^*]+\*)      -> Capture Italic chunks (asterisk) - CAUTION: conflict with bold if not careful, but since we match bold first in the OR chain, it might work if we are careful.
-    // However, string.split with regex capture groups includes the separators.
+    while ((match = fullPattern.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(
+                <Text key={`text-${lastIndex}`} style={baseStyle}>
+                    {text.substring(lastIndex, match.index)}
+                </Text>
+            );
+        }
 
-    // Better strategy: Simple scanner or splitting by priority.
-    // Given the complexity of nested items, let's stick to non-nested for this simple implementation as requested.
-
-    // Pattern: 
-    // Bold: \*\*([^\*]+?)\*\*
-    // Strike: ~~([^~]+?)~~
-    // Code: `([^`]+?)`
-    // Italic: _([^_]+?)_
-    // Italic2: \*([^\*]+?)\*
-
-    // We will use a sequence of Replacers or a split-map approach. 
-    // React Native needs nodes, not just a string string.
-
-    const parts: { key: string; match: string; type: 'bold' | 'italic' | 'strike' | 'code' | 'text' }[] = [];
-
-    // Assume text is processed line-by-line by the renderer.
-
-    // Simple parser: Text -> Tokens
-    const pattern = /(\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_)/g;
-    // Note: Intentionally omitting single '*' for italic for now to avoid conflict with list items like '* item' if user does that, 
-    // though the request specifically mentioned '*' as well. 
-    // User content often uses '*' for lists. 
-    // Let's include `\*([^*]+?)\*` but strict: must have closing `*`.
-
-    // We also want to capture checkboxes: "- [ ] " or "- [x] "
-    // But for completed items "- [x] text...", we want to capture the whole line to strike it through.
-    // The previous implementation splits by token. 
-    // If we want to style the content of a todo item, we have to capture it as a block.
-    // However, the `split` logic is flat.
-    // Let's modify the strategy:
-    // Capture "Completed Todo Line":  `-\s\[[xX]\]\s[^-\n]+` (until newline or next dash)
-    // But since `text` is single line (newlines replaced by spaces in NoteCard), we just go until next token or end?
-    // Actually, `NoteCard` replaces newlines with space. So the content is one long string "foo - [ ] bar - [x] baz...".
-
-    // We need to match "- [x] ... " carefully.
-    // Let's match: `(-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$)))`  -> Match "- [x] content" until next "- [" or End of String.
-    // And for unchecked: `(-\s\[ \]\s)` -> Just the checkbox itself is fine, or match the whole thing to be consistent, but we don't style unchecked text special.
-    // Matches:
-    // 1. Completed Todo Block
-    // 2. Unchecked Todo Marker (we'll just render the box)
-    // 3. Bold, Italic, Code etc (for parts outside the Todo Block)
-
-    // Pattern order matters! Longer specific matches first.
-    const fullPattern = /(==(?:(?:red|orange|yellow|green|blue|purple):)?.+?==|<u>.*?<\/u>|(?:^|\s)-\s\[[xX]\]\s.*?(?=(?:\s-\s\[|$))|(?:\s|^)-\s\[ \]\s|\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
-
-    // Split text by pattern
-    // Note: capturing group causes split to include the separator.
-    const split = text.split(fullPattern);
-
-    return split.map((chunk, index) => {
-        if (!chunk) return null; // Empty splits
-
-        let content: React.ReactNode = chunk;
+        const chunk = match[0];
+        const index = match.index;
         const style: TextStyle[] = [StyleSheet.flatten(baseStyle)];
 
-        // Highlight: ==...==
-        if (chunk.startsWith('==') && chunk.endsWith('==') && chunk.length >= 4) {
-            const inner = chunk.substring(2, chunk.length - 2);
-            let colorKey = 'yellow';
-            let innerText = inner;
-
-            // Check for color prefix
-            const colorMatch = inner.match(/^(red|orange|yellow|green|blue|purple):(.*)$/);
-            if (colorMatch) {
-                colorKey = colorMatch[1];
-                innerText = colorMatch[2];
-            }
-
-            // Apply background color from theme
-            const highlightColor = (colors.highlight as any)[colorKey] || colors.highlight.yellow;
-            style.push({ backgroundColor: highlightColor });
-
-            return (
-                <Text key={index} style={style}>
-                    {parseMarkdownText(innerText)}
-                </Text>
-            );
-        }
-
-        // Underline: <u>...</u>
-        if (chunk.startsWith('<u>') && chunk.endsWith('</u>') && chunk.length >= 7) {
-            const innerText = chunk.substring(3, chunk.length - 4);
-            style.push({ textDecorationLine: 'underline' });
-            return (
-                <Text key={index} style={style}>
-                    {parseMarkdownText(innerText)}
-                </Text>
-            );
-        }
-
-        // Completed Todo Block: "- [x] content..."
-        const completedMatch = chunk.match(/^\s*-\s\[[xX]\]\s(.*)$/);
-        if (completedMatch) {
-            const innerContent = completedMatch[1];
-            return (
-                <Text key={index} style={style}>
-                    <Text>☑ </Text>
-                    <Text style={{ textDecorationLine: 'line-through', opacity: 0.6 }}>
-                        {parseMarkdownText(innerContent)}
-                    </Text>
-                </Text>
-            );
-        }
-
-        // Unchecked Todo Marker
-        if (chunk.match(/^\s*-\s\[ \]\s$/)) {
-            return (
-                <Text key={index} style={style}>
-                    ☐{" "}
-                </Text>
-            );
-        }
-
-        // Bold
         if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
             const innerText = chunk.substring(2, chunk.length - 2);
             style.push({ fontWeight: 'bold' });
-            return (
-                <Text key={index} style={style}>
-                    {parseMarkdownText(innerText)}
+            parts.push(
+                <Text key={`bold-${index}`} style={style}>
+                    {parseMarkdownText(innerText, baseStyle)}
                 </Text>
             );
         }
-        // Strikethrough
         else if (chunk.startsWith('~~') && chunk.endsWith('~~') && chunk.length >= 4) {
             const innerText = chunk.substring(2, chunk.length - 2);
             style.push({ textDecorationLine: 'line-through' });
-            return (
-                <Text key={index} style={style}>
-                    {parseMarkdownText(innerText)}
+            parts.push(
+                <Text key={`strike-${index}`} style={style}>
+                    {parseMarkdownText(innerText, baseStyle)}
                 </Text>
             );
         }
-        // Code
         else if (chunk.startsWith('`') && chunk.endsWith('`') && chunk.length >= 2) {
             const innerText = chunk.substring(1, chunk.length - 1);
             style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
-            return (
-                <Text key={index} style={style}>
+            parts.push(
+                <Text key={`code-${index}`} style={style}>
                     {innerText}
                 </Text>
             );
         }
-        // Italic (underscore)
-        else if (chunk.startsWith('_') && chunk.endsWith('_') && chunk.length >= 2) {
-            const innerText = chunk.substring(1, chunk.length - 1);
-            style.push({ fontStyle: 'italic' });
-            return (
-                <Text key={index} style={style}>
-                    {parseMarkdownText(innerText)}
+        else if (chunk.startsWith('==') && chunk.endsWith('==') && chunk.length >= 4) {
+            const inner = chunk.substring(2, chunk.length - 2);
+            let colorKey = 'yellow';
+            let innerText = inner;
+            const colorMatch = inner.match(/^(red|orange|yellow|green|blue|purple):([\s\S]*)$/);
+            if (colorMatch) {
+                colorKey = colorMatch[1];
+                innerText = colorMatch[2];
+            }
+            const highlightColor = (colors.highlight as any)[colorKey] || colors.highlight.yellow;
+            style.push({ backgroundColor: highlightColor });
+            parts.push(
+                <Text key={`highlight-${index}`} style={style}>
+                    {parseMarkdownText(innerText, baseStyle)}
                 </Text>
             );
         }
-        // Italic (asterisk)
-        else if (chunk.startsWith('*') && chunk.endsWith('*') && chunk.length >= 2) {
-            const innerText = chunk.substring(1, chunk.length - 1);
-            style.push({ fontStyle: 'italic' });
-            return (
-                <Text key={index} style={style}>
-                    {parseMarkdownText(innerText)}
+        else if (chunk.startsWith('<u>') && chunk.endsWith('</u>')) {
+            const innerText = chunk.substring(3, chunk.length - 4);
+            style.push({ textDecorationLine: 'underline' });
+            parts.push(
+                <Text key={`underline-${index}`} style={style}>
+                    {parseMarkdownText(innerText, baseStyle)}
                 </Text>
             );
+        }
+        else if (chunk.startsWith('_') && chunk.endsWith('_')) {
+            const innerText = chunk.substring(1, chunk.length - 1);
+            style.push({ fontStyle: 'italic' });
+            parts.push(
+                <Text key={`italic-${index}`} style={style}>
+                    {parseMarkdownText(innerText, baseStyle)}
+                </Text>
+            );
+        }
+        else if (chunk.startsWith('*') && chunk.endsWith('*')) {
+            const innerText = chunk.substring(1, chunk.length - 1);
+            style.push({ fontStyle: 'italic' });
+            parts.push(
+                <Text key={`italic-star-${index}`} style={style}>
+                    {parseMarkdownText(innerText, baseStyle)}
+                </Text>
+            );
+        }
+        else if (chunk.match(/^\s*-\s\[[xX]\]\s/)) {
+            const innerMatch = chunk.match(/^\s*-\s\[[xX]\]\s(.*)$/);
+            const innerText = innerMatch ? innerMatch[1] : '';
+            parts.push(
+                <Text key={`todo-done-${index}`} style={style}>
+                    <Text>☑ </Text>
+                    <Text style={{ textDecorationLine: 'line-through', opacity: 0.6 }}>
+                        {parseMarkdownText(innerText, baseStyle)}
+                    </Text>
+                </Text>
+            );
+        }
+        else if (chunk.match(/^\s*-\s\[ \]\s/)) {
+            parts.push(
+                <Text key={`todo-open-${index}`} style={style}>
+                    ☐{" "}
+                </Text>
+            );
+        } else {
+            parts.push(<Text key={`unknown-${index}`} style={style}>{chunk}</Text>);
         }
 
-        return (
-            <Text key={index} style={style} >
-                {content}
+        lastIndex = fullPattern.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(
+            <Text key={`text-end`} style={baseStyle}>
+                {text.substring(lastIndex)}
             </Text>
         );
-    });
+    }
+    return parts;
 };
 
 /**
  * Parses markdown for TextInput children.
  * Syntax markers are rendered with almost-zero size to hide them but keep them in the DOM.
  */
-export const parseMarkdownForInput = (
-    text: string,
-    baseStyle?: StyleProp<TextStyle>
-): React.ReactNode[] => {
+export const parseMarkdownForInput = (text: string, baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {
     if (!text) return [];
 
-    // Patterns
-    // Highlight (Color): ==color:content==
-    // Highlight (Default): ==content==
-    // Bold: **content**
-    // Strike: ~~content~~
-    // Code: `content`
-    // Italic: _content_ or *content*
+    // Same pattern logic, simplified highlight
+    const fullPattern = /(\*\*(?:[\s\S]+?)\*\*|~~(?:[\s\S]+?)~~|`[^`]+?`|_(?:==(?:[\s\S]+?)==|[^_]+?)+?_|\*(?:[\s\S]+?)\*|==(?:[\s\S]+?)==|<u>(?:[\s\S]*?)<\/u>)/g;
 
-    // We need to capture the color key if present.
-    // Regex for highlight: ==((?:[a-z]+:)?.+?)==
-    // But split doesn't give us captured groups easily if we want to differentiate.
-    // Let's stick to the list of token types.
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    const hiddenStyle: TextStyle = { fontSize: 1, color: '#00000000' };
 
-    const fullPattern = /(==(?:(?:red|orange|yellow|green|blue|purple):)?.+?==|<u>.*?<\/u>|\*\*[^*]+?\*\*|~~[^~]+?~~|`[^`]+?`|_[^_]+?_|\*[^\s*][^*]*[^\s*]\*)/g;
-    const split = text.split(fullPattern);
+    while ((match = fullPattern.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(
+                <Text key={`text-${lastIndex}`} style={baseStyle}>
+                    {text.substring(lastIndex, match.index)}
+                </Text>
+            );
+        }
 
-    // Hidden style for markers
-    const hiddenStyle: TextStyle = {
-        fontSize: 0.1,
-        color: 'transparent',
-    };
-
-
-    return split.map((chunk, index) => {
-        if (!chunk) return null;
-
+        const chunk = match[0];
+        const index = match.index;
         const style: TextStyle[] = [StyleSheet.flatten(baseStyle)];
 
-        // Highlight: ==...==
-        if (chunk.startsWith('==') && chunk.endsWith('==') && chunk.length >= 4) {
-            const inner = chunk.substring(2, chunk.length - 2);
-            let colorKey = 'yellow';
-            let content = inner;
-
-            // Check for color prefix
-            const colorMatch = inner.match(/^(red|orange|yellow|green|blue|purple):(.*)$/);
-            if (colorMatch) {
-                colorKey = colorMatch[1];
-                content = colorMatch[2];
-            }
-
-            // Apply background color from theme
-            const highlightColor = (colors.highlight as any)[colorKey] || colors.highlight.yellow;
-            style.push({ backgroundColor: highlightColor });
-
-            return (
-                <Text key={index} style={style}>
-                    <Text style={hiddenStyle}>=={colorMatch ? colorKey + ':' : ''}</Text>
-                    {parseMarkdownForInput(content)}
-                    {/* Note: Recursive highlight active word? Maybe too distinct. Let's disable for nested for now or pass relative offset? */}
-                    <Text style={hiddenStyle}>==</Text>
-                </Text>
-            );
-        }
-        // Underline: <u>content</u>
-        else if (chunk.startsWith('<u>') && chunk.endsWith('</u>') && chunk.length >= 7) {
-            const content = chunk.substring(3, chunk.length - 4);
-            style.push({ textDecorationLine: 'underline' });
-            return (
-                <Text key={index} style={style}>
-                    <Text style={hiddenStyle}>&lt;u&gt;</Text>
-                    {parseMarkdownForInput(content)}
-                    <Text style={hiddenStyle}>&lt;/u&gt;</Text>
-                </Text>
-            );
-        }
-        // Bold: **content**
-        else if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
+        if (chunk.startsWith('**') && chunk.endsWith('**')) {
             const content = chunk.substring(2, chunk.length - 2);
             style.push({ fontWeight: 'bold' });
-            return (
-                <Text key={index} style={style}>
+            parts.push(
+                <Text key={`bold-${index}`} style={style}>
                     <Text style={hiddenStyle}>**</Text>
-                    {parseMarkdownForInput(content)}
+                    {parseMarkdownForInput(content, baseStyle)}
                     <Text style={hiddenStyle}>**</Text>
                 </Text>
             );
         }
-        // Strikethrough: ~~content~~
-        else if (chunk.startsWith('~~') && chunk.endsWith('~~') && chunk.length >= 4) {
+        else if (chunk.startsWith('~~') && chunk.endsWith('~~')) {
             const content = chunk.substring(2, chunk.length - 2);
             style.push({ textDecorationLine: 'line-through' });
-            return (
-                <Text key={index} style={style}>
+            parts.push(
+                <Text key={`strike-${index}`} style={style}>
                     <Text style={hiddenStyle}>~~</Text>
-                    {parseMarkdownForInput(content)}
+                    {parseMarkdownForInput(content, baseStyle)}
                     <Text style={hiddenStyle}>~~</Text>
                 </Text>
             );
         }
-        // Code: `content`
-        else if (chunk.startsWith('`') && chunk.endsWith('`') && chunk.length >= 2) {
+        else if (chunk.startsWith('`') && chunk.endsWith('`')) {
             const content = chunk.substring(1, chunk.length - 1);
             style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
-            return (
-                <Text key={index} style={style}>
+            parts.push(
+                <Text key={`code-${index}`} style={style}>
                     <Text style={hiddenStyle}>`</Text>
                     {content}
                     <Text style={hiddenStyle}>`</Text>
                 </Text>
             );
         }
-        // Italic: _content_
-        else if (chunk.startsWith('_') && chunk.endsWith('_') && chunk.length >= 2) {
+        else if (chunk.startsWith('==') && chunk.endsWith('==')) {
+            const inner = chunk.substring(2, chunk.length - 2);
+            let colorKey = 'yellow';
+            let content = inner;
+            const colorMatch = inner.match(/^(red|orange|yellow|green|blue|purple):([\s\S]*)$/);
+            if (colorMatch) {
+                colorKey = colorMatch[1];
+                content = colorMatch[2];
+            }
+            const highlightColor = (colors.highlight as any)[colorKey] || colors.highlight.yellow;
+            style.push({ backgroundColor: highlightColor });
+            parts.push(
+                <Text key={`highlight-${index}`} style={style}>
+                    <Text style={hiddenStyle}>=={colorMatch ? colorKey + ':' : ''}</Text>
+                    {parseMarkdownForInput(content, baseStyle)}
+                    <Text style={hiddenStyle}>==</Text>
+                </Text>
+            );
+        }
+        else if (chunk.startsWith('<u>') && chunk.endsWith('</u>')) {
+            const content = chunk.substring(3, chunk.length - 4);
+            style.push({ textDecorationLine: 'underline' });
+            parts.push(
+                <Text key={`underline-${index}`} style={style}>
+                    <Text style={hiddenStyle}>&lt;u&gt;</Text>
+                    {parseMarkdownForInput(content, baseStyle)}
+                    <Text style={hiddenStyle}>&lt;/u&gt;</Text>
+                </Text>
+            );
+        }
+        else if (chunk.startsWith('_') && chunk.endsWith('_')) {
             const content = chunk.substring(1, chunk.length - 1);
             style.push({ fontStyle: 'italic' });
-            return (
-                <Text key={index} style={style}>
+            parts.push(
+                <Text key={`italic-${index}`} style={style}>
                     <Text style={hiddenStyle}>_</Text>
-                    {parseMarkdownForInput(content)}
+                    {parseMarkdownForInput(content, baseStyle)}
                     <Text style={hiddenStyle}>_</Text>
                 </Text>
             );
         }
-        // Italic: *content*
-        else if (chunk.startsWith('*') && chunk.endsWith('*') && chunk.length >= 2) {
+        else if (chunk.startsWith('*') && chunk.endsWith('*')) {
             const content = chunk.substring(1, chunk.length - 1);
             style.push({ fontStyle: 'italic' });
-            return (
-                <Text key={index} style={style}>
+            parts.push(
+                <Text key={`italic-star-${index}`} style={style}>
                     <Text style={hiddenStyle}>*</Text>
-                    {parseMarkdownForInput(content)}
+                    {parseMarkdownForInput(content, baseStyle)}
                     <Text style={hiddenStyle}>*</Text>
                 </Text>
             );
+        }
+        else {
+            parts.push(<Text key={`unknown-${index}`} style={style}>{chunk}</Text>);
         }
 
-        return (
-            <Text key={index} style={style}>
-                {chunk}
+        lastIndex = fullPattern.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(
+            <Text key={`end-${lastIndex}`} style={baseStyle}>
+                {text.substring(lastIndex)}
             </Text>
         );
-    });
+    }
+    return parts;
 };

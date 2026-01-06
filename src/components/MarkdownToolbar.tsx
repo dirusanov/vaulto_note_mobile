@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -12,6 +12,42 @@ interface MarkdownToolbarProps {
     onColorPickerToggle?: (visible: boolean) => void;
 }
 
+interface ToolbarButtonProps {
+    isActive: boolean;
+    onPress: () => void;
+    iconName?: keyof typeof MaterialIcons.glyphMap;
+    label?: string;
+    children?: React.ReactNode;
+}
+
+const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconName, label, children }) => {
+    return (
+        <TouchableOpacity
+            onPress={onPress}
+            style={[styles.button, isActive && styles.activeButton]}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            activeOpacity={0.6}
+        >
+            {iconName && (
+                <MaterialIcons
+                    name={iconName}
+                    size={24}
+                    color={isActive ? colors.primary : colors.textSecondary}
+                />
+            )}
+            {label && (
+                <Text style={[
+                    styles.textIcon,
+                    { color: isActive ? colors.primary : colors.textSecondary }
+                ]}>
+                    {label}
+                </Text>
+            )}
+            {children}
+        </TouchableOpacity>
+    );
+};
+
 export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle }) => {
     const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -23,16 +59,8 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
 
     // Check if any highlight is active
     const activeHighlight = activeFormats.find(f => f.startsWith('highlight:'));
-    const activeColor = activeHighlight ? activeHighlight.split(':')[1] : 'white';
+    const activeHighlightColor = activeHighlight ? activeHighlight.split(':')[1] : 'white';
     const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
-
-    const getButtonStyle = (type: MarkdownFormatType) => [
-        styles.button,
-        isActive(type) && styles.activeButton
-    ];
-
-    const getIconColor = (type: MarkdownFormatType) =>
-        isActive(type) ? colors.primary : colors.text;
 
     const highlightColors = [
         { name: 'yellow', value: colors.highlight.yellow },
@@ -55,100 +83,83 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
 
     return (
         <View style={styles.container}>
-            <View style={styles.toolbarRow}>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="always"
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="always"
+            >
+                {/* Structure */}
+                <ToolbarButton
+                    isActive={isActive('todo')}
+                    onPress={() => onFormat('todo')}
+                    iconName="check-box"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('list')}
+                    onPress={() => onFormat('list')}
+                    iconName="format-list-bulleted"
+                />
+
+                <View style={styles.spacer} />
+
+                {/* Headers */}
+                <ToolbarButton
+                    isActive={isActive('h2')}
+                    onPress={() => onFormat('h2')}
+                    label="H2"
+                />
+
+                <View style={styles.spacer} />
+
+                {/* Text Styles */}
+                <ToolbarButton
+                    isActive={isActive('bold')}
+                    onPress={() => onFormat('bold')}
+                    iconName="format-bold"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('italic')}
+                    onPress={() => onFormat('italic')}
+                    iconName="format-italic"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('underline')}
+                    onPress={() => onFormat('underline')}
+                    iconName="format-underlined"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('strikethrough')}
+                    onPress={() => onFormat('strikethrough')}
+                    iconName="format-strikethrough"
+                />
+
+                <View style={styles.spacer} />
+
+                {/* Highlight */}
+                <TouchableOpacity
+                    style={[styles.button, isHighlightActive && styles.activeButton]}
+                    onPress={handleHighlightPress}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
-                    {/* Group 1: Structure (Todo, List) */}
-                    <TouchableOpacity
-                        style={getButtonStyle('todo')}
-                        onPress={() => onFormat('todo')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons name="check-box" size={24} color={getIconColor('todo')} />
-                    </TouchableOpacity>
+                    <MaterialIcons
+                        name="border-color"
+                        size={22} // Slightly smaller optical size for this icon
+                        color={isHighlightActive ? colors.primary : colors.textSecondary}
+                    />
+                    <View style={[
+                        styles.colorDot,
+                        { backgroundColor: (colors.highlight as any)[activeHighlightColor] },
+                        // specific tweak for correct visual
+                        activeHighlightColor === 'white' && { borderWidth: 1, borderColor: '#eee' }
+                    ]} />
+                </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={getButtonStyle('list')}
-                        onPress={() => onFormat('list')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons name="format-list-bulleted" size={24} color={getIconColor('list')} />
-                    </TouchableOpacity>
-
-                    <View style={styles.divider} />
-
-                    {/* Group 2: Headers */}
-                    <TouchableOpacity
-                        style={getButtonStyle('h2')}
-                        onPress={() => onFormat('h2')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <Text style={[styles.headingIcon, { fontSize: 18, fontWeight: 'bold', color: getIconColor('h2') }]}>H</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.divider} />
-
-                    {/* Highlight Button */}
-                    <TouchableOpacity
-                        style={[
-                            styles.button,
-                            isHighlightActive && { backgroundColor: (colors.highlight as any)[activeColor] }
-                        ]}
-                        onPress={handleHighlightPress}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons
-                            name="border-color"
-                            size={20}
-                            color={isHighlightActive ? colors.text : colors.text}
-                        />
-                        <View style={[styles.colorIndicator, { backgroundColor: (colors.highlight as any)[activeColor] }]} />
-                    </TouchableOpacity>
-
-
-                    <View style={styles.divider} />
-
-                    {/* Group 3: Text Formatting */}
-                    <TouchableOpacity
-                        style={getButtonStyle('bold')}
-                        onPress={() => onFormat('bold')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons name="format-bold" size={24} color={getIconColor('bold')} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={getButtonStyle('italic')}
-                        onPress={() => onFormat('italic')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons name="format-italic" size={24} color={getIconColor('italic')} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={getButtonStyle('underline')}
-                        onPress={() => onFormat('underline')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons name="format-underlined" size={24} color={getIconColor('underline')} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={getButtonStyle('strikethrough')}
-                        onPress={() => onFormat('strikethrough')}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialIcons name="format-strikethrough" size={24} color={getIconColor('strikethrough')} />
-                    </TouchableOpacity>
-
-
-
-                </ScrollView>
-            </View>
+            </ScrollView>
 
             <Modal
                 transparent
@@ -159,7 +170,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                 <TouchableWithoutFeedback onPress={() => setShowColorPicker(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.colorPickerContainer}>
-                            <Text style={styles.colorPickerTitle}>Select Highlight Color</Text>
+                            <Text style={styles.colorPickerTitle}>Highlight Color</Text>
                             <View style={styles.colorsGrid}>
                                 {highlightColors.map((color) => (
                                     <TouchableOpacity
@@ -167,12 +178,17 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                                         style={[
                                             styles.colorOption,
                                             { backgroundColor: color.value },
-                                            activeColor === color.name && styles.activeColorOption
+                                            activeHighlightColor === color.name && styles.activeColorOption
                                         ]}
                                         onPress={() => applyHighlight(color.name)}
+                                        activeOpacity={0.8}
                                     >
-                                        {activeColor === color.name && (
-                                            <MaterialIcons name="check" size={20} color={colors.text} />
+                                        {activeHighlightColor === color.name && (
+                                            <MaterialIcons
+                                                name="check"
+                                                size={20}
+                                                color={color.name === 'white' ? colors.text : colors.text}
+                                            />
                                         )}
                                     </TouchableOpacity>
                                 ))}
@@ -189,111 +205,117 @@ const styles = StyleSheet.create({
     container: {
         backgroundColor: colors.surface,
         borderTopWidth: 1,
-        borderTopColor: colors.border,
-        paddingVertical: 0, // Removed vertical padding
-        marginHorizontal: -spacing.m, // Extend to screen edges
+        borderTopColor: 'rgba(0,0,0,0.05)',
+        paddingVertical: spacing.s,
+        marginHorizontal: -spacing.m,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 3,
+                shadowOffset: { width: 0, height: -3 },
+                shadowOpacity: 0.08,
+                shadowRadius: 5,
+                zIndex: 10,
             },
             android: {
-                elevation: 8,
+                elevation: 12,
             },
         }),
     },
-    toolbarRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
     scrollContent: {
-        paddingHorizontal: spacing.s, // Add small padding for content
+        paddingHorizontal: spacing.m,
         alignItems: 'center',
-        gap: spacing.s,
-        height: 44, // Tighter height
+        height: 48,
+        gap: 4, // Material Design dense toolbar gap
     },
     button: {
-        width: 40,
-        height: 40,
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 12, // Softer corners
-        backgroundColor: colors.background, // Slight background for buttons
+        borderRadius: 12, // Modern rounded square
+        backgroundColor: 'transparent',
     },
     activeButton: {
         backgroundColor: colors.backgroundSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
     },
-    divider: {
-        width: 1,
-        height: 20,
-        backgroundColor: colors.border,
-        marginHorizontal: spacing.xs,
-    },
-    headingIcon: {
-        includeFontPadding: false,
-        textAlignVertical: 'center',
-    },
-    colorIndicator: {
-        position: 'absolute',
-        bottom: 5,
-        right: 5,
+    spacer: {
         width: 8,
-        height: 8,
-        borderRadius: 4,
+    },
+    textIcon: {
+        fontSize: 17,
+        fontWeight: '700',
+        includeFontPadding: false,
+    },
+    colorDot: {
+        position: 'absolute',
+        bottom: 6,
+        right: 6,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)'
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.2)',
+        backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'flex-end',
-        paddingBottom: 80, // Position above toolbar
     },
     colorPickerContainer: {
-        marginHorizontal: spacing.m,
         backgroundColor: colors.surface,
-        borderRadius: 16,
-        padding: spacing.m,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: spacing.l,
+        paddingBottom: Platform.OS === 'ios' ? 40 : spacing.l,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 12,
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 10,
             },
             android: {
-                elevation: 10,
+                elevation: 20,
             },
         }),
     },
     colorPickerTitle: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
-        color: colors.textSecondary,
-        marginBottom: spacing.m,
+        color: colors.text,
+        marginBottom: spacing.l,
         textAlign: 'center',
+        opacity: 0.8,
     },
     colorsGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: spacing.s,
+        gap: spacing.m,
     },
     colorOption: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: 'rgba(0,0,0,0.08)',
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 2,
+            },
+        }),
     },
     activeColorOption: {
         borderWidth: 2,
-        borderColor: colors.text,
+        borderColor: colors.primary,
+        transform: [{ scale: 1.1 }],
     },
 });

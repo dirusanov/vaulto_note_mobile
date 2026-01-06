@@ -133,14 +133,14 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         };
 
         // Bold (**...**)
-        checkOverlap(/\*\*(.*?)\*\*/g, 'bold', 2);
+        checkOverlap(/\*\*(?:[\s\S]*?)\*\*/g, 'bold', 2);
 
-        // Italic (_..._ or *...*)
         // Italic (_..._)
-        checkOverlap(/_(.*?)_/g, 'italic', 1);
+        checkOverlap(/_(?:[\s\S]*?)_/g, 'italic', 1);
 
         // Italic (*...*) - Strict check to avoid overlap with Bold (**)
-        const starItalicRegex = /\*((?:.|\n)*?)\*/g; // Match *content* non-greedy
+        const starItalicRegex = /\*((?:[\s\S]|\n)*?)\*/g; // Keep existing specific logic or align?
+        // Note: The specific star logic below manually checks * counts, so basic capture is fine.
         let starMatch;
         while ((starMatch = starItalicRegex.exec(text)) !== null) {
             const mStart = starMatch.index;
@@ -170,17 +170,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
 
         // Strikethrough (~~...~~)
-        checkOverlap(/~~(.*?)~~/g, 'strikethrough', 2);
+        checkOverlap(/~~(?:[\s\S]*?)~~/g, 'strikethrough', 2);
 
         // Underline (<u>...</u>)
-        checkOverlap(/<u>(.*?)<\/u>/g, 'underline', 3);
+        checkOverlap(/<u>(?:[\s\S]*?)<\/u>/g, 'underline', 3);
 
         // Highlight (==...==)
-        // Check for specific colors or default
-        // We need to return the SPECIFIC color type if detected, e.g. 'highlight:red'
-        // But the checkOverlap helper applies a single type.
-        // Let's do custom logic for highlight.
-        const highlightRegex = /==((?:[a-z]+:)?.+?)==/g;
+        const highlightRegex = /==((?:[a-z]+:)?(?:[\s\S]+?))==/g;
         // checkOverlap(highlightRegex, 'highlight', 2); 
         // We need to know specific color. 
         highlightRegex.lastIndex = 0;
@@ -369,7 +365,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     const color = chunks.length > 1 ? chunks[1] : 'yellow';
                     wrapper = `==${color}:`; // e.g. ==red:
                     // Regex to find ANY highlight
-                    regex = /==((?:[a-z]+:)?.+?)==/g;
+                    regex = /==((?:[a-z]+:)?(?:[\s\S]+?))==/g;
                 }
 
                 let newText = text;
@@ -523,11 +519,79 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             endWrapper = '==';
                         }
 
-                        newText = text.substring(0, start) + wrapper + selectedText + endWrapper + text.substring(end);
-                        blockSelections.current[block.id] = {
-                            start: start + wrapper.length,
-                            end: end + wrapper.length
-                        };
+                        // Unwrap-Transform-Rewrap Logic for nested formatting inside highlights
+                        // This prevents creating malformed markdown like ==color:**content==** by ensuring 
+                        // formatting is applied strictly to the inner content, and then re-wrapped.
+
+                        let handled = false;
+                        const highlightRegex = /==((?:[a-z]+:)?(?:[\s\S]+?))==/g;
+                        let hMatch;
+
+                        while ((hMatch = highlightRegex.exec(text)) !== null) {
+                            const hStart = hMatch.index;
+                            const hEnd = hStart + hMatch[0].length;
+
+                            // Check for intersection: 
+                            // Does the selection overlap with this highlight block?
+                            if ((start >= hStart && start < hEnd) ||
+                                (end > hStart && end <= hEnd) ||
+                                (start <= hStart && end >= hEnd)) {
+
+                                // Found overlapping highlight. 
+                                // Strategy: Unwrap -> Apply Format -> Rewrap
+
+                                const inner = hMatch[1];
+                                let color = 'yellow';
+                                let cleanContent = inner;
+
+                                const colMatch = inner.match(/^([a-z]+):([\s\S]*)$/);
+                                if (colMatch) {
+                                    color = colMatch[1];
+                                    cleanContent = colMatch[2];
+                                }
+
+                                const prefixLen = hMatch[0].length - cleanContent.length - 2; // -2 for trailing ==
+                                // Note: prefixLen = (2 for ==) + (color: length)
+
+                                // Map selection to local coordinates relative to cleanContent
+                                let localStart = start - hStart - prefixLen;
+                                let localEnd = end - hStart - prefixLen;
+
+                                // Clamp to content boundaries
+                                if (localStart < 0) localStart = 0;
+                                if (localEnd > cleanContent.length) localEnd = cleanContent.length;
+                                if (localEnd < localStart) localEnd = localStart;
+
+                                // Apply format to cleanContent
+                                const before = cleanContent.substring(0, localStart);
+                                const selected = cleanContent.substring(localStart, localEnd);
+                                const after = cleanContent.substring(localEnd);
+
+                                const formattedInner = before + wrapper + selected + endWrapper + after;
+
+                                // Re-construct the block
+                                const newBlockContent = `==${color}:${formattedInner}==`;
+
+                                newText = text.substring(0, hStart) + newBlockContent + text.substring(hEnd);
+
+                                blockSelections.current[block.id] = {
+                                    start: hStart + prefixLen + localEnd + wrapper.length + endWrapper.length,
+                                    end: hStart + prefixLen + localEnd + wrapper.length + endWrapper.length
+                                };
+
+                                handled = true;
+                                break; // Only handle one highlight intersection per format action for simplicity
+                            }
+                        }
+
+                        if (!handled) {
+                            // Standard wrapping if no highlight involved
+                            newText = text.substring(0, start) + wrapper + selectedText + endWrapper + text.substring(end);
+                            blockSelections.current[block.id] = {
+                                start: start + wrapper.length,
+                                end: end + wrapper.length
+                            };
+                        }
                     }
                 }
 
