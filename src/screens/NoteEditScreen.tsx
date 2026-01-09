@@ -867,7 +867,7 @@ export const NoteEditScreen = () => {
             setIsAIProcessing(true);
 
             // Pass the text we just got, so we don't need to re-transcribe or upload audio
-            const agentResult = await processVoiceNote(recordingUri, 'ru', currentContextContent, transcribedText);
+            const agentResult = await processVoiceNote(recordingUri, undefined, currentContextContent, transcribedText);
 
             if (agentResult.success) {
                 const originalText = agentResult.originalText || transcribedText;

@@ -34,7 +34,7 @@ export interface VoiceNoteResult {
  */
 export async function transcribeAudio(
     audioUri: string,
-    language: string = 'ru'
+    language?: string
 ): Promise<TranscriptionResult> {
     const provider = await getAIProvider();
     if (provider === 'secure_llm' || provider === 'selfhosted') {
@@ -93,7 +93,9 @@ export async function transcribeAudio(
 
             formData.append('file', file);
             formData.append('model', 'whisper-1');
-            formData.append('language', language);
+            if (language) {
+                formData.append('language', language);
+            }
 
             // Send request
             const response = await fetch(OPENAI_WHISPER_URL, {
@@ -133,7 +135,7 @@ export async function transcribeAudio(
     };
 }
 
-async function transcribeViaBackend(audioUri: string, language: string): Promise<TranscriptionResult> {
+async function transcribeViaBackend(audioUri: string, language?: string): Promise<TranscriptionResult> {
     // Check if self-hosted provider is selected
     const provider = await getAIProvider();
     const isSelfHosted = provider === 'selfhosted';
@@ -188,7 +190,9 @@ async function transcribeViaBackend(audioUri: string, language: string): Promise
             type: 'audio/m4a',
             name: 'audio.m4a',
         } as any);
-        formData.append('language', language);
+        if (language) {
+            formData.append('language', language);
+        }
 
         const response = await fetch(baseUrl, {
             method: 'POST',
@@ -272,7 +276,7 @@ export async function testSelfHostedConnection(url: string, apiKey: string): Pro
  */
 export async function processVoiceNote(
     audioUri: string,
-    language: string = 'ru',
+    language?: string,
     currentContent?: string,
     preTranscribedText?: string
 ): Promise<VoiceNoteResult> {
@@ -380,7 +384,9 @@ export async function processVoiceNote(
             } as any);
         }
 
-        formData.append('language', language);
+        if (language) {
+            formData.append('language', language);
+        }
         if (currentContent) {
             formData.append('current_content', currentContent);
         }
