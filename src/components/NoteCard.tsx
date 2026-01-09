@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -94,6 +95,9 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
         }
     };
 
+    const hasAudio = note.has_audio;
+    const isEmpty = !title && (!content || content.trim().length === 0);
+
     return (
         <TouchableOpacity
             style={styles.card}
@@ -101,13 +105,16 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
             activeOpacity={0.9}
         >
             <View style={styles.content}>
-                <Text style={styles.title} numberOfLines={1}>
-                    {title || ' '}
+                <Text style={[styles.title, isEmpty && hasAudio && styles.placeholderTitle]} numberOfLines={1}>
+                    {(isEmpty && hasAudio) ? 'Voice Note' : (title || ' ')}
                 </Text>
-                {(previewTextRaw && previewTextRaw !== title) && (
+                {(!isEmpty && previewTextRaw && previewTextRaw !== title) && (
                     <Text style={styles.preview} numberOfLines={6}>
                         {previewNodes}
                     </Text>
+                )}
+                {(isEmpty && hasAudio) && (
+                    <Text style={styles.audioPreviewLabel}> Audio recording available</Text>
                 )}
             </View>
             {(note.updated_at || note.created_at) && (
@@ -115,6 +122,9 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
                     <Text style={styles.date}>
                         {formatDate(note.updated_at || note.created_at || '')}
                     </Text>
+                    {hasAudio && (
+                        <MaterialIcons name="graphic-eq" size={16} color={colors.textTertiary} />
+                    )}
                 </View>
             )}
         </TouchableOpacity>
@@ -152,10 +162,23 @@ const styles = StyleSheet.create({
     footer: {
         paddingHorizontal: spacing.m,
         paddingBottom: spacing.m,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     date: {
         fontSize: 12,
         color: colors.textTertiary,
         fontWeight: '500',
+    },
+    placeholderTitle: {
+        color: colors.textSecondary,
+        fontStyle: 'italic',
+    },
+    audioPreviewLabel: {
+        fontSize: 14,
+        color: colors.primary,
+        fontWeight: '500',
+        marginTop: spacing.xs,
     },
 });

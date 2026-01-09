@@ -55,6 +55,9 @@ import {
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
 
+import { ErrorModal } from '../components/ErrorModal';
+import { getErrorMessage } from '../utils/errorMessage';
+
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
 
@@ -174,6 +177,10 @@ export const NoteEditScreen = () => {
     const [isRecordingInstruction, setIsRecordingInstruction] = useState(false);
     const [showCustomInput, setShowCustomInput] = useState(false);
 
+    // Error Modal State
+    const [errorModalVisible, setErrorModalVisible] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+
     // Determine initial active variant based on is_active flags
 
 
@@ -269,9 +276,11 @@ export const NoteEditScreen = () => {
         }
 
         // Load audio if exists
+        // Load audio if exists
         if (existingNote.has_audio && existingNote.audio_file_path && !audioUri) {
             loadAudio(existingNote.audio_file_path);
             setAudioDuration(existingNote.audio_duration || 0);
+            setShowAudioPlayer(true);
         }
 
         lastSavedTitle.current = existingNote.title || '';
@@ -921,10 +930,13 @@ export const NoteEditScreen = () => {
                     }
                 }
             } else {
-                console.error('[NoteEditScreen] Agent processing failed:', agentResult.error);
+                setErrorMessage(getErrorMessage(agentResult.error, 'Agent processing failed'));
+                setErrorModalVisible(true);
             }
         } catch (error) {
             console.error('[NoteEditScreen] Agent flow error:', error);
+            setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
+            setErrorModalVisible(true);
         } finally {
             setIsAIProcessing(false);
         }
@@ -944,6 +956,14 @@ export const NoteEditScreen = () => {
         // Handle failure but SAVE audio
         if (!isTranscriptionSuccess) {
             // Silently fail to transcribe but proceed to save audio below
+            // UNLESS there is a specific error we should show (like trial expired)
+            if (transcription.error) {
+                const msg = getErrorMessage(transcription.error, '');
+                if (msg) {
+                    setErrorMessage(msg);
+                    setErrorModalVisible(true);
+                }
+            }
         }
 
         const contentForAgentContext = content;
@@ -998,7 +1018,8 @@ export const NoteEditScreen = () => {
             // If transcription failed here, we can't really do much since improvements are text-based
             if (!isTranscriptionSuccess) {
                 await AudioService.deleteAudioFile(recording.uri);
-                Alert.alert('Transcription Failed', 'Could not add voice text to improvement.');
+                setErrorMessage('Could not add voice text to improvement.');
+                setErrorModalVisible(true);
                 return;
             }
 
@@ -1042,11 +1063,13 @@ export const NoteEditScreen = () => {
             if (transcription.success && transcription.text) {
                 setCustomInstruction(transcription.text);
             } else {
-                Alert.alert('Transcription Failed', transcription.error || 'Could not recognize speech');
+                setErrorMessage(getErrorMessage(transcription.error, 'Could not recognize speech'));
+                setErrorModalVisible(true);
             }
         } catch (error) {
             console.error('Instruction transcription failed:', error);
-            Alert.alert('Error', 'Failed to transcribe instruction');
+            setErrorMessage('Failed to transcribe instruction');
+            setErrorModalVisible(true);
         } finally {
             setIsAIProcessing(false);
             setIsRecordingInstruction(false);
@@ -1236,10 +1259,9 @@ export const NoteEditScreen = () => {
                 updateHistoryImmediate('', finalText);
             }
         } catch (error) {
-            const message = error instanceof Error
-                ? error.message
-                : 'Failed to improve text. Check AI settings.';
-            Alert.alert('Error', message);
+            const prettyMessage = getErrorMessage(error, 'Failed to improve text. Check AI settings.');
+            setErrorMessage(prettyMessage);
+            setErrorModalVisible(true);
         } finally {
             setIsAIProcessing(false);
         }
@@ -1401,7 +1423,8 @@ export const NoteEditScreen = () => {
             const transcription = await transcribeAudio(audioUri);
 
             if (!transcription.success || !transcription.text) {
-                Alert.alert('Transcription Failed', transcription.error || 'Check internet connection');
+                setErrorMessage(getErrorMessage(transcription.error, 'Check internet connection'));
+                setErrorModalVisible(true);
                 return;
             }
 
@@ -1427,7 +1450,8 @@ export const NoteEditScreen = () => {
 
         } catch (error) {
             setIsTranscribing(false);
-            Alert.alert('Error', 'Failed to retry transcription');
+            setErrorMessage('Failed to retry transcription');
+            setErrorModalVisible(true);
         } finally {
             setIsTranscribing(false);
         }
@@ -1939,6 +1963,12 @@ export const NoteEditScreen = () => {
                 visible={showPrivacyWarning}
                 onAccept={handlePrivacyAccept}
                 onCancel={() => setShowPrivacyWarning(false)}
+            />
+
+            <ErrorModal
+                visible={errorModalVisible}
+                message={errorMessage}
+                onClose={() => setErrorModalVisible(false)}
             />
 
             <VoiceRecorder
