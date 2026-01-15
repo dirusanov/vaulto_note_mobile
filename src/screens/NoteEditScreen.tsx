@@ -34,6 +34,8 @@ import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
+import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
+import { VoiceRecording } from '../api/notes';
 import * as Haptics from 'expo-haptics';
 import { getPrivacyWarningDismissed } from '../utils/storage';
 import {
@@ -95,8 +97,19 @@ export const NoteEditScreen = () => {
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
+    const localNoteIdRef = useRef(localNoteId);
+
+    useEffect(() => {
+        localNoteIdRef.current = localNoteId;
+    }, [localNoteId]);
+
+    // Voice Recordings
+    const [voiceRecordings, setVoiceRecordings] = useState<VoiceRecording[]>([]);
     const existingNote = notes.find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
+
+    // Refresh recordings when list modal opens
+
 
     // Determine initial active variant based on is_active flags
     const getInitialActiveVariantId = () => {
@@ -144,8 +157,10 @@ export const NoteEditScreen = () => {
     const skipAutoSaveRef = useRef(false);
     const isColorPickerOpen = useRef(false);
     const isMounted = useRef(true);
+    const hasAutoOpenedRecordings = useRef(false);
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
+    const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
 
     // Add state to track if audio holds a transcription
     const [hasTranscription, setHasTranscription] = useState(!!existingNote?.encrypted_transcription);
@@ -171,6 +186,32 @@ export const NoteEditScreen = () => {
     const [newPromptTitle, setNewPromptTitle] = useState('');
     const [newPromptTemplate, setNewPromptTemplate] = useState('');
     const [newPromptIcon, setNewPromptIcon] = useState<string>(ICON_CHOICES[0]);
+
+    // Voice Recordings List State
+    const [showRecordingsList, setShowRecordingsList] = useState(false);
+
+    // Refresh recordings when list modal opens
+    useEffect(() => {
+        if (showRecordingsList && localNoteId) {
+            getVoiceRecordingsLocal(localNoteId).then(async (recs) => {
+                setVoiceRecordings(recs);
+
+                // Auto-select the latest recording (first in list)
+                if (recs.length > 0) {
+                    const latest = recs[0];
+                    setPlayingRecordingId(latest.id);
+                    try {
+                        const uri = await AudioService.readAudioFile(latest.file_path);
+                        setAudioUri(uri);
+                        setAudioDuration(latest.duration);
+                        setShowAudioPlayer(true);
+                    } catch (e) {
+                        console.error('[NoteEditScreen] Failed to auto-load recording', e);
+                    }
+                }
+            });
+        }
+    }, [showRecordingsList, localNoteId]);
 
     // Custom Instruction State
     const [customInstruction, setCustomInstruction] = useState('');
@@ -205,6 +246,35 @@ export const NoteEditScreen = () => {
         setFontSizeState(size);
         setAutoScalingEnabledState(scaling);
     };
+
+
+    useEffect(() => {
+        if (localNoteId) {
+            getVoiceRecordingsLocal(localNoteId).then(async (recs) => {
+                setVoiceRecordings(recs);
+
+                // Auto-load player if note is empty but has recordings (unprocessed voice note)
+                if (!hasAutoOpenedRecordings.current && recs.length > 0 && existingNote) {
+                    const isEmpty = !existingNote.title && (!existingNote.content || existingNote.content.trim().length === 0);
+                    const hasNoTx = !existingNote.encrypted_transcription && !existingNote.transcription;
+
+                    if (isEmpty && hasNoTx) {
+                        // Load the latest recording
+                        const latest = recs[0];
+                        try {
+                            const uri = await AudioService.readAudioFile(latest.file_path);
+                            setAudioUri(uri);
+                            setAudioDuration(latest.duration);
+                            setShowAudioPlayer(true);
+                            hasAutoOpenedRecordings.current = true;
+                        } catch (e) {
+                            console.error('Failed to auto-load empty note audio', e);
+                        }
+                    }
+                }
+            });
+        }
+    }, [localNoteId, existingNote]);
 
     const handleFontSizeChange = (size: number) => {
         setFontSizeState(size);
@@ -953,10 +1023,9 @@ export const NoteEditScreen = () => {
         const isTranscriptionSuccess = transcription.success && !!transcription.text;
         const transcribedText = isTranscriptionSuccess ? transcription.text : '';
 
-        // Handle failure but SAVE audio
+        // Handle failure (but we might still save audio if we want?)
+        // Currently if transcription fails we show error and maybe don't save.
         if (!isTranscriptionSuccess) {
-            // Silently fail to transcribe but proceed to save audio below
-            // UNLESS there is a specific error we should show (like trial expired)
             if (transcription.error) {
                 const msg = getErrorMessage(transcription.error, '');
                 if (msg) {
@@ -969,32 +1038,25 @@ export const NoteEditScreen = () => {
         const contentForAgentContext = content;
         let finalTranscribedContent = content; // Default to existing
 
-        // Track the current note ID locally to avoid closure stale state issues
-        let currentNoteId = localNoteId;
+        // Track the current note ID using ref to avoid stale closure state issues
+        let currentNoteId = localNoteIdRef.current;
 
-        // 2. IMMEDIATE UI UPDATE (Append Text)
-        if (activeVariantId === 'original') {
-            const savedPath = await AudioService.saveAudioFile(recording.uri, false);
+        // 2. SAVE AUDIO (ALWAYS)
+        // Save file to persistent storage first so we can attach it to the new note if needed
+        const savedPath = await AudioService.saveAudioFile(recording.uri, false);
 
-            if (transcribedText) {
-                finalTranscribedContent = content + (content ? '\n\n' : '') + transcribedText;
-            }
+        // Ensure Note Exists (Create if not)
+        // If we are recording on a "New Note" (not saved yet), we must create it now to attach audio.
+        if (!currentNoteId) {
+            try {
+                // Create basic note WITH audio so it's not rejected as empty.
+                // We provide a fallback title if currently empty to ensure it passes 'isEmpty' check.
+                const titleToUse = title.trim();
+                console.log('[NoteEditScreen] Creating note with audio:', { title: titleToUse, audioPath: savedPath });
 
-            setContent(finalTranscribedContent);
-            updateHistoryImmediate(title, finalTranscribedContent);
-
-            if (currentNoteId) {
-                await updateNote(currentNoteId, {
-                    content: finalTranscribedContent,
-                    audio_file_path: savedPath,
-                    audio_duration: recording.duration,
-                    has_audio: true,
-                    encrypted_transcription: transcribedText || undefined
-                });
-            } else {
                 const newNote = await createNote({
-                    title,
-                    content: finalTranscribedContent,
+                    title: titleToUse,
+                    content: content,
                     audio: {
                         filePath: savedPath,
                         duration: recording.duration,
@@ -1002,49 +1064,94 @@ export const NoteEditScreen = () => {
                     }
                 });
                 setLocalNoteId(newNote.id);
+                localNoteIdRef.current = newNote.id; // Update Ref immediately
                 currentNoteId = newNote.id;
-
                 lastSavedTitle.current = title;
-                lastSavedContent.current = finalTranscribedContent;
+                lastSavedContent.current = content;
+            } catch (e) {
+                console.error('Failed to create note for voice:', e);
+                setErrorMessage('Failed to save note');
+                setErrorModalVisible(true);
+                return;
             }
+        }
 
+        // 2. SAVE AUDIO (ALWAYS)
+        // We save to the 'original' / parent note ID (currentNoteId).
+        // If we are in improvement, 'currentNoteId' is the Parent.
+        // (Wait, localNoteId is the Parent? Yes, see handleRecordingFinish usages).
+
+        // Save file to persistent storage
+
+
+        // Save Metadata to DB
+        const voiceId = Date.now().toString() + Math.random().toString(36).substring(2);
+        const voiceRecording: VoiceRecording = {
+            id: voiceId,
+            note_id: currentNoteId,
+            file_path: savedPath,
+            duration: recording.duration,
+            transcription: transcribedText,
+            created_at: new Date().toISOString(),
+        }
+        await saveVoiceRecordingLocal(voiceRecording);
+
+        // Reload from DB to ensure consistency and correct order
+        const updatedRecs = await getVoiceRecordingsLocal(currentNoteId);
+        setVoiceRecordings(updatedRecs);
+
+        // Also update the 'legacy' fields on the note for backward compatibility / list view
+        // But only if we are in Original mode? Or always?
+        // Let's update them if this is the generic "active" audio.
+        if (activeVariantId === 'original') {
+            await updateNote(currentNoteId, {
+                has_audio: true,
+                audio_file_path: savedPath,
+                audio_duration: recording.duration,
+                encrypted_transcription: transcribedText || undefined
+            });
+
+            // 3. UI UPDATE (Original Mode)
+            // Append text immediately
+            if (transcribedText) {
+                finalTranscribedContent = content + (content ? '\n\n' : '') + transcribedText;
+            }
+            setContent(finalTranscribedContent);
+            updateHistoryImmediate(title, finalTranscribedContent);
+
+            // Set Player
             const playbackUri = await AudioService.readAudioFile(savedPath);
             setAudioUri(playbackUri);
             setAudioDuration(recording.duration);
             setShowAudioPlayer(true);
             setHasTranscription(!!transcribedText);
+
+            // Save Content
+            await updateNote(currentNoteId, {
+                content: finalTranscribedContent
+            });
         } else {
-            // Improvements/Variants: Append text, delete audio
-            // If transcription failed here, we can't really do much since improvements are text-based
+            // 3. UI UPDATE (Improvement Mode)
+            // DO NOT Delete Audio
+            // DO NOT Append Text (Fixes Flicker)
+
+            // We assume the user wants the Agent to process the text and put it into the improvement.
+            // If transcription failed, we just stop (no text to improve).
             if (!isTranscriptionSuccess) {
-                await AudioService.deleteAudioFile(recording.uri);
-                setErrorMessage('Could not add voice text to improvement.');
-                setErrorModalVisible(true);
                 return;
             }
 
-            await AudioService.deleteAudioFile(recording.uri);
-
-            finalTranscribedContent = content + (content ? '\n\n' : '') + transcribedText;
-            setContent(finalTranscribedContent);
-            updateHistoryImmediate('', finalTranscribedContent);
-
-            if (currentNoteId) {
-                try {
-                    await updateImprovement(currentNoteId, activeVariantId, { content: finalTranscribedContent });
-                    improvementSavedRef.current[activeVariantId] = finalTranscribedContent;
-                } catch (error) {
-                    console.error('Failed to save improvement:', error);
-                }
-            }
+            // If we really wanted to show the text "pending" we could, but skipping it fixes the bug.
+            // We do separate 'updateHistoryImmediate' or 'saveImprovement draft' here? 
+            // No, because we haven't changed the content yet.
         }
 
-        // 3. STOP IF NO TEXT (OFFLINE MODE) OR AGENT MODE CHECK
+        // 4. STOP IF NO TEXT (OFFLINE MODE) OR AGENT MODE CHECK
         if (!isTranscriptionSuccess) {
             return;
         }
 
-        // 4. AGENT PROCESSING (If enabled)
+        // 5. AGENT PROCESSING (If enabled)
         await executeAgentFlow(recording.uri, transcribedText, contentForAgentContext, currentNoteId, activeVariantId);
     };
 
@@ -1457,6 +1564,41 @@ export const NoteEditScreen = () => {
         }
     };
 
+
+
+    const formatDuration = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    const handleDeleteRecording = async (id: string, path: string) => {
+        Alert.alert(
+            'Delete Recording',
+            'Are you sure?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await deleteVoiceRecordingLocal(id);
+                        await AudioService.deleteAudioFile(path); // Verify if we should delete file? Yes.
+                        setVoiceRecordings(prev => prev.filter(r => r.id !== id));
+                        // If current audio is this one, close player
+                        // We need to check if path matches audioUri, but audioUri might be full path or uri
+                        // Simple equality check might fail if protocols differ (file://)
+                        // For now, simple check
+                        if (audioUri && (audioUri.includes(path) || path.includes(audioUri))) {
+                            setShowAudioPlayer(false);
+                            setAudioUri(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderHeader = () => (
         <View>
             <TextInput
@@ -1539,21 +1681,25 @@ export const NoteEditScreen = () => {
                 </View>
             )}
 
-            {showAudioPlayer && audioUri && (
-                <View>
-                    <AudioPlayer
-                        audioUri={audioUri}
-                        duration={audioDuration}
-                        onClose={() => setShowAudioPlayer(false)}
-                    />
-                    {!hasTranscription && (
-                        <TouchableOpacity
-                            style={styles.retryTranscriptionButton}
-                            onPress={handleRetryTranscription}
-                        >
-                            <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
-                        </TouchableOpacity>
+
+
+            {/* Inline Player for Empty Voice Notes */}
+            {voiceRecordings.length > 0 && !title && (!content || content.trim().length === 0) && !hasTranscription && !isTranscribing && (
+                <View style={{ marginBottom: spacing.m, marginTop: spacing.s }}>
+                    {showAudioPlayer && audioUri && (
+                        <AudioPlayer
+                            audioUri={audioUri}
+                            duration={audioDuration}
+                            onClose={() => setShowAudioPlayer(false)}
+                        />
                     )}
+                    <TouchableOpacity
+                        style={[styles.retryTranscriptionButton, { alignSelf: 'stretch', justifyContent: 'center', marginTop: spacing.s }]}
+                        onPress={handleRetryTranscription}
+                    >
+                        <MaterialIcons name="auto-awesome" size={18} color={colors.background} style={{ marginRight: 8 }} />
+                        <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
+                    </TouchableOpacity>
                 </View>
             )}
 
@@ -1597,15 +1743,15 @@ export const NoteEditScreen = () => {
                         )}
                     </TouchableOpacity>
 
-                    {/* Cassette Button for Audio */}
-                    {audioUri && (
-                        <TouchableOpacity
-                            onPress={() => setShowAudioPlayer(!showAudioPlayer)}
-                            style={styles.iconButton}
-                        >
-                            <MaterialIcons name="graphic-eq" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    )}
+                    {/* Voice Recordings List Button */}
+                    <TouchableOpacity
+                        onPress={() => setShowRecordingsList(true)}
+                        style={styles.iconButton}
+                    >
+                        <MaterialIcons name="mic" size={24} color={colors.text} />
+                    </TouchableOpacity>
+
+
 
                     {/* Redo/Undo Buttons - Visible if editing or if history exists */}
                     {(isEditing || (variantHistories.current[activeVariantId]?.index > 0) || (variantHistories.current[activeVariantId]?.index < (variantHistories.current[activeVariantId]?.history?.length || 0) - 1)) && (
@@ -1986,6 +2132,135 @@ export const NoteEditScreen = () => {
                 }}
                 autoStart={true}
             />
+
+
+            {/* Recordings List Modal */}
+            <Modal
+                visible={showRecordingsList}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowRecordingsList(false)}
+            >
+                <TouchableWithoutFeedback onPress={() => setShowRecordingsList(false)}>
+                    <GestureHandlerRootView style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.aiModalContent}>
+                                <Text style={styles.aiModalTitle}>Voice Recordings</Text>
+
+                                {showAudioPlayer && audioUri && (
+                                    <View style={{ marginBottom: spacing.m }}>
+                                        <AudioPlayer
+                                            audioUri={audioUri}
+                                            duration={audioDuration}
+                                            onClose={() => {
+                                                setShowAudioPlayer(false);
+                                                setPlayingRecordingId(null);
+                                            }}
+                                        />
+                                        {!hasTranscription && (
+                                            <TouchableOpacity
+                                                style={styles.retryTranscriptionButton}
+                                                onPress={handleRetryTranscription}
+                                            >
+                                                <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                )}
+
+                                <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={{ paddingBottom: spacing.l }}>
+                                    {voiceRecordings.length === 0 ? (
+                                        <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: spacing.m }}>
+                                            No recordings yet.
+                                        </Text>
+                                    ) : (
+                                        voiceRecordings.map((rec) => {
+                                            const isPlaying = playingRecordingId === rec.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={rec.id}
+                                                    style={[
+                                                        styles.recordingItem,
+                                                        isPlaying && {
+                                                            backgroundColor: '#F3F4F6', // More subtle, cleaner grey
+                                                            borderColor: colors.border,
+                                                            borderWidth: 1
+                                                        }
+                                                    ]}
+                                                    onPress={async () => {
+                                                        setPlayingRecordingId(rec.id);
+
+                                                        try {
+                                                            const uri = await AudioService.readAudioFile(rec.file_path);
+                                                            setAudioUri(uri);
+                                                            setAudioDuration(rec.duration);
+                                                            setShowAudioPlayer(true);
+                                                        } catch (e) {
+                                                            console.error('Failed to play audio:', e);
+                                                            setPlayingRecordingId(null);
+                                                        }
+                                                    }}
+                                                >
+                                                    <View style={[
+                                                        styles.recordingIconContainer,
+                                                        isPlaying && { backgroundColor: '#FFFFFF', borderColor: 'rgba(0,0,0,0.05)', borderWidth: 1 }
+                                                    ]}>
+                                                        <MaterialIcons
+                                                            name={isPlaying ? "graphic-eq" : "play-arrow"}
+                                                            size={24}
+                                                            color={isPlaying ? colors.primary : colors.textSecondary}
+                                                        />
+                                                    </View>
+
+                                                    <View style={styles.recordingInfo}>
+                                                        <Text style={[
+                                                            styles.recordingTitle,
+                                                            isPlaying && { color: colors.text, fontWeight: '700' }
+                                                        ]}>
+                                                            {new Date(rec.created_at).toLocaleDateString()}
+                                                        </Text>
+                                                        <Text style={[
+                                                            styles.recordingSubtitle,
+                                                            isPlaying && { color: colors.textSecondary } // Ensure good contrast
+                                                        ]}>
+                                                            {new Date(rec.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {formatDuration(rec.duration)}
+                                                        </Text>
+                                                    </View>
+
+                                                    <TouchableOpacity
+                                                        style={styles.recordingDeleteButton}
+                                                        onPress={() => handleDeleteRecording(rec.id, rec.file_path)}
+                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                    >
+                                                        <MaterialIcons
+                                                            name="delete-outline"
+                                                            size={22}
+                                                            color={isPlaying ? colors.textSecondary : colors.textMuted}
+                                                        />
+                                                    </TouchableOpacity>
+                                                </TouchableOpacity>
+                                            );
+                                        })
+                                    )}
+                                </ScrollView>
+                                <TouchableOpacity
+                                    style={[styles.aiActionButton, { justifyContent: 'center', marginTop: spacing.m, backgroundColor: colors.primary, borderColor: colors.primary }]}
+                                    onPress={() => {
+                                        // Close modal to show full screen recorder? Or keep it simple.
+                                        // Existing logic was just handleMicPress() which opens recorder overlay.
+                                        // We can close this modal first.
+                                        setShowRecordingsList(false);
+                                        handleMicPress();
+                                    }}
+                                >
+                                    <MaterialIcons name="mic" size={20} color={colors.surface} />
+                                    <Text style={[styles.aiActionText, { color: colors.surface }]}>New Recording</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </GestureHandlerRootView>
+                </TouchableWithoutFeedback>
+            </Modal>
 
             <TextAppearanceModal
                 visible={showAppearanceModal}
@@ -2442,20 +2717,98 @@ const styles = StyleSheet.create({
         // paddingBottom removed to bring closer to keyboard
     },
     retryTranscriptionButton: {
-        marginTop: spacing.xs,
+        marginTop: spacing.s,
         marginBottom: spacing.m,
         backgroundColor: colors.primary,
-        paddingVertical: spacing.s,
-        paddingHorizontal: spacing.m,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
+        paddingVertical: 14,
+        paddingHorizontal: spacing.l,
+        borderRadius: 24,
+        alignSelf: 'stretch',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     retryTranscriptionText: {
         color: colors.background,
         fontSize: 14,
         fontWeight: '600',
+    },
+    recordingsList: {
+        marginTop: spacing.s,
+        marginBottom: spacing.m,
+        padding: spacing.s,
+        backgroundColor: colors.surface,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    recordingsListTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textSecondary,
+        marginBottom: spacing.s,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    recordingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.s,
+        marginBottom: spacing.s,
+        borderRadius: 12,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    recordingItemActive: {
+        borderColor: colors.primary,
+        backgroundColor: '#E6F0FF', // Distinct light blue tint
+        borderWidth: 1.5,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    recordingIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.s,
+    },
+    recordingIconContainerActive: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 102, 255, 0.2)',
+    },
+    recordingInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    recordingTitle: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text,
+        marginBottom: 2,
+    },
+    recordingTitleActive: {
+        color: colors.primary,
+        fontWeight: '600',
+    },
+    recordingSubtitle: {
+        fontSize: 12,
+        color: colors.textMuted,
+    },
+    recordingDeleteButton: {
+        padding: spacing.s,
+        marginLeft: spacing.s,
     },
 });

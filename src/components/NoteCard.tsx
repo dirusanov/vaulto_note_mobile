@@ -123,7 +123,7 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
                         {formatDate(note.updated_at || note.created_at || '')}
                     </Text>
                     {hasAudio && (
-                        <MaterialIcons name="graphic-eq" size={16} color={colors.textTertiary} />
+                        <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
                     )}
                 </View>
             )}
