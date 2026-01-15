@@ -31,7 +31,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.anonymous.vaultonotemobile"
+      "package": "com.anonymous.vaultonotemobile",
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

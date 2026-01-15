@@ -46,7 +46,18 @@ export interface Note {
     pending_delete?: boolean;
     dirty?: boolean;
     deleted?: boolean;
+    voice_files?: VoiceRecording[];
     improvements?: Note[]; // Changed from NoteImprovement[] to Note[]
+}
+
+export interface VoiceRecording {
+    id: string;
+    note_id: string;
+    file_path: string;
+    duration: number;
+    transcription?: string;
+    created_at: string;
+    iso_code?: string; // language code
 }
 
 export interface SyncChangeRequest {

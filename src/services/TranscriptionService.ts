@@ -10,8 +10,8 @@ import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey } from '..
 const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
-const BACKEND_TRANSCRIBE_URL = `${API_URL}/ai/transcribe`;
-const BACKEND_PROCESS_NOTE_URL = `${API_URL}/ai/process_voice_note`;
+const BACKEND_TRANSCRIBE_URL = `${API_URL}/gateway/ai/transcribe`;
+const BACKEND_PROCESS_NOTE_URL = `${API_URL}/gateway/ai/process_voice_note`;
 
 export interface TranscriptionResult {
     text: string;
@@ -194,13 +194,24 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
             formData.append('language', language);
         }
 
-        const response = await fetch(baseUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-            body: formData,
-        });
+        const makeRequest = async (url: string) => {
+            return await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: formData,
+            });
+        };
+
+        let response = await makeRequest(baseUrl);
+
+        // Fallback: If 404 and url contained /gateway, try removing it
+        if (response.status === 404 && baseUrl.includes('/gateway/')) {
+            console.log('[Transcription] 404 on gateway URL, retrying without /gateway prefix...');
+            const fallbackUrl = baseUrl.replace('/gateway/', '/');
+            response = await makeRequest(fallbackUrl);
+        }
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -397,35 +408,49 @@ export async function processVoiceNote(
             // But to be safe with some fetch implementations, let's just NOT send 'file' key at all.
         }
 
-        const response = await fetch(baseUrl, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: formData,
-        });
+        const makeRequest = async (url: string) => {
+            return await fetch(url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData,
+            });
+        };
 
+        let response = await makeRequest(baseUrl);
+
+        // Fallback checks
         if (!response.ok) {
-            // Fallback: If endpoint 404s (old backend), try standard transcribe
-            if (response.status === 404) {
-                if (preTranscribedText) {
+            // 1. URL Fix: If 404 and url contained /gateway, try removing it FIRST
+            if (response.status === 404 && baseUrl.includes('/gateway/')) {
+                console.log('[VoiceAgent] 404 on gateway URL, retrying without /gateway prefix...');
+                const fallbackUrl = baseUrl.replace('/gateway/', '/');
+                response = await makeRequest(fallbackUrl);
+            }
+
+            // 2. If STILL failing (or wasn't a URL issue), try standard fallback
+            if (!response.ok) {
+                if (response.status === 404) {
+                    if (preTranscribedText) {
+                        return {
+                            originalText: preTranscribedText,
+                            processedText: null,
+                            hasInstruction: false,
+                            success: true,
+                            error: 'Backend endpoint not found, using local transcript'
+                        };
+                    }
+                    const transResult = await transcribeAudio(audioUri, language);
                     return {
-                        originalText: preTranscribedText,
+                        originalText: transResult.text,
                         processedText: null,
                         hasInstruction: false,
-                        success: true,
-                        error: 'Backend endpoint not found, using local transcript'
+                        success: transResult.success,
+                        error: transResult.error
                     };
                 }
-                const transResult = await transcribeAudio(audioUri, language);
-                return {
-                    originalText: transResult.text,
-                    processedText: null,
-                    hasInstruction: false,
-                    success: transResult.success,
-                    error: transResult.error
-                };
+                const errorText = await response.text();
+                throw new Error(`API error: ${response.status} - ${errorText}`);
             }
-            const errorText = await response.text();
-            throw new Error(`API error: ${response.status} - ${errorText}`);
         }
 
         const result = await response.json();
@@ -441,7 +466,9 @@ export async function processVoiceNote(
         };
 
     } catch (error) {
-        console.error('[VoiceAgent] Failed', error);
+        // Use warn instead of error to prevent RedBox overlays in development for network issues
+        console.warn('[VoiceAgent] Processing failed:', error instanceof Error ? error.message : error);
+
         return {
             originalText: preTranscribedText || '',
             success: false,

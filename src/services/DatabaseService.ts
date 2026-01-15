@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
-import { Note, NoteImprovement } from '../api/notes';
+import { Note, NoteImprovement, VoiceRecording } from '../api/notes';
 import { decrypt } from '../crypto/encryption';
 
 const STORAGE_KEY = 'vaulto_notes_local_store';
@@ -84,6 +84,20 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
     `);
 
     await database.execAsync('CREATE INDEX IF NOT EXISTS idx_note_improvements_note_id ON note_improvements(note_id);');
+
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS voice_recordings (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            duration REAL,
+            transcription TEXT,
+            created_at TEXT,
+            iso_code TEXT,
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+    `);
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
 };
 
 const getDb = async () => {
@@ -106,11 +120,6 @@ const getDb = async () => {
         }
         try {
             await db.execAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
-        } catch (e) {
-            // Ignore
-        }
-        try {
-            await db.execAsync('ALTER TABLE note_improvements ADD COLUMN is_active INTEGER DEFAULT 0;');
         } catch (e) {
             // Ignore
         }
@@ -258,9 +267,64 @@ export const deleteNoteLocal = async (id: string): Promise<void> => {
         if (!database) return;
         await database.runAsync('DELETE FROM notes WHERE id = ?', [id]);
         await database.runAsync('DELETE FROM note_improvements WHERE note_id = ?', [id]);
+        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ?', [id]);
         console.log(`[DatabaseService] Note deleted from native DB: ${id}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete from native DB', e);
+    }
+};
+
+export const getVoiceRecordingsLocal = async (noteId: string): Promise<VoiceRecording[]> => {
+    if (Platform.OS === 'web') return []; // Not supported on web for now or stored in Note
+    try {
+        const database = await getDb();
+        if (!database) return [];
+        const rows = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? ORDER BY created_at DESC', [noteId]);
+        return rows;
+    } catch (e) {
+        console.error('[DatabaseService] Failed to get voice recordings', e);
+        return [];
+    }
+};
+
+export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promise<void> => {
+    if (Platform.OS === 'web') return;
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync(
+            `INSERT INTO voice_recordings (id, note_id, file_path, duration, transcription, created_at, iso_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+             file_path=excluded.file_path,
+             duration=excluded.duration,
+             transcription=excluded.transcription,
+             iso_code=excluded.iso_code
+            `,
+            [
+                recording.id,
+                recording.note_id,
+                recording.file_path,
+                recording.duration,
+                recording.transcription || null,
+                recording.created_at,
+                recording.iso_code || null
+            ]
+        );
+        console.log(`[DatabaseService] Voice recording saved: ${recording.id}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to save voice recording', e);
+    }
+};
+
+export const deleteVoiceRecordingLocal = async (id: string): Promise<void> => {
+    if (Platform.OS === 'web') return;
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('DELETE FROM voice_recordings WHERE id = ?', [id]);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to delete voice recording', e);
     }
 };
 
@@ -305,8 +369,21 @@ export const getNotesLocal = async (): Promise<Note[]> => {
         if (!database) return [];
         const rawNotes = await database.getAllAsync<any>('SELECT * FROM notes ORDER BY updated_at DESC');
         const rawImprovements = await database.getAllAsync<any>('SELECT * FROM note_improvements');
+        // We could fetch all voice recordings and map them, but that might be heavy.
+        // For list view, we might not need them all. But 'getNotesLocal' implies full objects?
+        // Usually list views don't show full recordings list. 
+        // Let's lazy load or just load for now since dataset is small for single user.
+        const allVoice = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings');
+
         const improvementsMap = await processImprovements(rawImprovements);
-        return processNotes(rawNotes, improvementsMap);
+        const voiceMap = new Map<string, VoiceRecording[]>();
+        allVoice.forEach(v => {
+            const list = voiceMap.get(v.note_id) ?? [];
+            list.push(v);
+            voiceMap.set(v.note_id, list);
+        });
+
+        return processNotes(rawNotes, improvementsMap, voiceMap);
     } catch (e) {
         console.error('[DatabaseService] Failed to get notes from native DB', e);
         return [];
@@ -362,7 +439,11 @@ const processImprovements = async (
     return grouped;
 };
 
-const processNotes = async (rawNotes: any[], improvements?: Map<string, NoteImprovement[]>): Promise<Note[]> => {
+const processNotes = async (
+    rawNotes: any[],
+    improvements?: Map<string, NoteImprovement[]>,
+    voiceRecordings?: Map<string, VoiceRecording[]>
+): Promise<Note[]> => {
     const notes: Note[] = [];
     for (const n of rawNotes) {
         try {
@@ -376,6 +457,9 @@ const processNotes = async (rawNotes: any[], improvements?: Map<string, NoteImpr
                 : undefined;
 
             const noteImprovements = improvements?.get(n.id) ?? [];
+            const voiceFiles = voiceRecordings?.get(n.id) ?? [];
+            // Sort voice files by date desc
+            voiceFiles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
             notes.push({
                 ...n,
@@ -391,6 +475,7 @@ const processNotes = async (rawNotes: any[], improvements?: Map<string, NoteImpr
                 content_nonce: n.content_nonce ?? null,
                 pending_delete: !!n.deleted || !!n.pending_delete,
                 improvements: noteImprovements,
+                voice_files: voiceFiles,
             });
         } catch (e) {
             console.error(`[DatabaseService] Failed to decrypt note ${n.id}`, e);
@@ -430,8 +515,13 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
         if (!rawNote) return null;
 
         const rawImprovements = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE note_id = ?', [id]);
+        const voiceRecordings = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ?', [id]);
+
         const improvementsMap = await processImprovements(rawImprovements);
-        const processed = await processNotes([rawNote], improvementsMap);
+        const voiceMap = new Map<string, VoiceRecording[]>();
+        voiceMap.set(id, voiceRecordings);
+
+        const processed = await processNotes([rawNote], improvementsMap, voiceMap);
         return processed[0] || null;
     } catch (e) {
         console.error('[DatabaseService] Failed to get note by id', e);
@@ -455,6 +545,7 @@ export const wipeLocalDatabase = async (): Promise<void> => {
         const database = await getDb();
         if (!database) return;
         await database.runAsync('DELETE FROM note_improvements;');
+        await database.runAsync('DELETE FROM voice_recordings;');
         await database.runAsync('DELETE FROM notes;');
         console.log('[DatabaseService] Native DB wiped');
     } catch (e) {

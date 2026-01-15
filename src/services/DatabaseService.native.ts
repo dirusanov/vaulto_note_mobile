@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Note, NoteImprovement } from '../api/notes';
+import { Note, NoteImprovement, VoiceRecording } from '../api/notes';
 import { decrypt } from '../crypto/encryption';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -60,6 +60,20 @@ export const initDatabase = async (): Promise<void> => {
                 FOREIGN KEY (parent_id) REFERENCES notes(id) ON DELETE CASCADE
             );
         `);
+
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS voice_recordings (
+                id TEXT PRIMARY KEY,
+                note_id TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                duration REAL,
+                transcription TEXT,
+                created_at TEXT,
+                iso_code TEXT,
+                FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+            );
+        `);
+        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
 
         // Check columns
         await ensureColumnExists(database, 'notes', 'parent_id', 'TEXT');
@@ -312,6 +326,8 @@ export const deleteNoteLocal = async (id: string): Promise<void> => {
 
         // Delete children (improvements)
         await database.runAsync('DELETE FROM notes WHERE parent_id = ?;', [id]);
+        // Delete voice recordings
+        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ?;', [id]);
         // Delete parent
         await database.runAsync('DELETE FROM notes WHERE id = ?;', [id]);
         console.log(`[DatabaseService] Note deleted locally: ${id}`);
@@ -585,7 +601,18 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
             is_active: row.is_active === 1,
             parent_id: row.parent_id,
             improvements: childNotes,
+
+            voice_files: undefined, // Will fill below
         };
+
+        // Fetch voice recordings
+        try {
+            const voiceRecs = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? ORDER BY created_at DESC', [id]);
+            note.voice_files = voiceRecs;
+        } catch (e) {
+            console.error('[DatabaseService] Failed to load voice recordings', e);
+        }
+
         return note;
     } catch (e) {
         console.error('[DatabaseService] Failed to get note by id', e);
@@ -598,7 +625,8 @@ export const wipeLocalDatabase = async (): Promise<void> => {
         await initDatabase();
         const database = await getDb();
         if (!database) return;
-        await database.runAsync('DELETE FROM note_improvements;');
+        await database.runAsync('DELETE FROM note_improvements;'); // Should be empty/migrated but safe to keep
+        await database.runAsync('DELETE FROM voice_recordings;');
         await database.runAsync('DELETE FROM notes;');
         console.log('[DatabaseService] Local DB wiped');
     } catch (error) {
@@ -687,5 +715,71 @@ export const getAllImprovementsLocal = async (): Promise<NoteImprovement[]> => {
     } catch (error) {
         console.error('[DatabaseService] Failed to load improvements', error);
         throw error;
+    }
+};
+
+export const getVoiceRecordingsLocal = async (noteId: string): Promise<VoiceRecording[]> => {
+    try {
+        const database = await getDb();
+        if (!database) return [];
+        const rows = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? ORDER BY created_at DESC', [noteId]);
+        return rows;
+    } catch (e) {
+        console.error('[DatabaseService] Failed to get voice recordings', e);
+        return [];
+    }
+};
+
+export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promise<void> => {
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        // Ensure table exists (hot-fix for hot-reload scenarios where init doesn't re-run)
+        await database.execAsync(`
+            CREATE TABLE IF NOT EXISTS voice_recordings (
+                id TEXT PRIMARY KEY,
+                note_id TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                duration REAL,
+                transcription TEXT,
+                created_at TEXT,
+                iso_code TEXT,
+                FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+            );
+        `);
+
+        await database.runAsync(
+            `INSERT INTO voice_recordings (id, note_id, file_path, duration, transcription, created_at, iso_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+             file_path=excluded.file_path,
+             duration=excluded.duration,
+             transcription=excluded.transcription,
+             iso_code=excluded.iso_code
+            `,
+            [
+                recording.id,
+                recording.note_id,
+                recording.file_path,
+                recording.duration,
+                recording.transcription || null,
+                recording.created_at,
+                recording.iso_code || null
+            ]
+        );
+        console.log(`[DatabaseService] Voice recording saved: ${recording.id}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to save voice recording', e);
+    }
+};
+
+export const deleteVoiceRecordingLocal = async (id: string): Promise<void> => {
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('DELETE FROM voice_recordings WHERE id = ?', [id]);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to delete voice recording', e);
     }
 };

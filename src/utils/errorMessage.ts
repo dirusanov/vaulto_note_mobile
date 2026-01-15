@@ -62,8 +62,16 @@ const parseStringError = (msg: string, fallback: string): string => {
 
     // If we have a status code indicator but no clear JSON, clean it up
     if (msg.includes('API Error:')) {
+        if (msg.includes('503') || msg.includes('ngrok')) {
+            return 'Agent service is temporarily unavailable (Server 503). Your note is safe.';
+        }
         // e.g. "API Error: 500 - Internal Server Error"
         return msg.replace('API Error:', 'Server Error').trim();
+    }
+
+    // Direct checks for ngrok
+    if (msg.includes('ngrok') || msg.includes('limit_exceeded')) {
+        return 'Server connection limit exceeded. Please try again later.';
     }
 
     return msg;
