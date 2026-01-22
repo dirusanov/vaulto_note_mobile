@@ -26,6 +26,13 @@ export const useGoogleOAuth = () => {
         try {
             await GoogleSignin.hasPlayServices();
 
+            // Force sign out to ensure the account picker always shows
+            try {
+                await GoogleSignin.signOut();
+            } catch (e) {
+                // Ignore if not signed in or other minor errors during signout
+            }
+
             // Native Sign In
             const userInfo = await GoogleSignin.signIn();
 
