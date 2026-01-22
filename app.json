@@ -2,6 +2,7 @@
   "expo": {
     "name": "Vaulto Note",
     "slug": "vaulto-note-mobile",
+    "owner": "random1k11",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -26,12 +27,13 @@
         "foregroundImage": "./assets/adaptive-icon-padded.png",
         "backgroundColor": "#ffffff"
       },
+      "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.anonymous.vaultonotemobile",
+      "package": "com.vaultonotemobile",
       "usesCleartextTraffic": true
     },
     "web": {
@@ -45,8 +47,10 @@
           "microphonePermission": "Allow Vaulto Note to access your microphone to record voice notes."
         }
       ],
+      "@react-native-google-signin/google-signin",
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

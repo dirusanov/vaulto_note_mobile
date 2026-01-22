@@ -1,4 +1,4 @@
-package com.anonymous.vaultonotemobile
+package com.vaultonotemobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

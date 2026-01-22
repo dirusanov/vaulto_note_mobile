@@ -1,4 +1,4 @@
-package com.anonymous.vaultonotemobile
+package com.vaultonotemobile
 
 import android.app.Application
 import android.content.res.Configuration

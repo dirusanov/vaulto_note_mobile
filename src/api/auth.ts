@@ -70,13 +70,17 @@ export const authApi = {
         return response.data;
     },
 
-    completeGoogleLogin: async (params: { code: string; state: string; code_verifier: string }): Promise<AuthTokens> => {
+    completeGoogleLogin: async (params: { code: string; state: string; code_verifier?: string }): Promise<AuthTokens> => {
+        const queryParams: Record<string, string> = {
+            code: params.code,
+            state: params.state,
+        };
+        if (params.code_verifier) {
+            queryParams.code_verifier = params.code_verifier;
+        }
+
         const response = await authClient.get('/auth/google/callback', {
-            params: {
-                code: params.code,
-                state: params.state,
-                code_verifier: params.code_verifier,
-            },
+            params: queryParams,
         });
         return response.data;
     },
