@@ -2243,19 +2243,7 @@ export const NoteEditScreen = () => {
                                         })
                                     )}
                                 </ScrollView>
-                                <TouchableOpacity
-                                    style={[styles.aiActionButton, { justifyContent: 'center', marginTop: spacing.m, backgroundColor: colors.primary, borderColor: colors.primary }]}
-                                    onPress={() => {
-                                        // Close modal to show full screen recorder? Or keep it simple.
-                                        // Existing logic was just handleMicPress() which opens recorder overlay.
-                                        // We can close this modal first.
-                                        setShowRecordingsList(false);
-                                        handleMicPress();
-                                    }}
-                                >
-                                    <MaterialIcons name="mic" size={20} color={colors.surface} />
-                                    <Text style={[styles.aiActionText, { color: colors.surface }]}>New Recording</Text>
-                                </TouchableOpacity>
+
                             </View>
                         </TouchableWithoutFeedback>
                     </GestureHandlerRootView>

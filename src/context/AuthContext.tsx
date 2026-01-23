@@ -67,9 +67,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 is_verified: guestData.is_verified,
                 status: 'active',
                 provider: 'anonymous',
-                trial_total_credits: guestData.trial_total_credits,
-                trial_used_credits: guestData.trial_used_credits,
-                trial_expires_at: guestData.trial_expires_at,
+                trial_total_credits: 0,
+                trial_used_credits: 0,
+                trial_expires_at: undefined,
             };
 
             await storage.setUserProfile(guestUser);

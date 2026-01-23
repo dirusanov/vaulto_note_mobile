@@ -18,25 +18,21 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
     console.log('[UsageCard] Rendering for user:', user.email || 'Guest');
     console.log('[UsageCard] Credits:', user.trial_total_credits, 'Used:', user.trial_used_credits, 'Expires:', user.trial_expires_at);
 
-    // "Unlimited" logic: If total credits > 100 hours (360000s) or plan is 'pro' (future proof)
+    // "Unlimited" logic: If total credits > 100 hours (360000s)
     const isUnlimited = user.trial_total_credits > 360000;
 
-    // Trial Calculations
-    const totalSeconds = user.trial_total_credits || 600; // Default 10 mins for guests
+    // Trial Calculations - Fixed 10 mins (600s) default if not provided
+    const totalSeconds = user.trial_total_credits || 600;
     const usedSeconds = user.trial_used_credits || 0;
     const remainingSeconds = Math.max(0, totalSeconds - usedSeconds);
     const progress = Math.min(1, usedSeconds / totalSeconds);
-
-    // Date formatting
-    const expiresAt = user.trial_expires_at ? new Date(user.trial_expires_at) : null;
-    const daysLeft = expiresAt
-        ? Math.max(0, Math.ceil((expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
-        : 0;
+    const isExpired = remainingSeconds <= 0;
 
     // Formatting helpers
-    const formatTime = (seconds: number) => {
+    const formatTimeMMSS = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
-        return `${mins} min`;
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     if (isUnlimited) {
@@ -53,17 +49,23 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
         );
     }
 
-    const cardTitle = isGuest ? 'Guest Trial' : 'Free Trial';
+    if (isGuest) {
+        return (
+            <View style={styles.card}>
+                <View style={styles.headerRow}>
+                    <Text style={styles.title}>Free Plan</Text>
+                </View>
+                <Text style={styles.guestText}>
+                    Sign in with Email or Google to get 10 free minutes of transcription.
+                </Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.card}>
             <View style={styles.headerRow}>
-                <Text style={styles.title}>{cardTitle}</Text>
-                {expiresAt && (
-                    <Text style={styles.expiryText}>
-                        {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
-                    </Text>
-                )}
+                <Text style={styles.title}>Transcription available</Text>
             </View>
 
             <View style={styles.progressContainer}>
@@ -72,19 +74,25 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
 
             <View style={styles.statsRow}>
                 <Text style={styles.statsText}>
-                    {formatTime(usedSeconds)} used
-                </Text>
-                <Text style={styles.statsText}>
-                    {formatTime(totalSeconds)} limit
+                    Used: {formatTimeMMSS(usedSeconds)} / {formatTimeMMSS(totalSeconds)}
                 </Text>
             </View>
 
-            {daysLeft === 0 && !isGuest && (
-                <Text style={styles.warningText}>Trial expired. Please upgrade.</Text>
-            )}
+            {isExpired && (
+                <View style={styles.expiredContainer}>
+                    <Text style={styles.warningText}>
+                        You’ve used all 10 free minutes.{'\n'}Upgrade coming soon.
+                    </Text>
 
-            {isGuest && (
-                <Text style={styles.hintText}>Create account to unlock full access</Text>
+                    <View style={styles.buttonRow}>
+                        <View style={[styles.button, styles.buttonDisabled]}>
+                            <Text style={styles.buttonTextDisabled}>Upgrade (soon)</Text>
+                        </View>
+                        <View style={[styles.button, styles.buttonSecondary]}>
+                            <Text style={styles.buttonTextSecondary}>Notify me</Text>
+                        </View>
+                    </View>
+                </View>
             )}
         </View>
     );
@@ -104,16 +112,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 12,
     },
     title: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '600',
         color: theme.colors.text,
-    },
-    expiryText: {
-        fontSize: 14,
-        color: theme.colors.textSecondary,
     },
     progressContainer: {
         height: 6,
@@ -130,10 +134,12 @@ const styles = StyleSheet.create({
     statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginBottom: 4,
     },
     statsText: {
         fontSize: 14,
         color: theme.colors.textSecondary,
+        fontWeight: '500',
     },
     badge: {
         backgroundColor: theme.colors.primary,
@@ -152,14 +158,54 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         marginTop: 8,
     },
-    warningText: {
-        color: theme.colors.error,
-        marginTop: 10,
-        fontSize: 14,
+    expiredContainer: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
     },
-    hintText: {
-        color: theme.colors.primary,
-        marginTop: 10,
+    warningText: {
+        color: theme.colors.text,
+        fontSize: 15,
+        textAlign: 'center',
+        marginBottom: 12,
+        fontWeight: '500',
+    },
+    guestText: {
         fontSize: 14,
+        color: theme.colors.textSecondary,
+        marginTop: 4,
+        lineHeight: 20,
+    },
+    buttonRow: {
+        flexDirection: 'row',
+        gap: 12,
+        justifyContent: 'center',
+    },
+    button: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+        alignItems: 'center',
+        minWidth: 120,
+    },
+    buttonDisabled: {
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+    },
+    buttonSecondary: {
+        backgroundColor: 'transparent',
+    },
+    buttonTextDisabled: {
+        color: theme.colors.textSecondary,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    buttonTextSecondary: {
+        color: theme.colors.primary,
+        fontSize: 14,
+        fontWeight: '600',
     },
 });
