@@ -713,6 +713,97 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             newBlocks[index] = { ...block, content: text, formats: newFormats };
         }
 
+        // Auto-List Continuation Logic
+        if (block.type === 'text') {
+            const insertedText = text.substring(commonStart, commonStart + delta);
+
+            // Check if a newline was inserted
+            if (delta > 0 && insertedText.includes('\n')) {
+                const newlineIndexInInsertion = insertedText.lastIndexOf('\n');
+                const cursor = commonStart + newlineIndexInInsertion;
+
+                // Check line before this specific newline
+                const lastNewlineBefore = text.lastIndexOf('\n', cursor - 1);
+                const lineStart = lastNewlineBefore === -1 ? 0 : lastNewlineBefore + 1;
+                const lineText = text.substring(lineStart, cursor);
+
+                const unorderedMatch = lineText.match(/^(\s*)([-\*])(\s+)$/);
+                const orderedMatch = lineText.match(/^(\s*)(\d+)(\.\s+)$/);
+
+                const unorderedStartMatch = lineText.match(/^(\s*)([-\*])(\s+)/);
+                const orderedStartMatch = lineText.match(/^(\s*)(\d+)(\.\s+)/);
+
+                let modification: { type: 'insert' | 'replace', text: string, index: number, length: number } | null = null;
+
+                // Check for Empty List Item (Termination)
+                if (unorderedMatch) {
+                    modification = { type: 'replace', text: '', index: lineStart, length: cursor - lineStart };
+                } else if (orderedMatch) {
+                    modification = { type: 'replace', text: '', index: lineStart, length: cursor - lineStart };
+                } else {
+                    // Check for Continuation
+                    if (unorderedStartMatch) {
+                        const nextItem = `${unorderedStartMatch[1]}${unorderedStartMatch[2]}${unorderedStartMatch[3]}`;
+                        modification = { type: 'insert', text: nextItem, index: cursor + 1, length: 0 };
+                    } else if (orderedStartMatch) {
+                        const num = parseInt(orderedStartMatch[2], 10);
+                        const nextItem = `${orderedStartMatch[1]}${num + 1}${orderedStartMatch[3]}`;
+                        modification = { type: 'insert', text: nextItem, index: cursor + 1, length: 0 };
+                    }
+                }
+
+                if (modification) {
+                    const currentContent = newBlocks[index].content;
+                    let finalContent = currentContent;
+                    let newCursor = cursor + 1;
+
+                    if (modification.type === 'insert') {
+                        finalContent = currentContent.substring(0, modification.index) + modification.text + currentContent.substring(modification.index);
+                        newCursor += modification.text.length;
+
+                        newBlocks[index].formats = newBlocks[index].formats.map(f => {
+                            if (f.start >= modification!.index) return { ...f, start: f.start + modification!.text.length, end: f.end + modification!.text.length };
+                            if (f.end > modification!.index) return { ...f, end: f.end + modification!.text.length };
+                            return f;
+                        });
+
+                    } else if (modification.type === 'replace') {
+                        finalContent = currentContent.substring(0, modification.index) + modification.text + currentContent.substring(modification.index + modification.length);
+                        newCursor = (cursor + 1) - modification.length;
+
+                        const delStart = modification!.index;
+                        const delEnd = modification!.index + modification!.length;
+
+                        newBlocks[index].formats = newBlocks[index].formats.reduce<BlockFormat[]>((acc, f) => {
+                            let newStart = f.start;
+                            let newEnd = f.end;
+
+                            if (newStart >= delStart && newEnd <= delEnd) return acc;
+
+                            if (newStart >= delEnd) newStart -= modification!.length;
+                            else if (newStart > delStart) newStart = delStart;
+
+                            if (newEnd >= delEnd) newEnd -= modification!.length;
+                            else if (newEnd > delStart) newEnd = delStart;
+
+                            if (newEnd > newStart) acc.push({ ...f, start: newStart, end: newEnd });
+                            return acc;
+                        }, []);
+                    }
+
+                    newBlocks[index].content = finalContent;
+
+                    setTimeout(() => {
+                        const ref = inputRefs.current[id];
+                        ref?.setNativeProps({ selection: { start: newCursor, end: newCursor } });
+                        if (blockSelections.current[id]) {
+                            blockSelections.current[id] = { start: newCursor, end: newCursor };
+                        }
+                    }, 10);
+                }
+            }
+        }
+
         setBlocks(newBlocks);
         isInternalUpdate.current = true;
         onChange(serializeBlocks(newBlocks));
