@@ -56,6 +56,7 @@ import {
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
+import { AIProcessingIndicator } from '../components/AIProcessingIndicator';
 
 import { ErrorModal } from '../components/ErrorModal';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -246,6 +247,7 @@ export const NoteEditScreen = () => {
         recordingUri: string;
         transcribedText: string;
     }[]>([]);
+    const [queueLength, setQueueLength] = useState(0);
     const isProcessingQueue = useRef(false);
     // Ref to hold the absolute latest content to ensure queue picks up changes from previous steps
     const currentContentRef = useRef(content);
@@ -1057,6 +1059,7 @@ export const NoteEditScreen = () => {
 
                 // Remove finished task
                 agentQueue.current.shift();
+                setQueueLength(prev => Math.max(0, prev - 1));
             }
         } finally {
             isProcessingQueue.current = false;
@@ -1087,6 +1090,7 @@ export const NoteEditScreen = () => {
             transcribedText,
             // variantId is resolved at runtime now
         });
+        setQueueLength(prev => prev + 1);
 
         // Trigger Processing
         processAgentQueue();
@@ -2196,6 +2200,11 @@ export const NoteEditScreen = () => {
                 visible={errorModalVisible}
                 message={errorMessage}
                 onClose={() => setErrorModalVisible(false)}
+            />
+
+            <AIProcessingIndicator
+                visible={isAIProcessing || queueLength > 0}
+                queueSize={queueLength}
             />
 
             <VoiceRecorder
