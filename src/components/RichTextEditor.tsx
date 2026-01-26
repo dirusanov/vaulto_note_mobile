@@ -19,7 +19,7 @@ import { typography } from '../theme/typography';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MarkdownFormatType } from './MarkdownToolbar';
-import { parseMarkdownForInput } from '../utils/markdownUtils';
+import { parseMarkdownToData, serializeBlockToMarkdown, renderFormattedText, BlockFormat } from '../utils/markdownUtils';
 
 interface RichTextEditorProps {
     initialContent: string;
@@ -43,6 +43,7 @@ interface Block {
     type: 'text' | 'todo' | 'h1' | 'h2' | 'h3';
     content: string;
     checked?: boolean;
+    formats: BlockFormat[];
 }
 
 // Simple ID generator for blocks to avoid async uuid overhead during typing
@@ -108,102 +109,28 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         if (block.type === 'todo') styles.push('todo');
         if (block.content.startsWith('- ')) styles.push('list');
 
-        // Inline styles
-        const text = block.content;
+        // Inline styles via Formats
+        if (!block.formats) return styles;
 
-        // Helper to check overlap
-        const checkOverlap = (regex: RegExp, type: MarkdownFormatType, dLen: number) => {
-            let match;
-            // Reset regex lastIndex just in case
-            regex.lastIndex = 0;
+        // Check intersection of selection and formats
+        // Logic: specific style is active if the selection START is inside the defined range,
+        // or if proper intersection logic is desired (e.g. whole selection must be bold).
+        const cursor = selection.start;
 
-            while ((match = regex.exec(text)) !== null) {
-                const matchStart = match.index;
-                const matchEnd = matchStart + match[0].length;
-
-                // Check if selection is fully within the styled range (inclusive of boundaries for user feel)
-                // For multiline, we just check intersection
-                if ((selection.start >= matchStart && selection.start <= matchEnd) ||
-                    (selection.end >= matchStart && selection.end <= matchEnd) ||
-                    (selection.start <= matchStart && selection.end >= matchEnd)) {
-                    styles.push(type);
-                    return; // Found one instance causing activation
+        block.formats.forEach(f => {
+            // Check if cursor is strictly inside or at boundaries?
+            // Usually styles are inclusive.
+            if (cursor >= f.start && cursor <= f.end) {
+                if (f.type === 'highlight' && f.data) {
+                    styles.push(`highlight:${f.data}`);
+                    if (!styles.includes('highlight')) styles.push('highlight');
+                } else {
+                    styles.push(f.type);
                 }
             }
-        };
+        });
 
-        // Bold (**...**)
-        checkOverlap(/\*\*(?:[\s\S]*?)\*\*/g, 'bold', 2);
-
-        // Italic (_..._)
-        checkOverlap(/_(?:[\s\S]*?)_/g, 'italic', 1);
-
-        // Italic (*...*) - Strict check to avoid overlap with Bold (**)
-        const starItalicRegex = /\*((?:[\s\S]|\n)*?)\*/g; // Keep existing specific logic or align?
-        // Note: The specific star logic below manually checks * counts, so basic capture is fine.
-        let starMatch;
-        while ((starMatch = starItalicRegex.exec(text)) !== null) {
-            const mStart = starMatch.index;
-            const mText = starMatch[0];
-            const mEnd = mStart + mText.length;
-
-            // Check overlap
-            if ((selection.start >= mStart && selection.start <= mEnd) ||
-                (selection.end >= mStart && selection.end <= mEnd) ||
-                (selection.start <= mStart && selection.end >= mEnd)) {
-
-                // Verify strictness: The delimiter * must be part of an ODD sequence of stars
-                // to be Italic. If it is part of Even (2, 4), it is Bold.
-
-                // Count contiguous stars around start
-                let startRunStart = mStart;
-                while (startRunStart > 0 && text[startRunStart - 1] === '*') startRunStart--;
-                let startRunEnd = mStart;
-                while (startRunEnd < text.length && text[startRunEnd] === '*') startRunEnd++;
-                const starCount = startRunEnd - startRunStart;
-
-                if (starCount % 2 !== 0) {
-                    styles.push('italic');
-                    break; // Found valid italic
-                }
-            }
-        }
-
-        // Strikethrough (~~...~~)
-        checkOverlap(/~~(?:[\s\S]*?)~~/g, 'strikethrough', 2);
-
-        // Underline (<u>...</u>)
-        checkOverlap(/<u>(?:[\s\S]*?)<\/u>/g, 'underline', 3);
-
-        // Highlight (==...==)
-        const highlightRegex = /==((?:[a-z]+:)?(?:[\s\S]+?))==/g;
-        // checkOverlap(highlightRegex, 'highlight', 2); 
-        // We need to know specific color. 
-        highlightRegex.lastIndex = 0;
-        let match;
-        while ((match = highlightRegex.exec(text)) !== null) {
-            const matchStart = match.index;
-            const matchEnd = matchStart + match[0].length; // ==red:foo==
-            if ((selection.start >= matchStart && selection.start <= matchEnd) ||
-                (selection.end >= matchStart && selection.end <= matchEnd) ||
-                (selection.start <= matchStart && selection.end >= matchEnd)) {
-
-                // Determine color
-                const inner = match[1]; // red:foo
-                let color = 'yellow';
-                if (inner.includes(':')) {
-                    const parts = inner.split(':');
-                    if (parts[0] && ['red', 'orange', 'yellow', 'green', 'blue', 'purple'].includes(parts[0])) {
-                        color = parts[0];
-                    }
-                }
-                styles.push(`highlight:${color}` as MarkdownFormatType);
-                styles.push('highlight' as MarkdownFormatType); // Generic indicator
-                return styles; // Return early if strict? Or continue? Usually one style per range kind.
-            }
-        }
-
-        return styles;
+        return Array.from(new Set(styles)); // unique
     };
 
     const updateActiveStyles = (blockId: string, selection?: { start: number; end: number }) => {
@@ -248,17 +175,49 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     const afterContent = text.substring(lineEnd + 1);
 
                     const newBlockId = generateId();
+
+                    // We need to slice formats logic if we care about preserving inline styles when splitting block.
+                    // For this V1 refactor, we can attempt to split formats.
+                    // Filter formats that fall into the extracted line.
+                    const targetFormats = block.formats
+                        .filter(f => f.end > lineStart && f.start < lineEnd)
+                        .map(f => ({
+                            ...f,
+                            start: Math.max(0, f.start - lineStart),
+                            end: Math.min(lineContent.length, f.end - lineStart)
+                        }));
+
                     const targetBlock: Block = {
                         id: newBlockId,
                         type: 'text', // to be converted below
-                        content: lineContent
+                        content: lineContent,
+                        formats: targetFormats
                     };
 
                     // Construct new blocks list
                     const replacementBlocks: Block[] = [];
-                    if (beforeContent) replacementBlocks.push({ id: block.id, type: 'text', content: beforeContent });
+                    // Before Block formats
+                    if (beforeContent) {
+                        const beforeFormats = block.formats
+                            .filter(f => f.start < lineStart) // crude filter
+                            .map(f => ({ ...f, end: Math.min(f.end, beforeContent.length) }));
+                        replacementBlocks.push({ id: block.id, type: 'text', content: beforeContent, formats: beforeFormats });
+                    }
+
                     replacementBlocks.push(targetBlock);
-                    if (afterContent) replacementBlocks.push({ id: generateId(), type: 'text', content: afterContent });
+
+                    // After Block formats
+                    if (afterContent) {
+                        const offset = lineEnd + 1;
+                        const afterFormats = block.formats
+                            .filter(f => f.end > offset)
+                            .map(f => ({
+                                ...f,
+                                start: Math.max(0, f.start - offset),
+                                end: Math.max(0, f.end - offset)
+                            }));
+                        replacementBlocks.push({ id: generateId(), type: 'text', content: afterContent, formats: afterFormats });
+                    }
 
                     // Replace the original block
                     newBlocks.splice(blockIndex, 1, ...replacementBlocks);
@@ -276,6 +235,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         else newContent = '- ' + newContent;
                     }
 
+                    // For structure types, do we keep inline formats? Yes usually.
+
                     if (type !== 'list') {
                         if (type === 'todo') {
                             targetBlock.type = 'todo';
@@ -285,6 +246,15 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         }
                     } else {
                         targetBlock.content = newContent;
+                        // Shift formats if we added/removed '- '
+                        if (newContent.length !== lineContent.length) {
+                            const delta = newContent.length - lineContent.length;
+                            targetBlock.formats = targetBlock.formats.map(f => ({
+                                ...f,
+                                start: f.start + delta,
+                                end: f.end + delta
+                            }));
+                        }
                     }
 
                     blockSelections.current[newBlockId] = {
@@ -305,9 +275,19 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
                     if (type === 'list') {
                         if (block.content.startsWith('- ')) {
-                            newBlocks[blockIndex] = { ...block, content: block.content.substring(2) };
+                            const newContent = block.content.substring(2);
+                            newBlocks[blockIndex] = {
+                                ...block,
+                                content: newContent,
+                                formats: block.formats.map(f => ({ ...f, start: f.start - 2, end: f.end - 2 })).filter(f => f.end > f.start)
+                            };
                         } else {
-                            newBlocks[blockIndex] = { ...block, content: '- ' + block.content };
+                            const newContent = '- ' + block.content;
+                            newBlocks[blockIndex] = {
+                                ...block,
+                                content: newContent,
+                                formats: block.formats.map(f => ({ ...f, start: f.start + 2, end: f.end + 2 }))
+                            };
                         }
                     } else if (block.type === type) {
                         newBlocks[blockIndex] = { ...block, type: 'text' };
@@ -322,280 +302,197 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 // Inline formatting (bold, italic, strikethrough, highlight)
                 let { start, end } = selection;
                 const text = block.content;
+                let currentFormats = block.formats || [];
 
                 // Smart Selection: If cursor is collapsed, expand to word boundaries
                 if (start === end) {
-                    // Find word start: stop at whitespace OR punctuation
                     const wordCharRegex = /[^\s.,;:!?(){}\[\]"']/;
                     let wordStart = start;
                     while (wordStart > 0 && wordCharRegex.test(text[wordStart - 1])) {
                         wordStart--;
                     }
-                    // Find word end
                     let wordEnd = end;
                     while (wordEnd < text.length && wordCharRegex.test(text[wordEnd])) {
                         wordEnd++;
                     }
-
-                    // Only expand if we found a non-empty word
                     if (wordEnd > wordStart) {
                         start = wordStart;
                         end = wordEnd;
-                        // Update selection for later use in this scope
                         selection = { start, end };
-                        // Note: We don't update component state selection immediately here, 
-                        // as the formatting logic below will use these new indices to apply the format.
-                        // The final setBlocks will update the content with the format applied to this range.
                     }
                 }
 
-                let wrapper = '';
-                let regex: RegExp | null = null;
+                // Parse Type
+                let targetType: BlockFormat['type'] = 'bold';
+                let targetData: string | undefined = undefined;
 
-                if (type === 'bold') { wrapper = '**'; regex = /\*\*(.*?)\*\*/g; }
-                else if (type === 'italic') {
-                    regex = /(_(.*?)_|\*(.*?)\*)/g;
-                    wrapper = '_';
-                }
-                else if (type === 'strikethrough') { wrapper = '~~'; regex = /~~(.*?)~~/g; }
-                else if (type === 'underline') { wrapper = '<u>'; regex = /<u>(.*?)<\/u>/g; }
-                else if (typeof type === 'string' && type.startsWith('highlight')) {
-                    // Extract color if present "highlight:red" or just "highlight" (default)
-                    const chunks = type.split(':');
-                    const color = chunks.length > 1 ? chunks[1] : 'yellow';
-                    wrapper = `==${color}:`; // e.g. ==red:
-                    // Regex to find ANY highlight
-                    regex = /==((?:[a-z]+:)?(?:[\s\S]+?))==/g;
+                if (type === 'bold') targetType = 'bold';
+                else if (type === 'italic') targetType = 'italic';
+                else if (type === 'strikethrough') targetType = 'strikethrough';
+                else if (type === 'underline') targetType = 'underline';
+                else if (type.startsWith('highlight')) {
+                    targetType = 'highlight';
+                    const parts = type.split(':');
+                    targetData = parts[1] || 'yellow';
                 }
 
-                let newText = text;
+                if (start === end) return; // Cannot format empty range without pending state
 
-                // Check if active (toggle off)
-                const activeStyles = detectActiveStyles(block, selection);
-                // "highlight:red" vs "highlight" logic
-                // If we want to toggle RED highlight:
-                // If RED is active -> Remove it.
-                // If YELLOW is active -> Change to RED? Or add Red too? (No, replacement).
-                // Let's say: if ANY highlight is detected, we check:
-                // 1. Is it the exact same color? -> Toggle Off.
-                // 2. Is it a different color? -> Replace Color.
-                // 3. No highlight? -> Toggle On.
+                // Check if we are adding or removing?
+                // Logic: If ANY part of the selection has this format, we REMOVE it from the overlap?
+                // Or "Toggle"? Standard logic: if fully covered -> Remove. If partially/not covered -> Add.
 
-                const highlightMatch = activeStyles.find(s => s.startsWith('highlight'));
+                // Let's implement ADD/REMOVE based on coverage.
+                // 1. Check coverage.
+                const coveredArea = currentFormats.reduce((acc, f) => {
+                    if (f.type !== targetType) return acc;
+                    if (targetType === 'highlight' && f.data !== targetData && targetData !== 'white') return acc; // Different color highlight is technically not "same style"
 
-                if (highlightMatch && regex && type.startsWith('highlight')) {
-                    // We have an existing highlight.
-                    // The 'highlightMatch' might be 'highlight:red'.
-                    // The 'type' is what we are applying, e.g. 'highlight:blue'.
-                    const chunks = type.split(':');
-                    const targetColor = chunks.length > 1 ? chunks[1] : 'yellow'; // default
-
-                    const existingChunks = highlightMatch.split(':');
-                    const existingColor = existingChunks.length > 1 ? existingChunks[1] : 'yellow';
-
-                    // Remove EXISTING highlight first
-                    let match;
-                    while ((match = regex.exec(text)) !== null) {
-                        const matchStart = match.index;
-                        const matchEnd = matchStart + match[0].length;
-                        const matchContent = match[0]; // e.g. ==red:text== or ==text==
-
-                        // Determine current wrapper length logic for this match
-                        // It can be `==` or `==color:`
-                        let currentWrapperLenStart = 2; // '=='
-                        const innerStart = matchContent.indexOf(':');
-                        if (innerStart !== -1 && innerStart < 10) { // arbitrary safety check for "color:"
-                            // It has a color prefix.
-                            // Actually, logic is: '==' + 'color' + ':' 
-                            // We scan for first ':'?
-                            currentWrapperLenStart = innerStart + 1; // ==red: is index of : + 1 length
-                            // Wait, matchContent contains the outer ==.
-                            // ==red:foo==.  inner matches "red:foo". match[1] matches "red:foo".
-                            // My regex: `==((?:[a-z]+:)?.+?)==`
-                            // match[0] is `==red:foo==`.
-                            // match[1] is `red:foo`.
-                            // We want to remove outer `==` and potential `color:` prefix.
-                            // If match[1] starts with "red:", remove it.
-                        }
-                        const currentWrapperLenEnd = 2; // '=='
-
-                        if ((start >= matchStart && start <= matchEnd) ||
-                            (end >= matchStart && end <= matchEnd) ||
-                            (start <= matchStart && end >= matchEnd)) {
-
-                            // Found the overlapping highlight.
-                            const prefix = text.substring(0, matchStart);
-                            // Extract just the text content
-                            const innerRaw = match[1]; // "red:text" or "text"
-                            let cleanContent = innerRaw;
-                            const colMatch = innerRaw.match(/^([a-z]+):(.+)$/);
-                            if (colMatch) {
-                                cleanContent = colMatch[2];
-                            }
-
-                            const suffix = text.substring(matchEnd);
-
-                            // If colors match OR target is 'white' (Toggle OFF/Remove)
-                            if (targetColor === existingColor || targetColor === 'white') {
-                                newText = prefix + cleanContent + suffix;
-                            } else {
-                                // Colors differ (Replace Color/Toggle ON new color)
-                                // Wrap cleanContent with new wrapper
-                                const newWrapper = `==${targetColor}:`;
-                                newText = prefix + newWrapper + cleanContent + '==' + suffix;
-                            }
-                            break;
-                        }
+                    const intersectStart = Math.max(start, f.start);
+                    const intersectEnd = Math.min(end, f.end);
+                    if (intersectEnd > intersectStart) {
+                        return acc + (intersectEnd - intersectStart);
                     }
+                    return acc;
+                }, 0);
 
-                } else if (activeStyles.includes(type) && regex && !type.startsWith('highlight')) {
-                    // Standard toggle off for bold/italic...
-                    // ... (existing logic) ...
-                    let match;
-                    while ((match = regex.exec(text)) !== null) {
-                        const matchStart = match.index;
-                        const matchEnd = matchStart + match[0].length;
-                        const matchContent = match[0];
+                // If coverage is substantial (e.g. > 50% or > 0?), toggle off.
+                // Simple toggle: If fully active at start? 
 
-                        let startWrapperLen = wrapper.length;
-                        let endWrapperLen = wrapper.length;
+                const isRemove = coveredArea === (end - start); // Only remove if FULLY covered? or any?
+                // Professional editors: B button status determines action.
+                // Here we essentially check "Is B active at cursor/selection?"
+                // Our `detectActiveStyles` says yes if start is covered.
 
-                        if (type === 'italic') {
-                            if (matchContent.startsWith('_') || matchContent.startsWith('*')) {
-                                startWrapperLen = 1;
-                                endWrapperLen = 1;
-                            }
-                        } else if (type === 'bold' || type === 'strikethrough') {
-                            startWrapperLen = 2;
-                            endWrapperLen = 2;
-                        } else if (type === 'underline') {
-                            startWrapperLen = 3; // <u>
-                            endWrapperLen = 4;   // </u>
+                const activeAtStart = currentFormats.some(f =>
+                    f.type === targetType &&
+                    (targetType !== 'highlight' || f.data === targetData) &&
+                    start >= f.start && start < f.end
+                );
+
+                // Re-evaluate: If I select "Hello World", and "Hello" is bold. 
+                // Pressing Bold -> usually makes "World" bold too. (Add to gap).
+                // Only untoggles if EVERYTHING is bold.
+
+                const operation = (activeAtStart && coveredArea === (end - start)) ? 'remove' : 'add';
+
+                // Special Highlight Logic: 'white' means remove highlights.
+                if (targetType === 'highlight' && targetData === 'white') {
+                    // Remove all overlapping highlights regardless of data
+                    currentFormats = currentFormats.reduce<BlockFormat[]>((acc, f) => {
+                        if (f.type !== 'highlight') {
+                            acc.push(f);
+                            return acc;
+                        }
+                        // Subtract selection from format
+                        // f: [----------], sel: [--]
+                        // Result: [---]   [-----]
+
+                        const overlapStart = Math.max(f.start, start);
+                        const overlapEnd = Math.min(f.end, end);
+
+                        if (overlapEnd <= overlapStart) {
+                            acc.push(f); // No overlap
+                            return acc;
                         }
 
-                        if ((start >= matchStart && start <= matchEnd) ||
-                            (end >= matchStart && end <= matchEnd) ||
-                            (start <= matchStart && end >= matchEnd)) {
-
-                            const innerStart = matchStart + startWrapperLen;
-                            const innerEnd = matchEnd - endWrapperLen;
-
-                            const prefix = text.substring(0, matchStart);
-                            const content = text.substring(innerStart, innerEnd);
-                            const suffix = text.substring(matchEnd);
-
-                            newText = prefix + content + suffix;
-                            break;
+                        if (f.start < overlapStart) {
+                            acc.push({ ...f, end: overlapStart });
                         }
-                    }
+                        if (f.end > overlapEnd) {
+                            acc.push({ ...f, start: overlapEnd });
+                        }
+                        return acc;
+                    }, []);
+
+                } else if (operation === 'remove') {
+                    // Subtract selection from matching formats
+                    currentFormats = currentFormats.reduce<BlockFormat[]>((acc, f) => {
+                        if (f.type !== targetType || (targetType === 'highlight' && f.data !== targetData)) {
+                            acc.push(f);
+                            return acc;
+                        }
+
+                        const overlapStart = Math.max(f.start, start);
+                        const overlapEnd = Math.min(f.end, end);
+
+                        if (overlapEnd <= overlapStart) {
+                            acc.push(f);
+                            return acc;
+                        }
+
+                        if (f.start < overlapStart) {
+                            acc.push({ ...f, end: overlapStart });
+                        }
+                        if (f.end > overlapEnd) {
+                            acc.push({ ...f, start: overlapEnd });
+                        }
+                        return acc;
+                    }, []);
+
                 } else {
-                    // Add formatting
-                    const selectedText = text.substring(start, end);
+                    // Add Format
+                    // 1. Remove overlapping formats of same type (merge logic implicitly handles by creating one big, but we assume distinct ranges usually)
+                    // Actually we should merge.
+                    // Simplified Add:
 
-                    if (type.startsWith('highlight')) {
-                        const chunks = type.split(':');
-                        const color = chunks.length > 1 ? chunks[1] : 'yellow';
-
-                        if (color === 'white') {
-                            // Do nothing if trying to apply white highlight to unhighlighted text (it effectively cleans it)
-                            return;
-                        }
-
-                        // Apply full wrapper
-                        // If I just select 'foo' -> ==red:foo==
-                        newText = text.substring(0, start) + `==${color}:${selectedText}==` + text.substring(end);
-
-                        blockSelections.current[block.id] = {
-                            start: start + `==${color}:`.length,
-                            end: end + `==${color}:`.length
-                        };
-
-                    } else {
-                        // Apply new formatting (wrapping)
-                        let endWrapper = wrapper;
-                        if (type === 'underline') {
-                            endWrapper = '</u>';
-                        } else if (type.startsWith('highlight')) {
-                            endWrapper = '==';
-                        }
-
-                        // Unwrap-Transform-Rewrap Logic for nested formatting inside highlights
-                        // This prevents creating malformed markdown like ==color:**content==** by ensuring 
-                        // formatting is applied strictly to the inner content, and then re-wrapped.
-
-                        let handled = false;
-                        const highlightRegex = /==((?:[a-z]+:)?(?:[\s\S]+?))==/g;
-                        let hMatch;
-
-                        while ((hMatch = highlightRegex.exec(text)) !== null) {
-                            const hStart = hMatch.index;
-                            const hEnd = hStart + hMatch[0].length;
-
-                            // Check for intersection: 
-                            // Does the selection overlap with this highlight block?
-                            if ((start >= hStart && start < hEnd) ||
-                                (end > hStart && end <= hEnd) ||
-                                (start <= hStart && end >= hEnd)) {
-
-                                // Found overlapping highlight. 
-                                // Strategy: Unwrap -> Apply Format -> Rewrap
-
-                                const inner = hMatch[1];
-                                let color = 'yellow';
-                                let cleanContent = inner;
-
-                                const colMatch = inner.match(/^([a-z]+):([\s\S]*)$/);
-                                if (colMatch) {
-                                    color = colMatch[1];
-                                    cleanContent = colMatch[2];
-                                }
-
-                                const prefixLen = hMatch[0].length - cleanContent.length - 2; // -2 for trailing ==
-                                // Note: prefixLen = (2 for ==) + (color: length)
-
-                                // Map selection to local coordinates relative to cleanContent
-                                let localStart = start - hStart - prefixLen;
-                                let localEnd = end - hStart - prefixLen;
-
-                                // Clamp to content boundaries
-                                if (localStart < 0) localStart = 0;
-                                if (localEnd > cleanContent.length) localEnd = cleanContent.length;
-                                if (localEnd < localStart) localEnd = localStart;
-
-                                // Apply format to cleanContent
-                                const before = cleanContent.substring(0, localStart);
-                                const selected = cleanContent.substring(localStart, localEnd);
-                                const after = cleanContent.substring(localEnd);
-
-                                const formattedInner = before + wrapper + selected + endWrapper + after;
-
-                                // Re-construct the block
-                                const newBlockContent = `==${color}:${formattedInner}==`;
-
-                                newText = text.substring(0, hStart) + newBlockContent + text.substring(hEnd);
-
-                                blockSelections.current[block.id] = {
-                                    start: hStart + prefixLen + localEnd + wrapper.length + endWrapper.length,
-                                    end: hStart + prefixLen + localEnd + wrapper.length + endWrapper.length
-                                };
-
-                                handled = true;
-                                break; // Only handle one highlight intersection per format action for simplicity
+                    // Specific highlight logic: If adding Red, remove Yellow overlap?
+                    if (targetType === 'highlight') {
+                        // Remove ANY highlight in range
+                        currentFormats = currentFormats.reduce<BlockFormat[]>((acc, f) => {
+                            if (f.type !== 'highlight') {
+                                acc.push(f);
+                                return acc;
                             }
-                        }
+                            const overlapStart = Math.max(f.start, start);
+                            const overlapEnd = Math.min(f.end, end);
 
-                        if (!handled) {
-                            // Standard wrapping if no highlight involved
-                            newText = text.substring(0, start) + wrapper + selectedText + endWrapper + text.substring(end);
-                            blockSelections.current[block.id] = {
-                                start: start + wrapper.length,
-                                end: end + wrapper.length
-                            };
-                        }
+                            if (overlapEnd <= overlapStart) {
+                                acc.push(f);
+                                return acc;
+                            }
+
+                            if (f.start < overlapStart) {
+                                acc.push({ ...f, end: overlapStart });
+                            }
+                            if (f.end > overlapEnd) {
+                                acc.push({ ...f, start: overlapEnd });
+                            }
+                            return acc;
+                        }, []);
                     }
+
+                    // Add new range
+                    const newRange: BlockFormat = {
+                        type: targetType,
+                        start,
+                        end,
+                        data: targetData
+                    };
+
+                    // Optimization: Merge with Touching/Overlapping ranges of same type & data
+                    // This keeps format list clean.
+                    // Filter out compatible ranges, merge into newRange, re-add.
+
+                    const compatible = currentFormats.filter(f =>
+                        f.type === targetType && f.data === targetData &&
+                        ((f.end >= newRange.start && f.start <= newRange.end) || f.end === newRange.start || f.start === newRange.end)
+                    );
+
+                    if (compatible.length > 0) {
+                        // Remove compatible from current
+                        currentFormats = currentFormats.filter(f => !compatible.includes(f));
+                        // Merge into newRange
+                        const combinedStart = Math.min(newRange.start, ...compatible.map(f => f.start));
+                        const combinedEnd = Math.max(newRange.end, ...compatible.map(f => f.end));
+                        newRange.start = combinedStart;
+                        newRange.end = combinedEnd;
+                    }
+
+                    currentFormats.push(newRange);
                 }
 
-                newBlocks[blockIndex] = { ...block, content: newText };
+                newBlocks[blockIndex] = { ...block, formats: currentFormats };
             }
 
             setBlocks(newBlocks);
@@ -625,7 +522,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     }));
 
     // Initial parsing
-    // Initial parsing
     useEffect(() => {
         if (isInternalUpdate.current) {
             isInternalUpdate.current = false;
@@ -648,36 +544,53 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (isStructure) {
                 // Determine type
                 let type: Block['type'] = 'text'; // Fallback
-                let content = line;
+                let rawContent = line;
                 let checked = false;
 
                 if (todoMatch) {
                     type = 'todo';
                     checked = todoMatch[2].toLowerCase() === 'x';
-                    content = todoMatch[3];
+                    rawContent = todoMatch[3];
                 } else if (header3Match) {
                     type = 'h3';
-                    content = line.substring(4);
+                    rawContent = line.substring(4);
                 } else if (header2Match) {
                     type = 'h2';
-                    content = line.substring(3);
+                    rawContent = line.substring(3);
                 } else if (header1Match) {
                     type = 'h1';
-                    content = line.substring(2);
+                    rawContent = line.substring(2);
                 }
 
+                // Parse inner markdown for formats
+                const { content, formats } = parseMarkdownToData(rawContent);
+
                 const id = generateId();
-                parsedBlocks.push({ id, type, content, checked });
+                parsedBlocks.push({ id, type, content, checked, formats });
                 currentTextBlock = null; // Break text continuity
 
             } else {
                 // It's text.
                 // Do we merge with previous text block?
                 if (currentTextBlock) {
-                    currentTextBlock.content += '\n' + line;
+                    // Merging is complex with formats. 
+                    // Previous content len
+                    const prevLen = currentTextBlock.content.length;
+                    const { content, formats } = parseMarkdownToData(line);
+
+                    currentTextBlock.content += '\n' + content;
+                    // Shift new formats
+                    const shiftedFormats = formats.map(f => ({
+                        ...f,
+                        start: f.start + prevLen + 1, // +1 for \n
+                        end: f.end + prevLen + 1
+                    }));
+                    currentTextBlock.formats = [...currentTextBlock.formats, ...shiftedFormats];
+
                 } else {
                     const id = generateId();
-                    currentTextBlock = { id, type: 'text', content: line };
+                    const { content, formats } = parseMarkdownToData(line);
+                    currentTextBlock = { id, type: 'text', content, formats };
                     parsedBlocks.push(currentTextBlock);
                 }
             }
@@ -685,7 +598,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
         // Ensure at least one block
         if (parsedBlocks.length === 0) {
-            parsedBlocks.push({ id: generateId(), type: 'text', content: '' });
+            parsedBlocks.push({ id: generateId(), type: 'text', content: '', formats: [] });
         }
 
         setBlocks(parsedBlocks);
@@ -694,13 +607,15 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     // Reconstruct markdown
     const serializeBlocks = (currentBlocks: Block[]) => {
         return currentBlocks.map(block => {
+            const serializedContent = serializeBlockToMarkdown(block.content, block.formats);
+
             if (block.type === 'todo') {
-                return `- [${block.checked ? 'x' : ' '}] ${block.content}`;
+                return `- [${block.checked ? 'x' : ' '}] ${serializedContent}`;
             }
-            if (block.type === 'h1') return `# ${block.content}`;
-            if (block.type === 'h2') return `## ${block.content}`;
-            if (block.type === 'h3') return `### ${block.content}`;
-            return block.content;
+            if (block.type === 'h1') return `# ${serializedContent}`;
+            if (block.type === 'h2') return `## ${serializedContent}`;
+            if (block.type === 'h3') return `### ${serializedContent}`;
+            return serializedContent;
         }).join('\n');
     };
 
@@ -710,32 +625,92 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         if (index === -1) return;
 
         const block = newBlocks[index];
+        const oldText = block.content;
 
-        // Check for Auto-Formatting (Text -> Todo/Header)
+        // Calculate Diff
+        // We know text changed. 
+        // Find start index of change.
+        let commonStart = 0;
+        while (commonStart < oldText.length && commonStart < text.length && oldText[commonStart] === text[commonStart]) {
+            commonStart++;
+        }
+
+        // Find end index of change? Not strictly necessary for simple offset shifting if we assume single contiguous change.
+        // But for "Select All + Replace" it might be complex.
+        // Simple heuristic: 
+        // Delta = newLen - oldLen. 
+        // If we assume the change happened at `commonStart`.
+
+        const delta = text.length - oldText.length;
+
+        // Update Formats
+        let newFormats = block.formats.map(f => {
+            // 1. Format is fully before change. Unchanged.
+            if (f.end <= commonStart) return f;
+
+            // 2. Format is fully after change. Shift start and end.
+            if (f.start >= commonStart) {
+                // But wait, if we deleted (delta < 0), we might shift it back?
+                // If we deleted text *before* this format, yes. 
+                // If commonStart is before f.start, then we definitely shift.
+
+                // Special Case: Deletion overlapping the start of the format?
+                // If we have `**Bold**` (2-6). 
+                // Delete char at 1. commonStart=1. f.start=2. 
+                // Shift to 1-5. Correct.
+                return { ...f, start: Math.max(commonStart, f.start + delta), end: Math.max(commonStart, f.end + delta) };
+            }
+
+            // 3. Change is INSIDE the format. 
+            // Extend or Shrink.
+            // `**Bo|ld**` -> Insert 'a' -> `**Boa|ld**`.
+            // f.end += delta.
+            return { ...f, end: Math.max(f.start, f.end + delta) };
+        }).filter(f => f.end > f.start); // Remove collapsed formats
+
+        // Check for Auto-Formatting Trigger (Space after specific chars)
+        // Only trigger if we just typed a space?
+        // Or check Start of Line.
+
+        // Simple check: Just updated text.
+
         if (block.type === 'text') {
-            const todoMatch = text.match(/^(\s*-\s\[([ xX])\]\s)(.*)$/);
+            // Headers
             const header1Match = text.match(/^#\s+(.*)$/);
             const header2Match = text.match(/^##\s+(.*)$/);
             const header3Match = text.match(/^###\s+(.*)$/);
+            const todoMatch = text.match(/^(\s*-\s\[([ xX])\]\s)(.*)$/);
 
-            if (todoMatch) {
+            if (header1Match) {
+                newBlocks[index] = { ...block, type: 'h1', content: header1Match[1], formats: newFormats };
+                // Note: We might want to clear formats if converting to header? Or keep them? Keeping is safer.
+            } else if (header2Match) {
+                newBlocks[index] = { ...block, type: 'h2', content: header2Match[1], formats: newFormats };
+            } else if (header3Match) {
+                newBlocks[index] = { ...block, type: 'h3', content: header3Match[1], formats: newFormats };
+            } else if (todoMatch) {
                 newBlocks[index] = {
                     ...block,
                     type: 'todo',
                     checked: todoMatch[2].toLowerCase() === 'x',
-                    content: todoMatch[3]
+                    content: todoMatch[3],
+                    formats: newFormats // TODO: Shift formats back because we removed prefix? Yes.
                 };
-            } else if (header1Match) {
-                newBlocks[index] = { ...block, type: 'h1', content: header1Match[1] };
-            } else if (header2Match) {
-                newBlocks[index] = { ...block, type: 'h2', content: header2Match[1] };
-            } else if (header3Match) {
-                newBlocks[index] = { ...block, type: 'h3', content: header3Match[1] };
+                // Fix formats for Todo conversion (stripping "- [ ] ")
+                // prefix length = text.length - todoMatch[3].length
+                const prefixLen = text.length - todoMatch[3].length;
+                newBlocks[index].formats = newFormats.map(f => ({
+                    ...f,
+                    start: Math.max(0, f.start - prefixLen),
+                    end: Math.max(0, f.end - prefixLen)
+                })).filter(f => f.end > f.start);
+
             } else {
-                newBlocks[index] = { ...block, content: text };
+                newBlocks[index] = { ...block, content: text, formats: newFormats };
             }
         } else {
-            newBlocks[index] = { ...block, content: text };
+            // Already structured
+            newBlocks[index] = { ...block, content: text, formats: newFormats };
         }
 
         setBlocks(newBlocks);
@@ -754,7 +729,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             // Multiline Text Logic:
             // If Text block, Enter = New line in same block.
             if (currentBlock.type === 'text') {
-                // ALLOW DEFAULT BEHAVIOR.
                 return;
             }
 
@@ -782,7 +756,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 id: newBlockId,
                 type: nextType,
                 content: '',
-                checked: nextChecked
+                checked: nextChecked,
+                formats: []
             };
 
             const newBlocks = [...blocks];
@@ -799,13 +774,15 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
             const currentBlock = blocks[index];
             const selection = blockSelections.current[id];
-            // Only merge if cursor is at the very beginning (0,0)
+
+            // Cursor at 0,0
             const isCursorAtStart = selection?.start === 0 && selection?.end === 0;
             const hasPrevBlock = index > 0;
             const isEffectivelyEmpty = currentBlock.content.length === 0;
 
+            // REMOVED Smart Backspace Logic (Range-based doesn't need it)
+
             if (!hasPrevBlock && isCursorAtStart) {
-                // At very start of doc, nothing to do
                 return;
             }
 
@@ -842,8 +819,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 const prevLength = prevBlock.content.length;
                 const mergedContent = prevBlock.content + currentBlock.content;
 
+                // Merge Formats
+                const shiftedFormats = currentBlock.formats.map(f => ({
+                    ...f,
+                    start: f.start + prevLength,
+                    end: f.end + prevLength
+                }));
+                const mergedFormats = [...prevBlock.formats, ...shiftedFormats];
+
                 const newBlocks = [...blocks];
-                newBlocks[prevIndex] = { ...prevBlock, content: mergedContent };
+                newBlocks[prevIndex] = { ...prevBlock, content: mergedContent, formats: mergedFormats };
                 newBlocks.splice(index, 1);
                 setBlocks(newBlocks);
 
@@ -856,7 +841,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 setTimeout(() => {
                     const ref = inputRefs.current[prevBlock.id];
                     ref?.focus();
-                    // setTimeout again to be safe with Layout
                     setTimeout(() => {
                         ref?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
                     }, 10);
@@ -1012,8 +996,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         }}
                     >
 
-                        {item.content
-                            ? parseMarkdownForInput(item.content, textStyles)
+                        {item.content || (item.formats && item.formats.length > 0)
+                            ? renderFormattedText(item.content, item.formats || [], textStyles)
                             : null}
                     </TextInput>
                 </View>
