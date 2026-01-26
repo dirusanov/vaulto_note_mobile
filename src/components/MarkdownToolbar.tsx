@@ -63,13 +63,13 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
     const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
 
     const highlightColors = [
-        { name: 'yellow', value: colors.highlight.yellow },
-        { name: 'green', value: colors.highlight.green },
-        { name: 'blue', value: colors.highlight.blue },
-        { name: 'purple', value: colors.highlight.purple },
-        { name: 'red', value: colors.highlight.red },
-        { name: 'orange', value: colors.highlight.orange },
-        { name: 'white', value: colors.highlight.white },
+        { name: 'yellow', hex: colors.highlight.yellow },
+        { name: 'green', hex: colors.highlight.green },
+        { name: 'blue', hex: colors.highlight.blue },
+        { name: 'purple', hex: colors.highlight.purple },
+        { name: 'red', hex: colors.highlight.red },
+        { name: 'orange', hex: colors.highlight.orange },
+        { name: 'white', hex: colors.highlight.white },
     ];
 
     const handleHighlightPress = () => {
@@ -177,7 +177,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                                         key={color.name}
                                         style={[
                                             styles.colorOption,
-                                            { backgroundColor: color.value },
+                                            { backgroundColor: color.hex },
                                             activeHighlightColor === color.name && styles.activeColorOption
                                         ]}
                                         onPress={() => applyHighlight(color.name)}
