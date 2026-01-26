@@ -48,6 +48,9 @@ export const colors = {
         green: '#BAFFC9',
         blue: '#BAE1FF',
         purple: '#E2BAFF',
+        pink: '#FFC4E1',
+        cyan: '#B5F2EA',
+        lime: '#E7FFAC',
         white: '#FFFFFF',
     }
 };

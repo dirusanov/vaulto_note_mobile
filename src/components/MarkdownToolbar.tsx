@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 
@@ -49,6 +50,7 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconNa
 };
 
 export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle }) => {
+    const insets = useSafeAreaInsets();
     const [showColorPicker, setShowColorPicker] = useState(false);
 
     React.useEffect(() => {
@@ -66,9 +68,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
         { name: 'yellow', hex: colors.highlight.yellow },
         { name: 'green', hex: colors.highlight.green },
         { name: 'blue', hex: colors.highlight.blue },
-        { name: 'purple', hex: colors.highlight.purple },
         { name: 'red', hex: colors.highlight.red },
-        { name: 'orange', hex: colors.highlight.orange },
         { name: 'white', hex: colors.highlight.white },
     ];
 
@@ -169,7 +169,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
             >
                 <TouchableWithoutFeedback onPress={() => setShowColorPicker(false)}>
                     <View style={styles.modalOverlay}>
-                        <View style={styles.colorPickerContainer}>
+                        <View style={[styles.colorPickerContainer, { paddingBottom: Math.max(insets.bottom, 20) + spacing.l }]}>
                             <Text style={styles.colorPickerTitle}>Highlight Color</Text>
                             <View style={styles.colorsGrid}>
                                 {highlightColors.map((color) => (

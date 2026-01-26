@@ -6,7 +6,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
-import { parseMarkdownText } from '../utils/markdownUtils';
+import { parseMarkdownText, parseMarkdownToData } from '../utils/markdownUtils';
 
 interface NoteCardProps {
     note: Note;
@@ -25,21 +25,23 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     }
     const buildTitle = () => {
         if (note.title && note.title.trim().length > 0) return note.title.trim();
-        const cleanedTokens = content
+
+        // Use the centralized parser to strip all markdown syntax including highlights
+        let { content: plainText } = parseMarkdownToData(content);
+
+        // Remove Checkboxes and Hashes before formatting
+        plainText = plainText.replace(/\[\s*(x|X)?\s*\]/g, '').replace(/#/g, '');
+
+        const cleanedTokens = plainText
             .replace(/\s+/g, ' ')
             .trim()
             .split(' ')
             .map(token => token.trim())
             .filter(token => {
                 if (!token) return false;
-                if (/^#+$/.test(token)) return false; // Headings
-                if (/^[-*_]+$/.test(token)) return false; // Separators
-                if (/^-?\[\s*(x|X)?\s*\]$/.test(token)) return false; // Checkboxes
+                if (/^[-*_]+$/.test(token)) return false; // Separators/Bullets
                 return true;
-            })
-            // Clean markdown syntax from tokens
-            .map(token => token.replace(/^[\[\](){}<>*_\-#+]+/, '').replace(/[\[\](){}<>*_\-#+]+$/, ''))
-            .filter(token => !!token);
+            });
 
         if (cleanedTokens.length === 0) return '';
         return cleanedTokens.slice(0, 3).join(' ');
