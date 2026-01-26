@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -225,6 +225,24 @@ export const SettingsScreen = () => {
         } else {
             setSelfHostedTestStatus({ type: 'error', message: 'Connection failed. Check URL and Key.' });
         }
+    };
+
+    const handleSignOut = () => {
+        Alert.alert(
+            "Sign Out",
+            "Are you sure you want to sign out?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Sign Out",
+                    onPress: signOut,
+                    style: "destructive"
+                }
+            ]
+        );
     };
 
     return (
@@ -627,7 +645,7 @@ export const SettingsScreen = () => {
                     <View style={[styles.footer, { marginBottom: spacing.xxl + spacing.l }]}>
                         <Button
                             title="Sign Out"
-                            onPress={signOut}
+                            onPress={handleSignOut}
                             variant="destructive"
                             style={[styles.button, { backgroundColor: 'transparent' }]}
                         />
