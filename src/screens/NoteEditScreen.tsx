@@ -231,12 +231,36 @@ export const NoteEditScreen = () => {
     const [autoScalingEnabled, setAutoScalingEnabledState] = useState(true);
     const [showAppearanceModal, setShowAppearanceModal] = useState(false);
 
+    // AI Request History (Session based)
+    const [requestHistory, setRequestHistory] = useState<string[]>([]);
+
     const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const editorRef = useRef<RichTextEditorHandle>(null);
     const contentInputRef = useRef<TextInput>(null);
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
+
+    // Queue for Agent Requests to prevent race conditions
+    const agentQueue = useRef<{
+        recordingUri: string;
+        transcribedText: string;
+    }[]>([]);
+    const isProcessingQueue = useRef(false);
+    // Ref to hold the absolute latest content to ensure queue picks up changes from previous steps
+    const currentContentRef = useRef(content);
+    // Ref to track active variant for queue processing
+    const activeVariantIdRef = useRef(activeVariantId);
+
+    // Sync contentRef whenever content state changes
+    useEffect(() => {
+        currentContentRef.current = content;
+    }, [content]);
+
+    // Sync activeVariantIdRef
+    useEffect(() => {
+        activeVariantIdRef.current = activeVariantId;
+    }, [activeVariantId]);
 
     const loadSettings = async () => {
         const [size, scaling] = await Promise.all([
@@ -916,11 +940,135 @@ export const NoteEditScreen = () => {
 
 
 
+    // Process the queue strictly sequentially
+    const processAgentQueue = async () => {
+        if (isProcessingQueue.current) return;
+        isProcessingQueue.current = true;
+
+        try {
+            while (agentQueue.current.length > 0) {
+                // Peek first
+                const task = agentQueue.current[0];
+
+                // Get fresh context from REFS (strict chaining)
+                const contextContent = currentContentRef.current;
+                const currentVariantId = activeVariantIdRef.current;
+
+                console.log('[NoteEditScreen] Processing queued task:', {
+                    text: task.transcribedText,
+                    currentContextLength: contextContent.length,
+                    variantId: currentVariantId
+                });
+
+                try {
+                    setIsAIProcessing(true);
+                    // Pass the text we just got
+                    const agentResult = await processVoiceNote(
+                        task.recordingUri,
+                        undefined,
+                        contextContent,
+                        task.transcribedText,
+                        requestHistory
+                    );
+
+                    if (agentResult.success) {
+                        // Update History
+                        if (task.transcribedText.trim()) {
+                            setRequestHistory(prev => {
+                                const newHistory = [...prev, task.transcribedText.trim()];
+                                return newHistory.slice(-7);
+                            });
+                        }
+
+                        const originalText = agentResult.originalText || task.transcribedText;
+
+                        if (currentVariantId === 'original') {
+                            // Check if the agent wants to create a separate improvement
+                            // ... (Same logic as before) ...
+                            const shouldCreateVoiceImprovement =
+                                agentResult.hasInstruction &&
+                                typeof agentResult.processedText === 'string' &&
+                                agentResult.processedText.trim().length > 0 &&
+                                !!localNoteIdRef.current && // Use Ref for noteId
+                                !areTextsEquivalent(agentResult.processedText, originalText);
+
+                            if (shouldCreateVoiceImprovement && localNoteIdRef.current) {
+                                const label = agentResult.mode
+                                    ? `AI (${agentResult.mode})`
+                                    : 'AI Improvement';
+
+                                const contentToSave = agentResult.processedText?.trim();
+                                if (contentToSave) {
+                                    const newImprovement = await createImprovement(localNoteIdRef.current, {
+                                        content: contentToSave,
+                                        label: label,
+                                        optionId: 'voice_instruction'
+                                    });
+
+                                    if (newImprovement?.id) {
+                                        improvementDraftsRef.current[newImprovement.id] = contentToSave;
+                                        improvementSavedRef.current[newImprovement.id] = contentToSave;
+                                        variantHistories.current[newImprovement.id] = {
+                                            history: [{ title: title || '', content: contentToSave }],
+                                            index: 0
+                                        };
+
+                                        setActiveVariantId(newImprovement.id);
+                                        activeVariantIdRef.current = newImprovement.id; // Immediate Ref Update
+                                        optimisticActiveVariant.current = newImprovement.id;
+                                        // Update Content AND Ref
+                                        setContent(contentToSave);
+                                        // currentContentRef is updated via useEffect, but for immediate next loop we might need it?
+                                        // Actually React state update might be async, so let's update ref manually to be safe for next loop
+                                        currentContentRef.current = contentToSave;
+
+                                        await setActiveVariant(localNoteIdRef.current, newImprovement.id);
+                                    }
+                                }
+                            }
+                        } else {
+                            // Variant In-Place Update
+                            const newText = agentResult.processedText;
+                            if (newText && !areTextsEquivalent(newText, contextContent + (contextContent ? '\n\n' : '') + task.transcribedText)) {
+                                setContent(newText);
+                                currentContentRef.current = newText; // Immediate Ref Update
+
+                                updateHistoryImmediate('', newText);
+                                improvementDraftsRef.current[currentVariantId] = newText;
+                                if (localNoteIdRef.current) {
+                                    try {
+                                        await updateImprovement(localNoteIdRef.current, currentVariantId, { content: newText });
+                                        improvementSavedRef.current[currentVariantId] = newText;
+                                    } catch (e) {
+                                        console.error('Failed to save updated improvement', e);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        setErrorMessage(getErrorMessage(agentResult.error, 'Agent processing failed'));
+                        setErrorModalVisible(true);
+                    }
+                } catch (error) {
+                    console.error('[NoteEditScreen] Agent flow error:', error);
+                    setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
+                    setErrorModalVisible(true);
+                }
+
+                // Remove finished task
+                agentQueue.current.shift();
+            }
+        } finally {
+            isProcessingQueue.current = false;
+            setIsAIProcessing(false);
+        }
+    };
+
     const executeAgentFlow = async (
         recordingUri: string,
         transcribedText: string,
         currentContextContent: string,
-        currentNoteId: string | undefined,
+        currentNoteId: string | undefined, // We rely on Refs inside processAgentQueue now for consistency
         variantId: string
     ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
@@ -933,84 +1081,17 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        try {
-            setIsAIProcessing(true);
+        // Add to Queue
+        agentQueue.current.push({
+            recordingUri,
+            transcribedText,
+            // variantId is resolved at runtime now
+        });
 
-            // Pass the text we just got, so we don't need to re-transcribe or upload audio
-            const agentResult = await processVoiceNote(recordingUri, undefined, currentContextContent, transcribedText);
-
-            if (agentResult.success) {
-                const originalText = agentResult.originalText || transcribedText;
-
-                if (variantId === 'original') {
-                    // Check if the agent wants to create a separate improvement
-                    const shouldCreateVoiceImprovement =
-                        agentResult.hasInstruction &&
-                        typeof agentResult.processedText === 'string' &&
-                        agentResult.processedText.trim().length > 0 &&
-                        !!currentNoteId &&
-                        !areTextsEquivalent(agentResult.processedText, originalText);
-                    // Removed check against finalTranscribedContent as we don't have it easily here, 
-                    // but agentResult.originalText should be close enough to what was appended.
-
-                    if (shouldCreateVoiceImprovement && currentNoteId) {
-                        const label = agentResult.mode
-                            ? `AI (${agentResult.mode})`
-                            : 'AI Improvement';
-
-                        const contentToSave = agentResult.processedText?.trim();
-                        if (contentToSave) {
-                            const newImprovement = await createImprovement(currentNoteId, {
-                                content: contentToSave,
-                                label: label,
-                                optionId: 'voice_instruction'
-                            });
-
-                            if (newImprovement?.id) {
-                                improvementDraftsRef.current[newImprovement.id] = contentToSave;
-                                improvementSavedRef.current[newImprovement.id] = contentToSave;
-                                variantHistories.current[newImprovement.id] = {
-                                    history: [{ title: title || '', content: contentToSave }],
-                                    index: 0
-                                };
-
-                                setActiveVariantId(newImprovement.id);
-                                optimisticActiveVariant.current = newImprovement.id;
-                                setContent(contentToSave);
-                                await setActiveVariant(currentNoteId, newImprovement.id);
-                            }
-                        }
-                    }
-                } else {
-                    // Variant In-Place Update
-                    const newText = agentResult.processedText;
-                    if (newText && !areTextsEquivalent(newText, currentContextContent + (currentContextContent ? '\n\n' : '') + transcribedText)) {
-                        // Approximate check
-                        setContent(newText);
-                        updateHistoryImmediate('', newText);
-                        improvementDraftsRef.current[variantId] = newText;
-                        if (localNoteId) {
-                            try {
-                                await updateImprovement(localNoteId, variantId, { content: newText });
-                                improvementSavedRef.current[variantId] = newText;
-                            } catch (e) {
-                                console.error('Failed to save updated improvement', e);
-                            }
-                        }
-                    }
-                }
-            } else {
-                setErrorMessage(getErrorMessage(agentResult.error, 'Agent processing failed'));
-                setErrorModalVisible(true);
-            }
-        } catch (error) {
-            console.error('[NoteEditScreen] Agent flow error:', error);
-            setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
-            setErrorModalVisible(true);
-        } finally {
-            setIsAIProcessing(false);
-        }
+        // Trigger Processing
+        processAgentQueue();
     };
+
 
     const handleRecordingFinish = async (recording: AudioRecording) => {
         setShowVoiceRecorder(false);

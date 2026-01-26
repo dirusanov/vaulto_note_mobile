@@ -289,7 +289,8 @@ export async function processVoiceNote(
     audioUri: string,
     language?: string,
     currentContent?: string,
-    preTranscribedText?: string
+    preTranscribedText?: string,
+    recentMessages: string[] = []
 ): Promise<VoiceNoteResult> {
     const [provider, agentModeEnabled] = await Promise.all([
         getAIProvider(),
@@ -406,6 +407,12 @@ export async function processVoiceNote(
             // We might need to send a dummy file or omit it. 
             // Our backend now supports optional file if transcript is present.
             // But to be safe with some fetch implementations, let's just NOT send 'file' key at all.
+        }
+
+        if (recentMessages && recentMessages.length > 0) {
+            // Take only the last 7 messages as requested
+            const limitedMessages = recentMessages.slice(-7);
+            formData.append('recent_messages', JSON.stringify(limitedMessages));
         }
 
         const makeRequest = async (url: string) => {
