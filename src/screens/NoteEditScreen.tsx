@@ -1450,10 +1450,16 @@ export const NoteEditScreen = () => {
                 // Update history for this variant
                 updateHistoryImmediate('', finalText);
             }
-        } catch (error) {
-            const prettyMessage = getErrorMessage(error, 'Failed to improve text. Check AI settings.');
-            setErrorMessage(prettyMessage);
-            setErrorModalVisible(true);
+        } catch (error: any) {
+            // Handle Trial Limit 403 specifically
+            if (error?.message?.includes('403') || error?.status === 403 || error?.response?.status === 403) {
+                setErrorMessage('Trial limit exceeded.\nTo continue AI editing and transcription, please upgrade your plan.');
+                setErrorModalVisible(true);
+            } else {
+                const prettyMessage = getErrorMessage(error, 'Failed to improve text. Check AI settings.');
+                setErrorMessage(prettyMessage);
+                setErrorModalVisible(true);
+            }
         } finally {
             setIsAIProcessing(false);
         }
@@ -1640,10 +1646,16 @@ export const NoteEditScreen = () => {
             // Trigger Agent Flow
             await executeAgentFlow(audioUri, text, contentForAgent, localNoteId, activeVariantId);
 
-        } catch (error) {
+        } catch (error: any) {
             setIsTranscribing(false);
-            setErrorMessage('Failed to retry transcription');
-            setErrorModalVisible(true);
+            // Handle Trial Limit 403 specifically
+            if (error?.message?.includes('403') || error?.status === 403 || error?.response?.status === 403) {
+                setErrorMessage('Trial limit exceeded.\nTo continue AI editing and transcription, please upgrade your plan.');
+                setErrorModalVisible(true);
+            } else {
+                setErrorMessage('Failed to retry transcription');
+                setErrorModalVisible(true);
+            }
         } finally {
             setIsTranscribing(false);
         }
