@@ -25,6 +25,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useNotesContext } from '../contexts/NotesContext';
+import { useAuth } from '../hooks/useAuth';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -95,6 +96,7 @@ export const NoteEditScreen = () => {
         deleteImprovement,
         setActiveVariant,
     } = useNotesContext();
+    const { isGuest } = useAuth();
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
@@ -222,6 +224,24 @@ export const NoteEditScreen = () => {
     // Error Modal State
     const [errorModalVisible, setErrorModalVisible] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+
+    const handleAiAccess = (callback: () => void) => {
+        if (isGuest) {
+            Alert.alert(
+                'AI Features Locked',
+                'AI features are available only for signed-in users.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Sign In',
+                        onPress: () => navigation.navigate('SignIn')
+                    }
+                ]
+            );
+            return;
+        }
+        callback();
+    };
 
     // Determine initial active variant based on is_active flags
 
@@ -1586,9 +1606,23 @@ export const NoteEditScreen = () => {
     // Handle initial recording passed from navigation
     useEffect(() => {
         if (route.params?.initialRecording) {
+            if (isGuest) {
+                Alert.alert(
+                    'AI Features Locked',
+                    'Sign in to process voice notes.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Sign In',
+                            onPress: () => navigation.navigate('SignIn')
+                        }
+                    ]
+                );
+                return;
+            }
             handleRecordingFinish(route.params.initialRecording);
         }
-    }, [route.params?.initialRecording]);
+    }, [route.params?.initialRecording, isGuest]);
 
     // Track keyboard visibility to handle color picker interactions
     const isKeyboardVisible = useRef(false);
@@ -1792,7 +1826,7 @@ export const NoteEditScreen = () => {
                     )}
                     <TouchableOpacity
                         style={[styles.retryTranscriptionButton, { alignSelf: 'stretch', justifyContent: 'center', marginTop: spacing.s }]}
-                        onPress={handleRetryTranscription}
+                        onPress={() => handleAiAccess(handleRetryTranscription)}
                     >
                         <MaterialIcons name="auto-awesome" size={18} color={colors.background} style={{ marginRight: 8 }} />
                         <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
@@ -1825,7 +1859,7 @@ export const NoteEditScreen = () => {
                     </TouchableOpacity>
                     {/* AI Improvement Button */}
                     <TouchableOpacity
-                        onPress={() => setShowAIModal(true)}
+                        onPress={() => handleAiAccess(() => setShowAIModal(true))}
                         style={[styles.iconButton, (!canUseAI || isAIProcessing) && styles.disabledIcon]}
                         disabled={isAIProcessing || !canUseAI}
                     >
@@ -2194,7 +2228,7 @@ export const NoteEditScreen = () => {
             {!isEditing && (
                 <TouchableOpacity
                     style={styles.micButton}
-                    onPress={handleMicPress}
+                    onPress={() => handleAiAccess(handleMicPress)}
                     activeOpacity={0.8}
                 >
                     <MaterialIcons name="mic" size={28} color="white" />

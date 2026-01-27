@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -10,6 +10,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useNotesContext } from '../contexts/NotesContext';
+import { useAuth } from '../hooks/useAuth';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AudioRecording } from '../services/AudioService';
@@ -77,6 +78,23 @@ export const NotesListScreen = () => {
 
     const handleSettingsPress = () => {
         navigation.navigate('Settings');
+    };
+
+    const { isGuest } = useAuth(); // Import useAuth hook
+
+    const handleMicPress = () => {
+        if (isGuest) {
+            Alert.alert(
+                'AI Features Locked',
+                'Sign in to record and transcribe voice notes.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Sign In', onPress: () => navigation.navigate('Settings') } // Navigate to Settings or SignIn
+                ]
+            );
+            return;
+        }
+        setIsVoiceRecorderVisible(true);
     };
 
     const handleCreateNote = () => {
@@ -183,7 +201,7 @@ export const NotesListScreen = () => {
             return (
                 <TouchableOpacity
                     style={styles.centerButton}
-                    onPress={() => setIsVoiceRecorderVisible(true)}
+                    onPress={handleMicPress}
                     onLongPress={toggleDockLayout}
                     delayLongPress={500}
                     activeOpacity={0.8}
@@ -227,7 +245,7 @@ export const NotesListScreen = () => {
             return (
                 <TouchableOpacity
                     style={styles.dockButton}
-                    onPress={() => setIsVoiceRecorderVisible(true)}
+                    onPress={handleMicPress}
                     onLongPress={toggleDockLayout}
                     delayLongPress={500}
                     activeOpacity={0.7}
