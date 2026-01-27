@@ -119,7 +119,9 @@ export const SettingsScreen = () => {
             ]);
 
             if (storedOpenAIKey) setApiKeyState(storedOpenAIKey);
-            setAiProviderState(provider);
+
+            setAiProviderState(provider || 'secure_llm');
+
             if (url) setSelfHostedUrlState(url);
             if (storedSelfHostedApiKey) setSelfHostedApiKeyState(storedSelfHostedApiKey);
             setAgentModeEnabledState(agentMode);
@@ -303,6 +305,18 @@ export const SettingsScreen = () => {
                             />
                         </>
                     )}
+
+                    {isAuthenticated && !isGuest && (
+                        <View style={{ marginTop: spacing.m }}>
+                            <Button
+                                title="Upgrade (coming soon)"
+                                onPress={() => { }}
+                                variant="secondary"
+                                disabled
+                            />
+                        </View>
+                    )}
+
                     <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} />
                 </View>
 
@@ -381,56 +395,29 @@ export const SettingsScreen = () => {
 
                     {activeProvider && (
                         <>
-                            <TouchableOpacity
-                                style={styles.infoToggleRow}
-                                onPress={() => setShowProviderInfo((prev) => !prev)}
-                                activeOpacity={0.85}
-                            >
-                                <MaterialIcons
-                                    name={showProviderInfo ? 'expand-less' : 'expand-more'}
-                                    size={20}
-                                    color={colors.textSecondary}
-                                />
-                                <Text style={styles.infoToggleText}>
-                                    {showProviderInfo ? 'Hide details' : 'More about provider'}
-                                </Text>
-                            </TouchableOpacity>
-                            {showProviderInfo && (
-                                <View style={styles.activeProviderCard}>
-                                    <View style={[styles.activeProviderIcon, { backgroundColor: activeProvider.accent }]}>
-                                        <MaterialIcons name={activeProvider.icon as any} size={22} color={colors.surface} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.activeProviderTitle}>{activeProvider.title}</Text>
-                                        <Text style={styles.activeProviderDescription}>{activeProvider.description}</Text>
-                                        <View style={styles.chipRow}>
-                                            {activeProvider.chips.map((chip) => (
-                                                <View key={chip} style={styles.microChip}>
-                                                    <Text style={styles.microChipText}>{chip}</Text>
-                                                </View>
-                                            ))}
-                                        </View>
-                                        {aiProvider === 'openai' && (
-                                            <View style={styles.microRow}>
-                                                <MaterialIcons name="audiotrack" size={14} color={colors.textSecondary} />
-                                                <Text style={styles.microText}>Audio → Whisper</Text>
-                                                <MaterialIcons name="east" size={14} color={colors.textSecondary} />
-                                                <MaterialIcons name="chat" size={14} color={colors.textSecondary} />
-                                                <Text style={styles.microText}>LLM</Text>
+                            <View style={styles.activeProviderCard}>
+                                <View style={[styles.activeProviderIcon, { backgroundColor: activeProvider.accent }]}>
+                                    <MaterialIcons name={activeProvider.icon as any} size={22} color={colors.surface} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.activeProviderTitle}>{activeProvider.title}</Text>
+                                    <Text style={styles.activeProviderDescription}>{activeProvider.description}</Text>
+                                    <View style={styles.chipRow}>
+                                        {activeProvider.chips.map((chip) => (
+                                            <View key={chip} style={styles.microChip}>
+                                                <Text
+                                                    style={styles.microChipText}
+                                                    numberOfLines={1}
+                                                    adjustsFontSizeToFit
+                                                    minimumFontScale={0.8}
+                                                >
+                                                    {chip}
+                                                </Text>
                                             </View>
-                                        )}
-                                        {aiProvider === 'selfhosted' && (
-                                            <View style={styles.microRow}>
-                                                <MaterialIcons name="router" size={14} color={colors.textSecondary} />
-                                                <Text style={styles.microText}>Your Server</Text>
-                                                <MaterialIcons name="east" size={14} color={colors.textSecondary} />
-                                                <MaterialIcons name="verified-user" size={14} color={colors.textSecondary} />
-                                                <Text style={styles.microText}>Private</Text>
-                                            </View>
-                                        )}
+                                        ))}
                                     </View>
                                 </View>
-                            )}
+                            </View>
                         </>
                     )}
 
@@ -815,19 +802,24 @@ const styles = StyleSheet.create({
     },
     chipRow: {
         flexDirection: 'row',
-        gap: spacing.xs,
+        alignItems: 'center',
+        gap: 4, // Reduced gap
         marginTop: spacing.xs,
+        // Ensure it doesn't wrap but we try to fit
     },
+    // chipRowContent removed as we are back to View
     microChip: {
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
-        borderRadius: 10,
+        paddingHorizontal: 6, // Reduced padding
+        paddingVertical: 2,
+        borderRadius: 8,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
+        flexShrink: 1, // Allow chips to shrink if needed
     },
     microChipText: {
         ...typography.caption,
+        fontSize: 11, // Slightly smaller font
         color: colors.textSecondary,
     },
     microRow: {
