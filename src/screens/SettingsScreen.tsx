@@ -70,6 +70,8 @@ export const SettingsScreen = () => {
         icon: string;
         accent: string;
         chips: string[];
+        isLocked?: boolean;
+        proMessage?: string;
     };
 
     const providerOptions: ProviderOption[] = [
@@ -80,7 +82,7 @@ export const SettingsScreen = () => {
             description: 'Whisper + LLM on our server. No data stored or analyzed. Fully anonymous and secure.',
             icon: 'security',
             accent: colors.primary,
-            chips: ['Zero retention', 'Anonymous', 'Secure'],
+            chips: ['Zero retention', 'Anonymous', 'Trial'],
         },
         {
             key: 'openai',
@@ -90,6 +92,8 @@ export const SettingsScreen = () => {
             icon: 'cloud-queue',
             accent: colors.accentPurple,
             chips: ['Whisper', 'GPT', 'Fast'],
+            isLocked: true,
+            proMessage: 'Available in Pro',
         },
         {
             key: 'selfhosted',
@@ -99,6 +103,8 @@ export const SettingsScreen = () => {
             icon: 'dns',
             accent: colors.accentGreen,
             chips: ['Your Server', 'VPN/SSL'],
+            isLocked: true,
+            proMessage: 'Available in Pro',
         },
     ];
 
@@ -133,6 +139,30 @@ export const SettingsScreen = () => {
     };
 
     const updateProvider = async (provider: AIProvider) => {
+        const selectedOption = providerOptions.find(opt => opt.key === provider);
+
+        // Show upgrade alert for locked providers
+        if (selectedOption?.isLocked) {
+            Alert.alert(
+                'Pro Feature',
+                `${selectedOption.title} is available in the Pro plan. Upgrade to unlock advanced AI providers and enhanced features.`,
+                [
+                    {
+                        text: 'Maybe Later',
+                        style: 'cancel'
+                    },
+                    {
+                        text: 'Learn More',
+                        onPress: () => {
+                            // TODO: Navigate to upgrade screen when available
+                            Alert.alert('Coming Soon', 'Pro plan details will be available soon!');
+                        }
+                    }
+                ]
+            );
+            return;
+        }
+
         setAiProviderState(provider);
         try {
             await setAIProvider(provider);
@@ -359,12 +389,14 @@ export const SettingsScreen = () => {
                     <View style={styles.providerSwitcher}>
                         {providerOptions.map((option) => {
                             const isActive = aiProvider === option.key;
+                            const isLocked = option.isLocked || false;
                             return (
                                 <TouchableOpacity
                                     key={option.key}
                                     style={[
                                         styles.providerPill,
                                         isActive && styles.providerPillActive,
+                                        isLocked && !isActive && styles.providerPillLocked,
                                     ]}
                                     onPress={() => updateProvider(option.key)}
                                     activeOpacity={0.9}
@@ -378,16 +410,31 @@ export const SettingsScreen = () => {
                                         <MaterialIcons
                                             name={option.icon as any}
                                             size={18}
-                                            color={isActive ? colors.surface : colors.textSecondary}
+                                            color={isActive ? colors.surface : isLocked ? colors.textSecondary : colors.textSecondary}
                                         />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.providerPillTitle}>{option.title}</Text>
-                                        <Text style={styles.providerPillSubtitle}>{option.blurb}</Text>
+                                        <View style={styles.providerPillTitleRow}>
+                                            <Text style={[styles.providerPillTitle, isLocked && styles.providerPillTitleLocked]}>{option.title}</Text>
+                                            {isLocked && (
+                                                <View style={styles.lockBadge}>
+                                                    <MaterialIcons name="workspace-premium" size={14} color={colors.accentPurple} />
+                                                    <Text style={styles.lockBadgeText}>Pro</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <Text style={[styles.providerPillSubtitle, isLocked && styles.providerPillSubtitleLocked]}>
+                                            {isLocked ? option.proMessage : option.blurb}
+                                        </Text>
                                     </View>
-                                    <View style={[styles.radio, isActive && styles.radioActive]}>
-                                        {isActive && <View style={styles.radioDot} />}
-                                    </View>
+                                    {!isLocked && (
+                                        <View style={[styles.radio, isActive && styles.radioActive]}>
+                                            {isActive && <View style={styles.radioDot} />}
+                                        </View>
+                                    )}
+                                    {isLocked && (
+                                        <MaterialIcons name="lock-outline" size={20} color={colors.textSecondary} />
+                                    )}
                                 </TouchableOpacity>
                             );
                         })}
@@ -768,10 +815,40 @@ const styles = StyleSheet.create({
         ...typography.h3,
         fontSize: 16,
     },
+    providerPillTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    providerPillTitleLocked: {
+        color: colors.textSecondary,
+    },
     providerPillSubtitle: {
         ...typography.caption,
         color: colors.textSecondary,
         marginTop: 2,
+    },
+    providerPillSubtitleLocked: {
+        color: colors.accentPurple,
+        fontWeight: '600',
+    },
+    providerPillLocked: {
+        opacity: 0.65,
+    },
+    lockBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        paddingHorizontal: spacing.xs,
+        paddingVertical: 2,
+        borderRadius: 8,
+        backgroundColor: colors.accentPurple + '15',
+    },
+    lockBadgeText: {
+        ...typography.caption,
+        fontSize: 11,
+        color: colors.accentPurple,
+        fontWeight: '700',
     },
     activeProviderCard: {
         flexDirection: 'row',
