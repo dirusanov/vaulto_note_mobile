@@ -15,14 +15,20 @@ import {
     Keyboard,
     Vibration,
     FlatList,
+    Share,
+    Animated,
 } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
+import ViewShot, { captureRef } from 'react-native-view-shot';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
@@ -62,6 +68,7 @@ import { AIProcessingIndicator } from '../components/AIProcessingIndicator';
 
 import { ErrorModal } from '../components/ErrorModal';
 import { getErrorMessage } from '../utils/errorMessage';
+import { stripMarkdownSyntax } from '../utils/markdownUtils';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -136,6 +143,130 @@ export const NoteEditScreen = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+
+    // Toast State
+    const toastOpacity = useRef(new Animated.Value(0)).current;
+    const [toastMessage, setToastMessage] = useState('');
+
+    const showToast = (message: string) => {
+        setToastMessage(message);
+        Animated.sequence([
+            Animated.timing(toastOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+            Animated.delay(2000),
+            Animated.timing(toastOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    };
+
+    // Export & Share Refs and Handlers
+    const viewShotRef = useRef<View>(null);
+
+    const handleCopyPlainText = async () => {
+        setShowMenu(false);
+        const fullText = `${title}\n\n${content}`;
+        const plainText = stripMarkdownSyntax(fullText);
+        await Clipboard.setStringAsync(plainText.trim());
+        showToast('Text copied to clipboard');
+    };
+
+    const handleCopyMarkdown = async () => {
+        setShowMenu(false);
+        // Strip audio tags (broken local links) but keep other markdown
+        const contentWithoutAudio = content
+            .replace(/!\[audio\]\([^)]+\)/g, '')
+            .replace(/\n{3,}/g, '\n\n') // Normalize extra newlines left by removal
+            .trim();
+
+        const fullText = `${title ? '# ' + title + '\n\n' : ''}${contentWithoutAudio}`;
+        await Clipboard.setStringAsync(fullText);
+        showToast('Markdown copied to clipboard');
+    };
+
+    const handleShareText = async () => {
+        setShowMenu(false);
+        // Also strip audio for sharing text
+        const contentWithoutAudio = content
+            .replace(/!\[audio\]\([^)]+\)/g, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+
+        const fullText = `${title}\n\n${contentWithoutAudio}`;
+        try {
+            await Share.share({
+                message: fullText,
+                title: title || 'Note',
+            });
+        } catch (error) {
+            console.error('Error sharing note:', error);
+        }
+    };
+
+    const handleExportMarkdownFile = async () => {
+        setShowMenu(false);
+        try {
+            const dateStr = existingNote?.created_at
+                ? new Date(existingNote.created_at).toISOString().split('T')[0]
+                : new Date().toISOString().split('T')[0];
+
+            // Allow basic latin, numbers, and cyrillic, replace others with underscore
+            const safeTitle = (title || 'note').replace(/[^a-z0-9а-яё]/gi, '_').toLowerCase();
+            const filename = `${safeTitle}_${dateStr}.md`;
+
+            const fileUri = `${FileSystem.documentDirectory}${filename} `;
+            const fullText = `${title ? '# ' + title + '\n\n' : ''}${content} `;
+
+            await FileSystem.writeAsStringAsync(fileUri, fullText, {
+                encoding: 'utf8',
+            });
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(fileUri, {
+                    dialogTitle: 'Export Note as Markdown',
+                    mimeType: 'text/markdown',
+                    UTI: 'net.daringfireball.markdown', // Helping iOS identify it as markdown
+                });
+            } else {
+                Alert.alert('Error', 'Sharing is not available');
+            }
+        } catch (error) {
+            console.error('Error exporting markdown:', error);
+            Alert.alert('Error', 'Failed to export markdown file');
+        }
+    };
+
+    const handleExportImage = async () => {
+        setShowMenu(false);
+        try {
+            if (viewShotRef.current) {
+                const uri = await captureRef(viewShotRef, {
+                    format: 'png',
+                    quality: 0.9,
+                    result: 'tmpfile',
+                });
+
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(uri, {
+                        mimeType: 'image/png',
+                        dialogTitle: 'Share Note as Image',
+                    });
+                } else {
+                    Alert.alert('Error', 'Sharing is not available on this device');
+                }
+            } else {
+                Alert.alert('Error', 'Could not capture view');
+            }
+        } catch (error) {
+            console.error('Error exporting image:', error);
+            Alert.alert('Error', 'Failed to export image');
+        }
+    };
 
     // History for Undo/Redo - separate for each variant
     const variantHistories = useRef<Record<string, VariantHistory>>({});
@@ -1030,7 +1161,7 @@ export const NoteEditScreen = () => {
 
                             if (shouldCreateVoiceImprovement && localNoteIdRef.current) {
                                 const label = agentResult.mode
-                                    ? `AI (${agentResult.mode})`
+                                    ? `AI(${agentResult.mode})`
                                     : 'AI Improvement';
 
                                 const contentToSave = agentResult.processedText?.trim();
@@ -1259,7 +1390,7 @@ export const NoteEditScreen = () => {
 
                 // Construct audio block
                 // We add newlines to ensure it's on its own block
-                const audioBlock = `${currentContent ? '\n' : ''}![audio](${playbackUri})\n`;
+                const audioBlock = `${currentContent ? '\n' : ''} ![audio](${playbackUri}) \n`;
 
                 finalTranscribedContent = currentContent + audioBlock;
                 setContent(finalTranscribedContent);
@@ -1359,7 +1490,7 @@ export const NoteEditScreen = () => {
         try {
             const uri = await AudioService.readAudioFile(recording.file_path);
             const currentContent = currentContentRef.current;
-            const audioBlock = `${currentContent ? '\n' : ''}![audio](${uri})\n`;
+            const audioBlock = `${currentContent ? '\n' : ''} ![audio](${uri}) \n`;
 
             const newContent = currentContent + audioBlock;
             setContent(newContent);
@@ -1591,7 +1722,7 @@ export const NoteEditScreen = () => {
         const preparedTemplate = ensureTemplateHasPlaceholder(newPromptTemplate.trim());
 
         const newOption: AIImprovementOption = {
-            id: `custom - ${Date.now()}`,
+            id: `custom - ${Date.now()} `,
             label: newPromptTitle.trim(),
             prompt: preparedTemplate,
             icon: newPromptIcon,
@@ -1620,7 +1751,7 @@ export const NoteEditScreen = () => {
             return (
                 <Text style={styles.promptPreviewText}>
                     {segments.map((segment, index) => (
-                        <React.Fragment key={`${segment} - ${index}`}>
+                        <React.Fragment key={`${segment} - ${index} `}>
                             {segment.length > 0 && <Text style={styles.promptPreviewText}>{segment}</Text>}
                             {index < segments.length - 1 && (
                                 <Text style={styles.promptPlaceholderToken}>{'{text}'}</Text>
@@ -1641,7 +1772,7 @@ export const NoteEditScreen = () => {
         return (
             <Text style={styles.aiOptionPrompt} numberOfLines={1}>
                 {segments.map((segment, index) => (
-                    <React.Fragment key={`${segment} - ${index}`}>
+                    <React.Fragment key={`${segment} - ${index} `}>
                         {segment.length > 0 && <Text style={styles.aiOptionPrompt}>{segment}</Text>}
                         {index < segments.length - 1 && <Text style={styles.promptPlaceholderToken}>{'{text}'}</Text>}
                     </React.Fragment>
@@ -1766,7 +1897,7 @@ export const NoteEditScreen = () => {
     const formatDuration = (seconds: number) => {
         const m = Math.floor(seconds / 60);
         const s = Math.floor(seconds % 60);
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
+        return `${m}:${s < 10 ? '0' : ''}${s} `;
     };
 
     const handleDeleteRecording = async (id: string, path: string) => {
@@ -2237,13 +2368,54 @@ export const NoteEditScreen = () => {
                 <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
                     <View style={styles.menuOverlay}>
                         <View style={styles.menuContainer}>
+                            <View style={styles.menuSectionHeader}>
+                                <Text style={styles.menuSectionTitle}>COPY</Text>
+                            </View>
+                            <TouchableOpacity onPress={handleCopyPlainText} style={styles.menuItem}>
+                                <MaterialIcons name="content-copy" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <Text style={styles.menuItemText}>Copy Plain Text</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleCopyMarkdown} style={styles.menuItem}>
+                                <MaterialIcons name="code" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <Text style={styles.menuItemText}>Copy Markdown</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.menuDivider} />
+
+                            <View style={styles.menuSectionHeader}>
+                                <Text style={styles.menuSectionTitle}>SHARE & EXPORT</Text>
+                            </View>
+                            <TouchableOpacity onPress={handleShareText} style={styles.menuItem}>
+                                <MaterialIcons name="share" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <Text style={styles.menuItemText}>Share Text</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleExportMarkdownFile} style={styles.menuItem}>
+                                <MaterialIcons name="file-present" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <Text style={styles.menuItemText}>Export Markdown File</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleExportImage} style={styles.menuItem}>
+                                <MaterialIcons name="image" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <Text style={styles.menuItemText}>Export as Image</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.menuDivider} />
+
                             <TouchableOpacity onPress={handleDelete} style={styles.menuItem}>
-                                <Text style={styles.menuItemText}>Delete</Text>
+                                <MaterialIcons name="delete-outline" size={20} color={colors.error} style={{ marginRight: 12 }} />
+                                <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Note</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </TouchableWithoutFeedback>
             </Modal>
+
+            {/* Custom Toast */}
+            <Animated.View style={[styles.toastContainer, { opacity: toastOpacity }]} pointerEvents="none">
+                <View style={styles.toastContent}>
+                    <MaterialIcons name="check-circle" size={20} color={colors.background} style={{ marginRight: 8 }} />
+                    <Text style={styles.toastText}>{toastMessage}</Text>
+                </View>
+            </Animated.View>
 
 
             <KeyboardAvoidingView
@@ -2251,7 +2423,11 @@ export const NoteEditScreen = () => {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 36}
                 style={{ flex: 1 }}
             >
-                <View style={{ flex: 1 }}>
+                <View
+                    ref={viewShotRef}
+                    collapsable={false}
+                    style={{ flex: 1, backgroundColor: colors.background }}
+                >
                     <RichTextEditor
                         ref={editorRef}
                         initialContent={content}
@@ -2527,15 +2703,63 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 5,
-        minWidth: 150,
+        minWidth: 200,
     },
     menuItem: {
-        paddingVertical: spacing.s,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: spacing.s + 4,
         paddingHorizontal: spacing.m,
+    },
+    menuSectionHeader: {
+        paddingHorizontal: spacing.m,
+        paddingTop: spacing.s + 4,
+        paddingBottom: spacing.s,
+    },
+    menuSectionTitle: {
+        fontSize: 11,
+        color: colors.textMuted,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    menuDivider: {
+        height: 1,
+        backgroundColor: colors.border,
+        marginVertical: 4,
     },
     menuItemText: {
         fontSize: 16,
         color: colors.text,
+    },
+    toastContainer: {
+        position: 'absolute',
+        bottom: 100,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+    },
+    toastContent: {
+        backgroundColor: colors.text, // High contrast
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 25,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    toastText: {
+        color: colors.background,
+        fontSize: 14,
+        fontWeight: '600',
     },
     content: {
         flex: 1,

@@ -317,4 +317,50 @@ export const renderFormattedText = (content: string, formats: BlockFormat[], bas
 export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {
     const { content, formats } = parseMarkdownToData(text);
     return renderFormattedText(content, formats, baseStyle);
+
+    /**
+     * Strips markdown syntax from text to return plain text.
+     */
+};
+
+/**
+ * Strips markdown syntax from text to return plain text.
+ */
+export const stripMarkdownSyntax = (text: string): string => {
+    if (!text) return '';
+
+    // 1. Strip Block Elements
+    // Headers (# Header)
+    let stripped = text.replace(/^#+\s+/gm, '');
+
+    // Lists (- Item, * Item, 1. Item)
+    stripped = stripped.replace(/^\s*[-*+]\s+/gm, '');
+    stripped = stripped.replace(/^\s*\d+\.\s+/gm, ''); // Ordered list
+
+    // Blockquotes (> Quote)
+    stripped = stripped.replace(/^\s*>\s+/gm, '');
+
+    // Todos (- [ ] Todo)
+    stripped = stripped.replace(/^\s*-\s\[[ xX]\]\s+/gm, '');
+
+    // Audio tags - remove entirely
+    stripped = stripped.replace(/!\[audio\]\([^)]+\)/g, '');
+
+    // Other Images (![alt](url)) - Keep alt text
+    stripped = stripped.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+
+    // horizontal rules
+    stripped = stripped.replace(/^-{3,}$/gm, '');
+
+    // 2. Strip Inline Elements using our existing logic logic
+    // We can reuse parseMarkdownToData which strips syntax by regex capturing group 1?
+    // Actually parseMarkdownToData already creates a plain text structure "content".
+    // Does it recursively strip? Yes, basic inline.
+
+    // Let's use parseMarkdownToData on the block-stripped text.
+    // However, parseMarkdownToData returns "plainText" which it constructs by taking INNER content.
+    // Example: "**Bold**" -> "Bold".
+
+    const { content } = parseMarkdownToData(stripped);
+    return content;
 };
