@@ -365,27 +365,28 @@ export const SettingsScreen = () => {
                         <Text style={styles.sectionTitle}>Preferences</Text>
                     </View>
 
-                    <View style={styles.agentModeCard}>
-                        <View style={styles.agentModeHeader}>
-                            <View style={styles.agentModeTitleRow}>
-                                <View style={styles.agentModeIcon}>
-                                    <MaterialIcons name="record-voice-over" size={20} color={colors.primary} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.agentModeTitle}>Auto-transcribe recordings</Text>
-                                    <Text style={styles.agentModeDescription}>
-                                        Automatically transcribe audio after recording
-                                    </Text>
-                                </View>
-                                <Switch
-                                    value={transcriptionEnabled}
-                                    onValueChange={toggleTranscription}
-                                    trackColor={{ false: colors.border, true: colors.primary }}
-                                    thumbColor={colors.surface}
-                                    ios_backgroundColor={colors.border}
-                                />
-                            </View>
+                    <View style={styles.preferenceRow}>
+                        <View style={{ flex: 1, marginRight: spacing.s }}>
+                            <Text style={styles.preferenceTitle}>Auto-transcribe recordings</Text>
+                            <Text style={styles.preferenceDescription}>
+                                {isGuest
+                                    ? "Sign in to unlock auto-transcription"
+                                    : "Automatically transcribe audio after recording"
+                                }
+                            </Text>
                         </View>
+                        <Switch
+                            value={!isGuest && transcriptionEnabled}
+                            onValueChange={(val) => {
+                                if (isGuest) return;
+                                toggleTranscription(val);
+                            }}
+                            disabled={isGuest}
+                            trackColor={{ false: colors.border, true: colors.primary }}
+                            thumbColor={colors.surface}
+                            ios_backgroundColor={colors.border}
+                            style={isGuest ? { opacity: 0.5 } : {}}
+                        />
                     </View>
                 </View>
 
@@ -816,6 +817,21 @@ const styles = StyleSheet.create({
     miniPillText: {
         ...typography.caption,
         color: colors.primary,
+    },
+    preferenceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: spacing.xs,
+    },
+    preferenceTitle: {
+        ...typography.body,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    preferenceDescription: {
+        ...typography.caption,
+        color: colors.textSecondary,
     },
     providerSwitcher: {
         flexDirection: 'column',
