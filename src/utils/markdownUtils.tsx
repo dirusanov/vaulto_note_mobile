@@ -18,8 +18,12 @@ export interface FormattedBlockData {
  * Parses raw markdown text into separated content and format ranges.
  * Example: "**Bold**" -> { content: "Bold", formats: [{type:'bold', start:0, end:4}] }
  */
-export const parseMarkdownToData = (text: string): FormattedBlockData => {
+export const parseMarkdownToData = (text: string, depth: number = 0): FormattedBlockData => {
     if (!text) return { content: '', formats: [] };
+    if (depth > 100) {
+        console.warn('Markdown recursion depth exceeded');
+        return { content: text, formats: [] };
+    }
 
     // We need to parse strictly from left to right, handling nesting.
     // For simplicity in this v1 refactor, we will focus on the main regex strategy 
@@ -92,7 +96,8 @@ export const parseMarkdownToData = (text: string): FormattedBlockData => {
             // If we blindly add innerRaw, we might miss nested syntax like `==red:**bold**==`
             // Ideally we recursively call parseMarkdownToData(innerRaw).
 
-            const innerData = parseMarkdownToData(innerRaw);
+            // @ts-ignore
+            const innerData = parseMarkdownToData(innerRaw, depth + 1);
 
             // Add the format for this wrapper
             formats.push({

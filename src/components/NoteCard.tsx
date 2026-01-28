@@ -27,7 +27,9 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
         if (note.title && note.title.trim().length > 0) return note.title.trim();
 
         // Use the centralized parser to strip all markdown syntax including highlights
-        let { content: plainText } = parseMarkdownToData(content);
+        // Truncate content to avoid performance issues on huge notes
+        const contentToParse = content.length > 1000 ? content.substring(0, 1000) : content;
+        let { content: plainText } = parseMarkdownToData(contentToParse);
 
         // Remove Checkboxes and Hashes before formatting
         plainText = plainText.replace(/\[\s*(x|X)?\s*\]/g, '').replace(/#/g, '');
