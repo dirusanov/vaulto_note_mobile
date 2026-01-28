@@ -27,6 +27,8 @@ interface RichTextEditorProps {
     onChange: (text: string) => void;
     onSelectionChange?: (selection: { start: number; end: number }) => void;
     onActiveStylesChange?: (styles: MarkdownFormatType[]) => void;
+    onFocus?: () => void;
+    reparseTrigger?: number;
     placeholder?: string;
     editable?: boolean;
     ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
@@ -56,6 +58,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         onChange,
         onSelectionChange,
         onActiveStylesChange,
+        onFocus,
+        reparseTrigger,
         placeholder,
         editable = true,
         ListHeaderComponent,
@@ -607,7 +611,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
 
         setBlocks(parsedBlocks);
-    }, [initialContent]);
+    }, [initialContent, reparseTrigger]);
 
     // Reconstruct markdown
     const serializeBlocks = (currentBlocks: Block[]) => {
@@ -724,7 +728,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             const insertedText = text.substring(commonStart, commonStart + delta);
 
             // Check if a newline was inserted
-            if (delta > 0 && insertedText.includes('\n')) {
+            if (delta > 0 && insertedText === '\n') {
                 const newlineIndexInInsertion = insertedText.lastIndexOf('\n');
                 const cursor = commonStart + newlineIndexInInsertion;
 
@@ -1105,6 +1109,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                 autoCorrect={false}
                                 spellCheck={false}
                                 onFocus={() => {
+                                    if (onFocus) onFocus();
                                     setFocusedBlockId(item.id);
                                     const selection = blockSelections.current[item.id];
                                     if (selection) {

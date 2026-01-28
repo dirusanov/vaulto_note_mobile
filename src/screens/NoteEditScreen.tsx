@@ -143,6 +143,8 @@ export const NoteEditScreen = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [editMode, setEditMode] = useState<'visual' | 'raw'>('visual');
+    const [reparseTrigger, setReparseTrigger] = useState(0);
 
     // Toast State
     const toastOpacity = useRef(new Animated.Value(0)).current;
@@ -730,7 +732,7 @@ export const NoteEditScreen = () => {
 
             const inserted = text.slice(i, i + (text.length - content.length));
 
-            if (inserted.includes('\n')) {
+            if (inserted === '\n') {
                 const textBefore = text.slice(0, i);
                 const lines = textBefore.split('\n');
                 const lastLine = lines[lines.length - 1]; // This is the line *before* the newline
@@ -1536,8 +1538,9 @@ export const NoteEditScreen = () => {
 
     const handleCheckPress = () => {
         Keyboard.dismiss();
-        setIsEditing(false);
-        saveNote(); // Auto-save on check press
+        setIsEditing(false); // Go to Preview Mode
+        setReparseTrigger(prev => prev + 1);
+        saveNote();
     };
 
     const handleAIImprovement = async (option: AIImprovementOption) => {
@@ -2082,8 +2085,8 @@ export const NoteEditScreen = () => {
 
 
 
-                    {/* Redo/Undo Buttons - Visible if editing or if history exists */}
-                    {(isEditing || (variantHistories.current[activeVariantId]?.index > 0) || (variantHistories.current[activeVariantId]?.index < (variantHistories.current[activeVariantId]?.history?.length || 0) - 1)) && (
+                    {/* Redo/Undo Buttons - Visible if there is history to navigate */}
+                    {((variantHistories.current[activeVariantId]?.index > 0) || (variantHistories.current[activeVariantId]?.index < (variantHistories.current[activeVariantId]?.history?.length || 0) - 1)) && (
                         <>
                             <TouchableOpacity
                                 onPress={handleUndo}
@@ -2369,6 +2372,22 @@ export const NoteEditScreen = () => {
                     <View style={styles.menuOverlay}>
                         <View style={styles.menuContainer}>
                             <View style={styles.menuSectionHeader}>
+                                <Text style={styles.menuSectionTitle}>EDITOR MODE</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => { setEditMode('visual'); setShowMenu(false); setIsEditing(true); }} style={styles.menuItem}>
+                                <MaterialIcons name="view-quilt" size={20} color={editMode === 'visual' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
+                                <Text style={[styles.menuItemText, editMode === 'visual' && { color: colors.primary, fontWeight: 'bold' }]}>Visual Editor</Text>
+                                {editMode === 'visual' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => { setEditMode('raw'); setShowMenu(false); setIsEditing(false); }} style={styles.menuItem}>
+                                <MaterialIcons name="code" size={20} color={editMode === 'raw' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
+                                <Text style={[styles.menuItemText, editMode === 'raw' && { color: colors.primary, fontWeight: 'bold' }]}>Raw Markdown</Text>
+                                {editMode === 'raw' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
+                            </TouchableOpacity>
+
+                            <View style={styles.menuDivider} />
+
+                            <View style={styles.menuSectionHeader}>
                                 <Text style={styles.menuSectionTitle}>COPY</Text>
                             </View>
                             <TouchableOpacity onPress={handleCopyPlainText} style={styles.menuItem}>
@@ -2418,6 +2437,7 @@ export const NoteEditScreen = () => {
             </Animated.View>
 
 
+            {/* Main Content Area */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 36}
@@ -2428,36 +2448,71 @@ export const NoteEditScreen = () => {
                     collapsable={false}
                     style={{ flex: 1, backgroundColor: colors.background }}
                 >
-                    <RichTextEditor
-                        ref={editorRef}
-                        initialContent={content}
-                        baseFontSize={fontSize}
-                        autoScalingEnabled={autoScalingEnabled}
-                        onChange={(text) => {
-                            setContent(text);
-                            if (existingNote) debouncedSave(text, title);
-                            if (activeVariantId === 'original') {
-                                updateHistory(title, text);
-                            } else {
-                                improvementDraftsRef.current[activeVariantId] = text;
-                                updateHistory(title, text);
-                            }
-                        }}
-                        onActiveStylesChange={setActiveFormats}
-                        placeholder="Start typing..."
-                        ListHeaderComponent={renderHeader()}
-                    />
+                    {editMode === 'raw' ? (
+                        // Raw Markdown Editor
+                        <TextInput
+                            style={[
+                                styles.rawInput,
+                                {
+                                    fontSize: fontSize,
+                                    lineHeight: fontSize * 1.5,
+                                    color: colors.text,
+                                    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace'
+                                }
+                            ]}
+                            multiline
+                            onFocus={() => setIsEditing(true)}
+                            value={content}
+                            onChangeText={(text) => {
+                                // Direct update for raw mode, bypassing auto-list logic
+                                setContent(text);
+                                if (existingNote) debouncedSave(text, title);
+                                if (activeVariantId === 'original') {
+                                    updateHistory(title, text);
+                                } else {
+                                    improvementDraftsRef.current[activeVariantId] = text;
+                                    updateHistory(title, text);
+                                }
+                            }}
+                            placeholder="Start typing markdown..."
+                            placeholderTextColor={colors.textMuted}
+                            textAlignVertical="top"
+                            autoCapitalize="sentences"
+                        />
+                    ) : (
+                        // Visual Rich Editor - Handles both Viewing and Editing
+                        <RichTextEditor
+                            ref={editorRef}
+                            initialContent={content}
+                            reparseTrigger={reparseTrigger}
+                            baseFontSize={fontSize}
+                            autoScalingEnabled={autoScalingEnabled}
+                            onChange={(text) => {
+                                setContent(text);
+                                if (existingNote) debouncedSave(text, title);
+                                if (activeVariantId === 'original') {
+                                    updateHistory(title, text);
+                                } else {
+                                    improvementDraftsRef.current[activeVariantId] = text;
+                                    updateHistory(title, text);
+                                }
+                            }}
+                            onActiveStylesChange={setActiveFormats}
+                            onFocus={() => setIsEditing(true)}
+                            placeholder="Start typing..."
+                            ListHeaderComponent={renderHeader()}
+                        />
+                    )}
                 </View>
 
-                {/* Formatting Toolbar - Show when in Edit Mode. */}
-                {isEditing && (
+                {/* Formatting Toolbar - Show only in Visual Edit Mode */}
+                {isEditing && editMode === 'visual' && (
                     <View style={styles.toolbarContainer}>
                         <MarkdownToolbar
                             onFormat={handleFormat}
                             activeFormats={activeFormats}
                             onColorPickerToggle={(visible) => {
                                 isColorPickerOpen.current = visible;
-                                // If picker closes and keyboard is already hidden, hide the toolbar
                                 if (!visible && !isKeyboardVisible.current) {
                                     setIsEditing(false);
                                 }
@@ -3138,6 +3193,12 @@ const styles = StyleSheet.create({
     iconChoiceSelected: {
         backgroundColor: colors.primary,
         borderColor: colors.primary,
+    },
+    rawInput: {
+        flex: 1,
+        padding: spacing.m,
+        paddingTop: spacing.l,
+        textAlignVertical: 'top',
     },
     toolbarContainer: {
         width: '100%',
