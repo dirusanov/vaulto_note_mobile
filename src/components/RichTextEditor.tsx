@@ -20,6 +20,7 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-nativ
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MarkdownFormatType } from './MarkdownToolbar';
 import { parseMarkdownToData, serializeBlockToMarkdown, renderFormattedText, BlockFormat } from '../utils/markdownUtils';
+import { AudioPlayer } from './AudioPlayer';
 
 interface RichTextEditorProps {
     initialContent: string;
@@ -40,7 +41,7 @@ export interface RichTextEditorHandle {
 
 interface Block {
     id: string;
-    type: 'text' | 'todo' | 'h1' | 'h2' | 'h3';
+    type: 'text' | 'todo' | 'h1' | 'h2' | 'h3' | 'audio';
     content: string;
     checked?: boolean;
     formats: BlockFormat[];
@@ -538,8 +539,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             const header1Match = line.startsWith('# ');
             const header2Match = line.startsWith('## ');
             const header3Match = line.startsWith('### ');
+            const audioMatch = line.match(/^!\[audio\]\((.*)\)$/);
 
-            const isStructure = todoMatch || header1Match || header2Match || header3Match;
+            const isStructure = todoMatch || header1Match || header2Match || header3Match || audioMatch;
 
             if (isStructure) {
                 // Determine type
@@ -560,6 +562,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 } else if (header1Match) {
                     type = 'h1';
                     rawContent = line.substring(2);
+                } else if (audioMatch) {
+                    type = 'audio';
+                    rawContent = audioMatch[1];
                 }
 
                 // Parse inner markdown for formats
@@ -615,6 +620,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (block.type === 'h1') return `# ${serializedContent}`;
             if (block.type === 'h2') return `## ${serializedContent}`;
             if (block.type === 'h3') return `### ${serializedContent}`;
+            if (block.type === 'audio') return `![audio](${block.content})`;
             return serializedContent;
         }).join('\n');
     };
@@ -1003,6 +1009,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
         const isHeader = item.type === 'h1' || item.type === 'h2' || item.type === 'h3';
+        const isAudio = item.type === 'audio';
 
         // Font size logic:
         // Todo: base * scaleFactor
@@ -1041,56 +1048,82 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             minHeight: (baseFontSize * 2.5) * scaleFactor, // Touch target
                             paddingVertical: 4 * scaleFactor,
                             // alignItems: 'center' // Removed to support multiline text top-alignment
+                        },
+                        isAudio && {
+                            paddingVertical: spacing.s,
+                            backgroundColor: 'transparent',
                         }
                     ]}
                 >
-                    {isTodo && (
-                        <TouchableOpacity
-                            style={[styles.checkbox, {
-                                marginTop: (4 * scaleFactor) + (baseFontSize * 0.1), // Heuristic alignment
-                                marginRight: spacing.s * scaleFactor
-                            }]}
-                            onPress={() => toggleTodo(item.id)}
-                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        >
-                            <MaterialIcons
-                                name={item.checked ? 'check-box' : 'check-box-outline-blank'}
-                                size={(baseFontSize * 1.5) * scaleFactor} // Scales with font
-                                color={item.checked ? colors.primary : colors.textTertiary}
-                            />
-                        </TouchableOpacity>
+                    {isAudio ? (
+                        <View style={{ flex: 1 }}>
+                            <TouchableOpacity onLongPress={drag} activeOpacity={0.9}>
+                                <AudioPlayer
+                                    audioUri={item.content}
+                                    duration={0}
+                                    hasTranscription={false}
+                                    onDelete={() => {
+                                        // Delete this block
+                                        const newBlocks = [...blocks];
+                                        newBlocks.splice(blocks.findIndex(b => b.id === item.id), 1);
+                                        setBlocks(newBlocks);
+                                        onChange(serializeBlocks(newBlocks));
+                                        isInternalUpdate.current = true;
+                                    }}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <>
+                            {isTodo && (
+                                <TouchableOpacity
+                                    style={[styles.checkbox, {
+                                        marginTop: (4 * scaleFactor) + (baseFontSize * 0.1), // Heuristic alignment
+                                        marginRight: spacing.s * scaleFactor
+                                    }]}
+                                    onPress={() => toggleTodo(item.id)}
+                                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                                >
+                                    <MaterialIcons
+                                        name={item.checked ? 'check-box' : 'check-box-outline-blank'}
+                                        size={(baseFontSize * 1.5) * scaleFactor} // Scales with font
+                                        color={item.checked ? colors.primary : colors.textTertiary}
+                                    />
+                                </TouchableOpacity>
+                            )}
+
+                            <TextInput
+                                ref={ref => { if (ref) inputRefs.current[item.id] = ref; }}
+                                style={textStyles}
+                                onChangeText={(text) => handleBlockChange(item.id, text)}
+                                onKeyPress={(e) => handleKeyPress(item.id, e)}
+                                onSelectionChange={(e) => handleSelectionChange(item.id, e)}
+                                placeholder={placeholder && blocks.length === 1 ? placeholder : undefined}
+                                placeholderTextColor={colors.textMuted}
+                                multiline={true}
+                                scrollEnabled={false}
+                                autoCorrect={false}
+                                spellCheck={false}
+                                onFocus={() => {
+                                    setFocusedBlockId(item.id);
+                                    const selection = blockSelections.current[item.id];
+                                    if (selection) {
+                                        requestAnimationFrame(() => {
+                                            inputRefs.current[item.id]?.setNativeProps({ selection });
+                                        });
+                                    }
+                                }}
+                                onBlur={() => {
+                                    setFocusedBlockId(null);
+                                }}
+                            >
+
+                                {item.content || (item.formats && item.formats.length > 0)
+                                    ? renderFormattedText(item.content, item.formats || [], textStyles)
+                                    : null}
+                            </TextInput>
+                        </>
                     )}
-
-                    <TextInput
-                        ref={ref => { if (ref) inputRefs.current[item.id] = ref; }}
-                        style={textStyles}
-                        onChangeText={(text) => handleBlockChange(item.id, text)}
-                        onKeyPress={(e) => handleKeyPress(item.id, e)}
-                        onSelectionChange={(e) => handleSelectionChange(item.id, e)}
-                        placeholder={placeholder && blocks.length === 1 ? placeholder : undefined}
-                        placeholderTextColor={colors.textMuted}
-                        multiline={true}
-                        scrollEnabled={false}
-                        autoCorrect={false}
-                        spellCheck={false}
-                        onFocus={() => {
-                            setFocusedBlockId(item.id);
-                            const selection = blockSelections.current[item.id];
-                            if (selection) {
-                                requestAnimationFrame(() => {
-                                    inputRefs.current[item.id]?.setNativeProps({ selection });
-                                });
-                            }
-                        }}
-                        onBlur={() => {
-                            setFocusedBlockId(null);
-                        }}
-                    >
-
-                        {item.content || (item.formats && item.formats.length > 0)
-                            ? renderFormattedText(item.content, item.formats || [], textStyles)
-                            : null}
-                    </TextInput>
                 </View>
             </ScaleDecorator >
         );

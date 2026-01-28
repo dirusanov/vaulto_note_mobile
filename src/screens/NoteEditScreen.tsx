@@ -1251,6 +1251,24 @@ export const NoteEditScreen = () => {
                 await updateNote(currentNoteId, {
                     content: finalTranscribedContent
                 });
+            } else {
+                // No transcription (or failed) -> Insert Audio Block
+                const currentContent = currentContentRef.current;
+                // Get display URI
+                const playbackUri = await AudioService.readAudioFile(savedPath);
+
+                // Construct audio block
+                // We add newlines to ensure it's on its own block
+                const audioBlock = `${currentContent ? '\n' : ''}![audio](${playbackUri})\n`;
+
+                finalTranscribedContent = currentContent + audioBlock;
+                setContent(finalTranscribedContent);
+                currentContentRef.current = finalTranscribedContent;
+
+                updateHistoryImmediate(title, finalTranscribedContent);
+                await updateNote(currentNoteId, {
+                    content: finalTranscribedContent
+                });
             }
 
             // Set Player
@@ -1335,6 +1353,33 @@ export const NoteEditScreen = () => {
         setIsRecordingInstruction(true);
         setShowCustomInput(true);
         setShowVoiceRecorder(true);
+    };
+
+    const handleInsertAudioToNote = async (recording: VoiceRecording) => {
+        try {
+            const uri = await AudioService.readAudioFile(recording.file_path);
+            const currentContent = currentContentRef.current;
+            const audioBlock = `${currentContent ? '\n' : ''}![audio](${uri})\n`;
+
+            const newContent = currentContent + audioBlock;
+            setContent(newContent);
+            currentContentRef.current = newContent;
+
+            if (activeVariantId === 'original') {
+                updateHistoryImmediate(title, newContent);
+                if (localNoteId) {
+                    await updateNote(localNoteId, { content: newContent });
+                }
+            } else {
+                improvementDraftsRef.current[activeVariantId] = newContent;
+                updateHistoryImmediate(title, newContent);
+            }
+
+            setShowRecordingsList(false);
+        } catch (error) {
+            console.error('Failed to insert audio:', error);
+            Alert.alert('Error', 'Failed to insert audio');
+        }
     };
 
     const handleAddTodo = useCallback(() => {
@@ -2385,6 +2430,18 @@ export const NoteEditScreen = () => {
                                                             {new Date(rec.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {formatDuration(rec.duration)}
                                                         </Text>
                                                     </View>
+
+                                                    <TouchableOpacity
+                                                        style={[styles.recordingDeleteButton, { marginRight: 8 }]}
+                                                        onPress={() => handleInsertAudioToNote(rec)}
+                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                    >
+                                                        <MaterialIcons
+                                                            name="playlist-add" // or "input" or "add-circle-outline"
+                                                            size={24}
+                                                            color={colors.primary}
+                                                        />
+                                                    </TouchableOpacity>
 
                                                     <TouchableOpacity
                                                         style={styles.recordingDeleteButton}

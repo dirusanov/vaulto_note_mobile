@@ -16,19 +16,25 @@ interface NoteCardProps {
 export const NoteCard = ({ note, onPress }: NoteCardProps) => {
     let content = note.content || '';
 
-    // Check if there is an active improvement (child note)
+    // Check if there is an active improvement (active child note)
     if (note.improvements && note.improvements.length > 0) {
         const activeChild = note.improvements.find(imp => imp.is_active);
         if (activeChild && activeChild.content) {
             content = activeChild.content;
         }
     }
+
+    // Determine if audio is present (flag or check content)
+    const hasAudio = note.has_audio || /!\[audio\]\(.*?\)/.test(content);
+
     const buildTitle = () => {
         if (note.title && note.title.trim().length > 0) return note.title.trim();
 
-        // Use the centralized parser to strip all markdown syntax including highlights
-        // Truncate content to avoid performance issues on huge notes
-        const contentToParse = content.length > 1000 ? content.substring(0, 1000) : content;
+        // Strip audio blocks for title generation
+        const contentForTitle = content.replace(/!\[audio\]\(.*?\)/g, '');
+
+        // Use the centralized parser to strip markdown
+        const contentToParse = contentForTitle.length > 1000 ? contentForTitle.substring(0, 1000) : contentForTitle;
         let { content: plainText } = parseMarkdownToData(contentToParse);
 
         // Remove Checkboxes and Hashes before formatting
@@ -49,24 +55,35 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
         return cleanedTokens.slice(0, 3).join(' ');
     };
 
-    // Extract title and preview
+    // Extract title
     const title = buildTitle();
-    // We want to keep the raw text length check for truncation logic, 
-    // but we can't easily truncate *after* parsing markdown without breaking tags.
-    // For a simple preview, we will truncate the string first (carefully) or rely on Text props if possible.
-    // However, parseMarkdownText returns an array of Text nodes. 
-    // If we pass a long string to parseMarkdownText, it returns nodes.
-    // We should truncate the string *before* parsing, but we must be careful not to split inside a tag.
-    // Given the simple regex parser, splitting `**bold**` into `**bo...` might show raw chars if the closer is missing.
-    // Let's just truncate as string first. If it breaks a tag, it renders as text, which is acceptable for a preview.
 
-    const previewTextRaw = content.length > 120
-        ? content.substring(0, 120).replace(/\n/g, ' ') + '...'
-        : content.replace(/\n/g, ' ');
+    // Prepare preview text
+    // We replace audio markdown with a unique marker to split and render custom chips
+    const AUDIO_MARKER = '{{AUDIO}}';
+    let previewString = content.replace(/!\[audio\]\(.*?\)/g, AUDIO_MARKER);
 
-    // Use parseMarkdownText for the preview
-    // We pass styles.preview as baseStyle
-    const previewNodes = parseMarkdownText(previewTextRaw, styles.preview);
+    previewString = previewString.length > 120
+        ? previewString.substring(0, 120).replace(/\n/g, ' ') + '...'
+        : previewString.replace(/\n/g, ' ');
+
+    const parts = previewString.split(AUDIO_MARKER);
+    const previewNodes: React.ReactNode[] = [];
+
+    parts.forEach((part, index) => {
+        if (part) {
+            previewNodes.push(...parseMarkdownText(part, styles.preview));
+        }
+
+        if (index < parts.length - 1) {
+            previewNodes.push(
+                <View key={`audio-chip-${index}`} style={styles.audioChip}>
+                    <MaterialIcons name="headset" size={12} color={colors.textSecondary} style={{ marginRight: 2 }} />
+                    <Text style={styles.audioChipText}>audio</Text>
+                </View>
+            );
+        }
+    });
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -99,7 +116,6 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
         }
     };
 
-    const hasAudio = note.has_audio;
     const isEmpty = !title && (!content || content.trim().length === 0);
 
     return (
@@ -109,10 +125,10 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
             activeOpacity={0.9}
         >
             <View style={styles.content}>
-                <Text style={[styles.title, isEmpty && hasAudio && styles.placeholderTitle]} numberOfLines={1}>
-                    {(isEmpty && hasAudio) ? 'Voice Note' : (title || ' ')}
+                <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle]} numberOfLines={1}>
+                    {title || (hasAudio ? 'Voice Note' : ' ')}
                 </Text>
-                {(!isEmpty && previewTextRaw && previewTextRaw !== title) && (
+                {(!isEmpty && previewString && previewString !== title) && (
                     <Text style={styles.preview} numberOfLines={6}>
                         {previewNodes}
                     </Text>
@@ -184,5 +200,22 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontWeight: '500',
         marginTop: spacing.xs,
+    },
+    audioChip: {
+        backgroundColor: colors.background,
+        borderColor: colors.border,
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        // Push down to align with text baseline better
+        transform: [{ translateY: 5 }],
+    },
+    audioChipText: {
+        fontSize: 11,
+        color: colors.textSecondary,
+        fontWeight: '500',
     },
 });
