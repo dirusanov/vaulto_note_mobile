@@ -49,6 +49,7 @@ import {
 } from '../services/AIService';
 import {
     getAgentModeEnabled,
+    getTranscriptionEnabled,
     getAIProvider,
     getFontSize,
     setFontSize,
@@ -163,7 +164,10 @@ export const NoteEditScreen = () => {
     const hasAutoOpenedRecordings = useRef(false);
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
+
     const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
+    const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+    const [storedAgentModeEnabled, setStoredAgentModeEnabled] = useState(true);
 
     // Add state to track if audio holds a transcription
     const [hasTranscription, setHasTranscription] = useState(!!existingNote?.encrypted_transcription);
@@ -450,6 +454,16 @@ export const NoteEditScreen = () => {
             }
         }
     }, [existingNote?.id, existingNote?.is_active, JSON.stringify(existingNote?.improvements?.map(i => ({ id: i.id, is_active: i.is_active })))]);
+
+    useEffect(() => {
+        const loadSettings = async () => {
+            const enabled = await getAgentModeEnabled();
+            const transcription = await getTranscriptionEnabled();
+            setStoredAgentModeEnabled(enabled);
+            setTranscriptionEnabled(transcription);
+        };
+        loadSettings();
+    }, []);
 
     useEffect(() => {
         const fetchAiOptions = async () => {
@@ -1117,48 +1131,61 @@ export const NoteEditScreen = () => {
     };
 
 
-    const handleRecordingFinish = async (recording: AudioRecording) => {
+    const handleRecordingFinish = async (recording: AudioRecording, transcribe: boolean = true) => {
         setShowVoiceRecorder(false);
 
-        // 1. ALWAYS TRANSCRIBE FIRST (Client-side effect)
-        setIsTranscribing(true);
-        const transcription = await transcribeAudio(recording.uri);
-        setIsTranscribing(false);
+        let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
+        let isTranscriptionSuccess = false;
+        let transcribedText = '';
 
-        const isTranscriptionSuccess = transcription.success && !!transcription.text;
-        const transcribedText = isTranscriptionSuccess ? transcription.text : '';
+        // 1. TRY TO TRANSCRIBE (But don't fail if it doesn't work)
+        try {
+            if (isGuest || !transcribe) {
+                // Skip transcription entirely for guests or if user opted out
+                console.log('[NoteEditScreen] Transcription skipped (Guest or Toggle OFF)');
+                console.log('[NoteEditScreen] Guest user - skipping transcription');
+                transcription = { success: false, text: '', error: 'Guest user - transcription disabled' };
+            } else {
+                setIsTranscribing(true);
+                transcription = await transcribeAudio(recording.uri);
+            }
+        } catch (err) {
+            console.error('[NoteEditScreen] Transcription unexpected error:', err);
+            transcription = { success: false, text: '', error: 'Unexpected transcription error' };
+        } finally {
+            setIsTranscribing(false);
+        }
 
-        // Handle failure (but we might still save audio if we want?)
-        // Currently if transcription fails we show error and maybe don't save.
+        isTranscriptionSuccess = transcription.success && !!transcription.text;
+        transcribedText = isTranscriptionSuccess ? transcription.text : '';
+
+        // Show informative message if transcription failed (but don't block saving)
         if (!isTranscriptionSuccess) {
-            if (transcription.error) {
-                const msg = getErrorMessage(transcription.error, '');
-                if (msg) {
-                    setErrorMessage(msg);
-                    setErrorModalVisible(true);
-                }
+            const errorMsg = transcription.error ? getErrorMessage(transcription.error, '') : '';
+            // Check if error is due to authentication/trial limits
+            const isAuthError = isGuest || errorMsg.toLowerCase().includes('sign in') ||
+                errorMsg.toLowerCase().includes('trial limit') ||
+                errorMsg.toLowerCase().includes('authentication') ||
+                errorMsg.toLowerCase().includes('quota');
+
+            if (isAuthError) {
+                // Silent failure for auth/guest errors - audio is still saved
+                console.log('[Transparency] Transcription skipped due to auth/guest status');
+            } else if (errorMsg) {
+                console.warn('[Transcription] Failed but audio will be saved:', errorMsg);
             }
         }
 
-        const contentForAgentContext = content;
         let finalTranscribedContent = content; // Default to existing
-
-        // Track the current note ID using ref to avoid stale closure state issues
         let currentNoteId = localNoteIdRef.current;
 
         // 2. SAVE AUDIO (ALWAYS)
-        // Save file to persistent storage first so we can attach it to the new note if needed
         const savedPath = await AudioService.saveAudioFile(recording.uri, false);
 
         // Ensure Note Exists (Create if not)
-        // If we are recording on a "New Note" (not saved yet), we must create it now to attach audio.
         if (!currentNoteId) {
             try {
-                // Create basic note WITH audio so it's not rejected as empty.
-                // We provide a fallback title if currently empty to ensure it passes 'isEmpty' check.
                 const titleToUse = title.trim();
-                console.log('[NoteEditScreen] Creating note with audio:', { title: titleToUse, audioPath: savedPath });
-
                 const newNote = await createNote({
                     title: titleToUse,
                     content: content,
@@ -1169,7 +1196,7 @@ export const NoteEditScreen = () => {
                     }
                 });
                 setLocalNoteId(newNote.id);
-                localNoteIdRef.current = newNote.id; // Update Ref immediately
+                localNoteIdRef.current = newNote.id;
                 currentNoteId = newNote.id;
                 lastSavedTitle.current = title;
                 lastSavedContent.current = content;
@@ -1180,14 +1207,6 @@ export const NoteEditScreen = () => {
                 return;
             }
         }
-
-        // 2. SAVE AUDIO (ALWAYS)
-        // We save to the 'original' / parent note ID (currentNoteId).
-        // If we are in improvement, 'currentNoteId' is the Parent.
-        // (Wait, localNoteId is the Parent? Yes, see handleRecordingFinish usages).
-
-        // Save file to persistent storage
-
 
         // Save Metadata to DB
         const voiceId = Date.now().toString() + Math.random().toString(36).substring(2);
@@ -1205,24 +1224,34 @@ export const NoteEditScreen = () => {
         const updatedRecs = await getVoiceRecordingsLocal(currentNoteId);
         setVoiceRecordings(updatedRecs);
 
-        // Also update the 'legacy' fields on the note for backward compatibility / list view
-        // But only if we are in Original mode? Or always?
-        // Let's update them if this is the generic "active" audio.
-        if (activeVariantId === 'original') {
-            await updateNote(currentNoteId, {
-                has_audio: true,
-                audio_file_path: savedPath,
-                audio_duration: recording.duration,
-                encrypted_transcription: transcribedText || undefined
-            });
+        // ALWAYS update the parent note to indicate it has audio
+        // This ensures the microphone icon appears in the list view
+        await updateNote(currentNoteId, {
+            has_audio: true,
+            audio_file_path: savedPath, // Update "primary" audio path to latest
+            audio_duration: recording.duration,
+            // Only update "primary" transcription if we actually have one, or if it was empty
+            ...(transcribedText ? { encrypted_transcription: transcribedText } : {})
+        });
 
-            // 3. UI UPDATE (Original Mode)
-            // Append text immediately
+
+        // 3. UI UPDATE & LOGIC
+        if (activeVariantId === 'original') {
+            // Append text immediately if we have it
             if (transcribedText) {
-                finalTranscribedContent = content + (content ? '\n\n' : '') + transcribedText;
+                // Use Ref to get the LATEST content (fixing valid overwrite race condition)
+                const currentContent = currentContentRef.current;
+                finalTranscribedContent = currentContent + (currentContent ? '\n\n' : '') + transcribedText;
+                setContent(finalTranscribedContent);
+                // Also update the Ref immediately to ensure subsequent steps use the new state
+                currentContentRef.current = finalTranscribedContent;
+
+                updateHistoryImmediate(title, finalTranscribedContent);
+                // Save Content with new text
+                await updateNote(currentNoteId, {
+                    content: finalTranscribedContent
+                });
             }
-            setContent(finalTranscribedContent);
-            updateHistoryImmediate(title, finalTranscribedContent);
 
             // Set Player
             const playbackUri = await AudioService.readAudioFile(savedPath);
@@ -1231,33 +1260,33 @@ export const NoteEditScreen = () => {
             setShowAudioPlayer(true);
             setHasTranscription(!!transcribedText);
 
-            // Save Content
-            await updateNote(currentNoteId, {
-                content: finalTranscribedContent
-            });
         } else {
-            // 3. UI UPDATE (Improvement Mode)
-            // DO NOT Delete Audio
-            // DO NOT Append Text (Fixes Flicker)
+            // Improvement Mode
+            // Audio is already saved to parent and state updated.
 
-            // We assume the user wants the Agent to process the text and put it into the improvement.
-            // If transcription failed, we just stop (no text to improve).
+            // If transcription failed, just show player and stop
             if (!isTranscriptionSuccess) {
+                const playbackUri = await AudioService.readAudioFile(savedPath);
+                setAudioUri(playbackUri);
+                setAudioDuration(recording.duration);
+                setShowAudioPlayer(true);
+                setHasTranscription(false);
                 return;
             }
 
-            // If we really wanted to show the text "pending" we could, but skipping it fixes the bug.
-            // We do separate 'updateHistoryImmediate' or 'saveImprovement draft' here? 
-            // No, because we haven't changed the content yet.
+            // If transcription success, we let the agent process it below
         }
 
-        // 4. STOP IF NO TEXT (OFFLINE MODE) OR AGENT MODE CHECK
+        // 4. STOP IF NO TEXT
         if (!isTranscriptionSuccess) {
             return;
         }
 
         // 5. AGENT PROCESSING (If enabled)
-        await executeAgentFlow(recording.uri, transcribedText, contentForAgentContext, currentNoteId, activeVariantId);
+        // Note: processAgentQueue uses currentContentRef internally, so we don't strictly need to pass content here,
+        // but passing the updated version we just set helps consistency if that function used the arg.
+        await executeAgentFlow(recording.uri, transcribedText, finalTranscribedContent, currentNoteId, activeVariantId);
+
     };
 
     const handleInstructionRecordingFinish = async (recording: AudioRecording) => {
@@ -1606,21 +1635,7 @@ export const NoteEditScreen = () => {
     // Handle initial recording passed from navigation
     useEffect(() => {
         if (route.params?.initialRecording) {
-            if (isGuest) {
-                Alert.alert(
-                    'AI Features Locked',
-                    'Sign in to process voice notes.',
-                    [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                            text: 'Sign In',
-                            onPress: () => navigation.navigate('SignIn')
-                        }
-                    ]
-                );
-                return;
-            }
-            handleRecordingFinish(route.params.initialRecording);
+            handleRecordingFinish(route.params.initialRecording, route.params.initialTranscribe ?? true);
         }
     }, [route.params?.initialRecording, isGuest]);
 
@@ -1648,7 +1663,8 @@ export const NoteEditScreen = () => {
     const handleRetryTranscription = async () => {
         if (!audioUri) return;
 
-        const contentForAgent = content;
+        // Use Ref for latest content
+        const contentForAgent = currentContentRef.current;
 
         setIsTranscribing(true);
         try {
@@ -1662,9 +1678,14 @@ export const NoteEditScreen = () => {
 
             const text = transcription.text;
 
-            // Append text
-            const newContent = content + (content ? '\n\n' : '') + text;
+            // Append text to LATEST content
+            // Need to fetch fresh ref again in case it changed during `transcribeAudio`
+            const freshContent = currentContentRef.current;
+            const newContent = freshContent + (freshContent ? '\n\n' : '') + text;
+
             setContent(newContent);
+            currentContentRef.current = newContent; // Update Ref
+
             updateHistoryImmediate(title, newContent);
 
             // Update DB
@@ -1678,7 +1699,7 @@ export const NoteEditScreen = () => {
             setHasTranscription(true);
 
             // Trigger Agent Flow
-            await executeAgentFlow(audioUri, text, contentForAgent, localNoteId, activeVariantId);
+            await executeAgentFlow(audioUri, text, newContent, localNoteId, activeVariantId);
 
         } catch (error: any) {
             setIsTranscribing(false);
@@ -1815,13 +1836,14 @@ export const NoteEditScreen = () => {
 
 
             {/* Inline Player for Empty Voice Notes */}
-            {voiceRecordings.length > 0 && !title && (!content || content.trim().length === 0) && !hasTranscription && !isTranscribing && (
+            {voiceRecordings.length > 0 && !title && (!content || content.trim().length === 0) && !hasTranscription && !isTranscribing && transcriptionEnabled && (
                 <View style={{ marginBottom: spacing.m, marginTop: spacing.s }}>
                     {showAudioPlayer && audioUri && (
                         <AudioPlayer
                             audioUri={audioUri}
                             duration={audioDuration}
                             onClose={() => setShowAudioPlayer(false)}
+                            hasTranscription={hasTranscription}
                         />
                     )}
                     <TouchableOpacity
@@ -2228,7 +2250,7 @@ export const NoteEditScreen = () => {
             {!isEditing && (
                 <TouchableOpacity
                     style={styles.micButton}
-                    onPress={() => handleAiAccess(handleMicPress)}
+                    onPress={handleMicPress}
                     activeOpacity={0.8}
                 >
                     <MaterialIcons name="mic" size={28} color="white" />
@@ -2255,11 +2277,11 @@ export const NoteEditScreen = () => {
 
             <VoiceRecorder
                 visible={showVoiceRecorder}
-                onFinish={(rec) => {
+                onFinish={(rec, transcribe) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec);
+                        handleRecordingFinish(rec, transcribe);
                     }
                 }}
                 onCancel={() => {
@@ -2292,8 +2314,9 @@ export const NoteEditScreen = () => {
                                                 setShowAudioPlayer(false);
                                                 setPlayingRecordingId(null);
                                             }}
+                                            hasTranscription={hasTranscription}
                                         />
-                                        {!hasTranscription && (
+                                        {!hasTranscription && transcriptionEnabled && (
                                             <TouchableOpacity
                                                 style={styles.retryTranscriptionButton}
                                                 onPress={handleRetryTranscription}

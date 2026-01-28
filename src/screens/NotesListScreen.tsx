@@ -83,17 +83,6 @@ export const NotesListScreen = () => {
     const { isGuest } = useAuth(); // Import useAuth hook
 
     const handleMicPress = () => {
-        if (isGuest) {
-            Alert.alert(
-                'AI Features Locked',
-                'Sign in to record and transcribe voice notes.',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Sign In', onPress: () => navigation.navigate('Settings') } // Navigate to Settings or SignIn
-                ]
-            );
-            return;
-        }
         setIsVoiceRecorderVisible(true);
     };
 
@@ -101,9 +90,9 @@ export const NotesListScreen = () => {
         navigation.navigate('NoteEdit');
     };
 
-    const handleVoiceFinish = (recording: AudioRecording) => {
+    const handleVoiceFinish = (recording: AudioRecording, transcribe: boolean) => {
         setIsVoiceRecorderVisible(false);
-        navigation.navigate('NoteEdit', { initialRecording: recording });
+        navigation.navigate('NoteEdit', { initialRecording: recording, initialTranscribe: transcribe });
     };
 
     const handleSearch = (text: string) => {
@@ -356,7 +345,7 @@ export const NotesListScreen = () => {
 
             <VoiceRecorder
                 visible={isVoiceRecorderVisible}
-                onFinish={handleVoiceFinish}
+                onFinish={(rec, transcribe) => handleVoiceFinish(rec, transcribe)}
                 onCancel={() => setIsVoiceRecorderVisible(false)}
                 autoStart={true}
             />

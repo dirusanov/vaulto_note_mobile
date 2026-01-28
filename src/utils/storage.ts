@@ -290,3 +290,25 @@ export const setAutoScalingEnabled = async (enabled: boolean): Promise<void> => 
         console.error('Failed to set auto scaling setting', e);
     }
 };
+
+// Transcription Setting
+const TRANSCRIPTION_ENABLED_KEY = 'vaulto_transcription_enabled';
+
+export const getTranscriptionEnabled = async (): Promise<boolean> => {
+    try {
+        const value = await AsyncStorage.getItem(TRANSCRIPTION_ENABLED_KEY);
+        // Default to true if not set
+        return value === null ? true : value === 'true';
+    } catch (e) {
+        console.error('Failed to get transcription setting', e);
+        return true;
+    }
+};
+
+export const setTranscriptionEnabled = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(TRANSCRIPTION_ENABLED_KEY, enabled.toString());
+    } catch (e) {
+        console.error('Failed to set transcription setting', e);
+    }
+};

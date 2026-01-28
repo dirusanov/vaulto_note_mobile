@@ -8,16 +8,18 @@ import {
     Animated,
     Alert,
     Dimensions,
+    Switch,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { AudioService, AudioRecording } from '../services/AudioService';
+import { getTranscriptionEnabled, setTranscriptionEnabled } from '../utils/storage';
 import { MaterialIcons } from '@expo/vector-icons';
 
 interface VoiceRecorderProps {
     visible: boolean;
-    onFinish: (recording: AudioRecording) => void;
+    onFinish: (recording: AudioRecording, transcribe: boolean) => void;
     onCancel: () => void;
     autoStart?: boolean;
 }
@@ -36,6 +38,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
+    const [transcribe, setTranscribe] = useState(true);
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -45,11 +48,17 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     useEffect(() => {
         if (visible) {
+            // Load preference
+            getTranscriptionEnabled().then(enabled => {
+                setTranscribe(enabled);
+            });
+
             if (autoStart) {
                 handleStartRecording();
             }
         } else {
             // Reset state when closed
+            // Don't reset transcribe here, keep user preference or reload next open
             setIsRecording(false);
             setIsPaused(false);
             setDuration(0);
@@ -58,6 +67,27 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             voiceSamples.current = 0;
         }
     }, [visible]);
+
+    const handleTranscriptionToggle = (value: boolean) => {
+        setTranscribe(value);
+        setTranscriptionEnabled(value);
+    };
+
+    // ... (rest of useEffects)
+
+    // ... inside return ...
+    {/* Transcription Toggle */ }
+    <View style={styles.toggleContainer}>
+        <Text style={styles.toggleLabel}>Transcribe Audio</Text>
+        <Switch
+            value={transcribe}
+            onValueChange={handleTranscriptionToggle}
+            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+            thumbColor="white"
+            // Scale transform for bigger switch
+            style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }}
+        />
+    </View>
 
     useEffect(() => {
         if (isRecording && !isPaused) {
@@ -180,7 +210,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     onCancel();
                     return;
                 }
-                onFinish(recording);
+                onFinish(recording, transcribe);
             }
         } catch (error) {
             Alert.alert('Error', 'Could not stop recording');
@@ -230,6 +260,19 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 ]}
                             />
                         ))}
+                    </View>
+
+                    {/* Transcription Toggle */}
+                    <View style={styles.toggleContainer}>
+                        <Text style={styles.toggleLabel}>Transcribe Audio</Text>
+                        <Switch
+                            value={transcribe}
+                            onValueChange={handleTranscriptionToggle}
+                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                            thumbColor="white"
+                            // Scale transform for bigger switch
+                            style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }}
+                        />
                     </View>
 
                     {/* Controls */}
@@ -302,8 +345,22 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         height: 60,
-        marginBottom: spacing.xxl,
+        marginBottom: spacing.l,
         gap: 4,
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.xl,
+        backgroundColor: colors.backgroundSecondary,
+        paddingHorizontal: spacing.l,
+        paddingVertical: spacing.xs,
+        borderRadius: 20,
+    },
+    toggleLabel: {
+        ...typography.body2,
+        color: colors.text,
+        marginRight: spacing.m,
     },
     bar: {
         width: 4,

@@ -16,9 +16,10 @@ interface AudioPlayerProps {
     audioUri: string;
     duration: number; // in seconds
     onClose?: () => void;
+    hasTranscription?: boolean; // Whether this recording has transcription
 }
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, hasTranscription = true }) => {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
@@ -95,6 +96,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
 
     return (
         <View style={styles.container}>
+            {!hasTranscription && (
+                <View style={styles.audioBadge}>
+                    <MaterialIcons name="mic" size={14} color={colors.textMuted} />
+                    <Text style={styles.audioBadgeText}>Audio Only</Text>
+                </View>
+            )}
             <View style={styles.row}>
                 <TouchableOpacity
                     style={styles.playButton}
@@ -200,5 +207,22 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         padding: 4,
+    },
+    audioBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 8,
+        marginBottom: spacing.xs,
+        alignSelf: 'flex-start',
+    },
+    audioBadgeText: {
+        ...typography.caption,
+        fontSize: 11,
+        color: colors.textMuted,
+        fontWeight: '500',
     },
 });

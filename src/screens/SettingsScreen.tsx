@@ -20,7 +20,9 @@ import {
     setSelfHostedUrl,
     setSelfHostedApiKey,
     getAgentModeEnabled,
-    setAgentModeEnabled
+    setAgentModeEnabled,
+    getTranscriptionEnabled,
+    setTranscriptionEnabled
 } from '../utils/storage';
 import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -32,6 +34,7 @@ export const SettingsScreen = () => {
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
+    const [transcriptionEnabled, setTranscriptionEnabledState] = useState(true);
     const [testingConnection, setTestingConnection] = useState(false);
     const [testingSelfHosted, setTestingSelfHosted] = useState(false);
     const [aiProvider, setAiProviderState] = useState<AIProvider>('secure_llm');
@@ -116,12 +119,13 @@ export const SettingsScreen = () => {
 
     const loadPreferences = async () => {
         try {
-            const [storedOpenAIKey, provider, url, storedSelfHostedApiKey, agentMode] = await Promise.all([
+            const [storedOpenAIKey, provider, url, storedSelfHostedApiKey, agentMode, transcription] = await Promise.all([
                 getOpenAIApiKey(),
                 getAIProvider(),
                 getSelfHostedUrl(),
                 getSelfHostedApiKey(),
-                getAgentModeEnabled()
+                getAgentModeEnabled(),
+                getTranscriptionEnabled()
             ]);
 
             if (storedOpenAIKey) setApiKeyState(storedOpenAIKey);
@@ -131,6 +135,7 @@ export const SettingsScreen = () => {
             if (url) setSelfHostedUrlState(url);
             if (storedSelfHostedApiKey) setSelfHostedApiKeyState(storedSelfHostedApiKey);
             setAgentModeEnabledState(agentMode);
+            setTranscriptionEnabledState(transcription);
         } catch (error) {
             console.error('Failed to load settings', error);
         } finally {
@@ -174,6 +179,11 @@ export const SettingsScreen = () => {
     const toggleAgentMode = async (value: boolean) => {
         setAgentModeEnabledState(value);
         await setAgentModeEnabled(value);
+    };
+
+    const toggleTranscription = async (value: boolean) => {
+        setTranscriptionEnabledState(value);
+        await setTranscriptionEnabled(value);
     };
 
     useEffect(() => {
@@ -348,6 +358,35 @@ export const SettingsScreen = () => {
                     )}
 
                     <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} />
+                </View>
+
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Text style={styles.sectionTitle}>Preferences</Text>
+                    </View>
+
+                    <View style={styles.agentModeCard}>
+                        <View style={styles.agentModeHeader}>
+                            <View style={styles.agentModeTitleRow}>
+                                <View style={styles.agentModeIcon}>
+                                    <MaterialIcons name="record-voice-over" size={20} color={colors.primary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.agentModeTitle}>Auto-transcribe recordings</Text>
+                                    <Text style={styles.agentModeDescription}>
+                                        Automatically transcribe audio after recording
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={transcriptionEnabled}
+                                    onValueChange={toggleTranscription}
+                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    thumbColor={colors.surface}
+                                    ios_backgroundColor={colors.border}
+                                />
+                            </View>
+                        </View>
+                    </View>
                 </View>
 
                 <View style={styles.card}>
