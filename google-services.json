@@ -1,34 +1,47 @@
 {
-    "project_info": {
-        "project_number": "123456789012",
-        "project_id": "placeholder-project",
-        "storage_bucket": "placeholder-project.appspot.com"
-    },
-    "client": [
-        {
-            "client_info": {
-                "mobilesdk_app_id": "1:123456789012:android:0000000000000000",
-                "android_client_info": {
-                    "package_name": "com.anonymous.vaultonotemobile"
-                }
-            },
-            "oauth_client": [
-                {
-                    "client_id": "dummy-client-id",
-                    "client_type": 3
-                }
-            ],
-            "api_key": [
-                {
-                    "current_key": "dummy_api_key"
-                }
-            ],
-            "services": {
-                "appinvite_service": {
-                    "other_platform_oauth_client": []
-                }
-            }
+  "project_info": {
+    "project_number": "410966204325",
+    "project_id": "local-bliss-234507",
+    "storage_bucket": "local-bliss-234507.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410966204325:android:c6bbe909e96417d96ed24c",
+        "android_client_info": {
+          "package_name": "com.vaultonotemobile"
         }
-    ],
-    "configuration_version": "1"
+      },
+      "oauth_client": [
+        {
+          "client_id": "410966204325-r6g7je8o2ii2rret3c2qopdqijt51odv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vaultonotemobile",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "410966204325-r74l70dc2ma9etmtba1ebvft7i5kbfu4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAjIktL1KiCULhXXzmdf_WX6_ZgvKZkak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "410966204325-r74l70dc2ma9etmtba1ebvft7i5kbfu4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }
