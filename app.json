@@ -34,7 +34,7 @@
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "package": "com.vaultonotemobile",
-      "versionCode": 11,
+      "versionCode": 12,
       "usesCleartextTraffic": true
     },
     "web": {
