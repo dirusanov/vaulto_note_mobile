@@ -1,5 +1,6 @@
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import { useCallback, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { useAuth } from './useAuth';
 import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -18,6 +19,9 @@ export const useGoogleOAuth = () => {
             offlineAccess: true,      // Required to get a Refresh Token (serverAuthCode)
             scopes: ['profile', 'email'],
         });
+
+        // DEBUG: Verify Client ID
+        Alert.alert("Debug Config", `ClientID: ${webClientId}`);
     }, []);
 
     const signInWithGoogle = useCallback(async () => {
