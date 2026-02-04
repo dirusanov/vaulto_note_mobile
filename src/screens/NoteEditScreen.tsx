@@ -1088,11 +1088,7 @@ export const NoteEditScreen = () => {
                 const contextContent = currentContentRef.current;
                 const currentVariantId = activeVariantIdRef.current;
 
-                console.log('[NoteEditScreen] Processing queued task:', {
-                    text: task.transcribedText,
-                    currentContextLength: contextContent.length,
-                    variantId: currentVariantId
-                });
+                console.log('[NoteEditScreen] Processing queued task');
 
                 try {
                     setIsAIProcessing(true);

@@ -68,11 +68,9 @@ function xorDecrypt(ciphertext: string, key: string): string {
 
 export async function encrypt(plaintext: string): Promise<string> {
     if (!plaintext) return '';
-    console.log('[encrypt] Encrypting text, length:', plaintext.length);
     try {
         const key = await deriveKey();
         const result = xorEncrypt(plaintext, key);
-        console.log('[encrypt] Encrypted successfully, result length:', result.length);
         return result;
     } catch (error) {
         console.error('[encrypt] Encryption failed:', error);
@@ -82,11 +80,9 @@ export async function encrypt(plaintext: string): Promise<string> {
 
 export async function decrypt(ciphertext: string): Promise<string> {
     if (!ciphertext) return '';
-    console.log('[decrypt] Decrypting text, length:', ciphertext.length);
     try {
         const key = await deriveKey();
         const result = xorDecrypt(ciphertext, key);
-        console.log('[decrypt] Decrypted successfully, result length:', result.length);
         return result;
     } catch (error) {
         console.error('[decrypt] Decryption failed:', error);

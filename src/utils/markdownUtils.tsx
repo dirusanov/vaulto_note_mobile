@@ -21,7 +21,7 @@ export interface FormattedBlockData {
 export const parseMarkdownToData = (text: string, depth: number = 0): FormattedBlockData => {
     if (!text) return { content: '', formats: [] };
     if (depth > 100) {
-        console.warn('Markdown recursion depth exceeded');
+        // Recursion depth exceeded - safely return plain text to prevent stack overflow
         return { content: text, formats: [] };
     }
 

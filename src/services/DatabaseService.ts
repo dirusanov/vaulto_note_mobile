@@ -444,24 +444,21 @@ const processNotes = async (
     improvements?: Map<string, NoteImprovement[]>,
     voiceRecordings?: Map<string, VoiceRecording[]>
 ): Promise<Note[]> => {
-    const notes: Note[] = [];
-    for (const n of rawNotes) {
+    const notes = await Promise.all(rawNotes.map(async (n): Promise<Note | null> => {
         try {
             const hasEncryptedTitle = n.encrypted_title !== undefined && n.encrypted_title !== null;
-            const title = hasEncryptedTitle
-                ? await decrypt(n.encrypted_title)
-                : '';
-            const content = await decrypt(n.encrypted_content);
-            const transcription = n.encrypted_transcription
-                ? await decrypt(n.encrypted_transcription)
-                : undefined;
+            const titlePromise = hasEncryptedTitle ? decrypt(n.encrypted_title) : Promise.resolve('');
+            const contentPromise = decrypt(n.encrypted_content);
+            const transcriptionPromise = n.encrypted_transcription ? decrypt(n.encrypted_transcription) : Promise.resolve(undefined);
+
+            const [title, content, transcription] = await Promise.all([titlePromise, contentPromise, transcriptionPromise]);
 
             const noteImprovements = improvements?.get(n.id) ?? [];
             const voiceFiles = voiceRecordings?.get(n.id) ?? [];
             // Sort voice files by date desc
             voiceFiles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-            notes.push({
+            return {
                 ...n,
                 title,
                 content,
@@ -476,13 +473,17 @@ const processNotes = async (
                 pending_delete: !!n.deleted || !!n.pending_delete,
                 improvements: noteImprovements,
                 voice_files: voiceFiles,
-            });
+            };
         } catch (e) {
             console.error(`[DatabaseService] Failed to decrypt note ${n.id}`, e);
+            return null;
         }
-    }
+    }));
+    // Filter out failed notes (nulls)
+    const validNotes = notes.filter((n): n is Note => n !== null);
+
     // Sort by updated_at desc (in case DB sort wasn't enough or for web)
-    return notes.sort((a, b) => {
+    return validNotes.sort((a, b) => {
         const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
         const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
         return dateB - dateA;
