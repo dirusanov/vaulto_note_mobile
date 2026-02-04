@@ -179,14 +179,19 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
             label: note.label ?? null,
             option_id: note.option_id ?? null,
         } as Note;
+        const safeNote = { ...normalizedNote };
+        delete safeNote.title;
+        delete safeNote.content;
+        delete safeNote.transcription;
+
         if (index >= 0) {
             notes[index] = {
                 ...notes[index],
-                ...normalizedNote,
-                improvements: normalizedNote.improvements ?? notes[index].improvements ?? [], // Should we recurse? simple replace for now.
+                ...safeNote,
+                improvements: safeNote.improvements ?? notes[index].improvements ?? [],
             };
         } else {
-            notes.push(normalizedNote);
+            notes.push(safeNote);
         }
         saveWebStore(notes);
         console.log(`[DatabaseService] Note saved to web store: ${note.id}`);
@@ -331,9 +336,24 @@ export const deleteVoiceRecordingLocal = async (id: string): Promise<void> => {
 export const getNotesLocal = async (): Promise<Note[]> => {
     if (Platform.OS === 'web') {
         const allNotes = getWebStore();
+
+        // Decrypt web notes just like native
+        const decryptedNotes = await Promise.all(allNotes.map(async (n) => {
+            const title = n.encrypted_title ? await decrypt(n.encrypted_title) : '';
+            const content = await decrypt(n.encrypted_content);
+            const transcription = n.encrypted_transcription ? await decrypt(n.encrypted_transcription) : undefined;
+
+            return {
+                ...n,
+                title,
+                content,
+                transcription,
+            };
+        }));
+
         // Separate parents and children
-        const parents = allNotes.filter(n => !n.parent_id);
-        const children = allNotes.filter(n => n.parent_id);
+        const parents = decryptedNotes.filter(n => !n.parent_id);
+        const children = decryptedNotes.filter(n => n.parent_id);
 
         // Group children
         const childrenMap = new Map<string, Note[]>();
@@ -579,10 +599,13 @@ export const saveImprovementLocal = async (improvement: NoteImprovement): Promis
         };
 
         // We need to merge if exists
+        const safeChild = { ...childNote };
+        delete safeChild.content;
+
         if (index >= 0) {
-            notes[index] = { ...notes[index], ...childNote };
+            notes[index] = { ...notes[index], ...safeChild };
         } else {
-            notes.push(childNote);
+            notes.push(safeChild);
         }
         saveWebStore(notes);
         console.log(`[DatabaseService] Improvement saved to web store as child note: ${improvement.id}`);

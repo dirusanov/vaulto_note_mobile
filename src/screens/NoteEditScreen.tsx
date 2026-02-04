@@ -1530,7 +1530,7 @@ export const NoteEditScreen = () => {
                 } catch (e) {
                     // Use warn instead of error to avoid RedBox in development
                     console.warn('Failed to parse grammar correction JSON', e);
-                    console.log('Raw AI response:', improvedText);
+
 
                     // Fallback: if the response looks like just the corrected text (no JSON structure), use it
                     // But for grammar, we expect JSON. If parsing failed, it might be a chatty response.
@@ -1569,13 +1569,7 @@ export const NoteEditScreen = () => {
             }
 
             // Check if we're on the original note or a child variant
-            console.log('[NoteEditScreen] Applying improvement:', {
-                activeVariant: activeVariantId,
-                isOriginal: activeVariantId === 'original',
-                parentNoteId: targetNoteId,
-                optionLabel: option.label,
-                optionId: option.id
-            });
+            console.log('[NoteEditScreen] Applying improvement');
 
             if (activeVariantId === 'original') {
                 // Create new child variant from parent
@@ -1603,12 +1597,7 @@ export const NoteEditScreen = () => {
                 setContent(finalText);
             } else {
                 // Update existing child variant in-place (no new children from children)
-                console.log('[NoteEditScreen] Updating existing improvement in-place:', {
-                    improvementId: activeVariantId,
-                    parentNoteId: targetNoteId,
-                    newLabel: option.label,
-                    newOptionId: option.id
-                });
+                console.log('[NoteEditScreen] Updating existing improvement in-place');
                 await updateImprovement(targetNoteId, activeVariantId, {
                     content: finalText,
                     label: option.label,

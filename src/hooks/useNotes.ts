@@ -494,7 +494,7 @@ export const useNotes = () => {
             console.log('[useNotes] updateImprovement called:', {
                 noteId,
                 improvementId,
-                updates: { ...updates, content: updates.content ? `${updates.content.substring(0, 50)}...` : undefined }
+                updates: { ...updates, content: updates.content ? '<hidden>' : undefined }
             });
 
             let note = notesRef.current.find(n => n.id === noteId);

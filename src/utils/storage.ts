@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 import { UserProfile } from '../api/auth';
 
@@ -15,10 +17,34 @@ const AI_PROVIDER_KEY = 'vaulto_ai_provider';
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
 
+// Helper for SecureStore with web fallback (since SecureStore doesn't support web)
+const secureGet = async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+        return AsyncStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+};
+
+const secureSet = async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+        return AsyncStorage.setItem(key, value);
+    }
+    return SecureStore.setItemAsync(key, value, {
+        keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+    });
+};
+
+const secureDelete = async (key: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+        return AsyncStorage.removeItem(key);
+    }
+    return SecureStore.deleteItemAsync(key);
+};
+
 export const storage = {
     getToken: async (): Promise<string | null> => {
         try {
-            return await AsyncStorage.getItem(TOKEN_KEY);
+            return await secureGet(TOKEN_KEY);
         } catch (e) {
             console.error('Failed to get token', e);
             return null;
@@ -26,21 +52,21 @@ export const storage = {
     },
     setToken: async (token: string): Promise<void> => {
         try {
-            await AsyncStorage.setItem(TOKEN_KEY, token);
+            await secureSet(TOKEN_KEY, token);
         } catch (e) {
             console.error('Failed to set token', e);
         }
     },
     removeToken: async (): Promise<void> => {
         try {
-            await AsyncStorage.removeItem(TOKEN_KEY);
+            await secureDelete(TOKEN_KEY);
         } catch (e) {
             console.error('Failed to remove token', e);
         }
     },
     getRefreshToken: async (): Promise<string | null> => {
         try {
-            return await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+            return await secureGet(REFRESH_TOKEN_KEY);
         } catch (e) {
             console.error('Failed to get refresh token', e);
             return null;
@@ -48,14 +74,14 @@ export const storage = {
     },
     setRefreshToken: async (token: string): Promise<void> => {
         try {
-            await AsyncStorage.setItem(REFRESH_TOKEN_KEY, token);
+            await secureSet(REFRESH_TOKEN_KEY, token);
         } catch (e) {
             console.error('Failed to set refresh token', e);
         }
     },
     removeRefreshToken: async (): Promise<void> => {
         try {
-            await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
+            await secureDelete(REFRESH_TOKEN_KEY);
         } catch (e) {
             console.error('Failed to remove refresh token', e);
         }
@@ -110,7 +136,7 @@ export const storage = {
 // OpenAI API Key
 export const getOpenAIApiKey = async (): Promise<string | null> => {
     try {
-        return await AsyncStorage.getItem(OPENAI_API_KEY);
+        return await secureGet(OPENAI_API_KEY);
     } catch (e) {
         console.error('Failed to get OpenAI API key', e);
         return null;
@@ -119,7 +145,7 @@ export const getOpenAIApiKey = async (): Promise<string | null> => {
 
 export const setOpenAIApiKey = async (apiKey: string): Promise<void> => {
     try {
-        await AsyncStorage.setItem(OPENAI_API_KEY, apiKey);
+        await secureSet(OPENAI_API_KEY, apiKey);
     } catch (e) {
         console.error('Failed to set OpenAI API key', e);
     }
@@ -214,7 +240,7 @@ export const setSelfHostedUrl = async (url: string): Promise<void> => {
 
 export const getSelfHostedApiKey = async (): Promise<string | null> => {
     try {
-        return await AsyncStorage.getItem(SELF_HOSTED_API_KEY);
+        return await secureGet(SELF_HOSTED_API_KEY);
     } catch (e) {
         console.error('Failed to get self-hosted API key', e);
         return null;
@@ -223,7 +249,7 @@ export const getSelfHostedApiKey = async (): Promise<string | null> => {
 
 export const setSelfHostedApiKey = async (apiKey: string): Promise<void> => {
     try {
-        await AsyncStorage.setItem(SELF_HOSTED_API_KEY, apiKey);
+        await secureSet(SELF_HOSTED_API_KEY, apiKey);
     } catch (e) {
         console.error('Failed to set self-hosted API key', e);
     }
