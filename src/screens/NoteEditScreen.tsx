@@ -13,22 +13,20 @@ import {
     Modal,
     TouchableWithoutFeedback,
     Keyboard,
-    Vibration,
-    FlatList,
     Share,
     Animated,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
-import ViewShot, { captureRef } from 'react-native-view-shot';
+import { captureRef } from 'react-native-view-shot';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
@@ -44,7 +42,7 @@ import { transcribeAudio, processVoiceNote } from '../services/TranscriptionServ
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
 import { VoiceRecording } from '../api/notes';
 import * as Haptics from 'expo-haptics';
-import { getPrivacyWarningDismissed } from '../utils/storage';
+
 import {
     improveText,
     loadImprovementOptions,
@@ -146,8 +144,8 @@ export const NoteEditScreen = () => {
         const imp = existingNote?.improvements?.find(i => i.id === initialId);
         return imp?.content || existingNote?.content || '';
     });
-    const [isSaving, setIsSaving] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
+    const [, setIsSaving] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editMode, setEditMode] = useState<'visual' | 'raw'>('visual');
     const [reparseTrigger, setReparseTrigger] = useState(0);
@@ -306,7 +304,7 @@ export const NoteEditScreen = () => {
 
     const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
     const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
-    const [storedAgentModeEnabled, setStoredAgentModeEnabled] = useState(true);
+
 
     // Add state to track if audio holds a transcription
     const [hasTranscription, setHasTranscription] = useState(!!existingNote?.encrypted_transcription);
@@ -321,7 +319,6 @@ export const NoteEditScreen = () => {
     }, [existingNote?.encrypted_transcription]);
 
     // Force re-render on history update to show undo/redo arrows
-    const [historyUpdateCount, setHistoryUpdateCount] = useState(0);
 
     // AI State
     const [showAIModal, setShowAIModal] = useState(false);
@@ -386,7 +383,7 @@ export const NoteEditScreen = () => {
         callback();
     };
 
-    // Determine initial active variant based on is_active flags
+
 
 
 
@@ -399,9 +396,8 @@ export const NoteEditScreen = () => {
     const [requestHistory, setRequestHistory] = useState<string[]>([]);
 
     const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
-    const [selection, setSelection] = useState({ start: 0, end: 0 });
     const editorRef = useRef<RichTextEditorHandle>(null);
-    const contentInputRef = useRef<TextInput>(null);
+
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
 
@@ -414,7 +410,7 @@ export const NoteEditScreen = () => {
     }[]>([]);
     const [queueLength, setQueueLength] = useState(0);
     const isProcessingQueue = useRef(false);
-    const [isBackgroundProcessing, setIsBackgroundProcessing] = useState(false);
+
     // Ref to hold the absolute latest content to ensure queue picks up changes from previous steps
     const currentContentRef = useRef(content);
     // Ref to track active variant for queue processing
@@ -599,9 +595,7 @@ export const NoteEditScreen = () => {
 
     useEffect(() => {
         const loadSettings = async () => {
-            const enabled = await getAgentModeEnabled();
             const transcription = await getTranscriptionEnabled();
-            setStoredAgentModeEnabled(enabled);
             setTranscriptionEnabled(transcription);
         };
         loadSettings();
@@ -673,7 +667,10 @@ export const NoteEditScreen = () => {
                 history: newHistory,
                 index: currentHistory.index
             };
-            setHistoryUpdateCount(prev => prev + 1);
+            variantHistories.current[variantId] = {
+                history: newHistory,
+                index: currentHistory.index
+            };
         }, 500); // 500ms debounce
     };
 
@@ -702,7 +699,7 @@ export const NoteEditScreen = () => {
             history: newHistory,
             index: currentHistory.index
         };
-        setHistoryUpdateCount(prev => prev + 1);
+
     };
 
     const handleTitleChange = (text: string) => {
@@ -727,72 +724,7 @@ export const NoteEditScreen = () => {
     // Debounced save
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const handleContentChange = (text: string) => {
-        let newContent = text;
 
-        // Auto-continuation logic for lists:
-        // Detect if a newline was inserted
-        if (text.length > content.length && selection.start !== undefined) {
-            // Heuristic: check if we added a newline compared to old content
-            // Identifying exact insertion index is ideal but tricky with just 'text' and 'content'
-            // We'll rely on finding the first diff.
-            let i = 0;
-            while (i < content.length && text[i] === content[i]) i++;
-
-            const inserted = text.slice(i, i + (text.length - content.length));
-
-            if (inserted === '\n') {
-                const textBefore = text.slice(0, i);
-                const lines = textBefore.split('\n');
-                const lastLine = lines[lines.length - 1]; // This is the line *before* the newline
-
-                // Check if it's a list item
-                const todoMatch = lastLine.match(/^(\s*-\s\[[ xX]?\]\s)(.*)$/);
-                const listMatch = lastLine.match(/^(\s*-\s)(.*)$/);
-
-                let prefix = '';
-                let isEmptyItem = false;
-
-                if (todoMatch) {
-                    prefix = todoMatch[1]; // e.g. "- [ ] "
-                    if (todoMatch[2].trim() === '') isEmptyItem = true;
-                } else if (listMatch) {
-                    prefix = listMatch[1]; // e.g. "- "
-                    if (listMatch[2].trim() === '') isEmptyItem = true;
-                }
-
-                if (prefix) {
-                    if (isEmptyItem) {
-                        // Enter on empty list item -> Remove the bucket/prefix (Exit list)
-                        // Remove `prefix` from `textBefore`.
-                        const lineStart = textBefore.lastIndexOf(prefix);
-                        if (lineStart !== -1) {
-                            const newTextBefore = textBefore.slice(0, lineStart) + textBefore.slice(lineStart + prefix.length);
-                            const textAfter = text.slice(i + inserted.length);
-                            // New content: textBefore (without prefix) + inserted (\n) + textAfter.
-                            newContent = newTextBefore + inserted + textAfter;
-                        }
-                    } else {
-                        // Enter on populated list item -> Continue list
-                        // Insert prefix on new line.
-                        const nextPrefix = todoMatch ? prefix.replace(/\[[ xX]\]/, '[ ]') : prefix; // ensure unchecked
-                        const textAfter = text.slice(i + inserted.length);
-                        newContent = textBefore + inserted + nextPrefix + textAfter;
-                    }
-                }
-            }
-        }
-
-        setContent(newContent);
-        if (existingNote) debouncedSave(newContent, title);
-        if (activeVariantId === 'original') {
-            updateHistory(title, newContent);
-        } else {
-            improvementDraftsRef.current[activeVariantId] = newContent;
-            // Update history for improvements too
-            updateHistory(title, newContent); // Using title for consistency, though variants share parent title
-        }
-    };
 
     const handleDeleteImprovementVariant = useCallback(async (improvementId: string) => {
         if (!localNoteId) return;
@@ -1150,11 +1082,7 @@ export const NoteEditScreen = () => {
             while (agentQueue.current.length > 0) {
                 // Peek first
                 const task = agentQueue.current[0];
-                const isBackground = !!task.isBackground;
 
-                if (isMounted.current) {
-                    setIsBackgroundProcessing(isBackground);
-                }
 
                 // Get fresh context from REFS (strict chaining)
                 const contextContent = currentContentRef.current;
@@ -1268,18 +1196,13 @@ export const NoteEditScreen = () => {
         } finally {
             isProcessingQueue.current = false;
             setIsAIProcessing(false);
-            if (isMounted.current) {
-                setIsBackgroundProcessing(false);
-            }
+
         }
     };
 
     const executeAgentFlow = async (
         recordingUri: string,
         transcribedText: string,
-        currentContextContent: string,
-        currentNoteId: string | undefined,
-        variantId: string,
         isBackground: boolean = false
     ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
@@ -1477,7 +1400,7 @@ export const NoteEditScreen = () => {
         // 5. AGENT PROCESSING (If enabled)
         // Note: processAgentQueue uses currentContentRef internally, so we don't strictly need to pass content here,
         // but passing the updated version we just set helps consistency if that function used the arg.
-        await executeAgentFlow(recording.uri, transcribedText, finalTranscribedContent, currentNoteId, activeVariantId, true);
+        await executeAgentFlow(recording.uri, transcribedText, true);
 
     };
 
@@ -1557,21 +1480,7 @@ export const NoteEditScreen = () => {
         }
     };
 
-    const handleAddTodo = useCallback(() => {
-        // Insert '- [ ] ' at cursor position or append
-        const prefix = '\n- [ ] ';
 
-        const newText =
-            content.substring(0, selection.start) +
-            prefix +
-            content.substring(selection.end);
-
-        handleContentChange(newText);
-
-        // Update selection to be after the inserted text
-        // Need to wait for render check?
-        // Note: TextInput selection update might be tricky without ref focus
-    }, [content, selection, handleContentChange]);
 
     const handleFormat = useCallback((type: MarkdownFormatType) => {
         editorRef.current?.handleFormat(type);
@@ -1704,7 +1613,7 @@ export const NoteEditScreen = () => {
                     newLabel: option.label,
                     newOptionId: option.id
                 });
-                const updatedImprovement = await updateImprovement(targetNoteId, activeVariantId, {
+                await updateImprovement(targetNoteId, activeVariantId, {
                     content: finalText,
                     label: option.label,
                     optionId: option.id,
@@ -1885,7 +1794,7 @@ export const NoteEditScreen = () => {
         if (!audioUri) return;
 
         // Use Ref for latest content
-        const contentForAgent = currentContentRef.current;
+
 
         setIsTranscribing(true);
         try {
@@ -1920,7 +1829,7 @@ export const NoteEditScreen = () => {
             setHasTranscription(true);
 
             // Trigger Agent Flow
-            await executeAgentFlow(audioUri, text, newContent, localNoteId, activeVariantId, false);
+            await executeAgentFlow(audioUri, text, false);
 
         } catch (error: any) {
             setIsTranscribing(false);

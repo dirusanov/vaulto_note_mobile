@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -80,7 +80,7 @@ export const NotesListScreen = () => {
         navigation.navigate('Settings');
     };
 
-    const { isGuest } = useAuth(); // Import useAuth hook
+    useAuth(); // Import useAuth hook
 
     const handleMicPress = () => {
         setIsVoiceRecorderVisible(true);

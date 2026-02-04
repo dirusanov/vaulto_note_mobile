@@ -37,7 +37,7 @@ export const useGoogleOAuth = () => {
             const userInfo = await GoogleSignin.signIn();
 
             // For backend verification we need the Server Auth Code
-            const code = userInfo.data?.serverAuthCode || userInfo.serverAuthCode;
+            const code = (userInfo as any).data?.serverAuthCode || (userInfo as any).serverAuthCode;
 
             if (!code) {
                 throw new Error("No server auth code returned from Google.");

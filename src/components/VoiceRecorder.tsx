@@ -7,7 +7,6 @@ import {
     Modal,
     Animated,
     Alert,
-    Dimensions,
     Switch,
 } from 'react-native';
 import { colors } from '../theme/colors';
@@ -24,7 +23,7 @@ interface VoiceRecorderProps {
     autoStart?: boolean;
 }
 
-const { width } = Dimensions.get('window');
+
 const BAR_COUNT = 20;
 const SILENCE_THRESHOLD_DB = -60;
 const MIN_VOICE_SAMPLES = 3;

@@ -5,14 +5,7 @@ import { encrypt, decrypt } from '../crypto/encryption';
 
 const MAX_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-// Safe directory access for web
-const getDocumentDirectory = () => {
-    if (Platform.OS === 'web') return null;
-    // @ts-ignore
-    return FileSystem.documentDirectory;
-};
 
-const AUDIO_DIR = Platform.OS === 'web' ? '' : `${getDocumentDirectory()}audio/`;
 
 export interface AudioRecording {
     uri: string;

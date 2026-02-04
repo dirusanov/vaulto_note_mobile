@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, Animated } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';

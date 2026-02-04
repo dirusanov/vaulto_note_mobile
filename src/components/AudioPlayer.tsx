@@ -22,7 +22,7 @@ interface AudioPlayerProps {
 
 import { AudioService } from '../services/AudioService';
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, hasTranscription = true, onDelete }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onDelete }) => {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);

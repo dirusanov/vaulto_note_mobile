@@ -337,55 +337,7 @@ export const deleteNoteLocal = async (id: string): Promise<void> => {
     }
 };
 
-const processImprovements = async (
-    rows: any[],
-    includeDeleted: boolean = false
-): Promise<Map<string, NoteImprovement[]>> => {
-    const grouped = new Map<string, NoteImprovement[]>();
-    for (const row of rows) {
-        try {
-            const noteId = row.note_id || row.noteId;
-            if (!noteId) continue;
-            const content = await decrypt(row.encrypted_content);
-            const improvement: NoteImprovement = {
-                id: row.id,
-                note_id: noteId,
-                encrypted_content: row.encrypted_content,
-                encrypted_title: row.encrypted_title ?? null,
-                content_nonce: row.content_nonce ?? null,
-                label: row.label ?? null,
-                option_id: row.option_id ?? null,
-                created_at: row.created_at ?? undefined,
-                updated_at: row.updated_at ?? undefined,
-                deleted: row.deleted === 1,
-                synced: row.synced ?? 1,
-                version: row.version ?? 0,
-                server_updated_at: row.server_updated_at ?? undefined,
-                dirty: row.dirty === 1,
-                is_active: row.is_active === 1, // Preserve is_active
-                content,
-            };
-            if (improvement.deleted && !includeDeleted) {
-                continue;
-            }
-            const list = grouped.get(noteId) ?? [];
-            list.push(improvement);
-            grouped.set(noteId, list);
-        } catch (error) {
-            console.error(`[DatabaseService] Failed to decrypt improvement ${row.id}`, error);
-        }
-    }
 
-    grouped.forEach(list => {
-        list.sort((a, b) => {
-            const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-            const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-            return bTime - aTime;
-        });
-    });
-
-    return grouped;
-};
 
 export const getNotesLocal = async (): Promise<Note[]> => {
     try {

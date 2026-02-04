@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Note, NoteImprovement } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
@@ -554,7 +554,7 @@ export const useNotes = () => {
                 is_active: updated.is_active
             });
 
-            await saveImprovementLocal(updated, true);
+            await saveImprovementLocal(updated);
 
 
             // Update parent note's updated_at so it moves to top of list

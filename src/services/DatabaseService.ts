@@ -554,7 +554,7 @@ export const wipeLocalDatabase = async (): Promise<void> => {
     }
 };
 
-export const saveImprovementLocal = async (improvement: NoteImprovement, useDbActiveState = false): Promise<void> => {
+export const saveImprovementLocal = async (improvement: NoteImprovement): Promise<void> => {
     if (Platform.OS === 'web') {
         const notes = getWebStore();
         const index = notes.findIndex(n => n.id === improvement.id);

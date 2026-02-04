@@ -1,23 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
     Alert,
-    KeyboardAvoidingView,
-    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { TextInput } from '../components/TextInput';
-import { Button } from '../components/Button';
+
 import { AuthProviderButton } from '../components/AuthProviderButton';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
-import { authApi } from '../api/auth';
+
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
@@ -25,7 +22,7 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 
 export const SignInScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
-    const { signIn } = useAuth();
+    useAuth();
     const { signInWithGoogle, loading: googleLoading } = useGoogleOAuth();
 
     const handleGoogleSignIn = async () => {

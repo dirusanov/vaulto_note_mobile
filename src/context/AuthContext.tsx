@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { storage } from '../utils/storage';
-import { authApi, UserProfile, GuestProfile } from '../api/auth';
+import { authApi, UserProfile } from '../api/auth';
 import { syncService } from '../services/SyncService';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { onUnauthorized } from '../utils/authEvents';
@@ -35,7 +35,7 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
     const [token, setToken] = useState<string | null>(null);
-    const [refreshToken, setRefreshToken] = useState<string | null>(null);
+    const [, setRefreshToken] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isGuest, setIsGuest] = useState(false);

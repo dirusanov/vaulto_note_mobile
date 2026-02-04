@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import {
     View,
     TextInput,
@@ -7,15 +7,11 @@ import {
     NativeSyntheticEvent,
     TextInputKeyPressEventData,
     Platform,
-    TextInputSelectionChangeEventData,
-    Text,
-    StyleProp,
-    TextStyle
+    TextInputSelectionChangeEventData
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MarkdownFormatType } from './MarkdownToolbar';
@@ -30,7 +26,6 @@ interface RichTextEditorProps {
     onFocus?: () => void;
     reparseTrigger?: number;
     placeholder?: string;
-    editable?: boolean;
     ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
     baseFontSize?: number;
     autoScalingEnabled?: boolean;
@@ -62,7 +57,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         onFocus,
         reparseTrigger,
         placeholder,
-        editable = true,
         ListHeaderComponent,
         baseFontSize = 16,
         autoScalingEnabled = true,
@@ -365,7 +359,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 // If coverage is substantial (e.g. > 50% or > 0?), toggle off.
                 // Simple toggle: If fully active at start? 
 
-                const isRemove = coveredArea === (end - start); // Only remove if FULLY covered? or any?
+                // If coverage is substantial (e.g. > 50% or > 0?), toggle off.
+                // Simple toggle: If fully active at start?
                 // Professional editors: B button status determines action.
                 // Here we essentially check "Is B active at cursor/selection?"
                 // Our `detectActiveStyles` says yes if start is covered.
@@ -863,18 +858,18 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             let nextType: Block['type'] = 'text';
             let nextChecked = false;
 
-            if (currentBlock.type === 'todo') {
-                if (currentBlock.content.trim() === '') {
-                    // Empty todo + Enter -> Convert to text
-                    const updatedBlocks = [...blocks];
-                    updatedBlocks[index] = { ...currentBlock, type: 'text' };
-                    setBlocks(updatedBlocks);
-                    isInternalUpdate.current = true;
-                    onChange(serializeBlocks(updatedBlocks));
-                    return;
-                }
+            if (currentBlock.content.trim() === '' && currentBlock.type === 'todo') {
+                // Empty todo + Enter -> Convert to text
+                const updatedBlocks = [...blocks];
+                updatedBlocks[index] = { ...currentBlock, type: 'text' };
+                setBlocks(updatedBlocks);
+                isInternalUpdate.current = true;
+                onChange(serializeBlocks(updatedBlocks));
+                return;
+            } else if (currentBlock.type === 'todo') {
                 nextType = 'todo';
             }
+
 
             const newBlock: Block = {
                 id: newBlockId,
@@ -1025,7 +1020,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const scaleFactor = getScaleFactor();
 
     // Derived font sizes
-    const fontSizeBody = baseFontSize * (scaleFactor); // Base body also scales if it's todo, treated below
     // Headers scale based on baseFontSize but NOT the density scaleFactor (usually) 
     // OR we might want everything to scale? 
     // Let's scale text only for todos via scaleFactor as before, but Headers relative to baseFontSize.
@@ -1035,7 +1029,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
-        const isHeader = item.type === 'h1' || item.type === 'h2' || item.type === 'h3';
         const isAudio = item.type === 'audio';
 
         // Font size logic:

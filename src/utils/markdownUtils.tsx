@@ -163,7 +163,7 @@ export const serializeBlockToMarkdown = (content: string, formats: BlockFormat[]
     }
 
     const markers: Marker[] = [];
-    sortedFormats.forEach((f, i) => {
+    sortedFormats.forEach((f) => {
         markers.push({ index: f.start, type: 'start', format: f, priority: 1 });
         markers.push({ index: f.end, type: 'end', format: f, priority: 0 }); // end processed before start?
     });

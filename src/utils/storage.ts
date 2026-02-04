@@ -11,7 +11,7 @@ const OPENAI_API_KEY = 'vaulto_openai_api_key';
 const PRIVACY_WARNING_DISMISSED_KEY = 'vaulto_privacy_warning_dismissed';
 const MAX_RECORDING_DURATION_KEY = 'vaulto_max_recording_duration';
 const AI_PROVIDER_KEY = 'vaulto_ai_provider';
-const SELF_HOSTED_ENABLED_KEY = 'vaulto_self_hosted_enabled';
+
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
 

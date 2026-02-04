@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, Platform, TextStyle, Pressable } from 'react-native';
-import Markdown, { MarkdownIt } from 'react-native-markdown-display';
+import { StyleSheet, ScrollView, View, Platform } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';

@@ -4,7 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
+
 
 import { parseMarkdownText, parseMarkdownToData } from '../utils/markdownUtils';
 

@@ -16,7 +16,7 @@ import {
     saveImprovementLocal,
 } from './DatabaseService';
 import { decrypt, encrypt } from '../crypto/encryption';
-import { isUUID, generateUUID } from '../utils/uuid';
+import { isUUID } from '../utils/uuid';
 
 const SYNC_SINCE_KEY = 'vaulto_last_sync_time';
 const SYNC_DEBOUNCE_MS = 5000;
@@ -128,7 +128,6 @@ class SyncService {
 
             for (const note of dirtyNotes) {
                 // Ensure UUID
-                let noteToSync = note;
                 if (!isUUID(note.id)) {
                     // If it's a temp ID, we should have already replaced it, but let's be safe
                     // Actually useNotes handles ID generation. We assume IDs are valid UUIDs here or handled before.

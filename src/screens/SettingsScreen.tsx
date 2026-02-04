@@ -14,7 +14,6 @@ import {
     getOpenAIApiKey,
     getSelfHostedUrl,
     getSelfHostedApiKey,
-    resetPrivacyWarning,
     setAIProvider,
     setOpenAIApiKey,
     setSelfHostedUrl,
@@ -41,19 +40,14 @@ export const SettingsScreen = () => {
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showOpenAIInfo, setShowOpenAIInfo] = useState(false);
     const [showSelfHostedInfo, setShowSelfHostedInfo] = useState(false);
-    const [showProviderInfo, setShowProviderInfo] = useState(false);
+
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
     const [showSelfHostedKey, setShowSelfHostedKey] = useState(false);
-    const [resettingPrivacy, setResettingPrivacy] = useState(false);
     const [openAITestStatus, setOpenAITestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
         type: 'idle',
         message: '',
     });
     const [selfHostedTestStatus, setSelfHostedTestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
-        type: 'idle',
-        message: '',
-    });
-    const [privacyStatus, setPrivacyStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
         type: 'idle',
         message: '',
     });

@@ -17,7 +17,7 @@ export const EmailVerificationScreen = () => {
     const email = route.params?.email;
     const password = route.params?.password;
 
-    const [isChecking, setIsChecking] = useState(true);
+
     const [isVerified, setIsVerified] = useState(false);
     const pollInterval = useRef<NodeJS.Timeout | null>(null);
 
@@ -37,7 +37,7 @@ export const EmailVerificationScreen = () => {
                     console.log('User is verified!');
                     stopPolling();
                     setIsVerified(true);
-                    setIsChecking(false);
+
                     // Auto-login after a short delay to show success message
                     setTimeout(() => handleVerified(), 3000);
                 }
