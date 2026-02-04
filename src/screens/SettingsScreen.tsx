@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -713,6 +713,16 @@ export const SettingsScreen = () => {
                     <Text style={styles.sectionTitle}>App Info</Text>
                     <Text style={styles.info}>Version 1.0.0</Text>
                     <Text style={styles.info}>Data is not stored or analyzed.</Text>
+
+                    <View style={styles.legalLinks}>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaulto.app/privacy')}>
+                            <Text style={styles.linkText}>Privacy Policy</Text>
+                        </TouchableOpacity>
+                        <View style={styles.linkDivider} />
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaulto.app/terms')}>
+                            <Text style={styles.linkText}>Terms of Service</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {isAuthenticated && (
@@ -1237,5 +1247,21 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.accentGreen,
         fontWeight: '600',
+    },
+    legalLinks: {
+        marginTop: spacing.m,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+    },
+    linkText: {
+        ...typography.bodySmall,
+        color: colors.primary,
+        textDecorationLine: 'underline',
+    },
+    linkDivider: {
+        width: 1,
+        height: 12,
+        backgroundColor: colors.border,
     },
 });

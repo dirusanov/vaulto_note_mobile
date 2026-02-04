@@ -306,8 +306,13 @@ class AudioServiceClass {
             });
 
             return tempUri;
-        } catch (error) {
-            console.error('Error reading audio file:', error);
+        } catch (error: any) {
+            // Suppress RedBox for file not found errors
+            if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
+                console.log('[AudioService] File not found (likely deleted):', uri);
+            } else {
+                console.error('Error reading audio file:', error);
+            }
             throw error;
         }
     }

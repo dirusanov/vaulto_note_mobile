@@ -20,6 +20,8 @@ interface AudioPlayerProps {
     onDelete?: () => void;
 }
 
+import { AudioService } from '../services/AudioService';
+
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, hasTranscription = true, onDelete }) => {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -27,6 +29,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     const [audioDuration, setAudioDuration] = useState(duration); // Local state for duration
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
     const [isLoading, setIsLoading] = useState(false);
+    const [playableUri, setPlayableUri] = useState<string | null>(null);
 
     useEffect(() => {
         return sound
@@ -36,15 +39,46 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
             : undefined;
     }, [sound]);
 
+    // Resolve persistent/encrypted URI to playable temp URI
+    useEffect(() => {
+        let isMounted = true;
+        const resolveUri = async () => {
+            if (!audioUri) return;
+
+            // If it's already a temp/cache file or web, use as is
+            if (audioUri.includes('cache') || audioUri.includes('temp') || audioUri.startsWith('blob:')) {
+                setPlayableUri(audioUri);
+                return;
+            }
+
+            // Assume it's a persistent encrypted file
+            try {
+                const tempUri = await AudioService.readAudioFile(audioUri);
+                if (isMounted) setPlayableUri(tempUri);
+            } catch (error: any) {
+                // If file is missing (e.g. deleted), don't show scary warning
+                if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT') {
+                    console.log('Audio file missing (likely deleted):', audioUri);
+                } else {
+                    console.warn('Failed to resolve audio URI:', error);
+                }
+                // Fallback to original
+                if (isMounted) setPlayableUri(audioUri);
+            }
+        };
+        resolveUri();
+        return () => { isMounted = false; };
+    }, [audioUri]);
+
     // Automatically check duration if it's 0 (unknown)
     useEffect(() => {
         let isMounted = true;
 
         const checkDuration = async () => {
-            if (audioDuration === 0 && audioUri) {
+            if (audioDuration === 0 && playableUri) {
                 try {
                     const { sound: tempSound, status } = await Audio.Sound.createAsync(
-                        { uri: audioUri },
+                        { uri: playableUri },
                         { shouldPlay: false }
                     );
 
@@ -53,8 +87,14 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                     }
 
                     await tempSound.unloadAsync();
-                } catch (error) {
-                    console.log('Error checking audio duration:', error);
+                } catch (error: any) {
+                    if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT') {
+                        console.log('Audio file missing for duration check:', playableUri);
+                        setIsMissing(true);
+                        if (onDelete) onDelete();
+                    } else {
+                        console.log('Error checking audio duration:', error);
+                    }
                 }
             }
         };
@@ -62,20 +102,34 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
         checkDuration();
 
         return () => { isMounted = false; };
-    }, [audioUri]);
+    }, [playableUri]); // Depend on playableUri
+
+    const [isMissing, setIsMissing] = useState(false);
 
     const loadAndPlaySound = async () => {
+        if (!playableUri) return;
         setIsLoading(true);
+        setIsMissing(false);
         try {
             const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: audioUri },
+                { uri: playableUri },
                 { shouldPlay: true, rate: playbackSpeed },
                 onPlaybackStatusUpdate
             );
             setSound(newSound);
             setIsPlaying(true);
-        } catch (error) {
-            console.error('Error playing sound:', error);
+        } catch (error: any) {
+            if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT') {
+                console.log('Audio file missing for playback:', playableUri);
+                setIsMissing(true);
+                // Optionally auto-delete if onDelete is safe to call?
+                // For now, we will render a "Missing" state.
+                if (onDelete) onDelete(); // Auto-remove from view if delete handler provided? 
+                // The user requested: "if note has no audio then do not display it".
+                // Calling onDelete() here effectively removes it from the parent list/content if the parent handles it.
+            } else {
+                console.error('Error playing sound:', error);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -143,6 +197,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     };
 
     const progress = audioDuration > 0 ? (position / audioDuration) * 100 : 0;
+
+    if (isMissing) return null;
 
     return (
         <View style={styles.container}>

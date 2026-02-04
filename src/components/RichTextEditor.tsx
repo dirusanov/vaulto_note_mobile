@@ -39,6 +39,7 @@ interface RichTextEditorProps {
 export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
     focusBlockAt: (lineIndex: number, ratio?: number) => void;
+    removeAudioBlock: (audioPath: string) => void;
 }
 
 interface Block {
@@ -523,6 +524,28 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             } else {
                 pendingFocusRef.current = null;
             }
+        },
+        removeAudioBlock: (audioPath: string) => {
+            // Robust match: Check full URI or Filename
+            const filename = audioPath.split('/').pop();
+
+            // Filter out matching audio blocks
+            const newBlocks = blocks.filter(b => {
+                if (b.type !== 'audio') return true;
+
+                // Check strict match or filename inclusion (to handle path variations)
+                const content = b.content;
+                if (content === audioPath) return false;
+                if (filename && content.includes(filename)) return false;
+
+                return true;
+            });
+
+            if (newBlocks.length !== blocks.length) {
+                setBlocks(newBlocks);
+                isInternalUpdate.current = true;
+                onChange(serializeBlocks(newBlocks));
+            }
         }
     }));
 
@@ -543,7 +566,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             const header1Match = line.startsWith('# ');
             const header2Match = line.startsWith('## ');
             const header3Match = line.startsWith('### ');
-            const audioMatch = line.match(/^!\[audio\]\((.*)\)$/);
+            const audioMatch = line.match(/^\s*!\[audio\]\((.*?)\)\s*$/);
 
             const isStructure = todoMatch || header1Match || header2Match || header3Match || audioMatch;
 

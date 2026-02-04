@@ -116,6 +116,12 @@ export const NoteEditScreen = () => {
 
     // Voice Recordings
     const [voiceRecordings, setVoiceRecordings] = useState<VoiceRecording[]>([]);
+    const voiceRecordingsRef = useRef<VoiceRecording[]>([]);
+
+    useEffect(() => {
+        voiceRecordingsRef.current = voiceRecordings;
+    }, [voiceRecordings]);
+
     const existingNote = notes.find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
 
@@ -403,9 +409,12 @@ export const NoteEditScreen = () => {
     const agentQueue = useRef<{
         recordingUri: string;
         transcribedText: string;
+        isBackground?: boolean;
+        intentHint?: string;
     }[]>([]);
     const [queueLength, setQueueLength] = useState(0);
     const isProcessingQueue = useRef(false);
+    const [isBackgroundProcessing, setIsBackgroundProcessing] = useState(false);
     // Ref to hold the absolute latest content to ensure queue picks up changes from previous steps
     const currentContentRef = useRef(content);
     // Ref to track active variant for queue processing
@@ -868,8 +877,14 @@ export const NoteEditScreen = () => {
         try {
             const uri = await AudioService.readAudioFile(path);
             setAudioUri(uri);
-        } catch (error) {
-            console.error('Failed to load audio:', error);
+        } catch (error: any) {
+            // Check for file not found error (ENOENT or specific message)
+            if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
+                console.log('[Audio] File not found (deleted?):', path);
+                showToast && showToast('Audio file not found');
+            } else {
+                console.error('Failed to load audio:', error);
+            }
         }
     };
 
@@ -902,9 +917,11 @@ export const NoteEditScreen = () => {
             await saveImprovementDraft();
             return;
         }
-        const hasAudio = !!audioUri || existingNote?.has_audio;
+        // Correct source of truth for audio presence is the current list of recordings
+        const hasAudio = voiceRecordingsRef.current.length > 0;
         const hasImprovements = noteImprovements.length > 0;
         const emptyText = !title.trim() && !content.trim();
+
         if (emptyText && !hasAudio && !hasImprovements) {
             if (localNoteId) {
                 try {
@@ -934,11 +951,15 @@ export const NoteEditScreen = () => {
                 await updateNote(localNoteId, {
                     title,
                     content,
+                    has_audio: hasAudio // Explicitly sync has_audio state
                 });
             } else {
                 const newNote = await createNote({
                     title,
                     content,
+                    // Note: createNote signature takes audio object, not has_audio flag directly.
+                    // But if we have no audio object here, it defaults to false.
+                    // If we needed to create with audio, we should likely be in handleRecordingFinish.
                 });
                 if (isMounted.current) {
                     setLocalNoteId(newNote.id);
@@ -953,7 +974,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [activeVariantId, audioUri, content, createNote, deleteNote, existingNote?.has_audio, localNoteId, noteImprovements.length, saveImprovementDraft, title, updateNote]);
+    }, [activeVariantId, content, createNote, deleteNote, localNoteId, noteImprovements.length, saveImprovementDraft, title, updateNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1057,14 +1078,25 @@ export const NoteEditScreen = () => {
 
     const handleBack = () => {
         Keyboard.dismiss();
-        // Skip the beforeRemove check since we're handling save here
         skipAutoSaveRef.current = true;
-        // Navigate immediately without waiting for save to complete
         navigateBackToList();
-        // Save in background (fire-and-forget)
-        saveNote().catch(error => {
-            console.error('Error during back navigation save:', error);
-        });
+
+        // Check if note is effectively empty
+        const isContentEmpty = !title.trim() && !content.trim();
+        const hasNoAudio = !existingNote?.has_audio && voiceRecordings.length === 0;
+
+        if (isContentEmpty && hasNoAudio && localNoteId) {
+            // Auto-delete empty notes to keep list clean
+            console.log('[AutoClean] Deleting empty note on exit');
+            deleteNote(localNoteId).catch(error => {
+                console.error('[AutoClean] Error deleting empty note:', error);
+            });
+        } else {
+            // Save normally
+            saveNote().catch(error => {
+                console.error('Error during back navigation save:', error);
+            });
+        }
     };
 
     const handleDelete = async () => {
@@ -1118,6 +1150,11 @@ export const NoteEditScreen = () => {
             while (agentQueue.current.length > 0) {
                 // Peek first
                 const task = agentQueue.current[0];
+                const isBackground = !!task.isBackground;
+
+                if (isMounted.current) {
+                    setIsBackgroundProcessing(isBackground);
+                }
 
                 // Get fresh context from REFS (strict chaining)
                 const contextContent = currentContentRef.current;
@@ -1231,6 +1268,9 @@ export const NoteEditScreen = () => {
         } finally {
             isProcessingQueue.current = false;
             setIsAIProcessing(false);
+            if (isMounted.current) {
+                setIsBackgroundProcessing(false);
+            }
         }
     };
 
@@ -1238,8 +1278,9 @@ export const NoteEditScreen = () => {
         recordingUri: string,
         transcribedText: string,
         currentContextContent: string,
-        currentNoteId: string | undefined, // We rely on Refs inside processAgentQueue now for consistency
-        variantId: string
+        currentNoteId: string | undefined,
+        variantId: string,
+        isBackground: boolean = false
     ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
             getAgentModeEnabled(),
@@ -1251,15 +1292,12 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        // Add to Queue
         agentQueue.current.push({
             recordingUri,
             transcribedText,
-            // variantId is resolved at runtime now
+            isBackground
         });
         setQueueLength(prev => prev + 1);
-
-        // Trigger Processing
         processAgentQueue();
     };
 
@@ -1387,12 +1425,13 @@ export const NoteEditScreen = () => {
             } else {
                 // No transcription (or failed) -> Insert Audio Block
                 const currentContent = currentContentRef.current;
-                // Get display URI
-                const playbackUri = await AudioService.readAudioFile(savedPath);
+
+                // Use persistent path for markdown to ensure it survives app restarts
+                // The AudioPlayer component handles decryption/playback
 
                 // Construct audio block
                 // We add newlines to ensure it's on its own block
-                const audioBlock = `${currentContent ? '\n' : ''} ![audio](${playbackUri}) \n`;
+                const audioBlock = `${currentContent ? '\n' : ''} ![audio](${savedPath}) \n`;
 
                 finalTranscribedContent = currentContent + audioBlock;
                 setContent(finalTranscribedContent);
@@ -1409,6 +1448,7 @@ export const NoteEditScreen = () => {
             setAudioUri(playbackUri);
             setAudioDuration(recording.duration);
             setShowAudioPlayer(true);
+            setPlayingRecordingId(voiceId); // Track the ID
             setHasTranscription(!!transcribedText);
 
         } else {
@@ -1421,6 +1461,7 @@ export const NoteEditScreen = () => {
                 setAudioUri(playbackUri);
                 setAudioDuration(recording.duration);
                 setShowAudioPlayer(true);
+                setPlayingRecordingId(voiceId); // Track the ID
                 setHasTranscription(false);
                 return;
             }
@@ -1436,7 +1477,7 @@ export const NoteEditScreen = () => {
         // 5. AGENT PROCESSING (If enabled)
         // Note: processAgentQueue uses currentContentRef internally, so we don't strictly need to pass content here,
         // but passing the updated version we just set helps consistency if that function used the arg.
-        await executeAgentFlow(recording.uri, transcribedText, finalTranscribedContent, currentNoteId, activeVariantId);
+        await executeAgentFlow(recording.uri, transcribedText, finalTranscribedContent, currentNoteId, activeVariantId, true);
 
     };
 
@@ -1490,7 +1531,8 @@ export const NoteEditScreen = () => {
 
     const handleInsertAudioToNote = async (recording: VoiceRecording) => {
         try {
-            const uri = await AudioService.readAudioFile(recording.file_path);
+            // Use persistent path directly to ensure it matches what is stored in DB and used for deletion
+            const uri = recording.file_path; // await AudioService.readAudioFile(recording.file_path);
             const currentContent = currentContentRef.current;
             const audioBlock = `${currentContent ? '\n' : ''} ![audio](${uri}) \n`;
 
@@ -1878,7 +1920,7 @@ export const NoteEditScreen = () => {
             setHasTranscription(true);
 
             // Trigger Agent Flow
-            await executeAgentFlow(audioUri, text, newContent, localNoteId, activeVariantId);
+            await executeAgentFlow(audioUri, text, newContent, localNoteId, activeVariantId, false);
 
         } catch (error: any) {
             setIsTranscribing(false);
@@ -1913,19 +1955,101 @@ export const NoteEditScreen = () => {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
+                        // 1. Cancel any pending auto-saves to prevent race condition overwriting our changes
+                        if (saveTimeoutRef.current) {
+                            clearTimeout(saveTimeoutRef.current);
+                        }
+
                         await deleteVoiceRecordingLocal(id);
-                        await AudioService.deleteAudioFile(path); // Verify if we should delete file? Yes.
-                        setVoiceRecordings(prev => prev.filter(r => r.id !== id));
-                        // If current audio is this one, close player
-                        // We need to check if path matches audioUri, but audioUri might be full path or uri
-                        // Simple equality check might fail if protocols differ (file://)
-                        // For now, simple check
-                        if (audioUri && (audioUri.includes(path) || path.includes(audioUri))) {
+                        await AudioService.deleteAudioFile(path);
+
+                        // Calculate new list state
+                        const remaining = voiceRecordings.filter(r => r.id !== id);
+                        setVoiceRecordings(remaining);
+
+                        // 1. Close player if playing deleted file OR if no recordings left
+                        if (remaining.length === 0) {
                             setShowAudioPlayer(false);
                             setAudioUri(null);
+                            setPlayingRecordingId(null);
+                        } else if (playingRecordingId === id) {
+                            // Precise match via ID
+                            setShowAudioPlayer(false);
+                            setAudioUri(null);
+                            setPlayingRecordingId(null);
+                        } else if (audioUri && (audioUri.includes(path) || path.includes(audioUri))) {
+                            // Fallback fuzzy match
+                            setShowAudioPlayer(false);
+                            setAudioUri(null);
+                            setPlayingRecordingId(null);
+                        }
+
+                        // 2. Remove the specific audio markdown tag from content
+
+                        // Check if we can use the Editor's native block removal (Proper Solution)
+                        if (editMode === 'visual' && editorRef.current) {
+                            console.log('[NoteEditScreen] Removing audio block via Editor API');
+                            editorRef.current.removeAudioBlock(path);
+                            // NOTE: Editor will trigger onChange -> handleContentChange -> setContent & debouncedSave
+                            // We do NOT call setReparseTrigger here, as the editor is already updated.
+
+                        } else {
+                            // Fallback: Raw String Manipulation (for Raw Mode or if Ref missing)
+                            const currentContent = currentContentRef.current;
+                            let newContent = currentContent;
+
+                            const filename = path.split('/').pop();
+                            if (filename) {
+                                const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\([^)]*${escapedFilename}\\)\\s*`, 'g');
+
+                                newContent = newContent.replace(audioTagRegex, '');
+                                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
+                            } else {
+                                const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\(${escapedPath}\\)\\s*`, 'g');
+                                newContent = newContent.replace(audioTagRegex, '');
+                                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
+                            }
+
+                            setContent(newContent);
+                            currentContentRef.current = newContent;
+
+                            // Save immediately for Raw mode
+                            if (localNoteId) {
+                                await updateNote(localNoteId, { content: newContent });
+                            }
+
+                            // Trigger reparse just in case if we switch back to visual
+                            setReparseTrigger(prev => prev + 1);
+                        }
+
+                        // 3. Update DB state if no recordings left
+                        if (remaining.length === 0 && localNoteId) {
+                            await updateNote(localNoteId, { has_audio: false });
+
+                            // 4. Auto-delete check (Deferred to handleBack)
+                            // We don't delete immediately anymore based on user feedback.
+                            // The user might want to add more content.
+                            // The empty check in handleBack will take care of cleaning up if they exit now.
+                            // We need to calculate potential new content for this check
+                            const latestContent = currentContentRef.current;
+                            const isContentEmpty = !title.trim() && !latestContent.trim();
+                            if (isContentEmpty) {
+                                console.log('[AutoClean] Note came empty after deleting last audio. Will be auto-deleted on exit if left empty.');
+                            }
+                        } else {
+                            // If not deleting note, ensure consistent history/save
+                            // If visual mode, debounce save is triggered by onChange. 
+                            // If raw mode, we just updated note above.
+                            // But for safety:
+                            const latestContent = currentContentRef.current;
+                            updateHistory(title, latestContent);
+                            debouncedSave(latestContent, title);
                         }
                     }
                 }
+
             ]
         );
     };
@@ -2035,12 +2159,7 @@ export const NoteEditScreen = () => {
                 </View>
             )}
 
-            {isTranscribing && (
-                <View style={styles.transcribingContainer}>
-                    <ActivityIndicator color={colors.primary} />
-                    <Text style={styles.transcribingText}>Transcribing...</Text>
-                </View>
-            )}
+
         </View>
     );
 
@@ -2075,13 +2194,15 @@ export const NoteEditScreen = () => {
                         )}
                     </TouchableOpacity>
 
-                    {/* Voice Recordings List Button */}
-                    <TouchableOpacity
-                        onPress={() => setShowRecordingsList(true)}
-                        style={styles.iconButton}
-                    >
-                        <MaterialIcons name="mic" size={24} color={colors.text} />
-                    </TouchableOpacity>
+                    {/* Voice Recordings List Button - Only show if recordings exist */}
+                    {voiceRecordings.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => setShowRecordingsList(true)}
+                            style={styles.iconButton}
+                        >
+                            <MaterialIcons name="mic" size={24} color={colors.text} />
+                        </TouchableOpacity>
+                    )}
 
 
 
@@ -2547,8 +2668,9 @@ export const NoteEditScreen = () => {
             />
 
             <AIProcessingIndicator
-                visible={isAIProcessing || queueLength > 0}
+                visible={(isAIProcessing || queueLength > 0 || isTranscribing)}
                 queueSize={queueLength}
+                isTranscribing={isTranscribing}
             />
 
             <VoiceRecorder

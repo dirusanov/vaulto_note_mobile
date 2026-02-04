@@ -181,9 +181,17 @@ export const NotesListScreen = () => {
         }
     };
 
+    // Filter out empty notes (no title, content, or audio)
+    const filteredNotes = notes.filter(n => {
+        const hasTitle = n.title && n.title.trim().length > 0;
+        const hasContent = n.content && n.content.trim().length > 0;
+        const hasAudio = n.has_audio;
+        return hasTitle || hasContent || hasAudio;
+    });
+
     // Split notes into two columns for masonry layout
-    const leftColumnNotes = notes.filter((_, index) => index % 2 === 0);
-    const rightColumnNotes = notes.filter((_, index) => index % 2 !== 0);
+    const leftColumnNotes = filteredNotes.filter((_, index) => index % 2 === 0);
+    const rightColumnNotes = filteredNotes.filter((_, index) => index % 2 !== 0);
 
     const PrimaryButton = () => {
         if (isMicPrimary) {
@@ -282,7 +290,7 @@ export const NotesListScreen = () => {
                 </View>
             </Animated.View>
 
-            {loading && notes.length === 0 ? (
+            {loading && filteredNotes.length === 0 ? (
                 <Loader />
             ) : (
                 <ScrollView
@@ -298,7 +306,7 @@ export const NotesListScreen = () => {
                         <RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={colors.primary} />
                     }
                 >
-                    {notes.length === 0 ? (
+                    {filteredNotes.length === 0 ? (
                         <View style={styles.emptyContainer}>
                             <EmptyState message={isMicPrimary ? "Tap the microphone to record" : "Tap the pencil to write"} />
                         </View>

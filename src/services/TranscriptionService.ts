@@ -10,8 +10,10 @@ import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey } from '..
 const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
-const BACKEND_TRANSCRIBE_URL = `${API_URL}/gateway/ai/transcribe`;
-const BACKEND_PROCESS_NOTE_URL = `${API_URL}/gateway/ai/process_voice_note`;
+// Ensure we don't double up on /gateway if it's already in API_URL
+const BASE_URL = API_URL.endsWith('/gateway') ? API_URL : `${API_URL}/gateway`;
+const BACKEND_TRANSCRIBE_URL = `${BASE_URL}/ai/transcribe`;
+const BACKEND_PROCESS_NOTE_URL = `${BASE_URL}/ai/process_voice_note`;
 
 export interface TranscriptionResult {
     text: string;
@@ -282,6 +284,9 @@ export async function testSelfHostedConnection(url: string, apiKey: string): Pro
         return false;
     }
 }
+
+
+
 /**
  * Process voice note using the Smart Agent backend
  */
@@ -415,6 +420,8 @@ export async function processVoiceNote(
             formData.append('recent_messages', JSON.stringify(limitedMessages));
         }
 
+
+
         const makeRequest = async (url: string) => {
             return await fetch(url, {
                 method: 'POST',
@@ -484,3 +491,4 @@ export async function processVoiceNote(
         };
     }
 }
+

@@ -8,14 +8,21 @@ import { typography } from '../theme/typography';
 interface AIProcessingIndicatorProps {
     visible: boolean;
     queueSize?: number;
+    isTranscribing?: boolean;
 }
 
 export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     visible,
-    queueSize = 0
+    queueSize = 0,
+    isTranscribing = false
 }) => {
     const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+    // Animations for AI (Spin)
     const rotateAnim = React.useRef(new Animated.Value(0)).current;
+
+    // Animations for Transcribing (Pulse)
+    const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         if (visible) {
@@ -25,18 +32,38 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                 useNativeDriver: true,
             }).start();
 
-            // Continuous rotation loop
-            const spin = Animated.loop(
-                Animated.timing(rotateAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    easing: Easing.linear,
-                    useNativeDriver: true,
-                })
-            );
-            spin.start();
+            if (isTranscribing) {
+                // Pulse Animation for Transcription
+                Animated.loop(
+                    Animated.sequence([
+                        Animated.timing(pulseAnim, {
+                            toValue: 1.2,
+                            duration: 800,
+                            easing: Easing.inOut(Easing.ease),
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(pulseAnim, {
+                            toValue: 1,
+                            duration: 800,
+                            easing: Easing.inOut(Easing.ease),
+                            useNativeDriver: true,
+                        }),
+                    ])
+                ).start();
+                rotateAnim.setValue(0); // Reset rotation
+            } else {
+                // Spin Animation for AI
+                Animated.loop(
+                    Animated.timing(rotateAnim, {
+                        toValue: 1,
+                        duration: 2000,
+                        easing: Easing.linear,
+                        useNativeDriver: true,
+                    })
+                ).start();
+                pulseAnim.setValue(1); // Reset pulse
+            }
 
-            return () => spin.stop();
         } else {
             Animated.timing(fadeAnim, {
                 toValue: 0,
@@ -44,12 +71,12 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                 useNativeDriver: true,
             }).start();
             rotateAnim.setValue(0);
+            pulseAnim.setValue(1);
         }
-    }, [visible]);
+    }, [visible, isTranscribing]);
 
     if (!visible) return null;
 
-    // Interpolate rotation
     const spin = rotateAnim.interpolate({
         inputRange: [0, 1],
         outputRange: ['0deg', '360deg'],
@@ -58,14 +85,24 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     return (
         <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
             <View style={styles.iconContainer}>
-                <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                    <MaterialIcons name="settings" size={20} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
-                </Animated.View>
-                <MaterialIcons name="smart-toy" size={24} color={colors.primary} />
+                {isTranscribing ? (
+                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                        <MaterialIcons name="graphic-eq" size={24} color={colors.primary} />
+                    </Animated.View>
+                ) : (
+                    <>
+                        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                            <MaterialIcons name="settings" size={20} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
+                        </Animated.View>
+                        <MaterialIcons name="smart-toy" size={24} color={colors.primary} />
+                    </>
+                )}
             </View>
             <View style={styles.textContainer}>
-                <Text style={styles.title}>AI Agent working...</Text>
-                {queueSize > 0 && (
+                <Text style={styles.title}>
+                    {isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
+                </Text>
+                {(!isTranscribing && queueSize > 0) && (
                     <Text style={styles.subtitle}>{queueSize} task{queueSize > 1 ? 's' : ''} pending</Text>
                 )}
             </View>
@@ -76,7 +113,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        bottom: 100, // Above typical FAB or keyboard area
+        bottom: 100,
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
