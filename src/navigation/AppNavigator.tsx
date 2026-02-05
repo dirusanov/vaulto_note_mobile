@@ -8,6 +8,9 @@ import { colors } from '../theme/colors';
 import { SignInScreen } from '../screens/SignInScreen';
 import { SignUpScreen } from '../screens/SignUpScreen';
 import { EmailVerificationScreen } from '../screens/EmailVerificationScreen';
+import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -40,6 +43,17 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                 component={EmailVerificationScreen}
                 options={{ headerShown: false }}
             />
+            <Stack.Screen
+                name="ForgotPassword"
+                component={ForgotPasswordScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="ResetPassword"
+                component={ResetPasswordScreen}
+                options={{ headerShown: false }}
+            />
+
             <Stack.Screen
                 name="NotesList"
                 component={NotesListScreen}

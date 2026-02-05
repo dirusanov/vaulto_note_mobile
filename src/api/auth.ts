@@ -92,4 +92,16 @@ export const authApi = {
         });
         return response.data;
     },
+
+    requestPasswordReset: async (email: string): Promise<void> => {
+        await authClient.post('/auth/password-reset/request', { email });
+    },
+
+    confirmPasswordReset: async (token: string, newPassword: string): Promise<void> => {
+        await authClient.post('/auth/password-reset/confirm', {
+            token,
+            new_password: newPassword,
+        });
+    },
 };
+
