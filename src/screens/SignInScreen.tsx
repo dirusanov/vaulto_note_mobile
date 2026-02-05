@@ -57,6 +57,15 @@ export const SignInScreen = () => {
                             onPress={handleGoogleSignIn}
                             loading={googleLoading}
                         />
+
+                        <TouchableOpacity
+                            style={styles.signUpButton}
+                            onPress={() => navigation.navigate('SignUp')}
+                        >
+                            <Text style={styles.signUpText}>
+                                Don{'\''}t have an account? <Text style={styles.signUpLink}>Sign Up</Text>
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
@@ -100,5 +109,17 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         gap: spacing.m,
+    },
+    signUpButton: {
+        marginTop: spacing.m,
+        alignItems: 'center',
+    },
+    signUpText: {
+        ...typography.body,
+        color: colors.textSecondary,
+    },
+    signUpLink: {
+        color: colors.primary,
+        fontWeight: '600',
     },
 });
