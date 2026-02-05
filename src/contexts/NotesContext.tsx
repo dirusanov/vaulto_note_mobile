@@ -22,6 +22,11 @@ interface NotesContextType {
     ) => Promise<NoteImprovement>;
     deleteImprovement: (noteId: string, improvementId: string) => Promise<void>;
     setActiveVariant: (noteId: string, variantId: string | null) => Promise<void>;
+    pinNote: (id: string) => Promise<void>;
+    unpinNote: (id: string) => Promise<void>;
+    batchPinNotes: (ids: string[]) => Promise<void>;
+    batchUnpinNotes: (ids: string[]) => Promise<void>;
+    batchDeleteNotes: (ids: string[]) => Promise<void>;
     // decrypt removed – decryption is handled inside useNotes hook
 }
 

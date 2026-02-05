@@ -35,6 +35,7 @@ export interface Note {
     audio_duration?: number;
     encrypted_transcription?: string;
     has_audio?: boolean;
+    is_pinned?: boolean;
     title?: string;
     content?: string;
     transcription?: string;
@@ -69,6 +70,7 @@ export interface SyncChangeRequest {
     base_version: number;
     client_updated_at: string;
     is_active?: boolean;
+    is_pinned?: boolean;
     last_variant_id?: string | null;
 }
 
@@ -103,6 +105,7 @@ export interface ServerNote {
     updated_at: string;
     last_variant_id?: string | null;
     is_active?: boolean;
+    is_pinned?: boolean;
 }
 
 export interface ServerImprovement {

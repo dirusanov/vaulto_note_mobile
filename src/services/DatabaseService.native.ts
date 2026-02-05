@@ -46,6 +46,7 @@ export const initDatabase = async (): Promise<void> => {
                 audio_duration INTEGER,
                 encrypted_transcription TEXT,
                 has_audio INTEGER DEFAULT 0,
+                is_pinned INTEGER DEFAULT 0,
                 synced INTEGER DEFAULT 0,
                 dirty INTEGER DEFAULT 0,
                 deleted INTEGER DEFAULT 0,
@@ -80,6 +81,7 @@ export const initDatabase = async (): Promise<void> => {
         await ensureColumnExists(database, 'notes', 'is_active', 'INTEGER DEFAULT 0');
         await ensureColumnExists(database, 'notes', 'label', 'TEXT');
         await ensureColumnExists(database, 'notes', 'option_id', 'TEXT');
+        await ensureColumnExists(database, 'notes', 'is_pinned', 'INTEGER DEFAULT 0');
 
         // ... (existing ensures)
         const addedDirty = await ensureColumnExists(database, 'notes', 'dirty', 'INTEGER DEFAULT 0');
@@ -266,10 +268,10 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
         await database.runAsync(
             `INSERT INTO notes (
                 id, encrypted_title, encrypted_content, created_at, updated_at,
-                audio_file_path, audio_duration, encrypted_transcription, has_audio,
+                audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned,
                 synced, dirty, deleted, version, server_updated_at, content_nonce, pending_delete,
                 parent_id, is_active, label, option_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 encrypted_title=excluded.encrypted_title,
                 encrypted_content=excluded.encrypted_content,
@@ -278,6 +280,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 audio_duration=excluded.audio_duration,
                 encrypted_transcription=excluded.encrypted_transcription,
                 has_audio=excluded.has_audio,
+                is_pinned=excluded.is_pinned,
                 synced=excluded.synced,
                 dirty=excluded.dirty,
                 deleted=excluded.deleted,
@@ -299,6 +302,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 note.audio_duration ?? null,
                 note.encrypted_transcription ?? null,
                 note.has_audio ? 1 : 0,
+                note.is_pinned ? 1 : 0,
                 note.synced ?? 1,
                 isDirty,
                 isDeleted,
@@ -432,6 +436,7 @@ export const getNotesLocal = async (): Promise<Note[]> => {
                     audio_duration: row.audio_duration ?? undefined,
                     encrypted_transcription: row.encrypted_transcription ?? undefined,
                     has_audio: !!row.audio_file_path,
+                    is_pinned: row.is_pinned === 1,
                     synced: row.synced ?? 1,
                     dirty: row.dirty === 1,
                     deleted: row.deleted === 1,
@@ -543,6 +548,7 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
             audio_duration: row.audio_duration ?? undefined,
             encrypted_transcription: row.encrypted_transcription ?? undefined,
             has_audio: !!row.audio_file_path,
+            is_pinned: row.is_pinned === 1,
             synced: row.synced ?? 1,
             dirty: row.dirty === 1,
             deleted: row.deleted === 1,

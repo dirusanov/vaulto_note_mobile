@@ -151,6 +151,7 @@ class SyncService {
                     base_version: note.version ?? 0,
                     client_updated_at: note.updated_at || new Date().toISOString(),
                     is_active: note.is_active,
+                    is_pinned: note.is_pinned ?? false,
                     last_variant_id: null, // Deprecated: using is_active now
                 });
             }
@@ -435,6 +436,7 @@ class SyncService {
                 audio_file_path: existing?.audio_file_path,
                 audio_duration: existing?.audio_duration,
                 has_audio: existing?.has_audio,
+                is_pinned: serverNote.is_pinned ?? existing?.is_pinned ?? false,
                 synced: 1,
                 dirty: false,
                 deleted: false,

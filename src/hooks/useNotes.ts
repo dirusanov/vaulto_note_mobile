@@ -671,6 +671,132 @@ export const useNotes = () => {
         [refreshFromLocal, isAuthenticated]
     );
 
+    const pinNote = useCallback(
+        async (id: string) => {
+            try {
+                const existing = notesRef.current.find(n => n.id === id);
+                if (!existing) throw new Error('Note not found');
+
+                const updated: Note = {
+                    ...existing,
+                    is_pinned: true,
+                    updated_at: new Date().toISOString(),
+                    synced: 0,
+                    dirty: true,
+                };
+                await saveNoteLocal(updated);
+                await refreshFromLocal();
+                syncService.scheduleAutoSync();
+            } catch (error) {
+                console.error('[useNotes] Failed to pin note', error);
+                throw error;
+            }
+        },
+        [refreshFromLocal]
+    );
+
+    const unpinNote = useCallback(
+        async (id: string) => {
+            try {
+                const existing = notesRef.current.find(n => n.id === id);
+                if (!existing) throw new Error('Note not found');
+
+                const updated: Note = {
+                    ...existing,
+                    is_pinned: false,
+                    updated_at: new Date().toISOString(),
+                    synced: 0,
+                    dirty: true,
+                };
+                await saveNoteLocal(updated);
+                await refreshFromLocal();
+                syncService.scheduleAutoSync();
+            } catch (error) {
+                console.error('[useNotes] Failed to unpin note', error);
+                throw error;
+            }
+        },
+        [refreshFromLocal]
+    );
+
+    const batchPinNotes = useCallback(
+        async (ids: string[]) => {
+            try {
+                for (const id of ids) {
+                    const existing = notesRef.current.find(n => n.id === id);
+                    if (existing) {
+                        const updated: Note = {
+                            ...existing,
+                            is_pinned: true,
+                            updated_at: new Date().toISOString(),
+                            synced: 0,
+                            dirty: true,
+                        };
+                        await saveNoteLocal(updated);
+                    }
+                }
+                await refreshFromLocal();
+                syncService.scheduleAutoSync();
+            } catch (error) {
+                console.error('[useNotes] Failed to batch pin notes', error);
+                throw error;
+            }
+        },
+        [refreshFromLocal]
+    );
+
+    const batchUnpinNotes = useCallback(
+        async (ids: string[]) => {
+            try {
+                for (const id of ids) {
+                    const existing = notesRef.current.find(n => n.id === id);
+                    if (existing) {
+                        const updated: Note = {
+                            ...existing,
+                            is_pinned: false,
+                            updated_at: new Date().toISOString(),
+                            synced: 0,
+                            dirty: true,
+                        };
+                        await saveNoteLocal(updated);
+                    }
+                }
+                await refreshFromLocal();
+                syncService.scheduleAutoSync();
+            } catch (error) {
+                console.error('[useNotes] Failed to batch unpin notes', error);
+                throw error;
+            }
+        },
+        [refreshFromLocal]
+    );
+
+    const batchDeleteNotes = useCallback(
+        async (ids: string[]) => {
+            try {
+                for (const id of ids) {
+                    const existing = notesRef.current.find(n => n.id === id);
+                    if (existing) {
+                        const marked: Note = {
+                            ...existing,
+                            deleted: true,
+                            synced: 0,
+                            dirty: true,
+                            updated_at: new Date().toISOString(),
+                        };
+                        await saveNoteLocal(marked);
+                    }
+                }
+                await refreshFromLocal();
+                syncService.scheduleAutoSync();
+            } catch (error) {
+                console.error('[useNotes] Failed to batch delete notes', error);
+                throw error;
+            }
+        },
+        [refreshFromLocal]
+    );
+
     return {
         notes,
         loading,
@@ -687,5 +813,10 @@ export const useNotes = () => {
         updateImprovement,
         deleteImprovement,
         setActiveVariant,
+        pinNote,
+        unpinNote,
+        batchPinNotes,
+        batchUnpinNotes,
+        batchDeleteNotes,
     };
 };

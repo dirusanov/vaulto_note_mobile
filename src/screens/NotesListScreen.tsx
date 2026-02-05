@@ -6,6 +6,8 @@ import { NoteCard } from '../components/NoteCard';
 import { Loader } from '../components/Loader';
 import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
+import { SelectionActionPanel } from '../components/SelectionActionPanel';
+import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -22,9 +24,14 @@ const DOCK_PREF_KEY = 'vaulto_dock_preference';
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { notes, loading, fetchNotes, searchNotes, syncNotes } = useNotesContext();
+    const { notes, loading, fetchNotes, searchNotes, syncNotes, batchPinNotes, batchUnpinNotes, batchDeleteNotes } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Selection mode state
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // true = Mic is Center (Primary), Note is Right (Secondary)
     // false = Note is Center (Primary), Mic is Right (Secondary)
@@ -73,7 +80,33 @@ export const NotesListScreen = () => {
     };
 
     const handleNotePress = (note: any) => {
-        navigation.navigate('NoteEdit', { noteId: note.id });
+        if (isSelectionMode) {
+            // Toggle selection
+            const newSelected = new Set(selectedNoteIds);
+            if (newSelected.has(note.id)) {
+                newSelected.delete(note.id);
+            } else {
+                newSelected.add(note.id);
+            }
+            setSelectedNoteIds(newSelected);
+
+            // Exit selection mode if no notes selected
+            if (newSelected.size === 0) {
+                setIsSelectionMode(false);
+            }
+        } else {
+            // Normal behavior - navigate to note
+            navigation.navigate('NoteEdit', { noteId: note.id });
+        }
+    };
+
+    const handleNoteLongPress = (note: any) => {
+        if (!isSelectionMode) {
+            // Enter selection mode and select this note
+            setIsSelectionMode(true);
+            setSelectedNoteIds(new Set([note.id]));
+            Vibration.vibrate(50);
+        }
     };
 
     const handleSettingsPress = () => {
@@ -98,6 +131,41 @@ export const NotesListScreen = () => {
     const handleSearch = (text: string) => {
         setSearchQuery(text);
         searchNotes(text);
+    };
+
+    const handleExitSelectionMode = () => {
+        setIsSelectionMode(false);
+        setSelectedNoteIds(new Set());
+    };
+
+    const handleBatchPin = async () => {
+        const ids = Array.from(selectedNoteIds);
+        // Check if all selected notes are already pinned
+        const allPinned = filteredNotes
+            .filter(n => ids.includes(n.id))
+            .every(n => n.is_pinned);
+
+        if (allPinned) {
+            await batchUnpinNotes(ids);
+        } else {
+            await batchPinNotes(ids);
+        }
+        handleExitSelectionMode();
+    };
+
+    const handleBatchDelete = () => {
+        setShowDeleteConfirm(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        const ids = Array.from(selectedNoteIds);
+        setShowDeleteConfirm(false);
+        await batchDeleteNotes(ids);
+        handleExitSelectionMode();
+    };
+
+    const handleCancelDelete = () => {
+        setShowDeleteConfirm(false);
     };
 
     const onRefresh = useCallback(async () => {
@@ -190,8 +258,23 @@ export const NotesListScreen = () => {
     });
 
     // Split notes into two columns for masonry layout
-    const leftColumnNotes = filteredNotes.filter((_, index) => index % 2 === 0);
-    const rightColumnNotes = filteredNotes.filter((_, index) => index % 2 !== 0);
+    // Sort pinned notes first
+    const sortedNotes = [...filteredNotes].sort((a, b) => {
+        // Pinned notes come first
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        // Otherwise sort by updated_at
+        const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return dateB - dateA;
+    });
+
+    const leftColumnNotes = sortedNotes.filter((_, index) => index % 2 === 0);
+    const rightColumnNotes = sortedNotes.filter((_, index) => index % 2 !== 0);
+
+    // Check if all selected notes are pinned
+    const selectedNotes = sortedNotes.filter(n => selectedNoteIds.has(n.id));
+    const allSelectedPinned = selectedNotes.length > 0 && selectedNotes.every(n => n.is_pinned);
 
     const PrimaryButton = () => {
         if (isMicPrimary) {
@@ -255,40 +338,42 @@ export const NotesListScreen = () => {
 
     return (
         <ScreenContainer>
-            <View style={styles.topBar}>
-                {/* <Text style={styles.topTitle}>Notes</Text> */}
-                <View style={styles.topActions}>
-                    {/* <TouchableOpacity
-                        style={[styles.syncButton, loading && styles.syncButtonDisabled]}
-                        onPress={handleSyncPress}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
-                        ) : (
-                            <MaterialIcons name="sync" size={20} color={colors.primary} />
+            {isSelectionMode ? (
+                <SelectionActionPanel
+                    selectedCount={selectedNoteIds.size}
+                    onPin={handleBatchPin}
+                    onUnpin={handleBatchPin}
+                    onDelete={handleBatchDelete}
+                    onClose={handleExitSelectionMode}
+                    allPinned={allSelectedPinned}
+                />
+            ) : (
+                <View style={styles.topBar}>
+                    {/* <Text style={styles.topTitle}>Notes</Text> */}
+                    <View style={styles.topActions}>
+                        {/* Sync button code commented out */}
+                    </View>
+                </View>
+            )}
+            {!isSelectionMode && (
+                <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, 60], outputRange: [0, 1] }) }]}>
+                    <View style={styles.searchBar}>
+                        <MaterialIcons name="search" size={20} color={colors.textTertiary} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search notes..."
+                            placeholderTextColor={colors.textTertiary}
+                            value={searchQuery}
+                            onChangeText={handleSearch}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => handleSearch('')}>
+                                <MaterialIcons name="close" size={20} color={colors.textTertiary} />
+                            </TouchableOpacity>
                         )}
-                        <Text style={styles.syncButtonText}>Sync</Text>
-                    </TouchableOpacity> */}
-                </View>
-            </View>
-            <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, 60], outputRange: [0, 1] }) }]}>
-                <View style={styles.searchBar}>
-                    <MaterialIcons name="search" size={20} color={colors.textTertiary} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search notes..."
-                        placeholderTextColor={colors.textTertiary}
-                        value={searchQuery}
-                        onChangeText={handleSearch}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => handleSearch('')}>
-                            <MaterialIcons name="close" size={20} color={colors.textTertiary} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </Animated.View>
+                    </View>
+                </Animated.View>
+            )}
 
             {loading && filteredNotes.length === 0 ? (
                 <Loader />
@@ -314,12 +399,26 @@ export const NotesListScreen = () => {
                         <View style={styles.masonryContainer}>
                             <View style={styles.column}>
                                 {leftColumnNotes.map(note => (
-                                    <NoteCard key={note.id} note={note} onPress={() => handleNotePress(note)} />
+                                    <NoteCard
+                                        key={note.id}
+                                        note={note}
+                                        onPress={() => handleNotePress(note)}
+                                        onLongPress={() => handleNoteLongPress(note)}
+                                        isSelectionMode={isSelectionMode}
+                                        isSelected={selectedNoteIds.has(note.id)}
+                                    />
                                 ))}
                             </View>
                             <View style={styles.column}>
                                 {rightColumnNotes.map(note => (
-                                    <NoteCard key={note.id} note={note} onPress={() => handleNotePress(note)} />
+                                    <NoteCard
+                                        key={note.id}
+                                        note={note}
+                                        onPress={() => handleNotePress(note)}
+                                        onLongPress={() => handleNoteLongPress(note)}
+                                        isSelectionMode={isSelectionMode}
+                                        isSelected={selectedNoteIds.has(note.id)}
+                                    />
                                 ))}
                             </View>
                         </View>
@@ -328,34 +427,43 @@ export const NotesListScreen = () => {
                 </ScrollView>
             )}
 
-            {/* Floating Dock */}
-            <View style={styles.dockContainer}>
-                <View style={styles.dock}>
-                    <View style={styles.dockButtonRow}>
-                        {/* Settings Button (Left) */}
-                        <TouchableOpacity
-                            style={styles.dockButton}
-                            onPress={handleSettingsPress}
-                            activeOpacity={0.7}
-                        >
-                            <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
-                        </TouchableOpacity>
+            {/* Floating Dock - hide in selection mode */}
+            {!isSelectionMode && (
+                <View style={styles.dockContainer}>
+                    <View style={styles.dock}>
+                        <View style={styles.dockButtonRow}>
+                            {/* Settings Button (Left) */}
+                            <TouchableOpacity
+                                style={styles.dockButton}
+                                onPress={handleSettingsPress}
+                                activeOpacity={0.7}
+                            >
+                                <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
+                            </TouchableOpacity>
 
-                        {/* Center Primary Button */}
-                        <PrimaryButton />
+                            {/* Center Primary Button */}
+                            <PrimaryButton />
 
-                        {/* Right Secondary Button */}
-                        <SecondaryButton />
+                            {/* Right Secondary Button */}
+                            <SecondaryButton />
+                        </View>
+                        <Text style={styles.hintText}>Long press to swap</Text>
                     </View>
-                    <Text style={styles.hintText}>Long press to swap</Text>
                 </View>
-            </View>
+            )}
 
             <VoiceRecorder
                 visible={isVoiceRecorderVisible}
                 onFinish={(rec, transcribe) => handleVoiceFinish(rec, transcribe)}
                 onCancel={() => setIsVoiceRecorderVisible(false)}
                 autoStart={true}
+            />
+
+            <DeleteConfirmationDialog
+                visible={showDeleteConfirm}
+                noteCount={selectedNoteIds.size}
+                onConfirm={handleConfirmDelete}
+                onCancel={handleCancelDelete}
             />
         </ScreenContainer>
     );

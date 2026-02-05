@@ -11,9 +11,12 @@ import { parseMarkdownText, parseMarkdownToData } from '../utils/markdownUtils';
 interface NoteCardProps {
     note: Note;
     onPress: () => void;
+    onLongPress?: () => void;
+    isSelectionMode?: boolean;
+    isSelected?: boolean;
 }
 
-export const NoteCard = ({ note, onPress }: NoteCardProps) => {
+export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
     let content = note.content || '';
 
     // Check if there is an active improvement (active child note)
@@ -120,10 +123,20 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
 
     return (
         <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, isSelected && styles.selectedCard]}
             onPress={onPress}
+            onLongPress={onLongPress}
             activeOpacity={0.9}
         >
+            {isSelectionMode && (
+                <View style={styles.selectionIndicator}>
+                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                        {isSelected && (
+                            <MaterialIcons name="check" size={16} color={colors.background} />
+                        )}
+                    </View>
+                </View>
+            )}
             <View style={styles.content}>
                 <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle]} numberOfLines={1}>
                     {title || (hasAudio ? 'Voice Note' : ' ')}
@@ -137,16 +150,19 @@ export const NoteCard = ({ note, onPress }: NoteCardProps) => {
                     <Text style={styles.audioPreviewLabel}> Audio recording available</Text>
                 )}
             </View>
-            {(note.updated_at || note.created_at) && (
-                <View style={styles.footer}>
-                    <Text style={styles.date}>
-                        {formatDate(note.updated_at || note.created_at || '')}
-                    </Text>
+            <View style={styles.footer}>
+                <Text style={styles.date}>
+                    {formatDate(note.updated_at || note.created_at || '')}
+                </Text>
+                <View style={styles.iconsRow}>
                     {hasAudio && (
                         <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
                     )}
+                    {note.is_pinned && (
+                        <MaterialIcons name="push-pin" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                    )}
                 </View>
-            )}
+            </View>
         </TouchableOpacity>
     );
 };
@@ -162,6 +178,32 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 8,
         elevation: 3,
+        position: 'relative',
+    },
+    selectedCard: {
+        borderWidth: 2,
+        borderColor: colors.primary,
+        backgroundColor: colors.surface,
+    },
+    selectionIndicator: {
+        position: 'absolute',
+        top: spacing.s,
+        right: spacing.s,
+        zIndex: 10,
+    },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    checkboxSelected: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
     content: {
         padding: spacing.m,
@@ -184,6 +226,10 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.m,
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    iconsRow: {
+        flexDirection: 'row',
         alignItems: 'center',
     },
     date: {
