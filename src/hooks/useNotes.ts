@@ -16,17 +16,42 @@ import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
 
-const DEMO_SEEDED_KEY = 'vaulto_demo_seeded_v1';
+const DEMO_SEEDED_KEY = 'vaulto_demo_seeded_v3';
+const DEMO_IDS_KEY = 'vaulto_demo_note_ids';
+
 const demoSeedNotes = [
     {
-        title: 'Focus list for today',
-        content: ['Morning sync highlights', 'Review Vaulto mobile design', 'Investor call at 15:00', 'Capture idea for tomorrow']
-            .map((item, index) => `${index + 1}. ${item}`)
-            .join('\n'),
+        title: '🛒 Weekly Grocery List',
+        content: [
+            '- [ ] 🥛 Fresh Milk',
+            '- [ ] 🥚 Organic Eggs (1/2 doz)',
+            '- [ ] 🥑 Avocados (ripe!)',
+            '- [ ] 🥖 Sourdough Bread',
+            '- [ ] 🍎 Honeycrisp Apples',
+            '- [ ] ☕ Coffee Beans (Dark Roast)'
+        ].join('\n'),
     },
     {
-        title: 'Idea: Calm onboarding',
-        content: 'Guide new users with a warm intro, highlight secure sync, and keep the mic button one tap away. Maybe show a quick animation when a transcript arrives.',
+        title: 'Welcome to Vaulto 🚀',
+        content: [
+            '# Express Yourself',
+            "Vaulto isn't just for plain text. It's designed to make your thoughts **bold** and _beautiful_.",
+            '',
+            '## Rich Formatting',
+            'You can organize your thoughts with:',
+            '',
+            '> Blockquotes for important ideas or key takeaways.',
+            '',
+            '## Colorful Highlighting',
+            'Highlight what matters most with color:',
+            '- ==yellow:Important notes== stand out',
+            '- ==red:Urgent tasks== catch your eye',
+            '- ==green:Completed goals== feel rewarding',
+            '- ==blue:Calm thoughts== for reflection',
+            '- ==purple:Creative ideas== spark joy',
+            '',
+            'Tap anywhere to start editing. Enjoy your new space! ✨'
+        ].join('\n'),
     },
 ];
 
@@ -102,8 +127,9 @@ export const useNotes = () => {
             content: string;
             audio?: NoteAudio;
             transcription?: string;
+            dirty?: boolean;
         }) => {
-            const { id, title, content, audio, transcription } = params;
+            const { id, title, content, audio, transcription, dirty = true } = params;
             const encryptedTitle = await encrypt(title);
             const encryptedContent = await encrypt(content);
             const encryptedTranscription = transcription ? await encrypt(transcription) : undefined;
@@ -122,7 +148,7 @@ export const useNotes = () => {
                 title,
                 content,
                 synced: 0,
-                dirty: true,
+                dirty: dirty,
                 deleted: false,
                 version: 0,
                 is_active: true, // New parent notes are active by default
@@ -176,11 +202,15 @@ export const useNotes = () => {
             if (alreadySeeded === '1') {
                 return false;
             }
+            const demoIds: string[] = [];
             for (const demo of demoSeedNotes) {
                 const id = await generateUUID();
-                await buildLocalNote({ id, title: demo.title, content: demo.content });
+                demoIds.push(id);
+                // Create with dirty=false so they don't auto-sync unless edited
+                await buildLocalNote({ id, title: demo.title, content: demo.content, dirty: false });
             }
             await AsyncStorage.setItem(DEMO_SEEDED_KEY, '1');
+            await AsyncStorage.setItem(DEMO_IDS_KEY, JSON.stringify(demoIds));
             return true;
         } catch (error) {
             console.error('[useNotes] Failed to seed demo notes:', error);
@@ -188,8 +218,46 @@ export const useNotes = () => {
         }
     }, [buildLocalNote]);
 
+    const cleanupDemoNotesIfNeeded = useCallback(async (allNotes: Note[]) => {
+        try {
+            // Check if we have any synced notes (from server)
+            const hasServerNotes = allNotes.some(n => n.synced === 1);
+            if (!hasServerNotes) return;
+
+            const demoIdsJson = await AsyncStorage.getItem(DEMO_IDS_KEY);
+            if (!demoIdsJson) return;
+
+            const demoIds = JSON.parse(demoIdsJson) as string[];
+            if (!Array.isArray(demoIds) || demoIds.length === 0) return;
+
+            let didDelete = false;
+            for (const id of demoIds) {
+                const note = allNotes.find(n => n.id === id);
+                // If note exists AND is still not dirty (untouched) AND not synced (local only)
+                if (note && !note.dirty && note.synced === 0) {
+                    console.log('[useNotes] Removing untouched demo note:', id);
+                    await deleteNoteLocal(id);
+                    didDelete = true;
+                }
+            }
+
+            if (didDelete) {
+                // Remove the list so we don't check again unnecessarily
+                await AsyncStorage.removeItem(DEMO_IDS_KEY);
+            }
+        } catch (e) {
+            console.error('[useNotes] Failed to cleanup demo notes', e);
+        }
+    }, []);
+
     const refreshFromLocal = useCallback(async () => {
         let localNotes = await getNotesLocal();
+
+        // Check for cleanup before filtering
+        await cleanupDemoNotesIfNeeded(localNotes);
+        // Re-fetch in case we deleted something
+        localNotes = await getNotesLocal();
+
         let visible = await filterAndCleanupNotes(localNotes);
 
         if (visible.length === 0) {
@@ -202,7 +270,7 @@ export const useNotes = () => {
 
         setNotes(visible);
         return visible;
-    }, [filterAndCleanupNotes, seedDemoNotes]);
+    }, [filterAndCleanupNotes, seedDemoNotes, cleanupDemoNotesIfNeeded]);
 
     // Subscribe to SyncService updates
     useEffect(() => {
