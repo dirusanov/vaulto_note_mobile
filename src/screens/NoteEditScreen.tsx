@@ -15,6 +15,7 @@ import {
     Keyboard,
     Share,
     Animated,
+    AppState,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -912,7 +913,7 @@ export const NoteEditScreen = () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
             saveNote();
-        }, 2000);
+        }, 500); // Reduced from 2000ms to 500ms for faster auto-save
     }, [saveNote]);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
@@ -1007,6 +1008,27 @@ export const NoteEditScreen = () => {
 
         return unsubscribe;
     }, [content, navigation, saveNote, title]);
+
+    // Auto-save when app goes to background or inactive state
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (nextAppState) => {
+            if (nextAppState === 'background' || nextAppState === 'inactive') {
+                // Clear any pending debounced save to prevent duplicate
+                if (saveTimeoutRef.current) {
+                    clearTimeout(saveTimeoutRef.current);
+                    saveTimeoutRef.current = null;
+                }
+                // Save immediately when app goes to background
+                saveNote().catch(error => {
+                    console.error('Error during background auto-save:', error);
+                });
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, [saveNote]);
 
     const handleBack = () => {
         Keyboard.dismiss();
