@@ -766,11 +766,11 @@ export const SettingsScreen = () => {
                     <Text style={styles.info}>Data is not stored or analyzed.</Text>
 
                     <View style={styles.legalLinks}>
-                        <TouchableOpacity onPress={() => Linking.openURL('https://vaulto.app/privacy')}>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>
                             <Text style={styles.linkText}>Privacy Policy</Text>
                         </TouchableOpacity>
                         <View style={styles.linkDivider} />
-                        <TouchableOpacity onPress={() => Linking.openURL('https://vaulto.app/terms')}>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')}>
                             <Text style={styles.linkText}>Terms of Service</Text>
                         </TouchableOpacity>
                     </View>

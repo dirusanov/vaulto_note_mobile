@@ -127,14 +127,14 @@ export const SignUpScreen = () => {
                                     I agree to the{' '}
                                     <Text
                                         style={styles.linkText}
-                                        onPress={() => openLink('https://vaulto.app/terms')}
+                                        onPress={() => openLink('https://vaultonote.com/terms')}
                                     >
                                         Terms of Service
                                     </Text>
                                     {' '}and{' '}
                                     <Text
                                         style={styles.linkText}
-                                        onPress={() => openLink('https://vaulto.app/privacy')}
+                                        onPress={() => openLink('https://vaultonote.com/privacy')}
                                     >
                                         Privacy Policy
                                     </Text>
