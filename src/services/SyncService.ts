@@ -84,10 +84,11 @@ class SyncService {
         this.listeners.forEach(l => l());
     }
 
-    public async getSyncStatus(): Promise<{ unsyncedCount: number }> {
-        if (!this.currentUserId) return { unsyncedCount: 0 };
-        const notes = await getNotesLocal(this.currentUserId);
-        const improvements = await getAllImprovementsLocal(this.currentUserId);
+    public async getSyncStatus(userId?: string | null): Promise<{ unsyncedCount: number }> {
+        const effectiveUserId = userId ?? this.currentUserId;
+        if (!effectiveUserId) return { unsyncedCount: 0 };
+        const notes = await getNotesLocal(effectiveUserId);
+        const improvements = await getAllImprovementsLocal(effectiveUserId);
 
         const dirtyNotes = notes.filter(n => n.dirty || n.deleted || n.pending_delete).length;
         const dirtyImprovements = improvements.filter(n => n.dirty || n.deleted).length;
@@ -95,8 +96,8 @@ class SyncService {
         return { unsyncedCount: dirtyNotes + dirtyImprovements };
     }
 
-    public async hasUnsyncedChanges(): Promise<boolean> {
-        const status = await this.getSyncStatus();
+    public async hasUnsyncedChanges(userId?: string | null): Promise<boolean> {
+        const status = await this.getSyncStatus(userId);
         return status.unsyncedCount > 0;
     }
 
@@ -116,6 +117,8 @@ class SyncService {
         this.syncTimeout = setTimeout(() => {
             this.syncNow('auto');
         }, SYNC_DEBOUNCE_MS);
+        // Local changes were made; update listeners (e.g. Settings sync status)
+        this.notifyListeners();
     }
 
     public async syncNow(reason: SyncReason) {

@@ -26,10 +26,11 @@ import {
 import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
+import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
-    const { signOut, isAuthenticated, isGuest, user, refreshProfile } = useAuth();
+    const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
@@ -38,6 +39,7 @@ export const SettingsScreen = () => {
     const [testingSelfHosted, setTestingSelfHosted] = useState(false);
     const [aiProvider, setAiProviderState] = useState<AIProvider>('secure_llm');
     const [preferencesReady, setPreferencesReady] = useState(false);
+    const [showSignOutDialog, setShowSignOutDialog] = useState(false);
     const [showOpenAIInfo, setShowOpenAIInfo] = useState(false);
     const [showSelfHostedInfo, setShowSelfHostedInfo] = useState(false);
 
@@ -277,8 +279,14 @@ export const SettingsScreen = () => {
     useEffect(() => {
         const checkSyncStatus = async () => {
             if (isAuthenticated && user) {
-                const status = await import('../services/SyncService').then(m => m.syncService.getSyncStatus());
-                setUnsyncedCount(status.unsyncedCount);
+                try {
+                    const status = await import('../services/SyncService').then(m =>
+                        m.syncService.getSyncStatus(userId ?? user.id)
+                    );
+                    setUnsyncedCount(status.unsyncedCount);
+                } catch (error) {
+                    console.error('[Settings] Failed to check sync status', error);
+                }
             }
         };
 
@@ -293,43 +301,10 @@ export const SettingsScreen = () => {
         return () => {
             unsubscribe.then(unsub => unsub && unsub());
         }
-    }, [isAuthenticated, user]);
+    }, [isAuthenticated, user, userId]);
 
     const handleSignOut = async () => {
-        if (unsyncedCount > 0) {
-            Alert.alert(
-                "Unsynced Changes",
-                `You have ${unsyncedCount} unsynced changes. They will remain on this device but won't be available on other devices until synced. Sign out anyway?`,
-                [
-                    {
-                        text: "Cancel",
-                        style: "cancel"
-                    },
-                    {
-                        text: "Sign Out",
-                        onPress: signOut,
-                        style: "destructive"
-                    }
-                ]
-            );
-            return;
-        }
-
-        Alert.alert(
-            "Sign Out",
-            "Are you sure you want to sign out?",
-            [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
-                {
-                    text: "Sign Out",
-                    onPress: signOut,
-                    style: "destructive"
-                }
-            ]
-        );
+        setShowSignOutDialog(true);
     };
 
     return (
@@ -787,6 +762,20 @@ export const SettingsScreen = () => {
                     </View>
                 )}
             </ScrollView>
+
+            <SignOutChoiceDialog
+                visible={showSignOutDialog}
+                unsyncedCount={unsyncedCount}
+                onKeep={() => {
+                    setShowSignOutDialog(false);
+                    signOut({ keepLocalNotes: true, wipeLocal: false });
+                }}
+                onDelete={() => {
+                    setShowSignOutDialog(false);
+                    signOut({ keepLocalNotes: false, wipeLocal: true });
+                }}
+                onCancel={() => setShowSignOutDialog(false)}
+            />
         </ScreenContainer>
     );
 };

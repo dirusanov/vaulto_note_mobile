@@ -621,10 +621,28 @@ export const wipeLocalDatabase = async (): Promise<void> => {
         await initDatabase();
         const database = await getDb();
         if (!database) return;
-        await database.runAsync('DELETE FROM note_improvements;'); // Should be empty/migrated but safe to keep
-        await database.runAsync('DELETE FROM voice_recordings;');
-        await database.runAsync('DELETE FROM notes;');
-        console.log('[DatabaseService] Local DB wiped');
+        const tables = await database.getAllAsync<{ name: string }>(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'android_metadata';"
+        );
+        if (tables.length === 0) {
+            console.log('[DatabaseService] No user tables found to wipe');
+            return;
+        }
+
+        let foreignKeysDisabled = false;
+        try {
+            await database.execAsync('PRAGMA foreign_keys = OFF;');
+            foreignKeysDisabled = true;
+            for (const { name } of tables) {
+                await database.runAsync(`DELETE FROM \"${name}\";`);
+            }
+        } finally {
+            if (foreignKeysDisabled) {
+                await database.execAsync('PRAGMA foreign_keys = ON;');
+            }
+        }
+
+        console.log('[DatabaseService] Local DB wiped', tables.map(t => t.name));
     } catch (error) {
         console.error('[DatabaseService] Failed to wipe local DB', error);
         throw error;

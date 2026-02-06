@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback } fro
 import { storage } from '../utils/storage';
 import { authApi, UserProfile } from '../api/auth';
 import { syncService } from '../services/SyncService';
+import { getAllImprovementsLocal, getNotesLocal, wipeLocalDatabase } from '../services/DatabaseService';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { onUnauthorized } from '../utils/authEvents';
 
@@ -13,7 +14,7 @@ interface AuthContextType {
     isGuest: boolean;
     isLoading: boolean;
     signIn: (accessToken: string, refreshToken: string) => Promise<void>;
-    signOut: () => Promise<void>;
+    signOut: (options?: { wipeLocal?: boolean; keepLocalNotes?: boolean }) => Promise<void>;
     refreshProfile: () => Promise<void>;
 }
 
@@ -42,13 +43,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isRecreatingSession, setIsRecreatingSession] = useState(false);
 
-    const createGuestSession = useCallback(async () => {
+    const createGuestSession = useCallback(async (options?: { preserveLocalUserId?: boolean }) => {
         if (isRecreatingSession) {
             console.log('[AuthContext] Already recreating session, skipping...');
             return;
         }
         setIsRecreatingSession(true);
         try {
+            const preserveLocalUserId = options?.preserveLocalUserId ?? false;
+            const existingLocalUserId = await storage.getUserId();
+            const shouldPreserveLocalUserId = preserveLocalUserId && !!existingLocalUserId;
             const deviceId = await getDeviceId();
             const platform = getPlatformName();
             console.log('[AuthContext] Creating guest session with deviceId:', deviceId);
@@ -57,7 +61,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             console.log('[AuthContext] Guest session created:', guestData.user_id);
 
             await storage.setToken(guestData.access_token);
-            await storage.setUserId(guestData.user_id);
+            if (!shouldPreserveLocalUserId) {
+                await storage.setUserId(guestData.user_id);
+            }
 
             // Build a UserProfile-like object from GuestProfile
             const guestUser: UserProfile = {
@@ -76,7 +82,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             await storage.setUserProfile(guestUser);
 
             setToken(guestData.access_token);
-            setUserId(guestData.user_id);
+            if (!shouldPreserveLocalUserId) {
+                setUserId(guestData.user_id);
+            }
             setIsGuest(true);
 
             setUser(guestUser);
@@ -91,13 +99,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Subscribe to 401 unauthorized events
     useEffect(() => {
         const unsubscribe = onUnauthorized.subscribe(() => {
-            console.log('[AuthContext] Received unauthorized event, recreating guest session...');
-            setToken(null);
-            setUserId(null);
-            setUser(null);
-            setIsGuest(false);
-            syncService.setAuthenticated(false);
-            createGuestSession();
+            const handleUnauthorized = async () => {
+                console.log('[AuthContext] Received unauthorized event, recreating guest session...');
+                const keepLocalNotes = await storage.getKeepLocalNotes();
+                if (!keepLocalNotes) {
+                    setUserId(null);
+                }
+                setToken(null);
+                setUser(null);
+                setIsGuest(false);
+                syncService.setAuthenticated(false);
+                createGuestSession({ preserveLocalUserId: keepLocalNotes });
+            };
+            void handleUnauthorized();
         });
         return unsubscribe;
     }, [createGuestSession]);
@@ -109,6 +123,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             const storedRefreshToken = await storage.getRefreshToken();
             const storedUserId = await storage.getUserId();
             const storedProfile = await storage.getUserProfile();
+            const keepLocalNotes = await storage.getKeepLocalNotes();
 
             if (storedToken && storedProfile) {
                 console.log('[AuthContext] cached profile found, loading immediately...');
@@ -116,7 +131,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 if (storedRefreshToken) {
                     setRefreshToken(storedRefreshToken);
                 }
-                setUserId(storedProfile.id);
+                const preserveLocalUserId = keepLocalNotes && storedProfile.provider === 'anonymous' && !!storedUserId;
+                setUserId(preserveLocalUserId ? storedUserId : storedProfile.id);
                 setUser(storedProfile);
                 setIsGuest(!storedProfile.is_verified && storedProfile.provider === 'anonymous');
 
@@ -127,12 +143,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 try {
                     console.log('[AuthContext] Refreshing profile in background...');
                     const profile = await authApi.getProfile();
-                    setUserId(profile.id);
                     setUser(profile);
                     setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
-                    await storage.setUserId(profile.id);
+                    const preserveOnRefresh = keepLocalNotes && profile.provider === 'anonymous' && !!storedUserId;
+                    if (preserveOnRefresh) {
+                        setUserId(storedUserId);
+                    } else {
+                        setUserId(profile.id);
+                        await storage.setUserId(profile.id);
+                    }
                     await storage.setUserProfile(profile);
-                    await syncService.setCurrentUser(profile.id, storedUserId);
+                    await syncService.setCurrentUser(preserveOnRefresh ? storedUserId : profile.id, storedUserId);
                     console.log('[AuthContext] Profile refreshed:', profile.id);
                 } catch (err: any) {
                     if (err?.response?.status === 401) {
@@ -160,12 +181,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     console.log('[AuthContext] Profile loaded:', profile.id, 'isGuest:', !profile.is_verified);
                 } catch (err) {
                     console.error('[AuthContext] Failed to load profile, creating guest session', err);
-                    await createGuestSession();
+                    if (keepLocalNotes && storedUserId) {
+                        setUserId(storedUserId);
+                    } else {
+                        setUserId(null);
+                    }
+                    await createGuestSession({ preserveLocalUserId: keepLocalNotes });
                 }
                 setIsLoading(false);
             } else {
                 console.log('[AuthContext] No token, creating guest session');
-                await createGuestSession();
+                if (keepLocalNotes && storedUserId) {
+                    setUserId(storedUserId);
+                } else {
+                    setUserId(null);
+                }
+                await createGuestSession({ preserveLocalUserId: keepLocalNotes });
                 setIsLoading(false);
             }
         };
@@ -193,26 +224,60 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
         } catch (err) {
             console.error('[AuthContext] Failed to fetch profile after sign-in', err);
-            await signOut();
+            await signOut({ wipeLocal: false });
             throw err;
         }
     };
 
-    const signOut = async () => {
+    const signOut = async (options?: { wipeLocal?: boolean; keepLocalNotes?: boolean }) => {
+        const keepLocalNotes = options?.keepLocalNotes ?? false;
+        const shouldWipeLocal = !keepLocalNotes && (options?.wipeLocal ?? true);
+        const previousUserId = userId;
         console.log('[AuthContext] Signing out, reverting to guest...');
         await storage.removeToken();
         await storage.removeRefreshToken();
-        await storage.removeUserId();
+        if (!keepLocalNotes) {
+            await storage.removeUserId();
+        }
         await storage.removeUserProfile();
         setToken(null);
         setRefreshToken(null);
-        setUserId(null);
+        if (!keepLocalNotes) {
+            setUserId(null);
+        }
         setUser(null);
         setIsGuest(false);
+        await storage.setKeepLocalNotes(keepLocalNotes);
         await syncService.setCurrentUser(null);
 
+        if (shouldWipeLocal) {
+            try {
+                await wipeLocalDatabase();
+                if (previousUserId) {
+                    const [remainingNotes, remainingImprovements] = await Promise.all([
+                        getNotesLocal(previousUserId),
+                        getAllImprovementsLocal(previousUserId),
+                    ]);
+                    if (remainingNotes.length > 0 || remainingImprovements.length > 0) {
+                        console.error(
+                            '[AuthContext][WIPE FAILED] Local DB still has data after sign out',
+                            {
+                                userId: previousUserId,
+                                notesCount: remainingNotes.length,
+                                improvementsCount: remainingImprovements.length,
+                                noteIds: remainingNotes.slice(0, 50).map(n => n.id),
+                                improvementIds: remainingImprovements.slice(0, 50).map(i => i.id),
+                            }
+                        );
+                    }
+                }
+            } catch (err) {
+                console.error('[AuthContext] Failed to wipe local DB on sign out', err);
+            }
+        }
+
         // Re-create guest session
-        await createGuestSession();
+        await createGuestSession({ preserveLocalUserId: keepLocalNotes });
         setIsLoading(false);
     };
 

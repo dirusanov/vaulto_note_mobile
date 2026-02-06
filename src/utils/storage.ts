@@ -9,6 +9,7 @@ const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
 const USER_PROFILE_KEY = 'vaulto_user_profile';
+const KEEP_LOCAL_NOTES_KEY = 'vaulto_keep_local_notes';
 const OPENAI_API_KEY = 'vaulto_openai_api_key';
 const PRIVACY_WARNING_DISMISSED_KEY = 'vaulto_privacy_warning_dismissed';
 const MAX_RECORDING_DURATION_KEY = 'vaulto_max_recording_duration';
@@ -129,6 +130,22 @@ export const storage = {
             await AsyncStorage.removeItem(USER_PROFILE_KEY);
         } catch (e) {
             console.error('Failed to remove user profile', e);
+        }
+    },
+    getKeepLocalNotes: async (): Promise<boolean> => {
+        try {
+            const value = await AsyncStorage.getItem(KEEP_LOCAL_NOTES_KEY);
+            return value === 'true';
+        } catch (e) {
+            console.error('Failed to get keep local notes flag', e);
+            return false;
+        }
+    },
+    setKeepLocalNotes: async (keep: boolean): Promise<void> => {
+        try {
+            await AsyncStorage.setItem(KEEP_LOCAL_NOTES_KEY, keep.toString());
+        } catch (e) {
+            console.error('Failed to set keep local notes flag', e);
         }
     },
 };
