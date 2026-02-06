@@ -8,7 +8,8 @@ import {
     View,
     KeyboardAvoidingView,
     Platform,
-    ScrollView
+    ScrollView,
+    Linking
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -25,10 +26,16 @@ export const SignUpScreen = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(false);
 
     const handleSignUp = async () => {
         if (!email || !password) {
             Alert.alert('Error', 'Please fill in all fields');
+            return;
+        }
+
+        if (!termsAccepted) {
+            Alert.alert('Error', 'Please agree to the Terms of Service and Privacy Policy to continue.');
             return;
         }
 
@@ -41,6 +48,19 @@ export const SignUpScreen = () => {
             Alert.alert('Registration Failed', message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const openLink = async (url: string) => {
+        try {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            } else {
+                Alert.alert('Error', `Don't know how to open this URL: ${url}`);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'An error occurred while trying to open the link.');
         }
     };
 
@@ -88,6 +108,38 @@ export const SignUpScreen = () => {
                                 value={password}
                                 onChangeText={setPassword}
                             />
+                        </View>
+
+                        <View style={styles.termsContainer}>
+                            <TouchableOpacity
+                                style={styles.checkbox}
+                                onPress={() => setTermsAccepted(!termsAccepted)}
+                                activeOpacity={0.8}
+                            >
+                                <MaterialIcons
+                                    name={termsAccepted ? 'check-box' : 'check-box-outline-blank'}
+                                    size={24}
+                                    color={termsAccepted ? colors.primary : colors.textSecondary}
+                                />
+                            </TouchableOpacity>
+                            <View style={styles.termsTextContainer}>
+                                <Text style={styles.termsText}>
+                                    I agree to the{' '}
+                                    <Text
+                                        style={styles.linkText}
+                                        onPress={() => openLink('https://vaulto.app/terms')}
+                                    >
+                                        Terms of Service
+                                    </Text>
+                                    {' '}and{' '}
+                                    <Text
+                                        style={styles.linkText}
+                                        onPress={() => openLink('https://vaulto.app/privacy')}
+                                    >
+                                        Privacy Policy
+                                    </Text>
+                                </Text>
+                            </View>
                         </View>
 
                         <TouchableOpacity
@@ -167,19 +219,41 @@ const styles = StyleSheet.create({
         color: colors.text,
         fontSize: 16,
     },
+    termsContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: spacing.l,
+    },
+    checkbox: {
+        marginRight: spacing.s,
+        marginTop: 0,
+    },
+    termsTextContainer: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    termsText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        lineHeight: 20,
+    },
+    linkText: {
+        color: colors.primary,
+        fontWeight: '600',
+    },
     button: {
         backgroundColor: colors.primary,
         borderRadius: 12,
         padding: spacing.m,
         alignItems: 'center',
-        marginTop: spacing.m,
+        marginTop: spacing.s,
     },
     buttonDisabled: {
         opacity: 0.7,
     },
     buttonText: {
         ...typography.button,
-        color: '#FFFFFF', // Assuming primary is dark or distinct
+        color: '#FFFFFF',
         fontWeight: '600',
     },
     footer: {
