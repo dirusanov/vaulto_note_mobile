@@ -38,6 +38,7 @@ export const initDatabase = async (): Promise<void> => {
         await database.execAsync(`
             CREATE TABLE IF NOT EXISTS notes (
                 id TEXT PRIMARY KEY NOT NULL,
+                user_id TEXT,
                 encrypted_title TEXT,
                 encrypted_content TEXT NOT NULL,
                 created_at TEXT,
@@ -66,6 +67,7 @@ export const initDatabase = async (): Promise<void> => {
             CREATE TABLE IF NOT EXISTS voice_recordings (
                 id TEXT PRIMARY KEY,
                 note_id TEXT NOT NULL,
+                user_id TEXT,
                 file_path TEXT NOT NULL,
                 duration REAL,
                 transcription TEXT,
@@ -74,16 +76,13 @@ export const initDatabase = async (): Promise<void> => {
                 FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
             );
         `);
-        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
-
-        // Check columns
+        // Check columns FIRST before creating headers
         await ensureColumnExists(database, 'notes', 'parent_id', 'TEXT');
         await ensureColumnExists(database, 'notes', 'is_active', 'INTEGER DEFAULT 0');
         await ensureColumnExists(database, 'notes', 'label', 'TEXT');
         await ensureColumnExists(database, 'notes', 'option_id', 'TEXT');
         await ensureColumnExists(database, 'notes', 'is_pinned', 'INTEGER DEFAULT 0');
 
-        // ... (existing ensures)
         const addedDirty = await ensureColumnExists(database, 'notes', 'dirty', 'INTEGER DEFAULT 0');
         await ensureColumnExists(database, 'notes', 'audio_file_path', 'TEXT');
         await ensureColumnExists(database, 'notes', 'audio_duration', 'INTEGER');
@@ -94,6 +93,14 @@ export const initDatabase = async (): Promise<void> => {
         await ensureColumnExists(database, 'notes', 'server_updated_at', 'TEXT');
         await ensureColumnExists(database, 'notes', 'content_nonce', 'TEXT');
         await ensureColumnExists(database, 'notes', 'pending_delete', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(database, 'notes', 'user_id', 'TEXT');
+        await ensureColumnExists(database, 'voice_recordings', 'user_id', 'TEXT');
+
+        // Create indexes AFTER columns exist
+        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
+        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
+
+
 
         // MIGRATION: Move note_improvements to notes
         // Check if note_improvements table exists
@@ -154,13 +161,29 @@ export const initDatabase = async (): Promise<void> => {
     }
 };
 
+
+export const migrateLegacyNotesToUser = async (userId: string): Promise<void> => {
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        // We only migrate notes that have NO user_id (NULL).
+        // This effectively "claims" the device's previous guest notes for this user.
+        await database.runAsync('UPDATE notes SET user_id = ? WHERE user_id IS NULL;', [userId]);
+        await database.runAsync('UPDATE voice_recordings SET user_id = ? WHERE user_id IS NULL;', [userId]);
+        console.log(`[DatabaseService] Migrated legacy notes to user ${userId}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to migrate legacy notes', e);
+    }
+};
+
 /**
  * Set the active variant for a note.
  * Ensures only one note (parent or child) is marked as active at a time.
  * @param parentNoteId - The parent note ID
  * @param activeChildId - The child note ID to mark as active, or null for parent/original
  */
-export const setActiveVariant = async (parentNoteId: string, activeChildId: string | null): Promise<void> => {
+export const setActiveVariant = async (userId: string, parentNoteId: string, activeChildId: string | null): Promise<void> => {
     try {
         console.log('[DatabaseService] setActiveVariant called:', { parentNoteId, activeChildId });
         const database = await getDb();
@@ -172,8 +195,8 @@ export const setActiveVariant = async (parentNoteId: string, activeChildId: stri
         try {
             const now = new Date().toISOString();
             const previousActiveChild = await database.getFirstAsync<{ id: string }>(
-                'SELECT id FROM notes WHERE parent_id = ? AND is_active = 1 LIMIT 1;',
-                [parentNoteId]
+                'SELECT id FROM notes WHERE parent_id = ? AND is_active = 1 AND user_id = ? LIMIT 1;',
+                [parentNoteId, userId]
             );
             const previousActiveChildId = previousActiveChild?.id ?? null;
 
@@ -242,7 +265,15 @@ export const setActiveVariant = async (parentNoteId: string, activeChildId: stri
     }
 };
 
-export const saveNoteLocal = async (note: Note): Promise<void> => {
+export const saveNoteLocal = async (userId: string, note: Note): Promise<void> => {
+    if (!userId) {
+        console.warn('[DatabaseService] saveNoteLocal called without userId');
+        return;
+    }
+    if (!note || !note.id) {
+        console.error('[DatabaseService] saveNoteLocal called with invalid note:', note);
+        return;
+    }
     try {
         const database = await getDb();
         if (!database) return;
@@ -267,12 +298,13 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
 
         await database.runAsync(
             `INSERT INTO notes (
-                id, encrypted_title, encrypted_content, created_at, updated_at,
+                id, user_id, encrypted_title, encrypted_content, created_at, updated_at,
                 audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned,
                 synced, dirty, deleted, version, server_updated_at, content_nonce, pending_delete,
                 parent_id, is_active, label, option_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+                user_id=excluded.user_id,
                 encrypted_title=excluded.encrypted_title,
                 encrypted_content=excluded.encrypted_content,
                 updated_at=excluded.updated_at,
@@ -294,6 +326,7 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
                 option_id=excluded.option_id;`,
             [
                 note.id,
+                userId,
                 note.encrypted_title ?? null,
                 note.encrypted_content || '', // Fallback to empty string to prevent crash, though logic might be wrong
                 note.created_at ?? note.updated_at ?? new Date().toISOString(),
@@ -323,17 +356,21 @@ export const saveNoteLocal = async (note: Note): Promise<void> => {
     }
 };
 
-export const deleteNoteLocal = async (id: string): Promise<void> => {
+export const deleteNoteLocal = async (userId: string, id: string): Promise<void> => {
+    if (!id) {
+        console.warn('[DatabaseService] deleteNoteLocal called without id');
+        return;
+    }
     try {
         const database = await getDb();
         if (!database) return;
 
         // Delete children (improvements)
-        await database.runAsync('DELETE FROM notes WHERE parent_id = ?;', [id]);
+        await database.runAsync('DELETE FROM notes WHERE parent_id = ? AND user_id = ?;', [id, userId]);
         // Delete voice recordings
-        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ?;', [id]);
+        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ? AND user_id = ?;', [id, userId]);
         // Delete parent
-        await database.runAsync('DELETE FROM notes WHERE id = ?;', [id]);
+        await database.runAsync('DELETE FROM notes WHERE id = ? AND user_id = ?;', [id, userId]);
         console.log(`[DatabaseService] Note deleted locally: ${id}`);
     } catch (error) {
         console.error(`[DatabaseService] Failed to delete note ${id}`, error);
@@ -343,13 +380,14 @@ export const deleteNoteLocal = async (id: string): Promise<void> => {
 
 
 
-export const getNotesLocal = async (): Promise<Note[]> => {
+export const getNotesLocal = async (userId: string): Promise<Note[]> => {
+    if (!userId) return [];
     try {
         const database = await getDb();
         if (!database) return [];
 
-        // Get all notes (parents and children)
-        const rows = await database.getAllAsync<any>('SELECT * FROM notes;');
+        // Get all notes (parents and children) for this user
+        const rows = await database.getAllAsync<any>('SELECT * FROM notes WHERE user_id = ?;', [userId]);
         console.log(`[DatabaseService] Fetched ${rows.length} total rows from notes table`);
 
         const parents = rows.filter((r: any) => !r.parent_id);
@@ -467,8 +505,8 @@ export const getNotesLocal = async (): Promise<Note[]> => {
     }
 };
 
-export const searchNotesLocal = async (query: string): Promise<Note[]> => {
-    const allNotes = await getNotesLocal();
+export const searchNotesLocal = async (userId: string, query: string): Promise<Note[]> => {
+    const allNotes = await getNotesLocal(userId);
     if (!query) return allNotes;
 
     const lowerQuery = query.toLowerCase();
@@ -480,13 +518,13 @@ export const searchNotesLocal = async (query: string): Promise<Note[]> => {
     );
 };
 
-export const getNoteById = async (id: string): Promise<Note | null> => {
+export const getNoteById = async (userId: string, id: string): Promise<Note | null> => {
     try {
         const database = await getDb();
         if (!database) return null;
 
         // Try to find as a parent note first
-        let row = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ?', [id]);
+        let row = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
         if (!row) return null;
 
         // If it's a child note (improvement), we might need its content decrypted differently?
@@ -497,7 +535,7 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
         let children: any[] = [];
         if (!parentId) {
             // It's a parent, fetch its children
-            children = await database.getAllAsync<any>('SELECT * FROM notes WHERE parent_id = ?', [row.id]);
+            children = await database.getAllAsync<any>('SELECT * FROM notes WHERE parent_id = ? AND user_id = ?', [row.id, userId]);
         }
 
         const title = row.encrypted_title ? await decrypt(row.encrypted_title) : '';
@@ -565,7 +603,7 @@ export const getNoteById = async (id: string): Promise<Note | null> => {
 
         // Fetch voice recordings
         try {
-            const voiceRecs = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? ORDER BY created_at DESC', [id]);
+            const voiceRecs = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? AND user_id = ? ORDER BY created_at DESC', [id, userId]);
             note.voice_files = voiceRecs;
         } catch (e) {
             console.error('[DatabaseService] Failed to load voice recordings', e);
@@ -593,7 +631,7 @@ export const wipeLocalDatabase = async (): Promise<void> => {
     }
 };
 
-export const saveImprovementLocal = async (improvement: NoteImprovement & { is_active?: boolean }, useDbActiveState = false): Promise<void> => {
+export const saveImprovementLocal = async (userId: string, improvement: NoteImprovement & { is_active?: boolean }, useDbActiveState = false): Promise<void> => {
     // Adapter for backward compatibility or direct usage, simply calls saveNoteLocal with parent_id mapping
     // We need to ensure we don't accidentally overwrite is_active with false if it's undefined
     let isActive = improvement.is_active;
@@ -602,7 +640,7 @@ export const saveImprovementLocal = async (improvement: NoteImprovement & { is_a
         try {
             const database = await getDb();
             if (database) {
-                const existing = await database.getFirstAsync<{ is_active: number }>('SELECT is_active FROM notes WHERE id = ?;', [improvement.id]);
+                const existing = await database.getFirstAsync<{ is_active: number }>('SELECT is_active FROM notes WHERE id = ? AND user_id = ?;', [improvement.id, userId]);
                 if (existing) {
                     isActive = existing.is_active === 1;
                 }
@@ -631,19 +669,19 @@ export const saveImprovementLocal = async (improvement: NoteImprovement & { is_a
         is_active: isActive ?? false,
     };
 
-    await saveNoteLocal(childNote);
+    await saveNoteLocal(userId, childNote);
 };
 
-export const deleteImprovementLocal = async (id: string): Promise<void> => {
-    await deleteNoteLocal(id);
+export const deleteImprovementLocal = async (userId: string, id: string): Promise<void> => {
+    await deleteNoteLocal(userId, id);
 };
 
-export const getAllImprovementsLocal = async (): Promise<NoteImprovement[]> => {
+export const getAllImprovementsLocal = async (userId: string): Promise<NoteImprovement[]> => {
     // This might be used by SyncService. We need to fetch all notes where parent_id IS NOT NULL
     try {
         const database = await getDb();
         if (!database) return [];
-        const rows = await database.getAllAsync<any>('SELECT * FROM notes WHERE parent_id IS NOT NULL;');
+        const rows = await database.getAllAsync<any>('SELECT * FROM notes WHERE parent_id IS NOT NULL AND user_id = ?;', [userId]);
 
         // Map to NoteImprovement interface
         const improvements: NoteImprovement[] = [];
@@ -676,11 +714,11 @@ export const getAllImprovementsLocal = async (): Promise<NoteImprovement[]> => {
     }
 };
 
-export const getVoiceRecordingsLocal = async (noteId: string): Promise<VoiceRecording[]> => {
+export const getVoiceRecordingsLocal = async (userId: string, noteId: string): Promise<VoiceRecording[]> => {
     try {
         const database = await getDb();
         if (!database) return [];
-        const rows = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? ORDER BY created_at DESC', [noteId]);
+        const rows = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? AND user_id = ? ORDER BY created_at DESC', [noteId, userId]);
         return rows;
     } catch (e) {
         console.error('[DatabaseService] Failed to get voice recordings', e);
@@ -688,7 +726,7 @@ export const getVoiceRecordingsLocal = async (noteId: string): Promise<VoiceReco
     }
 };
 
-export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promise<void> => {
+export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRecording): Promise<void> => {
     try {
         const database = await getDb();
         if (!database) return;
@@ -698,6 +736,7 @@ export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promis
             CREATE TABLE IF NOT EXISTS voice_recordings (
                 id TEXT PRIMARY KEY,
                 note_id TEXT NOT NULL,
+                user_id TEXT,
                 file_path TEXT NOT NULL,
                 duration REAL,
                 transcription TEXT,
@@ -708,9 +747,10 @@ export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promis
         `);
 
         await database.runAsync(
-            `INSERT INTO voice_recordings (id, note_id, file_path, duration, transcription, created_at, iso_code)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
+             user_id=excluded.user_id,
              file_path=excluded.file_path,
              duration=excluded.duration,
              transcription=excluded.transcription,
@@ -719,6 +759,7 @@ export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promis
             [
                 recording.id,
                 recording.note_id,
+                userId,
                 recording.file_path,
                 recording.duration,
                 recording.transcription || null,
@@ -732,11 +773,11 @@ export const saveVoiceRecordingLocal = async (recording: VoiceRecording): Promis
     }
 };
 
-export const deleteVoiceRecordingLocal = async (id: string): Promise<void> => {
+export const deleteVoiceRecordingLocal = async (userId: string, id: string): Promise<void> => {
     try {
         const database = await getDb();
         if (!database) return;
-        await database.runAsync('DELETE FROM voice_recordings WHERE id = ?', [id]);
+        await database.runAsync('DELETE FROM voice_recordings WHERE id = ? AND user_id = ?', [id, userId]);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete voice recording', e);
     }

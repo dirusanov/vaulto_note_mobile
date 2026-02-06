@@ -263,7 +263,49 @@ export const SettingsScreen = () => {
         }
     };
 
-    const handleSignOut = () => {
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
+
+    useEffect(() => {
+        const checkSyncStatus = async () => {
+            if (isAuthenticated && user) {
+                const status = await import('../services/SyncService').then(m => m.syncService.getSyncStatus());
+                setUnsyncedCount(status.unsyncedCount);
+            }
+        };
+
+        checkSyncStatus();
+
+        const unsubscribe = import('../services/SyncService').then(m =>
+            m.syncService.subscribe(() => {
+                checkSyncStatus();
+            })
+        );
+
+        return () => {
+            unsubscribe.then(unsub => unsub && unsub());
+        }
+    }, [isAuthenticated, user]);
+
+    const handleSignOut = async () => {
+        if (unsyncedCount > 0) {
+            Alert.alert(
+                "Unsynced Changes",
+                `You have ${unsyncedCount} unsynced changes. They will remain on this device but won't be available on other devices until synced. Sign out anyway?`,
+                [
+                    {
+                        text: "Cancel",
+                        style: "cancel"
+                    },
+                    {
+                        text: "Sign Out",
+                        onPress: signOut,
+                        style: "destructive"
+                    }
+                ]
+            );
+            return;
+        }
+
         Alert.alert(
             "Sign Out",
             "Are you sure you want to sign out?",
@@ -324,8 +366,14 @@ export const SettingsScreen = () => {
                                     {user.email || 'Signed in'}
                                 </Text>
                                 <View style={styles.syncStatusRow}>
-                                    <MaterialIcons name="cloud-done" size={14} color={colors.accentGreen} />
-                                    <Text style={styles.syncStatusText}>Notes syncing</Text>
+                                    <MaterialIcons
+                                        name={unsyncedCount > 0 ? "cloud-upload" : "cloud-done"}
+                                        size={14}
+                                        color={unsyncedCount > 0 ? colors.warning : colors.accentGreen}
+                                    />
+                                    <Text style={[styles.syncStatusText, unsyncedCount > 0 && { color: colors.warning }]}>
+                                        {unsyncedCount > 0 ? `${unsyncedCount} unsynced` : "Notes synced"}
+                                    </Text>
                                 </View>
                             </View>
                         </View>

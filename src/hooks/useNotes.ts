@@ -110,14 +110,16 @@ export const useNotes = () => {
                     continue;
                 }
                 if (isEmptyNote(note)) {
-                    await deleteNoteLocal(note.id);
+                    if (userId) {
+                        await deleteNoteLocal(userId, note.id);
+                    }
                     continue;
                 }
                 visible.push(note);
             }
             return visible;
         },
-        [isEmptyNote],
+        [isEmptyNote, userId],
     );
 
     const buildLocalNote = useCallback(
@@ -129,6 +131,8 @@ export const useNotes = () => {
             transcription?: string;
             dirty?: boolean;
         }) => {
+            if (!userId) throw new Error('Cannot save note without user ID');
+
             const { id, title, content, audio, transcription, dirty = true } = params;
             const encryptedTitle = await encrypt(title);
             const encryptedContent = await encrypt(content);
@@ -153,10 +157,10 @@ export const useNotes = () => {
                 version: 0,
                 is_active: true, // New parent notes are active by default
             };
-            await saveNoteLocal(localNote);
+            await saveNoteLocal(userId, localNote);
             return localNote;
         },
-        []
+        [userId]
     );
 
     const buildLocalImprovement = useCallback(
@@ -167,6 +171,8 @@ export const useNotes = () => {
             label?: string;
             optionId?: string;
         }): Promise<NoteImprovement> => {
+            if (!userId) throw new Error('Cannot save improvement without user ID');
+
             const { id, noteId, content, label, optionId } = params;
             let encryptedContent = await encrypt(content);
 
@@ -190,10 +196,10 @@ export const useNotes = () => {
                 deleted: false,
                 version: 0,
             };
-            await saveImprovementLocal(improvement);
+            await saveImprovementLocal(userId, improvement);
             return improvement;
         },
-        []
+        [userId]
     );
 
     const seedDemoNotes = useCallback(async () => {
@@ -202,8 +208,21 @@ export const useNotes = () => {
             if (alreadySeeded === '1') {
                 return false;
             }
+            if (!userId) return false;
+
             const demoIds: string[] = [];
+
+            // Check if demo notes already exist in DB to prevent duplicates
+            const existingNotes = await getNotesLocal(userId);
+
             for (const demo of demoSeedNotes) {
+                // Check if title matches (fuzzy or exact)
+                const alreadyExists = existingNotes.some(n => n.title === demo.title || (n.title && n.title.includes(demo.title.substring(0, 10))));
+                if (alreadyExists) {
+                    console.log(`[useNotes] Demo note '${demo.title}' already exists, skipping.`);
+                    continue;
+                }
+
                 const id = await generateUUID();
                 demoIds.push(id);
                 // Create with dirty=false so they don't auto-sync unless edited
@@ -216,13 +235,14 @@ export const useNotes = () => {
             console.error('[useNotes] Failed to seed demo notes:', error);
             return false;
         }
-    }, [buildLocalNote]);
+    }, [buildLocalNote, userId]);
 
     const cleanupDemoNotesIfNeeded = useCallback(async (allNotes: Note[]) => {
         try {
             // Check if we have any synced notes (from server)
             const hasServerNotes = allNotes.some(n => n.synced === 1);
             if (!hasServerNotes) return;
+            if (!userId) return;
 
             const demoIdsJson = await AsyncStorage.getItem(DEMO_IDS_KEY);
             if (!demoIdsJson) return;
@@ -236,7 +256,7 @@ export const useNotes = () => {
                 // If note exists AND is still not dirty (untouched) AND not synced (local only)
                 if (note && !note.dirty && note.synced === 0) {
                     console.log('[useNotes] Removing untouched demo note:', id);
-                    await deleteNoteLocal(id);
+                    await deleteNoteLocal(userId, id);
                     didDelete = true;
                 }
             }
@@ -248,37 +268,47 @@ export const useNotes = () => {
         } catch (e) {
             console.error('[useNotes] Failed to cleanup demo notes', e);
         }
-    }, []);
+    }, [userId]);
 
     const refreshFromLocal = useCallback(async () => {
-        let localNotes = await getNotesLocal();
+        if (!userId) {
+            setNotes([]);
+            return [];
+        }
+
+        let localNotes = await getNotesLocal(userId);
 
         // Check for cleanup before filtering
         await cleanupDemoNotesIfNeeded(localNotes);
         // Re-fetch in case we deleted something
-        localNotes = await getNotesLocal();
+        localNotes = await getNotesLocal(userId);
 
         let visible = await filterAndCleanupNotes(localNotes);
 
         if (visible.length === 0) {
             const seeded = await seedDemoNotes();
             if (seeded) {
-                localNotes = await getNotesLocal();
+                localNotes = await getNotesLocal(userId);
                 visible = await filterAndCleanupNotes(localNotes);
             }
         }
 
         setNotes(visible);
         return visible;
-    }, [filterAndCleanupNotes, seedDemoNotes, cleanupDemoNotesIfNeeded]);
+    }, [filterAndCleanupNotes, seedDemoNotes, cleanupDemoNotesIfNeeded, userId]);
 
-    // Subscribe to SyncService updates
+    // Subscribe to SyncService updatess
     useEffect(() => {
         const unsubscribe = syncService.subscribe(() => {
             console.log('[useNotes] Sync finished, refreshing local notes');
             refreshFromLocal();
         });
         return unsubscribe;
+    }, [refreshFromLocal]);
+
+    // Re-fetch when userId changes
+    useEffect(() => {
+        refreshFromLocal();
     }, [refreshFromLocal]);
 
     const fetchNotes = useCallback(async () => {
@@ -288,7 +318,7 @@ export const useNotes = () => {
         try {
             await refreshFromLocal();
             // Trigger sync on fetch (e.g. screen mount)
-            if (isAuthenticated) {
+            if (isAuthenticated && userId) {
                 syncService.syncNow('app_start');
             }
         } catch (err) {
@@ -297,7 +327,7 @@ export const useNotes = () => {
         } finally {
             setLoading(false);
         }
-    }, [refreshFromLocal, isAuthenticated]);
+    }, [refreshFromLocal, isAuthenticated, userId]);
 
     // Manual sync (pull-to-refresh)
     const syncNotes = useCallback(async () => {
@@ -349,6 +379,8 @@ export const useNotes = () => {
     };
 
     const updateNote = async (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => {
+        if (!userId) return Promise.reject(new Error('No user'));
+
         setLoading(true);
         setError(null);
         try {
@@ -421,7 +453,7 @@ export const useNotes = () => {
                 dirty: true,
                 deleted: false,
             };
-            await saveNoteLocal(updatedLocal);
+            await saveNoteLocal(userId, updatedLocal);
             await refreshFromLocal();
 
             // Schedule auto-sync
@@ -438,13 +470,14 @@ export const useNotes = () => {
     };
 
     const deleteNote = async (id: string) => {
+        if (!userId) return;
         setLoading(true);
         setError(null);
         try {
             const existing = notesRef.current.find(n => n.id === id);
             if (!existing) {
                 // If not in memory, try to delete from DB anyway (maybe it's hidden)
-                await deleteNoteLocal(id);
+                await deleteNoteLocal(userId, id);
                 await refreshFromLocal();
                 return;
             }
@@ -456,7 +489,7 @@ export const useNotes = () => {
                 dirty: true,
                 updated_at: new Date().toISOString(),
             };
-            await saveNoteLocal(marked);
+            await saveNoteLocal(userId, marked);
             await refreshFromLocal();
 
             // Schedule auto-sync
@@ -471,9 +504,10 @@ export const useNotes = () => {
     };
 
     const searchNotes = async (query: string) => {
+        if (!userId) return;
         setLoading(true);
         try {
-            const results = await searchNotesLocal(query);
+            const results = await searchNotesLocal(userId, query);
             const filtered = results.filter(note => !note.deleted && !note.pending_delete && !isEmptyNote(note));
             setNotes(filtered);
         } catch (err) {
@@ -497,10 +531,12 @@ export const useNotes = () => {
             noteId: string,
             params: { content: string; label?: string; optionId?: string }
         ): Promise<NoteImprovement> => {
+            if (!userId) throw new Error('No user');
+
             let note = notesRef.current.find(n => n.id === noteId);
             if (!note) {
                 // Fallback to DB for fast-following updates
-                const dbNote = await getNoteById(noteId);
+                const dbNote = await getNoteById(userId, noteId);
                 if (dbNote) note = dbNote;
             }
             if (!note) throw new Error('Note not found');
@@ -526,12 +562,10 @@ export const useNotes = () => {
 
             if (!improvement) throw new Error('Failed to build local improvement');
 
-
-
             // Update parent note's updated_at so it moves to top of list
             // Ensure we preserve encrypted_content. If not in memory note, refetch from DB.
             if (!note.encrypted_content) {
-                const refreshedParent = await getNoteById(noteId);
+                const refreshedParent = await getNoteById(userId, noteId);
                 if (refreshedParent) {
                     note = refreshedParent;
                 }
@@ -544,13 +578,13 @@ export const useNotes = () => {
                 synced: 0,
                 dirty: true,
             };
-            await saveNoteLocal(parentUpdate);
+            await saveNoteLocal(userId, parentUpdate);
 
             await refreshFromLocal();
             syncService.scheduleAutoSync();
             return improvement;
         },
-        [buildLocalImprovement, refreshFromLocal]
+        [buildLocalImprovement, refreshFromLocal, userId]
     );
 
     const updateImprovement = useCallback(
@@ -559,6 +593,8 @@ export const useNotes = () => {
             improvementId: string,
             updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
         ): Promise<NoteImprovement> => {
+            if (!userId) throw new Error('No user');
+
             console.log('[useNotes] updateImprovement called:', {
                 noteId,
                 improvementId,
@@ -567,7 +603,7 @@ export const useNotes = () => {
 
             let note = notesRef.current.find(n => n.id === noteId);
             if (!note) {
-                const dbNote = await getNoteById(noteId);
+                const dbNote = await getNoteById(userId, noteId);
                 if (dbNote) note = dbNote;
             }
 
@@ -614,15 +650,7 @@ export const useNotes = () => {
                 dirty: true,
             };
 
-            console.log('[useNotes] Saving updated improvement:', {
-                id: updated.id,
-                label: updated.label,
-                option_id: updated.option_id,
-                deleted: updated.deleted,
-                is_active: updated.is_active
-            });
-
-            await saveImprovementLocal(updated);
+            await saveImprovementLocal(userId, updated);
 
 
             // Update parent note's updated_at so it moves to top of list
@@ -632,7 +660,7 @@ export const useNotes = () => {
                 synced: 0,
                 dirty: true,
             };
-            await saveNoteLocal(parentUpdate);
+            await saveNoteLocal(userId, parentUpdate);
 
             await refreshFromLocal();
             syncService.scheduleAutoSync();
@@ -640,7 +668,7 @@ export const useNotes = () => {
             console.log('[useNotes] Improvement update complete');
             return updated;
         },
-        [refreshFromLocal]
+        [refreshFromLocal, userId]
     );
 
     const deleteImprovement = useCallback(
@@ -652,8 +680,9 @@ export const useNotes = () => {
 
     const setActiveVariant = useCallback(
         async (noteId: string, variantId: string | null) => {
+            if (!userId) return;
             try {
-                await setActiveVariantDB(noteId, variantId);
+                await setActiveVariantDB(userId, noteId, variantId);
                 await refreshFromLocal();
 
                 // Immediate sync for logged-in users (is_active is user preference)
@@ -668,11 +697,12 @@ export const useNotes = () => {
                 throw error;
             }
         },
-        [refreshFromLocal, isAuthenticated]
+        [refreshFromLocal, isAuthenticated, userId]
     );
 
     const pinNote = useCallback(
         async (id: string) => {
+            if (!userId) return;
             try {
                 const existing = notesRef.current.find(n => n.id === id);
                 if (!existing) throw new Error('Note not found');
@@ -684,7 +714,7 @@ export const useNotes = () => {
                     synced: 0,
                     dirty: true,
                 };
-                await saveNoteLocal(updated);
+                await saveNoteLocal(userId, updated);
                 await refreshFromLocal();
                 syncService.scheduleAutoSync();
             } catch (error) {
@@ -692,11 +722,12 @@ export const useNotes = () => {
                 throw error;
             }
         },
-        [refreshFromLocal]
+        [refreshFromLocal, userId]
     );
 
     const unpinNote = useCallback(
         async (id: string) => {
+            if (!userId) return;
             try {
                 const existing = notesRef.current.find(n => n.id === id);
                 if (!existing) throw new Error('Note not found');
@@ -708,7 +739,7 @@ export const useNotes = () => {
                     synced: 0,
                     dirty: true,
                 };
-                await saveNoteLocal(updated);
+                await saveNoteLocal(userId, updated);
                 await refreshFromLocal();
                 syncService.scheduleAutoSync();
             } catch (error) {
@@ -716,11 +747,12 @@ export const useNotes = () => {
                 throw error;
             }
         },
-        [refreshFromLocal]
+        [refreshFromLocal, userId]
     );
 
     const batchPinNotes = useCallback(
         async (ids: string[]) => {
+            if (!userId) return;
             try {
                 for (const id of ids) {
                     const existing = notesRef.current.find(n => n.id === id);
@@ -732,7 +764,7 @@ export const useNotes = () => {
                             synced: 0,
                             dirty: true,
                         };
-                        await saveNoteLocal(updated);
+                        await saveNoteLocal(userId, updated);
                     }
                 }
                 await refreshFromLocal();
@@ -742,11 +774,12 @@ export const useNotes = () => {
                 throw error;
             }
         },
-        [refreshFromLocal]
+        [refreshFromLocal, userId]
     );
 
     const batchUnpinNotes = useCallback(
         async (ids: string[]) => {
+            if (!userId) return;
             try {
                 for (const id of ids) {
                     const existing = notesRef.current.find(n => n.id === id);
@@ -758,7 +791,7 @@ export const useNotes = () => {
                             synced: 0,
                             dirty: true,
                         };
-                        await saveNoteLocal(updated);
+                        await saveNoteLocal(userId, updated);
                     }
                 }
                 await refreshFromLocal();
@@ -768,11 +801,12 @@ export const useNotes = () => {
                 throw error;
             }
         },
-        [refreshFromLocal]
+        [refreshFromLocal, userId]
     );
 
     const batchDeleteNotes = useCallback(
         async (ids: string[]) => {
+            if (!userId) return;
             try {
                 for (const id of ids) {
                     const existing = notesRef.current.find(n => n.id === id);
@@ -784,7 +818,7 @@ export const useNotes = () => {
                             dirty: true,
                             updated_at: new Date().toISOString(),
                         };
-                        await saveNoteLocal(marked);
+                        await saveNoteLocal(userId, marked);
                     }
                 }
                 await refreshFromLocal();
@@ -794,7 +828,7 @@ export const useNotes = () => {
                 throw error;
             }
         },
-        [refreshFromLocal]
+        [refreshFromLocal, userId]
     );
 
     return {
@@ -802,11 +836,11 @@ export const useNotes = () => {
         loading,
         error,
         fetchNotes,
-        syncNotes,
         createNote,
         updateNote,
         deleteNote,
         searchNotes,
+        syncNotes,
         attachAudioToNote,
         removeAudioFromNote,
         createImprovement,

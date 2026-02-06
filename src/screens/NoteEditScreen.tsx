@@ -103,7 +103,7 @@ export const NoteEditScreen = () => {
         deleteImprovement,
         setActiveVariant,
     } = useNotesContext();
-    const { isGuest } = useAuth();
+    const { isGuest, userId } = useAuth();
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
@@ -336,8 +336,8 @@ export const NoteEditScreen = () => {
 
     // Refresh recordings when list modal opens
     useEffect(() => {
-        if (showRecordingsList && localNoteId) {
-            getVoiceRecordingsLocal(localNoteId).then(async (recs) => {
+        if (showRecordingsList && localNoteId && userId) {
+            getVoiceRecordingsLocal(userId, localNoteId).then(async (recs) => {
                 setVoiceRecordings(recs);
 
                 // Auto-select the latest recording (first in list)
@@ -438,8 +438,8 @@ export const NoteEditScreen = () => {
 
 
     useEffect(() => {
-        if (localNoteId) {
-            getVoiceRecordingsLocal(localNoteId).then(async (recs) => {
+        if (localNoteId && userId) {
+            getVoiceRecordingsLocal(userId, localNoteId).then(async (recs) => {
                 setVoiceRecordings(recs);
 
                 // Auto-load player if note is empty but has recordings (unprocessed voice note)
@@ -1330,10 +1330,14 @@ export const NoteEditScreen = () => {
             transcription: transcribedText,
             created_at: new Date().toISOString(),
         }
-        await saveVoiceRecordingLocal(voiceRecording);
+        if (userId) {
+            await saveVoiceRecordingLocal(userId, voiceRecording);
+        } else {
+            console.warn('[NoteEditScreen] No user ID, strictly local recording might be lost on exit');
+        }
 
         // Reload from DB to ensure consistency and correct order
-        const updatedRecs = await getVoiceRecordingsLocal(currentNoteId);
+        const updatedRecs = userId ? await getVoiceRecordingsLocal(userId, currentNoteId) : [];
         setVoiceRecordings(updatedRecs);
 
         // ALWAYS update the parent note to indicate it has audio
@@ -1876,7 +1880,9 @@ export const NoteEditScreen = () => {
                             clearTimeout(saveTimeoutRef.current);
                         }
 
-                        await deleteVoiceRecordingLocal(id);
+                        if (userId) {
+                            await deleteVoiceRecordingLocal(userId, id);
+                        }
                         await AudioService.deleteAudioFile(path);
 
                         // Calculate new list state

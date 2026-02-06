@@ -14,6 +14,7 @@ import {
     deleteNoteLocal,
     getAllImprovementsLocal,
     saveImprovementLocal,
+    migrateLegacyNotesToUser,
 } from './DatabaseService';
 import { decrypt, encrypt } from '../crypto/encryption';
 import { isUUID } from '../utils/uuid';
@@ -62,7 +63,10 @@ class SyncService {
         }
 
         if (userId) {
-            await this.migrateLocalNotesToUser();
+            // Check if we need to migrate guest notes to this user
+            // This is "claim device notes" logic.
+            // We only do this if we are coming from a state where we might have guest notes.
+            await migrateLegacyNotesToUser(userId);
             this.currentUserId = userId;
         } else {
             this.currentUserId = null;
@@ -78,6 +82,22 @@ class SyncService {
 
     private notifyListeners() {
         this.listeners.forEach(l => l());
+    }
+
+    public async getSyncStatus(): Promise<{ unsyncedCount: number }> {
+        if (!this.currentUserId) return { unsyncedCount: 0 };
+        const notes = await getNotesLocal(this.currentUserId);
+        const improvements = await getAllImprovementsLocal(this.currentUserId);
+
+        const dirtyNotes = notes.filter(n => n.dirty || n.deleted || n.pending_delete).length;
+        const dirtyImprovements = improvements.filter(n => n.dirty || n.deleted).length;
+
+        return { unsyncedCount: dirtyNotes + dirtyImprovements };
+    }
+
+    public async hasUnsyncedChanges(): Promise<boolean> {
+        const status = await this.getSyncStatus();
+        return status.unsyncedCount > 0;
     }
 
     private handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -104,18 +124,18 @@ class SyncService {
             return;
         }
 
-        if (!this.isAuthenticated) {
-            console.log('[SyncService] Not authenticated. Skipping sync.');
+        if (!this.isAuthenticated || !this.currentUserId) {
+            console.log('[SyncService] Not authenticated or no user selected. Skipping sync.');
             return;
         }
 
-        console.log(`[SyncService] Starting sync. Reason: ${reason}`);
+        console.log(`[SyncService] Starting sync for user ${this.currentUserId}. Reason: ${reason}`);
         this.isSyncing = true;
 
         try {
             // 1. Gather local changes
-            const allNotes = await getNotesLocal();
-            const allImprovements = await getAllImprovementsLocal();
+            const allNotes = await getNotesLocal(this.currentUserId);
+            const allImprovements = await getAllImprovementsLocal(this.currentUserId);
             const dirtyNotes = allNotes.filter(n => n.dirty || n.deleted || n.pending_delete);
             const dirtyImprovements = allImprovements.filter(imp => imp.dirty || imp.deleted);
             const hasLocalNotes = allNotes.length > 0;
@@ -127,19 +147,12 @@ class SyncService {
             const improvementMap = new Map<string, typeof dirtyImprovements[number]>();
 
             for (const note of dirtyNotes) {
-                // Ensure UUID
                 if (!isUUID(note.id)) {
-                    // If it's a temp ID, we should have already replaced it, but let's be safe
-                    // Actually useNotes handles ID generation. We assume IDs are valid UUIDs here or handled before.
-                    // If we encounter a non-UUID here, it might be tricky without updating the ID in DB first.
-                    // For now, assume useNotes ensures UUIDs.
+                    // Skip invalid IDs
                 }
 
                 noteMap.set(note.id, note);
 
-                // Encrypt title for valid E2E
-                // Ideally note.encrypted_title is already set/up-to-date.
-                // If not, we generate it now.
                 const titleToSync = note.encrypted_title || await encrypt(note.title || '');
 
                 changes.push({
@@ -152,13 +165,12 @@ class SyncService {
                     client_updated_at: note.updated_at || new Date().toISOString(),
                     is_active: note.is_active,
                     is_pinned: note.is_pinned ?? false,
-                    last_variant_id: null, // Deprecated: using is_active now
+                    last_variant_id: null,
                 });
             }
 
             for (const improvement of dirtyImprovements) {
                 improvementMap.set(improvement.id, improvement);
-                // Fetch parent note to check for is_active
                 const parentNote = allNotes.find(n => n.id === improvement.note_id);
                 const activeChild = parentNote?.improvements?.find(imp => imp.is_active);
                 const isActive = activeChild?.id === improvement.id;
@@ -179,12 +191,6 @@ class SyncService {
             }
 
             // 3. Send to server
-            // We always ask for server changes if it's not just a quick save (or maybe always?)
-            // User said: "Отправляем на сервер одним батчем... Сервер возвращает обновлённые заметки"
-            // We should send `since` timestamp.
-
-            // If we have never synced or local cache is empty (e.g. after manual wipe), pull everything.
-            // Otherwise, use last sync timestamp.
             const since = !hasLocalNotes || this.lastSyncAt === 0
                 ? '1970-01-01T00:00:00+00:00'
                 : new Date(this.lastSyncAt).toISOString();
@@ -202,7 +208,6 @@ class SyncService {
                 ...response.conflicts
             ];
 
-            // Deduplicate
             const uniqueIncoming = new Map<string, ServerNote>();
             incoming.forEach(n => uniqueIncoming.set(n.id, n));
 
@@ -218,55 +223,15 @@ class SyncService {
                 await this.applyServerImprovements(incomingImprovements);
             }
 
-            // 5. Mark local dirty notes as synced (if they were in the request and not in conflict/update response?)
-            // Actually, if we sent them and got no error, we assume they are synced.
-            // But if there was a conflict, they are in the response.
-            // If they were successfully updated, they might be in `updated`?
-            // Usually sync response `updated` contains the notes that were successfully written? 
-            // Or `updated` means "here is the new state of the note you sent".
-
-            // Let's assume we clear dirty for everything we sent, UNLESS it came back in the response (which we just handled).
-            // Actually, `applyServerChanges` will overwrite them.
-            // So we can just clear dirty for all `changes` we sent.
-            // But we must be careful not to clear dirty if the user edited it *while* syncing.
-            // But we are single threaded in JS.
-            // If `applyServerChanges` updates the note, it saves it with `dirty=false` (synced=1).
-
-            // What about notes we sent but didn't get back? (Successful write, no change from server side logic?)
-            // Typically sync protocols return the new version.
-            // If the server returns nothing for a sent change, it implies success?
-            // Let's look at `useNotes` implementation of `syncWithServer`.
-            // It calls `dedupeServerNotes([...response.updated, ...response.server_changes, ...response.conflicts])`.
-            // Then `applyServerNotes`.
-            // It doesn't explicitly clear dirty for sent notes that didn't come back.
-            // This implies the server returns EVERYTHING that changed, including what we just sent (with new version).
-
-            // If so, `applyServerChanges` handles it.
-
-            // But what if we sent a note and server didn't return it? (e.g. no change in version?)
-            // We should probably clear dirty flag for the notes we sent.
-
+            // 5. Cleanup dirty flags
             for (const change of changes) {
-                // If we have a local note that is still dirty/deleted, and we haven't overwritten it with server response yet...
-                // We need to be careful.
-                // Simplest: `applyServerChanges` handles the ones returned.
-                // For the ones NOT returned, we assume success and clear dirty?
-                // Or does the server always return the updated note?
-                // Assuming server always returns updated note is safer.
-
-                // If we assume server returns updated notes, then `applyServerChanges` will save them as clean.
-                // If the server DOES NOT return them, they stay dirty? That would cause loops.
-                // Let's assume we need to mark them clean.
-
                 if (!uniqueIncoming.has(change.id)) {
                     const local = noteMap.get(change.id);
-                    if (local) {
-                        // If it was a delete, and server didn't return it, it's gone.
+                    if (local && this.currentUserId) {
                         if (change.deleted) {
-                            await deleteNoteLocal(local.id); // Hard delete?
+                            await deleteNoteLocal(this.currentUserId, local.id);
                         } else {
-                            // Mark clean
-                            await saveNoteLocal({ ...local, dirty: false, synced: 1 });
+                            await saveNoteLocal(this.currentUserId, { ...local, dirty: false, synced: 1 });
                         }
                     }
                 }
@@ -284,8 +249,8 @@ class SyncService {
                         continue;
                     }
                     const localImprovement = improvementMap.get(change.id);
-                    if (!localImprovement) continue;
-                    await saveImprovementLocal({
+                    if (!localImprovement || !this.currentUserId) continue;
+                    await saveImprovementLocal(this.currentUserId, {
                         ...localImprovement,
                         dirty: false,
                         synced: 1,
@@ -300,50 +265,15 @@ class SyncService {
 
         } catch (e) {
             console.error('[SyncService] Sync failed', e);
-            // Don't clear dirty flags, so we retry next time.
         } finally {
             this.isSyncing = false;
         }
     }
 
-    private async migrateLocalNotesToUser() {
-        try {
-            const notes = await getNotesLocal();
-            if (!notes.length) {
-                this.lastSyncAt = 0;
-                await AsyncStorage.setItem(SYNC_SINCE_KEY, '0');
-                return;
-            }
-
-            console.log('[SyncService] Migrating local notes to current user, marking as dirty...');
-            for (const note of notes) {
-                const isDeleted = !!note.deleted || !!note.pending_delete;
-                const migrated: Note = {
-                    ...note,
-                    synced: 0,
-                    dirty: true,
-                    deleted: isDeleted,
-                    pending_delete: note.pending_delete ?? isDeleted,
-                    version: 0,
-                    server_updated_at: undefined,
-                    conflict_of: null,
-                    // Keep original timestamps; user did not edit now.
-                    updated_at: note.updated_at,
-                };
-                await saveNoteLocal(migrated);
-            }
-
-            this.lastSyncAt = 0;
-            await AsyncStorage.setItem(SYNC_SINCE_KEY, '0');
-            console.log('[SyncService] Migration complete. All notes will be uploaded on next sync.');
-        } catch (e) {
-            console.error('[SyncService] Failed to migrate notes to new user', e);
-        }
-    }
-
     private async applyServerImprovements(improvements: ServerImprovement[]) {
+        if (!this.currentUserId) return;
         for (const improvement of improvements) {
-            await saveImprovementLocal({
+            await saveImprovementLocal(this.currentUserId, {
                 id: improvement.id,
                 note_id: improvement.note_id,
                 encrypted_content: improvement.content_ciphertext,
@@ -363,14 +293,14 @@ class SyncService {
     }
 
     private async applyServerChanges(serverNotes: ServerNote[]) {
-        const localNotes = await getNotesLocal();
+        if (!this.currentUserId) return;
+        const localNotes = await getNotesLocal(this.currentUserId);
         const localMap = new Map(localNotes.map(n => [n.id, n]));
 
         for (const serverNote of serverNotes) {
             const existing = localMap.get(serverNote.id);
             const serverNonce = serverNote.content_nonce ?? null;
 
-            // Skip if nothing changed (prevents updated_at churn on no-op syncs)
             const unchanged =
                 existing &&
                 existing.version === serverNote.version &&
@@ -382,13 +312,11 @@ class SyncService {
             }
 
             if (serverNote.deleted) {
-                await deleteNoteLocal(serverNote.id); // Hard delete locally
+                await deleteNoteLocal(this.currentUserId, serverNote.id);
                 localMap.delete(serverNote.id);
                 continue;
             }
 
-            // Decrypt server payload for local cache
-            // Decrypt server payload for local cache
             let title = 'Untitled';
             let content = '';
             let encryptedTitle = serverNote.title || undefined;
@@ -396,19 +324,13 @@ class SyncService {
             try {
                 if (serverNote.content_ciphertext) {
                     content = await decrypt(serverNote.content_ciphertext);
-                } else {
-                    console.warn(`[SyncService] Note ${serverNote.id} has no content ciphertext`);
                 }
 
-                // Handle title decryption
                 if (serverNote.title) {
                     try {
                         title = await decrypt(serverNote.title);
                     } catch (e) {
-                        // Title might be plaintext (legacy)
-                        // console.log('[SyncService] Title decryption failed, assuming plaintext');
                         title = serverNote.title;
-                        // Re-encrypt for local consistency
                         encryptedTitle = await encrypt(title);
                     }
                 }
@@ -448,7 +370,7 @@ class SyncService {
                 is_active: serverNote.is_active ?? existing?.is_active ?? false,
             };
 
-            await saveNoteLocal(merged);
+            await saveNoteLocal(this.currentUserId, merged);
             localMap.set(serverNote.id, merged);
         }
     }
