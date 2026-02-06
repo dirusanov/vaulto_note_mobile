@@ -19,15 +19,18 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
     if (!user) return null;
 
     console.log('[UsageCard] Rendering for user:', user.email || 'Guest');
-    console.log('[UsageCard] Credits:', user.trial_total_credits, 'Used:', user.trial_used_credits, 'Expires:', user.trial_expires_at);
+    console.log('[UsageCard] Credits:', user.transcription_max_seconds, 'Used:', user.transcription_used_seconds, 'Remaining:', user.transcription_remaining_seconds);
 
-    // "Unlimited" logic: If total credits > 100 hours (360000s)
-    const isUnlimited = user.trial_total_credits > 360000;
+    // "Unlimited" logic: If max seconds > 100 hours (360000s)
+    const isUnlimited = user.transcription_max_seconds > 360000;
 
-    // Trial Calculations - Fixed 10 mins (600s) default if not provided
-    const totalSeconds = user.trial_total_credits || 600;
-    const usedSeconds = user.trial_used_credits || 0;
-    const remainingSeconds = Math.max(0, totalSeconds - usedSeconds);
+    // Trial Calculations
+    const totalSeconds = user.transcription_max_seconds || 600;
+    const usedSeconds = user.transcription_used_seconds || 0;
+    const remainingSeconds = user.transcription_remaining_seconds !== undefined
+        ? user.transcription_remaining_seconds
+        : Math.max(0, totalSeconds - usedSeconds);
+
     const progress = Math.min(1, usedSeconds / totalSeconds);
     const isExpired = remainingSeconds <= 0;
     const isLowBalance = remainingSeconds > 0 && remainingSeconds <= 120; // Less than 2 minutes

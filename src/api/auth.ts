@@ -14,9 +14,10 @@ export interface UserProfile {
     is_verified: boolean;
     status: string;
     provider: string;
-    trial_total_credits: number;
-    trial_used_credits: number;
-    trial_expires_at?: string;
+    transcription_max_seconds: number;
+    transcription_used_seconds: number;
+    transcription_remaining_seconds: number;
+    has_llm_access: boolean;
 }
 
 export interface GuestProfile {
@@ -24,9 +25,10 @@ export interface GuestProfile {
     expires_in: number;
     user_id: string;
     is_verified: boolean;
-    trial_total_credits: number;
-    trial_used_credits: number;
-    trial_expires_at?: string;
+    transcription_max_seconds: number;
+    transcription_used_seconds: number;
+    transcription_remaining_seconds: number;
+    has_llm_access: boolean;
 }
 
 export interface GoogleAuthInit {
