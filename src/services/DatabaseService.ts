@@ -28,7 +28,7 @@ const saveWebStore = (userId: string, notes: Note[]) => {
 let db: SQLite.SQLiteDatabase | null = null;
 
 const createTables = async (database: SQLite.SQLiteDatabase) => {
-    await database.execAsync(`
+    await database.runAsync(`
         CREATE TABLE IF NOT EXISTS notes (
             id TEXT PRIMARY KEY,
             user_id TEXT,
@@ -48,7 +48,7 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
         );
     `);
 
-    await database.execAsync(`
+    await database.runAsync(`
         CREATE TABLE IF NOT EXISTS note_improvements (
             id TEXT PRIMARY KEY,
             note_id TEXT NOT NULL,
@@ -70,10 +70,10 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
         );
     `);
 
-    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_note_improvements_note_id ON note_improvements(note_id);');
-    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
+    await database.runAsync('CREATE INDEX IF NOT EXISTS idx_note_improvements_note_id ON note_improvements(note_id);');
+    await database.runAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
 
-    await database.execAsync(`
+    await database.runAsync(`
         CREATE TABLE IF NOT EXISTS voice_recordings (
             id TEXT PRIMARY KEY,
             note_id TEXT NOT NULL,
@@ -86,42 +86,42 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
         );
     `);
-    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
+    await database.runAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
 };
 
 const getDb = async () => {
     if (Platform.OS === 'web') return null;
     if (!db) {
         db = await SQLite.openDatabaseAsync('vaulto.db');
-        await db.execAsync('PRAGMA foreign_keys = ON;');
+        await db.runAsync('PRAGMA foreign_keys = ON;');
         await createTables(db);
 
         // Migration for existing tables
         try {
-            await db.execAsync('ALTER TABLE notes ADD COLUMN dirty INTEGER DEFAULT 0;');
+            await db.runAsync('ALTER TABLE notes ADD COLUMN dirty INTEGER DEFAULT 0;');
         } catch (e) { /* Ignore */ }
         try {
-            await db.execAsync('ALTER TABLE notes ADD COLUMN deleted INTEGER DEFAULT 0;');
+            await db.runAsync('ALTER TABLE notes ADD COLUMN deleted INTEGER DEFAULT 0;');
         } catch (e) { /* Ignore */ }
         try {
-            await db.execAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;');
+            await db.runAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;');
         } catch (e) { /* Ignore */ }
         try {
-            await db.execAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
+            await db.runAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
         } catch (e) { /* Ignore */ }
 
         // USER ID MIGRATION
         try {
-            await db.execAsync('ALTER TABLE notes ADD COLUMN user_id TEXT;');
-            await db.execAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
+            await db.runAsync('ALTER TABLE notes ADD COLUMN user_id TEXT;');
+            await db.runAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
         } catch (e) { /* Ignore */ }
 
         try {
-            await db.execAsync('ALTER TABLE note_improvements ADD COLUMN user_id TEXT;');
+            await db.runAsync('ALTER TABLE note_improvements ADD COLUMN user_id TEXT;');
         } catch (e) { /* Ignore */ }
 
         try {
-            await db.execAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;');
+            await db.runAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;');
         } catch (e) { /* Ignore */ }
     }
     return db;

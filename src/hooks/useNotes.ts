@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Note, NoteImprovement } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
@@ -310,6 +311,30 @@ export const useNotes = () => {
     useEffect(() => {
         refreshFromLocal();
     }, [refreshFromLocal]);
+
+    // Periodic Sync Interval (30s)
+    useEffect(() => {
+        if (!isAuthenticated || !userId) return;
+
+        console.log('[useNotes] Starting periodic sync interval');
+        const intervalId = setInterval(async () => {
+            if (AppState.currentState !== 'active') return;
+
+            try {
+                const hasChanges = await syncService.hasUnsyncedChanges();
+                if (hasChanges) {
+                    console.log('[useNotes] Periodic check: Found unsynced changes, syncing...');
+                    await syncService.syncNow('auto');
+                }
+            } catch (e) {
+                console.warn('[useNotes] Periodic sync check failed', e);
+            }
+        }, 30000); // 30 seconds
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, [isAuthenticated, userId]);
 
     const fetchNotes = useCallback(async () => {
         console.log('[useNotes] fetchNotes called');

@@ -417,6 +417,11 @@ export const NoteEditScreen = () => {
     // Ref to track active variant for queue processing
     const activeVariantIdRef = useRef(activeVariantId);
 
+    // Refs for safe note creation (prevent duplicates)
+    const isCreatingNote = useRef(false);
+    const pendingSaveAfterCreate = useRef(false);
+    const currentTitleRef = useRef(title);
+
     // Sync contentRef whenever content state changes
     useEffect(() => {
         currentContentRef.current = content;
@@ -426,6 +431,11 @@ export const NoteEditScreen = () => {
     useEffect(() => {
         activeVariantIdRef.current = activeVariantId;
     }, [activeVariantId]);
+
+    // Sync currentTitleRef
+    useEffect(() => {
+        currentTitleRef.current = title;
+    }, [title]);
 
     const loadSettings = async () => {
         const [size, scaling] = await Promise.all([
@@ -850,6 +860,14 @@ export const NoteEditScreen = () => {
             await saveImprovementDraft();
             return;
         }
+
+        // CREATION LOCK: Prevent double-creation if already in progress
+        if (isCreatingNote.current) {
+            console.log('[NoteEditScreen] Save skipped: Creation already in progress. Marking pending update.');
+            pendingSaveAfterCreate.current = true;
+            return;
+        }
+
         // Correct source of truth for audio presence is the current list of recordings
         const hasAudio = voiceRecordingsRef.current.length > 0;
         const hasImprovements = noteImprovements.length > 0;
@@ -872,7 +890,8 @@ export const NoteEditScreen = () => {
         }
 
         // Avoid duplicate save if nothing changed
-        if (title === lastSavedTitle.current && content === lastSavedContent.current) {
+        // NOTE: We check refs vs refs to avoid stale closures if this runs delayed
+        if (localNoteId && title === lastSavedTitle.current && content === lastSavedContent.current) {
             return;
         }
 
@@ -887,15 +906,50 @@ export const NoteEditScreen = () => {
                     has_audio: hasAudio // Explicitly sync has_audio state
                 });
             } else {
-                const newNote = await createNote({
-                    title,
-                    content,
-                    // Note: createNote signature takes audio object, not has_audio flag directly.
-                    // But if we have no audio object here, it defaults to false.
-                    // If we needed to create with audio, we should likely be in handleRecordingFinish.
-                });
-                if (isMounted.current) {
-                    setLocalNoteId(newNote.id);
+                // LOCK CREATION
+                isCreatingNote.current = true;
+                pendingSaveAfterCreate.current = false; // Reset flag
+
+                try {
+                    const newNote = await createNote({
+                        title,
+                        content,
+                        // Note: createNote signature takes audio object, not has_audio flag directly.
+                        // But if we have no audio object here, it defaults to false.
+                        // If we needed to create with audio, we should likely be in handleRecordingFinish.
+                    });
+
+                    // Update ID immediately
+                    if (isMounted.current) {
+                        setLocalNoteId(newNote.id);
+                        localNoteIdRef.current = newNote.id; // Immediate ref update for other async flows
+                    }
+
+                    // CHECK FOR PENDING UPDATES (Race condition fix)
+                    // If user typed more while creation was in flight, or pending flag was set
+                    const latestContent = currentContentRef.current;
+                    const latestTitle = currentTitleRef.current;
+
+                    // currentTitleRef and currentContentRef hold the very latest state from the component
+                    // We check if it differs from what we *just* created (which was 'title' and 'content' from closure)
+                    const contentChanged = latestContent !== content;
+                    const titleChanged = latestTitle !== title;
+
+                    if (pendingSaveAfterCreate.current || contentChanged || titleChanged) {
+                        console.log('[NoteEditScreen] Identifying pending changes after creation, triggering update...', { pending: pendingSaveAfterCreate.current, contentChanged, titleChanged });
+                        await updateNote(newNote.id, {
+                            title: latestTitle,
+                            content: latestContent,
+                            has_audio: hasAudio
+                        });
+                        // Update "last saved" to the LATEST values we just pushed
+                        lastSavedTitle.current = latestTitle;
+                        lastSavedContent.current = latestContent;
+                        // Return here so we don't overwrite lastSaved with stale closure values below
+                        return;
+                    }
+                } finally {
+                    isCreatingNote.current = false;
                 }
             }
             lastSavedTitle.current = title;
@@ -1288,6 +1342,11 @@ export const NoteEditScreen = () => {
             }
         }
 
+        // Wait for any pending creation to finish
+        while (isCreatingNote.current) {
+            await new Promise(r => setTimeout(r, 100));
+        }
+
         let finalTranscribedContent = content; // Default to existing
         let currentNoteId = localNoteIdRef.current;
 
@@ -1572,6 +1631,11 @@ export const NoteEditScreen = () => {
                 Alert.alert('No changes', 'The text remains unchanged.');
                 setIsAIProcessing(false);
                 return;
+            }
+
+            // Wait for any pending creation to finish
+            while (isCreatingNote.current) {
+                await new Promise(r => setTimeout(r, 100));
             }
 
             let targetNoteId = localNoteId;
