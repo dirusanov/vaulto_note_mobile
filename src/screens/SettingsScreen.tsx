@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
@@ -7,7 +7,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useAuth } from '../hooks/useAuth';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
     AIProvider,
     getAIProvider,
@@ -29,7 +29,7 @@ import { UsageCard } from '../components/UsageCard';
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
-    const { signOut, isAuthenticated, isGuest, user } = useAuth();
+    const { signOut, isAuthenticated, isGuest, user, refreshProfile } = useAuth();
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
@@ -110,6 +110,15 @@ export const SettingsScreen = () => {
     useEffect(() => {
         loadPreferences();
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            if (isAuthenticated && !isGuest) {
+                console.log('[SettingsScreen] Refreshing profile data...');
+                refreshProfile();
+            }
+        }, [isAuthenticated, isGuest, refreshProfile])
+    );
 
     const loadPreferences = async () => {
         try {
