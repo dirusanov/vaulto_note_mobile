@@ -792,17 +792,119 @@ export const wipeLocalDatabase = async (): Promise<void> => {
         localStorage.clear();
         return;
     }
+};
 
+export const seedDemoData = async (userId: string): Promise<void> => {
     try {
-        const database = await getDb();
-        if (!database) return;
-        await database.runAsync('DELETE FROM note_improvements;');
-        await database.runAsync('DELETE FROM voice_recordings;');
-        await database.runAsync('DELETE FROM notes;');
-        console.log('[DatabaseService] Native DB wiped');
+        console.log('[DatabaseService] Seeding demo data for user', userId);
+        const now = new Date().toISOString();
+
+        // 1. Shopping List (Checklist style if we had it, but for now text with emojis)
+        const shoppingNoteId = 'demo-shopping-list';
+        const shoppingTitle = await encrypt('Weekly Groceries 🛒');
+        const shoppingContent = await encrypt(
+            "- [ ] Organic Milk 🥛\n- [ ] Free-range Eggs 🥚\n- [ ] Sourdough Bread 🥖\n- [ ] Avocados 🥑\n- [ ] Coffee Beans ☕\n- [ ] Dark Chocolate 🍫\n- [ ] Greek Yogurt"
+        );
+
+        await saveNoteLocal(userId, {
+            id: shoppingNoteId,
+            encrypted_title: shoppingTitle,
+            encrypted_content: shoppingContent,
+            created_at: now,
+            updated_at: now,
+            has_audio: false,
+            is_pinned: true,
+            synced: 0,
+            dirty: true,
+            deleted: false,
+            version: 1,
+            server_updated_at: now,
+            label: 'Personal',
+            is_active: false
+        });
+
+        // 2. Project Ideas (List)
+        const ideasNoteId = 'demo-ideas-list';
+        const ideasTitle = await encrypt('Startup Ideas 💡');
+        const ideasContent = await encrypt(
+            "1. AI-powered Personal Trainer\n   - Uses camera to correct form\n   - Generates workout plans\n\n2. Smart Recipe Manager\n   - Scans fridge contents\n   - Suggests recipes based on expiration dates\n\n3. Local Event Aggregator\n   - Pulls from various social media\n   - Personalized recommendations"
+        );
+
+        await saveNoteLocal(userId, {
+            id: ideasNoteId,
+            encrypted_title: ideasTitle,
+            encrypted_content: ideasContent,
+            created_at: new Date(Date.now() - 100000).toISOString(), // Slightly older
+            updated_at: new Date(Date.now() - 100000).toISOString(),
+            has_audio: false,
+            is_pinned: false,
+            synced: 0,
+            dirty: true,
+            deleted: false,
+            version: 1,
+            server_updated_at: new Date(Date.now() - 100000).toISOString(),
+            label: 'Work',
+            is_active: false
+        });
+
+        // 3. Meeting Notes (Text)
+        const meetingNoteId = 'demo-meeting-notes';
+        const meetingTitle = await encrypt('Product Sync 📅');
+        const meetingContent = await encrypt(
+            "Attendees: Alex, Sarah, Mike\nDate: Oct 24, 2024\n\n## Key Updates\n- Mobile app performance improved by 30% 🚀\n- Dark mode implementation is complete.\n- User feedback on the new navigation is positive.\n\n## Action Items\n- Sarah: Finalize design for the settings page.\n- Mike: Investigate the sync conflict issue.\n- Alex: Prepare release notes for v2.1."
+        );
+
+        await saveNoteLocal(userId, {
+            id: meetingNoteId,
+            encrypted_title: meetingTitle,
+            encrypted_content: meetingContent,
+            created_at: new Date(Date.now() - 200000).toISOString(),
+            updated_at: new Date(Date.now() - 200000).toISOString(),
+            has_audio: false,
+            is_pinned: false,
+            synced: 0,
+            dirty: true,
+            deleted: false,
+            version: 1,
+            server_updated_at: new Date(Date.now() - 200000).toISOString(),
+            label: 'Work',
+            is_active: true
+        });
+
+        // 4. Voice Note Mockup
+        const voiceNoteId = 'demo-voice-note';
+        const voiceTitle = await encrypt('Design Brainstorm 🎙️');
+        const voiceContent = await encrypt(
+            "Thought about the new gesture system. We should probably use a swipe-to-archive interaction similar to email apps. It feels more natural on mobile. Also, need to consider haptic feedback for long presses."
+        );
+        const voiceTranscription = await encrypt(
+            "Thought about the new gesture system. We should probably use a swipe-to-archive interaction similar to email apps. It feels more natural on mobile. Also, need to consider haptic feedback for long presses."
+        );
+
+        await saveNoteLocal(userId, {
+            id: voiceNoteId,
+            encrypted_title: voiceTitle,
+            encrypted_content: voiceContent,
+            encrypted_transcription: voiceTranscription,
+            created_at: new Date(Date.now() - 50000).toISOString(),
+            updated_at: new Date(Date.now() - 50000).toISOString(),
+            has_audio: true,
+            audio_duration: 45, // 45 seconds
+            audio_file_path: 'mock/path/to/audio.m4a', // Won't play but UI should show player
+            is_pinned: false,
+            synced: 0,
+            dirty: true,
+            deleted: false,
+            version: 1,
+            server_updated_at: new Date(Date.now() - 50000).toISOString(),
+            label: 'Ideas',
+            is_active: false
+        });
+
+
+        console.log('[DatabaseService] Demo data seeded successfully');
     } catch (e) {
-        console.error('[DatabaseService] Failed to wipe native DB', e);
-        throw e;
+        console.error('[DatabaseService] Failed to seed demo data', e);
     }
 };
 

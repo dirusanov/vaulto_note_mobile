@@ -31,6 +31,7 @@ interface EncryptionContextType {
     enableE2EE: (pin: string) => Promise<void>;
     unlock: (pin: string) => Promise<void>;
     changePin: (pin: string) => Promise<void>;
+    resetSync: () => Promise<void>;
     lock: () => void;
 }
 
@@ -100,6 +101,20 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             return;
         }
 
+        const chooseNewestBundle = (local: KeyBundle | null, remote: KeyBundle | null): KeyBundle | null => {
+            if (!local) return remote;
+            if (!remote) return local;
+            const localTime = Date.parse(local.created_at || '');
+            const remoteTime = Date.parse(remote.created_at || '');
+            if (!Number.isNaN(localTime) && !Number.isNaN(remoteTime)) {
+                return remoteTime > localTime ? remote : local;
+            }
+            if (!Number.isNaN(localTime) && Number.isNaN(remoteTime)) {
+                return local;
+            }
+            return remote;
+        };
+
         let activeBundle: KeyBundle | null = null;
         const localBundle = await storage.getKeyBundle(userId);
         if (localBundle && isKeyBundle(localBundle)) {
@@ -109,8 +124,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         try {
             const serverBundle = await e2eeApi.fetchKeyBundle();
             if (serverBundle && isKeyBundle(serverBundle)) {
-                activeBundle = serverBundle;
-                await storage.setKeyBundle(userId, serverBundle);
+                const chosen = chooseNewestBundle(activeBundle, serverBundle);
+                activeBundle = chosen;
+                if (chosen === serverBundle) {
+                    await storage.setKeyBundle(userId, serverBundle);
+                }
             }
         } catch (error) {
             console.warn('[Encryption] Failed to fetch key bundle from server:', error);
@@ -224,6 +242,34 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
     }, [isAuthenticated, isGuest, userId]);
 
+    const resetSync = useCallback(async () => {
+        if (!isAuthenticated || isGuest) {
+            throw new Error('Sign in required to reset sync');
+        }
+        if (!userId) {
+            throw new Error('User not available');
+        }
+
+        try {
+            await e2eeApi.deleteKeyBundle();
+        } catch (error) {
+            console.warn('[Encryption] Failed to delete key bundle on server:', error);
+        }
+
+        await storage.removeKeyBundle(userId);
+        await storage.removeStoredMasterKey(userId);
+        await storage.setSyncEnabled(false);
+        clearMasterKey();
+        setBundle(null);
+        setSyncUnlocked(false);
+        setSyncEnabled(false);
+        setStatus('uninitialized');
+        setMode('local');
+        setCryptoMode('local');
+        syncService.setSyncEnabled(false);
+        await syncService.resetSyncState(userId);
+    }, [isAuthenticated, isGuest, userId]);
+
     const lock = useCallback(() => {
         clearMasterKey();
         setSyncUnlocked(false);
@@ -243,8 +289,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         enableE2EE,
         unlock,
         changePin,
+        resetSync,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, bundle, enableE2EE, unlock, changePin, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, bundle, enableE2EE, unlock, changePin, resetSync, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

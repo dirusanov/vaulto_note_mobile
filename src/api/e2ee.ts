@@ -9,4 +9,7 @@ export const e2eeApi = {
     storeKeyBundle: async (bundle: KeyBundle): Promise<void> => {
         await client.put('/e2ee/master-key', bundle);
     },
+    deleteKeyBundle: async (): Promise<void> => {
+        await client.delete('/e2ee/master-key');
+    },
 };

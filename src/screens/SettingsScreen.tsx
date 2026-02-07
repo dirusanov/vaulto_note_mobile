@@ -34,10 +34,12 @@ import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
 
+import { seedDemoData } from '../services/DatabaseService';
+
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
-    const { status: encryptionStatus, syncEnabled, syncLocked } = useEncryption();
+    const { syncEnabled, syncLocked, resetSync } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
@@ -81,6 +83,28 @@ export const SettingsScreen = () => {
         : syncLocked
             ? 'Unlock sync to resume uploading and downloading changes.'
             : 'PIN is required only to enable sync or restore on a new device.';
+
+    const handleResetSync = useCallback(() => {
+        Alert.alert(
+            'Reset sync?',
+            'This will remove your sync key. Previously synced notes will be unrecoverable. Local notes on this device will not be deleted.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Reset',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await resetSync();
+                            Alert.alert('Sync reset', 'Sync key removed. You can enable sync again with a new PIN.');
+                        } catch (error: any) {
+                            Alert.alert('Reset failed', error?.message || 'Unable to reset sync.');
+                        }
+                    }
+                }
+            ]
+        );
+    }, [resetSync]);
 
     type ProviderOption = {
         key: AIProvider;
@@ -459,6 +483,13 @@ export const SettingsScreen = () => {
                     {syncEnabled && syncLocked && (
                         <View style={{ marginTop: spacing.m }}>
                             <Button title="Unlock Sync" onPress={() => setShowUnlockSyncModal(true)} />
+                            <View style={{ marginTop: spacing.s }}>
+                                <Button
+                                    title="Reset Sync (Forgot PIN)"
+                                    variant="outline"
+                                    onPress={handleResetSync}
+                                />
+                            </View>
                         </View>
                     )}
                     {syncEnabled && !syncLocked && (
@@ -850,17 +881,51 @@ export const SettingsScreen = () => {
                     </View>
                 </View>
 
-                {isAuthenticated && (
-                    <View style={[styles.footer, { marginBottom: spacing.xxl + spacing.l }]}>
-                        <Button
-                            title="Sign Out"
-                            onPress={handleSignOut}
-                            variant="destructive"
-                            style={[styles.button, { backgroundColor: 'transparent' }]}
-                        />
+                {
+                    isAuthenticated && (
+                        <View style={[styles.footer, { marginBottom: spacing.xxl + spacing.l }]}>
+                            <Button
+                                title="Sign Out"
+                                onPress={handleSignOut}
+                                variant="destructive"
+                                style={[styles.button, { backgroundColor: 'transparent' }]}
+                            />
+                        </View>
+                    )
+                }
+
+
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Text style={styles.sectionTitle}>Demo & Screenshots</Text>
                     </View>
-                )}
-            </ScrollView>
+                    <Text style={styles.sectionHint}>
+                        Populate the app with sample data for screenshots (Shopping List, Ideas, Voice Notes).
+                    </Text>
+                    <Button
+                        title="Load Demo Data"
+                        onPress={async () => {
+                            if (!user?.id) return;
+                            Alert.alert(
+                                'Load Demo Data',
+                                'This will add sample notes to your account. Existing notes will not be deleted.',
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                        text: 'Load',
+                                        onPress: async () => {
+                                            await seedDemoData(user.id);
+                                            Alert.alert('Success', 'Demo data loaded! Go to your notes list.');
+                                        }
+                                    }
+                                ]
+                            );
+                        }}
+                        variant="secondary"
+                    />
+                </View>
+
+            </ScrollView >
 
             <EnableSyncModal
                 visible={showEnableSyncModal}
@@ -922,7 +987,7 @@ export const SettingsScreen = () => {
                 }}
                 onCancel={() => setShowSignOutDialog(false)}
             />
-        </ScreenContainer>
+        </ScreenContainer >
     );
 };
 
