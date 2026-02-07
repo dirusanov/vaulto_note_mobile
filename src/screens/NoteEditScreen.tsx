@@ -38,6 +38,7 @@ import { typography } from '../theme/typography';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
+import { EnableSyncModal } from '../components/EnableSyncModal';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
@@ -68,6 +69,7 @@ import { AIProcessingIndicator } from '../components/AIProcessingIndicator';
 import { ErrorModal } from '../components/ErrorModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
+import { useEncryption } from '../context/EncryptionContext';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -104,10 +106,12 @@ export const NoteEditScreen = () => {
         setActiveVariant,
     } = useNotesContext();
     const { isGuest, userId } = useAuth();
+    const { syncEnabled } = useEncryption();
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
     const localNoteIdRef = useRef(localNoteId);
+    const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
 
     useEffect(() => {
         localNoteIdRef.current = localNoteId;
@@ -383,6 +387,43 @@ export const NoteEditScreen = () => {
         }
         callback();
     };
+
+    const maybePromptSyncChoice = useCallback(async (text: string) => {
+        if (syncEnabled || !text.trim()) return;
+        Alert.alert(
+            'Save transcription',
+            'Choose how to store this text:',
+            [
+                { text: 'Save locally', style: 'default' },
+                {
+                    text: 'Save & Sync',
+                    onPress: () => {
+                        if (isGuest) {
+                            Alert.alert(
+                                'Sign in required',
+                                'Please sign in to enable sync.',
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                        text: 'Sign In',
+                                        onPress: () => navigation.navigate('SignIn')
+                                    }
+                                ]
+                            );
+                            return;
+                        }
+                        setShowEnableSyncModal(true);
+                    },
+                },
+                {
+                    text: 'Copy text',
+                    onPress: async () => {
+                        await Clipboard.setStringAsync(text);
+                    }
+                }
+            ]
+        );
+    }, [syncEnabled, isGuest, navigation]);
 
 
 
@@ -1306,11 +1347,10 @@ export const NoteEditScreen = () => {
 
         // 1. TRY TO TRANSCRIBE (But don't fail if it doesn't work)
         try {
-            if (isGuest || !transcribe) {
-                // Skip transcription entirely for guests or if user opted out
-                console.log('[NoteEditScreen] Transcription skipped (Guest or Toggle OFF)');
-                console.log('[NoteEditScreen] Guest user - skipping transcription');
-                transcription = { success: false, text: '', error: 'Guest user - transcription disabled' };
+            if (!transcribe) {
+                // Skip transcription if user opted out
+                console.log('[NoteEditScreen] Transcription skipped (Toggle OFF)');
+                transcription = { success: false, text: '', error: 'Transcription disabled' };
             } else {
                 setIsTranscribing(true);
                 transcription = await transcribeAudio(recording.uri);
@@ -1477,6 +1517,8 @@ export const NoteEditScreen = () => {
         if (!isTranscriptionSuccess) {
             return;
         }
+
+        void maybePromptSyncChoice(transcribedText);
 
         // 5. AGENT PROCESSING (If enabled)
         // Note: processAgentQueue uses currentContentRef internally, so we don't strictly need to pass content here,
@@ -1842,7 +1884,7 @@ export const NoteEditScreen = () => {
         if (route.params?.initialRecording) {
             handleRecordingFinish(route.params.initialRecording, route.params.initialTranscribe ?? true);
         }
-    }, [route.params?.initialRecording, isGuest]);
+    }, [route.params?.initialRecording]);
 
     // Track keyboard visibility to handle color picker interactions
     const isKeyboardVisible = useRef(false);
@@ -1902,6 +1944,8 @@ export const NoteEditScreen = () => {
             }
 
             setHasTranscription(true);
+
+            void maybePromptSyncChoice(text);
 
             // Trigger Agent Flow
             await executeAgentFlow(audioUri, text, false);
@@ -2137,7 +2181,7 @@ export const NoteEditScreen = () => {
                     )}
                     <TouchableOpacity
                         style={[styles.retryTranscriptionButton, { alignSelf: 'stretch', justifyContent: 'center', marginTop: spacing.s }]}
-                        onPress={() => handleAiAccess(handleRetryTranscription)}
+                        onPress={handleRetryTranscription}
                     >
                         <MaterialIcons name="auto-awesome" size={18} color={colors.background} style={{ marginRight: 8 }} />
                         <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
@@ -2651,6 +2695,12 @@ export const NoteEditScreen = () => {
                 visible={errorModalVisible}
                 message={errorMessage}
                 onClose={() => setErrorModalVisible(false)}
+            />
+
+            <EnableSyncModal
+                visible={showEnableSyncModal}
+                onClose={() => setShowEnableSyncModal(false)}
+                onEnabled={() => setShowEnableSyncModal(false)}
             />
 
             <AIProcessingIndicator

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { storage } from '../utils/storage';
 import { authApi, UserProfile } from '../api/auth';
 import { syncService } from '../services/SyncService';
@@ -102,6 +102,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             const handleUnauthorized = async () => {
                 console.log('[AuthContext] Received unauthorized event, recreating guest session...');
                 const keepLocalNotes = await storage.getKeepLocalNotes();
+                const previousUserId = await storage.getUserId();
+                if (previousUserId) {
+                    await storage.removeStoredMasterKey(previousUserId);
+                }
                 if (!keepLocalNotes) {
                     setUserId(null);
                 }
@@ -234,6 +238,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const shouldWipeLocal = !keepLocalNotes && (options?.wipeLocal ?? true);
         const previousUserId = userId;
         console.log('[AuthContext] Signing out, reverting to guest...');
+        if (previousUserId) {
+            await storage.removeStoredMasterKey(previousUserId);
+        }
         await storage.removeToken();
         await storage.removeRefreshToken();
         if (!keepLocalNotes) {
@@ -281,8 +288,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setIsLoading(false);
     };
 
-    const refreshProfile = async () => {
+    const refreshInFlight = useRef(false);
+
+    const refreshProfile = useCallback(async () => {
         if (!token) return;
+        if (refreshInFlight.current) return;
+        refreshInFlight.current = true;
         try {
             const profile = await authApi.getProfile();
             setUser(profile);
@@ -290,8 +301,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
         } catch (err) {
             console.error('[AuthContext] Failed to refresh profile', err);
+        } finally {
+            refreshInFlight.current = false;
         }
-    };
+    }, [token]);
 
     return (
         <AuthContext.Provider

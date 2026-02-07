@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { Note, NoteImprovement, VoiceRecording } from '../api/notes';
-import { decrypt } from '../crypto/encryption';
+import { decrypt, encrypt, isDeviceCiphertext, isMasterCiphertext } from '../crypto/encryption';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
 
@@ -158,6 +158,185 @@ export const migrateLegacyNotesToUser = async (userId: string): Promise<void> =>
         console.log(`[DatabaseService] Migrated legacy notes to user ${userId}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to migrate legacy notes', e);
+    }
+};
+
+export const migrateLegacyEncryption = async (userId: string, target: 'device' | 'master' = 'device'): Promise<void> => {
+    if (!userId) return;
+
+    const shouldReencrypt = (ciphertext: string | null | undefined) => {
+        if (!ciphertext) return false;
+        if (target === 'master') {
+            return !isMasterCiphertext(ciphertext);
+        }
+        return !isDeviceCiphertext(ciphertext);
+    };
+
+    if (Platform.OS === 'web') {
+        const notes = getWebStore(userId);
+        let mutated = false;
+        const now = new Date().toISOString();
+        let processed = 0;
+        const YIELD_EVERY = 25;
+
+        for (const note of notes) {
+            let changed = false;
+
+            if (shouldReencrypt(note.encrypted_content)) {
+                try {
+                    const content = await decrypt(note.encrypted_content);
+                    note.encrypted_content = await encrypt(content);
+                    changed = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping content migration (web)', e);
+                }
+            }
+
+            if (shouldReencrypt(note.encrypted_title)) {
+                try {
+                    const title = await decrypt(note.encrypted_title);
+                    note.encrypted_title = await encrypt(title);
+                    changed = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping title migration (web)', e);
+                }
+            }
+
+            if (shouldReencrypt(note.encrypted_transcription)) {
+                try {
+                    const transcription = await decrypt(note.encrypted_transcription);
+                    note.encrypted_transcription = await encrypt(transcription);
+                    changed = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping transcription migration (web)', e);
+                }
+            }
+
+            if (changed) {
+                note.dirty = true;
+                note.synced = 0;
+                note.updated_at = now;
+                mutated = true;
+            }
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        if (mutated) {
+            saveWebStore(userId, notes);
+            console.log(`[DatabaseService] Encryption migrated (web -> ${target})`);
+        }
+        return;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+        const now = new Date().toISOString();
+
+        const rows = await database.getAllAsync<any>(
+            'SELECT id, encrypted_title, encrypted_content, encrypted_transcription FROM notes WHERE user_id = ?',
+            [userId]
+        );
+
+        let processed = 0;
+        const YIELD_EVERY = 25;
+        for (const row of rows) {
+            let updated = false;
+            let encryptedContent = row.encrypted_content;
+            let encryptedTitle = row.encrypted_title;
+            let encryptedTranscription = row.encrypted_transcription;
+
+            if (shouldReencrypt(encryptedContent)) {
+                try {
+                    const content = await decrypt(encryptedContent);
+                    encryptedContent = await encrypt(content);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping content migration', e);
+                }
+            }
+
+            if (shouldReencrypt(encryptedTitle)) {
+                try {
+                    const title = await decrypt(encryptedTitle);
+                    encryptedTitle = await encrypt(title);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping title migration', e);
+                }
+            }
+
+            if (shouldReencrypt(encryptedTranscription)) {
+                try {
+                    const transcription = await decrypt(encryptedTranscription);
+                    encryptedTranscription = await encrypt(transcription);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping transcription migration', e);
+                }
+            }
+
+            if (updated) {
+                await database.runAsync(
+                    `UPDATE notes SET encrypted_title = ?, encrypted_content = ?, encrypted_transcription = ?, dirty = 1, synced = 0, updated_at = ? WHERE id = ?`,
+                    [encryptedTitle ?? null, encryptedContent, encryptedTranscription ?? null, now, row.id]
+                );
+            }
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        const improvements = await database.getAllAsync<any>(
+            'SELECT id, encrypted_title, encrypted_content FROM note_improvements WHERE user_id = ?',
+            [userId]
+        );
+
+        processed = 0;
+        for (const imp of improvements) {
+            let updated = false;
+            let encryptedContent = imp.encrypted_content;
+            let encryptedTitle = imp.encrypted_title;
+
+            if (shouldReencrypt(encryptedContent)) {
+                try {
+                    const content = await decrypt(encryptedContent);
+                    encryptedContent = await encrypt(content);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping improvement content migration', e);
+                }
+            }
+
+            if (shouldReencrypt(encryptedTitle)) {
+                try {
+                    const title = await decrypt(encryptedTitle);
+                    encryptedTitle = await encrypt(title);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping improvement title migration', e);
+                }
+            }
+
+            if (updated) {
+                await database.runAsync(
+                    `UPDATE note_improvements SET encrypted_title = ?, encrypted_content = ?, dirty = 1, synced = 0, updated_at = ? WHERE id = ?`,
+                    [encryptedTitle ?? null, encryptedContent, now, imp.id]
+                );
+            }
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        console.log(`[DatabaseService] Encryption migrated (native -> ${target})`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to migrate legacy encryption', e);
     }
 };
 
@@ -357,6 +536,32 @@ export const deleteVoiceRecordingLocal = async (userId: string, id: string): Pro
     }
 };
 
+export const markAllDirty = async (userId: string): Promise<void> => {
+    if (!userId) return;
+
+    if (Platform.OS === 'web') {
+        const notes = getWebStore(userId);
+        const updated = notes.map(note => ({
+            ...note,
+            dirty: true,
+            synced: 0,
+        }));
+        saveWebStore(userId, updated);
+        console.log(`[DatabaseService] Marked all notes dirty in web store for user ${userId}`);
+        return;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
+        await database.runAsync('UPDATE note_improvements SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
+        console.log(`[DatabaseService] Marked all notes dirty for user ${userId}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to mark notes dirty', e);
+    }
+};
+
 export const getNotesLocal = async (userId: string): Promise<Note[]> => {
     if (!userId) return [];
 
@@ -364,20 +569,26 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
         const allNotes = getWebStore(userId);
 
         const decryptedNotes = await Promise.all(allNotes.map(async (n) => {
-            const title = n.encrypted_title ? await decrypt(n.encrypted_title) : '';
-            const content = await decrypt(n.encrypted_content);
-            const transcription = n.encrypted_transcription ? await decrypt(n.encrypted_transcription) : undefined;
+            try {
+                const title = n.encrypted_title ? await decrypt(n.encrypted_title) : '';
+                const content = await decrypt(n.encrypted_content);
+                const transcription = n.encrypted_transcription ? await decrypt(n.encrypted_transcription) : undefined;
 
-            return {
-                ...n,
-                title,
-                content,
-                transcription,
-            };
+                return {
+                    ...n,
+                    title,
+                    content,
+                    transcription,
+                };
+            } catch (e) {
+                console.error(`[DatabaseService] Failed to decrypt note ${n.id}`, e);
+                return null;
+            }
         }));
 
-        const parents = decryptedNotes.filter(n => !n.parent_id);
-        const children = decryptedNotes.filter(n => n.parent_id);
+        const validNotes = decryptedNotes.filter((n): n is Note => n !== null);
+        const parents = validNotes.filter(n => !n.parent_id);
+        const children = validNotes.filter(n => n.parent_id);
         const childrenMap = new Map<string, Note[]>();
         children.forEach(c => {
             const pid = c.parent_id!;

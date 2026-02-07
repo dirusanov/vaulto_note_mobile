@@ -62,8 +62,6 @@ export async function transcribeAudio(
             // Read audio file info
             if (Platform.OS !== 'web') {
                 const fileInfo = await FileSystem.getInfoAsync(audioUri);
-                console.log('[Transcription] File info:', fileInfo);
-
                 if (!fileInfo.exists) {
                     return {
                         text: '',
@@ -90,8 +88,6 @@ export async function transcribeAudio(
                 type: 'audio/m4a', // Changed from audio/mp4
                 name: 'audio.m4a',
             } as any;
-
-            console.log('[Transcription] Uploading file:', file);
 
             formData.append('file', file);
             formData.append('model', 'whisper-1');
@@ -491,4 +487,3 @@ export async function processVoiceNote(
         };
     }
 }
-

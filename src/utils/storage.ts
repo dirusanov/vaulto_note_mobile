@@ -3,8 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { UserProfile } from '../api/auth';
+import { KeyBundle } from '../crypto/e2ee';
 
 export type AIProvider = 'secure_llm' | 'openai' | 'selfhosted';
+export type CryptoMode = 'local' | 'e2ee';
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
@@ -14,6 +16,11 @@ const OPENAI_API_KEY = 'vaulto_openai_api_key';
 const PRIVACY_WARNING_DISMISSED_KEY = 'vaulto_privacy_warning_dismissed';
 const MAX_RECORDING_DURATION_KEY = 'vaulto_max_recording_duration';
 const AI_PROVIDER_KEY = 'vaulto_ai_provider';
+const CRYPTO_MODE_KEY = 'vaulto_crypto_mode';
+const SYNC_ENABLED_KEY = 'vaulto_sync_enabled';
+const DEVICE_KEY_KEY = 'vaulto_device_key_v1';
+const KEY_BUNDLE_PREFIX = 'vaulto_key_bundle_v1';
+const MASTER_KEY_PREFIX = 'vaulto_master_key_v1';
 
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
@@ -146,6 +153,104 @@ export const storage = {
             await AsyncStorage.setItem(KEEP_LOCAL_NOTES_KEY, keep.toString());
         } catch (e) {
             console.error('Failed to set keep local notes flag', e);
+        }
+    },
+    getCryptoMode: async (): Promise<CryptoMode> => {
+        try {
+            const value = await AsyncStorage.getItem(CRYPTO_MODE_KEY);
+            return value === 'e2ee' ? 'e2ee' : 'local';
+        } catch (e) {
+            console.error('Failed to get crypto mode', e);
+            return 'local';
+        }
+    },
+    setCryptoMode: async (mode: CryptoMode): Promise<void> => {
+        try {
+            await AsyncStorage.setItem(CRYPTO_MODE_KEY, mode);
+        } catch (e) {
+            console.error('Failed to set crypto mode', e);
+        }
+    },
+    getSyncEnabled: async (): Promise<boolean> => {
+        try {
+            const value = await AsyncStorage.getItem(SYNC_ENABLED_KEY);
+            return value === 'true';
+        } catch (e) {
+            console.error('Failed to get sync enabled flag', e);
+            return false;
+        }
+    },
+    setSyncEnabled: async (enabled: boolean): Promise<void> => {
+        try {
+            await AsyncStorage.setItem(SYNC_ENABLED_KEY, enabled.toString());
+        } catch (e) {
+            console.error('Failed to set sync enabled flag', e);
+        }
+    },
+    getDeviceKey: async (): Promise<string | null> => {
+        try {
+            return await secureGet(DEVICE_KEY_KEY);
+        } catch (e) {
+            console.error('Failed to get device key', e);
+            return null;
+        }
+    },
+    setDeviceKey: async (hexKey: string): Promise<void> => {
+        try {
+            await secureSet(DEVICE_KEY_KEY, hexKey);
+        } catch (e) {
+            console.error('Failed to set device key', e);
+        }
+    },
+    getKeyBundle: async (userId: string): Promise<KeyBundle | null> => {
+        if (!userId) return null;
+        try {
+            const raw = await secureGet(`${KEY_BUNDLE_PREFIX}_${userId}`);
+            return raw ? (JSON.parse(raw) as KeyBundle) : null;
+        } catch (e) {
+            console.error('Failed to get key bundle', e);
+            return null;
+        }
+    },
+    getStoredMasterKey: async (userId: string): Promise<string | null> => {
+        if (!userId) return null;
+        try {
+            return await secureGet(`${MASTER_KEY_PREFIX}_${userId}`);
+        } catch (e) {
+            console.error('Failed to get master key', e);
+            return null;
+        }
+    },
+    setStoredMasterKey: async (userId: string, wrappedKey: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureSet(`${MASTER_KEY_PREFIX}_${userId}`, wrappedKey);
+        } catch (e) {
+            console.error('Failed to set master key', e);
+        }
+    },
+    removeStoredMasterKey: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureDelete(`${MASTER_KEY_PREFIX}_${userId}`);
+        } catch (e) {
+            console.error('Failed to remove master key', e);
+        }
+    },
+    setKeyBundle: async (userId: string, bundle: KeyBundle): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureSet(`${KEY_BUNDLE_PREFIX}_${userId}`, JSON.stringify(bundle));
+        } catch (e) {
+            console.error('Failed to set key bundle', e);
+        }
+    },
+    removeKeyBundle: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureDelete(`${KEY_BUNDLE_PREFIX}_${userId}`);
+        } catch (e) {
+            console.error('Failed to remove key bundle', e);
         }
     },
 };

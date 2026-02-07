@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
@@ -27,10 +27,17 @@ import { testOpenAIConnection, testSelfHostedConnection } from '../services/Tran
 import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
+import { useEncryption } from '../context/EncryptionContext';
+import { EnableSyncModal } from '../components/EnableSyncModal';
+import { ChangePinModal } from '../components/ChangePinModal';
+import { UnlockSyncModal } from '../components/UnlockSyncModal';
+import { UnlockingOverlay } from '../components/UnlockingOverlay';
+import { syncService } from '../services/SyncService';
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
+    const { status: encryptionStatus, syncEnabled, syncLocked } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
@@ -42,6 +49,11 @@ export const SettingsScreen = () => {
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
     const [showOpenAIInfo, setShowOpenAIInfo] = useState(false);
     const [showSelfHostedInfo, setShowSelfHostedInfo] = useState(false);
+    const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
+    const [showChangePinModal, setShowChangePinModal] = useState(false);
+    const [showPinChangeOverlay, setShowPinChangeOverlay] = useState(false);
+    const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
+    const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
 
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
     const [showSelfHostedKey, setShowSelfHostedKey] = useState(false);
@@ -113,12 +125,20 @@ export const SettingsScreen = () => {
         loadPreferences();
     }, []);
 
+    const PROFILE_REFRESH_INTERVAL_MS = 60000;
+    const lastProfileRefreshAt = useRef(0);
     useFocusEffect(
         useCallback(() => {
-            if (isAuthenticated && !isGuest) {
-                console.log('[SettingsScreen] Refreshing profile data...');
-                refreshProfile();
+            if (!isAuthenticated || isGuest) {
+                return;
             }
+            const now = Date.now();
+            if (now - lastProfileRefreshAt.current < PROFILE_REFRESH_INTERVAL_MS) {
+                return;
+            }
+            lastProfileRefreshAt.current = now;
+            console.log('[SettingsScreen] Refreshing profile data...');
+            refreshProfile();
         }, [isAuthenticated, isGuest, refreshProfile])
     );
 
@@ -276,32 +296,34 @@ export const SettingsScreen = () => {
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
-    useEffect(() => {
-        const checkSyncStatus = async () => {
-            if (isAuthenticated && user) {
-                try {
-                    const status = await import('../services/SyncService').then(m =>
-                        m.syncService.getSyncStatus(userId ?? user.id)
-                    );
-                    setUnsyncedCount(status.unsyncedCount);
-                } catch (error) {
-                    console.error('[Settings] Failed to check sync status', error);
-                }
-            }
-        };
-
-        checkSyncStatus();
-
-        const unsubscribe = import('../services/SyncService').then(m =>
-            m.syncService.subscribe(() => {
-                checkSyncStatus();
-            })
-        );
-
-        return () => {
-            unsubscribe.then(unsub => unsub && unsub());
+    const checkSyncStatus = useCallback(async () => {
+        if (!isAuthenticated || !user) return;
+        if (!syncEnabled || syncLocked) {
+            setUnsyncedCount(0);
+            return;
         }
-    }, [isAuthenticated, user, userId]);
+        try {
+            const status = await import('../services/SyncService').then(m =>
+                m.syncService.getSyncStatus(userId ?? user.id)
+            );
+            setUnsyncedCount(status.unsyncedCount);
+        } catch (error) {
+            console.error('[Settings] Failed to check sync status', error);
+        }
+    }, [isAuthenticated, user, userId, syncEnabled, syncLocked]);
+
+    const SYNC_STATUS_INTERVAL_MS = 60000;
+    const lastSyncCheckAt = useRef(0);
+    useFocusEffect(
+        useCallback(() => {
+            const now = Date.now();
+            if (now - lastSyncCheckAt.current < SYNC_STATUS_INTERVAL_MS) {
+                return;
+            }
+            lastSyncCheckAt.current = now;
+            checkSyncStatus();
+        }, [checkSyncStatus])
+    );
 
     const handleSignOut = async () => {
         setShowSignOutDialog(true);
@@ -351,12 +373,35 @@ export const SettingsScreen = () => {
                                 </Text>
                                 <View style={styles.syncStatusRow}>
                                     <MaterialIcons
-                                        name={unsyncedCount > 0 ? "cloud-upload" : "cloud-done"}
+                                        name={
+                                            !syncEnabled
+                                                ? "cloud-off"
+                                                : syncLocked
+                                                    ? "lock"
+                                                    : unsyncedCount > 0
+                                                        ? "cloud-upload"
+                                                        : "cloud-done"
+                                        }
                                         size={14}
-                                        color={unsyncedCount > 0 ? colors.warning : colors.accentGreen}
+                                        color={
+                                            !syncEnabled
+                                                ? colors.textSecondary
+                                                : syncLocked
+                                                    ? colors.warning
+                                                    : unsyncedCount > 0
+                                                        ? colors.warning
+                                                        : colors.accentGreen
+                                        }
                                     />
-                                    <Text style={[styles.syncStatusText, unsyncedCount > 0 && { color: colors.warning }]}>
-                                        {unsyncedCount > 0 ? `${unsyncedCount} unsynced` : "Notes synced"}
+                                    <Text style={[
+                                        styles.syncStatusText,
+                                        (syncLocked || unsyncedCount > 0) && { color: colors.warning }
+                                    ]}>
+                                        {syncEnabled
+                                            ? (syncLocked
+                                                ? "Sync locked (unlock to sync)"
+                                                : (unsyncedCount > 0 ? `${unsyncedCount} unsynced` : "Notes synced"))
+                                            : "Sync disabled"}
                                     </Text>
                                 </View>
                             </View>
@@ -388,6 +433,95 @@ export const SettingsScreen = () => {
 
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
+                        <Text style={styles.sectionTitle}>Security</Text>
+                    </View>
+                    <Text style={styles.sectionHint}>
+                        Notes are encrypted on this device before sync. The server only stores encrypted data.
+                    </Text>
+                    <View style={styles.securityRow}>
+                        <Text style={styles.securityLabel}>Encryption status</Text>
+                        <Text style={styles.securityValue}>
+                            {encryptionStatus === 'loading'
+                                ? 'Loading'
+                                : encryptionStatus === 'locked'
+                                    ? 'Locked'
+                                    : encryptionStatus === 'uninitialized'
+                                        ? 'Not set'
+                                        : 'Ready'}
+                        </Text>
+                    </View>
+                    <View style={styles.securityRow}>
+                        <Text style={styles.securityLabel}>PIN</Text>
+                        <Text style={styles.securityValue}>{syncEnabled ? 'Set (used for sync & restore)' : 'Not set'}</Text>
+                    </View>
+                    {syncEnabled && (
+                        <View style={styles.securityRow}>
+                            <Text style={styles.securityLabel}>Sync key</Text>
+                            <Text style={styles.securityValue}>{syncLocked ? 'Locked' : 'Unlocked'}</Text>
+                        </View>
+                    )}
+                    <View style={styles.securityRow}>
+                        <Text style={styles.securityLabel}>Sync</Text>
+                        <Text style={styles.securityValue}>{syncEnabled ? 'Enabled' : 'Local only'}</Text>
+                    </View>
+                    <Text style={styles.securityCopy}>
+                        When sync is enabled, a master key is generated on your device, encrypted with your PIN, and the wrapped master key is stored on the server.
+                    </Text>
+                    <Text style={styles.securityCopy}>
+                        PIN is required only to enable sync or restore on a new device. We never store your PIN.
+                    </Text>
+                    <Text style={styles.securityCopy}>
+                        If you forget your PIN and lose this device, your notes cannot be recovered.
+                    </Text>
+                    {syncEnabled && syncLocked && encryptionStatus === 'locked' && (
+                        <View style={{ marginTop: spacing.m }}>
+                            <Button
+                                title="Unlock Sync"
+                                onPress={() => setShowUnlockSyncModal(true)}
+                            />
+                            <Text style={styles.securityCopy}>
+                                PIN is required only to sync or restore notes. Local access stays unlocked.
+                            </Text>
+                        </View>
+                    )}
+                    {syncEnabled && encryptionStatus === 'ready' && (
+                        <View style={{ marginTop: spacing.m }}>
+                            <Button
+                                title="Change PIN"
+                                onPress={() => {
+                                    if (!isAuthenticated || isGuest) {
+                                        Alert.alert('Sign in required', 'Please sign in to change your PIN.');
+                                        return;
+                                    }
+                                    setShowChangePinModal(true);
+                                }}
+                            />
+                            <Text style={styles.securityCopy}>
+                                Changing your PIN updates the encrypted key bundle without re-encrypting notes.
+                            </Text>
+                        </View>
+                    )}
+                    {(!syncEnabled || encryptionStatus === 'uninitialized') && (
+                        <View style={{ marginTop: spacing.m }}>
+                            <Button
+                                title="Enable Sync (Requires PIN)"
+                                onPress={() => {
+                                    if (!isAuthenticated || isGuest) {
+                                        Alert.alert('Sign in required', 'Please sign in to enable sync.');
+                                        return;
+                                    }
+                                    setShowEnableSyncModal(true);
+                                }}
+                            />
+                            <Text style={styles.securityCopy}>
+                                Notes stay only on this device until sync is enabled.
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
                         <Text style={styles.sectionTitle}>Preferences</Text>
                     </View>
 
@@ -395,23 +529,17 @@ export const SettingsScreen = () => {
                         <View style={{ flex: 1, marginRight: spacing.s }}>
                             <Text style={styles.preferenceTitle}>Auto-transcribe recordings</Text>
                             <Text style={styles.preferenceDescription}>
-                                {isGuest
-                                    ? "Sign in to unlock auto-transcription"
-                                    : "Automatically transcribe audio after recording"
-                                }
+                                Automatically transcribe audio after recording
                             </Text>
                         </View>
                         <Switch
-                            value={!isGuest && transcriptionEnabled}
+                            value={transcriptionEnabled}
                             onValueChange={(val) => {
-                                if (isGuest) return;
                                 toggleTranscription(val);
                             }}
-                            disabled={isGuest}
                             trackColor={{ false: colors.border, true: colors.primary }}
                             thumbColor={colors.surface}
                             ios_backgroundColor={colors.border}
-                            style={isGuest ? { opacity: 0.5 } : {}}
                         />
                     </View>
                 </View>
@@ -763,6 +891,53 @@ export const SettingsScreen = () => {
                 )}
             </ScrollView>
 
+            <EnableSyncModal
+                visible={showEnableSyncModal}
+                onClose={() => setShowEnableSyncModal(false)}
+                onEnabled={() => setShowEnableSyncModal(false)}
+            />
+            <ChangePinModal
+                visible={showChangePinModal}
+                onClose={() => setShowChangePinModal(false)}
+                onChanging={() => {
+                    setShowPinChangeOverlay(true);
+                }}
+                onError={(message) => {
+                    setShowPinChangeOverlay(false);
+                    Alert.alert('PIN update failed', message);
+                    setShowChangePinModal(true);
+                }}
+                onChanged={() => {
+                    setShowChangePinModal(false);
+                    setShowPinChangeOverlay(false);
+                }}
+            />
+            <UnlockSyncModal
+                visible={showUnlockSyncModal}
+                onClose={() => setShowUnlockSyncModal(false)}
+                onUnlocking={() => {
+                    setShowUnlockingOverlay(true);
+                }}
+                onError={(message) => {
+                    setShowUnlockingOverlay(false);
+                    Alert.alert('Unlock failed', message);
+                    setShowUnlockSyncModal(true);
+                }}
+                onUnlocked={() => {
+                    setShowUnlockSyncModal(false);
+                    setShowUnlockingOverlay(false);
+                    setTimeout(() => {
+                        void syncService.syncNow('manual');
+                    }, 0);
+                }}
+            />
+            <UnlockingOverlay visible={showUnlockingOverlay} />
+            <UnlockingOverlay
+                visible={showPinChangeOverlay}
+                title="Updating PIN"
+                subtitle="Re-wrapping your sync key. This may take a few seconds."
+            />
+
             <SignOutChoiceDialog
                 visible={showSignOutDialog}
                 unsyncedCount={unsyncedCount}
@@ -854,6 +1029,26 @@ const styles = StyleSheet.create({
         ...typography.body,
         color: colors.textSecondary,
         marginBottom: spacing.m,
+    },
+    securityRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+    },
+    securityLabel: {
+        ...typography.body,
+        color: colors.text,
+        fontWeight: '600',
+    },
+    securityValue: {
+        ...typography.body,
+        color: colors.textSecondary,
+    },
+    securityCopy: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginTop: spacing.s,
     },
     miniPill: {
         flexDirection: 'row',

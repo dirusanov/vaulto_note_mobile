@@ -15,8 +15,10 @@ import {
     getAllImprovementsLocal,
     saveImprovementLocal,
     migrateLegacyNotesToUser,
+    markAllDirty,
 } from './DatabaseService';
-import { decrypt, encrypt } from '../crypto/encryption';
+import { decrypt, encrypt, encryptForSync, decryptFromSync } from '../crypto/encryption';
+import { hasMasterKey } from '../crypto/e2ee';
 import { isUUID } from '../utils/uuid';
 
 const SYNC_SINCE_KEY = 'vaulto_last_sync_time';
@@ -33,6 +35,7 @@ class SyncService {
     private listeners: SyncListener[] = [];
     private isAuthenticated = false;
     private currentUserId: string | null = null;
+    private syncEnabled = false;
 
     constructor() {
         // Load last sync time from storage
@@ -48,6 +51,10 @@ class SyncService {
 
     public setAuthenticated(auth: boolean) {
         this.isAuthenticated = auth;
+    }
+
+    public setSyncEnabled(enabled: boolean) {
+        this.syncEnabled = enabled;
     }
 
     public async setCurrentUser(userId: string | null, previousUserId?: string | null) {
@@ -80,11 +87,22 @@ class SyncService {
         };
     }
 
+    public async resetSyncState(userId?: string | null) {
+        this.lastSyncAt = 0;
+        await AsyncStorage.setItem(SYNC_SINCE_KEY, '0');
+        const effectiveUserId = userId ?? this.currentUserId;
+        if (effectiveUserId) {
+            await markAllDirty(effectiveUserId);
+        }
+        this.notifyListeners();
+    }
+
     private notifyListeners() {
         this.listeners.forEach(l => l());
     }
 
     public async getSyncStatus(userId?: string | null): Promise<{ unsyncedCount: number }> {
+        if (!this.syncEnabled) return { unsyncedCount: 0 };
         const effectiveUserId = userId ?? this.currentUserId;
         if (!effectiveUserId) return { unsyncedCount: 0 };
         const notes = await getNotesLocal(effectiveUserId);
@@ -97,6 +115,7 @@ class SyncService {
     }
 
     public async hasUnsyncedChanges(userId?: string | null): Promise<boolean> {
+        if (!this.syncEnabled) return false;
         const status = await this.getSyncStatus(userId);
         return status.unsyncedCount > 0;
     }
@@ -131,6 +150,14 @@ class SyncService {
             console.log('[SyncService] Not authenticated or no user selected. Skipping sync.');
             return;
         }
+        if (!this.syncEnabled) {
+            console.log('[SyncService] Sync disabled. Skipping sync.');
+            return;
+        }
+        if (!hasMasterKey()) {
+            console.log('[SyncService] Encryption locked. Skipping sync.');
+            return;
+        }
 
         console.log(`[SyncService] Starting sync for user ${this.currentUserId}. Reason: ${reason}`);
         this.isSyncing = true;
@@ -149,6 +176,8 @@ class SyncService {
             const noteMap = new Map<string, Note>();
             const improvementMap = new Map<string, typeof dirtyImprovements[number]>();
 
+            let processedNotes = 0;
+            const YIELD_EVERY = 20;
             for (const note of dirtyNotes) {
                 if (!isUUID(note.id)) {
                     // Skip invalid IDs
@@ -156,11 +185,12 @@ class SyncService {
 
                 noteMap.set(note.id, note);
 
-                const titleToSync = note.encrypted_title || await encrypt(note.title || '');
+                const titleToSync = await encryptForSync(note.title || '');
+                const contentToSync = await encryptForSync(note.content || '');
 
                 changes.push({
                     id: note.id,
-                    content_ciphertext: note.encrypted_content,
+                    content_ciphertext: contentToSync,
                     content_nonce: note.content_nonce ?? null,
                     title: titleToSync,
                     deleted: !!note.deleted || !!note.pending_delete,
@@ -170,20 +200,36 @@ class SyncService {
                     is_pinned: note.is_pinned ?? false,
                     last_variant_id: null,
                 });
+                processedNotes += 1;
+                if (processedNotes % YIELD_EVERY === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
             }
 
+            let processedImprovements = 0;
             for (const improvement of dirtyImprovements) {
                 improvementMap.set(improvement.id, improvement);
                 const parentNote = allNotes.find(n => n.id === improvement.note_id);
                 const activeChild = parentNote?.improvements?.find(imp => imp.is_active);
                 const isActive = activeChild?.id === improvement.id;
 
+                let improvementTitle: string | null = null;
+                if (improvement.encrypted_title) {
+                    try {
+                        const titlePlain = await decrypt(improvement.encrypted_title);
+                        improvementTitle = await encryptForSync(titlePlain);
+                    } catch (e) {
+                        console.warn('[SyncService] Failed to re-encrypt improvement title', e);
+                        improvementTitle = null;
+                    }
+                }
+
                 improvementChanges.push({
                     id: improvement.id,
                     note_id: improvement.note_id,
-                    content_ciphertext: improvement.encrypted_content,
+                    content_ciphertext: await encryptForSync(improvement.content || ''),
                     content_nonce: improvement.content_nonce ?? null,
-                    encrypted_title: improvement.encrypted_title ?? null,
+                    encrypted_title: improvementTitle,
                     label: improvement.label ?? null,
                     option_id: improvement.option_id ?? null,
                     deleted: !!improvement.deleted,
@@ -191,6 +237,10 @@ class SyncService {
                     client_updated_at: improvement.updated_at || new Date().toISOString(),
                     is_active: isActive,
                 });
+                processedImprovements += 1;
+                if (processedImprovements % YIELD_EVERY === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
             }
 
             // 3. Send to server
@@ -275,12 +325,29 @@ class SyncService {
 
     private async applyServerImprovements(improvements: ServerImprovement[]) {
         if (!this.currentUserId) return;
+        let processed = 0;
+        const YIELD_EVERY = 20;
         for (const improvement of improvements) {
+            let content = '';
+            let encryptedTitle: string | null = null;
+            try {
+                if (improvement.content_ciphertext) {
+                    content = await decryptFromSync(improvement.content_ciphertext);
+                }
+                if (improvement.encrypted_title) {
+                    const titlePlain = await decryptFromSync(improvement.encrypted_title);
+                    encryptedTitle = await encrypt(titlePlain);
+                }
+            } catch (e) {
+                console.error(`[SyncService] Failed to decrypt improvement ${improvement.id}`, e);
+                continue;
+            }
+
             await saveImprovementLocal(this.currentUserId, {
                 id: improvement.id,
                 note_id: improvement.note_id,
-                encrypted_content: improvement.content_ciphertext,
-                encrypted_title: improvement.encrypted_title ?? null,
+                encrypted_content: await encrypt(content),
+                encrypted_title: encryptedTitle,
                 content_nonce: improvement.content_nonce ?? null,
                 label: improvement.label ?? null,
                 option_id: improvement.option_id ?? null,
@@ -292,6 +359,10 @@ class SyncService {
                 dirty: false,
                 is_active: improvement.is_active ?? false,
             } as any);
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
     }
 
@@ -299,16 +370,14 @@ class SyncService {
         if (!this.currentUserId) return;
         const localNotes = await getNotesLocal(this.currentUserId);
         const localMap = new Map(localNotes.map(n => [n.id, n]));
+        let processed = 0;
+        const YIELD_EVERY = 20;
 
         for (const serverNote of serverNotes) {
             const existing = localMap.get(serverNote.id);
-            const serverNonce = serverNote.content_nonce ?? null;
-
             const unchanged =
                 existing &&
                 existing.version === serverNote.version &&
-                existing.encrypted_content === serverNote.content_ciphertext &&
-                (existing.content_nonce ?? null) === serverNonce &&
                 existing.deleted === serverNote.deleted;
             if (unchanged) {
                 continue;
@@ -320,28 +389,28 @@ class SyncService {
                 continue;
             }
 
-            let title = 'Untitled';
+            let title = '';
             let content = '';
-            let encryptedTitle = serverNote.title || undefined;
+            let encryptedTitle: string | undefined = undefined;
 
             try {
                 if (serverNote.content_ciphertext) {
-                    content = await decrypt(serverNote.content_ciphertext);
+                    content = await decryptFromSync(serverNote.content_ciphertext);
                 }
 
                 if (serverNote.title) {
                     try {
-                        title = await decrypt(serverNote.title);
+                        title = await decryptFromSync(serverNote.title);
                     } catch (e) {
                         title = serverNote.title;
-                        encryptedTitle = await encrypt(title);
                     }
                 }
 
                 if (!title) {
                     title = '';
-                    encryptedTitle = await encrypt(title);
                 }
+
+                encryptedTitle = await encrypt(title);
             } catch (e) {
                 console.error(`[SyncService] Failed to decrypt note ${serverNote.id}`, e);
                 continue;
@@ -353,7 +422,7 @@ class SyncService {
                 title,
                 content,
                 encrypted_title: encryptedTitle,
-                encrypted_content: serverNote.content_ciphertext ?? (await encrypt(content)),
+                encrypted_content: await encrypt(content),
                 updated_at: serverNote.updated_at,
                 created_at: existing?.created_at ?? serverNote.updated_at,
                 transcription: existing?.transcription,
@@ -375,6 +444,10 @@ class SyncService {
 
             await saveNoteLocal(this.currentUserId, merged);
             localMap.set(serverNote.id, merged);
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
     }
 }

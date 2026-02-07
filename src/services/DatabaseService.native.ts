@@ -1,10 +1,11 @@
 import * as SQLite from 'expo-sqlite';
 import { Note, NoteImprovement, VoiceRecording } from '../api/notes';
-import { decrypt } from '../crypto/encryption';
+import { decrypt, encrypt, isDeviceCiphertext, isMasterCiphertext } from '../crypto/encryption';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let initPromise: Promise<void> | null = null;
 
-const getDb = async (): Promise<SQLite.SQLiteDatabase | null> => {
+const openDb = async (): Promise<SQLite.SQLiteDatabase | null> => {
     if (!db) {
         db = await SQLite.openDatabaseAsync('notes.db');
         await db.execAsync('PRAGMA foreign_keys = ON;');
@@ -29,131 +30,161 @@ const ensureColumnExists = async (
     return false;
 };
 
+const initializeSchema = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+    // 1. Create/Update 'notes' table
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS notes (
+            id TEXT PRIMARY KEY NOT NULL,
+            user_id TEXT,
+            encrypted_title TEXT,
+            encrypted_content TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT,
+            audio_file_path TEXT,
+            audio_duration INTEGER,
+            encrypted_transcription TEXT,
+            has_audio INTEGER DEFAULT 0,
+            is_pinned INTEGER DEFAULT 0,
+            synced INTEGER DEFAULT 0,
+            dirty INTEGER DEFAULT 0,
+            deleted INTEGER DEFAULT 0,
+            version INTEGER DEFAULT 0,
+            server_updated_at TEXT,
+            content_nonce TEXT,
+            pending_delete INTEGER DEFAULT 0,
+            parent_id TEXT,
+            is_active INTEGER DEFAULT 0,
+            label TEXT,
+            option_id TEXT,
+            FOREIGN KEY (parent_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+    `);
+
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS voice_recordings (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            user_id TEXT,
+            file_path TEXT NOT NULL,
+            duration REAL,
+            transcription TEXT,
+            created_at TEXT,
+            iso_code TEXT,
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+    `);
+    // Check columns FIRST before creating headers
+    await ensureColumnExists(database, 'notes', 'parent_id', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'is_active', 'INTEGER DEFAULT 0');
+    await ensureColumnExists(database, 'notes', 'label', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'option_id', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'is_pinned', 'INTEGER DEFAULT 0');
+
+    const addedDirty = await ensureColumnExists(database, 'notes', 'dirty', 'INTEGER DEFAULT 0');
+    await ensureColumnExists(database, 'notes', 'audio_file_path', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'audio_duration', 'INTEGER');
+    await ensureColumnExists(database, 'notes', 'encrypted_transcription', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'has_audio', 'INTEGER DEFAULT 0');
+    await ensureColumnExists(database, 'notes', 'deleted', 'INTEGER DEFAULT 0');
+    await ensureColumnExists(database, 'notes', 'version', 'INTEGER DEFAULT 0');
+    await ensureColumnExists(database, 'notes', 'server_updated_at', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'content_nonce', 'TEXT');
+    await ensureColumnExists(database, 'notes', 'pending_delete', 'INTEGER DEFAULT 0');
+    await ensureColumnExists(database, 'notes', 'user_id', 'TEXT');
+    await ensureColumnExists(database, 'voice_recordings', 'user_id', 'TEXT');
+
+    // Create indexes AFTER columns exist
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
+
+    // MIGRATION: Move note_improvements to notes
+    const checkTable = await database.getAllAsync<any>("SELECT name FROM sqlite_master WHERE type='table' AND name='note_improvements';");
+    if (checkTable.length > 0) {
+        console.log('[DatabaseService] Migrating note_improvements to notes...');
+        const improvements = await database.getAllAsync<any>('SELECT * FROM note_improvements');
+        for (const imp of improvements) {
+            // Insert as child note
+            await database.runAsync(
+                `INSERT INTO notes (
+                    id, parent_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
+                    created_at, updated_at, synced, dirty, deleted, version, server_updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    parent_id=excluded.parent_id,
+                    encrypted_content=excluded.encrypted_content,
+                    encrypted_title=excluded.encrypted_title,
+                    content_nonce=excluded.content_nonce,
+                    label=excluded.label,
+                    option_id=excluded.option_id,
+                    updated_at=excluded.updated_at,
+                    synced=excluded.synced,
+                    dirty=excluded.dirty,
+                    deleted=excluded.deleted,
+                    version=excluded.version,
+                    server_updated_at=excluded.server_updated_at`,
+                [
+                    imp.id,
+                    imp.note_id, // parent_id
+                    imp.encrypted_content,
+                    imp.encrypted_title,
+                    imp.content_nonce,
+                    imp.label,
+                    imp.option_id,
+                    imp.created_at,
+                    imp.updated_at,
+                    imp.synced,
+                    imp.dirty,
+                    imp.deleted,
+                    imp.version,
+                    imp.server_updated_at
+                ]
+            );
+        }
+        // Drop old table
+        await database.execAsync('DROP TABLE note_improvements;');
+        console.log('[DatabaseService] Migration complete: note_improvements dropped.');
+    }
+
+    if (addedDirty) {
+        await database.execAsync('UPDATE notes SET dirty = 1 WHERE synced = 0 OR pending_delete = 1;');
+    }
+};
+
+const getDb = async (): Promise<SQLite.SQLiteDatabase | null> => {
+    const database = await openDb();
+    if (!database) return null;
+
+    if (!initPromise) {
+        initPromise = initializeSchema(database).catch((error) => {
+            initPromise = null;
+            throw error;
+        });
+    }
+    await initPromise;
+
+    try {
+        await database.getFirstAsync('SELECT 1 as ok;');
+    } catch (error) {
+        console.warn('[DatabaseService] Database handle invalid, reopening...', error);
+        db = null;
+        initPromise = null;
+        const reopened = await openDb();
+        if (!reopened) return null;
+        initPromise = initializeSchema(reopened).catch((initError) => {
+            initPromise = null;
+            throw initError;
+        });
+        await initPromise;
+    }
+
+    return db;
+};
+
 export const initDatabase = async (): Promise<void> => {
     try {
         const database = await getDb();
         if (!database) return;
 
-        // 1. Create/Update 'notes' table
-        await database.execAsync(`
-            CREATE TABLE IF NOT EXISTS notes (
-                id TEXT PRIMARY KEY NOT NULL,
-                user_id TEXT,
-                encrypted_title TEXT,
-                encrypted_content TEXT NOT NULL,
-                created_at TEXT,
-                updated_at TEXT,
-                audio_file_path TEXT,
-                audio_duration INTEGER,
-                encrypted_transcription TEXT,
-                has_audio INTEGER DEFAULT 0,
-                is_pinned INTEGER DEFAULT 0,
-                synced INTEGER DEFAULT 0,
-                dirty INTEGER DEFAULT 0,
-                deleted INTEGER DEFAULT 0,
-                version INTEGER DEFAULT 0,
-                server_updated_at TEXT,
-                content_nonce TEXT,
-                pending_delete INTEGER DEFAULT 0,
-                parent_id TEXT,
-                is_active INTEGER DEFAULT 0,
-                label TEXT,
-                option_id TEXT,
-                FOREIGN KEY (parent_id) REFERENCES notes(id) ON DELETE CASCADE
-            );
-        `);
-
-        await database.execAsync(`
-            CREATE TABLE IF NOT EXISTS voice_recordings (
-                id TEXT PRIMARY KEY,
-                note_id TEXT NOT NULL,
-                user_id TEXT,
-                file_path TEXT NOT NULL,
-                duration REAL,
-                transcription TEXT,
-                created_at TEXT,
-                iso_code TEXT,
-                FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
-            );
-        `);
-        // Check columns FIRST before creating headers
-        await ensureColumnExists(database, 'notes', 'parent_id', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'is_active', 'INTEGER DEFAULT 0');
-        await ensureColumnExists(database, 'notes', 'label', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'option_id', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'is_pinned', 'INTEGER DEFAULT 0');
-
-        const addedDirty = await ensureColumnExists(database, 'notes', 'dirty', 'INTEGER DEFAULT 0');
-        await ensureColumnExists(database, 'notes', 'audio_file_path', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'audio_duration', 'INTEGER');
-        await ensureColumnExists(database, 'notes', 'encrypted_transcription', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'has_audio', 'INTEGER DEFAULT 0');
-        await ensureColumnExists(database, 'notes', 'deleted', 'INTEGER DEFAULT 0');
-        await ensureColumnExists(database, 'notes', 'version', 'INTEGER DEFAULT 0');
-        await ensureColumnExists(database, 'notes', 'server_updated_at', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'content_nonce', 'TEXT');
-        await ensureColumnExists(database, 'notes', 'pending_delete', 'INTEGER DEFAULT 0');
-        await ensureColumnExists(database, 'notes', 'user_id', 'TEXT');
-        await ensureColumnExists(database, 'voice_recordings', 'user_id', 'TEXT');
-
-        // Create indexes AFTER columns exist
-        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
-        await database.execAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
-
-
-
-        // MIGRATION: Move note_improvements to notes
-        // Check if note_improvements table exists
-        const checkTable = await database.getAllAsync<any>("SELECT name FROM sqlite_master WHERE type='table' AND name='note_improvements';");
-        if (checkTable.length > 0) {
-            console.log('[DatabaseService] Migrating note_improvements to notes...');
-            const improvements = await database.getAllAsync<any>('SELECT * FROM note_improvements');
-            for (const imp of improvements) {
-                // Insert as child note
-                await database.runAsync(
-                    `INSERT INTO notes (
-                        id, parent_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
-                        created_at, updated_at, synced, dirty, deleted, version, server_updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        parent_id=excluded.parent_id,
-                        encrypted_content=excluded.encrypted_content,
-                        encrypted_title=excluded.encrypted_title,
-                        content_nonce=excluded.content_nonce,
-                        label=excluded.label,
-                        option_id=excluded.option_id,
-                        updated_at=excluded.updated_at,
-                        synced=excluded.synced,
-                        dirty=excluded.dirty,
-                        deleted=excluded.deleted,
-                        version=excluded.version,
-                        server_updated_at=excluded.server_updated_at`,
-                    [
-                        imp.id,
-                        imp.note_id, // parent_id
-                        imp.encrypted_content,
-                        imp.encrypted_title,
-                        imp.content_nonce,
-                        imp.label,
-                        imp.option_id,
-                        imp.created_at,
-                        imp.updated_at,
-                        imp.synced,
-                        imp.dirty,
-                        imp.deleted,
-                        imp.version,
-                        imp.server_updated_at
-                    ]
-                );
-            }
-            // Drop old table
-            await database.execAsync('DROP TABLE note_improvements;');
-            console.log('[DatabaseService] Migration complete: note_improvements dropped.');
-        }
-
-        if (addedDirty) {
-            await database.execAsync('UPDATE notes SET dirty = 1 WHERE synced = 0 OR pending_delete = 1;');
-        }
         console.log('[DatabaseService] Database initialized');
     } catch (error) {
         console.error('[DatabaseService] Failed to initialize database', error);
@@ -174,6 +205,82 @@ export const migrateLegacyNotesToUser = async (userId: string): Promise<void> =>
         console.log(`[DatabaseService] Migrated legacy notes to user ${userId}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to migrate legacy notes', e);
+    }
+};
+
+export const migrateLegacyEncryption = async (userId: string, target: 'device' | 'master' = 'device'): Promise<void> => {
+    if (!userId) return;
+
+    const shouldReencrypt = (ciphertext: string | null | undefined) => {
+        if (!ciphertext) return false;
+        if (target === 'master') {
+            return !isMasterCiphertext(ciphertext);
+        }
+        return !isDeviceCiphertext(ciphertext);
+    };
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        const rows = await database.getAllAsync<any>(
+            'SELECT id, encrypted_title, encrypted_content, encrypted_transcription FROM notes WHERE user_id = ?',
+            [userId]
+        );
+        const now = new Date().toISOString();
+
+        let processed = 0;
+        const YIELD_EVERY = 25;
+        for (const row of rows) {
+            let updated = false;
+            let encryptedContent = row.encrypted_content;
+            let encryptedTitle = row.encrypted_title;
+            let encryptedTranscription = row.encrypted_transcription;
+
+            if (shouldReencrypt(encryptedContent)) {
+                try {
+                    const content = await decrypt(encryptedContent);
+                    encryptedContent = await encrypt(content);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping content migration', e);
+                }
+            }
+
+            if (shouldReencrypt(encryptedTitle)) {
+                try {
+                    const title = await decrypt(encryptedTitle);
+                    encryptedTitle = await encrypt(title);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping title migration', e);
+                }
+            }
+
+            if (shouldReencrypt(encryptedTranscription)) {
+                try {
+                    const transcription = await decrypt(encryptedTranscription);
+                    encryptedTranscription = await encrypt(transcription);
+                    updated = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping transcription migration', e);
+                }
+            }
+
+            if (updated) {
+                await database.runAsync(
+                    `UPDATE notes SET encrypted_title = ?, encrypted_content = ?, encrypted_transcription = ?, dirty = 1, synced = 0, updated_at = ? WHERE id = ?`,
+                    [encryptedTitle ?? null, encryptedContent, encryptedTranscription ?? null, now, row.id]
+                );
+            }
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+        console.log(`[DatabaseService] Encryption migrated (native -> ${target})`);
+    } catch (error) {
+        console.error('[DatabaseService] Failed to migrate legacy encryption', error);
     }
 };
 
@@ -798,5 +905,17 @@ export const deleteVoiceRecordingLocal = async (userId: string, id: string): Pro
         await database.runAsync('DELETE FROM voice_recordings WHERE id = ? AND user_id = ?', [id, userId]);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete voice recording', e);
+    }
+};
+
+export const markAllDirty = async (userId: string): Promise<void> => {
+    if (!userId) return;
+    try {
+        const database = await getDb();
+        if (!database) return;
+        await database.runAsync('UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
+        console.log(`[DatabaseService] Marked all notes dirty for user ${userId}`);
+    } catch (e) {
+        console.error('[DatabaseService] Failed to mark notes dirty', e);
     }
 };
