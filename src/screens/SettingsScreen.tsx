@@ -72,6 +72,15 @@ export const SettingsScreen = () => {
 
     const usingOpenAI = aiProvider === 'openai';
     const usingSelfHosted = aiProvider === 'selfhosted';
+    const syncStatusLabel = !syncEnabled ? 'Local only' : syncLocked ? 'Locked' : 'Enabled';
+    const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
+    const pinStatusLabel = syncEnabled ? 'Set' : 'Not set';
+    const pinStatusColor = syncEnabled ? colors.accentGreen : colors.textSecondary;
+    const securityNote = !syncEnabled
+        ? 'Enable sync to back up encrypted notes across devices.'
+        : syncLocked
+            ? 'Unlock sync to resume uploading and downloading changes.'
+            : 'PIN is required only to enable sync or restore on a new device.';
 
     type ProviderOption = {
         key: AIProvider;
@@ -439,52 +448,20 @@ export const SettingsScreen = () => {
                         Notes are encrypted on this device before sync. The server only stores encrypted data.
                     </Text>
                     <View style={styles.securityRow}>
-                        <Text style={styles.securityLabel}>Encryption status</Text>
-                        <Text style={styles.securityValue}>
-                            {encryptionStatus === 'loading'
-                                ? 'Loading'
-                                : encryptionStatus === 'locked'
-                                    ? 'Locked'
-                                    : encryptionStatus === 'uninitialized'
-                                        ? 'Not set'
-                                        : 'Ready'}
-                        </Text>
+                        <Text style={styles.securityLabel}>Sync</Text>
+                        <Text style={[styles.securityValue, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
                     </View>
                     <View style={styles.securityRow}>
                         <Text style={styles.securityLabel}>PIN</Text>
-                        <Text style={styles.securityValue}>{syncEnabled ? 'Set (used for sync & restore)' : 'Not set'}</Text>
+                        <Text style={[styles.securityValue, { color: pinStatusColor }]}>{pinStatusLabel}</Text>
                     </View>
-                    {syncEnabled && (
-                        <View style={styles.securityRow}>
-                            <Text style={styles.securityLabel}>Sync key</Text>
-                            <Text style={styles.securityValue}>{syncLocked ? 'Locked' : 'Unlocked'}</Text>
-                        </View>
-                    )}
-                    <View style={styles.securityRow}>
-                        <Text style={styles.securityLabel}>Sync</Text>
-                        <Text style={styles.securityValue}>{syncEnabled ? 'Enabled' : 'Local only'}</Text>
-                    </View>
-                    <Text style={styles.securityCopy}>
-                        When sync is enabled, a master key is generated on your device, encrypted with your PIN, and the wrapped master key is stored on the server.
-                    </Text>
-                    <Text style={styles.securityCopy}>
-                        PIN is required only to enable sync or restore on a new device. We never store your PIN.
-                    </Text>
-                    <Text style={styles.securityCopy}>
-                        If you forget your PIN and lose this device, your notes cannot be recovered.
-                    </Text>
-                    {syncEnabled && syncLocked && encryptionStatus === 'locked' && (
+                    <Text style={styles.securityCopy}>{securityNote}</Text>
+                    {syncEnabled && syncLocked && (
                         <View style={{ marginTop: spacing.m }}>
-                            <Button
-                                title="Unlock Sync"
-                                onPress={() => setShowUnlockSyncModal(true)}
-                            />
-                            <Text style={styles.securityCopy}>
-                                PIN is required only to sync or restore notes. Local access stays unlocked.
-                            </Text>
+                            <Button title="Unlock Sync" onPress={() => setShowUnlockSyncModal(true)} />
                         </View>
                     )}
-                    {syncEnabled && encryptionStatus === 'ready' && (
+                    {syncEnabled && !syncLocked && (
                         <View style={{ marginTop: spacing.m }}>
                             <Button
                                 title="Change PIN"
@@ -496,12 +473,9 @@ export const SettingsScreen = () => {
                                     setShowChangePinModal(true);
                                 }}
                             />
-                            <Text style={styles.securityCopy}>
-                                Changing your PIN updates the encrypted key bundle without re-encrypting notes.
-                            </Text>
                         </View>
                     )}
-                    {(!syncEnabled || encryptionStatus === 'uninitialized') && (
+                    {!syncEnabled && (
                         <View style={{ marginTop: spacing.m }}>
                             <Button
                                 title="Enable Sync (Requires PIN)"
@@ -513,9 +487,6 @@ export const SettingsScreen = () => {
                                     setShowEnableSyncModal(true);
                                 }}
                             />
-                            <Text style={styles.securityCopy}>
-                                Notes stay only on this device until sync is enabled.
-                            </Text>
                         </View>
                     )}
                 </View>
