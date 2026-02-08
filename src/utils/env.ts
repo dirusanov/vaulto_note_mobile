@@ -31,7 +31,8 @@ const GATEWAY_PORT = process.env.EXPO_PUBLIC_GATEWAY_API_PORT ?? DEFAULT_GATEWAY
 
 const sanitizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
-const DEFAULT_GATEWAY_BASE = `http://${GATEWAY_HOST}:${GATEWAY_PORT}`;
+const DEFAULT_SCHEME = __DEV__ ? 'http' : 'https';
+const DEFAULT_GATEWAY_BASE = `${DEFAULT_SCHEME}://${GATEWAY_HOST}:${GATEWAY_PORT}`;
 
 // Prioritize the full Base URL if provided
 const GATEWAY_BASE_URL = sanitizeBaseUrl(
@@ -40,6 +41,10 @@ const GATEWAY_BASE_URL = sanitizeBaseUrl(
 
 export const API_URL = GATEWAY_BASE_URL;
 export const AUTH_API_URL = GATEWAY_BASE_URL;
+
+if (!__DEV__ && !GATEWAY_BASE_URL.startsWith('https://')) {
+    throw new Error(`[ENV] Non-HTTPS API URL is not allowed in production: ${GATEWAY_BASE_URL}`);
+}
 
 console.log('[ENV] Raw EXPO_PUBLIC_GATEWAY_API_BASE_URL:', process.env.EXPO_PUBLIC_GATEWAY_API_BASE_URL);
 console.log('[ENV] Resolved AUTH_API_URL:', AUTH_API_URL);
