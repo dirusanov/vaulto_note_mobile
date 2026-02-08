@@ -52,7 +52,6 @@ export const SettingsScreen = () => {
     const [showSelfHostedInfo, setShowSelfHostedInfo] = useState(false);
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
     const [showChangePinModal, setShowChangePinModal] = useState(false);
-    const [showPinChangeOverlay, setShowPinChangeOverlay] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
@@ -931,15 +930,8 @@ export const SettingsScreen = () => {
                 visible={showChangePinModal}
                 flow="change"
                 onClose={() => setShowChangePinModal(false)}
-                onChanging={() => {
-                    setShowPinChangeOverlay(true);
-                }}
-                onError={() => {
-                    setShowPinChangeOverlay(false);
-                }}
                 onChanged={() => {
                     setShowChangePinModal(false);
-                    setShowPinChangeOverlay(false);
                 }}
             />
             <UnlockSyncModal
@@ -971,11 +963,6 @@ export const SettingsScreen = () => {
                 visible={showUnlockingOverlay}
                 title="Verifying Access Key"
                 subtitle="Checking your key and decrypting sync. This may take up to a minute on some devices."
-            />
-            <UnlockingOverlay
-                visible={showPinChangeOverlay}
-                title="Updating Access Key"
-                subtitle="Re-wrapping your sync key. This may take a few seconds."
             />
 
             <SignOutChoiceDialog

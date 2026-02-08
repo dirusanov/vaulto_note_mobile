@@ -23,17 +23,20 @@ import { UnlockingOverlay } from '../components/UnlockingOverlay';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
+const LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
 
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { syncEnabled, syncLocked, hasRemoteKeyBundle, bundle, custodyMode, resetSync } = useEncryption();
+    const { userId } = useAuth();
+    const { syncLocked, hasRemoteKeyBundle, bundle, custodyMode, resetSync } = useEncryption();
     const { notes, loading, fetchNotes, searchNotes, syncNotes, batchPinNotes, batchUnpinNotes, batchDeleteNotes } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
+    const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -169,7 +172,40 @@ export const NotesListScreen = () => {
         );
     }, [resetSync]);
 
-    useAuth(); // Import useAuth hook
+    const hasSyncHistory = hasRemoteKeyBundle || !!bundle || custodyMode === 'strict_seed';
+    const shouldShowLockBanner = !isSelectionMode && syncLocked && hasSyncHistory && !lockBannerDismissed;
+
+    useEffect(() => {
+        let mounted = true;
+        const key = userId ? `${LOCK_BANNER_DISMISS_PREFIX}_${userId}` : null;
+
+        const hydrateDismissState = async () => {
+            if (!key) {
+                if (mounted) setLockBannerDismissed(false);
+                return;
+            }
+            if (!syncLocked || !hasSyncHistory) {
+                await AsyncStorage.removeItem(key);
+                if (mounted) setLockBannerDismissed(false);
+                return;
+            }
+            const stored = await AsyncStorage.getItem(key);
+            if (mounted) {
+                setLockBannerDismissed(stored === '1');
+            }
+        };
+
+        void hydrateDismissState();
+        return () => {
+            mounted = false;
+        };
+    }, [userId, syncLocked, hasSyncHistory]);
+
+    const dismissLockBanner = useCallback(() => {
+        setLockBannerDismissed(true);
+        if (!userId) return;
+        void AsyncStorage.setItem(`${LOCK_BANNER_DISMISS_PREFIX}_${userId}`, '1');
+    }, [userId]);
 
     const handleMicPress = () => {
         setIsVoiceRecorderVisible(true);
@@ -411,11 +447,24 @@ export const NotesListScreen = () => {
                     </View>
                 </View>
             )}
-            {!isSelectionMode && syncEnabled && syncLocked && (
+            {shouldShowLockBanner && (
                 <View style={styles.lockBanner}>
                     <View style={styles.lockBannerHeader}>
-                        <MaterialIcons name="lock" size={18} color={colors.warning} />
-                        <Text style={styles.lockBannerTitle}>Encrypted sync is locked</Text>
+                        <View style={styles.lockBannerTitleRow}>
+                            <View style={styles.lockBannerIcon}>
+                                <MaterialIcons name="lock" size={16} color={colors.primary} />
+                            </View>
+                            <Text style={styles.lockBannerTitle}>Encrypted Sync Is Locked</Text>
+                        </View>
+                        <TouchableOpacity
+                            onPress={dismissLockBanner}
+                            style={styles.lockBannerClose}
+                            activeOpacity={0.75}
+                            accessibilityRole="button"
+                            accessibilityLabel="Hide lock warning"
+                        >
+                            <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
                     </View>
                     <Text style={styles.lockBannerText}>
                         {hasRemoteKeyBundle
@@ -606,21 +655,47 @@ const styles = StyleSheet.create({
         marginHorizontal: spacing.m,
         marginBottom: spacing.s,
         padding: spacing.m,
-        borderRadius: 16,
+        borderRadius: 18,
         borderWidth: 1,
-        borderColor: '#F7D9A6',
-        backgroundColor: '#FFF8E8',
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        shadowColor: colors.cardShadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
     },
     lockBannerHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.xs,
+        justifyContent: 'space-between',
         marginBottom: spacing.xs,
+    },
+    lockBannerTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        flex: 1,
+    },
+    lockBannerIcon: {
+        width: 26,
+        height: 26,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.backgroundSecondary,
     },
     lockBannerTitle: {
         ...typography.body,
         color: colors.text,
         fontWeight: '700',
+    },
+    lockBannerClose: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     lockBannerText: {
         ...typography.caption,
@@ -645,8 +720,8 @@ const styles = StyleSheet.create({
     },
     lockActionSecondary: {
         borderWidth: 1,
-        borderColor: '#E6B96E',
-        backgroundColor: '#FFF3D9',
+        borderColor: colors.border,
+        backgroundColor: colors.backgroundSecondary,
     },
     lockActionPrimaryText: {
         ...typography.captionBold,
@@ -654,7 +729,7 @@ const styles = StyleSheet.create({
     },
     lockActionSecondaryText: {
         ...typography.captionBold,
-        color: '#8A5A10',
+        color: colors.text,
     },
     syncButton: {
         flexDirection: 'row',
