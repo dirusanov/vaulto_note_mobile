@@ -4,14 +4,34 @@ import { decrypt, encrypt, isDeviceCiphertext, isMasterCiphertext } from '../cry
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<void> | null = null;
+let openPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+const asNonEmptyString = (value: unknown): string | undefined => {
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+};
+
+const resetDbHandles = () => {
+    db = null;
+    initPromise = null;
+    openPromise = null;
+};
 
 const openDb = async (): Promise<SQLite.SQLiteDatabase | null> => {
-    if (!db) {
-        db = await SQLite.openDatabaseAsync('notes.db');
-        await db.execAsync('PRAGMA foreign_keys = ON;');
-        await db.execAsync('PRAGMA journal_mode = WAL;');
+    if (db) return db;
+    if (!openPromise) {
+        openPromise = (async () => {
+            const opened = await SQLite.openDatabaseAsync('notes.db');
+            await opened.execAsync('PRAGMA foreign_keys = ON;');
+            await opened.execAsync('PRAGMA journal_mode = WAL;');
+            db = opened;
+            return opened;
+        })().catch((error) => {
+            resetDbHandles();
+            throw error;
+        });
     }
-    return db;
+
+    return openPromise;
 };
 
 const ensureColumnExists = async (
@@ -151,33 +171,37 @@ const initializeSchema = async (database: SQLite.SQLiteDatabase): Promise<void> 
 };
 
 const getDb = async (): Promise<SQLite.SQLiteDatabase | null> => {
-    const database = await openDb();
-    if (!database) return null;
+    const ensureReady = async (): Promise<SQLite.SQLiteDatabase | null> => {
+        const database = await openDb();
+        if (!database) return null;
 
-    if (!initPromise) {
-        initPromise = initializeSchema(database).catch((error) => {
-            initPromise = null;
-            throw error;
-        });
-    }
-    await initPromise;
+        if (!initPromise) {
+            initPromise = initializeSchema(database).catch((error) => {
+                initPromise = null;
+                throw error;
+            });
+        }
+        await initPromise;
+        await database.getFirstAsync('SELECT 1 as ok;');
+        return database;
+    };
 
     try {
-        await database.getFirstAsync('SELECT 1 as ok;');
+        return await ensureReady();
     } catch (error) {
-        console.warn('[DatabaseService] Database handle invalid, reopening...', error);
-        db = null;
-        initPromise = null;
-        const reopened = await openDb();
-        if (!reopened) return null;
-        initPromise = initializeSchema(reopened).catch((initError) => {
-            initPromise = null;
-            throw initError;
-        });
-        await initPromise;
-    }
+        const message = String((error as Error)?.message || error || '');
+        const isInvalidHandleError =
+            message.includes('NativeDatabase.execAsync') ||
+            message.includes('NullPointerException');
 
-    return db;
+        if (!isInvalidHandleError) {
+            throw error;
+        }
+
+        console.warn('[DatabaseService] Database handle invalid, reopening once...', error);
+        resetDbHandles();
+        return await ensureReady();
+    }
 };
 
 export const initDatabase = async (): Promise<void> => {
@@ -233,11 +257,11 @@ export const migrateLegacyEncryption = async (userId: string, target: 'device' |
         const YIELD_EVERY = 25;
         for (const row of rows) {
             let updated = false;
-            let encryptedContent = row.encrypted_content;
-            let encryptedTitle = row.encrypted_title;
-            let encryptedTranscription = row.encrypted_transcription;
+            let encryptedContent = asNonEmptyString(row.encrypted_content);
+            let encryptedTitle = asNonEmptyString(row.encrypted_title);
+            let encryptedTranscription = asNonEmptyString(row.encrypted_transcription);
 
-            if (shouldReencrypt(encryptedContent)) {
+            if (encryptedContent && shouldReencrypt(encryptedContent)) {
                 try {
                     const content = await decrypt(encryptedContent);
                     encryptedContent = await encrypt(content);
@@ -247,7 +271,7 @@ export const migrateLegacyEncryption = async (userId: string, target: 'device' |
                 }
             }
 
-            if (shouldReencrypt(encryptedTitle)) {
+            if (encryptedTitle && shouldReencrypt(encryptedTitle)) {
                 try {
                     const title = await decrypt(encryptedTitle);
                     encryptedTitle = await encrypt(title);
@@ -257,7 +281,7 @@ export const migrateLegacyEncryption = async (userId: string, target: 'device' |
                 }
             }
 
-            if (shouldReencrypt(encryptedTranscription)) {
+            if (encryptedTranscription && shouldReencrypt(encryptedTranscription)) {
                 try {
                     const transcription = await decrypt(encryptedTranscription);
                     encryptedTranscription = await encrypt(transcription);
@@ -270,7 +294,7 @@ export const migrateLegacyEncryption = async (userId: string, target: 'device' |
             if (updated) {
                 await database.runAsync(
                     `UPDATE notes SET encrypted_title = ?, encrypted_content = ?, encrypted_transcription = ?, dirty = 1, synced = 0, updated_at = ? WHERE id = ?`,
-                    [encryptedTitle ?? null, encryptedContent, encryptedTranscription ?? null, now, row.id]
+                    [encryptedTitle ?? null, encryptedContent ?? '', encryptedTranscription ?? null, now, row.id]
                 );
             }
             processed += 1;
@@ -497,17 +521,20 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
         const rows = await database.getAllAsync<any>('SELECT * FROM notes WHERE user_id = ?;', [userId]);
         console.log(`[DatabaseService] Fetched ${rows.length} total rows from notes table`);
 
-        const parents = rows.filter((r: any) => !r.parent_id);
-        const children = rows.filter((r: any) => r.parent_id);
+        const parents = rows.filter((r: any) => !(typeof r.parent_id === 'string' && r.parent_id.length > 0));
+        const children = rows.filter((r: any): r is any & { parent_id: string } =>
+            typeof r.parent_id === 'string' && r.parent_id.length > 0
+        );
 
         console.log(`[DatabaseService] Found ${parents.length} parents and ${children.length} children`);
 
         // Group children by parent_id
         const childrenMap = new Map<string, any[]>();
-        children.forEach((c: any) => {
-            const list = childrenMap.get(c.parent_id) ?? [];
+        children.forEach((c) => {
+            const parentId = c.parent_id;
+            const list = childrenMap.get(parentId) ?? [];
             list.push(c);
-            childrenMap.set(c.parent_id, list);
+            childrenMap.set(parentId, list);
         });
 
         const notes: Note[] = [];
@@ -756,118 +783,7 @@ export const wipeLocalDatabase = async (): Promise<void> => {
     }
 };
 
-export const seedDemoData = async (userId: string): Promise<void> => {
-    try {
-        console.log('[DatabaseService] Seeding demo data for user', userId);
-        const now = new Date().toISOString();
 
-        // 1. Shopping List
-        const shoppingNoteId = 'demo-shopping-list';
-        const shoppingTitle = await encrypt('Weekly Groceries 🛒');
-        const shoppingContent = await encrypt(
-            "- [ ] Organic Milk 🥛\n- [ ] Free-range Eggs 🥚\n- [ ] Sourdough Bread 🥖\n- [ ] Avocados 🥑\n- [ ] Coffee Beans ☕\n- [ ] Dark Chocolate 🍫\n- [ ] Greek Yogurt"
-        );
-
-        await saveNoteLocal(userId, {
-            id: shoppingNoteId,
-            encrypted_title: shoppingTitle,
-            encrypted_content: shoppingContent,
-            created_at: now,
-            updated_at: now,
-            has_audio: false,
-            is_pinned: true,
-            synced: 0,
-            dirty: true,
-            deleted: false,
-            version: 1,
-            server_updated_at: now,
-            label: 'Personal',
-            is_active: false
-        } as Note);
-
-        // 2. Project Ideas
-        const ideasNoteId = 'demo-ideas-list';
-        const ideasTitle = await encrypt('Startup Ideas 💡');
-        const ideasContent = await encrypt(
-            "1. AI-powered Personal Trainer\n   - Uses camera to correct form\n   - Generates workout plans\n\n2. Smart Recipe Manager\n   - Scans fridge contents\n   - Suggests recipes based on expiration dates\n\n3. Local Event Aggregator\n   - Pulls from various social media\n   - Personalized recommendations"
-        );
-
-        await saveNoteLocal(userId, {
-            id: ideasNoteId,
-            encrypted_title: ideasTitle,
-            encrypted_content: ideasContent,
-            created_at: new Date(Date.now() - 100000).toISOString(),
-            updated_at: new Date(Date.now() - 100000).toISOString(),
-            has_audio: false,
-            is_pinned: false,
-            synced: 0,
-            dirty: true,
-            deleted: false,
-            version: 1,
-            server_updated_at: new Date(Date.now() - 100000).toISOString(),
-            label: 'Work',
-            is_active: false
-        } as Note);
-
-        // 3. Meeting Notes
-        const meetingNoteId = 'demo-meeting-notes';
-        const meetingTitle = await encrypt('Product Sync 📅');
-        const meetingContent = await encrypt(
-            "Attendees: Alex, Sarah, Mike\nDate: Oct 24, 2024\n\n## Key Updates\n- Mobile app performance improved by 30% 🚀\n- Dark mode implementation is complete.\n- User feedback on the new navigation is positive.\n\n## Action Items\n- Sarah: Finalize design for the settings page.\n- Mike: Investigate the sync conflict issue.\n- Alex: Prepare release notes for v2.1."
-        );
-
-        await saveNoteLocal(userId, {
-            id: meetingNoteId,
-            encrypted_title: meetingTitle,
-            encrypted_content: meetingContent,
-            created_at: new Date(Date.now() - 200000).toISOString(),
-            updated_at: new Date(Date.now() - 200000).toISOString(),
-            has_audio: false,
-            is_pinned: false,
-            synced: 0,
-            dirty: true,
-            deleted: false,
-            version: 1,
-            server_updated_at: new Date(Date.now() - 200000).toISOString(),
-            label: 'Work',
-            is_active: true
-        } as Note);
-
-        // 4. Voice Note Mockup
-        const voiceNoteId = 'demo-voice-note';
-        const voiceTitle = await encrypt('Design Brainstorm 🎙️');
-        const voiceContent = await encrypt(
-            "Thought about the new gesture system. We should probably use a swipe-to-archive interaction similar to email apps. It feels more natural on mobile. Also, need to consider haptic feedback for long presses."
-        );
-        const voiceTranscription = await encrypt(
-            "Thought about the new gesture system. We should probably use a swipe-to-archive interaction similar to email apps. It feels more natural on mobile. Also, need to consider haptic feedback for long presses."
-        );
-
-        await saveNoteLocal(userId, {
-            id: voiceNoteId,
-            encrypted_title: voiceTitle,
-            encrypted_content: voiceContent,
-            encrypted_transcription: voiceTranscription,
-            created_at: new Date(Date.now() - 50000).toISOString(),
-            updated_at: new Date(Date.now() - 50000).toISOString(),
-            has_audio: true,
-            audio_duration: 45, // 45 seconds
-            audio_file_path: 'mock/path/to/audio.m4a', // Won't play but UI should show player
-            is_pinned: false,
-            synced: 0,
-            dirty: true,
-            deleted: false,
-            version: 1,
-            server_updated_at: new Date(Date.now() - 50000).toISOString(),
-            label: 'Ideas',
-            is_active: false
-        } as Note);
-
-        console.log('[DatabaseService] Demo data seeded successfully');
-    } catch (e) {
-        console.error('[DatabaseService] Failed to seed demo data', e);
-    }
-};
 
 export const saveImprovementLocal = async (userId: string, improvement: NoteImprovement & { is_active?: boolean }, useDbActiveState = false): Promise<void> => {
     // Adapter for backward compatibility or direct usage, simply calls saveNoteLocal with parent_id mapping

@@ -1,5 +1,7 @@
 import client from './client';
 
+export type DeleteSyncNotesResult = 'deleted' | 'unsupported';
+
 export interface NoteImprovement {
     id: string;
     note_id: string;
@@ -135,5 +137,17 @@ export const notesApi = {
     sync: async (payload: SyncNotesRequest): Promise<SyncNotesResponse> => {
         const response = await client.post('/sync/notes', payload);
         return response.data;
+    },
+    deleteAllSyncNotes: async (): Promise<DeleteSyncNotesResult> => {
+        const response = await client.delete('/sync/notes', {
+            validateStatus: (status) =>
+                (status >= 200 && status < 300) || status === 404 || status === 405,
+        });
+
+        if (response.status === 404 || response.status === 405) {
+            return 'unsupported';
+        }
+
+        return 'deleted';
     },
 };

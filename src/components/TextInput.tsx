@@ -11,11 +11,17 @@ interface Props extends TextInputProps {
 }
 
 export const TextInput = ({ label, error, containerStyle, style, ...props }: Props) => {
+    const isMultiline = !!props.multiline;
     return (
         <View style={[styles.container, containerStyle]}>
             {label && <Text style={styles.label}>{label}</Text>}
             <RNTextInput
-                style={[styles.input, error ? styles.inputError : null, style]}
+                style={[
+                    styles.input,
+                    isMultiline ? styles.inputMultiline : null,
+                    error ? styles.inputError : null,
+                    style,
+                ]}
                 placeholderTextColor={colors.textMuted}
                 {...props}
             />
@@ -35,7 +41,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     input: {
-        height: 50,
+        minHeight: 50,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
@@ -43,6 +49,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.m,
         fontSize: 16,
         color: colors.text,
+    },
+    inputMultiline: {
+        minHeight: 96,
+        paddingTop: spacing.s,
+        textAlignVertical: 'top',
     },
     inputError: {
         borderColor: colors.error,

@@ -7,6 +7,7 @@ import { KeyBundle } from '../crypto/e2ee';
 
 export type AIProvider = 'secure_llm' | 'openai' | 'selfhosted';
 export type CryptoMode = 'local' | 'e2ee';
+export type CustodyMode = 'standard' | 'strict_seed';
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
@@ -21,6 +22,8 @@ const SYNC_ENABLED_KEY = 'vaulto_sync_enabled';
 const DEVICE_KEY_KEY = 'vaulto_device_key_v1';
 const KEY_BUNDLE_PREFIX = 'vaulto_key_bundle_v1';
 const MASTER_KEY_PREFIX = 'vaulto_master_key_v1';
+const SYNC_RESET_BLOCK_PREFIX = 'vaulto_sync_reset_block_v1';
+const CUSTODY_MODE_PREFIX = 'vaulto_custody_mode_v1';
 
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
@@ -251,6 +254,61 @@ export const storage = {
             await secureDelete(`${KEY_BUNDLE_PREFIX}_${userId}`);
         } catch (e) {
             console.error('Failed to remove key bundle', e);
+        }
+    },
+    getSyncResetBlocked: async (userId: string): Promise<boolean> => {
+        if (!userId) return false;
+        try {
+            const value = await secureGet(`${SYNC_RESET_BLOCK_PREFIX}_${userId}`);
+            return value === '1';
+        } catch (e) {
+            console.error('Failed to get sync reset block flag', e);
+            return false;
+        }
+    },
+    setSyncResetBlocked: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureSet(`${SYNC_RESET_BLOCK_PREFIX}_${userId}`, '1');
+        } catch (e) {
+            console.error('Failed to set sync reset block flag', e);
+        }
+    },
+    clearSyncResetBlocked: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureDelete(`${SYNC_RESET_BLOCK_PREFIX}_${userId}`);
+        } catch (e) {
+            console.error('Failed to clear sync reset block flag', e);
+        }
+    },
+    getCustodyMode: async (userId: string): Promise<CustodyMode | null> => {
+        if (!userId) return null;
+        try {
+            const value = await secureGet(`${CUSTODY_MODE_PREFIX}_${userId}`);
+            if (value === 'strict_seed' || value === 'standard') {
+                return value;
+            }
+            return null;
+        } catch (e) {
+            console.error('Failed to get custody mode', e);
+            return null;
+        }
+    },
+    setCustodyMode: async (userId: string, mode: CustodyMode): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureSet(`${CUSTODY_MODE_PREFIX}_${userId}`, mode);
+        } catch (e) {
+            console.error('Failed to set custody mode', e);
+        }
+    },
+    removeCustodyMode: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureDelete(`${CUSTODY_MODE_PREFIX}_${userId}`);
+        } catch (e) {
+            console.error('Failed to remove custody mode', e);
         }
     },
 };

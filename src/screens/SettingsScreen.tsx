@@ -34,12 +34,12 @@ import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
 
-import { seedDemoData } from '../services/DatabaseService';
+
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
-    const { syncEnabled, syncLocked, resetSync } = useEncryption();
+    const { syncEnabled, syncLocked, hasRemoteKeyBundle, resetSync } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
@@ -56,6 +56,7 @@ export const SettingsScreen = () => {
     const [showPinChangeOverlay, setShowPinChangeOverlay] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
+
 
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
     const [showSelfHostedKey, setShowSelfHostedKey] = useState(false);
@@ -76,31 +77,53 @@ export const SettingsScreen = () => {
     const usingSelfHosted = aiProvider === 'selfhosted';
     const syncStatusLabel = !syncEnabled ? 'Local only' : syncLocked ? 'Locked' : 'Enabled';
     const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
-    const pinStatusLabel = syncEnabled ? 'Set' : 'Not set';
+    const pinStatusLabel = syncEnabled ? 'Configured' : 'Not set';
     const pinStatusColor = syncEnabled ? colors.accentGreen : colors.textSecondary;
     const securityNote = !syncEnabled
-        ? 'Enable sync to back up encrypted notes across devices.'
+        ? 'Enable sync to choose PIN (quick), code phrase (stronger), or Advanced Secure seed phrase.'
         : syncLocked
-            ? 'Unlock sync to resume uploading and downloading changes.'
-            : 'PIN is required only to enable sync or restore on a new device.';
+            ? hasRemoteKeyBundle
+                ? 'Encrypted sync data detected on server. Unlock with your original key to access it.'
+                : 'Sync is locked on this device. Unlock with your original key to resume syncing.'
+            : 'Master key is decrypted only on-device. Use seed phrase for strongest offline protection.';
 
     const handleResetSync = useCallback(() => {
         Alert.alert(
-            'Reset sync?',
-            'This will remove your sync key. Previously synced notes will be unrecoverable. Local notes on this device will not be deleted.',
+            'Forgot access key?',
+            'You can reset encryption key and create a new one, but previously synced encrypted notes will be permanently lost.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Reset',
+                    text: 'Continue',
                     style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await resetSync();
-                            Alert.alert('Sync reset', 'Sync key removed. You can enable sync again with a new PIN.');
-                        } catch (error: any) {
-                            Alert.alert('Reset failed', error?.message || 'Unable to reset sync.');
-                        }
-                    }
+                    onPress: () => {
+                        Alert.alert(
+                            'Final confirmation',
+                            'Press "I Understand, Reset" only if you agree that old synced notes cannot be recovered.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'I Understand, Reset',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            const result = await resetSync();
+                                            if (result === 'purged') {
+                                                Alert.alert('Sync reset', 'Old encrypted sync data and key were removed. You can now create a new key.');
+                                            } else {
+                                                Alert.alert(
+                                                    'Partial reset',
+                                                    'Local key was reset, but server did not confirm full encrypted data purge. Please update backend to support vault reset.'
+                                                );
+                                            }
+                                        } catch (error: any) {
+                                            Alert.alert('Reset failed', error?.message || 'Unable to reset sync.');
+                                        }
+                                    }
+                                }
+                            ]
+                        );
+                    },
                 }
             ]
         );
@@ -469,14 +492,14 @@ export const SettingsScreen = () => {
                         <Text style={styles.sectionTitle}>Security</Text>
                     </View>
                     <Text style={styles.sectionHint}>
-                        Notes are encrypted on this device before sync. The server only stores encrypted data.
+                        Notes are encrypted on this device before sync. Master key never leaves device in plaintext.
                     </Text>
                     <View style={styles.securityRow}>
                         <Text style={styles.securityLabel}>Sync</Text>
                         <Text style={[styles.securityValue, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
                     </View>
                     <View style={styles.securityRow}>
-                        <Text style={styles.securityLabel}>PIN</Text>
+                        <Text style={styles.securityLabel}>Access key</Text>
                         <Text style={[styles.securityValue, { color: pinStatusColor }]}>{pinStatusLabel}</Text>
                     </View>
                     <Text style={styles.securityCopy}>{securityNote}</Text>
@@ -485,7 +508,7 @@ export const SettingsScreen = () => {
                             <Button title="Unlock Sync" onPress={() => setShowUnlockSyncModal(true)} />
                             <View style={{ marginTop: spacing.s }}>
                                 <Button
-                                    title="Reset Sync (Forgot PIN)"
+                                    title="Reset Sync (Forgot key)"
                                     variant="outline"
                                     onPress={handleResetSync}
                                 />
@@ -495,10 +518,10 @@ export const SettingsScreen = () => {
                     {syncEnabled && !syncLocked && (
                         <View style={{ marginTop: spacing.m }}>
                             <Button
-                                title="Change PIN"
+                                title="Change Access Key"
                                 onPress={() => {
                                     if (!isAuthenticated || isGuest) {
-                                        Alert.alert('Sign in required', 'Please sign in to change your PIN.');
+                                        Alert.alert('Sign in required', 'Please sign in to change your access key.');
                                         return;
                                     }
                                     setShowChangePinModal(true);
@@ -509,7 +532,7 @@ export const SettingsScreen = () => {
                     {!syncEnabled && (
                         <View style={{ marginTop: spacing.m }}>
                             <Button
-                                title="Enable Sync (Requires PIN)"
+                                title="Enable Sync & Choose Security"
                                 onPress={() => {
                                     if (!isAuthenticated || isGuest) {
                                         Alert.alert('Sign in required', 'Please sign in to enable sync.');
@@ -895,35 +918,7 @@ export const SettingsScreen = () => {
                 }
 
 
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>Demo & Screenshots</Text>
-                    </View>
-                    <Text style={styles.sectionHint}>
-                        Populate the app with sample data for screenshots (Shopping List, Ideas, Voice Notes).
-                    </Text>
-                    <Button
-                        title="Load Demo Data"
-                        onPress={async () => {
-                            if (!user?.id) return;
-                            Alert.alert(
-                                'Load Demo Data',
-                                'This will add sample notes to your account. Existing notes will not be deleted.',
-                                [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                        text: 'Load',
-                                        onPress: async () => {
-                                            await seedDemoData(user.id);
-                                            Alert.alert('Success', 'Demo data loaded! Go to your notes list.');
-                                        }
-                                    }
-                                ]
-                            );
-                        }}
-                        variant="secondary"
-                    />
-                </View>
+
 
             </ScrollView >
 
@@ -940,7 +935,7 @@ export const SettingsScreen = () => {
                 }}
                 onError={(message) => {
                     setShowPinChangeOverlay(false);
-                    Alert.alert('PIN update failed', message);
+                    Alert.alert('Access key update failed', message);
                     setShowChangePinModal(true);
                 }}
                 onChanged={() => {
@@ -970,7 +965,7 @@ export const SettingsScreen = () => {
             <UnlockingOverlay visible={showUnlockingOverlay} />
             <UnlockingOverlay
                 visible={showPinChangeOverlay}
-                title="Updating PIN"
+                title="Updating Access Key"
                 subtitle="Re-wrapping your sync key. This may take a few seconds."
             />
 

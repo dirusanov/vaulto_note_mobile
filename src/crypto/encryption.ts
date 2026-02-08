@@ -4,7 +4,6 @@ import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import { CIPHER_VERSION, getMasterKey, hasMasterKey } from './e2ee';
 import { storage, CryptoMode } from '../utils/storage';
 
-const LEGACY_PASSPHRASE = 'vaulto-note-secret';
 export const V2_MASTER_PREFIX = `${CIPHER_VERSION}m.`;
 export const V2_DEVICE_PREFIX = `${CIPHER_VERSION}d.`;
 export const V2_COMPAT_PREFIX = `${CIPHER_VERSION}.`;
@@ -17,48 +16,6 @@ export const setCryptoMode = (mode: CryptoMode) => {
 };
 
 export const getCryptoMode = () => cryptoMode;
-
-const deriveLegacyKey = async (): Promise<string> => {
-    const digest = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        LEGACY_PASSPHRASE
-    );
-    return digest;
-};
-
-const xorEncrypt = (plaintext: string, key: string): string => {
-    const encoded = encodeURIComponent(plaintext);
-    const result: number[] = [];
-    for (let i = 0; i < encoded.length; i++) {
-        result.push(encoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-
-    let binary = '';
-    const CHUNK_SIZE = 8192;
-    for (let i = 0; i < result.length; i += CHUNK_SIZE) {
-        const chunk = result.slice(i, i + CHUNK_SIZE);
-        binary += String.fromCharCode(...chunk);
-    }
-
-    return btoa(binary);
-};
-
-const xorDecrypt = (ciphertext: string, key: string): string => {
-    const decoded = atob(ciphertext);
-    const result: number[] = [];
-    for (let i = 0; i < decoded.length; i++) {
-        result.push(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-
-    let output = '';
-    const CHUNK_SIZE = 8192;
-    for (let i = 0; i < result.length; i += CHUNK_SIZE) {
-        const chunk = result.slice(i, i + CHUNK_SIZE);
-        output += String.fromCharCode(...chunk);
-    }
-
-    return decodeURIComponent(output);
-};
 
 const getOrCreateDeviceKey = async (): Promise<Uint8Array> => {
     if (cachedDeviceKey) return cachedDeviceKey;
@@ -152,8 +109,7 @@ export async function decrypt(ciphertext: string): Promise<string> {
             return decryptWithKey(ciphertext, deviceKey, V2_DEVICE_PREFIX);
         }
 
-        const key = await deriveLegacyKey();
-        return xorDecrypt(ciphertext, key);
+        throw new Error('Unsupported legacy ciphertext format.');
     } catch (error) {
         console.error('[decrypt] Decryption failed:', error);
         throw error;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -13,10 +13,13 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
+import { useEncryption } from '../context/EncryptionContext';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
+import { UnlockSyncModal } from '../components/UnlockSyncModal';
+import { UnlockingOverlay } from '../components/UnlockingOverlay';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
@@ -24,9 +27,12 @@ const DOCK_PREF_KEY = 'vaulto_dock_preference';
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
+    const { syncEnabled, syncLocked, hasRemoteKeyBundle, bundle, custodyMode, resetSync } = useEncryption();
     const { notes, loading, fetchNotes, searchNotes, syncNotes, batchPinNotes, batchUnpinNotes, batchDeleteNotes } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
+    const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -112,6 +118,55 @@ export const NotesListScreen = () => {
     const handleSettingsPress = () => {
         navigation.navigate('Settings');
     };
+
+    const secretModeLabel =
+        custodyMode === 'strict_seed' || bundle?.secret_mode === 'seed_phrase'
+            ? 'Seed Phrase'
+            : bundle?.secret_mode === 'passphrase'
+                ? 'Code Phrase'
+                : 'PIN';
+
+    const handleResetLockedSync = useCallback(() => {
+        Alert.alert(
+            'Forgot access key?',
+            'You can reset encryption key and create a new one, but previously synced encrypted notes will be permanently lost.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Continue',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Final confirmation',
+                            'Press "I Understand, Reset" only if you agree that old synced notes cannot be recovered.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'I Understand, Reset',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            const result = await resetSync();
+                                            if (result === 'purged') {
+                                                Alert.alert('Sync reset', 'Old encrypted sync data and key were removed. You can now create a new key from Settings.');
+                                            } else {
+                                                Alert.alert(
+                                                    'Partial reset',
+                                                    'Local key was reset, but server did not confirm full encrypted data purge. Please update backend to support vault reset.'
+                                                );
+                                            }
+                                        } catch (error: any) {
+                                            Alert.alert('Reset failed', error?.message || 'Unable to reset sync.');
+                                        }
+                                    },
+                                },
+                            ]
+                        );
+                    },
+                },
+            ]
+        );
+    }, [resetSync]);
 
     useAuth(); // Import useAuth hook
 
@@ -355,6 +410,35 @@ export const NotesListScreen = () => {
                     </View>
                 </View>
             )}
+            {!isSelectionMode && syncEnabled && syncLocked && (
+                <View style={styles.lockBanner}>
+                    <View style={styles.lockBannerHeader}>
+                        <MaterialIcons name="lock" size={18} color={colors.warning} />
+                        <Text style={styles.lockBannerTitle}>Encrypted sync is locked</Text>
+                    </View>
+                    <Text style={styles.lockBannerText}>
+                        {hasRemoteKeyBundle
+                            ? `Encrypted sync data detected on server. Unlock using your ${secretModeLabel} to access notes on this device.`
+                            : `Sync key is configured, but currently locked. Unlock using your ${secretModeLabel}.`}
+                    </Text>
+                    <View style={styles.lockBannerActions}>
+                        <TouchableOpacity
+                            style={[styles.lockActionButton, styles.lockActionPrimary]}
+                            onPress={() => setShowUnlockSyncModal(true)}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.lockActionPrimaryText}>Unlock Sync</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.lockActionButton, styles.lockActionSecondary]}
+                            onPress={handleResetLockedSync}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.lockActionSecondaryText}>Forgot key? Reset</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
             {!isSelectionMode && (
                 <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, 60], outputRange: [0, 1] }) }]}>
                     <View style={styles.searchBar}>
@@ -465,6 +549,30 @@ export const NotesListScreen = () => {
                 onConfirm={handleConfirmDelete}
                 onCancel={handleCancelDelete}
             />
+            <UnlockSyncModal
+                visible={showUnlockSyncModal}
+                onClose={() => setShowUnlockSyncModal(false)}
+                onUnlocking={() => {
+                    setShowUnlockingOverlay(true);
+                }}
+                onError={(message) => {
+                    setShowUnlockingOverlay(false);
+                    Alert.alert('Unlock failed', message);
+                    setShowUnlockSyncModal(true);
+                }}
+                onUnlocked={() => {
+                    setShowUnlockSyncModal(false);
+                    setShowUnlockingOverlay(false);
+                    setTimeout(() => {
+                        void syncNotes();
+                    }, 0);
+                }}
+            />
+            <UnlockingOverlay
+                visible={showUnlockingOverlay}
+                title="Unlocking Sync"
+                subtitle="Decrypting your sync key. This may take a few seconds."
+            />
         </ScreenContainer>
     );
 };
@@ -486,6 +594,60 @@ const styles = StyleSheet.create({
     topActions: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    lockBanner: {
+        marginHorizontal: spacing.m,
+        marginBottom: spacing.s,
+        padding: spacing.m,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#F7D9A6',
+        backgroundColor: '#FFF8E8',
+    },
+    lockBannerHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        marginBottom: spacing.xs,
+    },
+    lockBannerTitle: {
+        ...typography.body,
+        color: colors.text,
+        fontWeight: '700',
+    },
+    lockBannerText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        lineHeight: 18,
+    },
+    lockBannerActions: {
+        marginTop: spacing.s,
+        flexDirection: 'row',
+        gap: spacing.s,
+    },
+    lockActionButton: {
+        flex: 1,
+        minHeight: 40,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: spacing.s,
+    },
+    lockActionPrimary: {
+        backgroundColor: colors.primary,
+    },
+    lockActionSecondary: {
+        borderWidth: 1,
+        borderColor: '#E6B96E',
+        backgroundColor: '#FFF3D9',
+    },
+    lockActionPrimaryText: {
+        ...typography.captionBold,
+        color: colors.surface,
+    },
+    lockActionSecondaryText: {
+        ...typography.captionBold,
+        color: '#8A5A10',
     },
     syncButton: {
         flexDirection: 'row',
