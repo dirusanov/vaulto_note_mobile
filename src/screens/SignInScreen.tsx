@@ -20,7 +20,7 @@ import { spacing } from '../theme/spacing';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
-import { authApi } from '../api/auth';
+import { authApi, LoginResult } from '../api/auth';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 
 export const SignInScreen = () => {
@@ -32,6 +32,24 @@ export const SignInScreen = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const handlePostLogin = async (result: LoginResult, provider: 'google' | 'email') => {
+        if (result.needs_legal_acceptance) {
+            if (!result.legal_token) {
+                throw new Error('Missing legal acceptance token');
+            }
+            navigation.navigate('LegalAcceptance', {
+                legalToken: result.legal_token,
+                provider,
+            });
+            return;
+        }
+        if (!result.access_token || !result.refresh_token) {
+            throw new Error('Invalid login response');
+        }
+        await signIn(result.access_token, result.refresh_token);
+        navigation.navigate('NotesList');
+    };
+
     const handleEmailSignIn = async () => {
         if (!email || !password) {
             Alert.alert('Error', 'Please fill in all fields');
@@ -40,9 +58,8 @@ export const SignInScreen = () => {
 
         setLoading(true);
         try {
-            const tokens = await authApi.login(email, password);
-            await signIn(tokens.access_token, tokens.refresh_token);
-            navigation.navigate('NotesList');
+            const result = await authApi.login(email, password);
+            await handlePostLogin(result, 'email');
         } catch (err) {
             const message = getErrorMessage(err, 'Sign-in failed');
             Alert.alert('Sign-In Failed', message);
@@ -53,8 +70,8 @@ export const SignInScreen = () => {
 
     const handleGoogleSignIn = async () => {
         try {
-            await signInWithGoogle();
-            navigation.navigate('NotesList');
+            const result = await signInWithGoogle();
+            await handlePostLogin(result, 'google');
         } catch (err) {
             const message = getErrorMessage(err, 'Google sign-in was cancelled.');
             Alert.alert('Google Sign-In', message);
@@ -160,15 +177,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.surface,
-        marginTop: spacing.l,
-        marginLeft: spacing.l,
+        marginTop: spacing.m,
+        marginLeft: spacing.m,
         alignSelf: 'flex-start',
     },
     content: {
         flex: 1,
         justifyContent: 'center',
-        paddingHorizontal: spacing.l,
-        paddingBottom: spacing.xxl,
+        paddingHorizontal: spacing.m,
+        paddingBottom: spacing.l,
     },
     title: {
         ...typography.h1,
@@ -179,13 +196,13 @@ const styles = StyleSheet.create({
         ...typography.body,
         color: colors.textSecondary,
         textAlign: 'center',
-        marginBottom: spacing.xxl,
+        marginBottom: spacing.l,
     },
     buttonContainer: {
-        gap: spacing.m,
+        gap: spacing.s,
     },
     inputGroup: {
-        marginBottom: spacing.s,
+        marginBottom: spacing.xs,
     },
     label: {
         ...typography.caption,
@@ -204,7 +221,7 @@ const styles = StyleSheet.create({
     },
     forgotPasswordButton: {
         alignSelf: 'flex-end',
-        marginBottom: spacing.m,
+        marginBottom: spacing.s,
     },
     forgotPasswordText: {
         ...typography.caption,
@@ -228,7 +245,7 @@ const styles = StyleSheet.create({
     separator: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: spacing.l,
+        marginVertical: spacing.m,
     },
     separatorLine: {
         flex: 1,
@@ -241,7 +258,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.m,
     },
     signUpButton: {
-        marginTop: spacing.m,
+        marginTop: spacing.s,
         alignItems: 'center',
     },
     signUpText: {
@@ -253,4 +270,3 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 });
-

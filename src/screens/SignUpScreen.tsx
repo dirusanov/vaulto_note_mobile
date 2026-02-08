@@ -41,7 +41,7 @@ export const SignUpScreen = () => {
 
         setLoading(true);
         try {
-            await authApi.register({ email, password });
+            await authApi.register({ email, password, termsAccepted: true });
             navigation.navigate('EmailVerification', { email, password });
         } catch (err: any) {
             const message = getErrorMessage(err, 'Registration failed');

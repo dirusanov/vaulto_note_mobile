@@ -8,6 +8,7 @@ import { typography } from '../theme/typography';
 import { authApi } from '../api/auth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export const EmailVerificationScreen = () => {
     const navigation = useNavigation<any>();
@@ -67,8 +68,24 @@ export const EmailVerificationScreen = () => {
         if (password) {
             try {
                 console.log('Attempting auto-login...');
-                const tokens = await authApi.login(email, password);
-                await signIn(tokens.access_token, tokens.refresh_token);
+                const loginResult = await authApi.login(email, password);
+                if (loginResult.needs_legal_acceptance) {
+                    if (!loginResult.legal_token) {
+                        throw new Error('Missing legal acceptance token');
+                    }
+                    navigation.reset({
+                        index: 0,
+                        routes: [{
+                            name: 'LegalAcceptance',
+                            params: { legalToken: loginResult.legal_token, provider: 'email' },
+                        }],
+                    });
+                    return;
+                }
+                if (!loginResult.access_token || !loginResult.refresh_token) {
+                    throw new Error('Invalid login response');
+                }
+                await signIn(loginResult.access_token, loginResult.refresh_token);
                 console.log('Auto-login successful');
 
                 // Reset navigation stack to Main screen
@@ -79,6 +96,8 @@ export const EmailVerificationScreen = () => {
             } catch (e) {
                 // Fallback if auto-login fails
                 console.log('Auto-login failed:', e);
+                const message = getErrorMessage(e, 'Please sign in again.');
+                console.warn('[EmailVerification] Auto-login failed:', message);
                 navigation.navigate('SignIn', { email });
             }
         } else {

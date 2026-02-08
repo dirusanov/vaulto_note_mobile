@@ -1,11 +1,9 @@
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from './useAuth';
-import { authApi } from '../api/auth';
+import { authApi, LoginResult } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
 
 export const useGoogleOAuth = () => {
-    const { signIn } = useAuth();
     const [loading, setLoading] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
 
@@ -20,7 +18,7 @@ export const useGoogleOAuth = () => {
         });
     }, []);
 
-    const signInWithGoogle = useCallback(async () => {
+    const signInWithGoogle = useCallback(async (): Promise<LoginResult> => {
         setLoading(true);
         setLastError(null);
         try {
@@ -50,8 +48,7 @@ export const useGoogleOAuth = () => {
                 state: 'native_android', // State is less relevant for native flow
                 code_verifier: '',       // Native SDK handles security, no PKCE needed
             });
-
-            await signIn(tokens.access_token, tokens.refresh_token);
+            return tokens;
 
         } catch (error: any) {
             console.error('Google Sign-In Error:', error);
@@ -77,7 +74,7 @@ export const useGoogleOAuth = () => {
         } finally {
             setLoading(false);
         }
-    }, [signIn]);
+    }, []);
 
     return {
         signInWithGoogle,

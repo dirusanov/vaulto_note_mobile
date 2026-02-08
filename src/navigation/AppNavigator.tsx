@@ -10,6 +10,7 @@ import { SignUpScreen } from '../screens/SignUpScreen';
 import { EmailVerificationScreen } from '../screens/EmailVerificationScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
+import { LegalAcceptanceScreen } from '../screens/LegalAcceptanceScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -51,6 +52,11 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
             <Stack.Screen
                 name="ResetPassword"
                 component={ResetPasswordScreen}
+                options={{ headerShown: false }}
+            />
+            <Stack.Screen
+                name="LegalAcceptance"
+                component={LegalAcceptanceScreen}
                 options={{ headerShown: false }}
             />
 

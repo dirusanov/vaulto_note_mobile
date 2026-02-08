@@ -7,6 +7,15 @@ export interface AuthTokens {
     expires_in: number;
 }
 
+export interface LoginResult {
+    needs_legal_acceptance: boolean;
+    legal_token?: string | null;
+    access_token?: string | null;
+    refresh_token?: string | null;
+    token_type?: string;
+    expires_in?: number | null;
+}
+
 export interface UserProfile {
     id: string;
     email: string;
@@ -38,16 +47,17 @@ export interface GoogleAuthInit {
 }
 
 export const authApi = {
-    register: async (params: { email: string; password: string; fullName?: string | null }): Promise<UserProfile> => {
+    register: async (params: { email: string; password: string; fullName?: string | null; termsAccepted?: boolean }): Promise<UserProfile> => {
         const response = await authClient.post('/auth/register', {
             email: params.email,
             password: params.password,
             full_name: params.fullName,
+            terms_accepted: params.termsAccepted ?? false,
         });
         return response.data;
     },
 
-    login: async (email: string, password: string): Promise<AuthTokens> => {
+    login: async (email: string, password: string): Promise<LoginResult> => {
         const response = await authClient.post('/auth/login', { email, password });
         return response.data;
     },
@@ -72,7 +82,7 @@ export const authApi = {
         return response.data;
     },
 
-    completeGoogleLogin: async (params: { code: string; state: string; code_verifier?: string }): Promise<AuthTokens> => {
+    completeGoogleLogin: async (params: { code: string; state: string; code_verifier?: string }): Promise<LoginResult> => {
         const queryParams: Record<string, string> = {
             code: params.code,
             state: params.state,
@@ -83,6 +93,13 @@ export const authApi = {
 
         const response = await authClient.get('/auth/google/callback', {
             params: queryParams,
+        });
+        return response.data;
+    },
+
+    acceptLegal: async (legalToken: string): Promise<AuthTokens> => {
+        const response = await authClient.post('/auth/legal/accept', {
+            legal_token: legalToken,
         });
         return response.data;
     },
@@ -106,4 +123,3 @@ export const authApi = {
         });
     },
 };
-
