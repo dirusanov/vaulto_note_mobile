@@ -1,5 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import { pbkdf2 } from '@noble/hashes/pbkdf2';
+import { pbkdf2, pbkdf2Async } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
@@ -15,6 +15,7 @@ export const SEED_PHRASE_WORDS = 12;
 const INVISIBLE_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
 const STRICT_SEED_KDF_ITERATIONS = 300_000;
 const STRICT_SEED_DOMAIN_SALT = utf8ToBytes('vaulto.strict-seed.master-key.v1');
+const STRICT_SEED_ASYNC_TICK_MS = 1;
 
 export type SecretMode = 'pin' | 'passphrase' | 'seed_phrase';
 
@@ -130,6 +131,20 @@ export const deriveMasterKeyFromSeed = (seedPhrase: string): Uint8Array => {
         throw new Error(validationError);
     }
     return deriveKey(normalizedSeed, STRICT_SEED_DOMAIN_SALT, STRICT_SEED_KDF_ITERATIONS);
+};
+
+export const deriveMasterKeyFromSeedAsync = async (seedPhrase: string): Promise<Uint8Array> => {
+    const normalizedSeed = normalizeSecretInput(seedPhrase, 'seed_phrase');
+    const validationError = getSecretValidationError(normalizedSeed, 'seed_phrase');
+    if (validationError) {
+        throw new Error(validationError);
+    }
+    const materialBytes = utf8ToBytes(normalizedSeed);
+    return await pbkdf2Async(sha256, materialBytes, STRICT_SEED_DOMAIN_SALT, {
+        c: STRICT_SEED_KDF_ITERATIONS,
+        dkLen: 32,
+        asyncTick: STRICT_SEED_ASYNC_TICK_MS,
+    });
 };
 
 export const createKeyBundle = async (

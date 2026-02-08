@@ -7,7 +7,7 @@ import {
     KeyBundle,
     clearMasterKey,
     createKeyBundle,
-    deriveMasterKeyFromSeed,
+    deriveMasterKeyFromSeedAsync,
     getMasterKey,
     getSecretValidationError,
     hasMasterKey,
@@ -221,7 +221,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         syncService.setSyncEnabled(true);
 
         if (nextMode === 'seed_phrase') {
-            const derivedMasterKey = deriveMasterKeyFromSeed(normalizedSecret);
+            const derivedMasterKey = await deriveMasterKeyFromSeedAsync(normalizedSecret);
             setMasterKey(derivedMasterKey);
             setSyncUnlocked(true);
             setBundle(null);
@@ -276,18 +276,69 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('Access key is required.');
         }
 
+        const formatIncorrectSecretMessage = (secretMode: SecretMode): string => {
+            if (secretMode === 'pin') return 'Incorrect PIN.';
+            if (secretMode === 'passphrase') return 'Incorrect passphrase.';
+            return 'Incorrect seed phrase.';
+        };
+
+        const expectedSecretMode: SecretMode =
+            custodyMode === 'strict_seed'
+                ? 'seed_phrase'
+                : (bundle?.secret_mode ?? 'pin');
+
         let resolvedMasterKey: Uint8Array;
         if (custodyMode === 'strict_seed') {
             const validationError = getSecretValidationError(secret, 'seed_phrase');
             if (validationError) {
                 throw new Error(validationError);
             }
-            resolvedMasterKey = deriveMasterKeyFromSeed(secret);
+            try {
+                resolvedMasterKey = await deriveMasterKeyFromSeedAsync(secret);
+            } catch (error: any) {
+                const message = String(error?.message || '');
+                if (message.toLowerCase().includes('invalid')) {
+                    throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
+                }
+                throw error;
+            }
+
+            // In strict-seed mode, verify against locally cached master key when available.
+            // This gives immediate "incorrect seed" feedback on devices that already unlocked before.
+            if (userId) {
+                const storedWrappedMasterKey = await storage.getStoredMasterKey(userId);
+                if (storedWrappedMasterKey) {
+                    try {
+                        const storedMasterKeyHex = await decrypt(storedWrappedMasterKey);
+                        if (storedMasterKeyHex !== bytesToHex(resolvedMasterKey)) {
+                            throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
+                        }
+                    } catch (error: any) {
+                        const message = String(error?.message || '').toLowerCase();
+                        if (
+                            message.includes('incorrect seed phrase') ||
+                            message.includes('invalid tag') ||
+                            message.includes('invalid ciphertext')
+                        ) {
+                            throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
+                        }
+                        console.warn('[Encryption] Failed to verify strict-seed master key from local cache:', error);
+                    }
+                }
+            }
         } else {
             if (!bundle) {
                 throw new Error('Key bundle missing');
             }
-            resolvedMasterKey = unwrapMasterKey(bundle, secret);
+            try {
+                resolvedMasterKey = unwrapMasterKey(bundle, secret);
+            } catch (error: any) {
+                const message = String(error?.message || '').toLowerCase();
+                if (message.includes('invalid access key') || message.includes('invalid tag')) {
+                    throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
+                }
+                throw error;
+            }
         }
 
         setMasterKey(resolvedMasterKey);
@@ -331,7 +382,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         if (nextMode === 'seed_phrase') {
             const previousMasterHex = bytesToHex(currentMasterKey);
-            const derivedMasterKey = deriveMasterKeyFromSeed(normalizedSecret);
+            const derivedMasterKey = await deriveMasterKeyFromSeedAsync(normalizedSecret);
             const nextMasterHex = bytesToHex(derivedMasterKey);
             const requiresReSync = custodyMode !== 'strict_seed' || previousMasterHex !== nextMasterHex;
 

@@ -29,7 +29,6 @@ import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { useEncryption } from '../context/EncryptionContext';
 import { EnableSyncModal } from '../components/EnableSyncModal';
-import { ChangePinModal } from '../components/ChangePinModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
@@ -56,6 +55,7 @@ export const SettingsScreen = () => {
     const [showPinChangeOverlay, setShowPinChangeOverlay] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
+    const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
 
 
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
@@ -927,16 +927,15 @@ export const SettingsScreen = () => {
                 onClose={() => setShowEnableSyncModal(false)}
                 onEnabled={() => setShowEnableSyncModal(false)}
             />
-            <ChangePinModal
+            <EnableSyncModal
                 visible={showChangePinModal}
+                flow="change"
                 onClose={() => setShowChangePinModal(false)}
                 onChanging={() => {
                     setShowPinChangeOverlay(true);
                 }}
-                onError={(message) => {
+                onError={() => {
                     setShowPinChangeOverlay(false);
-                    Alert.alert('Access key update failed', message);
-                    setShowChangePinModal(true);
                 }}
                 onChanged={() => {
                     setShowChangePinModal(false);
@@ -945,24 +944,34 @@ export const SettingsScreen = () => {
             />
             <UnlockSyncModal
                 visible={showUnlockSyncModal}
-                onClose={() => setShowUnlockSyncModal(false)}
+                errorMessage={unlockErrorMessage}
+                onClose={() => {
+                    setShowUnlockSyncModal(false);
+                    setUnlockErrorMessage(null);
+                }}
                 onUnlocking={() => {
                     setShowUnlockingOverlay(true);
+                    setUnlockErrorMessage(null);
                 }}
                 onError={(message) => {
                     setShowUnlockingOverlay(false);
-                    Alert.alert('Unlock failed', message);
+                    setUnlockErrorMessage(message);
                     setShowUnlockSyncModal(true);
                 }}
                 onUnlocked={() => {
                     setShowUnlockSyncModal(false);
                     setShowUnlockingOverlay(false);
+                    setUnlockErrorMessage(null);
                     setTimeout(() => {
                         void syncService.syncNow('manual');
                     }, 0);
                 }}
             />
-            <UnlockingOverlay visible={showUnlockingOverlay} />
+            <UnlockingOverlay
+                visible={showUnlockingOverlay}
+                title="Verifying Access Key"
+                subtitle="Checking your key and decrypting sync. This may take up to a minute on some devices."
+            />
             <UnlockingOverlay
                 visible={showPinChangeOverlay}
                 title="Updating Access Key"

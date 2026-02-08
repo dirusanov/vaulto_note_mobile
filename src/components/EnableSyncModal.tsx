@@ -37,6 +37,10 @@ interface EnableSyncModalProps {
     visible: boolean;
     onClose: () => void;
     onEnabled?: () => void;
+    flow?: 'enable' | 'change';
+    onChanged?: () => void;
+    onChanging?: () => void;
+    onError?: (message: string) => void;
 }
 
 type SetupStep = 'choose_method' | 'enter_secret' | 'advanced_secure' | 'create_seed' | 'confirm_seed' | 'restore_seed';
@@ -62,8 +66,17 @@ const waitForUiFrame = () => new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
 });
 
-export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModalProps) => {
-    const { enableE2EE } = useEncryption();
+export const EnableSyncModal = ({
+    visible,
+    onClose,
+    onEnabled,
+    flow = 'enable',
+    onChanged,
+    onChanging,
+    onError,
+}: EnableSyncModalProps) => {
+    const { enableE2EE, changePin } = useEncryption();
+    const isChangeFlow = flow === 'change';
     const [step, setStep] = useState<SetupStep>('choose_method');
     const [mode, setMode] = useState<SecretMode>('pin');
     const [secret, setSecret] = useState('');
@@ -108,16 +121,29 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
         const normalizedSecret = normalizeSecretInput(rawSecret, selectedMode);
         setLoadingMode(selectedMode);
         setLoading(true);
+        if (isChangeFlow) {
+            onChanging?.();
+        }
         try {
             await waitForUiFrame();
-            await enableE2EE(normalizedSecret, selectedMode);
+            if (isChangeFlow) {
+                await changePin(normalizedSecret, selectedMode);
+            } else {
+                await enableE2EE(normalizedSecret, selectedMode);
+            }
             setTimeout(() => {
                 void syncService.syncNow('manual');
             }, 0);
             reset();
-            onEnabled?.();
+            if (isChangeFlow) {
+                onChanged?.();
+            } else {
+                onEnabled?.();
+            }
         } catch (e: any) {
-            setError(e?.message || 'Failed to enable sync.');
+            const message = e?.message || (isChangeFlow ? 'Failed to change access key.' : 'Failed to enable sync.');
+            setError(message);
+            onError?.(message);
         } finally {
             setLoading(false);
             setLoadingMode(null);
@@ -217,31 +243,37 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
 
     const progress = useMemo(() => {
         if (step === 'choose_method') return { current: 1, total: 1, label: 'Choose security level' };
-        if (step === 'enter_secret') return { current: 1, total: 2, label: mode === 'pin' ? 'Set PIN' : 'Set code phrase' };
+        if (step === 'enter_secret') {
+            if (isChangeFlow) {
+                return { current: 1, total: 2, label: mode === 'pin' ? 'Set new PIN' : 'Set new code phrase' };
+            }
+            return { current: 1, total: 2, label: mode === 'pin' ? 'Set PIN' : 'Set code phrase' };
+        }
         if (step === 'advanced_secure') return { current: 1, total: 3, label: 'Advanced secure options' };
         if (step === 'create_seed') return { current: 2, total: 3, label: 'Back up your seed' };
         if (step === 'confirm_seed') return { current: 3, total: 3, label: 'Confirm backup words' };
         return { current: 2, total: 3, label: 'Restore existing seed' };
-    }, [mode, step]);
+    }, [isChangeFlow, mode, step]);
 
     const loadingCopy = useMemo(() => {
+        const actionVerb = isChangeFlow ? 'Updating' : 'Enabling';
         if (loadingMode === 'seed_phrase') {
             return {
-                title: 'Enabling Sync with Seed',
+                title: `${actionVerb} ${isChangeFlow ? 'Access Key' : 'Sync'} with Seed`,
                 subtitle: 'Deriving keys and securing sync with your seed phrase. Please wait a few seconds.',
             };
         }
         if (loadingMode === 'passphrase') {
             return {
-                title: 'Enabling Sync with Code Phrase',
+                title: `${actionVerb} ${isChangeFlow ? 'Access Key' : 'Sync'} with Code Phrase`,
                 subtitle: 'Deriving encryption keys from your phrase. Please wait a few seconds.',
             };
         }
         return {
-            title: 'Enabling Sync with PIN',
+            title: `${actionVerb} ${isChangeFlow ? 'Access Key' : 'Sync'} with PIN`,
             subtitle: 'Preparing encrypted sync and wrapping your master key. Please wait a few seconds.',
         };
-    }, [loadingMode]);
+    }, [isChangeFlow, loadingMode]);
 
     return (
         <Modal
@@ -255,10 +287,14 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                     <TouchableWithoutFeedback>
                         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.avoider}>
                             <View style={styles.card}>
-                                <View style={styles.headerBlock}>
-                                    <Text style={styles.title}>Secure Sync Setup</Text>
+                                    <View style={styles.headerBlock}>
+                                    <Text style={styles.title}>
+                                        {isChangeFlow ? 'Change Access Key' : 'Secure Sync Setup'}
+                                    </Text>
                                     <Text style={styles.subtitle}>
-                                        Start simple or choose advanced custody. Master key never leaves this device unencrypted.
+                                        {isChangeFlow
+                                            ? 'Choose your new key method. Notes remain encrypted and protected.'
+                                            : 'Start simple or choose advanced custody. Master key never leaves this device unencrypted.'}
                                     </Text>
                                     <View style={styles.progressRow}>
                                         <Text style={styles.progressText}>
@@ -417,7 +453,7 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                                     style={styles.actionButton}
                                                 />
                                                 <Button
-                                                    title="Enable Sync"
+                                                    title={isChangeFlow ? 'Update Key' : 'Enable Sync'}
                                                     onPress={handleEnableWithPinOrPassphrase}
                                                     loading={loading}
                                                     disabled={loading}
@@ -491,16 +527,27 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                                 <Text style={styles.seedTitle}>Your recovery seed phrase</Text>
                                                 <Text style={styles.seedSubtitle}>Write this down. Anyone with it can decrypt your synced notes.</Text>
                                                 <SeedWordsGrid words={seedWords} editable={false} />
-                                                <Button
-                                                    title={seedCopied ? 'Copied' : 'Copy Seed'}
-                                                    variant={seedCopied ? 'secondary' : 'outline'}
-                                                    onPress={() => {
-                                                        if (!seedPhrase) return;
-                                                        void Clipboard.setStringAsync(seedPhrase);
-                                                        setSeedCopied(true);
-                                                    }}
-                                                    style={styles.seedAction}
-                                                />
+                                                <View style={styles.seedActions}>
+                                                    <Button
+                                                        title={seedCopied ? 'Copied' : 'Copy Seed'}
+                                                        variant={seedCopied ? 'secondary' : 'outline'}
+                                                        onPress={() => {
+                                                            if (!seedPhrase) return;
+                                                            void Clipboard.setStringAsync(seedPhrase);
+                                                            setSeedCopied(true);
+                                                        }}
+                                                        style={styles.seedAction}
+                                                    />
+                                                    <Button
+                                                        title="Regenerate Seed"
+                                                        variant="outline"
+                                                        onPress={() => {
+                                                            void handleCreateSeed();
+                                                        }}
+                                                        disabled={loading}
+                                                        style={styles.seedRegenerateAction}
+                                                    />
+                                                </View>
                                             </View>
 
                                             <View style={styles.actions}>
@@ -565,7 +612,7 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                                     style={styles.actionButton}
                                                 />
                                                 <Button
-                                                    title="Enable Sync"
+                                                    title={isChangeFlow ? 'Update Key' : 'Enable Sync'}
                                                     onPress={() => {
                                                         void handleEnableWithCreatedSeed();
                                                     }}
@@ -622,7 +669,7 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                                     style={styles.actionButton}
                                                 />
                                                 <Button
-                                                    title="Enable Sync"
+                                                    title={isChangeFlow ? 'Update Key' : 'Enable Sync'}
                                                     onPress={() => {
                                                         void handleEnableWithRestoredSeed();
                                                     }}
@@ -787,8 +834,15 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginBottom: spacing.s,
     },
+    seedActions: {
+        marginTop: spacing.m,
+    },
     seedAction: {
         marginVertical: 0,
+    },
+    seedRegenerateAction: {
+        marginTop: spacing.s,
+        marginBottom: 0,
     },
     confirmTitle: {
         ...typography.body,

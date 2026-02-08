@@ -33,6 +33,7 @@ export const NotesListScreen = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
+    const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -551,18 +552,24 @@ export const NotesListScreen = () => {
             />
             <UnlockSyncModal
                 visible={showUnlockSyncModal}
-                onClose={() => setShowUnlockSyncModal(false)}
+                errorMessage={unlockErrorMessage}
+                onClose={() => {
+                    setShowUnlockSyncModal(false);
+                    setUnlockErrorMessage(null);
+                }}
                 onUnlocking={() => {
                     setShowUnlockingOverlay(true);
+                    setUnlockErrorMessage(null);
                 }}
                 onError={(message) => {
                     setShowUnlockingOverlay(false);
-                    Alert.alert('Unlock failed', message);
+                    setUnlockErrorMessage(message);
                     setShowUnlockSyncModal(true);
                 }}
                 onUnlocked={() => {
                     setShowUnlockSyncModal(false);
                     setShowUnlockingOverlay(false);
+                    setUnlockErrorMessage(null);
                     setTimeout(() => {
                         void syncNotes();
                     }, 0);
@@ -570,8 +577,8 @@ export const NotesListScreen = () => {
             />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title="Unlocking Sync"
-                subtitle="Decrypting your sync key. This may take a few seconds."
+                title="Verifying Access Key"
+                subtitle="Checking your key and decrypting sync. This may take up to a minute on some devices."
             />
         </ScreenContainer>
     );

@@ -426,16 +426,27 @@ export const PinSetupScreen = () => {
                                 <Text style={styles.seedTitle}>Your recovery seed phrase</Text>
                                 <Text style={styles.seedSubtitle}>Write this down. Anyone with it can decrypt your synced notes.</Text>
                                 <SeedWordsGrid words={seedWords} editable={false} />
-                                <Button
-                                    title={seedCopied ? 'Copied' : 'Copy Seed'}
-                                    variant={seedCopied ? 'secondary' : 'outline'}
-                                    onPress={() => {
-                                        if (!seedPhrase) return;
-                                        void Clipboard.setStringAsync(seedPhrase);
-                                        setSeedCopied(true);
-                                    }}
-                                    style={styles.seedAction}
-                                />
+                                <View style={styles.seedActions}>
+                                    <Button
+                                        title={seedCopied ? 'Copied' : 'Copy Seed'}
+                                        variant={seedCopied ? 'secondary' : 'outline'}
+                                        onPress={() => {
+                                            if (!seedPhrase) return;
+                                            void Clipboard.setStringAsync(seedPhrase);
+                                            setSeedCopied(true);
+                                        }}
+                                        style={styles.seedAction}
+                                    />
+                                    <Button
+                                        title="Regenerate Seed"
+                                        variant="outline"
+                                        onPress={() => {
+                                            void handleCreateSeed();
+                                        }}
+                                        disabled={loading}
+                                        style={styles.seedRegenerateAction}
+                                    />
+                                </View>
                             </View>
 
                             <Button
@@ -665,8 +676,15 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginBottom: spacing.s,
     },
+    seedActions: {
+        marginTop: spacing.m,
+    },
     seedAction: {
         marginVertical: 0,
+    },
+    seedRegenerateAction: {
+        marginTop: spacing.s,
+        marginBottom: 0,
     },
     confirmTitle: {
         ...typography.body,

@@ -16,12 +16,20 @@ interface UnlockSyncModalProps {
     onUnlocked?: () => void;
     onUnlocking?: () => void;
     onError?: (message: string) => void;
+    errorMessage?: string | null;
 }
 
 const createEmptySeedWords = (): string[] => Array.from({ length: SEED_PHRASE_WORDS }, () => '');
 const normalizeSeedWordInput = (value: string): string => value.toLowerCase().replace(/\s+/g, '');
 
-export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onError }: UnlockSyncModalProps) => {
+export const UnlockSyncModal = ({
+    visible,
+    onClose,
+    onUnlocked,
+    onUnlocking,
+    onError,
+    errorMessage = null,
+}: UnlockSyncModalProps) => {
     const { unlock, bundle, custodyMode } = useEncryption();
     const preferredMode = custodyMode === 'strict_seed'
         ? 'seed_phrase'
@@ -43,10 +51,16 @@ export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onE
 
     useEffect(() => {
         if (!visible) return;
+        if (errorMessage) {
+            setError(errorMessage);
+            return;
+        }
         setMode(preferredMode);
+        setSecret('');
         setSeedWords(createEmptySeedWords());
+        setShowSecret(false);
         setError(null);
-    }, [visible, preferredMode]);
+    }, [visible, preferredMode, errorMessage]);
 
     const handleClose = () => {
         if (loading) return;
