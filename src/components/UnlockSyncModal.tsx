@@ -8,6 +8,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { TextInput } from './TextInput';
+import { SeedWordsGrid } from './SeedWordsGrid';
 
 interface UnlockSyncModalProps {
     visible: boolean;
@@ -17,6 +18,9 @@ interface UnlockSyncModalProps {
     onError?: (message: string) => void;
 }
 
+const createEmptySeedWords = (): string[] => Array.from({ length: SEED_PHRASE_WORDS }, () => '');
+const normalizeSeedWordInput = (value: string): string => value.toLowerCase().replace(/\s+/g, '');
+
 export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onError }: UnlockSyncModalProps) => {
     const { unlock, bundle, custodyMode } = useEncryption();
     const preferredMode = custodyMode === 'strict_seed'
@@ -24,6 +28,7 @@ export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onE
         : (bundle?.secret_mode ?? 'pin');
     const [mode, setMode] = useState<SecretMode>(preferredMode);
     const [secret, setSecret] = useState('');
+    const [seedWords, setSeedWords] = useState<string[]>(createEmptySeedWords);
     const [showSecret, setShowSecret] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -31,6 +36,7 @@ export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onE
     const reset = () => {
         setMode(preferredMode);
         setSecret('');
+        setSeedWords(createEmptySeedWords());
         setShowSecret(false);
         setError(null);
     };
@@ -38,6 +44,7 @@ export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onE
     useEffect(() => {
         if (!visible) return;
         setMode(preferredMode);
+        setSeedWords(createEmptySeedWords());
         setError(null);
     }, [visible, preferredMode]);
 
@@ -50,14 +57,15 @@ export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onE
     const handleUnlock = async () => {
         setError(null);
         const effectiveMode: SecretMode = custodyMode === 'strict_seed' ? 'seed_phrase' : mode;
-        const validationError = getSecretValidationError(secret, effectiveMode);
+        const rawSecret = effectiveMode === 'seed_phrase' ? seedWords.join(' ') : secret;
+        const validationError = getSecretValidationError(rawSecret, effectiveMode);
         if (validationError) {
             setError(validationError);
             return;
         }
 
         setLoading(true);
-        const secretValue = secret;
+        const secretValue = rawSecret;
         onUnlocking?.();
         onClose();
         setTimeout(() => {
@@ -134,15 +142,16 @@ export const UnlockSyncModal = ({ visible, onClose, onUnlocked, onUnlocking, onE
                                 />
                             ) : (custodyMode === 'strict_seed' || mode === 'seed_phrase') ? (
                                 <>
-                                    <TextInput
-                                        label={`Seed phrase (${SEED_PHRASE_WORDS} words)`}
-                                        value={secret}
-                                        onChangeText={setSecret}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        placeholder="Enter your 12-word seed phrase"
-                                        multiline
-                                        style={styles.seedInput}
+                                    <Text style={styles.seedLabel}>{`Seed phrase (${SEED_PHRASE_WORDS} words)`}</Text>
+                                    <SeedWordsGrid
+                                        words={seedWords}
+                                        onChangeWord={(index, value) => {
+                                            setSeedWords((prev) => {
+                                                const next = [...prev];
+                                                next[index] = normalizeSeedWordInput(value);
+                                                return next;
+                                            });
+                                        }}
                                     />
                                 </>
                             ) : (
@@ -260,9 +269,10 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.primary,
     },
-    seedInput: {
-        minHeight: 84,
-        textAlignVertical: 'top',
+    seedLabel: {
+        ...typography.captionBold,
+        color: colors.textSecondary,
+        marginBottom: spacing.s,
     },
     hint: {
         ...typography.caption,

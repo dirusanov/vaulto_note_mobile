@@ -31,6 +31,7 @@ import { TextInput } from './TextInput';
 import { syncService } from '../services/SyncService';
 import { generateMnemonic } from '../crypto/bip39';
 import { UnlockingOverlay } from './UnlockingOverlay';
+import { SeedWordsGrid } from './SeedWordsGrid';
 
 interface EnableSyncModalProps {
     visible: boolean;
@@ -489,14 +490,7 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                             <View style={styles.seedCard}>
                                                 <Text style={styles.seedTitle}>Your recovery seed phrase</Text>
                                                 <Text style={styles.seedSubtitle}>Write this down. Anyone with it can decrypt your synced notes.</Text>
-                                                <View style={styles.seedGrid}>
-                                                    {seedWords.map((word, index) => (
-                                                        <View key={`${word}-${index}`} style={styles.seedWordItem}>
-                                                            <Text style={styles.seedWordIndex}>{index + 1}.</Text>
-                                                            <Text style={styles.seedWordText}>{word}</Text>
-                                                        </View>
-                                                    ))}
-                                                </View>
+                                                <SeedWordsGrid words={seedWords} editable={false} />
                                                 <Button
                                                     title={seedCopied ? 'Copied' : 'Copy Seed'}
                                                     variant={seedCopied ? 'secondary' : 'outline'}
@@ -596,13 +590,6 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                                 <Text style={styles.backText}>Back to advanced options</Text>
                                             </Pressable>
 
-                                            <TextInput
-                                                label={`Seed phrase (${SEED_PHRASE_WORDS} words)`}
-                                                value={restoreSeedWords.join(' ')}
-                                                editable={false}
-                                                placeholder="Enter your seed words below"
-                                                style={styles.restoreSeedPreview}
-                                            />
                                             <Button
                                                 title="Paste full phrase"
                                                 variant="outline"
@@ -611,28 +598,16 @@ export const EnableSyncModal = ({ visible, onClose, onEnabled }: EnableSyncModal
                                                 }}
                                                 style={styles.pasteSeedButton}
                                             />
-                                            <View style={styles.restoreGrid}>
-                                                {Array.from({ length: SEED_PHRASE_WORDS }, (_, index) => (
-                                                    <View key={`restore-seed-${index}`} style={styles.restoreWordField}>
-                                                        <Text style={styles.restoreWordLabel}>{index + 1}</Text>
-                                                        <TextInput
-                                                            value={restoreSeedWords[index] || ''}
-                                                            onChangeText={(value) => {
-                                                                setRestoreSeedWords((prev) => {
-                                                                    const next = [...prev];
-                                                                    next[index] = normalizeSeedWordInput(value);
-                                                                    return next;
-                                                                });
-                                                            }}
-                                                            autoCapitalize="none"
-                                                            autoCorrect={false}
-                                                            placeholder="word"
-                                                            containerStyle={styles.restoreWordInputContainer}
-                                                            style={styles.restoreWordInput}
-                                                        />
-                                                    </View>
-                                                ))}
-                                            </View>
+                                            <SeedWordsGrid
+                                                words={restoreSeedWords}
+                                                onChangeWord={(index, value) => {
+                                                    setRestoreSeedWords((prev) => {
+                                                        const next = [...prev];
+                                                        next[index] = normalizeSeedWordInput(value);
+                                                        return next;
+                                                    });
+                                                }}
+                                            />
 
                                             <Text style={styles.hint}>
                                                 Restore flow decrypts only on this device. Server never receives plaintext notes or master key.
@@ -812,34 +787,6 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginBottom: spacing.s,
     },
-    seedGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.s,
-        marginBottom: spacing.s,
-    },
-    seedWordItem: {
-        width: '48%',
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 10,
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.s,
-        backgroundColor: colors.surface,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-    },
-    seedWordIndex: {
-        ...typography.captionBold,
-        color: colors.textSecondary,
-    },
-    seedWordText: {
-        ...typography.caption,
-        color: colors.text,
-        fontWeight: '600',
-        flex: 1,
-    },
     seedAction: {
         marginVertical: 0,
     },
@@ -853,33 +800,8 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginBottom: spacing.s,
     },
-    restoreSeedPreview: {
-        minHeight: 56,
-    },
     pasteSeedButton: {
-        marginTop: -spacing.xs,
-    },
-    restoreGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.s,
         marginBottom: spacing.s,
-    },
-    restoreWordField: {
-        width: '31%',
-    },
-    restoreWordLabel: {
-        ...typography.captionBold,
-        color: colors.textSecondary,
-        marginBottom: spacing.xs,
-    },
-    restoreWordInputContainer: {
-        marginBottom: 0,
-    },
-    restoreWordInput: {
-        minHeight: 46,
-        paddingHorizontal: spacing.s,
-        fontSize: 14,
     },
     hint: {
         ...typography.caption,

@@ -17,6 +17,7 @@ import { Button } from './Button';
 import { PinCodeInput } from './PinCodeInput';
 import { TextInput } from './TextInput';
 import { generateMnemonic } from '../crypto/bip39';
+import { SeedWordsGrid } from './SeedWordsGrid';
 
 interface ChangePinModalProps {
     visible: boolean;
@@ -26,8 +27,9 @@ interface ChangePinModalProps {
     onError?: (message: string) => void;
 }
 
-type ChangeStep = 'enter_secret' | 'confirm_seed';
+type ChangeStep = 'enter_secret' | 'seed_ready' | 'confirm_seed';
 const SEED_CONFIRMATION_WORDS = 3;
+const createEmptySeedWords = (): string[] => Array.from({ length: SEED_PHRASE_WORDS }, () => '');
 
 const normalizeSeedWordInput = (value: string): string => value.toLowerCase().replace(/\s+/g, '');
 
@@ -51,6 +53,7 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
     const [mode, setMode] = useState<SecretMode>(preferredMode);
     const [secret, setSecret] = useState('');
     const [confirmSecret, setConfirmSecret] = useState('');
+    const [seedWords, setSeedWords] = useState<string[]>(createEmptySeedWords);
     const [seedConfirmationIndexes, setSeedConfirmationIndexes] = useState<number[]>([]);
     const [seedConfirmationInputs, setSeedConfirmationInputs] = useState<Record<number, string>>({});
     const [showSecret, setShowSecret] = useState(false);
@@ -62,6 +65,7 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
         setMode(preferredMode);
         setSecret('');
         setConfirmSecret('');
+        setSeedWords(createEmptySeedWords());
         setSeedConfirmationIndexes([]);
         setSeedConfirmationInputs({});
         setShowSecret(false);
@@ -72,6 +76,7 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
         if (!visible) return;
         setStep('enter_secret');
         setMode(preferredMode);
+        setSeedWords(createEmptySeedWords());
         setSeedConfirmationIndexes([]);
         setSeedConfirmationInputs({});
         setError(null);
@@ -85,39 +90,24 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
 
     const handleChange = async () => {
         setError(null);
-        const validationError = getSecretValidationError(secret, mode);
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-        const normalizedSecret = normalizeSecretInput(secret, mode);
-        const normalizedConfirm = normalizeSecretInput(confirmSecret, mode);
-        if (normalizedSecret !== normalizedConfirm) {
-            if (mode === 'pin') {
-                setError('PINs do not match.');
-            } else if (mode === 'seed_phrase') {
-                setError('Seed phrases do not match.');
-            } else {
-                setError('Passphrases do not match.');
-            }
-            return;
-        }
-
-        if (mode === 'seed_phrase' && step === 'enter_secret') {
-            const words = normalizedSecret.split(' ').filter(Boolean);
-            if (words.length !== SEED_PHRASE_WORDS) {
-                setError(`Seed phrase must contain ${SEED_PHRASE_WORDS} words.`);
+        if (mode === 'seed_phrase') {
+            if (step === 'enter_secret') {
+                await handleGenerateSeed();
                 return;
             }
-            const indexes = pickUniqueRandomIndexes(words.length, SEED_CONFIRMATION_WORDS);
-            setSeedConfirmationIndexes(indexes);
-            setSeedConfirmationInputs({});
-            setStep('confirm_seed');
-            return;
-        }
-
-        if (mode === 'seed_phrase') {
-            const words = normalizedSecret.split(' ').filter(Boolean);
+            if (step === 'seed_ready') {
+                const words = secret.split(' ').filter(Boolean);
+                if (words.length !== SEED_PHRASE_WORDS) {
+                    setError(`Seed phrase must contain ${SEED_PHRASE_WORDS} words.`);
+                    return;
+                }
+                const indexes = pickUniqueRandomIndexes(words.length, SEED_CONFIRMATION_WORDS);
+                setSeedConfirmationIndexes(indexes);
+                setSeedConfirmationInputs({});
+                setStep('confirm_seed');
+                return;
+            }
+            const words = secret.split(' ').filter(Boolean);
             for (const index of seedConfirmationIndexes) {
                 const expected = normalizeSeedWordInput(words[index] || '');
                 const provided = normalizeSeedWordInput(seedConfirmationInputs[index] || '');
@@ -130,10 +120,28 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                     return;
                 }
             }
+        } else {
+            const validationError = getSecretValidationError(secret, mode);
+            if (validationError) {
+                setError(validationError);
+                return;
+            }
+            const normalizedSecret = normalizeSecretInput(secret, mode);
+            const normalizedConfirm = normalizeSecretInput(confirmSecret, mode);
+            if (normalizedSecret !== normalizedConfirm) {
+                if (mode === 'pin') {
+                    setError('PINs do not match.');
+                } else {
+                    setError('Passphrases do not match.');
+                }
+                return;
+            }
         }
 
         setLoading(true);
-        const secretValue = normalizedSecret;
+        const secretValue = mode === 'seed_phrase'
+            ? secret
+            : normalizeSecretInput(secret, mode);
         onChanging?.();
         onClose();
         setTimeout(() => {
@@ -156,13 +164,13 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
     const handleGenerateSeed = async () => {
         try {
             const seed = await generateMnemonic(SEED_PHRASE_WORDS as 12);
-            setSecret(seed);
-            setConfirmSecret('');
-            setStep('enter_secret');
+            const normalizedSeed = normalizeSecretInput(seed, 'seed_phrase');
+            setSecret(normalizedSeed);
+            setSeedWords(normalizedSeed.split(' '));
+            setStep('seed_ready');
             setSeedConfirmationIndexes([]);
             setSeedConfirmationInputs({});
             setError(null);
-            setShowSecret(true);
         } catch (e: any) {
             setError(e?.message || 'Failed to generate seed phrase.');
         }
@@ -189,6 +197,8 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                     onPress={() => {
                                         setStep('enter_secret');
                                         setMode('seed_phrase');
+                                        setSecret('');
+                                        setSeedWords(createEmptySeedWords());
                                         setSeedConfirmationIndexes([]);
                                         setSeedConfirmationInputs({});
                                         setError(null);
@@ -243,39 +253,11 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                         length={PIN_LENGTH}
                                     />
                                 </>
-                            ) : mode === 'seed_phrase' && step === 'enter_secret' ? (
-                                <>
-                                    <TextInput
-                                        label={`New seed phrase (${SEED_PHRASE_WORDS} words)`}
-                                        value={secret}
-                                        onChangeText={setSecret}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        placeholder="abandon ability ... (12 words)"
-                                        multiline
-                                        style={styles.seedInput}
-                                    />
-                                    <TextInput
-                                        label="Confirm seed phrase"
-                                        value={confirmSecret}
-                                        onChangeText={setConfirmSecret}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        placeholder="Repeat the same 12 words"
-                                        multiline
-                                        style={styles.seedInput}
-                                    />
-                                    <Pressable onPress={handleGenerateSeed} style={styles.revealRow}>
-                                        <Text style={styles.revealText}>
-                                            Generate {SEED_PHRASE_WORDS}-word seed
-                                        </Text>
-                                    </Pressable>
-                                </>
-                            ) : mode === 'seed_phrase' ? (
+                            ) : mode === 'seed_phrase' && step === 'confirm_seed' ? (
                                 <>
                                     <Pressable
                                         onPress={() => {
-                                            setStep('enter_secret');
+                                            setStep('seed_ready');
                                             setSeedConfirmationInputs({});
                                             setError(null);
                                         }}
@@ -300,6 +282,20 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                             placeholder={`Type word #${index + 1}`}
                                         />
                                     ))}
+                                </>
+                            ) : mode === 'seed_phrase' ? (
+                                <>
+                                    <Text style={styles.seedModeHint}>
+                                        Seed phrase is generated only on this device.
+                                    </Text>
+                                    {secret ? (
+                                        <SeedWordsGrid words={seedWords} editable={false} />
+                                    ) : null}
+                                    <Pressable onPress={handleGenerateSeed} style={styles.revealRow}>
+                                        <Text style={styles.revealText}>
+                                            {secret ? 'Regenerate seed on device' : `Generate ${SEED_PHRASE_WORDS}-word seed`}
+                                        </Text>
+                                    </Pressable>
                                 </>
                             ) : (
                                 <>
@@ -332,9 +328,11 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                 {mode === 'pin'
                                     ? 'PIN is faster to type, but weaker against offline brute-force.'
                                     : mode === 'seed_phrase'
-                                        ? step === 'enter_secret'
-                                            ? 'With seed phrase, you keep full control. You must verify backup words before update.'
-                                            : 'Verification required before applying your new seed phrase.'
+                                        ? step === 'confirm_seed'
+                                            ? 'Verification required before applying your new seed phrase.'
+                                            : step === 'seed_ready'
+                                            ? 'Review and save all 12 words before continuing.'
+                                            : 'Generate a new seed phrase on this device.'
                                         : `Use ${PASSPHRASE_MIN_WORDS}-5 words or ${PASSPHRASE_MIN_LENGTH}+ characters for stronger protection.`}
                             </Text>
                             {error && <Text style={styles.error}>{error}</Text>}
@@ -347,7 +345,15 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                     style={styles.actionButton}
                                 />
                                 <Button
-                                    title={mode === 'seed_phrase' && step === 'enter_secret' ? 'Continue' : 'Update Key'}
+                                    title={
+                                        mode === 'seed_phrase'
+                                            ? step === 'enter_secret'
+                                                ? 'Generate Seed'
+                                                : step === 'seed_ready'
+                                                ? 'Continue'
+                                                : 'Update Key'
+                                            : 'Update Key'
+                                    }
                                     onPress={handleChange}
                                     loading={loading}
                                     disabled={loading}
@@ -426,6 +432,11 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.primary,
     },
+    seedModeHint: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginBottom: spacing.s,
+    },
     backRow: {
         marginBottom: spacing.s,
     },
@@ -444,10 +455,6 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.textSecondary,
         marginBottom: spacing.s,
-    },
-    seedInput: {
-        minHeight: 84,
-        textAlignVertical: 'top',
     },
     hint: {
         ...typography.caption,

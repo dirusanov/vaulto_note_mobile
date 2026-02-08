@@ -9,11 +9,16 @@ import { typography } from '../theme/typography';
 import { useEncryption } from '../context/EncryptionContext';
 import { getSecretValidationError, PIN_LENGTH, SEED_PHRASE_WORDS, SecretMode } from '../crypto/e2ee';
 import { TextInput } from '../components/TextInput';
+import { SeedWordsGrid } from '../components/SeedWordsGrid';
+
+const createEmptySeedWords = (): string[] => Array.from({ length: SEED_PHRASE_WORDS }, () => '');
+const normalizeSeedWordInput = (value: string): string => value.toLowerCase().replace(/\s+/g, '');
 
 export const PinUnlockScreen = () => {
     const { unlock, custodyMode } = useEncryption();
     const [mode, setMode] = useState<SecretMode>('seed_phrase');
     const [secret, setSecret] = useState('');
+    const [seedWords, setSeedWords] = useState<string[]>(createEmptySeedWords);
     const [showSecret, setShowSecret] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -21,14 +26,15 @@ export const PinUnlockScreen = () => {
     const handleUnlock = async () => {
         setError(null);
         const effectiveMode: SecretMode = custodyMode === 'strict_seed' ? 'seed_phrase' : mode;
-        const validationError = getSecretValidationError(secret, effectiveMode);
+        const rawSecret = effectiveMode === 'seed_phrase' ? seedWords.join(' ') : secret;
+        const validationError = getSecretValidationError(rawSecret, effectiveMode);
         if (validationError) {
             setError(validationError);
             return;
         }
         setLoading(true);
         try {
-            await unlock(secret);
+            await unlock(rawSecret);
         } catch (e: any) {
             setError(e?.message || 'Failed to unlock.');
         } finally {
@@ -81,15 +87,16 @@ export const PinUnlockScreen = () => {
                     />
                 ) : (custodyMode === 'strict_seed' || mode === 'seed_phrase') ? (
                     <>
-                        <TextInput
-                            label={`Seed phrase (${SEED_PHRASE_WORDS} words)`}
-                            value={secret}
-                            onChangeText={setSecret}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            placeholder="Enter your 12-word seed phrase"
-                            multiline
-                            style={styles.seedInput}
+                        <Text style={styles.seedLabel}>{`Seed phrase (${SEED_PHRASE_WORDS} words)`}</Text>
+                        <SeedWordsGrid
+                            words={seedWords}
+                            onChangeWord={(index, value) => {
+                                setSeedWords((prev) => {
+                                    const next = [...prev];
+                                    next[index] = normalizeSeedWordInput(value);
+                                    return next;
+                                });
+                            }}
                         />
                     </>
                 ) : (
@@ -175,9 +182,10 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.primary,
     },
-    seedInput: {
-        minHeight: 84,
-        textAlignVertical: 'top',
+    seedLabel: {
+        ...typography.captionBold,
+        color: colors.textSecondary,
+        marginBottom: spacing.s,
     },
     hint: {
         ...typography.caption,
