@@ -28,6 +28,22 @@ const RESUME_SYNC_THRESHOLD_MS = 30000; // 30 seconds
 type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch';
 type SyncListener = () => void;
 
+const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    return String(error ?? '');
+};
+
+const isExpectedDecryptFailure = (error: unknown): boolean => {
+    const message = getErrorMessage(error).toLowerCase();
+    return (
+        message.includes('invalid tag') ||
+        message.includes('e2ee locked') ||
+        message.includes('master key missing') ||
+        message.includes('unsupported legacy ciphertext format') ||
+        message.includes('invalid ciphertext')
+    );
+};
+
 class SyncService {
     private isSyncing = false;
     private lastSyncAt: number = 0;
@@ -272,6 +288,10 @@ class SyncService {
                 ...(response.improvement_updates || []),
                 ...(response.improvement_changes || []),
             ];
+            if (!hasMasterKey()) {
+                console.log('[SyncService] Encryption locked before applying server changes. Skipping response apply.');
+                return;
+            }
             if (incomingImprovements.length > 0) {
                 await this.applyServerImprovements(incomingImprovements);
             }
@@ -324,8 +344,9 @@ class SyncService {
     }
 
     private async applyServerImprovements(improvements: ServerImprovement[]) {
-        if (!this.currentUserId) return;
+        if (!this.currentUserId || !hasMasterKey()) return;
         let processed = 0;
+        let skippedExpectedDecryptFailures = 0;
         const YIELD_EVERY = 20;
         for (const improvement of improvements) {
             let content = '';
@@ -339,6 +360,10 @@ class SyncService {
                     encryptedTitle = await encrypt(titlePlain);
                 }
             } catch (e) {
+                if (isExpectedDecryptFailure(e)) {
+                    skippedExpectedDecryptFailures += 1;
+                    continue;
+                }
                 console.error(`[SyncService] Failed to decrypt improvement ${improvement.id}`, e);
                 continue;
             }
@@ -364,13 +389,19 @@ class SyncService {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
+        if (skippedExpectedDecryptFailures > 0) {
+            console.warn(
+                `[SyncService] Skipped ${skippedExpectedDecryptFailures} improvements due to locked vault or key mismatch.`
+            );
+        }
     }
 
     private async applyServerChanges(serverNotes: ServerNote[]) {
-        if (!this.currentUserId) return;
+        if (!this.currentUserId || !hasMasterKey()) return;
         const localNotes = await getNotesLocal(this.currentUserId);
         const localMap = new Map(localNotes.map(n => [n.id, n]));
         let processed = 0;
+        let skippedExpectedDecryptFailures = 0;
         const YIELD_EVERY = 20;
 
         for (const serverNote of serverNotes) {
@@ -412,6 +443,10 @@ class SyncService {
 
                 encryptedTitle = await encrypt(title);
             } catch (e) {
+                if (isExpectedDecryptFailure(e)) {
+                    skippedExpectedDecryptFailures += 1;
+                    continue;
+                }
                 console.error(`[SyncService] Failed to decrypt note ${serverNote.id}`, e);
                 continue;
             }
@@ -448,6 +483,11 @@ class SyncService {
             if (processed % YIELD_EVERY === 0) {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
+        }
+        if (skippedExpectedDecryptFailures > 0) {
+            console.warn(
+                `[SyncService] Skipped ${skippedExpectedDecryptFailures} notes due to locked vault or key mismatch.`
+            );
         }
     }
 }
