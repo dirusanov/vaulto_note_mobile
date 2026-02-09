@@ -122,4 +122,9 @@ export const authApi = {
             new_password: newPassword,
         });
     },
+
+    generateMagicLink: async (): Promise<{ url: string; token: string }> => {
+        const response = await authClient.post<{ url: string; token: string }>('/auth/magic-link');
+        return response.data;
+    },
 };

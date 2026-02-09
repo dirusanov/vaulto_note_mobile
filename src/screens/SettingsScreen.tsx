@@ -56,7 +56,7 @@ export const SettingsScreen = () => {
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
 
-
+    const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
     const [showSelfHostedKey, setShowSelfHostedKey] = useState(false);
     const [openAITestStatus, setOpenAITestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
@@ -472,18 +472,34 @@ export const SettingsScreen = () => {
                         </>
                     )}
 
+
+                    <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} />
+
                     {isAuthenticated && !isGuest && (
                         <View style={{ marginTop: spacing.m }}>
                             <Button
-                                title="Upgrade (coming soon)"
-                                onPress={() => { }}
-                                variant="secondary"
-                                disabled
+                                title="Manage Account (Web)"
+                                loading={isGeneratingMagicLink}
+                                onPress={async () => {
+                                    setIsGeneratingMagicLink(true);
+                                    try {
+                                        const { url } = await import('../api/auth').then(m => m.authApi.generateMagicLink());
+                                        const canOpen = await Linking.canOpenURL(url);
+                                        if (canOpen) {
+                                            await Linking.openURL(url);
+                                        } else {
+                                            Alert.alert('Error', 'Cannot open web browser');
+                                        }
+                                    } catch (error: any) {
+                                        Alert.alert('Error', error?.message || 'Failed to generate magic link');
+                                    } finally {
+                                        setIsGeneratingMagicLink(false);
+                                    }
+                                }}
+                                variant="outline"
                             />
                         </View>
                     )}
-
-                    <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} />
                 </View>
 
                 <View style={styles.card}>
