@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -30,14 +30,21 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
     const [isLoading, setIsLoading] = useState(false);
     const [playableUri, setPlayableUri] = useState<string | null>(null);
+    const soundRef = useRef<Audio.Sound | null>(null);
 
     useEffect(() => {
-        return sound
-            ? () => {
-                sound.unloadAsync();
-            }
-            : undefined;
+        soundRef.current = sound;
     }, [sound]);
+
+    useEffect(() => {
+        return () => {
+            if (soundRef.current) {
+                void soundRef.current.unloadAsync();
+            }
+            // Critical: remove decrypted playback leftovers when player unmounts.
+            void AudioService.cleanupTempFiles();
+        };
+    }, []);
 
     // Resolve persistent/encrypted URI to playable temp URI
     useEffect(() => {
@@ -62,6 +69,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                 } else {
                     console.warn('Failed to resolve audio URI:', error);
                 }
+                void AudioService.cleanupTempFiles();
                 // Fallback to original
                 if (isMounted) setPlayableUri(audioUri);
             }
@@ -95,6 +103,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                     } else {
                         console.log('Error checking audio duration:', error);
                     }
+                    void AudioService.cleanupTempFiles();
                 }
             }
         };
@@ -130,6 +139,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
             } else {
                 console.error('Error playing sound:', error);
             }
+            void AudioService.cleanupTempFiles();
         } finally {
             setIsLoading(false);
         }
@@ -148,6 +158,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                 setIsPlaying(false);
                 setPosition(0);
                 sound?.setPositionAsync(0); // Reset position for replay
+                // Critical: playback completion should clear temporary decrypted files.
+                void AudioService.cleanupTempFiles();
             }
         }
     };
