@@ -42,7 +42,7 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
-import { VoiceRecording } from '../api/notes';
+import { NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -60,7 +60,11 @@ import {
     getFontSize,
     setFontSize,
     getAutoScalingEnabled,
-    setAutoScalingEnabled
+    setAutoScalingEnabled,
+    getLocalOnlyWarningDismissed,
+    setLocalOnlyWarningDismissed,
+    getPrivateAIAllowed,
+    setPrivateAIAllowed,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -104,10 +108,20 @@ export const NoteEditScreen = () => {
         updateImprovement,
         deleteImprovement,
         setActiveVariant,
+        updateNoteStorageScope,
+        updateNotePrivacy,
     } = useNotesContext();
     const { isGuest, userId } = useAuth();
     const { syncEnabled } = useEncryption();
+    const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
+    const normalizePrivacy = (value?: NotePrivacy): NotePrivacy => {
+        if (value === 'hidden') return value;
+        return 'normal';
+    };
+    const normalizeScope = (value?: StorageScope): StorageScope => {
+        return value === 'local_only' ? 'local_only' : 'sync';
+    };
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
     const localNoteIdRef = useRef(localNoteId);
@@ -127,6 +141,12 @@ export const NoteEditScreen = () => {
 
     const existingNote = notes.find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
+    const [storageScope, setStorageScope] = useState<StorageScope>(
+        route.params?.initialStorageScope ?? existingNote?.storage_scope ?? 'sync'
+    );
+    const [privacy, setPrivacy] = useState<NotePrivacy>(
+        route.params?.initialPrivacy ?? existingNote?.privacy ?? 'normal'
+    );
 
     // Refresh recordings when list modal opens
 
@@ -176,6 +196,22 @@ export const NoteEditScreen = () => {
         ]).start();
     };
 
+    const isPrivateContent = (): boolean => {
+        const effectiveScope = normalizeScope(existingNote?.storage_scope ?? storageScope);
+        return effectiveScope === 'local_only';
+    };
+
+    const ensurePrivateShareAllowed = (): boolean => {
+        if (!isPrivateContent()) {
+            return true;
+        }
+        Alert.alert(
+            'Sharing disabled for private notes',
+            'To prevent leaks, share and export are blocked for local-only notes.'
+        );
+        return false;
+    };
+
     // Export & Share Refs and Handlers
     const viewShotRef = useRef<View>(null);
 
@@ -202,6 +238,7 @@ export const NoteEditScreen = () => {
 
     const handleShareText = async () => {
         setShowMenu(false);
+        if (!ensurePrivateShareAllowed()) return;
         // Also strip audio for sharing text
         const contentWithoutAudio = content
             .replace(/!\[audio\]\([^)]+\)/g, '')
@@ -221,6 +258,7 @@ export const NoteEditScreen = () => {
 
     const handleExportMarkdownFile = async () => {
         setShowMenu(false);
+        if (!ensurePrivateShareAllowed()) return;
         try {
             const dateStr = existingNote?.created_at
                 ? new Date(existingNote.created_at).toISOString().split('T')[0]
@@ -254,6 +292,7 @@ export const NoteEditScreen = () => {
 
     const handleExportImage = async () => {
         setShowMenu(false);
+        if (!ensurePrivateShareAllowed()) return;
         try {
             if (viewShotRef.current) {
                 const uri = await captureRef(viewShotRef, {
@@ -323,6 +362,21 @@ export const NoteEditScreen = () => {
         }
     }, [existingNote?.encrypted_transcription]);
 
+    useEffect(() => {
+        if (existingNote) {
+            setStorageScope(normalizeScope(existingNote.storage_scope));
+            setPrivacy(normalizePrivacy(existingNote.privacy));
+            return;
+        }
+
+        if (route.params?.initialPrivacy || route.params?.initialStorageScope) {
+            const nextPrivacy = normalizePrivacy(route.params?.initialPrivacy);
+            const nextScope = normalizeScope(route.params?.initialStorageScope);
+            setPrivacy(nextPrivacy);
+            setStorageScope(nextScope);
+        }
+    }, [existingNote?.id, existingNote?.privacy, existingNote?.storage_scope, route.params?.initialPrivacy, route.params?.initialStorageScope]);
+
     // Force re-render on history update to show undo/redo arrows
 
     // AI State
@@ -370,7 +424,33 @@ export const NoteEditScreen = () => {
     const [errorModalVisible, setErrorModalVisible] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
 
-    const handleAiAccess = (callback: () => void) => {
+    const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
+        const isPrivate = normalizeScope(storageScope) === 'local_only';
+        if (!isPrivate || allowPrivateAI) {
+            return true;
+        }
+
+        return await new Promise<boolean>((resolve) => {
+            Alert.alert(
+                'Private note protection',
+                'AI processing can send note text to an external service. Allow for this private note?',
+                [
+                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Allow Once', onPress: () => resolve(true) },
+                    {
+                        text: 'Always Allow for Private Notes',
+                        onPress: async () => {
+                            await setPrivateAIAllowed(true);
+                            await setAllowPrivateAI(true);
+                            resolve(true);
+                        },
+                    },
+                ]
+            );
+        });
+    }, [allowPrivateAI, privacy, setAllowPrivateAI, storageScope]);
+
+    const handleAiAccess = async (callback: () => void) => {
         if (isGuest) {
             Alert.alert(
                 'AI Features Locked',
@@ -383,6 +463,10 @@ export const NoteEditScreen = () => {
                     }
                 ]
             );
+            return;
+        }
+        const consentGranted = await requestPrivateAIConsent();
+        if (!consentGranted) {
             return;
         }
         callback();
@@ -424,6 +508,78 @@ export const NoteEditScreen = () => {
             ]
         );
     }, [syncEnabled, isGuest, navigation]);
+
+    const confirmLocalOnlyWarning = useCallback(async (): Promise<boolean> => {
+        const dismissed = await getLocalOnlyWarningDismissed();
+        if (dismissed) {
+            return true;
+        }
+
+        return await new Promise<boolean>((resolve) => {
+            Alert.alert(
+                'Local-only note',
+                'This note will not sync, and it cannot be recovered after app reinstall or device loss.',
+                [
+                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                    {
+                        text: 'Do not show again',
+                        onPress: async () => {
+                            await setLocalOnlyWarningDismissed(true);
+                            resolve(true);
+                        },
+                    },
+                    { text: 'I Understand', onPress: () => resolve(true) },
+                ]
+            );
+        });
+    }, []);
+
+    const applyStorageScope = useCallback(async (nextScope: StorageScope) => {
+        const normalizedScope = normalizeScope(nextScope);
+
+        if (normalizedScope === 'local_only') {
+            const warningAccepted = await confirmLocalOnlyWarning();
+            if (!warningAccepted) return;
+            if (existingNote && normalizeScope(existingNote.storage_scope) === 'sync') {
+                const confirmed = await new Promise<boolean>((resolve) => {
+                    Alert.alert(
+                        'Move to Local-Only',
+                        'Server copy will be deleted from sync.',
+                        [
+                            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Move', style: 'destructive', onPress: () => resolve(true) },
+                        ]
+                    );
+                });
+                if (!confirmed) return;
+            }
+        } else if (normalizeScope(storageScope) === 'local_only') {
+            const confirmed = await new Promise<boolean>((resolve) => {
+                Alert.alert(
+                    'Enable sync for note',
+                    'This note content will be sent to server (encrypted).',
+                    [
+                        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                        { text: 'Enable Sync', onPress: () => resolve(true) },
+                    ]
+                );
+            });
+            if (!confirmed) return;
+        }
+
+        if (localNoteId) {
+            await updateNoteStorageScope(localNoteId, normalizedScope);
+        }
+        setStorageScope(normalizedScope);
+    }, [confirmLocalOnlyWarning, existingNote, localNoteId, storageScope, updateNoteStorageScope]);
+
+    const applyPrivacy = useCallback(async (nextPrivacyRaw: NotePrivacy) => {
+        const nextPrivacy = normalizePrivacy(nextPrivacyRaw);
+        if (localNoteId) {
+            await updateNotePrivacy(localNoteId, nextPrivacy);
+        }
+        setPrivacy(nextPrivacy);
+    }, [localNoteId, updateNotePrivacy]);
 
 
 
@@ -479,12 +635,14 @@ export const NoteEditScreen = () => {
     }, [title]);
 
     const loadSettings = async () => {
-        const [size, scaling] = await Promise.all([
+        const [size, scaling, privateAIAllowed] = await Promise.all([
             getFontSize(),
             getAutoScalingEnabled(),
+            getPrivateAIAllowed(),
         ]);
         setFontSizeState(size);
         setAutoScalingEnabledState(scaling);
+        setAllowPrivateAI(privateAIAllowed);
     };
 
 
@@ -944,7 +1102,9 @@ export const NoteEditScreen = () => {
                 await updateNote(localNoteId, {
                     title,
                     content,
-                    has_audio: hasAudio // Explicitly sync has_audio state
+                    has_audio: hasAudio, // Explicitly sync has_audio state
+                    storage_scope: storageScope,
+                    privacy,
                 });
             } else {
                 // LOCK CREATION
@@ -955,6 +1115,8 @@ export const NoteEditScreen = () => {
                     const newNote = await createNote({
                         title,
                         content,
+                        storage_scope: storageScope,
+                        privacy,
                         // Note: createNote signature takes audio object, not has_audio flag directly.
                         // But if we have no audio object here, it defaults to false.
                         // If we needed to create with audio, we should likely be in handleRecordingFinish.
@@ -981,7 +1143,9 @@ export const NoteEditScreen = () => {
                         await updateNote(newNote.id, {
                             title: latestTitle,
                             content: latestContent,
-                            has_audio: hasAudio
+                            has_audio: hasAudio,
+                            storage_scope: storageScope,
+                            privacy,
                         });
                         // Update "last saved" to the LATEST values we just pushed
                         lastSavedTitle.current = latestTitle;
@@ -1002,7 +1166,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [activeVariantId, content, createNote, deleteNote, localNoteId, noteImprovements.length, saveImprovementDraft, title, updateNote]);
+    }, [activeVariantId, content, createNote, deleteNote, existingNote?.privacy, localNoteId, noteImprovements.length, privacy, saveImprovementDraft, storageScope, title, updateNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1084,18 +1248,19 @@ export const NoteEditScreen = () => {
                     await saveNote();
                 } catch (error) {
                     console.error('Error during navigation auto-save:', error);
-                } finally {
-                    const isGoBack = event.data.action?.type === 'GO_BACK';
-                    const canGoBack = navigation.canGoBack();
-                    if (isGoBack && !canGoBack) {
-                        navigation.reset({
-                            index: 0,
-                            routes: [{ name: 'NotesList' as never }],
-                        });
-                        return;
-                    }
-                    navigation.dispatch(event.data.action);
+                    return;
                 }
+
+                const isGoBack = event.data.action?.type === 'GO_BACK';
+                const canGoBack = navigation.canGoBack();
+                if (isGoBack && !canGoBack) {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'NotesList' as never }],
+                    });
+                    return;
+                }
+                navigation.dispatch(event.data.action);
             };
 
             saveAndExit();
@@ -1108,6 +1273,8 @@ export const NoteEditScreen = () => {
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextAppState) => {
             if (nextAppState === 'background' || nextAppState === 'inactive') {
+                // Critical: clear temporary decrypted playback files on app backgrounding.
+                void AudioService.cleanupTempFiles();
                 // Clear any pending debounced save to prevent duplicate
                 if (saveTimeoutRef.current) {
                     clearTimeout(saveTimeoutRef.current);
@@ -1125,26 +1292,29 @@ export const NoteEditScreen = () => {
         };
     }, [saveNote]);
 
-    const handleBack = () => {
+    const handleBack = async () => {
         Keyboard.dismiss();
-        skipAutoSaveRef.current = true;
-        navigateBackToList();
 
         // Check if note is effectively empty
         const isContentEmpty = !title.trim() && !content.trim();
         const hasNoAudio = !existingNote?.has_audio && voiceRecordings.length === 0;
 
         if (isContentEmpty && hasNoAudio && localNoteId) {
+            skipAutoSaveRef.current = true;
+            navigateBackToList();
             // Auto-delete empty notes to keep list clean
             console.log('[AutoClean] Deleting empty note on exit');
             deleteNote(localNoteId).catch(error => {
                 console.error('[AutoClean] Error deleting empty note:', error);
             });
         } else {
-            // Save normally
-            saveNote().catch(error => {
+            try {
+                await saveNote();
+                skipAutoSaveRef.current = true;
+                navigateBackToList();
+            } catch (error) {
                 console.error('Error during back navigation save:', error);
-            });
+            }
         }
     };
 
@@ -1340,6 +1510,13 @@ export const NoteEditScreen = () => {
 
     const handleRecordingFinish = async (recording: AudioRecording, transcribe: boolean = true) => {
         setShowVoiceRecorder(false);
+        let shouldTranscribe = transcribe;
+        if (shouldTranscribe) {
+            const consentGranted = await requestPrivateAIConsent();
+            if (!consentGranted) {
+                shouldTranscribe = false;
+            }
+        }
 
         let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
         let isTranscriptionSuccess = false;
@@ -1347,7 +1524,7 @@ export const NoteEditScreen = () => {
 
         // 1. TRY TO TRANSCRIBE (But don't fail if it doesn't work)
         try {
-            if (!transcribe) {
+            if (!shouldTranscribe) {
                 // Skip transcription if user opted out
                 console.log('[NoteEditScreen] Transcription skipped (Toggle OFF)');
                 transcription = { success: false, text: '', error: 'Transcription disabled' };
@@ -1391,7 +1568,12 @@ export const NoteEditScreen = () => {
         let currentNoteId = localNoteIdRef.current;
 
         // 2. SAVE AUDIO (ALWAYS)
-        const savedPath = await AudioService.saveAudioFile(recording.uri, false);
+        const savedPath = await AudioService.saveAudioFile(
+            recording.uri,
+            true
+        );
+        const isPrivateVoiceContext = normalizeScope(storageScope) === 'local_only';
+        const recordingTranscription = isPrivateVoiceContext ? undefined : transcribedText;
 
         // Ensure Note Exists (Create if not)
         if (!currentNoteId) {
@@ -1400,6 +1582,8 @@ export const NoteEditScreen = () => {
                 const newNote = await createNote({
                     title: titleToUse,
                     content: content,
+                    storage_scope: storageScope,
+                    privacy,
                     audio: {
                         filePath: savedPath,
                         duration: recording.duration,
@@ -1413,6 +1597,8 @@ export const NoteEditScreen = () => {
                 lastSavedContent.current = content;
             } catch (e) {
                 console.error('Failed to create note for voice:', e);
+                // Critical: avoid orphan ciphertext files when note creation fails.
+                await AudioService.deleteAudioFile(savedPath).catch(() => undefined);
                 setErrorMessage('Failed to save note');
                 setErrorModalVisible(true);
                 return;
@@ -1426,7 +1612,7 @@ export const NoteEditScreen = () => {
             note_id: currentNoteId,
             file_path: savedPath,
             duration: recording.duration,
-            transcription: transcribedText,
+            transcription: recordingTranscription,
             created_at: new Date().toISOString(),
         }
         if (userId) {
@@ -1536,6 +1722,10 @@ export const NoteEditScreen = () => {
         setIsAIProcessing(true);
 
         try {
+            const consentGranted = await requestPrivateAIConsent();
+            if (!consentGranted) {
+                return;
+            }
             const transcription = await transcribeAudio(recording.uri);
             await AudioService.deleteAudioFile(recording.uri);
 
@@ -1621,6 +1811,10 @@ export const NoteEditScreen = () => {
         setShowAIModal(false);
         setIsAIProcessing(true);
         try {
+            const consentGranted = await requestPrivateAIConsent();
+            if (!consentGranted) {
+                return;
+            }
             const sourceText = content.trim();
             if (!sourceText) {
                 Alert.alert('Empty Text', 'Enter some text before requesting an improvement.');
@@ -1685,6 +1879,8 @@ export const NoteEditScreen = () => {
                 const newNote = await createNote({
                     title,
                     content: content,
+                    storage_scope: storageScope,
+                    privacy,
                 });
                 targetNoteId = newNote.id;
                 setLocalNoteId(newNote.id);
@@ -1878,6 +2074,9 @@ export const NoteEditScreen = () => {
 
     const charCount = content.length;
     const canUseAI = content.trim().length > 0;
+    const effectivePrivacy = normalizePrivacy(privacy);
+    const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
+    const canShareOrExport = effectiveStorageScope !== 'local_only';
 
     // Handle initial recording passed from navigation
     useEffect(() => {
@@ -1909,6 +2108,8 @@ export const NoteEditScreen = () => {
 
     const handleRetryTranscription = async () => {
         if (!audioUri) return;
+        const consentGranted = await requestPrivateAIConsent();
+        if (!consentGranted) return;
 
         // Use Ref for latest content
 
@@ -2209,7 +2410,7 @@ export const NoteEditScreen = () => {
                     </TouchableOpacity>
                     {/* AI Improvement Button */}
                     <TouchableOpacity
-                        onPress={() => handleAiAccess(() => setShowAIModal(true))}
+                        onPress={() => { void handleAiAccess(() => setShowAIModal(true)); }}
                         style={[styles.iconButton, (!canUseAI || isAIProcessing) && styles.disabledIcon]}
                         disabled={isAIProcessing || !canUseAI}
                     >
@@ -2271,11 +2472,9 @@ export const NoteEditScreen = () => {
                             </TouchableOpacity>
                         </>
                     ) : (
-                        localNoteId && (
-                            <TouchableOpacity onPress={() => setShowMenu(true)} style={styles.iconButton}>
-                                <MaterialIcons name="more-vert" size={24} color={colors.text} />
-                            </TouchableOpacity>
-                        )
+                        <TouchableOpacity onPress={() => setShowMenu(true)} style={styles.iconButton}>
+                            <MaterialIcons name="more-vert" size={24} color={colors.text} />
+                        </TouchableOpacity>
                     )}
                 </View>
             </View>
@@ -2550,24 +2749,66 @@ export const NoteEditScreen = () => {
                                 <Text style={styles.menuItemText}>Copy Markdown</Text>
                             </TouchableOpacity>
 
+                            {canShareOrExport ? (
+                                <>
+                                    <View style={styles.menuDivider} />
+
+                                    <View style={styles.menuSectionHeader}>
+                                        <Text style={styles.menuSectionTitle}>SHARE & EXPORT</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={handleShareText} style={styles.menuItem}>
+                                        <MaterialIcons name="share" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <Text style={styles.menuItemText}>Share Text</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={handleExportMarkdownFile} style={styles.menuItem}>
+                                        <MaterialIcons name="file-present" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <Text style={styles.menuItemText}>Export Markdown File</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={handleExportImage} style={styles.menuItem}>
+                                        <MaterialIcons name="image" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <Text style={styles.menuItemText}>Export as Image</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <View style={styles.menuDivider} />
+
+                                    <View style={styles.menuSectionHeader}>
+                                        <Text style={styles.menuSectionTitle}>SHARE & EXPORT</Text>
+                                    </View>
+                                    <View style={styles.menuItem}>
+                                        <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={{ marginRight: 12 }} />
+                                        <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>
+                                            Disabled for private notes
+                                        </Text>
+                                    </View>
+                                </>
+                            )}
+
                             <View style={styles.menuDivider} />
 
                             <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>SHARE & EXPORT</Text>
+                                <Text style={styles.menuSectionTitle}>SECURITY</Text>
                             </View>
-                            <TouchableOpacity onPress={handleShareText} style={styles.menuItem}>
-                                <MaterialIcons name="share" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                <Text style={styles.menuItemText}>Share Text</Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setShowMenu(false);
+                                    void applyStorageScope(
+                                        effectiveStorageScope === 'local_only' ? 'sync' : 'local_only'
+                                    );
+                                }}
+                                style={styles.menuItem}
+                            >
+                                <MaterialIcons
+                                    name={effectiveStorageScope === 'local_only' ? 'cloud-upload' : 'smartphone'}
+                                    size={20}
+                                    color={colors.text}
+                                    style={{ marginRight: 12 }}
+                                />
+                                <Text style={styles.menuItemText}>
+                                    {effectiveStorageScope === 'local_only' ? 'Make Sync' : 'Make Local-Only'}
+                                </Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={handleExportMarkdownFile} style={styles.menuItem}>
-                                <MaterialIcons name="file-present" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                <Text style={styles.menuItemText}>Export Markdown File</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleExportImage} style={styles.menuItem}>
-                                <MaterialIcons name="image" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                <Text style={styles.menuItemText}>Export as Image</Text>
-                            </TouchableOpacity>
-
                             <View style={styles.menuDivider} />
 
                             <TouchableOpacity onPress={handleDelete} style={styles.menuItem}>
@@ -2990,6 +3231,29 @@ const styles = StyleSheet.create({
     metaText: {
         fontSize: 12,
         color: colors.textTertiary,
+    },
+    securityBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        marginTop: spacing.s,
+        flexWrap: 'wrap',
+    },
+    securityBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 999,
+        paddingHorizontal: spacing.s,
+        paddingVertical: 4,
+        backgroundColor: colors.surface,
+    },
+    securityBadgeText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        fontWeight: '600',
     },
     variantContainer: {
         marginBottom: spacing.m,

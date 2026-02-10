@@ -18,6 +18,7 @@ interface NoteCardProps {
 
 export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
     let content = note.content || '';
+    const storageScope = note.storage_scope ?? 'sync';
 
     // Check if there is an active improvement (active child note)
     if (note.improvements && note.improvements.length > 0) {
@@ -157,6 +158,9 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 <View style={styles.iconsRow}>
                     {hasAudio && (
                         <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
+                    )}
+                    {storageScope === 'local_only' && (
+                        <MaterialIcons name="smartphone" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
                     )}
                     {note.is_pinned && (
                         <MaterialIcons name="push-pin" size={14} color={colors.primary} style={{ marginLeft: 4 }} />

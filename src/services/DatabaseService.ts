@@ -2,13 +2,64 @@ import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { Note, NoteImprovement, VoiceRecording } from '../api/notes';
 import { decrypt, encrypt, isDeviceCiphertext, isMasterCiphertext } from '../crypto/encryption';
+import { AudioService } from './AudioService';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
+const VAULT_STORAGE_KEY_PREFIX = 'vaulto_vault_notes_local_store_';
+
+const normalizeStorageScope = (value: unknown): 'sync' | 'local_only' => {
+    return value === 'local_only' ? 'local_only' : 'sync';
+};
+
+const normalizePrivacy = (value: unknown): 'normal' | 'hidden' => {
+    if (value === 'hidden') return value;
+    return 'normal';
+};
+
+const encryptForPrivacy = async (plaintext: string, privacy: unknown): Promise<string> => {
+    if (!plaintext) return '';
+    return await encrypt(plaintext);
+};
+
+const decryptByPrivacy = async (ciphertext: string, privacy: unknown): Promise<string> => {
+    if (!ciphertext) return '';
+    return await decrypt(ciphertext);
+};
+
+type WebContainer = 'main' | 'vault';
+
+const getStorageKey = (userId: string, container: WebContainer): string => {
+    return `${container === 'vault' ? VAULT_STORAGE_KEY_PREFIX : STORAGE_KEY_PREFIX}${userId}`;
+};
+
+const clearLegacyWebVaultStore = (userId?: string) => {
+    try {
+        if (typeof userId === 'string' && userId.length > 0) {
+            localStorage.removeItem(getStorageKey(userId, 'vault'));
+            return;
+        }
+        const keysToDelete: string[] = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(VAULT_STORAGE_KEY_PREFIX)) {
+                keysToDelete.push(key);
+            }
+        }
+        keysToDelete.forEach((key) => localStorage.removeItem(key));
+    } catch (e) {
+        console.warn('[DatabaseService] Failed to clear legacy vault localStorage keys', e);
+    }
+};
 
 // Web Store Implementation
-const getWebStore = (userId: string): Note[] => {
+const getWebStoreByContainer = (userId: string, container: WebContainer): Note[] => {
+    if (container === 'vault') {
+        // Critical: hard-disable vault storage on web.
+        clearLegacyWebVaultStore(userId);
+        return [];
+    }
     try {
-        const stored = localStorage.getItem(STORAGE_KEY_PREFIX + userId);
+        const stored = localStorage.getItem(getStorageKey(userId, container));
         return stored ? JSON.parse(stored) : [];
     } catch (e) {
         console.error('[DatabaseService] Failed to load from localStorage', e);
@@ -16,11 +67,38 @@ const getWebStore = (userId: string): Note[] => {
     }
 };
 
-const saveWebStore = (userId: string, notes: Note[]) => {
+const saveWebStoreByContainer = (userId: string, notes: Note[], container: WebContainer) => {
+    if (container === 'vault') {
+        // Critical: vault must never be persisted in web storage.
+        clearLegacyWebVaultStore(userId);
+        return;
+    }
     try {
-        localStorage.setItem(STORAGE_KEY_PREFIX + userId, JSON.stringify(notes));
+        localStorage.setItem(getStorageKey(userId, container), JSON.stringify(notes));
     } catch (e) {
         console.error('[DatabaseService] Failed to save to localStorage', e);
+    }
+};
+
+const getWebStore = (userId: string): Note[] => {
+    return getWebStoreByContainer(userId, 'main');
+};
+
+const getUniqueAudioPaths = (paths: Array<string | null | undefined>): string[] => {
+    return Array.from(
+        new Set(paths.filter((path): path is string => typeof path === 'string' && path.length > 0))
+    );
+};
+
+const purgeAudioFiles = async (paths: Array<string | null | undefined>, reason: string): Promise<void> => {
+    const uniquePaths = getUniqueAudioPaths(paths);
+    for (const path of uniquePaths) {
+        try {
+            // Critical: remove on-disk audio blobs when note/recording is deleted.
+            await AudioService.deleteAudioFile(path);
+        } catch (error) {
+            console.warn(`[DatabaseService] Failed to delete audio file (${reason})`, path, error);
+        }
     }
 };
 
@@ -44,7 +122,10 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             dirty INTEGER DEFAULT 0,
             deleted INTEGER DEFAULT 0,
             is_active INTEGER DEFAULT 0,
-            is_pinned INTEGER DEFAULT 0
+            is_pinned INTEGER DEFAULT 0,
+            storage_scope TEXT DEFAULT 'sync',
+            privacy TEXT DEFAULT 'normal',
+            pending_server_delete INTEGER DEFAULT 0
         );
     `);
 
@@ -109,6 +190,15 @@ const getDb = async () => {
         try {
             await db.runAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
         } catch (e) { /* Ignore */ }
+        try {
+            await db.runAsync("ALTER TABLE notes ADD COLUMN storage_scope TEXT DEFAULT 'sync';");
+        } catch (e) { /* Ignore */ }
+        try {
+            await db.runAsync("ALTER TABLE notes ADD COLUMN privacy TEXT DEFAULT 'normal';");
+        } catch (e) { /* Ignore */ }
+        try {
+            await db.runAsync('ALTER TABLE notes ADD COLUMN pending_server_delete INTEGER DEFAULT 0;');
+        } catch (e) { /* Ignore */ }
 
         // USER ID MIGRATION
         try {
@@ -129,6 +219,7 @@ const getDb = async () => {
 
 export const initDatabase = async (): Promise<void> => {
     if (Platform.OS === 'web') {
+        clearLegacyWebVaultStore();
         console.log('[DatabaseService] Web detected, using localStorage');
         return;
     }
@@ -173,62 +264,64 @@ export const migrateLegacyEncryption = async (userId: string, target: 'device' |
     };
 
     if (Platform.OS === 'web') {
-        const notes = getWebStore(userId);
-        let mutated = false;
         const now = new Date().toISOString();
-        let processed = 0;
         const YIELD_EVERY = 25;
+        for (const container of ['main'] as const) {
+            const notes = getWebStoreByContainer(userId, container);
+            let mutated = false;
+            let processed = 0;
 
-        for (const note of notes) {
-            let changed = false;
+            for (const note of notes) {
+                let changed = false;
 
-            if (shouldReencrypt(note.encrypted_content)) {
-                try {
-                    const content = await decrypt(note.encrypted_content);
-                    note.encrypted_content = await encrypt(content);
-                    changed = true;
-                } catch (e) {
-                    console.warn('[DatabaseService] Skipping content migration (web)', e);
+                if (shouldReencrypt(note.encrypted_content)) {
+                    try {
+                        const content = await decryptByPrivacy(note.encrypted_content, note.privacy);
+                        note.encrypted_content = await encryptForPrivacy(content, note.privacy);
+                        changed = true;
+                    } catch (e) {
+                        console.warn('[DatabaseService] Skipping content migration (web)', e);
+                    }
+                }
+
+                const encryptedTitle = note.encrypted_title;
+                if (encryptedTitle && shouldReencrypt(encryptedTitle)) {
+                    try {
+                        const title = await decryptByPrivacy(encryptedTitle, note.privacy);
+                        note.encrypted_title = await encryptForPrivacy(title, note.privacy);
+                        changed = true;
+                    } catch (e) {
+                        console.warn('[DatabaseService] Skipping title migration (web)', e);
+                    }
+                }
+
+                const encryptedTranscription = note.encrypted_transcription;
+                if (encryptedTranscription && shouldReencrypt(encryptedTranscription)) {
+                    try {
+                        const transcription = await decryptByPrivacy(encryptedTranscription, note.privacy);
+                        note.encrypted_transcription = await encryptForPrivacy(transcription, note.privacy);
+                        changed = true;
+                    } catch (e) {
+                        console.warn('[DatabaseService] Skipping transcription migration (web)', e);
+                    }
+                }
+
+                if (changed) {
+                    note.dirty = true;
+                    note.synced = 0;
+                    note.updated_at = now;
+                    mutated = true;
+                }
+                processed += 1;
+                if (processed % YIELD_EVERY === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
                 }
             }
 
-            const encryptedTitle = note.encrypted_title;
-            if (encryptedTitle && shouldReencrypt(encryptedTitle)) {
-                try {
-                    const title = await decrypt(encryptedTitle);
-                    note.encrypted_title = await encrypt(title);
-                    changed = true;
-                } catch (e) {
-                    console.warn('[DatabaseService] Skipping title migration (web)', e);
-                }
+            if (mutated) {
+                saveWebStoreByContainer(userId, notes, container);
+                console.log(`[DatabaseService] Encryption migrated (web:${container} -> ${target})`);
             }
-
-            const encryptedTranscription = note.encrypted_transcription;
-            if (encryptedTranscription && shouldReencrypt(encryptedTranscription)) {
-                try {
-                    const transcription = await decrypt(encryptedTranscription);
-                    note.encrypted_transcription = await encrypt(transcription);
-                    changed = true;
-                } catch (e) {
-                    console.warn('[DatabaseService] Skipping transcription migration (web)', e);
-                }
-            }
-
-            if (changed) {
-                note.dirty = true;
-                note.synced = 0;
-                note.updated_at = now;
-                mutated = true;
-            }
-            processed += 1;
-            if (processed % YIELD_EVERY === 0) {
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
-        }
-
-        if (mutated) {
-            saveWebStore(userId, notes);
-            console.log(`[DatabaseService] Encryption migrated (web -> ${target})`);
         }
         return;
     }
@@ -353,11 +446,25 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
     }
 
     if (Platform.OS === 'web') {
-        const notes = getWebStore(userId);
+        const requestedPrivacy = normalizePrivacy(note.privacy);
+        const notes = getWebStoreByContainer(userId, 'main');
         const index = notes.findIndex(n => n.id === note.id);
+        const privacy = requestedPrivacy;
+        const storageScope = normalizeStorageScope(note.storage_scope);
+        const encryptedTitle = (typeof note.title === 'string' && (note.title.length > 0 || !note.encrypted_title))
+            ? await encryptForPrivacy(note.title, privacy)
+            : note.encrypted_title;
+        const encryptedContent = (typeof note.content === 'string' && (note.content.length > 0 || !note.encrypted_content))
+            ? await encryptForPrivacy(note.content, privacy)
+            : note.encrypted_content;
+        const encryptedTranscription = (typeof note.transcription === 'string' && (note.transcription.length > 0 || !note.encrypted_transcription))
+            ? await encryptForPrivacy(note.transcription, privacy)
+            : note.encrypted_transcription;
         const normalizedNote = {
             ...note,
-            synced: note.synced ?? 1,
+            encrypted_title: encryptedTitle,
+            encrypted_content: encryptedContent,
+            encrypted_transcription: encryptedTranscription,
             dirty: note.dirty ?? false,
             deleted: note.deleted ?? false,
             version: note.version ?? (index >= 0 ? notes[index].version ?? 0 : 0),
@@ -368,6 +475,10 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
             is_pinned: note.is_pinned ?? false,
             label: note.label ?? null,
             option_id: note.option_id ?? null,
+            storage_scope: storageScope,
+            privacy,
+            pending_server_delete: note.pending_server_delete ?? false,
+            synced: note.synced ?? 1,
         } as Note;
 
         const safeNote = { ...normalizedNote };
@@ -384,7 +495,8 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         } else {
             notes.push(safeNote);
         }
-        saveWebStore(userId, notes);
+        saveWebStoreByContainer(userId, notes, 'main');
+        clearLegacyWebVaultStore(userId);
         console.log(`[DatabaseService] Note saved to web store: ${note.id} (user=${userId})`);
         return;
     }
@@ -393,15 +505,29 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         const database = await getDb();
         if (!database) return;
 
+        const privacy = normalizePrivacy(note.privacy);
+        const storageScope = normalizeStorageScope(note.storage_scope);
         const isDirty = note.dirty ? 1 : 0;
         const isDeleted = note.deleted || note.pending_delete ? 1 : 0;
         const isActive = note.is_active ? 1 : 0;
+        const pendingServerDelete = note.pending_server_delete ? 1 : 0;
+
+        const encryptedTitle = (typeof note.title === 'string' && (note.title.length > 0 || !note.encrypted_title))
+            ? await encryptForPrivacy(note.title, privacy)
+            : note.encrypted_title;
+        const encryptedContent = (typeof note.content === 'string' && (note.content.length > 0 || !note.encrypted_content))
+            ? await encryptForPrivacy(note.content, privacy)
+            : note.encrypted_content;
+        const encryptedTranscription = (typeof note.transcription === 'string' && (note.transcription.length > 0 || !note.encrypted_transcription))
+            ? await encryptForPrivacy(note.transcription, privacy)
+            : note.encrypted_transcription;
 
         await database.runAsync(
             `INSERT INTO notes (
                 id, user_id, encrypted_title, encrypted_content, created_at, updated_at, 
-                audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
+                storage_scope, privacy, pending_server_delete
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 user_id=excluded.user_id,
                 encrypted_title=excluded.encrypted_title,
@@ -415,24 +541,30 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                 synced=excluded.synced,
                 dirty=excluded.dirty,
                 deleted=excluded.deleted,
-                is_active=excluded.is_active
+                is_active=excluded.is_active,
+                storage_scope=excluded.storage_scope,
+                privacy=excluded.privacy,
+                pending_server_delete=excluded.pending_server_delete
             `,
             [
                 note.id,
                 userId,
-                note.encrypted_title || '',
-                note.encrypted_content,
+                encryptedTitle || '',
+                encryptedContent,
                 note.created_at || new Date().toISOString(),
                 note.updated_at || new Date().toISOString(),
                 note.audio_file_path || null,
                 note.audio_duration || 0,
-                note.encrypted_transcription || null,
+                encryptedTranscription || null,
                 note.has_audio ? 1 : 0,
                 note.is_pinned ? 1 : 0,
                 note.synced ?? 1,
                 isDirty,
                 isDeleted,
-                isActive
+                isActive,
+                storageScope,
+                privacy,
+                pendingServerDelete,
             ]
         );
         console.log(`[DatabaseService] Note saved to native DB: ${note.id} (user=${userId})`);
@@ -458,7 +590,7 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
         });
 
         notes = notes.filter(n => !toDeleteIds.has(n.id));
-        saveWebStore(userId, notes);
+        saveWebStoreByContainer(userId, notes, 'main');
         console.log(`[DatabaseService] Note deleted from web store: ${id}`);
         return;
     }
@@ -466,12 +598,49 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
     try {
         const database = await getDb();
         if (!database) return;
-        // Verify ownership (optional but good practice) - primarily we delete by ID, 
-        // but ensuring we only delete if it belongs to user is safer.
-        await database.runAsync('DELETE FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
-        // Cascading deletes usually handle children, but we enforce:
-        await database.runAsync('DELETE FROM note_improvements WHERE note_id = ?', [id]);
-        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ?', [id]);
+        const relatedRows = await database.getAllAsync<{ id: string }>(
+            'SELECT id FROM notes WHERE (id = ? OR parent_id = ?) AND user_id = ?',
+            [id, id, userId]
+        );
+        const relatedIds = Array.from(new Set(relatedRows.map((row) => row.id)));
+        let audioPathsToDelete: Array<string | null | undefined> = [];
+
+        if (relatedIds.length > 0) {
+            const placeholders = relatedIds.map(() => '?').join(', ');
+            const params = [userId, ...relatedIds];
+            const [voiceRows, noteRows] = await Promise.all([
+                database.getAllAsync<{ file_path: string | null }>(
+                    `SELECT file_path FROM voice_recordings WHERE user_id = ? AND note_id IN (${placeholders})`,
+                    params
+                ),
+                database.getAllAsync<{ audio_file_path: string | null }>(
+                    `SELECT audio_file_path FROM notes WHERE user_id = ? AND id IN (${placeholders})`,
+                    params
+                ),
+            ]);
+            audioPathsToDelete = [
+                ...voiceRows.map((row) => row.file_path),
+                ...noteRows.map((row) => row.audio_file_path),
+            ];
+            await database.runAsync(
+                `DELETE FROM voice_recordings WHERE user_id = ? AND note_id IN (${placeholders})`,
+                params
+            );
+        } else {
+            await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ? AND user_id = ?', [id, userId]);
+        }
+        if (relatedIds.length > 0) {
+            const placeholders = relatedIds.map(() => '?').join(', ');
+            await database.runAsync(
+                `DELETE FROM note_improvements WHERE user_id = ? AND note_id IN (${placeholders})`,
+                [userId, ...relatedIds]
+            );
+        } else {
+            await database.runAsync('DELETE FROM note_improvements WHERE note_id = ? AND user_id = ?', [id, userId]);
+        }
+        await database.runAsync('DELETE FROM notes WHERE (id = ? OR parent_id = ?) AND user_id = ?', [id, id, userId]);
+        await purgeAudioFiles(audioPathsToDelete, `delete note ${id}`);
+        await AudioService.cleanupTempFiles();
         console.log(`[DatabaseService] Note deleted from native DB: ${id}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete from native DB', e);
@@ -500,6 +669,14 @@ export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRe
     try {
         const database = await getDb();
         if (!database) return;
+        const noteMeta = await database.getFirstAsync<{ privacy: string | null; storage_scope: string | null }>(
+            'SELECT privacy, storage_scope FROM notes WHERE id = ? AND user_id = ? LIMIT 1',
+            [recording.note_id, userId]
+        );
+        const isPrivateRecording = !noteMeta
+            || normalizePrivacy(noteMeta.privacy) !== 'normal'
+            || normalizeStorageScope(noteMeta.storage_scope) === 'local_only';
+        const safeTranscription = isPrivateRecording ? null : (recording.transcription || null);
         await database.runAsync(
             `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -516,7 +693,7 @@ export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRe
                 userId,
                 recording.file_path,
                 recording.duration,
-                recording.transcription || null,
+                safeTranscription,
                 recording.created_at,
                 recording.iso_code || null
             ]
@@ -532,7 +709,12 @@ export const deleteVoiceRecordingLocal = async (userId: string, id: string): Pro
     try {
         const database = await getDb();
         if (!database) return;
+        const rows = await database.getAllAsync<{ file_path: string | null }>(
+            'SELECT file_path FROM voice_recordings WHERE id = ? AND user_id = ?',
+            [id, userId]
+        );
         await database.runAsync('DELETE FROM voice_recordings WHERE id = ? AND user_id = ?', [id, userId]);
+        await purgeAudioFiles(rows.map((row) => row.file_path), `delete voice recording ${id}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete voice recording', e);
     }
@@ -542,13 +724,13 @@ export const markAllDirty = async (userId: string): Promise<void> => {
     if (!userId) return;
 
     if (Platform.OS === 'web') {
-        const notes = getWebStore(userId);
+        const notes = getWebStoreByContainer(userId, 'main');
         const updated = notes.map(note => ({
             ...note,
-            dirty: true,
+            dirty: normalizeStorageScope(note.storage_scope) === 'sync',
             synced: 0,
         }));
-        saveWebStore(userId, updated);
+        saveWebStoreByContainer(userId, updated, 'main');
         console.log(`[DatabaseService] Marked all notes dirty in web store for user ${userId}`);
         return;
     }
@@ -556,7 +738,10 @@ export const markAllDirty = async (userId: string): Promise<void> => {
     try {
         const database = await getDb();
         if (!database) return;
-        await database.runAsync('UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
+        await database.runAsync(
+            "UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')",
+            [userId]
+        );
         await database.runAsync('UPDATE note_improvements SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
         console.log(`[DatabaseService] Marked all notes dirty for user ${userId}`);
     } catch (e) {
@@ -572,13 +757,19 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
 
         const decryptedNotes = await Promise.all(allNotes.map(async (n): Promise<Note | null> => {
             try {
-                const title = n.encrypted_title ? await decrypt(n.encrypted_title) : '';
-                const content = await decrypt(n.encrypted_content);
-                const transcription = n.encrypted_transcription ? await decrypt(n.encrypted_transcription) : undefined;
+                const privacy = normalizePrivacy(n.privacy);
+                const title = n.encrypted_title ? await decryptByPrivacy(n.encrypted_title, privacy) : '';
+                const content = await decryptByPrivacy(n.encrypted_content, privacy);
+                const transcription = n.encrypted_transcription
+                    ? await decryptByPrivacy(n.encrypted_transcription, privacy)
+                    : undefined;
 
                 return {
                     ...n,
                     is_active: !!n.is_active,
+                    storage_scope: normalizeStorageScope(n.storage_scope),
+                    privacy,
+                    pending_server_delete: !!n.pending_server_delete,
                     title,
                     content,
                     transcription,
@@ -663,7 +854,8 @@ const processImprovements = async (
             const noteId = imp.note_id || imp.noteId;
             if (!noteId) continue;
 
-            const content = await decrypt(imp.encrypted_content);
+            const privacy = normalizePrivacy(imp.privacy);
+            const content = await decryptByPrivacy(imp.encrypted_content, privacy);
             const improvement: NoteImprovement = {
                 ...imp,
                 note_id: noteId,
@@ -677,6 +869,9 @@ const processImprovements = async (
                 synced: imp.synced ?? 1,
                 version: imp.version ?? 0,
                 server_updated_at: imp.server_updated_at,
+                ...(imp.storage_scope ? { storage_scope: normalizeStorageScope(imp.storage_scope) } : {}),
+                ...(imp.privacy ? { privacy } : {}),
+                ...(imp.pending_server_delete ? { pending_server_delete: !!imp.pending_server_delete } : {}),
             };
             if (improvement.deleted && !includeDeleted) {
                 continue;
@@ -707,10 +902,13 @@ const processNotes = async (
 ): Promise<Note[]> => {
     const notes = await Promise.all(rawNotes.map(async (n): Promise<Note | null> => {
         try {
+            const privacy = normalizePrivacy(n.privacy);
             const hasEncryptedTitle = n.encrypted_title !== undefined && n.encrypted_title !== null;
-            const titlePromise = hasEncryptedTitle ? decrypt(n.encrypted_title) : Promise.resolve('');
-            const contentPromise = decrypt(n.encrypted_content);
-            const transcriptionPromise = n.encrypted_transcription ? decrypt(n.encrypted_transcription) : Promise.resolve(undefined);
+            const titlePromise = hasEncryptedTitle ? decryptByPrivacy(n.encrypted_title, privacy) : Promise.resolve('');
+            const contentPromise = decryptByPrivacy(n.encrypted_content, privacy);
+            const transcriptionPromise = n.encrypted_transcription
+                ? decryptByPrivacy(n.encrypted_transcription, privacy)
+                : Promise.resolve(undefined);
 
             const [title, content, transcription] = await Promise.all([titlePromise, contentPromise, transcriptionPromise]);
 
@@ -732,6 +930,9 @@ const processNotes = async (
                 server_updated_at: n.server_updated_at,
                 content_nonce: n.content_nonce ?? null,
                 pending_delete: !!n.deleted || !!n.pending_delete,
+                storage_scope: normalizeStorageScope(n.storage_scope),
+                privacy,
+                pending_server_delete: !!n.pending_server_delete,
                 improvements: noteImprovements,
                 voice_files: voiceFiles,
             };
@@ -750,7 +951,33 @@ const processNotes = async (
 };
 
 export const searchNotesLocal = async (userId: string, query: string): Promise<Note[]> => {
-    const allNotes = await getNotesLocal(userId);
+    let allNotes: Note[];
+    if (Platform.OS === 'web') {
+        const rawMainNotes = getWebStoreByContainer(userId, 'main');
+        const decrypted = await Promise.all(rawMainNotes.map(async (n): Promise<Note | null> => {
+            try {
+                const privacy = normalizePrivacy(n.privacy);
+                const title = n.encrypted_title ? await decryptByPrivacy(n.encrypted_title, privacy) : '';
+                const content = await decryptByPrivacy(n.encrypted_content, privacy);
+                const transcription = n.encrypted_transcription
+                    ? await decryptByPrivacy(n.encrypted_transcription, privacy)
+                    : undefined;
+                return {
+                    ...n,
+                    title,
+                    content,
+                    transcription,
+                    privacy,
+                    storage_scope: normalizeStorageScope(n.storage_scope),
+                };
+            } catch {
+                return null;
+            }
+        }));
+        allNotes = decrypted.filter((n): n is Note => n !== null);
+    } else {
+        allNotes = await getNotesLocal(userId);
+    }
     if (!query) return allNotes;
 
     const lowerQuery = query.toLowerCase();
@@ -760,6 +987,17 @@ export const searchNotesLocal = async (userId: string, query: string): Promise<N
         (note.transcription && note.transcription.toLowerCase().includes(lowerQuery)) ||
         (note.improvements && note.improvements.some(imp => imp.content?.toLowerCase().includes(lowerQuery)))
     );
+};
+
+export const getVaultNotesCountLocal = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
+    clearLegacyWebVaultStore(userId);
+    return 0;
+};
+
+export const wipeVaultNotesLocal = async (userId: string): Promise<void> => {
+    if (!userId) return;
+    clearLegacyWebVaultStore(userId);
 };
 
 export const getNoteById = async (userId: string, id: string): Promise<Note | null> => {
@@ -803,7 +1041,7 @@ export const wipeLocalDatabase = async (): Promise<void> => {
 
 export const saveImprovementLocal = async (userId: string, improvement: NoteImprovement): Promise<void> => {
     if (Platform.OS === 'web') {
-        const notes = getWebStore(userId);
+        const notes = getWebStoreByContainer(userId, 'main');
         const index = notes.findIndex(n => n.id === improvement.id);
 
         const childNote: Note = {
@@ -822,6 +1060,8 @@ export const saveImprovementLocal = async (userId: string, improvement: NoteImpr
             server_updated_at: improvement.server_updated_at,
             content: improvement.content,
             is_active: false,
+            privacy: 'normal',
+            storage_scope: 'sync',
         };
 
         const safeChild = { ...childNote };
@@ -832,7 +1072,7 @@ export const saveImprovementLocal = async (userId: string, improvement: NoteImpr
         } else {
             notes.push(safeChild);
         }
-        saveWebStore(userId, notes);
+        saveWebStoreByContainer(userId, notes, 'main');
         console.log(`[DatabaseService] Improvement saved to web store as child note: ${improvement.id}`);
         return;
     }
@@ -908,7 +1148,7 @@ export const deleteImprovementLocal = async (userId: string, id: string): Promis
 
 export const getAllImprovementsLocal = async (userId: string): Promise<NoteImprovement[]> => {
     if (Platform.OS === 'web') {
-        const allNotes = getWebStore(userId);
+        const allNotes = getWebStoreByContainer(userId, 'main');
         return allNotes.filter(n => n.parent_id) as any[];
     }
     try {
@@ -926,7 +1166,7 @@ export const getAllImprovementsLocal = async (userId: string): Promise<NoteImpro
 
 export const setActiveVariant = async (userId: string, parentNoteId: string, activeChildId: string | null): Promise<void> => {
     if (Platform.OS === 'web') {
-        const notes = getWebStore(userId);
+        const notes = getWebStoreByContainer(userId, 'main');
 
         const parentIndex = notes.findIndex(n => n.id === parentNoteId);
         if (parentIndex === -1) {
@@ -950,7 +1190,7 @@ export const setActiveVariant = async (userId: string, parentNoteId: string, act
             });
         }
 
-        saveWebStore(userId, notes);
+        saveWebStoreByContainer(userId, notes, 'main');
         return;
     }
 

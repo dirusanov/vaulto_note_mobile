@@ -8,6 +8,8 @@ import { KeyBundle } from '../crypto/e2ee';
 export type AIProvider = 'secure_llm' | 'openai' | 'selfhosted';
 export type CryptoMode = 'local' | 'e2ee';
 export type CustodyMode = 'standard' | 'strict_seed';
+export type AppLockTimeout = 'immediate' | '30s' | '1m' | '5m' | '15m';
+export type VaultAutoLockTimeout = AppLockTimeout;
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
@@ -27,6 +29,11 @@ const CUSTODY_MODE_PREFIX = 'vaulto_custody_mode_v1';
 
 const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
+const LOCAL_ONLY_WARNING_DISMISSED_KEY = 'vaulto_local_only_warning_dismissed_v1';
+const PRIVATE_AI_ALLOWED_KEY = 'vaulto_private_ai_allowed_v1';
+const APP_LOCK_AUTOBLOCK_KEY = 'vaulto_app_lock_autoblock_v1';
+const LEGACY_VAULT_AUTOBLOCK_KEY = 'vaulto_vault_autoblock_v1';
+const HIDE_APP_SWITCHER_KEY = 'vaulto_hide_app_switcher_v1';
 
 // Helper for SecureStore with web fallback (since SecureStore doesn't support web)
 const secureGet = async (key: string): Promise<string | null> => {
@@ -516,5 +523,93 @@ export const setTranscriptionEnabled = async (enabled: boolean): Promise<void> =
         await AsyncStorage.setItem(TRANSCRIPTION_ENABLED_KEY, enabled.toString());
     } catch (e) {
         console.error('Failed to set transcription setting', e);
+    }
+};
+
+export const getLocalOnlyWarningDismissed = async (): Promise<boolean> => {
+    try {
+        const value = await AsyncStorage.getItem(LOCAL_ONLY_WARNING_DISMISSED_KEY);
+        return value === 'true';
+    } catch (e) {
+        console.error('Failed to get local-only warning state', e);
+        return false;
+    }
+};
+
+export const setLocalOnlyWarningDismissed = async (dismissed: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(LOCAL_ONLY_WARNING_DISMISSED_KEY, dismissed.toString());
+    } catch (e) {
+        console.error('Failed to set local-only warning state', e);
+    }
+};
+
+export const getPrivateAIAllowed = async (): Promise<boolean> => {
+    try {
+        const value = await AsyncStorage.getItem(PRIVATE_AI_ALLOWED_KEY);
+        return value === 'true';
+    } catch (e) {
+        console.error('Failed to get private AI setting', e);
+        return false;
+    }
+};
+
+export const setPrivateAIAllowed = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(PRIVATE_AI_ALLOWED_KEY, enabled.toString());
+    } catch (e) {
+        console.error('Failed to set private AI setting', e);
+    }
+};
+
+export const getAppLockAutoLockTimeout = async (): Promise<AppLockTimeout> => {
+    try {
+        const value =
+            await AsyncStorage.getItem(APP_LOCK_AUTOBLOCK_KEY)
+            ?? await AsyncStorage.getItem(LEGACY_VAULT_AUTOBLOCK_KEY);
+        if (
+            value === 'immediate' ||
+            value === '30s' ||
+            value === '1m' ||
+            value === '5m' ||
+            value === '15m'
+        ) {
+            return value;
+        }
+        return '30s';
+    } catch (e) {
+        console.error('Failed to get app lock auto-lock timeout', e);
+        return '30s';
+    }
+};
+
+export const setAppLockAutoLockTimeout = async (timeout: AppLockTimeout): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(APP_LOCK_AUTOBLOCK_KEY, timeout);
+        await AsyncStorage.removeItem(LEGACY_VAULT_AUTOBLOCK_KEY);
+    } catch (e) {
+        console.error('Failed to set app lock auto-lock timeout', e);
+    }
+};
+
+// Backward-compatible aliases while old imports are being removed.
+export const getVaultAutoLockTimeout = getAppLockAutoLockTimeout;
+export const setVaultAutoLockTimeout = setAppLockAutoLockTimeout;
+
+export const getHideAppSwitcherContent = async (): Promise<boolean> => {
+    try {
+        const value = await AsyncStorage.getItem(HIDE_APP_SWITCHER_KEY);
+        return value === null ? true : value === 'true';
+    } catch (e) {
+        console.error('Failed to get app switcher privacy setting', e);
+        return true;
+    }
+};
+
+export const setHideAppSwitcherContent = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(HIDE_APP_SWITCHER_KEY, enabled.toString());
+    } catch (e) {
+        console.error('Failed to set app switcher privacy setting', e);
     }
 };

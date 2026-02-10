@@ -3,6 +3,13 @@ export type RootStackParamList = {
     SignUp: undefined;
     LegalAcceptance: { legalToken: string; provider?: 'google' | 'email' | string };
     NotesList: undefined;
-    NoteEdit: { noteId?: string; initialRecording?: any; initialTranscribe?: boolean }; // using any for simplicity, or import AudioRecording
+    AppLock: undefined;
+    NoteEdit: {
+        noteId?: string;
+        initialRecording?: any;
+        initialTranscribe?: boolean;
+        initialStorageScope?: 'sync' | 'local_only';
+        initialPrivacy?: 'normal' | 'hidden';
+    };
     Settings: undefined;
 };

@@ -28,6 +28,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { useEncryption } from '../context/EncryptionContext';
+import { useAppLock } from '../context/AppLockContext';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
@@ -39,6 +40,19 @@ export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
     const { syncEnabled, syncLocked, hasRemoteKeyBundle, resetSync } = useEncryption();
+    const {
+        status: appLockStatus,
+        isAvailable: appLockAvailable,
+        isUnlocked: appLockUnlocked,
+        biometricAvailable,
+        biometricEnabled,
+        autoLockTimeout,
+        hideAppSwitcherContent,
+        setBiometricEnabled,
+        setAutoLockTimeout,
+        setHideInAppSwitcher,
+        lock: lockApp,
+    } = useAppLock();
 
     const [apiKey, setApiKeyState] = useState('');
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
@@ -55,6 +69,7 @@ export const SettingsScreen = () => {
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
+    const [isAppLockExpanded, setIsAppLockExpanded] = useState(false);
 
     const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
@@ -112,7 +127,7 @@ export const SettingsScreen = () => {
                                             } else {
                                                 Alert.alert(
                                                     'Partial reset',
-                                                    'Local key was reset, but server did not confirm full encrypted data purge. Please update backend to support vault reset.'
+                                                    'Local key was reset, but server did not confirm full encrypted data purge.'
                                                 );
                                             }
                                         } catch (error: any) {
@@ -265,6 +280,34 @@ export const SettingsScreen = () => {
         setTranscriptionEnabledState(value);
         await setTranscriptionEnabled(value);
     };
+
+    const appLockStatusLabel = appLockStatus === 'not_configured'
+        ? 'Not configured'
+        : appLockStatus === 'unlocked'
+            ? 'Unlocked'
+            : appLockStatus === 'locked'
+                ? 'Locked'
+                : 'Loading';
+
+    const toggleAppLockBiometrics = useCallback(async (enabled: boolean) => {
+        if (!appLockAvailable) {
+            Alert.alert('Unavailable', 'App Lock biometrics are available only in iOS/Android app builds.');
+            return;
+        }
+        if (!biometricAvailable) {
+            Alert.alert('Unavailable', 'Biometric authentication is not available on this device.');
+            return;
+        }
+        if (!appLockUnlocked) {
+            Alert.alert('Unlock required', 'Unlock App Lock first to change biometric settings.');
+            return;
+        }
+        try {
+            await setBiometricEnabled(enabled);
+        } catch (error: any) {
+            Alert.alert('Biometric setup failed', error?.message || 'Could not update biometric unlock setting.');
+        }
+    }, [appLockAvailable, appLockUnlocked, biometricAvailable, setBiometricEnabled]);
 
     useEffect(() => {
         if (!preferencesReady) return;
@@ -582,6 +625,136 @@ export const SettingsScreen = () => {
                             ios_backgroundColor={colors.border}
                         />
                     </View>
+                </View>
+
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Text style={styles.sectionTitle}>App Lock</Text>
+                        <TouchableOpacity
+                            style={styles.sectionToggleButton}
+                            onPress={() => setIsAppLockExpanded(prev => !prev)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.sectionToggleText}>{isAppLockExpanded ? 'Hide' : 'Show'}</Text>
+                            <MaterialIcons
+                                name={isAppLockExpanded ? 'expand-less' : 'expand-more'}
+                                size={18}
+                                color={colors.textSecondary}
+                            />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.securityRow}>
+                        <Text style={styles.securityLabel}>Status</Text>
+                        <Text style={styles.securityValue}>{appLockStatusLabel}</Text>
+                    </View>
+                    {isAppLockExpanded ? (
+                        <>
+                            <Text style={styles.sectionHint}>
+                                One lock for app UI access. Sync encryption key is managed separately.
+                            </Text>
+                            {!appLockAvailable && (
+                                <Text style={styles.securityCopy}>
+                                    App Lock is disabled in web builds.
+                                </Text>
+                            )}
+                            <View style={styles.securityRow}>
+                                <Text style={styles.securityLabel}>Auto-lock</Text>
+                                <Text style={styles.securityValue}>{autoLockTimeout}</Text>
+                            </View>
+
+                            <View style={styles.securityRow}>
+                                <Text style={styles.securityLabel}>Biometric unlock</Text>
+                                <Text style={styles.securityValue}>
+                                    {!appLockAvailable ? 'Unavailable'
+                                        : !biometricAvailable ? 'Not supported'
+                                            : biometricEnabled ? 'Enabled' : 'Disabled'}
+                                </Text>
+                            </View>
+
+                            <View style={styles.timeoutRow}>
+                                {(['immediate', '30s', '1m', '5m', '15m'] as const).map((item) => (
+                                    <TouchableOpacity
+                                        key={item}
+                                        style={[
+                                            styles.timeoutChip,
+                                            autoLockTimeout === item && styles.timeoutChipActive,
+                                        ]}
+                                        onPress={() => {
+                                            void setAutoLockTimeout(item);
+                                        }}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.timeoutChipText,
+                                                autoLockTimeout === item && styles.timeoutChipTextActive,
+                                            ]}
+                                        >
+                                            {item}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <View style={styles.preferenceRow}>
+                                <View style={{ flex: 1, marginRight: spacing.s }}>
+                                    <Text style={styles.preferenceTitle}>Use biometrics for App Lock</Text>
+                                    <Text style={styles.preferenceDescription}>
+                                        Fast unlock after PIN setup. Requires unlocked App Lock to change.
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={biometricEnabled}
+                                    onValueChange={(value) => {
+                                        void toggleAppLockBiometrics(value);
+                                    }}
+                                    disabled={!appLockAvailable || !biometricAvailable}
+                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    thumbColor={colors.surface}
+                                    ios_backgroundColor={colors.border}
+                                />
+                            </View>
+
+                            <View style={styles.preferenceRow}>
+                                <View style={{ flex: 1, marginRight: spacing.s }}>
+                                    <Text style={styles.preferenceTitle}>Hide app switcher preview</Text>
+                                    <Text style={styles.preferenceDescription}>
+                                        Obscure content when app goes background
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={hideAppSwitcherContent}
+                                    onValueChange={(value) => {
+                                        void setHideInAppSwitcher(value);
+                                    }}
+                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    thumbColor={colors.surface}
+                                    ios_backgroundColor={colors.border}
+                                />
+                            </View>
+
+                            <View style={{ marginTop: spacing.s }}>
+                                <Button
+                                    title="Manage App Lock"
+                                    onPress={() => {
+                                        if (!appLockAvailable) {
+                                            Alert.alert('App Lock unavailable', 'App Lock works only in iOS/Android app builds.');
+                                            return;
+                                        }
+                                        navigation.navigate('AppLock');
+                                    }}
+                                />
+                            </View>
+                            {appLockUnlocked && (
+                                <View style={{ marginTop: spacing.s }}>
+                                    <Button title="Lock App Now" variant="outline" onPress={lockApp} />
+                                </View>
+                            )}
+                        </>
+                    ) : (
+                        <Text style={[styles.sectionHint, { marginBottom: 0 }]}>
+                            Tap Show to view App Lock settings.
+                        </Text>
+                    )}
                 </View>
 
                 <View style={styles.card}>
@@ -1064,6 +1237,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: spacing.s,
     },
+    sectionToggleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        paddingHorizontal: spacing.s,
+        paddingVertical: 4,
+        borderRadius: 10,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    sectionToggleText: {
+        ...typography.captionBold,
+        color: colors.textSecondary,
+    },
     sectionTitle: {
         ...typography.h2,
         fontSize: 20,
@@ -1120,6 +1306,33 @@ const styles = StyleSheet.create({
     preferenceDescription: {
         ...typography.caption,
         color: colors.textSecondary,
+    },
+    timeoutRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.xs,
+        marginTop: spacing.xs,
+        marginBottom: spacing.s,
+    },
+    timeoutChip: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 999,
+        paddingHorizontal: spacing.s,
+        paddingVertical: 6,
+        backgroundColor: colors.background,
+    },
+    timeoutChipActive: {
+        borderColor: colors.primary,
+        backgroundColor: '#EEF4FF',
+    },
+    timeoutChipText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        fontWeight: '600',
+    },
+    timeoutChipTextActive: {
+        color: colors.primary,
     },
     providerSwitcher: {
         flexDirection: 'column',

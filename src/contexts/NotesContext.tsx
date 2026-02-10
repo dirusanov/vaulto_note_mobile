@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { Note, NoteImprovement } from '../api/notes';
+import { Note, NoteImprovement, NotePrivacy, StorageScope } from '../api/notes';
 import { useNotes, NoteAudio } from '../hooks/useNotes';
 
 interface NotesContextType {
@@ -8,7 +8,13 @@ interface NotesContextType {
     error: string | null;
     fetchNotes: () => Promise<void>;
     syncNotes: () => Promise<void>;
-    createNote: (data: { title?: string; content: string; audio?: NoteAudio }) => Promise<Note>;
+    createNote: (data: {
+        title?: string;
+        content: string;
+        audio?: NoteAudio;
+        storage_scope?: StorageScope;
+        privacy?: NotePrivacy;
+    }) => Promise<Note>;
     updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
     searchNotes: (query: string) => Promise<void>;
@@ -27,6 +33,8 @@ interface NotesContextType {
     batchPinNotes: (ids: string[]) => Promise<void>;
     batchUnpinNotes: (ids: string[]) => Promise<void>;
     batchDeleteNotes: (ids: string[]) => Promise<void>;
+    updateNoteStorageScope: (id: string, storageScope: StorageScope) => Promise<void>;
+    updateNotePrivacy: (id: string, privacy: NotePrivacy) => Promise<void>;
     // decrypt removed – decryption is handled inside useNotes hook
 }
 

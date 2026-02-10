@@ -365,7 +365,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('User not available');
         }
         if (!hasMasterKey()) {
-            throw new Error('Vault is locked');
+            throw new Error('Sync key is locked');
         }
         const validationError = getSecretValidationError(secret, nextMode);
         if (validationError) {

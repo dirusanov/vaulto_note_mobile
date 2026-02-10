@@ -1,6 +1,8 @@
 import client from './client';
 
 export type DeleteSyncNotesResult = 'deleted' | 'unsupported';
+export type StorageScope = 'sync' | 'local_only';
+export type NotePrivacy = 'normal' | 'hidden';
 
 export interface NoteImprovement {
     id: string;
@@ -38,6 +40,9 @@ export interface Note {
     encrypted_transcription?: string;
     has_audio?: boolean;
     is_pinned?: boolean;
+    storage_scope?: StorageScope;
+    privacy?: NotePrivacy;
+    pending_server_delete?: boolean;
     title?: string;
     content?: string;
     transcription?: string;
@@ -74,6 +79,7 @@ export interface SyncChangeRequest {
     is_active?: boolean;
     is_pinned?: boolean;
     last_variant_id?: string | null;
+    pending_server_delete?: boolean;
 }
 
 export interface SyncImprovementChangeRequest {

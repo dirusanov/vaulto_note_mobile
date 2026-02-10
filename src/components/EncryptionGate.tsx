@@ -14,7 +14,7 @@ export const EncryptionGate = ({ children }: { children: React.ReactNode }) => {
             <ScreenContainer>
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.text}>Preparing secure vault...</Text>
+                    <Text style={styles.text}>Preparing encrypted storage...</Text>
                 </View>
             </ScreenContainer>
         );

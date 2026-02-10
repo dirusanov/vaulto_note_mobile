@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Note, NoteImprovement } from '../api/notes';
+import { Note, NoteImprovement, NotePrivacy, StorageScope } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
 import {
     initDatabase,
@@ -12,10 +12,13 @@ import {
     saveImprovementLocal,
     setActiveVariant as setActiveVariantDB,
     getNoteById,
+    getVoiceRecordingsLocal,
+    deleteVoiceRecordingLocal,
 } from '../services/DatabaseService';
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
+import { AudioService } from '../services/AudioService';
 
 const DEMO_SEEDED_KEY = 'vaulto_demo_seeded_v3';
 const DEMO_IDS_KEY = 'vaulto_demo_note_ids';
@@ -68,6 +71,7 @@ export const useNotes = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const notesRef = useRef<Note[]>([]);
+    const allNotesRef = useRef<Note[]>([]);
 
     // Update SyncService auth state
     useEffect(() => {
@@ -92,6 +96,20 @@ export const useNotes = () => {
         return '';
     }, []);
 
+    const normalizeStorageScope = useCallback((scope?: StorageScope): StorageScope => {
+        return scope === 'local_only' ? 'local_only' : 'sync';
+    }, []);
+
+    const normalizePrivacy = useCallback((privacy?: NotePrivacy): NotePrivacy => {
+        if (privacy === 'hidden') return privacy;
+        return 'normal';
+    }, []);
+
+    const shouldSyncNote = useCallback((note: Partial<Note>): boolean => {
+        const scope = normalizeStorageScope(note.storage_scope);
+        return scope === 'sync';
+    }, [normalizeStorageScope]);
+
     const isEmptyNote = useCallback(
         (note: Partial<Note>) => {
             const plainTitle = (note.title || '').trim();
@@ -105,22 +123,34 @@ export const useNotes = () => {
 
     const filterAndCleanupNotes = useCallback(
         async (source: Note[]) => {
-            const visible: Note[] = [];
+            const main: Note[] = [];
             for (const note of source) {
                 if (note.deleted || note.pending_delete) {
                     continue;
                 }
+                const privacy = normalizePrivacy(note.privacy);
+                const normalized: Note = {
+                    ...note,
+                    storage_scope: normalizeStorageScope(note.storage_scope),
+                    privacy,
+                };
+
                 if (isEmptyNote(note)) {
                     if (userId) {
                         await deleteNoteLocal(userId, note.id);
                     }
                     continue;
                 }
-                visible.push(note);
+
+                // Hidden mode is reserved; keep it out of default list.
+                if (privacy === 'hidden') {
+                    continue;
+                }
+                main.push(normalized);
             }
-            return visible;
+            return main;
         },
-        [isEmptyNote, userId],
+        [isEmptyNote, normalizePrivacy, normalizeStorageScope, userId],
     );
 
     const buildLocalNote = useCallback(
@@ -131,14 +161,28 @@ export const useNotes = () => {
             audio?: NoteAudio;
             transcription?: string;
             dirty?: boolean;
+            storage_scope?: StorageScope;
+            privacy?: NotePrivacy;
         }) => {
             if (!userId) throw new Error('Cannot save note without user ID');
 
-            const { id, title, content, audio, transcription, dirty = true } = params;
+            const {
+                id,
+                title,
+                content,
+                audio,
+                transcription,
+                dirty = true,
+                storage_scope,
+                privacy,
+            } = params;
+            const normalizedPrivacy = normalizePrivacy(privacy);
+            const normalizedScope = normalizeStorageScope(storage_scope);
             const encryptedTitle = await encrypt(title);
             const encryptedContent = await encrypt(content);
             const encryptedTranscription = transcription ? await encrypt(transcription) : undefined;
             const now = new Date().toISOString();
+            const syncAllowed = normalizedScope === 'sync';
             const localNote: Note = {
                 id,
                 encrypted_title: encryptedTitle,
@@ -153,15 +197,18 @@ export const useNotes = () => {
                 title,
                 content,
                 synced: 0,
-                dirty: dirty,
+                dirty: syncAllowed ? dirty : false,
                 deleted: false,
                 version: 0,
                 is_active: true, // New parent notes are active by default
+                storage_scope: normalizedScope,
+                privacy: normalizedPrivacy,
+                pending_server_delete: false,
             };
             await saveNoteLocal(userId, localNote);
             return localNote;
         },
-        [userId]
+        [normalizePrivacy, normalizeStorageScope, userId]
     );
 
     const buildLocalImprovement = useCallback(
@@ -171,10 +218,12 @@ export const useNotes = () => {
             content: string;
             label?: string;
             optionId?: string;
+            storage_scope?: StorageScope;
+            privacy?: NotePrivacy;
         }): Promise<NoteImprovement> => {
             if (!userId) throw new Error('Cannot save improvement without user ID');
 
-            const { id, noteId, content, label, optionId } = params;
+            const { id, noteId, content, label, optionId, storage_scope, privacy } = params;
             let encryptedContent = await encrypt(content);
 
             if (encryptedContent === undefined || encryptedContent === null) {
@@ -183,6 +232,10 @@ export const useNotes = () => {
             }
 
             const now = new Date().toISOString();
+            const improvementSyncAllowed = shouldSyncNote({
+                storage_scope: storage_scope ?? 'sync',
+                privacy: privacy ?? 'normal',
+            });
             const improvement: NoteImprovement = {
                 id,
                 note_id: noteId,
@@ -193,14 +246,16 @@ export const useNotes = () => {
                 created_at: now,
                 updated_at: now,
                 synced: 0,
-                dirty: true,
+                dirty: improvementSyncAllowed,
                 deleted: false,
                 version: 0,
+                ...(storage_scope ? { storage_scope } : {}),
+                ...(privacy ? { privacy } : {}),
             };
             await saveImprovementLocal(userId, improvement);
             return improvement;
         },
-        [userId]
+        [shouldSyncNote, userId]
     );
 
     const seedDemoNotes = useCallback(async () => {
@@ -274,6 +329,7 @@ export const useNotes = () => {
     const refreshFromLocal = useCallback(async () => {
         if (!userId) {
             setNotes([]);
+            allNotesRef.current = [];
             return [];
         }
 
@@ -284,19 +340,20 @@ export const useNotes = () => {
         // Re-fetch in case we deleted something
         localNotes = await getNotesLocal(userId);
 
-        let visible = await filterAndCleanupNotes(localNotes);
+        let visibleMain = await filterAndCleanupNotes(localNotes);
 
-        if (visible.length === 0) {
+        if (visibleMain.length === 0) {
             const seeded = await seedDemoNotes();
             if (seeded) {
                 localNotes = await getNotesLocal(userId);
-                visible = await filterAndCleanupNotes(localNotes);
+                visibleMain = await filterAndCleanupNotes(localNotes);
             }
         }
 
-        setNotes(visible);
-        return visible;
-    }, [filterAndCleanupNotes, seedDemoNotes, cleanupDemoNotesIfNeeded, userId]);
+        allNotesRef.current = visibleMain;
+        setNotes(visibleMain);
+        return visibleMain;
+    }, [cleanupDemoNotesIfNeeded, filterAndCleanupNotes, seedDemoNotes, userId]);
 
     // Subscribe to SyncService updatess
     useEffect(() => {
@@ -366,8 +423,14 @@ export const useNotes = () => {
         }
     }, [isAuthenticated, refreshFromLocal]);
 
-    const createNote = async (data: { title?: string; content: string; audio?: NoteAudio }) => {
-        const { title, content, audio } = data;
+    const createNote = async (data: {
+        title?: string;
+        content: string;
+        audio?: NoteAudio;
+        storage_scope?: StorageScope;
+        privacy?: NotePrivacy;
+    }) => {
+        const { title, content, audio, storage_scope, privacy } = data;
         const titleToUse = buildTitle(title);
         const contentToUse = content || '';
         const isEmpty = !titleToUse.trim() && !contentToUse.trim() && !audio;
@@ -387,6 +450,8 @@ export const useNotes = () => {
                 content: contentToUse,
                 audio,
                 transcription: audio?.transcription,
+                storage_scope: storage_scope ?? 'sync',
+                privacy: privacy ?? 'normal',
             });
             await refreshFromLocal();
 
@@ -409,7 +474,11 @@ export const useNotes = () => {
         setLoading(true);
         setError(null);
         try {
-            const existing = notesRef.current.find(n => n.id === id);
+            let existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
+            if (!existing && userId) {
+                const dbNote = await getNoteById(userId, id);
+                if (dbNote) existing = dbNote;
+            }
             if (!existing) throw new Error('Note not found');
 
             const titleToUse = buildTitle(updates.title ?? existing.title);
@@ -459,6 +528,14 @@ export const useNotes = () => {
                 return existing;
             }
 
+            const nextPrivacy = normalizePrivacy(updates.privacy ?? existing.privacy);
+            const nextScope = normalizeStorageScope((updates.storage_scope ?? existing.storage_scope) as StorageScope);
+            const pendingServerDelete = updates.pending_server_delete ?? existing.pending_server_delete ?? false;
+            const dirtyFlag = shouldSyncNote({
+                storage_scope: nextScope,
+                privacy: nextPrivacy,
+            }) || pendingServerDelete;
+
             const encryptedTitle = await encrypt(titleToUse);
             const encryptedContent = await encrypt(contentToUse);
             const updatedAt = new Date().toISOString();
@@ -475,8 +552,11 @@ export const useNotes = () => {
                 has_audio: hasAudio,
                 updated_at: updatedAt,
                 synced: 0,
-                dirty: true,
+                dirty: dirtyFlag,
                 deleted: false,
+                storage_scope: nextScope,
+                privacy: nextPrivacy,
+                pending_server_delete: pendingServerDelete,
             };
             await saveNoteLocal(userId, updatedLocal);
             await refreshFromLocal();
@@ -499,7 +579,7 @@ export const useNotes = () => {
         setLoading(true);
         setError(null);
         try {
-            const existing = notesRef.current.find(n => n.id === id);
+            const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
             if (!existing) {
                 // If not in memory, try to delete from DB anyway (maybe it's hidden)
                 await deleteNoteLocal(userId, id);
@@ -507,11 +587,34 @@ export const useNotes = () => {
                 return;
             }
 
+            const audioPaths = new Set<string>();
+            if (typeof existing.audio_file_path === 'string' && existing.audio_file_path.length > 0) {
+                audioPaths.add(existing.audio_file_path);
+            }
+            const recordings = await getVoiceRecordingsLocal(userId, id);
+            for (const recording of recordings) {
+                if (recording.file_path) {
+                    audioPaths.add(recording.file_path);
+                }
+                await deleteVoiceRecordingLocal(userId, recording.id);
+            }
+            for (const path of audioPaths) {
+                try {
+                    // Critical: note deletion must physically remove local audio blobs.
+                    await AudioService.deleteAudioFile(path);
+                } catch (audioError) {
+                    console.warn('[useNotes] Failed to delete note audio file', path, audioError);
+                }
+            }
+
             const marked: Note = {
                 ...existing,
                 deleted: true, // Soft delete
+                has_audio: false,
+                audio_file_path: undefined,
+                audio_duration: undefined,
                 synced: 0,
-                dirty: true,
+                dirty: shouldSyncNote(existing) || !!existing.pending_server_delete,
                 updated_at: new Date().toISOString(),
             };
             await saveNoteLocal(userId, marked);
@@ -533,7 +636,11 @@ export const useNotes = () => {
         setLoading(true);
         try {
             const results = await searchNotesLocal(userId, query);
-            const filtered = results.filter(note => !note.deleted && !note.pending_delete && !isEmptyNote(note));
+            const filtered = results.filter(note => {
+                if (note.deleted || note.pending_delete || isEmptyNote(note)) return false;
+                const privacy = normalizePrivacy(note.privacy);
+                return privacy === 'normal';
+            });
             setNotes(filtered);
         } catch (err) {
             console.error('[useNotes] Search failed', err);
@@ -573,7 +680,6 @@ export const useNotes = () => {
             console.log('[useNotes] createImprovement', {
                 id,
                 noteId,
-                contentLength: safeContent.length,
                 label: params.label
             });
 
@@ -583,6 +689,8 @@ export const useNotes = () => {
                 content: safeContent,
                 label: params.label,
                 optionId: params.optionId,
+                storage_scope: note.storage_scope,
+                privacy: note.privacy,
             });
 
             if (!improvement) throw new Error('Failed to build local improvement');
@@ -601,7 +709,7 @@ export const useNotes = () => {
                 encrypted_content: note.encrypted_content || '', // Fallback to avoid constraint viol
                 updated_at: new Date().toISOString(),
                 synced: 0,
-                dirty: true,
+                dirty: shouldSyncNote(note) || !!note.pending_server_delete,
             };
             await saveNoteLocal(userId, parentUpdate);
 
@@ -672,7 +780,7 @@ export const useNotes = () => {
                 deleted: updates.deleted ?? improvement.deleted ?? false,
                 updated_at: new Date().toISOString(),
                 synced: 0,
-                dirty: true,
+                dirty: shouldSyncNote(note) && !note.pending_server_delete,
             };
 
             await saveImprovementLocal(userId, updated);
@@ -683,7 +791,7 @@ export const useNotes = () => {
                 ...note,
                 updated_at: new Date().toISOString(),
                 synced: 0,
-                dirty: true,
+                dirty: shouldSyncNote(note) || !!note.pending_server_delete,
             };
             await saveNoteLocal(userId, parentUpdate);
 
@@ -729,7 +837,7 @@ export const useNotes = () => {
         async (id: string) => {
             if (!userId) return;
             try {
-                const existing = notesRef.current.find(n => n.id === id);
+                const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
                 if (!existing) throw new Error('Note not found');
 
                 const updated: Note = {
@@ -737,7 +845,7 @@ export const useNotes = () => {
                     is_pinned: true,
                     updated_at: new Date().toISOString(),
                     synced: 0,
-                    dirty: true,
+                    dirty: shouldSyncNote(existing) || !!existing.pending_server_delete,
                 };
                 await saveNoteLocal(userId, updated);
                 await refreshFromLocal();
@@ -754,7 +862,7 @@ export const useNotes = () => {
         async (id: string) => {
             if (!userId) return;
             try {
-                const existing = notesRef.current.find(n => n.id === id);
+                const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
                 if (!existing) throw new Error('Note not found');
 
                 const updated: Note = {
@@ -762,7 +870,7 @@ export const useNotes = () => {
                     is_pinned: false,
                     updated_at: new Date().toISOString(),
                     synced: 0,
-                    dirty: true,
+                    dirty: shouldSyncNote(existing) || !!existing.pending_server_delete,
                 };
                 await saveNoteLocal(userId, updated);
                 await refreshFromLocal();
@@ -780,14 +888,14 @@ export const useNotes = () => {
             if (!userId) return;
             try {
                 for (const id of ids) {
-                    const existing = notesRef.current.find(n => n.id === id);
+                    const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
                     if (existing) {
                         const updated: Note = {
                             ...existing,
                             is_pinned: true,
                             updated_at: new Date().toISOString(),
                             synced: 0,
-                            dirty: true,
+                            dirty: shouldSyncNote(existing) || !!existing.pending_server_delete,
                         };
                         await saveNoteLocal(userId, updated);
                     }
@@ -807,14 +915,14 @@ export const useNotes = () => {
             if (!userId) return;
             try {
                 for (const id of ids) {
-                    const existing = notesRef.current.find(n => n.id === id);
+                    const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
                     if (existing) {
                         const updated: Note = {
                             ...existing,
                             is_pinned: false,
                             updated_at: new Date().toISOString(),
                             synced: 0,
-                            dirty: true,
+                            dirty: shouldSyncNote(existing) || !!existing.pending_server_delete,
                         };
                         await saveNoteLocal(userId, updated);
                     }
@@ -834,13 +942,36 @@ export const useNotes = () => {
             if (!userId) return;
             try {
                 for (const id of ids) {
-                    const existing = notesRef.current.find(n => n.id === id);
+                    const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
                     if (existing) {
+                        const audioPaths = new Set<string>();
+                        if (typeof existing.audio_file_path === 'string' && existing.audio_file_path.length > 0) {
+                            audioPaths.add(existing.audio_file_path);
+                        }
+                        const recordings = await getVoiceRecordingsLocal(userId, id);
+                        for (const recording of recordings) {
+                            if (recording.file_path) {
+                                audioPaths.add(recording.file_path);
+                            }
+                            await deleteVoiceRecordingLocal(userId, recording.id);
+                        }
+                        for (const path of audioPaths) {
+                            try {
+                                // Critical: batch delete must also purge on-disk audio.
+                                await AudioService.deleteAudioFile(path);
+                            } catch (audioError) {
+                                console.warn('[useNotes] Failed to delete note audio file', path, audioError);
+                            }
+                        }
+
                         const marked: Note = {
                             ...existing,
                             deleted: true,
+                            has_audio: false,
+                            audio_file_path: undefined,
+                            audio_duration: undefined,
                             synced: 0,
-                            dirty: true,
+                            dirty: shouldSyncNote(existing) || !!existing.pending_server_delete,
                             updated_at: new Date().toISOString(),
                         };
                         await saveNoteLocal(userId, marked);
@@ -854,6 +985,106 @@ export const useNotes = () => {
             }
         },
         [refreshFromLocal, userId]
+    );
+
+    const updateNoteStorageScope = useCallback(
+        async (id: string, storageScope: StorageScope) => {
+            if (!userId) return;
+            const existing = allNotesRef.current.find((n) => n.id === id);
+            if (!existing) {
+                throw new Error('Note not found');
+            }
+
+            const currentPrivacy = normalizePrivacy(existing.privacy);
+            const nextScope = normalizeStorageScope(storageScope);
+            const wasSync = normalizeStorageScope(existing.storage_scope) === 'sync';
+            const hasServerVersion = (existing.synced === 1) || (existing.version ?? 0) > 0;
+            const pendingServerDelete = nextScope === 'local_only' && wasSync && hasServerVersion;
+            const nextDirty = shouldSyncNote({
+                storage_scope: nextScope,
+                privacy: currentPrivacy,
+            }) || pendingServerDelete;
+
+            const updated: Note = {
+                ...existing,
+                storage_scope: nextScope,
+                privacy: currentPrivacy,
+                pending_server_delete: pendingServerDelete,
+                updated_at: new Date().toISOString(),
+                synced: 0,
+                dirty: nextDirty,
+            };
+
+            await saveNoteLocal(userId, updated);
+            await refreshFromLocal();
+            if (nextDirty) {
+                syncService.scheduleAutoSync();
+            }
+        },
+        [normalizePrivacy, normalizeStorageScope, refreshFromLocal, shouldSyncNote, userId]
+    );
+
+    const updateNotePrivacy = useCallback(
+        async (id: string, privacy: NotePrivacy) => {
+            if (!userId) return;
+            const existing = allNotesRef.current.find((n) => n.id === id);
+            if (!existing) {
+                throw new Error('Note not found');
+            }
+
+            const currentPrivacy = normalizePrivacy(existing.privacy);
+            const nextPrivacy = normalizePrivacy(privacy);
+            const currentScope = normalizeStorageScope(existing.storage_scope);
+            const nextScope: StorageScope = currentScope;
+            const hasServerVersion = (existing.synced === 1) || (existing.version ?? 0) > 0;
+            const pendingServerDelete = nextScope === 'local_only' && currentScope === 'sync' && hasServerVersion;
+
+            const nextDirty = shouldSyncNote({
+                storage_scope: nextScope,
+                privacy: nextPrivacy,
+            }) || pendingServerDelete;
+
+            const updated: Note = {
+                ...existing,
+                storage_scope: nextScope,
+                privacy: nextPrivacy,
+                pending_server_delete: pendingServerDelete,
+                updated_at: new Date().toISOString(),
+                synced: 0,
+                dirty: nextDirty,
+            };
+            await saveNoteLocal(userId, updated);
+
+            if (existing.improvements?.length) {
+                for (const imp of existing.improvements) {
+                    await saveImprovementLocal(userId, {
+                        id: imp.id,
+                        note_id: existing.id,
+                        encrypted_content: imp.encrypted_content,
+                        encrypted_title: imp.encrypted_title,
+                        content_nonce: imp.content_nonce,
+                        label: imp.label,
+                        option_id: imp.option_id,
+                        created_at: imp.created_at,
+                        updated_at: new Date().toISOString(),
+                        synced: 0,
+                        dirty: nextDirty,
+                        deleted: imp.deleted ?? false,
+                        version: imp.version ?? 0,
+                        is_active: imp.is_active ?? false,
+                        storage_scope: nextScope,
+                        privacy: nextPrivacy,
+                        pending_server_delete: pendingServerDelete,
+                    } as any);
+                }
+            }
+
+            await refreshFromLocal();
+            if (nextDirty) {
+                syncService.scheduleAutoSync();
+            }
+        },
+        [normalizePrivacy, normalizeStorageScope, refreshFromLocal, shouldSyncNote, userId]
     );
 
     return {
@@ -877,5 +1108,7 @@ export const useNotes = () => {
         batchPinNotes,
         batchUnpinNotes,
         batchDeleteNotes,
+        updateNoteStorageScope,
+        updateNotePrivacy,
     };
 };

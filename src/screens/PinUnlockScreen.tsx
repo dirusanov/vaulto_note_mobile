@@ -45,7 +45,7 @@ export const PinUnlockScreen = () => {
     return (
         <ScreenContainer>
             <View style={styles.container}>
-                <Text style={styles.title}>Unlock Vault</Text>
+                <Text style={styles.title}>Unlock Sync</Text>
                 <Text style={styles.subtitle}>
                     Enter your sync access key on this device.
                 </Text>

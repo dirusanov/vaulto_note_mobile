@@ -28,6 +28,11 @@ const RESUME_SYNC_THRESHOLD_MS = 30000; // 30 seconds
 type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch';
 type SyncListener = () => void;
 
+const shouldSyncNote = (note: Note): boolean => {
+    const storageScope = note.storage_scope ?? 'sync';
+    return storageScope === 'sync';
+};
+
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     return String(error ?? '');
@@ -123,9 +128,15 @@ class SyncService {
         if (!effectiveUserId) return { unsyncedCount: 0 };
         const notes = await getNotesLocal(effectiveUserId);
         const improvements = await getAllImprovementsLocal(effectiveUserId);
+        const notesById = new Map(notes.map((n) => [n.id, n]));
 
-        const dirtyNotes = notes.filter(n => n.dirty || n.deleted || n.pending_delete).length;
-        const dirtyImprovements = improvements.filter(n => n.dirty || n.deleted).length;
+        const dirtyNotes = notes.filter(
+            (n) => (shouldSyncNote(n) || n.pending_server_delete) && (n.dirty || n.deleted || n.pending_delete || n.pending_server_delete)
+        ).length;
+        const dirtyImprovements = improvements.filter((imp) => {
+            const parent = notesById.get(imp.note_id);
+            return !!parent && shouldSyncNote(parent) && !parent.pending_server_delete && (imp.dirty || imp.deleted);
+        }).length;
 
         return { unsyncedCount: dirtyNotes + dirtyImprovements };
     }
@@ -182,9 +193,15 @@ class SyncService {
             // 1. Gather local changes
             const allNotes = await getNotesLocal(this.currentUserId);
             const allImprovements = await getAllImprovementsLocal(this.currentUserId);
-            const dirtyNotes = allNotes.filter(n => n.dirty || n.deleted || n.pending_delete);
-            const dirtyImprovements = allImprovements.filter(imp => imp.dirty || imp.deleted);
-            const hasLocalNotes = allNotes.length > 0;
+            const notesById = new Map(allNotes.map((n) => [n.id, n]));
+            const dirtyNotes = allNotes.filter(
+                (n) => (shouldSyncNote(n) || n.pending_server_delete) && (n.dirty || n.deleted || n.pending_delete || n.pending_server_delete)
+            );
+            const dirtyImprovements = allImprovements.filter((imp) => {
+                const parent = notesById.get(imp.note_id);
+                return !!parent && shouldSyncNote(parent) && !parent.pending_server_delete && (imp.dirty || imp.deleted);
+            });
+            const hasLocalNotes = allNotes.some((n) => shouldSyncNote(n));
 
             // 2. Prepare changes for server
             const changes: SyncChangeRequest[] = [];
@@ -201,15 +218,16 @@ class SyncService {
 
                 noteMap.set(note.id, note);
 
-                const titleToSync = await encryptForSync(note.title || '');
-                const contentToSync = await encryptForSync(note.content || '');
+                const shouldDelete = !!note.deleted || !!note.pending_delete || !!note.pending_server_delete;
+                const titleToSync = shouldDelete ? '' : await encryptForSync(note.title || '');
+                const contentToSync = shouldDelete ? '' : await encryptForSync(note.content || '');
 
                 changes.push({
                     id: note.id,
                     content_ciphertext: contentToSync,
                     content_nonce: note.content_nonce ?? null,
                     title: titleToSync,
-                    deleted: !!note.deleted || !!note.pending_delete,
+                    deleted: shouldDelete,
                     base_version: note.version ?? 0,
                     client_updated_at: note.updated_at || new Date().toISOString(),
                     is_active: note.is_active,
@@ -225,7 +243,7 @@ class SyncService {
             let processedImprovements = 0;
             for (const improvement of dirtyImprovements) {
                 improvementMap.set(improvement.id, improvement);
-                const parentNote = allNotes.find(n => n.id === improvement.note_id);
+                const parentNote = notesById.get(improvement.note_id);
                 const activeChild = parentNote?.improvements?.find(imp => imp.is_active);
                 const isActive = activeChild?.id === improvement.id;
 
@@ -298,14 +316,26 @@ class SyncService {
 
             // 5. Cleanup dirty flags
             for (const change of changes) {
-                if (!uniqueIncoming.has(change.id)) {
-                    const local = noteMap.get(change.id);
-                    if (local && this.currentUserId) {
-                        if (change.deleted) {
-                            await deleteNoteLocal(this.currentUserId, local.id);
-                        } else {
-                            await saveNoteLocal(this.currentUserId, { ...local, dirty: false, synced: 1 });
-                        }
+                const local = noteMap.get(change.id);
+                if (!local || !this.currentUserId) continue;
+
+                const incomingVersion = uniqueIncoming.get(change.id);
+                const serverConfirmedDelete = !!incomingVersion?.deleted;
+
+                if (!uniqueIncoming.has(change.id) || (local.pending_server_delete && serverConfirmedDelete)) {
+                    if (local.pending_server_delete) {
+                        await saveNoteLocal(this.currentUserId, {
+                            ...local,
+                            pending_server_delete: false,
+                            dirty: false,
+                            synced: 0,
+                            deleted: false,
+                            pending_delete: false,
+                        });
+                    } else if (change.deleted) {
+                        await deleteNoteLocal(this.currentUserId, local.id);
+                    } else {
+                        await saveNoteLocal(this.currentUserId, { ...local, dirty: false, synced: 1 });
                     }
                 }
             }
@@ -345,10 +375,16 @@ class SyncService {
 
     private async applyServerImprovements(improvements: ServerImprovement[]) {
         if (!this.currentUserId || !hasMasterKey()) return;
+        const localNotes = await getNotesLocal(this.currentUserId);
+        const notesById = new Map(localNotes.map((n) => [n.id, n]));
         let processed = 0;
         let skippedExpectedDecryptFailures = 0;
         const YIELD_EVERY = 20;
         for (const improvement of improvements) {
+            const parent = notesById.get(improvement.note_id);
+            if (parent && (!shouldSyncNote(parent) || parent.pending_server_delete)) {
+                continue;
+            }
             let content = '';
             let encryptedTitle: string | null = null;
             try {
@@ -391,7 +427,7 @@ class SyncService {
         }
         if (skippedExpectedDecryptFailures > 0) {
             console.warn(
-                `[SyncService] Skipped ${skippedExpectedDecryptFailures} improvements due to locked vault or key mismatch.`
+                `[SyncService] Skipped ${skippedExpectedDecryptFailures} improvements due to locked encryption or key mismatch.`
             );
         }
     }
@@ -411,6 +447,9 @@ class SyncService {
                 existing.version === serverNote.version &&
                 existing.deleted === serverNote.deleted;
             if (unchanged) {
+                continue;
+            }
+            if (existing && (!shouldSyncNote(existing) || existing.pending_server_delete)) {
                 continue;
             }
 
@@ -475,6 +514,9 @@ class SyncService {
                 content_nonce: serverNote.content_nonce ?? null,
                 conflict_of: serverNote.conflict_of ?? null,
                 is_active: serverNote.is_active ?? existing?.is_active ?? false,
+                storage_scope: existing?.storage_scope ?? 'sync',
+                privacy: existing?.privacy ?? 'normal',
+                pending_server_delete: false,
             };
 
             await saveNoteLocal(this.currentUserId, merged);
@@ -486,7 +528,7 @@ class SyncService {
         }
         if (skippedExpectedDecryptFailures > 0) {
             console.warn(
-                `[SyncService] Skipped ${skippedExpectedDecryptFailures} notes due to locked vault or key mismatch.`
+                `[SyncService] Skipped ${skippedExpectedDecryptFailures} notes due to locked encryption or key mismatch.`
             );
         }
     }

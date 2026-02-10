@@ -30,7 +30,16 @@ export const NotesListScreen = () => {
     const isFocused = useIsFocused();
     const { userId } = useAuth();
     const { syncLocked, hasRemoteKeyBundle, bundle, custodyMode, resetSync } = useEncryption();
-    const { notes, loading, fetchNotes, searchNotes, syncNotes, batchPinNotes, batchUnpinNotes, batchDeleteNotes } = useNotesContext();
+    const {
+        notes,
+        loading,
+        fetchNotes,
+        searchNotes,
+        syncNotes,
+        batchPinNotes,
+        batchUnpinNotes,
+        batchDeleteNotes,
+    } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
@@ -156,7 +165,7 @@ export const NotesListScreen = () => {
                                             } else {
                                                 Alert.alert(
                                                     'Partial reset',
-                                                    'Local key was reset, but server did not confirm full encrypted data purge. Please update backend to support vault reset.'
+                                                    'Local key was reset, but server did not confirm full encrypted data purge.'
                                                 );
                                             }
                                         } catch (error: any) {
@@ -440,12 +449,7 @@ export const NotesListScreen = () => {
                     allPinned={allSelectedPinned}
                 />
             ) : (
-                <View style={styles.topBar}>
-                    {/* <Text style={styles.topTitle}>Notes</Text> */}
-                    <View style={styles.topActions}>
-                        {/* Sync button code commented out */}
-                    </View>
-                </View>
+                <View style={styles.topBar} />
             )}
             {shouldShowLockBanner && (
                 <View style={styles.lockBanner}>

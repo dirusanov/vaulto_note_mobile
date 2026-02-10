@@ -17,6 +17,14 @@ class AudioServiceClass {
     private recording: Audio.Recording | null = null;
     private recordingStartTime: number = 0;
 
+    private async encryptAudioPayload(payloadBase64: string): Promise<string> {
+        return await encrypt(payloadBase64);
+    }
+
+    private async decryptAudioPayload(payload: string): Promise<string> {
+        return await decrypt(payload);
+    }
+
     private async getAudioDir(): Promise<string> {
         if (Platform.OS === 'web') {
             throw new Error('Audio recording not supported on web');
@@ -233,7 +241,10 @@ class AudioServiceClass {
     /**
      * Save audio file permanently with encryption
      */
-    async saveAudioFile(tempUri: string, shouldDeleteOriginal: boolean = true): Promise<string> {
+    async saveAudioFile(
+        tempUri: string,
+        shouldDeleteOriginal: boolean = true
+    ): Promise<string> {
         if (Platform.OS === 'web') return tempUri;
         try {
             // Generate unique filename
@@ -254,7 +265,7 @@ class AudioServiceClass {
             });
 
             // Encrypt the audio data
-            const encryptedData = await encrypt(audioData);
+            const encryptedData = await this.encryptAudioPayload(audioData);
 
             // Save encrypted data
             await FileSystem.writeAsStringAsync(targetUri, encryptedData, {
@@ -285,7 +296,7 @@ class AudioServiceClass {
             });
 
             // Decrypt
-            const decryptedData = await decrypt(encryptedData);
+            const decryptedData = await this.decryptAudioPayload(encryptedData);
 
             // Create temp file for playback
             // @ts-ignore
@@ -308,6 +319,18 @@ class AudioServiceClass {
             }
             throw error;
         }
+    }
+
+    async reencryptAudioFile(uri: string): Promise<void> {
+        if (Platform.OS === 'web') return;
+        const encryptedData = await FileSystem.readAsStringAsync(uri, {
+            encoding: 'utf8',
+        });
+        const decryptedData = await this.decryptAudioPayload(encryptedData);
+        const reencrypted = await this.encryptAudioPayload(decryptedData);
+        await FileSystem.writeAsStringAsync(uri, reencrypted, {
+            encoding: 'utf8',
+        });
     }
 
     /**
