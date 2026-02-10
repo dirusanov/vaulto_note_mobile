@@ -6,6 +6,7 @@ import { AudioService } from './AudioService';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
 const VAULT_STORAGE_KEY_PREFIX = 'vaulto_vault_notes_local_store_';
+const LEGACY_VAULT_PRIVACY = 'vault';
 
 const normalizeStorageScope = (value: unknown): 'sync' | 'local_only' => {
     return value === 'local_only' ? 'local_only' : 'sync';
@@ -15,6 +16,8 @@ const normalizePrivacy = (value: unknown): 'normal' | 'hidden' => {
     if (value === 'hidden') return value;
     return 'normal';
 };
+
+const isLegacyVaultPrivacy = (value: unknown): boolean => value === LEGACY_VAULT_PRIVACY;
 
 const encryptForPrivacy = async (plaintext: string, privacy: unknown): Promise<string> => {
     if (!plaintext) return '';
@@ -60,7 +63,20 @@ const getWebStoreByContainer = (userId: string, container: WebContainer): Note[]
     }
     try {
         const stored = localStorage.getItem(getStorageKey(userId, container));
-        return stored ? JSON.parse(stored) : [];
+        if (!stored) return [];
+        const parsed = JSON.parse(stored) as Note[];
+        let mutated = false;
+        const sanitized = parsed.filter((note) => {
+            if (isLegacyVaultPrivacy((note as any).privacy)) {
+                mutated = true;
+                return false;
+            }
+            return true;
+        });
+        if (mutated) {
+            localStorage.setItem(getStorageKey(userId, container), JSON.stringify(sanitized));
+        }
+        return sanitized;
     } catch (e) {
         console.error('[DatabaseService] Failed to load from localStorage', e);
         return [];
@@ -170,6 +186,54 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
     await database.runAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
 };
 
+const purgeLegacyVaultRows = async (database: SQLite.SQLiteDatabase): Promise<void> => {
+    const legacyParentRows = await database.getAllAsync<{ id: string }>(
+        "SELECT id FROM notes WHERE privacy = 'vault';"
+    );
+    if (legacyParentRows.length === 0) {
+        return;
+    }
+
+    const legacyParentIds = legacyParentRows.map((row) => row.id);
+    const parentPlaceholders = legacyParentIds.map(() => '?').join(', ');
+    const legacyNoteRows = await database.getAllAsync<{ id: string; audio_file_path: string | null }>(
+        `SELECT id, audio_file_path FROM notes WHERE id IN (${parentPlaceholders}) OR parent_id IN (${parentPlaceholders});`,
+        [...legacyParentIds, ...legacyParentIds]
+    );
+    if (legacyNoteRows.length === 0) {
+        return;
+    }
+
+    const legacyNoteIds = Array.from(new Set(legacyNoteRows.map((row) => row.id)));
+    const placeholders = legacyNoteIds.map(() => '?').join(', ');
+    const voiceRows = await database.getAllAsync<{ file_path: string | null }>(
+        `SELECT file_path FROM voice_recordings WHERE note_id IN (${placeholders});`,
+        legacyNoteIds
+    );
+
+    await database.runAsync(
+        `DELETE FROM voice_recordings WHERE note_id IN (${placeholders});`,
+        legacyNoteIds
+    );
+    await database.runAsync(
+        `DELETE FROM note_improvements WHERE note_id IN (${placeholders});`,
+        legacyNoteIds
+    );
+    await database.runAsync(
+        `DELETE FROM notes WHERE id IN (${placeholders}) OR parent_id IN (${placeholders});`,
+        [...legacyNoteIds, ...legacyNoteIds]
+    );
+    await purgeAudioFiles(
+        [
+            ...legacyNoteRows.map((row) => row.audio_file_path),
+            ...voiceRows.map((row) => row.file_path),
+        ],
+        'purge legacy vault rows'
+    );
+    await AudioService.cleanupTempFiles();
+    console.log(`[DatabaseService] Purged ${legacyNoteIds.length} legacy vault notes`);
+};
+
 const getDb = async () => {
     if (Platform.OS === 'web') return null;
     if (!db) {
@@ -213,6 +277,9 @@ const getDb = async () => {
         try {
             await db.runAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;');
         } catch (e) { /* Ignore */ }
+
+        // Critical: remove obsolete vault records and attached files from old builds.
+        await purgeLegacyVaultRows(db);
     }
     return db;
 };
@@ -851,6 +918,9 @@ const processImprovements = async (
     const grouped = new Map<string, NoteImprovement[]>();
     for (const imp of rawImprovements) {
         try {
+            if (isLegacyVaultPrivacy((imp as any).privacy)) {
+                continue;
+            }
             const noteId = imp.note_id || imp.noteId;
             if (!noteId) continue;
 
@@ -902,6 +972,9 @@ const processNotes = async (
 ): Promise<Note[]> => {
     const notes = await Promise.all(rawNotes.map(async (n): Promise<Note | null> => {
         try {
+            if (isLegacyVaultPrivacy((n as any).privacy)) {
+                return null;
+            }
             const privacy = normalizePrivacy(n.privacy);
             const hasEncryptedTitle = n.encrypted_title !== undefined && n.encrypted_title !== null;
             const titlePromise = hasEncryptedTitle ? decryptByPrivacy(n.encrypted_title, privacy) : Promise.resolve('');
@@ -987,17 +1060,6 @@ export const searchNotesLocal = async (userId: string, query: string): Promise<N
         (note.transcription && note.transcription.toLowerCase().includes(lowerQuery)) ||
         (note.improvements && note.improvements.some(imp => imp.content?.toLowerCase().includes(lowerQuery)))
     );
-};
-
-export const getVaultNotesCountLocal = async (userId: string): Promise<number> => {
-    if (!userId) return 0;
-    clearLegacyWebVaultStore(userId);
-    return 0;
-};
-
-export const wipeVaultNotesLocal = async (userId: string): Promise<void> => {
-    if (!userId) return;
-    clearLegacyWebVaultStore(userId);
 };
 
 export const getNoteById = async (userId: string, id: string): Promise<Note | null> => {
