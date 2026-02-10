@@ -20,7 +20,6 @@ import {
 } from '../crypto/e2ee';
 import { decrypt, encrypt, setCryptoMode } from '../crypto/encryption';
 import { CustodyMode, e2eeApi } from '../api/e2ee';
-import { notesApi } from '../api/notes';
 import { initDatabase, migrateLegacyEncryption } from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 
@@ -451,41 +450,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         await storage.setSyncResetBlocked(userId);
         try {
-            const result = await e2eeApi.resetVault();
-            if (result === 'deleted') {
-                remoteNotesPurged = true;
-                keyDeleted = true;
-            } else {
-                console.warn('[Encryption] Server does not support /e2ee/vault reset endpoint.');
-            }
+            await e2eeApi.resetSyncData();
+            remoteNotesPurged = true;
+            keyDeleted = true;
         } catch (error) {
-            console.warn('[Encryption] Failed to reset remote vault:', error);
-        }
-
-        if (!remoteNotesPurged) {
-            try {
-                const deleteNotesResult = await notesApi.deleteAllSyncNotes();
-                if (deleteNotesResult === 'deleted') {
-                    remoteNotesPurged = true;
-                } else {
-                    console.warn('[Encryption] Server does not support /sync/notes deletion endpoint.');
-                }
-            } catch (error) {
-                console.warn('[Encryption] Failed to delete remote sync notes:', error);
-            }
-        }
-
-        if (!keyDeleted) {
-            try {
-                const keyDeleteResult = await e2eeApi.deleteKeyBundle();
-                if (keyDeleteResult === 'deleted') {
-                    keyDeleted = true;
-                } else {
-                    console.warn('[Encryption] Server does not support key-bundle deletion endpoint.');
-                }
-            } catch (error) {
-                console.warn('[Encryption] Failed to delete key bundle on server:', error);
-            }
+            console.warn('[Encryption] Failed to reset remote sync data:', error);
         }
 
         try {

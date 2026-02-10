@@ -30,8 +30,7 @@ type SyncListener = () => void;
 
 const shouldSyncNote = (note: Note): boolean => {
     const storageScope = note.storage_scope ?? 'sync';
-    const isLegacyVault = (note as any).privacy === 'vault';
-    return storageScope === 'sync' && !isLegacyVault;
+    return storageScope === 'sync';
 };
 
 const getErrorMessage = (error: unknown): string => {

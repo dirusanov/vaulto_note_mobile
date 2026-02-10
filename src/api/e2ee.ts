@@ -2,7 +2,7 @@ import client from './client';
 import { KeyBundle } from '../crypto/e2ee';
 
 export type DeleteKeyBundleResult = 'deleted' | 'unsupported';
-export type ResetVaultResult = 'deleted' | 'unsupported';
+export type ResetSyncResult = 'deleted';
 export type CustodyMode = 'standard' | 'strict_seed';
 
 export interface E2EEConfigResponse {
@@ -51,16 +51,8 @@ export const e2eeApi = {
 
         return 'deleted';
     },
-    resetVault: async (): Promise<ResetVaultResult> => {
-        const response = await client.delete('/e2ee/vault', {
-            validateStatus: (status) =>
-                (status >= 200 && status < 300) || status === 404 || status === 405,
-        });
-
-        if (response.status === 404 || response.status === 405) {
-            return 'unsupported';
-        }
-
+    resetSyncData: async (): Promise<ResetSyncResult> => {
+        await client.delete('/e2ee/reset');
         return 'deleted';
     },
 };

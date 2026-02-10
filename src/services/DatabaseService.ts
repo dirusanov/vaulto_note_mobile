@@ -5,8 +5,6 @@ import { decrypt, encrypt, isDeviceCiphertext, isMasterCiphertext } from '../cry
 import { AudioService } from './AudioService';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
-const VAULT_STORAGE_KEY_PREFIX = 'vaulto_vault_notes_local_store_';
-const LEGACY_VAULT_PRIVACY = 'vault';
 
 const normalizeStorageScope = (value: unknown): 'sync' | 'local_only' => {
     return value === 'local_only' ? 'local_only' : 'sync';
@@ -16,8 +14,6 @@ const normalizePrivacy = (value: unknown): 'normal' | 'hidden' => {
     if (value === 'hidden') return value;
     return 'normal';
 };
-
-const isLegacyVaultPrivacy = (value: unknown): boolean => value === LEGACY_VAULT_PRIVACY;
 
 const encryptForPrivacy = async (plaintext: string, privacy: unknown): Promise<string> => {
     if (!plaintext) return '';
@@ -29,75 +25,28 @@ const decryptByPrivacy = async (ciphertext: string, privacy: unknown): Promise<s
     return await decrypt(ciphertext);
 };
 
-type WebContainer = 'main' | 'vault';
-
-const getStorageKey = (userId: string, container: WebContainer): string => {
-    return `${container === 'vault' ? VAULT_STORAGE_KEY_PREFIX : STORAGE_KEY_PREFIX}${userId}`;
-};
-
-const clearLegacyWebVaultStore = (userId?: string) => {
-    try {
-        if (typeof userId === 'string' && userId.length > 0) {
-            localStorage.removeItem(getStorageKey(userId, 'vault'));
-            return;
-        }
-        const keysToDelete: string[] = [];
-        for (let i = 0; i < localStorage.length; i += 1) {
-            const key = localStorage.key(i);
-            if (key?.startsWith(VAULT_STORAGE_KEY_PREFIX)) {
-                keysToDelete.push(key);
-            }
-        }
-        keysToDelete.forEach((key) => localStorage.removeItem(key));
-    } catch (e) {
-        console.warn('[DatabaseService] Failed to clear legacy vault localStorage keys', e);
-    }
+const getStorageKey = (userId: string): string => {
+    return `${STORAGE_KEY_PREFIX}${userId}`;
 };
 
 // Web Store Implementation
-const getWebStoreByContainer = (userId: string, container: WebContainer): Note[] => {
-    if (container === 'vault') {
-        // Critical: hard-disable vault storage on web.
-        clearLegacyWebVaultStore(userId);
-        return [];
-    }
+const getWebStore = (userId: string): Note[] => {
     try {
-        const stored = localStorage.getItem(getStorageKey(userId, container));
+        const stored = localStorage.getItem(getStorageKey(userId));
         if (!stored) return [];
-        const parsed = JSON.parse(stored) as Note[];
-        let mutated = false;
-        const sanitized = parsed.filter((note) => {
-            if (isLegacyVaultPrivacy((note as any).privacy)) {
-                mutated = true;
-                return false;
-            }
-            return true;
-        });
-        if (mutated) {
-            localStorage.setItem(getStorageKey(userId, container), JSON.stringify(sanitized));
-        }
-        return sanitized;
+        return JSON.parse(stored) as Note[];
     } catch (e) {
         console.error('[DatabaseService] Failed to load from localStorage', e);
         return [];
     }
 };
 
-const saveWebStoreByContainer = (userId: string, notes: Note[], container: WebContainer) => {
-    if (container === 'vault') {
-        // Critical: vault must never be persisted in web storage.
-        clearLegacyWebVaultStore(userId);
-        return;
-    }
+const saveWebStore = (userId: string, notes: Note[]) => {
     try {
-        localStorage.setItem(getStorageKey(userId, container), JSON.stringify(notes));
+        localStorage.setItem(getStorageKey(userId), JSON.stringify(notes));
     } catch (e) {
         console.error('[DatabaseService] Failed to save to localStorage', e);
     }
-};
-
-const getWebStore = (userId: string): Note[] => {
-    return getWebStoreByContainer(userId, 'main');
 };
 
 const getUniqueAudioPaths = (paths: Array<string | null | undefined>): string[] => {
@@ -186,54 +135,6 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
     await database.runAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
 };
 
-const purgeLegacyVaultRows = async (database: SQLite.SQLiteDatabase): Promise<void> => {
-    const legacyParentRows = await database.getAllAsync<{ id: string }>(
-        "SELECT id FROM notes WHERE privacy = 'vault';"
-    );
-    if (legacyParentRows.length === 0) {
-        return;
-    }
-
-    const legacyParentIds = legacyParentRows.map((row) => row.id);
-    const parentPlaceholders = legacyParentIds.map(() => '?').join(', ');
-    const legacyNoteRows = await database.getAllAsync<{ id: string; audio_file_path: string | null }>(
-        `SELECT id, audio_file_path FROM notes WHERE id IN (${parentPlaceholders}) OR parent_id IN (${parentPlaceholders});`,
-        [...legacyParentIds, ...legacyParentIds]
-    );
-    if (legacyNoteRows.length === 0) {
-        return;
-    }
-
-    const legacyNoteIds = Array.from(new Set(legacyNoteRows.map((row) => row.id)));
-    const placeholders = legacyNoteIds.map(() => '?').join(', ');
-    const voiceRows = await database.getAllAsync<{ file_path: string | null }>(
-        `SELECT file_path FROM voice_recordings WHERE note_id IN (${placeholders});`,
-        legacyNoteIds
-    );
-
-    await database.runAsync(
-        `DELETE FROM voice_recordings WHERE note_id IN (${placeholders});`,
-        legacyNoteIds
-    );
-    await database.runAsync(
-        `DELETE FROM note_improvements WHERE note_id IN (${placeholders});`,
-        legacyNoteIds
-    );
-    await database.runAsync(
-        `DELETE FROM notes WHERE id IN (${placeholders}) OR parent_id IN (${placeholders});`,
-        [...legacyNoteIds, ...legacyNoteIds]
-    );
-    await purgeAudioFiles(
-        [
-            ...legacyNoteRows.map((row) => row.audio_file_path),
-            ...voiceRows.map((row) => row.file_path),
-        ],
-        'purge legacy vault rows'
-    );
-    await AudioService.cleanupTempFiles();
-    console.log(`[DatabaseService] Purged ${legacyNoteIds.length} legacy vault notes`);
-};
-
 const getDb = async () => {
     if (Platform.OS === 'web') return null;
     if (!db) {
@@ -278,15 +179,12 @@ const getDb = async () => {
             await db.runAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;');
         } catch (e) { /* Ignore */ }
 
-        // Critical: remove obsolete vault records and attached files from old builds.
-        await purgeLegacyVaultRows(db);
     }
     return db;
 };
 
 export const initDatabase = async (): Promise<void> => {
     if (Platform.OS === 'web') {
-        clearLegacyWebVaultStore();
         console.log('[DatabaseService] Web detected, using localStorage');
         return;
     }
@@ -333,62 +231,60 @@ export const migrateLegacyEncryption = async (userId: string, target: 'device' |
     if (Platform.OS === 'web') {
         const now = new Date().toISOString();
         const YIELD_EVERY = 25;
-        for (const container of ['main'] as const) {
-            const notes = getWebStoreByContainer(userId, container);
-            let mutated = false;
-            let processed = 0;
+        const notes = getWebStore(userId);
+        let mutated = false;
+        let processed = 0;
 
-            for (const note of notes) {
-                let changed = false;
+        for (const note of notes) {
+            let changed = false;
 
-                if (shouldReencrypt(note.encrypted_content)) {
-                    try {
-                        const content = await decryptByPrivacy(note.encrypted_content, note.privacy);
-                        note.encrypted_content = await encryptForPrivacy(content, note.privacy);
-                        changed = true;
-                    } catch (e) {
-                        console.warn('[DatabaseService] Skipping content migration (web)', e);
-                    }
-                }
-
-                const encryptedTitle = note.encrypted_title;
-                if (encryptedTitle && shouldReencrypt(encryptedTitle)) {
-                    try {
-                        const title = await decryptByPrivacy(encryptedTitle, note.privacy);
-                        note.encrypted_title = await encryptForPrivacy(title, note.privacy);
-                        changed = true;
-                    } catch (e) {
-                        console.warn('[DatabaseService] Skipping title migration (web)', e);
-                    }
-                }
-
-                const encryptedTranscription = note.encrypted_transcription;
-                if (encryptedTranscription && shouldReencrypt(encryptedTranscription)) {
-                    try {
-                        const transcription = await decryptByPrivacy(encryptedTranscription, note.privacy);
-                        note.encrypted_transcription = await encryptForPrivacy(transcription, note.privacy);
-                        changed = true;
-                    } catch (e) {
-                        console.warn('[DatabaseService] Skipping transcription migration (web)', e);
-                    }
-                }
-
-                if (changed) {
-                    note.dirty = true;
-                    note.synced = 0;
-                    note.updated_at = now;
-                    mutated = true;
-                }
-                processed += 1;
-                if (processed % YIELD_EVERY === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 0));
+            if (shouldReencrypt(note.encrypted_content)) {
+                try {
+                    const content = await decryptByPrivacy(note.encrypted_content, note.privacy);
+                    note.encrypted_content = await encryptForPrivacy(content, note.privacy);
+                    changed = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping content migration (web)', e);
                 }
             }
 
-            if (mutated) {
-                saveWebStoreByContainer(userId, notes, container);
-                console.log(`[DatabaseService] Encryption migrated (web:${container} -> ${target})`);
+            const encryptedTitle = note.encrypted_title;
+            if (encryptedTitle && shouldReencrypt(encryptedTitle)) {
+                try {
+                    const title = await decryptByPrivacy(encryptedTitle, note.privacy);
+                    note.encrypted_title = await encryptForPrivacy(title, note.privacy);
+                    changed = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping title migration (web)', e);
+                }
             }
+
+            const encryptedTranscription = note.encrypted_transcription;
+            if (encryptedTranscription && shouldReencrypt(encryptedTranscription)) {
+                try {
+                    const transcription = await decryptByPrivacy(encryptedTranscription, note.privacy);
+                    note.encrypted_transcription = await encryptForPrivacy(transcription, note.privacy);
+                    changed = true;
+                } catch (e) {
+                    console.warn('[DatabaseService] Skipping transcription migration (web)', e);
+                }
+            }
+
+            if (changed) {
+                note.dirty = true;
+                note.synced = 0;
+                note.updated_at = now;
+                mutated = true;
+            }
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        if (mutated) {
+            saveWebStore(userId, notes);
+            console.log(`[DatabaseService] Encryption migrated (web -> ${target})`);
         }
         return;
     }
@@ -514,7 +410,7 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
 
     if (Platform.OS === 'web') {
         const requestedPrivacy = normalizePrivacy(note.privacy);
-        const notes = getWebStoreByContainer(userId, 'main');
+        const notes = getWebStore(userId);
         const index = notes.findIndex(n => n.id === note.id);
         const privacy = requestedPrivacy;
         const storageScope = normalizeStorageScope(note.storage_scope);
@@ -562,8 +458,7 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         } else {
             notes.push(safeNote);
         }
-        saveWebStoreByContainer(userId, notes, 'main');
-        clearLegacyWebVaultStore(userId);
+        saveWebStore(userId, notes);
         console.log(`[DatabaseService] Note saved to web store: ${note.id} (user=${userId})`);
         return;
     }
@@ -657,7 +552,7 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
         });
 
         notes = notes.filter(n => !toDeleteIds.has(n.id));
-        saveWebStoreByContainer(userId, notes, 'main');
+        saveWebStore(userId, notes);
         console.log(`[DatabaseService] Note deleted from web store: ${id}`);
         return;
     }
@@ -791,13 +686,13 @@ export const markAllDirty = async (userId: string): Promise<void> => {
     if (!userId) return;
 
     if (Platform.OS === 'web') {
-        const notes = getWebStoreByContainer(userId, 'main');
+        const notes = getWebStore(userId);
         const updated = notes.map(note => ({
             ...note,
             dirty: normalizeStorageScope(note.storage_scope) === 'sync',
             synced: 0,
         }));
-        saveWebStoreByContainer(userId, updated, 'main');
+        saveWebStore(userId, updated);
         console.log(`[DatabaseService] Marked all notes dirty in web store for user ${userId}`);
         return;
     }
@@ -918,9 +813,6 @@ const processImprovements = async (
     const grouped = new Map<string, NoteImprovement[]>();
     for (const imp of rawImprovements) {
         try {
-            if (isLegacyVaultPrivacy((imp as any).privacy)) {
-                continue;
-            }
             const noteId = imp.note_id || imp.noteId;
             if (!noteId) continue;
 
@@ -972,9 +864,6 @@ const processNotes = async (
 ): Promise<Note[]> => {
     const notes = await Promise.all(rawNotes.map(async (n): Promise<Note | null> => {
         try {
-            if (isLegacyVaultPrivacy((n as any).privacy)) {
-                return null;
-            }
             const privacy = normalizePrivacy(n.privacy);
             const hasEncryptedTitle = n.encrypted_title !== undefined && n.encrypted_title !== null;
             const titlePromise = hasEncryptedTitle ? decryptByPrivacy(n.encrypted_title, privacy) : Promise.resolve('');
@@ -1026,7 +915,7 @@ const processNotes = async (
 export const searchNotesLocal = async (userId: string, query: string): Promise<Note[]> => {
     let allNotes: Note[];
     if (Platform.OS === 'web') {
-        const rawMainNotes = getWebStoreByContainer(userId, 'main');
+        const rawMainNotes = getWebStore(userId);
         const decrypted = await Promise.all(rawMainNotes.map(async (n): Promise<Note | null> => {
             try {
                 const privacy = normalizePrivacy(n.privacy);
@@ -1103,7 +992,7 @@ export const wipeLocalDatabase = async (): Promise<void> => {
 
 export const saveImprovementLocal = async (userId: string, improvement: NoteImprovement): Promise<void> => {
     if (Platform.OS === 'web') {
-        const notes = getWebStoreByContainer(userId, 'main');
+        const notes = getWebStore(userId);
         const index = notes.findIndex(n => n.id === improvement.id);
 
         const childNote: Note = {
@@ -1134,7 +1023,7 @@ export const saveImprovementLocal = async (userId: string, improvement: NoteImpr
         } else {
             notes.push(safeChild);
         }
-        saveWebStoreByContainer(userId, notes, 'main');
+        saveWebStore(userId, notes);
         console.log(`[DatabaseService] Improvement saved to web store as child note: ${improvement.id}`);
         return;
     }
@@ -1210,7 +1099,7 @@ export const deleteImprovementLocal = async (userId: string, id: string): Promis
 
 export const getAllImprovementsLocal = async (userId: string): Promise<NoteImprovement[]> => {
     if (Platform.OS === 'web') {
-        const allNotes = getWebStoreByContainer(userId, 'main');
+        const allNotes = getWebStore(userId);
         return allNotes.filter(n => n.parent_id) as any[];
     }
     try {
@@ -1228,7 +1117,7 @@ export const getAllImprovementsLocal = async (userId: string): Promise<NoteImpro
 
 export const setActiveVariant = async (userId: string, parentNoteId: string, activeChildId: string | null): Promise<void> => {
     if (Platform.OS === 'web') {
-        const notes = getWebStoreByContainer(userId, 'main');
+        const notes = getWebStore(userId);
 
         const parentIndex = notes.findIndex(n => n.id === parentNoteId);
         if (parentIndex === -1) {
@@ -1252,7 +1141,7 @@ export const setActiveVariant = async (userId: string, parentNoteId: string, act
             });
         }
 
-        saveWebStoreByContainer(userId, notes, 'main');
+        saveWebStore(userId, notes);
         return;
     }
 

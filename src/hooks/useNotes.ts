@@ -128,13 +128,6 @@ export const useNotes = () => {
                 if (note.deleted || note.pending_delete) {
                     continue;
                 }
-                if ((note as any).privacy === 'vault') {
-                    // Critical: fully drop obsolete vault records from pre-migration builds.
-                    if (userId) {
-                        await deleteNoteLocal(userId, note.id);
-                    }
-                    continue;
-                }
                 const privacy = normalizePrivacy(note.privacy);
                 const normalized: Note = {
                     ...note,
