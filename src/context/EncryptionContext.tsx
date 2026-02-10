@@ -20,7 +20,7 @@ import {
 } from '../crypto/e2ee';
 import { decrypt, encrypt, setCryptoMode } from '../crypto/encryption';
 import { CustodyMode, e2eeApi } from '../api/e2ee';
-import { initDatabase, migrateLegacyEncryption } from '../services/DatabaseService';
+import { initDatabase } from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 
 export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
@@ -72,20 +72,19 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
     }, []);
 
-    const runMigration = useCallback(async (currentUserId: string) => {
+    const runDatabaseInit = useCallback(async (_currentUserId: string) => {
         try {
             await initDatabase();
-            await migrateLegacyEncryption(currentUserId, 'device');
         } catch (error) {
-            console.warn('[Encryption] Legacy migration failed:', error);
+            console.warn('[Encryption] Database init failed:', error);
         }
     }, []);
 
-    const scheduleMigration = useCallback((currentUserId: string) => {
+    const scheduleDatabaseInit = useCallback((currentUserId: string) => {
         InteractionManager.runAfterInteractions(() => {
-            void runMigration(currentUserId);
+            void runDatabaseInit(currentUserId);
         });
-    }, [runMigration]);
+    }, [runDatabaseInit]);
 
     const persistCustodyMode = useCallback(async (currentUserId: string, nextMode: CustodyMode) => {
         await storage.setCustodyMode(currentUserId, nextMode);
@@ -110,7 +109,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (!isAuthReady) {
             setStatus('ready');
             if (userId) {
-                scheduleMigration(userId);
+                scheduleDatabaseInit(userId);
             }
             return;
         }
@@ -192,7 +191,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setSyncEnabled(false);
         syncService.setSyncEnabled(false);
         setStatus('uninitialized');
-    }, [userId, isAuthenticated, isGuest, restoreMasterKey, scheduleMigration]);
+    }, [userId, isAuthenticated, isGuest, restoreMasterKey, scheduleDatabaseInit]);
 
     useEffect(() => {
         void loadState();
@@ -242,7 +241,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             }
 
             await syncService.resetSyncState(userId);
-            scheduleMigration(userId);
+            scheduleDatabaseInit(userId);
             return;
         }
 
@@ -267,8 +266,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             console.warn('[Encryption] Failed to store key bundle on server:', error);
         }
 
-        scheduleMigration(userId);
-    }, [isAuthenticated, isGuest, userId, scheduleMigration, persistMasterKey, persistCustodyMode]);
+        scheduleDatabaseInit(userId);
+    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey, persistCustodyMode]);
 
     const unlock = useCallback(async (secret: string) => {
         if (!secret.trim()) {
@@ -352,9 +351,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
 
         if (userId) {
-            scheduleMigration(userId);
+            scheduleDatabaseInit(userId);
         }
-    }, [bundle, custodyMode, userId, scheduleMigration, persistMasterKey]);
+    }, [bundle, custodyMode, userId, scheduleDatabaseInit, persistMasterKey]);
 
     const changePin = useCallback(async (secret: string, nextMode: SecretMode = 'pin') => {
         if (!isAuthenticated || isGuest) {

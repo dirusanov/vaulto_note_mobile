@@ -311,7 +311,7 @@ export const renderFormattedText = (content: string, formats: BlockFormat[], bas
 };
 
 /**
- * Legacy support for simple text rendering (reading mode).
+ * Simple text rendering support (reading mode).
  * Wraps the new range-based logic.
  */
 export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {

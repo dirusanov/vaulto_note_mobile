@@ -14,7 +14,6 @@ import {
     deleteNoteLocal,
     getAllImprovementsLocal,
     saveImprovementLocal,
-    migrateLegacyNotesToUser,
     markAllDirty,
 } from './DatabaseService';
 import { decrypt, encrypt, encryptForSync, decryptFromSync } from '../crypto/encryption';
@@ -44,7 +43,7 @@ const isExpectedDecryptFailure = (error: unknown): boolean => {
         message.includes('invalid tag') ||
         message.includes('e2ee locked') ||
         message.includes('master key missing') ||
-        message.includes('unsupported legacy ciphertext format') ||
+        message.includes('unsupported ciphertext format') ||
         message.includes('invalid ciphertext')
     );
 };
@@ -91,10 +90,6 @@ class SyncService {
         }
 
         if (userId) {
-            // Check if we need to migrate guest notes to this user
-            // This is "claim device notes" logic.
-            // We only do this if we are coming from a state where we might have guest notes.
-            await migrateLegacyNotesToUser(userId);
             this.currentUserId = userId;
         } else {
             this.currentUserId = null;

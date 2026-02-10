@@ -109,7 +109,7 @@ export async function decrypt(ciphertext: string): Promise<string> {
             return decryptWithKey(ciphertext, deviceKey, V2_DEVICE_PREFIX);
         }
 
-        throw new Error('Unsupported legacy ciphertext format.');
+        throw new Error('Unsupported ciphertext format.');
     } catch (error) {
         console.error('[decrypt] Decryption failed:', error);
         throw error;
@@ -129,6 +129,6 @@ export async function decryptFromSync(ciphertext: string): Promise<string> {
         const prefix = ciphertext.startsWith(V2_MASTER_PREFIX) ? V2_MASTER_PREFIX : V2_COMPAT_PREFIX;
         return decryptWithKey(ciphertext, masterKey, prefix);
     }
-    // Fallback for legacy/invalid data.
+    // Fallback for invalid data.
     return await decrypt(ciphertext);
 }
