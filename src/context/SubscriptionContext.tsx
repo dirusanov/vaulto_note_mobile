@@ -73,7 +73,6 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const plansRef = useRef<SubscriptionPlan[]>([]);
     const customerInfoRef = useRef<CustomerInfo | null>(null);
     const backendProRef = useRef(false);
-    const backendProKnownRef = useRef(false);
 
     const hasBackendProInfo = (currentUser: typeof user) =>
         !!currentUser &&
@@ -123,8 +122,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     ) => {
         customerInfoRef.current = customerInfo;
         const status = buildSubscriptionStatus(customerInfo, currentPlans);
-        const useBackendAsSource = backendProKnownRef.current;
-        const effectiveIsActive = useBackendAsSource ? backendProRef.current : status.isActive;
+        // Source of truth for feature unlock is backend user plan/is_pro.
+        // RevenueCat here is used for purchase metadata and product mapping.
+        const effectiveIsActive = backendProRef.current;
         const effectiveStatus = {
             ...status,
             isActive: effectiveIsActive,
@@ -138,7 +138,6 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     useEffect(() => {
         const backendKnown = hasBackendProInfo(user);
         const backendPro = isBackendPro(user);
-        backendProKnownRef.current = backendKnown;
         backendProRef.current = backendPro;
 
         if (customerInfoRef.current) {
