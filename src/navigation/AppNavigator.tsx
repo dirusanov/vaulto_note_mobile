@@ -4,6 +4,7 @@ import { NotesListScreen } from '../screens/NotesListScreen';
 import { AppLockScreen } from '../screens/AppLockScreen';
 import { NoteEditScreen } from '../screens/NoteEditScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { PaywallScreen } from '../screens/PaywallScreen';
 import { colors } from '../theme/colors';
 
 import { SignInScreen } from '../screens/SignInScreen';
@@ -88,6 +89,14 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                 component={SettingsScreen}
                 options={{
                     headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="Paywall"
+                component={PaywallScreen}
+                options={{
+                    headerShown: false,
+                    presentation: 'modal',
                 }}
             />
         </Stack.Navigator>

@@ -23,6 +23,8 @@ export interface UserProfile {
     is_verified: boolean;
     status: string;
     provider: string;
+    plan?: string;
+    is_pro?: boolean;
     transcription_max_seconds: number;
     transcription_used_seconds: number;
     transcription_remaining_seconds: number;

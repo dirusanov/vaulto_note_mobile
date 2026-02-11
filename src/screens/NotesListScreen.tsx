@@ -20,6 +20,7 @@ import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
+import { notesApi } from '../api/notes';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
@@ -28,8 +29,8 @@ const LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { userId } = useAuth();
-    const { syncLocked, hasRemoteKeyBundle, bundle, custodyMode, resetSync } = useEncryption();
+    const { userId, isAuthenticated, isGuest } = useAuth();
+    const { syncLocked, bundle, custodyMode, resetSync } = useEncryption();
     const {
         notes,
         loading,
@@ -46,6 +47,7 @@ export const NotesListScreen = () => {
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
+    const [hasServerNotes, setHasServerNotes] = useState(false);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -181,8 +183,55 @@ export const NotesListScreen = () => {
         );
     }, [resetSync]);
 
-    const hasSyncHistory = hasRemoteKeyBundle || !!bundle || custodyMode === 'strict_seed';
-    const shouldShowLockBanner = !isSelectionMode && syncLocked && hasSyncHistory && !lockBannerDismissed;
+    const shouldShowLockBanner =
+        !isSelectionMode &&
+        isAuthenticated &&
+        !isGuest &&
+        syncLocked &&
+        hasServerNotes &&
+        !lockBannerDismissed;
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const checkServerNotesPresence = async () => {
+            if (!isAuthenticated || isGuest || !syncLocked) {
+                if (!cancelled) {
+                    setHasServerNotes(false);
+                }
+                return;
+            }
+
+            try {
+                const response = await notesApi.sync({
+                    changes: [],
+                    improvement_changes: [],
+                    since_updated_at: '1970-01-01T00:00:00+00:00',
+                });
+                const hasRemoteData =
+                    (response.server_changes?.length ?? 0) > 0 ||
+                    (response.improvement_changes?.length ?? 0) > 0 ||
+                    (response.updated?.length ?? 0) > 0 ||
+                    (response.improvement_updates?.length ?? 0) > 0 ||
+                    (response.conflicts?.length ?? 0) > 0 ||
+                    (response.improvement_conflicts?.length ?? 0) > 0;
+
+                if (!cancelled) {
+                    setHasServerNotes(hasRemoteData);
+                }
+            } catch (error) {
+                console.warn('[NotesList] Failed to check remote notes presence for lock banner', error);
+                if (!cancelled) {
+                    setHasServerNotes(false);
+                }
+            }
+        };
+
+        void checkServerNotesPresence();
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, isGuest, syncLocked, userId]);
 
     useEffect(() => {
         let mounted = true;
@@ -193,7 +242,7 @@ export const NotesListScreen = () => {
                 if (mounted) setLockBannerDismissed(false);
                 return;
             }
-            if (!syncLocked || !hasSyncHistory) {
+            if (!isAuthenticated || isGuest || !syncLocked || !hasServerNotes) {
                 await AsyncStorage.removeItem(key);
                 if (mounted) setLockBannerDismissed(false);
                 return;
@@ -208,7 +257,7 @@ export const NotesListScreen = () => {
         return () => {
             mounted = false;
         };
-    }, [userId, syncLocked, hasSyncHistory]);
+    }, [userId, isAuthenticated, isGuest, syncLocked, hasServerNotes]);
 
     const dismissLockBanner = useCallback(() => {
         setLockBannerDismissed(true);
@@ -471,9 +520,7 @@ export const NotesListScreen = () => {
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.lockBannerText}>
-                        {hasRemoteKeyBundle
-                            ? `Encrypted sync data detected on server. Unlock using your ${secretModeLabel} to access notes on this device.`
-                            : `Sync key is configured, but currently locked. Unlock using your ${secretModeLabel}.`}
+                        {`Encrypted sync data detected on server. Unlock using your ${secretModeLabel} to access notes on this device.`}
                     </Text>
                     <View style={styles.lockBannerActions}>
                         <TouchableOpacity

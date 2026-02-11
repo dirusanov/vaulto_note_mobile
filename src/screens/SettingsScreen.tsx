@@ -33,12 +33,109 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
+import { SubscriptionStatus, useSubscription } from '../context/SubscriptionContext';
+
+const formatSubscriptionDate = (isoDate: string | null) => {
+    if (!isoDate) return null;
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+interface SubscriptionStatusSectionProps {
+    isAuthenticated: boolean;
+    isGuest: boolean;
+    isPro: boolean;
+    isLoading: boolean;
+    subscriptionStatus: SubscriptionStatus | null;
+    onUpgrade: () => void;
+    onOpenDetails: () => void;
+}
+
+const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
+    isAuthenticated,
+    isGuest,
+    isPro,
+    isLoading,
+    subscriptionStatus,
+    onUpgrade,
+    onOpenDetails,
+}) => {
+    if (!isAuthenticated || isGuest) return null;
+
+    if (isLoading) {
+        return <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.s }} />;
+    }
+
+    const expiresLabel = formatSubscriptionDate(subscriptionStatus?.expiresAt || null);
+
+    if (isPro) {
+        return (
+            <View style={styles.proStatusCard}>
+                <View style={styles.proStatusHeader}>
+                    <View style={styles.proStatusIconWrap}>
+                        <MaterialIcons name="workspace-premium" size={18} color={colors.surface} />
+                    </View>
+                    <View style={styles.proStatusCopy}>
+                        <Text style={styles.proStatusTitle}>PRO</Text>
+                        <Text style={styles.proStatusSubtitle}>
+                            {expiresLabel ? `Subscription active until ${expiresLabel}` : 'Subscription active'}
+                        </Text>
+                    </View>
+                    <View style={styles.proStatusPill}>
+                        <Text style={styles.proStatusPillText}>ACTIVE</Text>
+                    </View>
+                </View>
+                <TouchableOpacity
+                    style={styles.subscriptionDetailsButton}
+                    onPress={onOpenDetails}
+                    activeOpacity={0.9}
+                >
+                    <MaterialIcons name="receipt-long" size={18} color={colors.primary} />
+                    <Text style={styles.subscriptionDetailsButtonText}>Subscription details</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.premiumUpgradeCard}>
+            <View style={styles.premiumUpgradeGlow} />
+            <TouchableOpacity style={styles.premiumUpgradeRow} onPress={onUpgrade} activeOpacity={0.92}>
+                <View style={styles.premiumUpgradeIcon}>
+                    <MaterialIcons name="auto-awesome" size={20} color={colors.accentYellow} />
+                </View>
+                <View style={styles.premiumUpgradeCopy}>
+                    <Text style={styles.premiumUpgradeTitle}>Upgrade to Pro</Text>
+                    <Text style={styles.premiumUpgradeSubtitle}>
+                        Unlock OpenAI, Self-Hosted and all features marked as Pro
+                    </Text>
+                </View>
+                <MaterialIcons name="arrow-forward-ios" size={16} color={colors.surface} />
+            </TouchableOpacity>
+            <TouchableOpacity
+                onPress={onOpenDetails}
+                style={styles.premiumStatusInlineButton}
+                activeOpacity={0.9}
+            >
+                <MaterialIcons name="receipt-long" size={16} color="rgba(255,255,255,0.92)" />
+                <Text style={styles.premiumStatusInlineText}>View subscription status</Text>
+            </TouchableOpacity>
+        </View>
+    );
+};
 
 
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
+    const {
+        isPro,
+        isLoading: subscriptionLoading,
+        subscriptionStatus,
+    } = useSubscription();
     const { syncEnabled, syncLocked, hasRemoteKeyBundle, resetSync } = useEncryption();
     const {
         status: appLockStatus,
@@ -173,7 +270,7 @@ export const SettingsScreen = () => {
             icon: 'cloud-queue',
             accent: colors.accentPurple,
             chips: ['Whisper', 'GPT', 'Fast'],
-            isLocked: true,
+            isLocked: !isPro,
             proMessage: 'Available in Pro',
         },
         {
@@ -184,7 +281,7 @@ export const SettingsScreen = () => {
             icon: 'dns',
             accent: colors.accentGreen,
             chips: ['Your Server', 'VPN/SSL'],
-            isLocked: true,
+            isLocked: !isPro,
             proMessage: 'Available in Pro',
         },
     ];
@@ -243,6 +340,17 @@ export const SettingsScreen = () => {
 
         // Show upgrade alert for locked providers
         if (selectedOption?.isLocked) {
+            if (!isAuthenticated || isGuest) {
+                Alert.alert(
+                    'Sign in required',
+                    `${selectedOption.title} is a Pro feature. Sign in to upgrade your account.`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Sign In', onPress: () => navigation.navigate('SignIn') },
+                    ]
+                );
+                return;
+            }
             Alert.alert(
                 'Pro Feature',
                 `${selectedOption.title} is available in the Pro plan. Upgrade to unlock advanced AI providers and enhanced features.`,
@@ -252,10 +360,9 @@ export const SettingsScreen = () => {
                         style: 'cancel'
                     },
                     {
-                        text: 'Learn More',
+                        text: 'Upgrade to Pro',
                         onPress: () => {
-                            // TODO: Navigate to upgrade screen when available
-                            Alert.alert('Coming Soon', 'Pro plan details will be available soon!');
+                            navigation.navigate('Paywall');
                         }
                     }
                 ]
@@ -270,6 +377,33 @@ export const SettingsScreen = () => {
             console.error('Failed to persist AI provider', e);
         }
     };
+
+    const handleOpenSubscriptionDetails = useCallback(() => {
+        if (!isAuthenticated || isGuest) {
+            return;
+        }
+        if (!subscriptionStatus || !subscriptionStatus.isActive) {
+            Alert.alert(
+                'Subscription',
+                'No active Pro subscription on this account yet.'
+            );
+            return;
+        }
+
+        const expiresLabel = formatSubscriptionDate(subscriptionStatus.expiresAt) || 'N/A';
+        const billingLabel = subscriptionStatus.billingPeriod
+            ? subscriptionStatus.billingPeriod.charAt(0).toUpperCase() + subscriptionStatus.billingPeriod.slice(1)
+            : 'N/A';
+
+        const details = [
+            `Status: Active`,
+            `Plan: ${billingLabel}`,
+            `Expires: ${expiresLabel}`,
+            `Auto-renew: ${subscriptionStatus.willRenew ? 'Yes' : 'No'}`,
+            `Product: ${subscriptionStatus.productIdentifier || 'N/A'}`,
+        ].join('\n');
+        Alert.alert('Pro Subscription', details, [{ text: 'OK' }]);
+    }, [isAuthenticated, isGuest, subscriptionStatus]);
 
     const toggleAgentMode = async (value: boolean) => {
         setAgentModeEnabledState(value);
@@ -516,7 +650,17 @@ export const SettingsScreen = () => {
                     )}
 
 
-                    <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} />
+                    <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} isPro={isPro} />
+
+                    <SubscriptionStatusSection
+                        isAuthenticated={isAuthenticated}
+                        isGuest={isGuest}
+                        isPro={isPro}
+                        isLoading={subscriptionLoading}
+                        subscriptionStatus={subscriptionStatus}
+                        onUpgrade={() => navigation.navigate('Paywall')}
+                        onOpenDetails={handleOpenSubscriptionDetails}
+                    />
 
                     {isAuthenticated && !isGuest && (
                         <View style={{ marginTop: spacing.m }}>
@@ -1230,6 +1374,132 @@ const styles = StyleSheet.create({
         elevation: 3,
         borderWidth: 1,
         borderColor: colors.border,
+    },
+    proStatusCard: {
+        marginTop: spacing.m,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#BFE8D0',
+        backgroundColor: '#F3FCF7',
+        padding: spacing.m,
+        gap: spacing.s,
+    },
+    proStatusHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    proStatusIconWrap: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: colors.accentGreen,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    proStatusCopy: {
+        flex: 1,
+    },
+    proStatusTitle: {
+        ...typography.h3,
+        fontSize: 16,
+        color: '#067647',
+    },
+    proStatusSubtitle: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    proStatusPill: {
+        borderRadius: 999,
+        paddingHorizontal: spacing.s,
+        paddingVertical: 4,
+        backgroundColor: '#DBF8E8',
+        borderWidth: 1,
+        borderColor: '#9FE3BD',
+    },
+    proStatusPillText: {
+        ...typography.captionBold,
+        color: '#067647',
+        fontSize: 11,
+    },
+    subscriptionDetailsButton: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    subscriptionDetailsButtonText: {
+        ...typography.body,
+        color: colors.primary,
+        fontWeight: '600',
+        flex: 1,
+    },
+    premiumUpgradeCard: {
+        marginTop: spacing.m,
+        borderRadius: 16,
+        padding: spacing.m,
+        backgroundColor: '#102A56',
+        borderWidth: 1,
+        borderColor: '#1D3B75',
+        overflow: 'hidden',
+        shadowColor: '#102A56',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    premiumUpgradeGlow: {
+        position: 'absolute',
+        width: 120,
+        height: 120,
+        borderRadius: 999,
+        top: -50,
+        right: -30,
+        backgroundColor: 'rgba(255, 193, 7, 0.18)',
+    },
+    premiumUpgradeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    premiumUpgradeIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 193, 7, 0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    premiumUpgradeCopy: {
+        flex: 1,
+    },
+    premiumUpgradeTitle: {
+        ...typography.h3,
+        color: colors.surface,
+        fontSize: 17,
+    },
+    premiumUpgradeSubtitle: {
+        ...typography.caption,
+        color: 'rgba(255,255,255,0.82)',
+        marginTop: 2,
+    },
+    premiumStatusInlineButton: {
+        marginTop: spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.15)',
+        paddingTop: spacing.s,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    premiumStatusInlineText: {
+        ...typography.captionBold,
+        color: 'rgba(255,255,255,0.92)',
     },
     cardHeader: {
         flexDirection: 'row',

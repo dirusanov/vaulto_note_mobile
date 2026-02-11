@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/context/AuthContext';
+import { SubscriptionProvider } from './src/context/SubscriptionContext';
 import { EncryptionProvider } from './src/context/EncryptionContext';
 import { AppLockProvider, useAppLock } from './src/context/AppLockContext';
 import { NotesProvider } from './src/contexts/NotesContext';
@@ -65,19 +66,21 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <AuthProvider>
-                    <EncryptionProvider>
-                        <AppLockProvider>
-                            <EncryptionGate>
-                                <NotesProvider>
-                                    <AppLockGate>
-                                        <StatusBar style="auto" />
-                                        <RootNavigator />
-                                        <AppPrivacyOverlay />
-                                    </AppLockGate>
-                                </NotesProvider>
-                            </EncryptionGate>
-                        </AppLockProvider>
-                    </EncryptionProvider>
+                    <SubscriptionProvider>
+                        <EncryptionProvider>
+                            <AppLockProvider>
+                                <EncryptionGate>
+                                    <NotesProvider>
+                                        <AppLockGate>
+                                            <StatusBar style="auto" />
+                                            <RootNavigator />
+                                            <AppPrivacyOverlay />
+                                        </AppLockGate>
+                                    </NotesProvider>
+                                </EncryptionGate>
+                            </AppLockProvider>
+                        </EncryptionProvider>
+                    </SubscriptionProvider>
                 </AuthProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

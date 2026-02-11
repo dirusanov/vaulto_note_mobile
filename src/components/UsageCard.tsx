@@ -11,9 +11,10 @@ interface UsageCardProps {
     user: UserProfile | null;
     aiProvider?: AIProvider;
     isGuest?: boolean;
+    isPro?: boolean;
 }
 
-export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest }) => {
+export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false }) => {
     // Only show for Secure LLM provider
     if (aiProvider !== 'secure_llm') return null;
     if (!user) return null;
@@ -101,7 +102,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
                         />
                     </View>
                     <View>
-                        <Text style={styles.title}>Trial Balance</Text>
+                        <Text style={styles.title}>Transcription Balance</Text>
                         <Text style={styles.subtitle}>Transcription time</Text>
                     </View>
                 </View>
@@ -126,12 +127,14 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
                     <View style={styles.warningBox}>
                         <MaterialIcons name="info-outline" size={18} color={colors.error} />
                         <Text style={styles.warningText}>
-                            You've used all 10 free minutes
+                            {isPro ? "You've used all monthly minutes" : "You've used all 10 free minutes"}
                         </Text>
                     </View>
-                    <Text style={styles.upgradeHint}>
-                        Upgrade to continue transcribing (coming soon)
-                    </Text>
+                    {!isPro && (
+                        <Text style={styles.upgradeHint}>
+                            Upgrade to continue transcribing (coming soon)
+                        </Text>
+                    )}
                 </View>
             )}
 
@@ -139,7 +142,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest 
                 <View style={styles.warningBox}>
                     <MaterialIcons name="warning-amber" size={18} color={colors.warning} />
                     <Text style={[styles.warningText, { color: colors.warning }]}>
-                        Running low on trial time
+                        {isPro ? 'Running low on monthly transcription minutes' : 'Running low on transcription time'}
                     </Text>
                 </View>
             )}
