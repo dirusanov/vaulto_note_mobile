@@ -73,6 +73,14 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const plansRef = useRef<SubscriptionPlan[]>([]);
     const customerInfoRef = useRef<CustomerInfo | null>(null);
     const backendProRef = useRef(false);
+    const backendProKnownRef = useRef(false);
+
+    const hasBackendProInfo = (currentUser: typeof user) =>
+        !!currentUser &&
+        (
+            typeof (currentUser as any).is_pro === 'boolean' ||
+            typeof (currentUser as any).plan === 'string'
+        );
 
     const isBackendPro = (currentUser: typeof user) =>
         !!currentUser && (() => {
@@ -82,8 +90,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
             return (
                 (currentUser as any).is_pro === true ||
-                normalizedPlan === 'pro' ||
-                ((currentUser as any).provider !== 'anonymous' && (currentUser as any).transcription_max_seconds >= 18000)
+                normalizedPlan === 'pro'
             );
         })();
 
@@ -116,22 +123,22 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     ) => {
         customerInfoRef.current = customerInfo;
         const status = buildSubscriptionStatus(customerInfo, currentPlans);
-        const effectiveStatus =
-            status.isActive || !backendProRef.current
-                ? status
-                : {
-                    ...status,
-                    isActive: true,
-                    planCode: status.planCode || 'pro',
-                    billingPeriod: status.billingPeriod || null,
-                };
+        const useBackendAsSource = backendProKnownRef.current;
+        const effectiveIsActive = useBackendAsSource ? backendProRef.current : status.isActive;
+        const effectiveStatus = {
+            ...status,
+            isActive: effectiveIsActive,
+            planCode: effectiveIsActive ? (status.planCode || 'pro') : status.planCode,
+        };
         setSubscriptionStatus(effectiveStatus);
-        setIsPro(effectiveStatus.isActive);
+        setIsPro(effectiveIsActive);
         return effectiveStatus;
     };
 
     useEffect(() => {
+        const backendKnown = hasBackendProInfo(user);
         const backendPro = isBackendPro(user);
+        backendProKnownRef.current = backendKnown;
         backendProRef.current = backendPro;
 
         if (customerInfoRef.current) {
@@ -139,7 +146,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return;
         }
 
-        if (backendPro) {
+        if (backendKnown && backendPro) {
             setIsPro(true);
             setSubscriptionStatus((prev) => ({
                 isActive: true,
@@ -154,7 +161,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             }));
         } else {
             setIsPro(false);
-            setSubscriptionStatus(null);
+            setSubscriptionStatus((prev) => (prev ? { ...prev, isActive: false } : null));
         }
     }, [user?.id, (user as any)?.is_pro, (user as any)?.plan]);
 
