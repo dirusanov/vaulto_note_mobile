@@ -101,26 +101,17 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
 
     return (
         <View style={styles.premiumUpgradeCard}>
-            <View style={styles.premiumUpgradeGlow} />
-            <TouchableOpacity style={styles.premiumUpgradeRow} onPress={onUpgrade} activeOpacity={0.92}>
+            <TouchableOpacity style={styles.premiumUpgradeRow} onPress={onUpgrade} activeOpacity={0.9}>
                 <View style={styles.premiumUpgradeIcon}>
-                    <MaterialIcons name="auto-awesome" size={20} color={colors.accentYellow} />
+                    <MaterialIcons name="workspace-premium" size={24} color="#F59E0B" />
                 </View>
                 <View style={styles.premiumUpgradeCopy}>
                     <Text style={styles.premiumUpgradeTitle}>Upgrade to Pro</Text>
                     <Text style={styles.premiumUpgradeSubtitle}>
-                        Unlock OpenAI, Self-Hosted and all features marked as Pro
+                        Extended transcription & premium features
                     </Text>
                 </View>
-                <MaterialIcons name="arrow-forward-ios" size={16} color={colors.surface} />
-            </TouchableOpacity>
-            <TouchableOpacity
-                onPress={onOpenDetails}
-                style={styles.premiumStatusInlineButton}
-                activeOpacity={0.9}
-            >
-                <MaterialIcons name="receipt-long" size={16} color="rgba(255,255,255,0.92)" />
-                <Text style={styles.premiumStatusInlineText}>View subscription status</Text>
+                <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
         </View>
     );
@@ -390,20 +381,37 @@ export const SettingsScreen = () => {
             return;
         }
 
+        const expiresDate = subscriptionStatus.expiresAt ? new Date(subscriptionStatus.expiresAt) : null;
         const expiresLabel = formatSubscriptionDate(subscriptionStatus.expiresAt) || 'N/A';
-        const billingLabel = subscriptionStatus.billingPeriod
-            ? subscriptionStatus.billingPeriod.charAt(0).toUpperCase() + subscriptionStatus.billingPeriod.slice(1)
-            : 'N/A';
+
+        // Calculate days remaining
+        let daysRemaining = 'N/A';
+        if (expiresDate && !Number.isNaN(expiresDate.getTime())) {
+            const now = new Date();
+            const diffTime = expiresDate.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            daysRemaining = diffDays > 0 ? `${diffDays} days` : 'Expiring today';
+        }
+
+        // Calculate limits
+        const totalSeconds = user?.transcription_max_seconds || 0;
+        const usedSeconds = user?.transcription_used_seconds || 0;
+        const remainingSeconds = user?.transcription_remaining_seconds !== undefined
+            ? user.transcription_remaining_seconds
+            : Math.max(0, totalSeconds - usedSeconds);
+
+        const minsLeft = Math.floor(remainingSeconds / 60);
+        const hoursLeft = (minsLeft / 60).toFixed(1);
 
         const details = [
-            `Status: Active`,
-            `Plan: ${billingLabel}`,
-            `Expires: ${expiresLabel}`,
-            `Auto-renew: ${subscriptionStatus.willRenew ? 'Yes' : 'No'}`,
-            `Product: ${subscriptionStatus.productIdentifier || 'N/A'}`,
+            `Subscription ends in: ${daysRemaining}`,
+            `Limits reset on: ${expiresLabel}`,
+            `\nTranscription balance:`,
+            `${minsLeft} minutes remaining (${hoursLeft} hours)`,
         ].join('\n');
-        Alert.alert('Pro Subscription', details, [{ text: 'OK' }]);
-    }, [isAuthenticated, isGuest, subscriptionStatus]);
+
+        Alert.alert('Pro Status', details, [{ text: 'OK' }]);
+    }, [isAuthenticated, isGuest, subscriptionStatus, user]);
 
     const toggleAgentMode = async (value: boolean) => {
         setAgentModeEnabledState(value);
@@ -650,7 +658,7 @@ export const SettingsScreen = () => {
                     )}
 
 
-                    <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} isPro={isPro} />
+                    {!isPro && <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} isPro={isPro} />}
 
                     <SubscriptionStatusSection
                         isAuthenticated={isAuthenticated}
@@ -663,29 +671,36 @@ export const SettingsScreen = () => {
                     />
 
                     {isAuthenticated && !isGuest && (
-                        <View style={{ marginTop: spacing.m }}>
-                            <Button
-                                title="Manage Account (Web)"
-                                loading={isGeneratingMagicLink}
-                                onPress={async () => {
-                                    setIsGeneratingMagicLink(true);
-                                    try {
-                                        const { url } = await import('../api/auth').then(m => m.authApi.generateMagicLink());
-                                        const canOpen = await Linking.canOpenURL(url);
-                                        if (canOpen) {
-                                            await Linking.openURL(url);
-                                        } else {
-                                            Alert.alert('Error', 'Cannot open web browser');
-                                        }
-                                    } catch (error: any) {
-                                        Alert.alert('Error', error?.message || 'Failed to generate magic link');
-                                    } finally {
-                                        setIsGeneratingMagicLink(false);
+                        <TouchableOpacity
+                            style={styles.manageAccountRow}
+                            onPress={async () => {
+                                setIsGeneratingMagicLink(true);
+                                try {
+                                    const { url } = await import('../api/auth').then(m => m.authApi.generateMagicLink());
+                                    const canOpen = await Linking.canOpenURL(url);
+                                    if (canOpen) {
+                                        await Linking.openURL(url);
+                                    } else {
+                                        Alert.alert('Error', 'Cannot open web browser');
                                     }
-                                }}
-                                variant="outline"
-                            />
-                        </View>
+                                } catch (error: any) {
+                                    Alert.alert('Error', error?.message || 'Failed to generate magic link');
+                                } finally {
+                                    setIsGeneratingMagicLink(false);
+                                }
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.manageAccountIcon}>
+                                {isGeneratingMagicLink ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                    <MaterialIcons name="open-in-new" size={20} color={colors.primary} />
+                                )}
+                            </View>
+                            <Text style={styles.manageAccountText}>Manage Account (Web)</Text>
+                            <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </TouchableOpacity>
                     )}
                 </View>
 
@@ -1441,37 +1456,27 @@ const styles = StyleSheet.create({
     },
     premiumUpgradeCard: {
         marginTop: spacing.m,
-        borderRadius: 16,
+        borderRadius: 20,
         padding: spacing.m,
-        backgroundColor: '#102A56',
+        backgroundColor: colors.surface,
         borderWidth: 1,
-        borderColor: '#1D3B75',
-        overflow: 'hidden',
-        shadowColor: '#102A56',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.22,
+        borderColor: 'rgba(255, 193, 7, 0.3)', // Subtle gold border
+        shadowColor: colors.accentYellow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
         shadowRadius: 12,
-        elevation: 6,
-    },
-    premiumUpgradeGlow: {
-        position: 'absolute',
-        width: 120,
-        height: 120,
-        borderRadius: 999,
-        top: -50,
-        right: -30,
-        backgroundColor: 'rgba(255, 193, 7, 0.18)',
+        elevation: 4,
     },
     premiumUpgradeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
+        gap: spacing.m,
     },
     premiumUpgradeIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255, 193, 7, 0.12)',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#FFF9C4', // Light cheerful yellow
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -1480,26 +1485,39 @@ const styles = StyleSheet.create({
     },
     premiumUpgradeTitle: {
         ...typography.h3,
-        color: colors.surface,
+        color: colors.text,
         fontSize: 17,
+        marginBottom: 2,
     },
     premiumUpgradeSubtitle: {
         ...typography.caption,
-        color: 'rgba(255,255,255,0.82)',
-        marginTop: 2,
+        color: colors.textSecondary,
+        fontSize: 13,
     },
-    premiumStatusInlineButton: {
-        marginTop: spacing.s,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.15)',
-        paddingTop: spacing.s,
+    manageAccountRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.xs,
+        paddingVertical: spacing.m,
+        paddingHorizontal: spacing.s,
+        marginTop: spacing.s,
+        borderTopWidth: 0.5,
+        borderTopColor: colors.border,
     },
-    premiumStatusInlineText: {
-        ...typography.captionBold,
-        color: 'rgba(255,255,255,0.92)',
+    manageAccountIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: colors.backgroundSecondary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.m,
+    },
+    manageAccountText: {
+        ...typography.body,
+        fontSize: 16,
+        fontWeight: '500',
+        color: colors.text,
+        flex: 1,
     },
     cardHeader: {
         flexDirection: 'row',
