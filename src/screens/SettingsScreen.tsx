@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -33,7 +33,8 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
-import { SubscriptionStatus, useSubscription } from '../context/SubscriptionContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import { ProIcon } from '../components/ProIcon';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -55,8 +56,6 @@ interface SubscriptionStatusSectionProps {
     isGuest: boolean;
     isPro: boolean;
     isLoading: boolean;
-    subscriptionStatus: SubscriptionStatus | null;
-    nextRefillAt: string | null;
     onUpgrade: () => void;
     onOpenMinutesSheet: () => void;
 }
@@ -66,8 +65,6 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     isGuest,
     isPro,
     isLoading,
-    subscriptionStatus,
-    nextRefillAt,
     onUpgrade,
     onOpenMinutesSheet,
 }) => {
@@ -77,47 +74,61 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
         return <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.s }} />;
     }
 
-    const expiresLabel = formatSubscriptionDate(subscriptionStatus?.expiresAt || null);
-    const refillLabel = formatSubscriptionDate(nextRefillAt);
-    const refillDays = getDaysUntilDate(nextRefillAt);
-    const refillTitle = refillDays === 0
-        ? 'Limits refresh today'
-        : refillDays === 1
-            ? 'Limits refresh in 1 day'
-            : typeof refillDays === 'number'
-                ? `Limits refresh in ${refillDays} days`
-                : null;
-    const refillTitleResolved = refillTitle || 'Monthly limits are active';
-    const refillDateResolved = refillLabel || 'Date will appear after first sync';
-
     if (isPro) {
         return (
             <View style={styles.proStatusCard}>
                 <View style={styles.proStatusHeader}>
-                    <View style={styles.proStatusIconWrap}>
-                        <MaterialIcons name="workspace-premium" size={18} color={colors.surface} />
+                    {/* Unified PRO Badge (Restored) */}
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: colors.primary,
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 10, // Pill shape
+                        gap: 4,
+                        shadowColor: colors.primary,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 2,
+                    }}>
+                        <Image
+                            source={require('../../assets/icon.png')}
+                            style={{
+                                width: 10,
+                                height: 10,
+                                tintColor: '#FFFFFF',
+                                opacity: 1,
+                            }}
+                            resizeMode="contain"
+                        />
+                        <Text style={{
+                            ...typography.caption,
+                            color: '#fff',
+                            fontWeight: '800', // Extra bold
+                            fontSize: 11,
+                            letterSpacing: 0.5,
+                        }}>PRO</Text>
                     </View>
-                    <View style={styles.proStatusCopy}>
-                        <Text style={styles.proStatusTitle}>PRO</Text>
-                        <Text style={styles.proStatusSubtitle}>
-                            {expiresLabel ? `Subscription active until ${expiresLabel}` : 'Subscription active'}
-                        </Text>
-                    </View>
+
+                    {/* Spacer to push "ACTIVE" to the right */}
+                    <View style={{ flex: 1 }} />
+
                     <View style={styles.proStatusPill}>
                         <Text style={styles.proStatusPillText}>ACTIVE</Text>
                     </View>
                 </View>
                 <TouchableOpacity
-                    style={styles.refillInfoCard}
+                    style={styles.proStatusAction}
                     onPress={onOpenMinutesSheet}
                     activeOpacity={0.9}
                 >
-                    <View style={styles.refillInfoHeader}>
-                        <MaterialIcons name="update" size={16} color={colors.primary} />
-                        <Text style={styles.refillInfoTitle}>{refillTitleResolved}</Text>
+                    <View style={styles.proStatusActionLeft}>
+                        {/* Hourglass icon removed as requested */}
+                        <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>Subscription details</Text>
                     </View>
-                    <Text style={styles.refillInfoDate}>Next refill: {refillDateResolved}</Text>
-                    <Text style={styles.refillInfoHint}>Tap to view remaining minutes</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
             </View>
         );
@@ -127,7 +138,12 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
         <View style={styles.premiumUpgradeCard}>
             <TouchableOpacity style={styles.premiumUpgradeRow} onPress={onUpgrade} activeOpacity={0.9}>
                 <View style={styles.premiumUpgradeIcon}>
-                    <MaterialIcons name="workspace-premium" size={24} color="#F59E0B" />
+                    <ProIcon
+                        size={22}
+                        containerSize={40}
+                        backgroundColor="#FFF7E6"
+                        borderColor="#FCD34D"
+                    />
                 </View>
                 <View style={styles.premiumUpgradeCopy}>
                     <Text style={styles.premiumUpgradeTitle}>Upgrade to Pro</Text>
@@ -149,7 +165,6 @@ export const SettingsScreen = () => {
     const {
         isPro,
         isLoading: subscriptionLoading,
-        subscriptionStatus,
     } = useSubscription();
     const { syncEnabled, syncLocked, hasRemoteKeyBundle, resetSync } = useEncryption();
     const {
@@ -199,6 +214,54 @@ export const SettingsScreen = () => {
     // Self-hosted settings
     const [selfHostedUrl, setSelfHostedUrlState] = useState('');
     const [selfHostedApiKey, setSelfHostedApiKeyState] = useState('');
+
+    // Agent Mode Animation - Swaying
+    const swayAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (agentModeEnabled) {
+            // Sway animation sequence
+            Animated.loop(
+                Animated.sequence([
+                    // Tilt left
+                    Animated.timing(swayAnim, {
+                        toValue: -1,
+                        duration: 1000,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: true,
+                    }),
+                    // Tilt right
+                    Animated.timing(swayAnim, {
+                        toValue: 1,
+                        duration: 1000,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: true,
+                    }),
+                    // Return to center
+                    Animated.timing(swayAnim, {
+                        toValue: 0,
+                        duration: 1000,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: true,
+                    }),
+                    // Pause
+                    Animated.delay(2000)
+                ])
+            ).start();
+        } else {
+            swayAnim.stopAnimation();
+            Animated.timing(swayAnim, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [agentModeEnabled]);
+
+    const sway = swayAnim.interpolate({
+        inputRange: [-1, 1],
+        outputRange: ['-15deg', '15deg'],
+    });
 
     const usingOpenAI = aiProvider === 'openai';
     const usingSelfHosted = aiProvider === 'selfhosted';
@@ -654,7 +717,7 @@ export const SettingsScreen = () => {
                                     ]}>
                                         {syncEnabled
                                             ? (syncLocked
-                                                ? "Sync locked (unlock to sync)"
+                                                ? "Sync locked"
                                                 : (unsyncedCount > 0 ? `${unsyncedCount} unsynced` : "Notes synced"))
                                             : "Sync disabled"}
                                     </Text>
@@ -680,44 +743,11 @@ export const SettingsScreen = () => {
                         isGuest={isGuest}
                         isPro={isPro}
                         isLoading={subscriptionLoading}
-                        subscriptionStatus={subscriptionStatus}
-                        nextRefillAt={user?.subscription_next_refill_at ?? null}
                         onUpgrade={() => navigation.navigate('Paywall')}
                         onOpenMinutesSheet={openMinutesSheet}
                     />
 
-                    {isAuthenticated && !isGuest && (
-                        <TouchableOpacity
-                            style={styles.manageAccountRow}
-                            onPress={async () => {
-                                setIsGeneratingMagicLink(true);
-                                try {
-                                    const { url } = await import('../api/auth').then(m => m.authApi.generateMagicLink());
-                                    const canOpen = await Linking.canOpenURL(url);
-                                    if (canOpen) {
-                                        await Linking.openURL(url);
-                                    } else {
-                                        Alert.alert('Error', 'Cannot open web browser');
-                                    }
-                                } catch (error: any) {
-                                    Alert.alert('Error', error?.message || 'Failed to generate magic link');
-                                } finally {
-                                    setIsGeneratingMagicLink(false);
-                                }
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.manageAccountIcon}>
-                                {isGeneratingMagicLink ? (
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                ) : (
-                                    <MaterialIcons name="open-in-new" size={20} color={colors.primary} />
-                                )}
-                            </View>
-                            <Text style={styles.manageAccountText}>Manage Account (Web)</Text>
-                            <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
+
                 </View>
 
                 <View style={styles.card}>
@@ -943,7 +973,9 @@ export const SettingsScreen = () => {
                         <View style={styles.agentModeHeader}>
                             <View style={styles.agentModeTitleRow}>
                                 <View style={styles.agentModeIcon}>
-                                    <MaterialIcons name="auto-awesome" size={20} color={colors.primary} />
+                                    <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled ? 1 : 0.4 }}>
+                                        <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled ? colors.primary : colors.textSecondary} />
+                                    </Animated.View>
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.agentModeTitle}>Agent Mode</Text>
@@ -1000,7 +1032,12 @@ export const SettingsScreen = () => {
                                             <Text style={[styles.providerPillTitle, isLocked && styles.providerPillTitleLocked]}>{option.title}</Text>
                                             {isLocked && (
                                                 <View style={styles.lockBadge}>
-                                                    <MaterialIcons name="workspace-premium" size={14} color={colors.accentPurple} />
+                                                    <ProIcon
+                                                        size={10}
+                                                        containerSize={18}
+                                                        backgroundColor="#F3E8FF"
+                                                        borderColor="#D8B4FE"
+                                                    />
                                                     <Text style={styles.lockBadgeText}>Pro</Text>
                                                 </View>
                                             )}
@@ -1325,6 +1362,16 @@ export const SettingsScreen = () => {
                                     </View>
                                 </View>
                                 <View style={styles.minutesUsageProBadge}>
+                                    <Image
+                                        source={require('../../assets/icon.png')}
+                                        style={{
+                                            width: 10,
+                                            height: 10,
+                                            tintColor: '#FFFFFF',
+                                            opacity: 1,
+                                        }}
+                                        resizeMode="contain"
+                                    />
                                     <Text style={styles.minutesUsageProBadgeText}>PRO</Text>
                                 </View>
                             </View>
@@ -1346,7 +1393,7 @@ export const SettingsScreen = () => {
                             </View>
 
                             <View style={styles.minutesReserveRow}>
-                                <Text style={styles.minutesReserveLabel}>Trial reserve (never expires)</Text>
+                                <Text style={styles.minutesReserveLabel}>Trial reserve</Text>
                                 <Text style={styles.minutesReserveValue}>
                                     {formatTimeMMSS(trialRemainingSeconds)}
                                 </Text>
@@ -1503,23 +1550,15 @@ const styles = StyleSheet.create({
         marginTop: spacing.m,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#BFE8D0',
-        backgroundColor: '#F3FCF7',
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
         padding: spacing.m,
-        gap: spacing.s,
+        gap: spacing.m,
     },
     proStatusHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
-    },
-    proStatusIconWrap: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: colors.accentGreen,
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     proStatusCopy: {
         flex: 1,
@@ -1527,53 +1566,41 @@ const styles = StyleSheet.create({
     proStatusTitle: {
         ...typography.h3,
         fontSize: 16,
-        color: '#067647',
-    },
-    proStatusSubtitle: {
-        ...typography.caption,
-        color: colors.textSecondary,
+        color: colors.text,
     },
     proStatusPill: {
         borderRadius: 999,
         paddingHorizontal: spacing.s,
         paddingVertical: 4,
-        backgroundColor: '#DBF8E8',
+        backgroundColor: colors.primary + '12',
         borderWidth: 1,
-        borderColor: '#9FE3BD',
+        borderColor: colors.primary + '30',
     },
     proStatusPillText: {
         ...typography.captionBold,
-        color: '#067647',
+        color: colors.primary,
         fontSize: 11,
     },
-    refillInfoCard: {
+    proStatusAction: {
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#CDE4FF',
-        backgroundColor: '#EEF5FF',
+        borderColor: colors.border,
+        backgroundColor: colors.backgroundSecondary,
         paddingVertical: spacing.s,
-        paddingHorizontal: spacing.m,
-        gap: 2,
-    },
-    refillInfoHeader: {
+        paddingHorizontal: spacing.s,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.xs,
+        justifyContent: 'space-between',
     },
-    refillInfoTitle: {
+    proStatusActionLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    proStatusActionText: {
         ...typography.body,
-        color: '#1D4ED8',
+        color: colors.text,
         fontWeight: '700',
-    },
-    refillInfoDate: {
-        ...typography.caption,
-        color: '#334155',
-    },
-    refillInfoHint: {
-        ...typography.caption,
-        color: colors.primary,
-        fontWeight: '600',
-        marginTop: 2,
     },
     sheetBackdrop: {
         flex: 1,
@@ -1586,7 +1613,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 24,
         paddingHorizontal: spacing.l,
         paddingTop: spacing.s,
-        paddingBottom: spacing.xl,
+        paddingBottom: Platform.OS === 'android' ? spacing.xxl + spacing.l : spacing.xxl,
         borderWidth: 1,
         borderColor: colors.border,
     },
@@ -1665,10 +1692,13 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     minutesUsageProBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: colors.primary,
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
-        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 10,
+        gap: 4,
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
@@ -1678,7 +1708,7 @@ const styles = StyleSheet.create({
     minutesUsageProBadgeText: {
         ...typography.caption,
         color: '#fff',
-        fontWeight: '700',
+        fontWeight: '800',
         fontSize: 11,
         letterSpacing: 0.5,
     },

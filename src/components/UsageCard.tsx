@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { UserProfile } from '../api/auth';
 import { AIProvider } from '../utils/storage';
+import { ProIcon } from './ProIcon';
 
 interface UsageCardProps {
     user: UserProfile | null;
@@ -55,12 +56,26 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             <View style={styles.card}>
                 <View style={styles.headerRow}>
                     <View style={styles.titleRow}>
-                        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-                            <MaterialIcons name="workspace-premium" size={20} color={colors.primary} />
-                        </View>
+                        <ProIcon
+                            size={18}
+                            containerSize={36}
+                            backgroundColor={colors.primary + '12'}
+                            borderColor={colors.primary + '30'}
+                        />
                         <Text style={styles.title}>Secure LLM Plan</Text>
                     </View>
+                    {/* Unified Badge */}
                     <View style={styles.proBadge}>
+                        <Image
+                            source={require('../../assets/icon.png')}
+                            style={{
+                                width: 10,
+                                height: 10,
+                                tintColor: '#FFFFFF',
+                                opacity: 1,
+                            }}
+                            resizeMode="contain"
+                        />
                         <Text style={styles.proBadgeText}>PRO</Text>
                     </View>
                 </View>
@@ -196,10 +211,13 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     proBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: colors.primary,
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
-        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 10,
+        gap: 4,
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
@@ -209,7 +227,7 @@ const styles = StyleSheet.create({
     proBadgeText: {
         ...typography.caption,
         color: '#fff',
-        fontWeight: '700',
+        fontWeight: '800', // Extra bold
         fontSize: 11,
         letterSpacing: 0.5,
     },

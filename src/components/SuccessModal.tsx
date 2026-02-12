@@ -16,6 +16,8 @@ interface SuccessModalProps {
     visible: boolean;
     title?: string;
     message: string;
+    iconName?: keyof typeof MaterialIcons.glyphMap;
+    iconColor?: string;
     onClose: () => void;
 }
 
@@ -23,6 +25,8 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
     visible,
     title = 'Success',
     message,
+    iconName = 'check-circle-outline',
+    iconColor = colors.success,
     onClose,
 }) => {
     return (
@@ -36,11 +40,11 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
                         <View style={styles.modal}>
-                            <View style={styles.iconContainer}>
+                            <View style={[styles.iconContainer, { backgroundColor: `${iconColor}15` }]}>
                                 <MaterialIcons
-                                    name="check-circle-outline"
+                                    name={iconName}
                                     size={32}
-                                    color={colors.success}
+                                    color={iconColor}
                                 />
                             </View>
 

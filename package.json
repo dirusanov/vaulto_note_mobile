@@ -1,6 +1,6 @@
 {
   "name": "vaulto-note-mobile",
-  "version": "1.0.0",
+  "version": "1.0.19",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -26,6 +26,7 @@
     "expo-dev-client": "~6.0.20",
     "expo-file-system": "~19.0.19",
     "expo-haptics": "~15.0.8",
+    "expo-linear-gradient": "~15.0.8",
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",
     "expo-splash-screen": "~31.0.12",
