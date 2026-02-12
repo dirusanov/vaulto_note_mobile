@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,84 +19,81 @@ export const PaywallScreen = () => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            <View style={styles.mainContent}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
                     <MaterialIcons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
-                <Text style={styles.title}>Unlock Premium</Text>
-            </View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.heroSection}>
-                    <MaterialIcons name="diamond" size={64} color={colors.primary} />
-                    <Text style={styles.heroTitle}>Go Pro</Text>
-                    <Text style={styles.heroSubtitle}>
-                        Unlimited access to advanced AI features and secure synchronization.
+                <View style={styles.centerContent}>
+                    <View style={styles.heroSection}>
+                        <View style={styles.logoContainer}>
+                            <Image
+                                source={require('../../assets/icon.png')}
+                                style={styles.logoImage}
+                                resizeMode="contain"
+                            />
+                        </View>
+                        <Text style={styles.heroTitle}>PRO ACCESS</Text>
+                        <Text style={styles.heroSubtitle}>
+                            Unlock the full potential.
+                        </Text>
+                    </View>
+
+                    <View style={styles.featuresList}>
+                        <FeatureItem text="Unlimited Cloud Sync" />
+                        <FeatureItem text="Extended Transcription Limits" />
+                        <FeatureItem text="Custom API Key & Server" />
+                    </View>
+
+                    {isLoading ? (
+                        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+                    ) : (
+                        <View style={styles.packagesContainer}>
+                            {packages.map((pack) => {
+                                const { backendPlan, product } = pack;
+                                const title = backendPlan?.display_name || product.title;
+                                const price = product.priceString;
+                                const isBestValue = pack.identifier.toLowerCase().includes('annual');
+
+                                return (
+                                    <TouchableOpacity
+                                        key={pack.identifier}
+                                        style={[styles.planCard, isBestValue && styles.planCardBest]}
+                                        onPress={() => handlePurchase(pack)}
+                                        activeOpacity={0.9}
+                                    >
+                                        <View style={styles.planHeader}>
+                                            <Text style={[styles.planTitle, isBestValue && styles.planTitleBest]}>{title}</Text>
+                                            {isBestValue && <View style={styles.badge}><Text style={styles.badgeText}>BEST VALUE</Text></View>}
+                                        </View>
+                                        <Text style={[styles.planPrice, isBestValue && styles.planPriceBest]}>{price}</Text>
+                                        <Text style={[styles.planSubtext, isBestValue && styles.planSubtextBest]}>
+                                            {product.description}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.footer}>
+                    <TouchableOpacity onPress={restorePurchases} style={styles.restoreButton}>
+                        <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+                    </TouchableOpacity>
+
+                    <Text style={styles.termsText}>
+                        Auto-renewable. Cancel anytime.
                     </Text>
                 </View>
-
-                <View style={styles.features}>
-                    <FeatureItem text="Unlimited Cloud Sync" icon="cloud-queue" />
-                    <FeatureItem text="Advanced Encryption" icon="security" />
-                    <FeatureItem text="Priority Support" icon="support-agent" />
-                    <FeatureItem text="No Ads" icon="block" />
-                    <FeatureItem text="Extended Transcription Limits" icon="graphic-eq" />
-                </View>
-
-                {isLoading ? (
-                    <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-                ) : (
-                    <View style={styles.packagesContainer}>
-                        {packages.map((pack) => {
-                            const { rcPackage, backendPlan, product } = pack;
-                            // Prefer backend display name if available, otherwise store title
-                            const title = backendPlan?.display_name || product.title;
-                            const description = product.description;
-                            const price = product.priceString;
-                            const isBestValue = pack.identifier.toLowerCase().includes('annual');
-
-                            return (
-                                <TouchableOpacity
-                                    key={pack.identifier}
-                                    style={[styles.packageButton, isBestValue && styles.packageButtonBest]}
-                                    onPress={() => handlePurchase(pack)}
-                                    activeOpacity={0.9}
-                                >
-                                    {isBestValue && (
-                                        <View style={styles.bestValueBadge}>
-                                            <Text style={styles.bestValueText}>BEST VALUE</Text>
-                                        </View>
-                                    )}
-                                    <View style={styles.packageContent}>
-                                        <View>
-                                            <Text style={[styles.packageTitle, isBestValue && styles.packageTitleBest]}>{title}</Text>
-                                            <Text style={[styles.packageDescription, isBestValue && styles.packageDescriptionBest]}>{description}</Text>
-                                        </View>
-                                        <Text style={[styles.packagePrice, isBestValue && styles.packagePriceBest]}>{price}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                )}
-
-                <TouchableOpacity onPress={restorePurchases} style={styles.restoreButton}>
-                    <Text style={styles.restoreButtonText}>Restore Purchases</Text>
-                </TouchableOpacity>
-
-                <Text style={styles.termsText}>
-                    Subscription automatically renews unless auto-renew is turned off at least 24-hours before the end of the current period.
-                </Text>
-            </ScrollView>
+            </View>
         </SafeAreaView>
     );
 };
 
-const FeatureItem = ({ text, icon }: { text: string; icon: keyof typeof MaterialIcons.glyphMap }) => (
+const FeatureItem = ({ text }: { text: string }) => (
     <View style={styles.featureRow}>
-        <View style={styles.featureIconContainer}>
-            <MaterialIcons name={icon} size={20} color={colors.primary} />
-        </View>
+        <MaterialIcons name="check" size={16} color={colors.primary} style={styles.checkIcon} />
         <Text style={styles.featureText}>{text}</Text>
     </View>
 );
@@ -106,159 +103,149 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
+    mainContent: {
+        flex: 1,
+        paddingHorizontal: 24,
+        paddingBottom: 24,
+        paddingTop: 16,
+        justifyContent: 'space-between',
     },
     closeButton: {
-        position: 'absolute',
-        top: 16,
-        left: 16,
-        zIndex: 1,
-        padding: 4,
+        width: 32,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 16,
+        backgroundColor: colors.surface,
+        alignSelf: 'flex-start',
     },
-    title: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: colors.text,
-    },
-    content: {
-        padding: 24,
-        paddingBottom: 40,
+    centerContent: {
+        flex: 1,
+        justifyContent: 'center',
     },
     heroSection: {
         alignItems: 'center',
-        marginBottom: 40,
-        marginTop: 20,
+        marginBottom: 32,
+    },
+    logoContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 20,
+        backgroundColor: colors.surface,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+        // Soft shadow for app icon look
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 8,
+    },
+    logoImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 12,
     },
     heroTitle: {
-        fontSize: 32,
-        fontWeight: 'bold',
+        fontSize: 24,
+        fontWeight: '800',
         color: colors.text,
-        marginTop: 16,
         marginBottom: 8,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
     },
     heroSubtitle: {
-        fontSize: 16,
+        fontSize: 15,
         color: colors.textSecondary,
         textAlign: 'center',
-        paddingHorizontal: 20,
-        lineHeight: 22,
+        letterSpacing: 0.5,
     },
-    description: {
-        fontSize: 16,
-        color: colors.textSecondary,
-        textAlign: 'center',
+    featuresList: {
         marginBottom: 32,
-        lineHeight: 24,
-    },
-    features: {
-        marginBottom: 40,
-        backgroundColor: colors.surface,
-        borderRadius: 16,
-        padding: 20,
-        // Shadow for iOS
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        // Elevation for Android
-        elevation: 2,
+        gap: 14,
+        paddingHorizontal: 16,
     },
     featureRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        gap: 12,
     },
-    featureIconContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: colors.primary + '15', // 15% opacity
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 16,
+    checkIcon: {
+        opacity: 1,
     },
     featureText: {
-        fontSize: 16,
+        fontSize: 14,
         color: colors.text,
         fontWeight: '500',
     },
-    loader: {
-        marginTop: 20,
-    },
     packagesContainer: {
-        gap: 16,
+        gap: 12,
     },
-    packageButton: {
+    planCard: {
         backgroundColor: colors.surface,
-        padding: 20,
-        borderRadius: 16,
-        marginBottom: 0,
         borderWidth: 1,
         borderColor: colors.border,
-        // Shadow
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        borderRadius: 16,
+        padding: 20,
     },
-    packageButtonBest: {
-        backgroundColor: colors.primary,
+    planCardBest: {
         borderColor: colors.primary,
+        backgroundColor: colors.surface,
+        borderWidth: 2,
     },
-    bestValueBadge: {
-        position: 'absolute',
-        top: -10,
-        right: 16,
-        backgroundColor: colors.accentYellow,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-        zIndex: 2,
-    },
-    bestValueText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: colors.text,
-    },
-    packageContent: {
+    planHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-    },
-    packageTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: colors.text,
         marginBottom: 4,
     },
-    packageTitleBest: {
-        color: '#fff',
+    planTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.textSecondary,
     },
-    packagePrice: {
+    planTitleBest: {
+        color: colors.primary,
+        fontWeight: '700',
+    },
+    badge: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    badgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    planPrice: {
         fontSize: 20,
         fontWeight: 'bold',
+        color: colors.text,
+        marginBottom: 2,
+    },
+    planPriceBest: {
         color: colors.primary,
     },
-    packagePriceBest: {
-        color: '#fff',
-    },
-    packageDescription: {
-        fontSize: 14,
+    planSubtext: {
+        fontSize: 12,
         color: colors.textSecondary,
-        maxWidth: 200,
     },
-    packageDescriptionBest: {
-        color: 'rgba(255,255,255,0.9)',
+    planSubtextBest: {
+        color: colors.textSecondary,
+    },
+    loader: {
+        marginVertical: 40,
+    },
+    footer: {
+        alignItems: 'center',
+        gap: 16,
+        paddingTop: 16,
     },
     restoreButton: {
-        marginTop: 32,
-        alignItems: 'center',
-        padding: 12,
+        padding: 8,
     },
     restoreButtonText: {
         color: colors.textSecondary,

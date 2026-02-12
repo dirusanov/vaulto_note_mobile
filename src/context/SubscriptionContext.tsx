@@ -75,8 +75,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const backendProRef = useRef(false);
 
     const hasBackendProInfo = (currentUser: typeof user) =>
-        !!currentUser &&
-        (
+        !!currentUser && (
             typeof (currentUser as any).is_pro === 'boolean' ||
             typeof (currentUser as any).plan === 'string'
         );
@@ -254,9 +253,12 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     };
                 });
                 setPackages(merged);
+            } else {
+                setPackages([]);
             }
         } catch (e) {
             console.error('Error loading offerings:', e);
+            setPackages([]);
         }
     };
 
@@ -304,9 +306,6 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             setIsLoading(false);
         }
     };
-
-    // We don't need to expose error/success setters to consumers,
-    // but we need to render the modals here.
 
     return (
         <SubscriptionContext.Provider
