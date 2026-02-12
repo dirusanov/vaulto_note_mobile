@@ -42,12 +42,21 @@ const formatSubscriptionDate = (isoDate: string | null) => {
     return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
+const getDaysUntilDate = (isoDate: string | null) => {
+    if (!isoDate) return null;
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) return null;
+    const diffMs = date.getTime() - Date.now();
+    return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+};
+
 interface SubscriptionStatusSectionProps {
     isAuthenticated: boolean;
     isGuest: boolean;
     isPro: boolean;
     isLoading: boolean;
     subscriptionStatus: SubscriptionStatus | null;
+    nextRefillAt: string | null;
     onUpgrade: () => void;
     onOpenDetails: () => void;
 }
@@ -58,6 +67,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     isPro,
     isLoading,
     subscriptionStatus,
+    nextRefillAt,
     onUpgrade,
     onOpenDetails,
 }) => {
@@ -68,6 +78,15 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     }
 
     const expiresLabel = formatSubscriptionDate(subscriptionStatus?.expiresAt || null);
+    const refillLabel = formatSubscriptionDate(nextRefillAt);
+    const refillDays = getDaysUntilDate(nextRefillAt);
+    const refillTitle = refillDays === 0
+        ? 'Limits refresh today'
+        : refillDays === 1
+            ? 'Limits refresh in 1 day'
+            : typeof refillDays === 'number'
+                ? `Limits refresh in ${refillDays} days`
+                : null;
 
     if (isPro) {
         return (
@@ -86,6 +105,17 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                         <Text style={styles.proStatusPillText}>ACTIVE</Text>
                     </View>
                 </View>
+                {(refillTitle || refillLabel) && (
+                    <View style={styles.refillInfoCard}>
+                        <View style={styles.refillInfoHeader}>
+                            <MaterialIcons name="update" size={16} color={colors.primary} />
+                            <Text style={styles.refillInfoTitle}>{refillTitle || 'Limits refresh scheduled'}</Text>
+                        </View>
+                        {refillLabel && (
+                            <Text style={styles.refillInfoDate}>Next refill: {refillLabel}</Text>
+                        )}
+                    </View>
+                )}
                 <TouchableOpacity
                     style={styles.subscriptionDetailsButton}
                     onPress={onOpenDetails}
@@ -383,6 +413,9 @@ export const SettingsScreen = () => {
 
         const expiresDate = subscriptionStatus.expiresAt ? new Date(subscriptionStatus.expiresAt) : null;
         const expiresLabel = formatSubscriptionDate(subscriptionStatus.expiresAt) || 'N/A';
+        const refillAt = user?.subscription_next_refill_at ?? null;
+        const refillLabel = formatSubscriptionDate(refillAt) || expiresLabel;
+        const refillDays = getDaysUntilDate(refillAt);
 
         // Calculate days remaining
         let daysRemaining = 'N/A';
@@ -403,9 +436,14 @@ export const SettingsScreen = () => {
         const minsLeft = Math.floor(remainingSeconds / 60);
         const hoursLeft = (minsLeft / 60).toFixed(1);
 
+        const relativeResetLine = refillDays !== null
+            ? `Limits reset in: ${refillDays === 0 ? 'today' : `${refillDays} day(s)`}`
+            : null;
+
         const details = [
             `Subscription ends in: ${daysRemaining}`,
-            `Limits reset on: ${expiresLabel}`,
+            ...(relativeResetLine ? [relativeResetLine] : []),
+            `Limits reset on: ${refillLabel}`,
             `\nTranscription balance:`,
             `${minsLeft} minutes remaining (${hoursLeft} hours)`,
         ].join('\n');
@@ -666,6 +704,7 @@ export const SettingsScreen = () => {
                         isPro={isPro}
                         isLoading={subscriptionLoading}
                         subscriptionStatus={subscriptionStatus}
+                        nextRefillAt={user?.subscription_next_refill_at ?? null}
                         onUpgrade={() => navigation.navigate('Paywall')}
                         onOpenDetails={handleOpenSubscriptionDetails}
                     />
@@ -1436,6 +1475,29 @@ const styles = StyleSheet.create({
         ...typography.captionBold,
         color: '#067647',
         fontSize: 11,
+    },
+    refillInfoCard: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#CDE4FF',
+        backgroundColor: '#EEF5FF',
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        gap: 2,
+    },
+    refillInfoHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    refillInfoTitle: {
+        ...typography.body,
+        color: '#1D4ED8',
+        fontWeight: '700',
+    },
+    refillInfoDate: {
+        ...typography.caption,
+        color: '#334155',
     },
     subscriptionDetailsButton: {
         borderRadius: 12,

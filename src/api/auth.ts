@@ -25,6 +25,7 @@ export interface UserProfile {
     provider: string;
     plan?: string;
     is_pro?: boolean;
+    subscription_next_refill_at?: string | null;
     transcription_max_seconds: number;
     transcription_used_seconds: number;
     transcription_remaining_seconds: number;
