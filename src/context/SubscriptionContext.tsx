@@ -5,6 +5,7 @@ import { subscriptionApi, SubscriptionPlan } from '../api/subscription';
 import { ErrorModal } from '../components/ErrorModal';
 import { SuccessModal } from '../components/SuccessModal';
 import { useAuth } from '../hooks/useAuth';
+import { colors } from '../theme/colors';
 
 // TODO: Replace with your actual RevenueCat API keys in .env
 const API_KEYS = {
@@ -60,15 +61,26 @@ const findPlanByProductId = (productIdentifier: string | null, plans: Subscripti
     });
 };
 
+const getFirstEntitlement = (source: any): any | null => {
+    if (!source || typeof source !== 'object') return null;
+    const firstKey = Object.keys(source)[0];
+    if (!firstKey) return null;
+    return source[firstKey] ?? null;
+};
+
+const wait = (ms: number) => new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+});
+
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isPro, setIsPro] = useState(false);
     const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
     const [packages, setPackages] = useState<MergedPackage[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<{ title?: string; message: string } | null>(null);
+    const [success, setSuccess] = useState<{ title?: string; message: string; iconName?: string; iconColor?: string } | null>(null);
 
-    const { userId, user } = useAuth();
+    const { userId, user, refreshProfile } = useAuth();
     const isConfigured = useRef(false);
     const plansRef = useRef<SubscriptionPlan[]>([]);
     const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -97,13 +109,18 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         currentPlans: SubscriptionPlan[]
     ): SubscriptionStatus => {
         const entitlements = (customerInfo as any)?.entitlements;
-        const activeEntitlement = entitlements?.active?.pro ?? null;
-        const knownEntitlement = activeEntitlement ?? entitlements?.all?.pro ?? null;
-        const productIdentifier: string | null = knownEntitlement?.productIdentifier ?? null;
+        const activeEntitlement = entitlements?.active?.pro ?? getFirstEntitlement(entitlements?.active);
+        const knownEntitlement = activeEntitlement ?? entitlements?.all?.pro ?? getFirstEntitlement(entitlements?.all);
+        const activeSubscriptions = Array.isArray((customerInfo as any)?.activeSubscriptions)
+            ? (customerInfo as any).activeSubscriptions
+            : [];
+        const fallbackProductId = activeSubscriptions.length > 0 ? activeSubscriptions[0] : null;
+        const productIdentifier: string | null = knownEntitlement?.productIdentifier ?? fallbackProductId ?? null;
         const matchedPlan = findPlanByProductId(productIdentifier, currentPlans);
+        const hasActiveEntitlement = !!activeEntitlement || activeSubscriptions.length > 0;
 
         return {
-            isActive: !!activeEntitlement,
+            isActive: hasActiveEntitlement,
             entitlementId: knownEntitlement?.identifier ?? null,
             productIdentifier,
             planCode: matchedPlan?.plan_code ?? null,
@@ -132,6 +149,33 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setSubscriptionStatus(effectiveStatus);
         setIsPro(effectiveIsActive);
         return effectiveStatus;
+    };
+
+    const refreshBackendStatusWithRetry = async (
+        maxAttempts = 5,
+        delayMs = 1200
+    ) => {
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            if (attempt > 0) {
+                await wait(delayMs);
+            }
+
+            const refreshedProfile = await refreshProfile();
+            if (!refreshedProfile) {
+                continue;
+            }
+
+            backendProRef.current = isBackendPro(refreshedProfile);
+            if (customerInfoRef.current) {
+                checkSubscriptionStatus(customerInfoRef.current, plansRef.current);
+            }
+
+            if (backendProRef.current) {
+                return true;
+            }
+        }
+
+        return false;
     };
 
     useEffect(() => {
@@ -266,19 +310,30 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         try {
             setIsLoading(true);
             const { customerInfo } = await Purchases.purchasePackage(pack.rcPackage);
-            const status = checkSubscriptionStatus(customerInfo);
-            if (status.isActive) {
-                const planLabel = status.billingPeriod === 'yearly'
-                    ? 'Yearly Pro'
-                    : status.billingPeriod === 'monthly'
-                        ? 'Monthly Pro'
-                        : 'Pro';
-                setSuccess({
-                    title: 'Subscription Activated',
-                    message: `Подписка успешно оформлена! ${planLabel} активирован.`,
-                });
+            const revenueCatStatus = buildSubscriptionStatus(customerInfo, plansRef.current);
+            checkSubscriptionStatus(customerInfo);
+
+            const backendConfirmed = await refreshBackendStatusWithRetry(5, 1200);
+            if (!backendConfirmed) {
+                void refreshBackendStatusWithRetry(8, 2000);
             }
-            return status.isActive;
+
+            const planLabel = revenueCatStatus.billingPeriod === 'yearly'
+                ? 'Yearly Pro'
+                : revenueCatStatus.billingPeriod === 'monthly'
+                    ? 'Monthly Pro'
+                    : 'Pro';
+
+            setSuccess({
+                title: backendConfirmed ? 'Welcome to Pro!' : 'Purchase Successful',
+                message: backendConfirmed
+                    ? `Subscription successfully activated. You are now on the ${planLabel} plan.`
+                    : `Purchase completed. We're syncing your ${planLabel} access now.`,
+                iconName: 'workspace-premium',
+                iconColor: colors.primary,
+            });
+
+            return true;
         } catch (e: any) {
             if (!e.userCancelled) {
                 setError(e.message);
@@ -293,12 +348,24 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         try {
             setIsLoading(true);
             const customerInfo = await Purchases.restorePurchases();
-            const status = checkSubscriptionStatus(customerInfo);
+            const revenueCatStatus = buildSubscriptionStatus(customerInfo, plansRef.current);
+            checkSubscriptionStatus(customerInfo);
+
+            const backendConfirmed = await refreshBackendStatusWithRetry(5, 1200);
+            if (!backendConfirmed) {
+                void refreshBackendStatusWithRetry(8, 2000);
+            }
+            const hasActiveSubscription = revenueCatStatus.isActive || backendConfirmed;
+
             setSuccess({
-                title: status.isActive ? 'Purchases Restored' : 'Restore Complete',
-                message: status.isActive
-                    ? 'Подписка успешно восстановлена.'
-                    : 'Покупки восстановлены, активной подписки сейчас нет.',
+                title: hasActiveSubscription ? 'Purchases Restored' : 'Restore Complete',
+                message: hasActiveSubscription
+                    ? backendConfirmed
+                        ? 'Your Pro subscription has been restored.'
+                        : 'Purchases restored. Subscription is syncing with your account.'
+                    : 'Purchases restored. No active subscription found.',
+                iconName: hasActiveSubscription ? 'workspace-premium' : 'check-circle-outline',
+                iconColor: hasActiveSubscription ? colors.primary : undefined,
             });
         } catch (e: any) {
             setError(e.message);
@@ -328,6 +395,8 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 visible={!!success}
                 title={success?.title}
                 message={success?.message || ''}
+                iconName={success?.iconName as any}
+                iconColor={success?.iconColor}
                 onClose={() => setSuccess(null)}
             />
         </SubscriptionContext.Provider>

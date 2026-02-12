@@ -15,7 +15,7 @@ interface AuthContextType {
     isLoading: boolean;
     signIn: (accessToken: string, refreshToken: string) => Promise<void>;
     signOut: (options?: { wipeLocal?: boolean; keepLocalNotes?: boolean }) => Promise<void>;
-    refreshProfile: () => Promise<void>;
+    refreshProfile: () => Promise<UserProfile | null>;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -27,7 +27,7 @@ export const AuthContext = createContext<AuthContextType>({
     isLoading: true,
     signIn: async () => { },
     signOut: async () => { },
-    refreshProfile: async () => { },
+    refreshProfile: async () => null,
 });
 
 interface AuthProviderProps {
@@ -288,22 +288,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setIsLoading(false);
     };
 
-    const refreshInFlight = useRef(false);
+    const refreshInFlight = useRef<Promise<UserProfile | null> | null>(null);
 
     const refreshProfile = useCallback(async () => {
-        if (!token) return;
-        if (refreshInFlight.current) return;
-        refreshInFlight.current = true;
-        try {
-            const profile = await authApi.getProfile();
-            setUser(profile);
-            await storage.setUserProfile(profile);
-            setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
-        } catch (err) {
-            console.error('[AuthContext] Failed to refresh profile', err);
-        } finally {
-            refreshInFlight.current = false;
-        }
+        if (!token) return null;
+        if (refreshInFlight.current) return refreshInFlight.current;
+
+        refreshInFlight.current = (async () => {
+            try {
+                const profile = await authApi.getProfile();
+                setUser(profile);
+                await storage.setUserProfile(profile);
+                setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
+                return profile;
+            } catch (err) {
+                console.error('[AuthContext] Failed to refresh profile', err);
+                return null;
+            } finally {
+                refreshInFlight.current = null;
+            }
+        })();
+
+        return refreshInFlight.current;
     }, [token]);
 
     return (
