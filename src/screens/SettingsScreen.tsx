@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -58,7 +58,7 @@ interface SubscriptionStatusSectionProps {
     subscriptionStatus: SubscriptionStatus | null;
     nextRefillAt: string | null;
     onUpgrade: () => void;
-    onOpenDetails: () => void;
+    onOpenMinutesSheet: () => void;
 }
 
 const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
@@ -69,7 +69,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     subscriptionStatus,
     nextRefillAt,
     onUpgrade,
-    onOpenDetails,
+    onOpenMinutesSheet,
 }) => {
     if (!isAuthenticated || isGuest) return null;
 
@@ -87,6 +87,8 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
             : typeof refillDays === 'number'
                 ? `Limits refresh in ${refillDays} days`
                 : null;
+    const refillTitleResolved = refillTitle || 'Monthly limits are active';
+    const refillDateResolved = refillLabel || 'Date will appear after first sync';
 
     if (isPro) {
         return (
@@ -105,25 +107,17 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                         <Text style={styles.proStatusPillText}>ACTIVE</Text>
                     </View>
                 </View>
-                {(refillTitle || refillLabel) && (
-                    <View style={styles.refillInfoCard}>
-                        <View style={styles.refillInfoHeader}>
-                            <MaterialIcons name="update" size={16} color={colors.primary} />
-                            <Text style={styles.refillInfoTitle}>{refillTitle || 'Limits refresh scheduled'}</Text>
-                        </View>
-                        {refillLabel && (
-                            <Text style={styles.refillInfoDate}>Next refill: {refillLabel}</Text>
-                        )}
-                    </View>
-                )}
                 <TouchableOpacity
-                    style={styles.subscriptionDetailsButton}
-                    onPress={onOpenDetails}
+                    style={styles.refillInfoCard}
+                    onPress={onOpenMinutesSheet}
                     activeOpacity={0.9}
                 >
-                    <MaterialIcons name="receipt-long" size={18} color={colors.primary} />
-                    <Text style={styles.subscriptionDetailsButtonText}>Subscription details</Text>
-                    <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
+                    <View style={styles.refillInfoHeader}>
+                        <MaterialIcons name="update" size={16} color={colors.primary} />
+                        <Text style={styles.refillInfoTitle}>{refillTitleResolved}</Text>
+                    </View>
+                    <Text style={styles.refillInfoDate}>Next refill: {refillDateResolved}</Text>
+                    <Text style={styles.refillInfoHint}>Tap to view remaining minutes</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -188,6 +182,7 @@ export const SettingsScreen = () => {
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [isAppLockExpanded, setIsAppLockExpanded] = useState(false);
+    const [showMinutesSheet, setShowMinutesSheet] = useState(false);
 
     const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
@@ -399,57 +394,14 @@ export const SettingsScreen = () => {
         }
     };
 
-    const handleOpenSubscriptionDetails = useCallback(() => {
-        if (!isAuthenticated || isGuest) {
-            return;
-        }
-        if (!subscriptionStatus || !subscriptionStatus.isActive) {
-            Alert.alert(
-                'Subscription',
-                'No active Pro subscription on this account yet.'
-            );
-            return;
-        }
+    const openMinutesSheet = useCallback(() => {
+        if (!isAuthenticated || isGuest || !isPro) return;
+        setShowMinutesSheet(true);
+    }, [isAuthenticated, isGuest, isPro]);
 
-        const expiresDate = subscriptionStatus.expiresAt ? new Date(subscriptionStatus.expiresAt) : null;
-        const expiresLabel = formatSubscriptionDate(subscriptionStatus.expiresAt) || 'N/A';
-        const refillAt = user?.subscription_next_refill_at ?? null;
-        const refillLabel = formatSubscriptionDate(refillAt) || expiresLabel;
-        const refillDays = getDaysUntilDate(refillAt);
-
-        // Calculate days remaining
-        let daysRemaining = 'N/A';
-        if (expiresDate && !Number.isNaN(expiresDate.getTime())) {
-            const now = new Date();
-            const diffTime = expiresDate.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            daysRemaining = diffDays > 0 ? `${diffDays} days` : 'Expiring today';
-        }
-
-        // Calculate limits
-        const totalSeconds = user?.transcription_max_seconds || 0;
-        const usedSeconds = user?.transcription_used_seconds || 0;
-        const remainingSeconds = user?.transcription_remaining_seconds !== undefined
-            ? user.transcription_remaining_seconds
-            : Math.max(0, totalSeconds - usedSeconds);
-
-        const minsLeft = Math.floor(remainingSeconds / 60);
-        const hoursLeft = (minsLeft / 60).toFixed(1);
-
-        const relativeResetLine = refillDays !== null
-            ? `Limits reset in: ${refillDays === 0 ? 'today' : `${refillDays} day(s)`}`
-            : null;
-
-        const details = [
-            `Subscription ends in: ${daysRemaining}`,
-            ...(relativeResetLine ? [relativeResetLine] : []),
-            `Limits reset on: ${refillLabel}`,
-            `\nTranscription balance:`,
-            `${minsLeft} minutes remaining (${hoursLeft} hours)`,
-        ].join('\n');
-
-        Alert.alert('Pro Status', details, [{ text: 'OK' }]);
-    }, [isAuthenticated, isGuest, subscriptionStatus, user]);
+    const closeMinutesSheet = useCallback(() => {
+        setShowMinutesSheet(false);
+    }, []);
 
     const toggleAgentMode = async (value: boolean) => {
         setAgentModeEnabledState(value);
@@ -607,6 +559,31 @@ export const SettingsScreen = () => {
         setShowSignOutDialog(true);
     };
 
+    const subscriptionTotalSeconds = user?.transcription_subscription_max_seconds ?? 0;
+    const subscriptionUsedSeconds = user?.transcription_subscription_used_seconds ?? 0;
+    const subscriptionRemainingSeconds = user?.transcription_subscription_remaining_seconds
+        ?? Math.max(0, subscriptionTotalSeconds - subscriptionUsedSeconds);
+    const trialTotalSeconds = user?.transcription_trial_total_seconds ?? 0;
+    const trialRemainingSeconds = user?.transcription_trial_remaining_seconds
+        ?? Math.max(0, trialTotalSeconds - (user?.transcription_trial_used_seconds ?? 0));
+    const progress = subscriptionTotalSeconds > 0
+        ? Math.min(1, subscriptionUsedSeconds / subscriptionTotalSeconds)
+        : 0;
+    const isExpired = subscriptionRemainingSeconds <= 0;
+    const isLowBalance = subscriptionRemainingSeconds > 0 && subscriptionRemainingSeconds <= 120;
+    const formatTimeMMSS = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+    const getProgressColor = () => {
+        if (isExpired) return colors.error;
+        if (isLowBalance) return colors.warning;
+        return colors.primary;
+    };
+    const refillAtLabel = formatSubscriptionDate(user?.subscription_next_refill_at ?? null);
+    const refillInDays = getDaysUntilDate(user?.subscription_next_refill_at ?? null);
+
     return (
         <ScreenContainer>
             <View style={styles.topBar}>
@@ -706,7 +683,7 @@ export const SettingsScreen = () => {
                         subscriptionStatus={subscriptionStatus}
                         nextRefillAt={user?.subscription_next_refill_at ?? null}
                         onUpgrade={() => navigation.navigate('Paywall')}
-                        onOpenDetails={handleOpenSubscriptionDetails}
+                        onOpenMinutesSheet={openMinutesSheet}
                     />
 
                     {isAuthenticated && !isGuest && (
@@ -1308,6 +1285,99 @@ export const SettingsScreen = () => {
 
             </ScrollView >
 
+            <Modal
+                visible={showMinutesSheet}
+                transparent
+                animationType="slide"
+                onRequestClose={closeMinutesSheet}
+            >
+                <Pressable style={styles.sheetBackdrop} onPress={closeMinutesSheet}>
+                    <Pressable style={styles.minutesSheet} onPress={() => { }}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.minutesSheetHeader}>
+                            <View>
+                                <Text style={styles.minutesSheetTitle}>Remaining Minutes</Text>
+                                <Text style={styles.minutesSheetSubtitle}>
+                                    {refillInDays === null
+                                        ? 'Monthly Pro balance'
+                                        : refillInDays === 0
+                                            ? 'Refreshes today'
+                                            : `Refreshes in ${refillInDays} day${refillInDays === 1 ? '' : 's'}`}
+                                </Text>
+                            </View>
+                            <TouchableOpacity onPress={closeMinutesSheet} style={styles.sheetCloseButton} activeOpacity={0.8}>
+                                <MaterialIcons name="close" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.minutesUsageCard}>
+                            <View style={styles.minutesUsageHeaderRow}>
+                                <View style={styles.minutesUsageTitleRow}>
+                                    <View style={[styles.minutesUsageIconContainer, { backgroundColor: getProgressColor() + '15' }]}>
+                                        <MaterialIcons
+                                            name={isExpired ? "schedule" : "hourglass-bottom"}
+                                            size={20}
+                                            color={getProgressColor()}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.minutesUsageTitle}>Transcription Balance</Text>
+                                        <Text style={styles.minutesUsageSubtitle}>Monthly Pro minutes</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.minutesUsageProBadge}>
+                                    <Text style={styles.minutesUsageProBadgeText}>PRO</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.minutesProgressTrack}>
+                                <View
+                                    style={[
+                                        styles.minutesProgressFill,
+                                        { width: `${progress * 100}%`, backgroundColor: getProgressColor() },
+                                    ]}
+                                />
+                            </View>
+
+                            <View style={styles.minutesUsageStatsRow}>
+                                <Text style={styles.minutesUsageStatsLabel}>Used</Text>
+                                <Text style={styles.minutesUsageStatsValue}>
+                                    {formatTimeMMSS(subscriptionUsedSeconds)} / {formatTimeMMSS(subscriptionTotalSeconds)}
+                                </Text>
+                            </View>
+
+                            <View style={styles.minutesReserveRow}>
+                                <Text style={styles.minutesReserveLabel}>Trial reserve (never expires)</Text>
+                                <Text style={styles.minutesReserveValue}>
+                                    {formatTimeMMSS(trialRemainingSeconds)}
+                                </Text>
+                            </View>
+
+                            {isExpired && (
+                                <View style={styles.minutesWarningBox}>
+                                    <MaterialIcons name="info-outline" size={18} color={colors.error} />
+                                    <Text style={styles.minutesWarningText}>
+                                        You've used all monthly minutes. Trial reserve will be used next.
+                                    </Text>
+                                </View>
+                            )}
+
+                            {isLowBalance && !isExpired && (
+                                <View style={styles.minutesWarningBoxLow}>
+                                    <MaterialIcons name="warning-amber" size={18} color={colors.warning} />
+                                    <Text style={styles.minutesWarningTextLow}>
+                                        Running low on monthly transcription minutes
+                                    </Text>
+                                </View>
+                            )}
+
+                            {refillAtLabel && (
+                                <Text style={styles.minutesRefillText}>Next refill: {refillAtLabel}</Text>
+                            )}
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+
             <EnableSyncModal
                 visible={showEnableSyncModal}
                 onClose={() => setShowEnableSyncModal(false)}
@@ -1499,22 +1569,201 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: '#334155',
     },
-    subscriptionDetailsButton: {
-        borderRadius: 12,
+    refillInfoHint: {
+        ...typography.caption,
+        color: colors.primary,
+        fontWeight: '600',
+        marginTop: 2,
+    },
+    sheetBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(9, 18, 33, 0.45)',
+        justifyContent: 'flex-end',
+    },
+    minutesSheet: {
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.s,
+        paddingBottom: spacing.xl,
         borderWidth: 1,
         borderColor: colors.border,
+    },
+    sheetHandle: {
+        width: 46,
+        height: 5,
+        borderRadius: 99,
+        backgroundColor: colors.border,
+        alignSelf: 'center',
+        marginBottom: spacing.m,
+    },
+    minutesSheetHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.m,
+    },
+    minutesSheetTitle: {
+        ...typography.h3,
+        color: colors.text,
+    },
+    minutesSheetSubtitle: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    sheetCloseButton: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: colors.backgroundSecondary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    minutesUsageCard: {
         backgroundColor: colors.surface,
-        paddingVertical: spacing.s,
-        paddingHorizontal: spacing.m,
+        borderRadius: 16,
+        padding: spacing.m,
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: colors.cardShadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    minutesUsageHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: spacing.m,
+    },
+    minutesUsageTitleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
-    },
-    subscriptionDetailsButtonText: {
-        ...typography.body,
-        color: colors.primary,
-        fontWeight: '600',
         flex: 1,
+    },
+    minutesUsageIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    minutesUsageTitle: {
+        ...typography.h3,
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    minutesUsageSubtitle: {
+        ...typography.caption,
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    minutesUsageProBadge: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.xs,
+        borderRadius: 8,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    minutesUsageProBadgeText: {
+        ...typography.caption,
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 11,
+        letterSpacing: 0.5,
+    },
+    minutesProgressTrack: {
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: colors.backgroundSecondary,
+        overflow: 'hidden',
+        marginBottom: spacing.s,
+    },
+    minutesProgressFill: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    minutesUsageStatsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    minutesUsageStatsLabel: {
+        ...typography.caption,
+        fontSize: 13,
+        color: colors.textSecondary,
+    },
+    minutesUsageStatsValue: {
+        ...typography.body,
+        fontSize: 13,
+        color: colors.text,
+        fontWeight: '600',
+    },
+    minutesReserveRow: {
+        marginTop: spacing.s,
+        paddingTop: spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    minutesReserveLabel: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    minutesReserveValue: {
+        ...typography.body,
+        fontSize: 13,
+        color: colors.primary,
+        fontWeight: '700',
+    },
+    minutesWarningBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        backgroundColor: colors.error + '10',
+        padding: spacing.s,
+        borderRadius: 10,
+        marginTop: spacing.s,
+    },
+    minutesWarningText: {
+        ...typography.body,
+        flex: 1,
+        fontSize: 13,
+        color: colors.error,
+        fontWeight: '500',
+    },
+    minutesWarningBoxLow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        backgroundColor: colors.warning + '10',
+        padding: spacing.s,
+        borderRadius: 10,
+        marginTop: spacing.s,
+    },
+    minutesWarningTextLow: {
+        ...typography.body,
+        flex: 1,
+        fontSize: 13,
+        color: colors.warning,
+        fontWeight: '500',
+    },
+    minutesRefillText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginTop: spacing.s,
     },
     premiumUpgradeCard: {
         marginTop: spacing.m,

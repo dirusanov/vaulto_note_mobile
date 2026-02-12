@@ -29,6 +29,12 @@ export interface UserProfile {
     transcription_max_seconds: number;
     transcription_used_seconds: number;
     transcription_remaining_seconds: number;
+    transcription_trial_total_seconds?: number;
+    transcription_trial_used_seconds?: number;
+    transcription_trial_remaining_seconds?: number;
+    transcription_subscription_max_seconds?: number;
+    transcription_subscription_used_seconds?: number;
+    transcription_subscription_remaining_seconds?: number;
     has_llm_access: boolean;
 }
 
