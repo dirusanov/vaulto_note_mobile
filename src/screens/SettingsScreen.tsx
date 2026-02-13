@@ -261,6 +261,7 @@ export const SettingsScreen = () => {
     const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
+    const isGuestOrAnonymous = !isAuthenticated || isGuest;
 
     const handleToggleSync = useCallback(async (enabled: boolean) => {
         if (syncToggleDisabled) {
@@ -316,6 +317,7 @@ export const SettingsScreen = () => {
             icon: 'security',
             accent: colors.primary,
             chips: ['Zero retention', 'Anonymous', 'Trial'],
+            isLocked: isGuestOrAnonymous,
         },
         {
             key: 'openai',
@@ -459,6 +461,18 @@ export const SettingsScreen = () => {
         getTranscriptionEnabled()
             .then(enabled => setTranscriptionEnabledState(enabled))
             .catch(() => setTranscriptionEnabledState(true));
+    }, [isAuthenticated, isGuest, preferencesReady]);
+
+    useEffect(() => {
+        // Guest/anonymous users can't use Agent Mode; force UI OFF (don't persist).
+        if (!preferencesReady) return;
+        if (!isAuthenticated || isGuest) {
+            setAgentModeEnabledState(false);
+            return;
+        }
+        getAgentModeEnabled()
+            .then(enabled => setAgentModeEnabledState(enabled))
+            .catch(() => setAgentModeEnabledState(true));
     }, [isAuthenticated, isGuest, preferencesReady]);
 
     const handleTestConnection = async () => {
@@ -653,12 +667,12 @@ export const SettingsScreen = () => {
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <Text style={[styles.securityValueMinimal, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
-                            {syncEnabled && syncLocked && (
+                            {syncEnabled && syncLocked && !syncToggleDisabled && (
                                 <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
                                     <Text style={styles.smallButtonText}>Unlock</Text>
                                 </TouchableOpacity>
                             )}
-                            {hasConfiguredKey && !syncLocked ? (
+                            {!syncToggleDisabled && hasConfiguredKey && !syncLocked ? (
                                 <Switch
                                     value={syncEnabled}
                                     onValueChange={(value) => {
@@ -669,20 +683,15 @@ export const SettingsScreen = () => {
                                     thumbColor={colors.surface}
                                     style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                                 />
-                            ) : (!hasConfiguredKey ? (
+                            ) : (!syncToggleDisabled && !hasConfiguredKey ? (
                                 <TouchableOpacity
                                     style={[
                                         styles.smallButton,
                                         {
-                                            backgroundColor: syncToggleDisabled ? colors.border : colors.primary,
-                                            opacity: syncToggleDisabled ? 0.65 : 1,
+                                            backgroundColor: colors.primary,
                                         },
                                     ]}
                                     onPress={() => {
-                                        if (syncToggleDisabled) {
-                                            Alert.alert('Sign in required', 'Sign in to enable sync.');
-                                            return;
-                                        }
                                         setShowEnableSyncModal(true);
                                     }}
                                 >
@@ -733,10 +742,15 @@ export const SettingsScreen = () => {
                     </View>
 
                     {/* Agent Mode Toggle */}
-                    <View style={[styles.preferenceRow, { marginBottom: spacing.m }]}>
+                    <TouchableOpacity
+                        style={[styles.preferenceRow, { marginBottom: spacing.m }]}
+                        activeOpacity={0.85}
+                        disabled={!isGuestOrAnonymous}
+                        onPress={() => setProviderGate({ kind: 'signin', providerTitle: 'Agent Mode' })}
+                    >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled ? 1 : 0.4 }}>
-                                <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled ? colors.primary : colors.textSecondary} />
+                            <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled && !isGuestOrAnonymous ? 1 : 0.4 }}>
+                                <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled && !isGuestOrAnonymous ? colors.primary : colors.textSecondary} />
                             </Animated.View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.preferenceTitle}>Agent Mode</Text>
@@ -744,13 +758,14 @@ export const SettingsScreen = () => {
                             </View>
                         </View>
                         <Switch
-                            value={agentModeEnabled}
+                            value={isGuestOrAnonymous ? false : agentModeEnabled}
                             onValueChange={toggleAgentMode}
+                            disabled={isGuestOrAnonymous}
                             trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
                             thumbColor={colors.surface}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                         />
-                    </View>
+                    </TouchableOpacity>
 
                     <View style={styles.separator} />
 
@@ -769,7 +784,7 @@ export const SettingsScreen = () => {
                                         isLocked && styles.compactProviderOptionLocked
                                     ]}
                                     onPress={() => updateProvider(option.key)}
-                                    disabled={activeProvider?.key === option.key}
+                                    disabled={activeProvider?.key === option.key && !isLocked}
                                 >
                                     {option.key === 'openai' ? (
                                         <Text style={[styles.providerGlyphText, { color: isActive ? colors.surface : colors.textSecondary }]}>GPT</Text>
@@ -890,13 +905,15 @@ export const SettingsScreen = () => {
 
                 {/* Sign Out & About */}
                 <View style={{ marginTop: spacing.l, marginBottom: spacing.xl, gap: spacing.m }}>
-                    <TouchableOpacity
-                        style={styles.signOutButton}
-                        onPress={handleSignOut}
-                    >
-                        <MaterialIcons name="logout" size={18} color={colors.error} />
-                        <Text style={styles.signOutText}>Sign Out</Text>
-                    </TouchableOpacity>
+                    {isAuthenticated && !isGuest && (
+                        <TouchableOpacity
+                            style={styles.signOutButton}
+                            onPress={handleSignOut}
+                        >
+                            <MaterialIcons name="logout" size={18} color={colors.error} />
+                            <Text style={styles.signOutText}>Sign Out</Text>
+                        </TouchableOpacity>
+                    )}
 
                     <View style={{ alignItems: 'center', gap: spacing.s, opacity: 0.7 }}>
                         <View style={{ flexDirection: 'row', gap: spacing.l }}>
@@ -1033,8 +1050,12 @@ export const SettingsScreen = () => {
 
             <SignInRequiredModal
                 visible={!!providerGate}
-                title={providerGate?.kind === 'upgrade' ? 'Upgrade to Pro' : 'Sign in to upgrade'}
-                message={providerGate ? `${providerGate.providerTitle} is available in Pro.` : ''}
+                title={providerGate?.kind === 'upgrade' ? 'Upgrade to Pro' : 'Sign in required'}
+                message={providerGate
+                    ? (providerGate.kind === 'upgrade'
+                        ? `${providerGate.providerTitle} is available in Pro.`
+                        : `Create an account to use ${providerGate.providerTitle}.`)
+                    : ''}
                 signInLabel={providerGate?.kind === 'upgrade' ? 'Upgrade' : 'Sign In'}
                 onClose={() => setProviderGate(null)}
                 onSignIn={() => {
