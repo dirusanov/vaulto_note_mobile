@@ -29,8 +29,8 @@ export const UnlockSyncModal = ({
     const { unlock, bundle, custodyMode } = useEncryption();
     const effectiveMode: SecretMode = custodyMode === 'strict_seed'
         ? 'seed_phrase'
-        : (bundle?.secret_mode ?? 'passphrase');
-    const isLegacyNumericPassphrase = effectiveMode === 'pin';
+        : (bundle?.secret_mode === 'seed_phrase' ? 'seed_phrase' : 'passphrase');
+    const isLegacyNumericPassphrase = custodyMode !== 'strict_seed' && bundle?.secret_mode === 'pin';
     const isRecoveryPhrase = effectiveMode === 'seed_phrase';
     const [secret, setSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
@@ -69,7 +69,7 @@ export const UnlockSyncModal = ({
 
         if (isLegacyNumericPassphrase) {
             if (!/^\d{8}$/.test(rawSecret.trim())) {
-                setError('Passphrase must be exactly 8 digits.');
+                setError('Legacy numeric passphrase must be exactly 8 digits.');
                 return;
             }
         } else {
@@ -131,7 +131,7 @@ export const UnlockSyncModal = ({
                                 {isRecoveryPhrase
                                     ? 'Recovery phrase mode: only your 12-word recovery phrase can unlock synced data.'
                                     : isLegacyNumericPassphrase
-                                        ? 'Legacy mode: your passphrase is an 8-digit code.'
+                                        ? 'Legacy mode detected: your passphrase is an 8-digit numeric code.'
                                         : 'Use your exact passphrase. Unlock happens locally.'}
                             </Text>
                             {error && <Text style={styles.error}>{error}</Text>}

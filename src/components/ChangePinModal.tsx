@@ -6,7 +6,6 @@ import {
     normalizeSecretInput,
     PASSPHRASE_MIN_LENGTH,
     PASSPHRASE_MIN_WORDS,
-    PIN_LENGTH,
     SEED_PHRASE_WORDS,
     SecretMode,
 } from '../crypto/e2ee';
@@ -14,7 +13,6 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { Button } from './Button';
-import { PinCodeInput } from './PinCodeInput';
 import { TextInput } from './TextInput';
 import { generateMnemonic } from '../crypto/bip39';
 import { SeedWordsGrid } from './SeedWordsGrid';
@@ -48,7 +46,7 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
     const { changePin, bundle, custodyMode } = useEncryption();
     const preferredMode = custodyMode === 'strict_seed'
         ? 'seed_phrase'
-        : (bundle?.secret_mode ?? 'pin');
+        : (bundle?.secret_mode === 'seed_phrase' ? 'seed_phrase' : 'passphrase');
     const [step, setStep] = useState<ChangeStep>('enter_secret');
     const [mode, setMode] = useState<SecretMode>(preferredMode);
     const [secret, setSecret] = useState('');
@@ -129,11 +127,7 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
             const normalizedSecret = normalizeSecretInput(secret, mode);
             const normalizedConfirm = normalizeSecretInput(confirmSecret, mode);
             if (normalizedSecret !== normalizedConfirm) {
-                if (mode === 'pin') {
-                    setError('PINs do not match.');
-                } else {
-                    setError('Passphrases do not match.');
-                }
+                setError('Passphrases do not match.');
                 return;
             }
         }
@@ -222,38 +216,9 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                         Code Phrase
                                     </Text>
                                 </Pressable>
-                                <Pressable
-                                    style={[styles.modeButton, mode === 'pin' && styles.modeButtonActive]}
-                                    onPress={() => {
-                                        setStep('enter_secret');
-                                        setMode('pin');
-                                        setSeedConfirmationIndexes([]);
-                                        setSeedConfirmationInputs({});
-                                        setError(null);
-                                    }}
-                                >
-                                    <Text style={[styles.modeTitle, mode === 'pin' && styles.modeTitleActive]}>
-                                        PIN
-                                    </Text>
-                                </Pressable>
                             </View>
 
-                            {mode === 'pin' ? (
-                                <>
-                                    <PinCodeInput
-                                        label={`New PIN (${PIN_LENGTH} digits)`}
-                                        value={secret}
-                                        onChange={setSecret}
-                                        length={PIN_LENGTH}
-                                    />
-                                    <PinCodeInput
-                                        label="Confirm PIN"
-                                        value={confirmSecret}
-                                        onChange={setConfirmSecret}
-                                        length={PIN_LENGTH}
-                                    />
-                                </>
-                            ) : mode === 'seed_phrase' && step === 'confirm_seed' ? (
+                            {mode === 'seed_phrase' && step === 'confirm_seed' ? (
                                 <>
                                     <Pressable
                                         onPress={() => {
@@ -325,9 +290,7 @@ export const ChangePinModal = ({ visible, onClose, onChanged, onChanging, onErro
                                 </>
                             )}
                             <Text style={styles.hint}>
-                                {mode === 'pin'
-                                    ? 'PIN is faster to type, but weaker against offline brute-force.'
-                                    : mode === 'seed_phrase'
+                                {mode === 'seed_phrase'
                                         ? step === 'confirm_seed'
                                             ? 'Verification required before applying your new seed phrase.'
                                             : step === 'seed_ready'

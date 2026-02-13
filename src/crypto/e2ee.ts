@@ -5,7 +5,6 @@ import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import { isValidMnemonic, normalizeMnemonic } from './bip39';
 
-export const PIN_LENGTH = 8;
 export const KEY_BUNDLE_VERSION = 2;
 export const CIPHER_VERSION = 'v2';
 export const DEFAULT_KDF_ITERATIONS = 150_000;
@@ -17,7 +16,10 @@ const STRICT_SEED_KDF_ITERATIONS = 300_000;
 const STRICT_SEED_DOMAIN_SALT = utf8ToBytes('vaulto.strict-seed.master-key.v1');
 const STRICT_SEED_ASYNC_TICK_MS = 1;
 
-export type SecretMode = 'pin' | 'passphrase' | 'seed_phrase';
+// PIN-based wrapping was removed; keep legacy 'pin' only for backward compatibility
+// when parsing old key bundles from storage/server.
+export type SecretMode = 'passphrase' | 'seed_phrase';
+export type KeyBundleSecretMode = SecretMode | 'pin';
 
 export type KeyBundleKdf = {
     name: 'PBKDF2-HMAC-SHA256';
@@ -36,7 +38,7 @@ export type KeyBundle = {
     wrap: KeyBundleWrap;
     wrapped_key: string; // hex
     created_at: string;
-    secret_mode?: SecretMode;
+    secret_mode?: KeyBundleSecretMode;
 };
 
 let masterKey: Uint8Array | null = null;
@@ -51,10 +53,6 @@ export const hasMasterKey = () => masterKey !== null;
 
 export const clearMasterKey = () => {
     masterKey = null;
-};
-
-export const isValidPin = (pin: string): boolean => {
-    return /^\d{8}$/.test(pin);
 };
 
 const countPassphraseWords = (passphrase: string): number => {
@@ -88,12 +86,6 @@ export const getSecretValidationError = (
     if (!normalized) {
         if (mode === 'seed_phrase') return 'Recovery phrase is required.';
         return 'Passphrase is required.';
-    }
-
-    if (mode === 'pin') {
-        return isValidPin(normalized)
-            ? null
-            : `Passphrase must be exactly ${PIN_LENGTH} digits.`;
     }
 
     if (mode === 'seed_phrase') {
@@ -187,7 +179,8 @@ export const wrapMasterKey = async (
 };
 
 export const unwrapMasterKey = (bundle: KeyBundle, secret: string): Uint8Array => {
-    const mode = bundle.secret_mode;
+    const mode: SecretMode | undefined =
+        bundle.secret_mode === 'pin' ? 'passphrase' : bundle.secret_mode;
     const candidates = new Set<string>();
     const addCandidate = (value: string) => {
         if (value) {
@@ -231,8 +224,8 @@ export const isKeyBundle = (value: any): value is KeyBundle => {
         typeof value.wrap.nonce === 'string' &&
         typeof value.wrapped_key === 'string' &&
         (value.secret_mode === undefined ||
-            value.secret_mode === 'pin' ||
             value.secret_mode === 'passphrase' ||
-            value.secret_mode === 'seed_phrase')
+            value.secret_mode === 'seed_phrase' ||
+            value.secret_mode === 'pin')
     );
 };

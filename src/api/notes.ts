@@ -132,12 +132,34 @@ export interface ServerImprovement {
 
 export interface SyncNotesResponse {
     updated: ServerNote[];
-    conflicts: ServerNote[];
+    conflicts: NoteSyncConflict[];
     server_changes: ServerNote[];
     improvement_updates: ServerImprovement[];
-    improvement_conflicts: ServerImprovement[];
+    improvement_conflicts: ImprovementSyncConflict[];
     improvement_changes: ServerImprovement[];
 }
+
+export type NoteSyncConflict = {
+    id: string;
+    error: string;
+    message?: string;
+    conflict_of?: string | null;
+    server_updated_at?: string;
+    client_updated_at?: string;
+    server_version?: number;
+    client_base_version?: number;
+};
+
+export type ImprovementSyncConflict = {
+    id: string;
+    note_id: string;
+    error: string;
+    message?: string;
+    server_updated_at?: string;
+    client_updated_at?: string;
+    server_version?: number | null;
+    client_base_version?: number;
+};
 
 export const notesApi = {
     sync: async (payload: SyncNotesRequest): Promise<SyncNotesResponse> => {

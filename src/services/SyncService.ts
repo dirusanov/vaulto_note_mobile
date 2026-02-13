@@ -50,7 +50,9 @@ const isExpectedDecryptFailure = (error: unknown): boolean => {
 
 class SyncService {
     private isSyncing = false;
-    private lastSyncAt: number = 0;
+    private lastSyncCompletedAtMs: number = 0;
+    // Server cursor used for since_updated_at. Stored as an ISO string.
+    private lastSyncCursor: string | null = null;
     private syncTimeout: NodeJS.Timeout | null = null;
     private listeners: SyncListener[] = [];
     private isAuthenticated = false;
@@ -58,10 +60,23 @@ class SyncService {
     private syncEnabled = false;
 
     constructor() {
-        // Load last sync time from storage
+        // Load last sync cursor from storage.
         AsyncStorage.getItem(SYNC_SINCE_KEY).then(val => {
             if (val) {
-                this.lastSyncAt = parseInt(val, 10);
+                // Legacy values were stored as epoch millis. That cursor can miss server updates
+                // (it is derived from local time), so we discard and force a full sync once.
+                if (/^\d+$/.test(val)) {
+                    void AsyncStorage.removeItem(SYNC_SINCE_KEY);
+                    this.lastSyncCursor = null;
+                    return;
+                }
+                const parsed = Date.parse(val);
+                if (Number.isNaN(parsed)) {
+                    void AsyncStorage.removeItem(SYNC_SINCE_KEY);
+                    this.lastSyncCursor = null;
+                    return;
+                }
+                this.lastSyncCursor = val;
             }
         });
 
@@ -104,8 +119,8 @@ class SyncService {
     }
 
     public async resetSyncState(userId?: string | null) {
-        this.lastSyncAt = 0;
-        await AsyncStorage.setItem(SYNC_SINCE_KEY, '0');
+        this.lastSyncCursor = null;
+        await AsyncStorage.removeItem(SYNC_SINCE_KEY);
         const effectiveUserId = userId ?? this.currentUserId;
         if (effectiveUserId) {
             await markAllDirty(effectiveUserId);
@@ -145,7 +160,7 @@ class SyncService {
     private handleAppStateChange = (nextAppState: AppStateStatus) => {
         if (nextAppState === 'active') {
             const now = Date.now();
-            if (now - this.lastSyncAt > RESUME_SYNC_THRESHOLD_MS) {
+            if (now - this.lastSyncCompletedAtMs > RESUME_SYNC_THRESHOLD_MS) {
                 this.syncNow('resume');
             }
         }
@@ -209,6 +224,7 @@ class SyncService {
             for (const note of dirtyNotes) {
                 if (!isUUID(note.id)) {
                     // Skip invalid IDs
+                    continue;
                 }
 
                 noteMap.set(note.id, note);
@@ -273,9 +289,9 @@ class SyncService {
             }
 
             // 3. Send to server
-            const since = !hasLocalNotes || this.lastSyncAt === 0
+            const since = !hasLocalNotes || !this.lastSyncCursor
                 ? '1970-01-01T00:00:00+00:00'
-                : new Date(this.lastSyncAt).toISOString();
+                : this.lastSyncCursor;
 
             const response = await notesApi.sync({
                 changes,
@@ -284,14 +300,17 @@ class SyncService {
             });
 
             // 4. Process response
-            const incoming = [
-                ...response.updated,
-                ...response.server_changes,
-                ...response.conflicts
-            ];
+            const conflictedNoteIds = new Set((response.conflicts || []).map((c) => c.id));
+            if (conflictedNoteIds.size > 0) {
+                console.warn(`[SyncService] Server reported ${conflictedNoteIds.size} note conflicts; keeping local notes dirty.`);
+            }
 
+            const serverNotes = [
+                ...(response.updated || []),
+                ...(response.server_changes || []),
+            ];
             const uniqueIncoming = new Map<string, ServerNote>();
-            incoming.forEach(n => uniqueIncoming.set(n.id, n));
+            serverNotes.forEach(n => uniqueIncoming.set(n.id, n));
 
             if (uniqueIncoming.size > 0) {
                 await this.applyServerChanges(Array.from(uniqueIncoming.values()));
@@ -301,6 +320,10 @@ class SyncService {
                 ...(response.improvement_updates || []),
                 ...(response.improvement_changes || []),
             ];
+            const conflictedImprovementIds = new Set((response.improvement_conflicts || []).map((c) => c.id));
+            if (conflictedImprovementIds.size > 0) {
+                console.warn(`[SyncService] Server reported ${conflictedImprovementIds.size} improvement conflicts; keeping local improvements dirty.`);
+            }
             if (!hasMasterKey()) {
                 console.log('[SyncService] Encryption locked before applying server changes. Skipping response apply.');
                 return;
@@ -314,38 +337,41 @@ class SyncService {
                 const local = noteMap.get(change.id);
                 if (!local || !this.currentUserId) continue;
 
-                const incomingVersion = uniqueIncoming.get(change.id);
-                const serverConfirmedDelete = !!incomingVersion?.deleted;
+                if (conflictedNoteIds.has(change.id)) {
+                    continue;
+                }
+                const serverNote = uniqueIncoming.get(change.id);
+                if (!serverNote) {
+                    // If server didn't echo back, keep local dirty.
+                    continue;
+                }
 
-                if (!uniqueIncoming.has(change.id) || (local.pending_server_delete && serverConfirmedDelete)) {
-                    if (local.pending_server_delete) {
-                        await saveNoteLocal(this.currentUserId, {
-                            ...local,
-                            pending_server_delete: false,
-                            dirty: false,
-                            synced: 0,
-                            deleted: false,
-                            pending_delete: false,
-                        });
-                    } else if (change.deleted) {
-                        await deleteNoteLocal(this.currentUserId, local.id);
-                    } else {
-                        await saveNoteLocal(this.currentUserId, { ...local, dirty: false, synced: 1 });
-                    }
+                const serverConfirmedDelete = !!serverNote.deleted;
+                if (local.pending_server_delete) {
+                    if (!serverConfirmedDelete) continue;
+                    await saveNoteLocal(this.currentUserId, {
+                        ...local,
+                        pending_server_delete: false,
+                        dirty: false,
+                        synced: 0,
+                        deleted: false,
+                        pending_delete: false,
+                    });
+                    continue;
+                }
+
+                if (change.deleted || serverConfirmedDelete) {
+                    await deleteNoteLocal(this.currentUserId, local.id);
+                } else {
+                    await saveNoteLocal(this.currentUserId, { ...local, dirty: false, synced: 1 });
                 }
             }
 
             if (improvementChanges.length > 0) {
-                const processedImprovementIds = new Set(
-                    [
-                        ...(response.improvement_updates || []),
-                        ...(response.improvement_changes || []),
-                    ].map(imp => imp.id)
-                );
+                const processedImprovementIds = new Set(incomingImprovements.map(imp => imp.id));
                 for (const change of improvementChanges) {
-                    if (processedImprovementIds.has(change.id)) {
-                        continue;
-                    }
+                    if (conflictedImprovementIds.has(change.id)) continue;
+                    if (!processedImprovementIds.has(change.id)) continue;
                     const localImprovement = improvementMap.get(change.id);
                     if (!localImprovement || !this.currentUserId) continue;
                     await saveImprovementLocal(this.currentUserId, {
@@ -356,8 +382,22 @@ class SyncService {
                 }
             }
 
-            this.lastSyncAt = Date.now();
-            await AsyncStorage.setItem(SYNC_SINCE_KEY, this.lastSyncAt.toString());
+            // Update cursor based on server timestamps, not local wall-clock time.
+            const cursorCandidates = [
+                ...Array.from(uniqueIncoming.values()).map((n) => n.updated_at),
+                ...incomingImprovements.map((i) => i.updated_at),
+            ];
+            const maxIncomingMs = cursorCandidates
+                .map((t) => Date.parse(t))
+                .filter((t) => Number.isFinite(t))
+                .reduce((acc, t) => Math.max(acc, t), 0);
+            const prevMs = this.lastSyncCursor ? Date.parse(this.lastSyncCursor) : 0;
+            const nextMs = Math.max(Number.isFinite(prevMs) ? prevMs : 0, maxIncomingMs);
+            if (nextMs > 0) {
+                this.lastSyncCursor = new Date(nextMs).toISOString();
+                await AsyncStorage.setItem(SYNC_SINCE_KEY, this.lastSyncCursor);
+            }
+            this.lastSyncCompletedAtMs = Date.now();
 
             this.notifyListeners();
 

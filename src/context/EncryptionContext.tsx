@@ -283,7 +283,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         const expectedSecretMode: SecretMode =
             custodyMode === 'strict_seed'
                 ? 'seed_phrase'
-                : (bundle?.secret_mode ?? 'pin');
+                : (bundle?.secret_mode === 'seed_phrase' ? 'seed_phrase' : 'passphrase');
 
         let resolvedMasterKey: Uint8Array;
         if (custodyMode === 'strict_seed') {
