@@ -358,47 +358,28 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
     try {
         const database = await getDb();
         if (!database) return;
-        const relatedRows = await database.getAllAsync<{ id: string }>(
-            'SELECT id FROM notes WHERE (id = ? OR parent_id = ?) AND user_id = ?',
-            [id, id, userId]
-        );
-        const relatedIds = Array.from(new Set(relatedRows.map((row) => row.id)));
+        // Native DB does not store improvements as child notes, so we only delete the note itself.
+        const relatedIds = [id];
         let audioPathsToDelete: Array<string | null | undefined> = [];
 
-        if (relatedIds.length > 0) {
-            const placeholders = relatedIds.map(() => '?').join(', ');
-            const params = [userId, ...relatedIds];
-            const [voiceRows, noteRows] = await Promise.all([
-                database.getAllAsync<{ file_path: string | null }>(
-                    `SELECT file_path FROM voice_recordings WHERE user_id = ? AND note_id IN (${placeholders})`,
-                    params
-                ),
-                database.getAllAsync<{ audio_file_path: string | null }>(
-                    `SELECT audio_file_path FROM notes WHERE user_id = ? AND id IN (${placeholders})`,
-                    params
-                ),
-            ]);
-            audioPathsToDelete = [
-                ...voiceRows.map((row) => row.file_path),
-                ...noteRows.map((row) => row.audio_file_path),
-            ];
-            await database.runAsync(
-                `DELETE FROM voice_recordings WHERE user_id = ? AND note_id IN (${placeholders})`,
-                params
-            );
-        } else {
-            await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ? AND user_id = ?', [id, userId]);
-        }
-        if (relatedIds.length > 0) {
-            const placeholders = relatedIds.map(() => '?').join(', ');
-            await database.runAsync(
-                `DELETE FROM note_improvements WHERE user_id = ? AND note_id IN (${placeholders})`,
-                [userId, ...relatedIds]
-            );
-        } else {
-            await database.runAsync('DELETE FROM note_improvements WHERE note_id = ? AND user_id = ?', [id, userId]);
-        }
-        await database.runAsync('DELETE FROM notes WHERE (id = ? OR parent_id = ?) AND user_id = ?', [id, id, userId]);
+        const [voiceRows, noteRows] = await Promise.all([
+            database.getAllAsync<{ file_path: string | null }>(
+                'SELECT file_path FROM voice_recordings WHERE user_id = ? AND note_id = ?',
+                [userId, id]
+            ),
+            database.getAllAsync<{ audio_file_path: string | null }>(
+                'SELECT audio_file_path FROM notes WHERE user_id = ? AND id = ?',
+                [userId, id]
+            ),
+        ]);
+        audioPathsToDelete = [
+            ...voiceRows.map((row) => row.file_path),
+            ...noteRows.map((row) => row.audio_file_path),
+        ];
+
+        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ? AND user_id = ?', [id, userId]);
+        await database.runAsync('DELETE FROM note_improvements WHERE note_id = ? AND user_id = ?', [id, userId]);
+        await database.runAsync('DELETE FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
         await purgeAudioFiles(audioPathsToDelete, `delete note ${id}`);
         await AudioService.cleanupTempFiles();
         console.log(`[DatabaseService] Note deleted from native DB: ${id}`);
