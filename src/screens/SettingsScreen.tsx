@@ -168,7 +168,15 @@ export const SettingsScreen = () => {
         isPro,
         isLoading: subscriptionLoading,
     } = useSubscription();
-    const { syncEnabled, syncLocked } = useEncryption();
+    const {
+        status: encryptionStatus,
+        syncEnabled,
+        syncLocked,
+        hasRemoteKeyBundle,
+        bundle,
+        custodyMode,
+        setSyncEnabledPreference,
+    } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
@@ -245,18 +253,45 @@ export const SettingsScreen = () => {
     });
 
     const usingOpenAI = aiProvider === 'openai';
-    const syncStatusLabel = !syncEnabled ? 'Local only' : syncLocked ? 'Locked' : 'Enabled';
+    const hasConfiguredKey = custodyMode === 'strict_seed' || !!bundle || hasRemoteKeyBundle;
+    const syncStatusLabel = !syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On';
     const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
-    const accessKeyLabel = !syncEnabled
-        ? 'Off'
-        : syncLocked
-            ? 'Locked'
-            : 'Set';
-    const accessKeyColor = !syncEnabled
-        ? colors.textSecondary
-        : syncLocked
-            ? colors.warning
-            : colors.accentGreen;
+    const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : 'Configured';
+    const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
+    const syncToggleDisabled = !isAuthenticated || isGuest;
+
+    const handleToggleSync = useCallback(async (enabled: boolean) => {
+        if (syncToggleDisabled) {
+            Alert.alert('Sign in required', 'Sign in to enable or disable sync.');
+            return;
+        }
+
+        if (enabled) {
+            if (!hasConfiguredKey) {
+                setShowEnableSyncModal(true);
+                return;
+            }
+            try {
+                await setSyncEnabledPreference(true);
+                if (encryptionStatus === 'locked') {
+                    setShowUnlockSyncModal(true);
+                    return;
+                }
+                setTimeout(() => {
+                    void syncService.syncNow('manual');
+                }, 0);
+            } catch (error: any) {
+                Alert.alert('Failed', error?.message || 'Unable to enable sync.');
+            }
+            return;
+        }
+
+        try {
+            await setSyncEnabledPreference(false);
+        } catch (error: any) {
+            Alert.alert('Failed', error?.message || 'Unable to disable sync.');
+        }
+    }, [encryptionStatus, hasConfiguredKey, setSyncEnabledPreference, syncToggleDisabled]);
 
     type ProviderOption = {
         key: AIProvider;
@@ -613,16 +648,21 @@ export const SettingsScreen = () => {
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <Text style={[styles.securityValueMinimal, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
-                            {!syncEnabled && (
-                                <TouchableOpacity style={styles.smallButton} onPress={() => setShowEnableSyncModal(true)}>
-                                    <Text style={styles.smallButtonText}>Enable</Text>
-                                </TouchableOpacity>
-                            )}
                             {syncEnabled && syncLocked && (
                                 <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
                                     <Text style={styles.smallButtonText}>Unlock</Text>
                                 </TouchableOpacity>
                             )}
+                            <Switch
+                                value={syncEnabled}
+                                onValueChange={(value) => {
+                                    void handleToggleSync(value);
+                                }}
+                                disabled={showUnlockingOverlay}
+                                trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                thumbColor={colors.surface}
+                                style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                            />
                         </View>
                     </View>
 
@@ -630,14 +670,14 @@ export const SettingsScreen = () => {
 
                     <View style={styles.securityRowMinimal}>
                         <View style={styles.securityRowLeft}>
-                            <View style={[styles.iconContainer, { backgroundColor: accessKeyColor + '20' }]}>
-                                <MaterialIcons name="vpn-key" size={16} color={accessKeyColor} />
+                            <View style={[styles.iconContainer, { backgroundColor: passphraseStatusColor + '20' }]}>
+                                <MaterialIcons name="vpn-key" size={16} color={passphraseStatusColor} />
                             </View>
                             <Text style={styles.securityLabelMinimal}>Passphrase</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <Text style={[styles.securityValueMinimal, { color: accessKeyColor }]}>{accessKeyLabel}</Text>
-                            {syncEnabled && !syncLocked && (
+                            <Text style={[styles.securityValueMinimal, { color: passphraseStatusColor }]}>{passphraseStatusLabel}</Text>
+                            {hasConfiguredKey && encryptionStatus !== 'locked' && (
                                 <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangePinModal(true)}>
                                     <Text style={styles.smallButtonTextOutlined}>Change</Text>
                                 </TouchableOpacity>

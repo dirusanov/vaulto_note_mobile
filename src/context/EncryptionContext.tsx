@@ -36,6 +36,7 @@ interface EncryptionContextType {
     enableE2EE: (secret: string, mode?: SecretMode) => Promise<void>;
     unlock: (secret: string) => Promise<void>;
     changePin: (secret: string, mode?: SecretMode) => Promise<void>;
+    setSyncEnabledPreference: (enabled: boolean) => Promise<void>;
     resetSync: () => Promise<'purged' | 'partial'>;
     resetEncryption: () => Promise<'purged' | 'partial'>;
     lock: () => void;
@@ -101,11 +102,12 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setCustodyMode('standard');
         const storedSyncEnabled = await storage.getSyncEnabled();
         const isAuthReady = !!userId && isAuthenticated && !isGuest;
+        const shouldEnableSync = isAuthReady && storedSyncEnabled;
 
         setMode('local');
         setCryptoMode('local');
-        setSyncEnabled(isAuthReady && storedSyncEnabled);
-        syncService.setSyncEnabled(isAuthReady && storedSyncEnabled);
+        setSyncEnabled(shouldEnableSync);
+        syncService.setSyncEnabled(shouldEnableSync);
 
         if (!isAuthReady) {
             setStatus('ready');
@@ -131,9 +133,6 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setCustodyMode(effectiveCustodyMode);
 
         if (effectiveCustodyMode === 'strict_seed') {
-            await storage.setSyncEnabled(true);
-            setSyncEnabled(true);
-            syncService.setSyncEnabled(true);
             setHasRemoteKeyBundle(false);
             setBundle(null);
             const restored = await restoreMasterKey(userId);
@@ -182,10 +181,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         if (activeBundle) {
             setBundle(activeBundle);
-            setSyncEnabled(true);
-            syncService.setSyncEnabled(true);
             const restored = await restoreMasterKey(userId);
             setStatus(restored ? 'ready' : 'locked');
+            // Keep existing key bundle but respect user preference for toggling sync.
+            setSyncEnabled(shouldEnableSync);
+            syncService.setSyncEnabled(shouldEnableSync);
             return;
         }
 
@@ -388,9 +388,6 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             setSyncUnlocked(true);
             setBundle(null);
             setHasRemoteKeyBundle(false);
-            setSyncEnabled(true);
-            syncService.setSyncEnabled(true);
-            await storage.setSyncEnabled(true);
             await persistMasterKey(userId, derivedMasterKey);
             await storage.removeKeyBundle(userId);
             await persistCustodyMode(userId, 'strict_seed');
@@ -420,9 +417,6 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         await persistCustodyMode(userId, 'standard');
         setBundle(newBundle);
         setHasRemoteKeyBundle(true);
-        setSyncEnabled(true);
-        syncService.setSyncEnabled(true);
-        await storage.setSyncEnabled(true);
 
         try {
             await e2eeApi.setConfig('standard');
@@ -435,6 +429,18 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             console.warn('[Encryption] Failed to update key bundle on server:', error);
         }
     }, [isAuthenticated, isGuest, userId, custodyMode, persistMasterKey, persistCustodyMode]);
+
+    const setSyncEnabledPreference = useCallback(async (enabled: boolean) => {
+        if (!isAuthenticated || isGuest) {
+            throw new Error('Sign in required to change sync');
+        }
+        if (!userId) {
+            throw new Error('User not available');
+        }
+        await storage.setSyncEnabled(enabled);
+        setSyncEnabled(enabled);
+        syncService.setSyncEnabled(enabled);
+    }, [isAuthenticated, isGuest, userId]);
 
     const resetSync = useCallback(async (): Promise<'purged' | 'partial'> => {
         if (!isAuthenticated || isGuest) {
@@ -527,10 +533,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         enableE2EE,
         unlock,
         changePin,
+        setSyncEnabledPreference,
         resetSync,
         resetEncryption,
         lock,
-    }), [status, mode, custodyMode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, resetSync, resetEncryption, lock]);
+    }), [status, mode, custodyMode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>
