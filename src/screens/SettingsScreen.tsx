@@ -24,11 +24,13 @@ import {
     setTranscriptionEnabled
 } from '../utils/storage';
 import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
+import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { useEncryption } from '../context/EncryptionContext';
 import { useAppLock } from '../context/AppLockContext';
+import Constants from 'expo-constants';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
@@ -210,6 +212,7 @@ export const SettingsScreen = () => {
         type: 'idle',
         message: '',
     });
+    const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
 
     // Self-hosted settings
     const [selfHostedUrl, setSelfHostedUrlState] = useState('');
@@ -472,6 +475,11 @@ export const SettingsScreen = () => {
     };
 
     const toggleTranscription = async (value: boolean) => {
+        if ((!isAuthenticated || isGuest) && value) {
+            setShowTranscriptionAuthModal(true);
+            setTranscriptionEnabledState(false);
+            return;
+        }
         setTranscriptionEnabledState(value);
         await setTranscriptionEnabled(value);
     };
@@ -521,6 +529,18 @@ export const SettingsScreen = () => {
 
         return () => clearTimeout(timeout);
     }, [selfHostedUrl, preferencesReady]);
+
+    useEffect(() => {
+        // Anonymous users can't use transcription; force UI OFF.
+        if (!preferencesReady) return;
+        if (!isAuthenticated || isGuest) {
+            setTranscriptionEnabledState(false);
+            return;
+        }
+        getTranscriptionEnabled()
+            .then(enabled => setTranscriptionEnabledState(enabled))
+            .catch(() => setTranscriptionEnabledState(true));
+    }, [isAuthenticated, isGuest, preferencesReady]);
 
     useEffect(() => {
         if (!preferencesReady) return;
@@ -1288,20 +1308,10 @@ export const SettingsScreen = () => {
 
 
 
-                <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>App Info</Text>
-                    <Text style={styles.info}>Version 1.0.0</Text>
-                    <Text style={styles.info}>Data is not stored or analyzed.</Text>
-
-                    <View style={styles.legalLinks}>
-                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>
-                            <Text style={styles.linkText}>Privacy Policy</Text>
-                        </TouchableOpacity>
-                        <View style={styles.linkDivider} />
-                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')}>
-                            <Text style={styles.linkText}>Terms of Service</Text>
-                        </TouchableOpacity>
-                    </View>
+                <View style={styles.minimalAppInfo}>
+                    <Text style={styles.minimalAppInfoText}>
+                        Version {Constants.expoConfig?.version || '1.0.0'} • <Text style={styles.minimalAppInfoLink} onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>Privacy</Text> • <Text style={styles.minimalAppInfoLink} onPress={() => Linking.openURL('https://vaultonote.com/terms')}>Terms</Text>
+                    </Text>
                 </View>
 
                 {
@@ -1424,6 +1434,17 @@ export const SettingsScreen = () => {
                     </Pressable>
                 </Pressable>
             </Modal>
+
+            <SignInRequiredModal
+                visible={showTranscriptionAuthModal}
+                title="Sign in to enable"
+                message="Auto-transcription is available after you create an account."
+                onClose={() => setShowTranscriptionAuthModal(false)}
+                onSignIn={() => {
+                    setShowTranscriptionAuthModal(false);
+                    navigation.navigate('SignIn');
+                }}
+            />
 
             <EnableSyncModal
                 visible={showEnableSyncModal}
@@ -2368,20 +2389,19 @@ const styles = StyleSheet.create({
         color: colors.accentGreen,
         fontWeight: '600',
     },
-    legalLinks: {
-        marginTop: spacing.m,
-        flexDirection: 'row',
+    minimalAppInfo: {
         alignItems: 'center',
-        gap: spacing.m,
+        justifyContent: 'center',
+        marginTop: spacing.xl,
+        marginBottom: spacing.m,
+        opacity: 0.7,
     },
-    linkText: {
-        ...typography.bodySmall,
-        color: colors.primary,
+    minimalAppInfoText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        textAlign: 'center',
+    },
+    minimalAppInfoLink: {
         textDecorationLine: 'underline',
-    },
-    linkDivider: {
-        width: 1,
-        height: 12,
-        backgroundColor: colors.border,
     },
 });
