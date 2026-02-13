@@ -75,7 +75,7 @@ export const PaywallScreen = () => {
                                         style={[styles.planCard, isBestValue && styles.planCardBest]}
                                         onPress={() => handlePurchase(pack)}
                                         activeOpacity={0.9}
-                                        disabled={!canPurchase}
+                                        disabled={!canPurchase || isLoading}
                                     >
                                         <View style={styles.planHeader}>
                                             <Text style={[styles.planTitle, isBestValue && styles.planTitleBest]}>{title}</Text>

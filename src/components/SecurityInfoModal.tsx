@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { Modal, View, Text, StyleSheet, Pressable, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -38,7 +38,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.scrollContent}>
 
                         <View style={styles.section}>
                             <View style={[styles.iconBox, { backgroundColor: colors.accentGreen + '15' }]}>
@@ -87,7 +87,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                             </Text>
                         </View>
 
-                    </ScrollView>
+                    </View>
 
                     <View style={styles.footer}>
                         <TouchableOpacity style={styles.button} onPress={onClose}>
@@ -153,9 +153,6 @@ const styles = StyleSheet.create({
     closeButton: {
         marginLeft: 'auto',
         padding: spacing.s,
-    },
-    content: {
-        maxHeight: 400,
     },
     scrollContent: {
         padding: spacing.l,

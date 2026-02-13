@@ -321,12 +321,12 @@ export const SettingsScreen = () => {
         },
         {
             key: 'openai',
-            title: 'OpenAI Compatible',
-            blurb: 'OpenAI or Custom URL',
-            description: 'Use OpenAI-style endpoints (chat + transcription). Works with OpenAI and compatible servers.',
-            icon: 'chat',
+            title: 'Custom AI',
+            blurb: 'OpenAI & Compatible APIs',
+            description: 'Works with OpenAI, self-hosted servers, and any OpenAI-compatible API endpoints.',
+            icon: 'dns',
             accent: colors.accentGreen,
-            chips: ['GPT', 'Whisper', 'Custom URL'],
+            chips: ['OpenAI', 'Custom', 'Self-hosted'],
             isLocked: !isPro,
             proMessage: 'Available in Pro',
         },
@@ -786,11 +786,7 @@ export const SettingsScreen = () => {
                                     onPress={() => updateProvider(option.key)}
                                     disabled={activeProvider?.key === option.key && !isLocked}
                                 >
-                                    {option.key === 'openai' ? (
-                                        <Text style={[styles.providerGlyphText, { color: isActive ? colors.surface : colors.textSecondary }]}>GPT</Text>
-                                    ) : (
-                                        <MaterialIcons name={option.icon as any} size={16} color={isActive ? colors.surface : colors.textSecondary} />
-                                    )}
+                                    <MaterialIcons name={option.icon as any} size={16} color={isActive ? colors.surface : colors.textSecondary} />
                                     <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]}>
                                         {option.title.replace(' Compatible', '').replace(' Hosted', '')}
                                     </Text>
@@ -800,111 +796,98 @@ export const SettingsScreen = () => {
                         })}
                     </View>
 
-                    {/* Setup for OpenAI/SelfHosted */}
-                    {usingOpenAI && (() => {
-                        const isStandardOpenAI = normalizeOpenAIBaseUrl(openAIBaseUrl) === DEFAULT_OPENAI_BASE_URL;
-
-                        return (
-                            <View style={styles.openAIConfigCard}>
-                                {/* Header with icon */}
-                                <View style={styles.openAIConfigHeader}>
-                                    <View style={[styles.iconContainer, { backgroundColor: isStandardOpenAI ? '#10A37F15' : colors.backgroundSecondary }]}>
-                                        <MaterialIcons
-                                            name={isStandardOpenAI ? 'chat' : 'dns'}
-                                            size={20}
-                                            color={isStandardOpenAI ? '#10A37F' : colors.primary}
-                                        />
-                                    </View>
-                                    <Text style={styles.openAIConfigTitle}>
-                                        {isStandardOpenAI ? 'ChatGPT' : 'Custom Server'}
-                                    </Text>
+                    {/* Setup for Custom AI (OpenAI & Compatible) */}
+                    {usingOpenAI && (
+                        <View style={styles.openAIConfigCard}>
+                            {/* Header */}
+                            <View style={styles.openAIConfigHeader}>
+                                <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
+                                    <MaterialIcons name="dns" size={20} color={colors.primary} />
                                 </View>
-
-                                {/* Base URL - only show for custom */}
-                                {!isStandardOpenAI && (
-                                    <View style={styles.openAIInputGroup}>
-                                        <Text style={styles.openAILabel}>Base URL</Text>
-                                        <TextInput
-                                            value={openAIBaseUrl}
-                                            onChangeText={setOpenAIBaseUrlState}
-                                            placeholder="https://api.openai.com/v1"
-                                            autoCapitalize="none"
-                                            style={styles.openAIInput}
-                                            placeholderTextColor={colors.textSecondary}
-                                        />
-                                    </View>
-                                )}
-
-                                {/* API Key */}
-                                <View style={styles.openAIInputGroup}>
-                                    <Text style={styles.openAILabel}>API Key</Text>
-                                    <View style={styles.openAISecretRow}>
-                                        <TextInput
-                                            value={apiKey}
-                                            onChangeText={setApiKeyState}
-                                            placeholder="sk-..."
-                                            autoCapitalize="none"
-                                            secureTextEntry={!showOpenAIKey}
-                                            style={styles.openAIInput}
-                                            placeholderTextColor={colors.textSecondary}
-                                        />
-                                        <TouchableOpacity
-                                            style={styles.openAIEyeButton}
-                                            onPress={() => setShowOpenAIKey(!showOpenAIKey)}
-                                        >
-                                            <MaterialIcons
-                                                name={showOpenAIKey ? 'visibility' : 'visibility-off'}
-                                                size={18}
-                                                color={colors.textSecondary}
-                                            />
-                                        </TouchableOpacity>
-                                    </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.openAIConfigTitle}>Custom AI Configuration</Text>
+                                    <Text style={styles.openAIConfigSubtitle}>OpenAI or compatible API</Text>
                                 </View>
+                            </View>
 
-                                {/* Toggle for standard OpenAI */}
-                                {isStandardOpenAI && (
+                            {/* Base URL */}
+                            <View style={styles.openAIInputGroup}>
+                                <Text style={styles.openAILabel}>Base URL</Text>
+                                <TextInput
+                                    value={openAIBaseUrl}
+                                    onChangeText={setOpenAIBaseUrlState}
+                                    placeholder="https://api.openai.com/v1"
+                                    autoCapitalize="none"
+                                    style={styles.openAIInput}
+                                    placeholderTextColor={colors.textSecondary}
+                                />
+                            </View>
+
+                            {/* API Key */}
+                            <View style={styles.openAIInputGroup}>
+                                <Text style={styles.openAILabel}>API Key</Text>
+                                <View style={styles.openAISecretRow}>
+                                    <TextInput
+                                        value={apiKey}
+                                        onChangeText={setApiKeyState}
+                                        placeholder="sk-..."
+                                        autoCapitalize="none"
+                                        secureTextEntry={!showOpenAIKey}
+                                        style={[styles.openAIInput, styles.openAIInputWithButton]}
+                                        placeholderTextColor={colors.textSecondary}
+                                    />
                                     <TouchableOpacity
-                                        style={styles.openAICustomToggle}
-                                        onPress={() => setOpenAIBaseUrlState('https://')}
+                                        style={styles.openAIEyeButton}
+                                        onPress={() => setShowOpenAIKey(!showOpenAIKey)}
                                     >
-                                        <MaterialIcons name="settings" size={14} color={colors.textSecondary} />
-                                        <Text style={styles.openAICustomToggleText}>Use custom URL</Text>
+                                        <MaterialIcons
+                                            name={showOpenAIKey ? 'visibility' : 'visibility-off'}
+                                            size={18}
+                                            color={colors.textSecondary}
+                                        />
                                     </TouchableOpacity>
-                                )}
+                                </View>
+                            </View>
 
-                                {/* Status message */}
-                                {openAITestStatus.message && (
+                            {/* Status message */}
+                            {openAITestStatus.message && (
+                                <View style={styles.openAIStatusRow}>
+                                    <MaterialIcons
+                                        name={openAITestStatus.type === 'success' ? 'check-circle' : 'error'}
+                                        size={14}
+                                        color={openAITestStatus.type === 'success' ? colors.accentGreen : colors.error}
+                                    />
                                     <Text style={[
                                         styles.openAIStatusText,
                                         openAITestStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError
                                     ]}>
                                         {openAITestStatus.message}
                                     </Text>
-                                )}
+                                </View>
+                            )}
 
-                                {/* Test button */}
-                                <TouchableOpacity
-                                    style={styles.openAITestButton}
-                                    onPress={handleTestConnection}
-                                    disabled={testingConnection}
-                                >
-                                    {testingConnection ? (
-                                        <ActivityIndicator size="small" color={colors.text} />
-                                    ) : (
-                                        <>
-                                            <MaterialIcons name="wifi-tethering" size={16} color={colors.text} />
-                                            <Text style={styles.openAITestButtonText}>Test Connection</Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        );
-                    })()}
+                            {/* Test button */}
+                            <TouchableOpacity
+                                style={styles.openAITestButton}
+                                onPress={handleTestConnection}
+                                disabled={testingConnection}
+                            >
+                                {testingConnection ? (
+                                    <ActivityIndicator size="small" color={colors.surface} />
+                                ) : (
+                                    <>
+                                        <MaterialIcons name="wifi-tethering" size={16} color={colors.surface} />
+                                        <Text style={styles.openAITestButtonText}>Test Connection</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                 </View>
 
                 {/* Sign Out & About */}
-                <View style={{ marginTop: spacing.l, marginBottom: spacing.xl, gap: spacing.m }}>
+                <View style={{ marginTop: spacing.m, marginBottom: spacing.m, gap: spacing.m }}>
                     {isAuthenticated && !isGuest && (
                         <TouchableOpacity
                             style={styles.signOutButton}
@@ -930,7 +913,6 @@ export const SettingsScreen = () => {
                     </View>
                 </View>
 
-                <View style={{ height: 20 }} />
 
             </ScrollView >
 
@@ -2212,13 +2194,69 @@ const styles = StyleSheet.create({
     openAIConfigHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
+        gap: spacing.m,
+        marginBottom: spacing.xs,
     },
     openAIConfigTitle: {
         ...typography.h3,
         fontSize: 16,
         fontWeight: '600',
         color: colors.text,
+    },
+    openAIConfigSubtitle: {
+        ...typography.caption,
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    openAIModeSelectorRow: {
+        flexDirection: 'row',
+        gap: spacing.s,
+    },
+    openAIModeButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.s,
+        paddingVertical: spacing.s + 2,
+        paddingHorizontal: spacing.m,
+        borderRadius: 12,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    openAIModeButtonActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    openAIModeIconContainer: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.backgroundSecondary,
+    },
+    openAIModeGlyph: {
+        ...typography.button,
+        fontSize: 11,
+        fontWeight: '800',
+        letterSpacing: 0.3,
+    },
+    openAIModeButtonText: {
+        ...typography.button,
+        fontSize: 14,
+        color: colors.text,
+        fontWeight: '600',
+    },
+    openAIModeButtonTextActive: {
+        color: colors.surface,
     },
     openAIInputGroup: {
         gap: spacing.xs,
@@ -2235,34 +2273,33 @@ const styles = StyleSheet.create({
         color: colors.text,
         backgroundColor: colors.surface,
         paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s,
+        paddingVertical: spacing.s + 2,
         borderRadius: 10,
         borderWidth: 1,
         borderColor: colors.border,
+        minHeight: 44,
+    },
+    openAIInputWithButton: {
+        paddingRight: 44, // Make room for the eye button
     },
     openAISecretRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
+        position: 'relative',
     },
     openAIEyeButton: {
         position: 'absolute',
-        right: spacing.s,
-        top: '50%',
-        transform: [{ translateY: -9 }],
-        padding: spacing.xs,
+        right: 2,
+        top: 2,
+        bottom: 2,
+        width: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
     },
-    openAICustomToggle: {
+    openAIStatusRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
-        alignSelf: 'flex-start',
         paddingVertical: spacing.xs,
-    },
-    openAICustomToggleText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        fontSize: 12,
     },
     openAIStatusText: {
         ...typography.caption,
@@ -2274,16 +2311,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.xs,
-        paddingVertical: spacing.s,
+        paddingVertical: spacing.m,
         paddingHorizontal: spacing.m,
         borderRadius: 10,
-        backgroundColor: colors.backgroundSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
+        backgroundColor: colors.primary,
+        minHeight: 44,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     openAITestButtonText: {
         ...typography.button,
-        fontSize: 13,
-        color: colors.text,
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.surface,
     },
 });
