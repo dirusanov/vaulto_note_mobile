@@ -31,10 +31,9 @@ export const UnlockSyncModal = ({
     errorMessage = null,
 }: UnlockSyncModalProps) => {
     const { unlock, bundle, custodyMode } = useEncryption();
-    const preferredMode = custodyMode === 'strict_seed'
+    const effectiveMode: SecretMode = custodyMode === 'strict_seed'
         ? 'seed_phrase'
         : (bundle?.secret_mode ?? 'pin');
-    const [mode, setMode] = useState<SecretMode>(preferredMode);
     const [secret, setSecret] = useState('');
     const [seedWords, setSeedWords] = useState<string[]>(createEmptySeedWords);
     const [showSecret, setShowSecret] = useState(false);
@@ -42,7 +41,6 @@ export const UnlockSyncModal = ({
     const [error, setError] = useState<string | null>(null);
 
     const reset = () => {
-        setMode(preferredMode);
         setSecret('');
         setSeedWords(createEmptySeedWords());
         setShowSecret(false);
@@ -55,12 +53,11 @@ export const UnlockSyncModal = ({
             setError(errorMessage);
             return;
         }
-        setMode(preferredMode);
         setSecret('');
         setSeedWords(createEmptySeedWords());
         setShowSecret(false);
         setError(null);
-    }, [visible, preferredMode, errorMessage]);
+    }, [visible, effectiveMode, errorMessage]);
 
     const handleClose = () => {
         if (loading) return;
@@ -70,7 +67,6 @@ export const UnlockSyncModal = ({
 
     const handleUnlock = async () => {
         setError(null);
-        const effectiveMode: SecretMode = custodyMode === 'strict_seed' ? 'seed_phrase' : mode;
         const rawSecret = effectiveMode === 'seed_phrase' ? seedWords.join(' ') : secret;
         const validationError = getSecretValidationError(rawSecret, effectiveMode);
         if (validationError) {
@@ -109,54 +105,17 @@ export const UnlockSyncModal = ({
                             <Text style={styles.subtitle}>
                                 Enter your access key to unlock sync. This does not affect local access.
                             </Text>
-                            {custodyMode !== 'strict_seed' && (
-                                <View style={styles.modeRow}>
-                                    <Pressable
-                                        style={[styles.modeButton, mode === 'seed_phrase' && styles.modeButtonActive]}
-                                        onPress={() => {
-                                            setMode('seed_phrase');
-                                            setError(null);
-                                        }}
-                                    >
-                                        <Text style={[styles.modeTitle, mode === 'seed_phrase' && styles.modeTitleActive]}>
-                                            Seed Phrase
-                                        </Text>
-                                    </Pressable>
-                                    <Pressable
-                                        style={[styles.modeButton, mode === 'passphrase' && styles.modeButtonActive]}
-                                        onPress={() => {
-                                            setMode('passphrase');
-                                            setError(null);
-                                        }}
-                                    >
-                                        <Text style={[styles.modeTitle, mode === 'passphrase' && styles.modeTitleActive]}>
-                                            Code Phrase
-                                        </Text>
-                                    </Pressable>
-                                    <Pressable
-                                        style={[styles.modeButton, mode === 'pin' && styles.modeButtonActive]}
-                                        onPress={() => {
-                                            setMode('pin');
-                                            setError(null);
-                                        }}
-                                    >
-                                        <Text style={[styles.modeTitle, mode === 'pin' && styles.modeTitleActive]}>
-                                            PIN
-                                        </Text>
-                                    </Pressable>
-                                </View>
-                            )}
 
-                            {(custodyMode !== 'strict_seed' && mode === 'pin') ? (
+                            {effectiveMode === 'pin' && custodyMode !== 'strict_seed' ? (
                                 <PinCodeInput
                                     label={`PIN (${PIN_LENGTH} digits)`}
                                     value={secret}
                                     onChange={setSecret}
                                     length={PIN_LENGTH}
                                 />
-                            ) : (custodyMode === 'strict_seed' || mode === 'seed_phrase') ? (
+                            ) : (custodyMode === 'strict_seed') ? (
                                 <>
-                                    <Text style={styles.seedLabel}>{`Seed phrase (${SEED_PHRASE_WORDS} words)`}</Text>
+                                    <Text style={styles.seedLabel}>{`Recovery phrase (${SEED_PHRASE_WORDS} words)`}</Text>
                                     <SeedWordsGrid
                                         words={seedWords}
                                         onChangeWord={(index, value) => {
@@ -171,13 +130,13 @@ export const UnlockSyncModal = ({
                             ) : (
                                 <>
                                     <TextInput
-                                        label="Code phrase"
+                                        label="Passphrase"
                                         value={secret}
                                         onChangeText={setSecret}
                                         secureTextEntry={!showSecret}
                                         autoCapitalize="none"
                                         autoCorrect={false}
-                                        placeholder="Enter your code phrase"
+                                        placeholder="Enter your passphrase"
                                     />
                                     <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
                                         <Text style={styles.revealText}>
@@ -188,11 +147,9 @@ export const UnlockSyncModal = ({
                             )}
                             <Text style={styles.hint}>
                                 {custodyMode === 'strict_seed'
-                                    ? 'Strict seed mode: only your seed phrase can unlock synced data.'
-                                    : mode === 'seed_phrase'
-                                    ? 'Master key is decrypted locally on this device.'
-                                    : mode === 'passphrase'
-                                        ? 'Use your exact phrase. Unlock happens locally.'
+                                    ? 'Recovery phrase mode: only your recovery phrase can unlock synced data.'
+                                    : effectiveMode === 'passphrase'
+                                        ? 'Use your exact passphrase. Unlock happens locally.'
                                         : 'PIN unlock is local and fast.'}
                             </Text>
                             {error && <Text style={styles.error}>{error}</Text>}
@@ -247,33 +204,6 @@ const styles = StyleSheet.create({
         ...typography.body,
         color: colors.textSecondary,
         marginBottom: spacing.m,
-    },
-    modeRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.s,
-        marginBottom: spacing.m,
-    },
-    modeButton: {
-        flexGrow: 1,
-        minWidth: 100,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 10,
-        paddingVertical: spacing.s,
-        alignItems: 'center',
-    },
-    modeButtonActive: {
-        borderColor: colors.primary,
-        backgroundColor: colors.background,
-    },
-    modeTitle: {
-        ...typography.caption,
-        color: colors.text,
-        fontWeight: '600',
-    },
-    modeTitleActive: {
-        color: colors.primary,
     },
     revealRow: {
         marginTop: -spacing.s,

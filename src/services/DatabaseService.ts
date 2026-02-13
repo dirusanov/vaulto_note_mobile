@@ -778,11 +778,46 @@ export const getNoteById = async (userId: string, id: string): Promise<Note | nu
 
 export const wipeLocalDatabase = async (): Promise<void> => {
     if (Platform.OS === 'web') {
-        // Warning: This wipes ALL users data in this browser context if we iterate keys
-        // or we need specific user wipe? "Wipe ALL" is safer for "logout all" semantics,
-        // but for "Wipe Data" button it's fine.
-        localStorage.clear();
+        // Remove only note storage keys; keep auth/preferences keys intact.
+        try {
+            for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+                    localStorage.removeItem(key);
+                }
+            }
+        } catch (e) {
+            console.error('[DatabaseService] Failed to wipe web store', e);
+        }
         return;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        // Purge on-disk audio blobs before deleting DB rows.
+        const noteAudio = await database.getAllAsync<{ audio_file_path: string | null }>(
+            "SELECT audio_file_path FROM notes WHERE audio_file_path IS NOT NULL AND audio_file_path != ''",
+        );
+        const recordingAudio = await database.getAllAsync<{ file_path: string }>(
+            "SELECT file_path FROM voice_recordings WHERE file_path IS NOT NULL AND file_path != ''",
+        );
+        await purgeAudioFiles(
+            [
+                ...noteAudio.map((row) => row.audio_file_path),
+                ...recordingAudio.map((row) => row.file_path),
+            ],
+            'wipe local database',
+        );
+
+        // Delete in child->parent order to be resilient even if foreign_keys is off.
+        await database.runAsync('DELETE FROM voice_recordings;');
+        await database.runAsync('DELETE FROM note_improvements;');
+        await database.runAsync('DELETE FROM notes;');
+    } catch (e) {
+        console.error('[DatabaseService] Failed to wipe native DB', e);
+        throw e;
     }
 };
 

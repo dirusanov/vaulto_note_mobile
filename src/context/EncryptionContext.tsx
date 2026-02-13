@@ -20,7 +20,7 @@ import {
 } from '../crypto/e2ee';
 import { decrypt, encrypt, setCryptoMode } from '../crypto/encryption';
 import { CustodyMode, e2eeApi } from '../api/e2ee';
-import { initDatabase } from '../services/DatabaseService';
+import { initDatabase, wipeLocalDatabase } from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 
 export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
@@ -37,6 +37,7 @@ interface EncryptionContextType {
     unlock: (secret: string) => Promise<void>;
     changePin: (secret: string, mode?: SecretMode) => Promise<void>;
     resetSync: () => Promise<'purged' | 'partial'>;
+    resetEncryption: () => Promise<'purged' | 'partial'>;
     lock: () => void;
 }
 
@@ -480,6 +481,32 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         return remoteNotesPurged && keyDeleted ? 'purged' : 'partial';
     }, [isAuthenticated, isGuest, userId]);
 
+    const resetEncryption = useCallback(async (): Promise<'purged' | 'partial'> => {
+        if (!isAuthenticated || isGuest) {
+            throw new Error('Sign in required to reset encryption');
+        }
+
+        const result = await resetSync();
+
+        // Wipe local notes so the user doesn't end up with unreadable ciphertext after key reset.
+        try {
+            await initDatabase();
+        } catch (_) {
+            // best-effort
+        }
+        try {
+            await wipeLocalDatabase();
+        } catch (error) {
+            console.error('[Encryption] Failed to wipe local notes after encryption reset:', error);
+            throw new Error('Encryption reset completed, but failed to delete local notes.');
+        }
+
+        // Ensure UI refreshes even if the wipe happened after resetSync notifications.
+        await syncService.resetSyncState(userId ?? null);
+
+        return result;
+    }, [isAuthenticated, isGuest, resetSync, userId]);
+
     const lock = useCallback(() => {
         clearMasterKey();
         setSyncUnlocked(false);
@@ -502,8 +529,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         unlock,
         changePin,
         resetSync,
+        resetEncryption,
         lock,
-    }), [status, mode, custodyMode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, resetSync, lock]);
+    }), [status, mode, custodyMode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, resetSync, resetEncryption, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

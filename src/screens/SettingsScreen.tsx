@@ -37,6 +37,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
+import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -168,7 +169,7 @@ export const SettingsScreen = () => {
         isPro,
         isLoading: subscriptionLoading,
     } = useSubscription();
-    const { syncEnabled, syncLocked, hasRemoteKeyBundle, resetSync } = useEncryption();
+    const { syncEnabled, syncLocked, bundle, custodyMode } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
@@ -182,6 +183,7 @@ export const SettingsScreen = () => {
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
     const [showChangePinModal, setShowChangePinModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
+    const [showResetEncryptionModal, setShowResetEncryptionModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
@@ -247,51 +249,21 @@ export const SettingsScreen = () => {
     const usingOpenAI = aiProvider === 'openai';
     const syncStatusLabel = !syncEnabled ? 'Local only' : syncLocked ? 'Locked' : 'Enabled';
     const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
-    const pinStatusLabel = syncEnabled ? 'Configured' : 'Not set';
-    const pinStatusColor = syncEnabled ? colors.accentGreen : colors.textSecondary;
-
-
-    const handleResetSync = useCallback(() => {
-        Alert.alert(
-            'Forgot access key?',
-            'You can reset encryption key and create a new one, but previously synced encrypted notes will be permanently lost.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Continue',
-                    style: 'destructive',
-                    onPress: () => {
-                        Alert.alert(
-                            'Final confirmation',
-                            'Press "I Understand, Reset" only if you agree that old synced notes cannot be recovered.',
-                            [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'I Understand, Reset',
-                                    style: 'destructive',
-                                    onPress: async () => {
-                                        try {
-                                            const result = await resetSync();
-                                            if (result === 'purged') {
-                                                Alert.alert('Sync reset', 'Old encrypted sync data and key were removed. You can now create a new key.');
-                                            } else {
-                                                Alert.alert(
-                                                    'Partial reset',
-                                                    'Local key was reset, but server did not confirm full encrypted data purge.'
-                                                );
-                                            }
-                                        } catch (error: any) {
-                                            Alert.alert('Reset failed', error?.message || 'Unable to reset sync.');
-                                        }
-                                    }
-                                }
-                            ]
-                        );
-                    },
-                }
-            ]
-        );
-    }, [resetSync]);
+    const accessKeyLabel = !syncEnabled
+        ? 'Off'
+        : syncLocked
+            ? 'Locked'
+            : custodyMode === 'strict_seed'
+                ? 'Recovery phrase'
+                : bundle?.secret_mode === 'passphrase'
+                    ? 'Passphrase'
+                    : 'PIN';
+    const accessKeyColor = !syncEnabled
+        ? colors.textSecondary
+        : syncLocked
+            ? colors.warning
+            : colors.accentGreen;
+    const resetEncryptionDisabled = !isAuthenticated || isGuest;
 
     type ProviderOption = {
         key: AIProvider;
@@ -665,18 +637,50 @@ export const SettingsScreen = () => {
 
                     <View style={styles.securityRowMinimal}>
                         <View style={styles.securityRowLeft}>
-                            <View style={[styles.iconContainer, { backgroundColor: pinStatusColor + '20' }]}>
-                                <MaterialIcons name="vpn-key" size={16} color={pinStatusColor} />
+                            <View style={[styles.iconContainer, { backgroundColor: accessKeyColor + '20' }]}>
+                                <MaterialIcons name="vpn-key" size={16} color={accessKeyColor} />
                             </View>
-                            <Text style={styles.securityLabelMinimal}>Key</Text>
+                            <Text style={styles.securityLabelMinimal}>Access key</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <Text style={[styles.securityValueMinimal, { color: pinStatusColor }]}>{pinStatusLabel}</Text>
+                            <Text style={[styles.securityValueMinimal, { color: accessKeyColor }]}>{accessKeyLabel}</Text>
                             {syncEnabled && !syncLocked && (
-                                <TouchableOpacity style={styles.iconButton} onPress={() => setShowChangePinModal(true)}>
-                                    <MaterialIcons name="edit" size={16} color={colors.textSecondary} />
+                                <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangePinModal(true)}>
+                                    <Text style={styles.smallButtonTextOutlined}>Change</Text>
                                 </TouchableOpacity>
                             )}
+                        </View>
+                    </View>
+
+                    <View style={styles.separator} />
+
+                    <View style={styles.securityRowMinimal}>
+                        <View style={styles.securityRowLeft}>
+                            <View style={[styles.iconContainer, { backgroundColor: colors.error + '15' }]}>
+                                <MaterialIcons name="delete-forever" size={16} color={colors.error} />
+                            </View>
+                            <Text style={styles.securityLabelMinimal}>Reset</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <Text style={[styles.securityValueMinimal, { color: colors.textSecondary }]}>Delete all notes</Text>
+                            <TouchableOpacity
+                                style={[
+                                    styles.smallButton,
+                                    {
+                                        backgroundColor: resetEncryptionDisabled ? colors.border : colors.error,
+                                        opacity: resetEncryptionDisabled ? 0.65 : 1,
+                                    },
+                                ]}
+                                onPress={() => {
+                                    if (resetEncryptionDisabled) {
+                                        Alert.alert('Sign in required', 'Sign in to reset encryption and delete encrypted sync data.');
+                                        return;
+                                    }
+                                    setShowResetEncryptionModal(true);
+                                }}
+                            >
+                                <Text style={styles.smallButtonText}>Reset</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -1049,6 +1053,21 @@ export const SettingsScreen = () => {
                     setTimeout(() => {
                         void syncService.syncNow('manual');
                     }, 0);
+                }}
+            />
+            <ResetEncryptionModal
+                visible={showResetEncryptionModal}
+                onClose={() => setShowResetEncryptionModal(false)}
+                onReset={(result) => {
+                    setShowResetEncryptionModal(false);
+                    if (result === 'purged') {
+                        Alert.alert('Encryption reset', 'Encryption was reset and all notes were deleted.');
+                    } else {
+                        Alert.alert(
+                            'Partial reset',
+                            'Encryption was reset locally, but server did not confirm full purge of encrypted sync data.'
+                        );
+                    }
                 }}
             />
             <UnlockingOverlay

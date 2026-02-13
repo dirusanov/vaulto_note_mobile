@@ -20,6 +20,7 @@ import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
+import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { notesApi } from '../api/notes';
 
 const { width } = Dimensions.get('window');
@@ -30,7 +31,7 @@ export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
     const { userId, isAuthenticated, isGuest } = useAuth();
-    const { syncLocked, bundle, custodyMode, resetSync } = useEncryption();
+    const { syncLocked, bundle, custodyMode } = useEncryption();
     const {
         notes,
         loading,
@@ -46,6 +47,7 @@ export const NotesListScreen = () => {
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
+    const [showResetEncryptionModal, setShowResetEncryptionModal] = useState(false);
     const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
     const [hasServerNotes, setHasServerNotes] = useState(false);
 
@@ -135,53 +137,15 @@ export const NotesListScreen = () => {
     };
 
     const secretModeLabel =
-        custodyMode === 'strict_seed' || bundle?.secret_mode === 'seed_phrase'
-            ? 'Seed Phrase'
+        custodyMode === 'strict_seed'
+            ? 'Recovery phrase'
             : bundle?.secret_mode === 'passphrase'
-                ? 'Code Phrase'
+                ? 'Passphrase'
                 : 'PIN';
 
     const handleResetLockedSync = useCallback(() => {
-        Alert.alert(
-            'Forgot access key?',
-            'You can reset encryption key and create a new one, but previously synced encrypted notes will be permanently lost.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Continue',
-                    style: 'destructive',
-                    onPress: () => {
-                        Alert.alert(
-                            'Final confirmation',
-                            'Press "I Understand, Reset" only if you agree that old synced notes cannot be recovered.',
-                            [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'I Understand, Reset',
-                                    style: 'destructive',
-                                    onPress: async () => {
-                                        try {
-                                            const result = await resetSync();
-                                            if (result === 'purged') {
-                                                Alert.alert('Sync reset', 'Old encrypted sync data and key were removed. You can now create a new key from Settings.');
-                                            } else {
-                                                Alert.alert(
-                                                    'Partial reset',
-                                                    'Local key was reset, but server did not confirm full encrypted data purge.'
-                                                );
-                                            }
-                                        } catch (error: any) {
-                                            Alert.alert('Reset failed', error?.message || 'Unable to reset sync.');
-                                        }
-                                    },
-                                },
-                            ]
-                        );
-                    },
-                },
-            ]
-        );
-    }, [resetSync]);
+        setShowResetEncryptionModal(true);
+    }, []);
 
     const shouldShowLockBanner =
         !isSelectionMode &&
@@ -673,6 +637,21 @@ export const NotesListScreen = () => {
                     setTimeout(() => {
                         void syncNotes();
                     }, 0);
+                }}
+            />
+            <ResetEncryptionModal
+                visible={showResetEncryptionModal}
+                onClose={() => setShowResetEncryptionModal(false)}
+                onReset={(result) => {
+                    setShowResetEncryptionModal(false);
+                    if (result === 'purged') {
+                        Alert.alert('Encryption reset', 'Encryption was reset and all notes were deleted.');
+                    } else {
+                        Alert.alert(
+                            'Partial reset',
+                            'Encryption was reset locally, but server did not confirm full purge of encrypted sync data.'
+                        );
+                    }
                 }}
             />
             <UnlockingOverlay
