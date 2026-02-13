@@ -181,7 +181,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
     const baseUrl = BACKEND_IMPROVE_URL;
 
     if (!token) {
-        throw new Error('Sign in required to use Secure LLM.');
+        throw new Error('Sign in required to use Vaulto AI.');
     }
 
     const body = {

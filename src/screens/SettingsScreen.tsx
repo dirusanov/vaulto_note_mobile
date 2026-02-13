@@ -311,7 +311,7 @@ export const SettingsScreen = () => {
     const providerOptions: ProviderOption[] = [
         {
             key: 'secure_llm',
-            title: 'Secure LLM',
+            title: 'Vaulto AI',
             blurb: 'Private & Anonymous',
             description: 'Whisper + LLM on our server. No data stored or analyzed. Fully anonymous and secure.',
             icon: 'security',

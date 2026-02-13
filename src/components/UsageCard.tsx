@@ -20,7 +20,7 @@ interface UsageCardProps {
 }
 
 export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false, autoTranscribeEnabled, onToggleAutoTranscribe }) => {
-    // Only show for Secure LLM provider
+    // Only show for Vaulto AI provider
     if (aiProvider !== 'secure_llm') return null;
     if (!user) return null;
 
@@ -83,7 +83,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                             backgroundColor={colors.primary + '12'}
                             borderColor={colors.primary + '30'}
                         />
-                        <Text style={styles.title}>Secure LLM Plan</Text>
+                        <Text style={styles.title}>Vaulto AI Plan</Text>
                     </View>
                     {/* Unified Badge */}
                     <View style={styles.proBadge}>

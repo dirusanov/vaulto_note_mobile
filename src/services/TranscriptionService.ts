@@ -143,7 +143,7 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
         return {
             text: '',
             success: false,
-            error: 'Sign in required to use Secure LLM.',
+            error: 'Sign in required to use Vaulto AI.',
         };
     }
 
@@ -299,7 +299,7 @@ export async function processVoiceNote(
         };
     }
 
-    // Use Backend (Secure LLM)
+    // Use Backend (Vaulto AI)
     const token = await storage.getToken();
     const baseUrl = BACKEND_PROCESS_NOTE_URL;
     if (!token) {
