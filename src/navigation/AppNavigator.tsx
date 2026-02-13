@@ -1,7 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NotesListScreen } from '../screens/NotesListScreen';
-import { AppLockScreen } from '../screens/AppLockScreen';
 import { NoteEditScreen } from '../screens/NoteEditScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { PaywallScreen } from '../screens/PaywallScreen';
@@ -68,13 +67,6 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                 options={{
                     headerShown: false,
                     animation: 'none', // Disable animation for the initial screen
-                }}
-            />
-            <Stack.Screen
-                name="AppLock"
-                component={AppLockScreen}
-                options={{
-                    headerShown: false,
                 }}
             />
             <Stack.Screen

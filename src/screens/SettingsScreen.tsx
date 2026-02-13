@@ -28,7 +28,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { useEncryption } from '../context/EncryptionContext';
-import { useAppLock } from '../context/AppLockContext';
 import Constants from 'expo-constants';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
@@ -170,19 +169,6 @@ export const SettingsScreen = () => {
         isLoading: subscriptionLoading,
     } = useSubscription();
     const { syncEnabled, syncLocked, hasRemoteKeyBundle, resetSync } = useEncryption();
-    const {
-        status: appLockStatus,
-        isAvailable: appLockAvailable,
-        isUnlocked: appLockUnlocked,
-        biometricAvailable,
-        biometricEnabled,
-        autoLockTimeout,
-        hideAppSwitcherContent,
-        setBiometricEnabled,
-        setAutoLockTimeout,
-        setHideInAppSwitcher,
-        lock: lockApp,
-    } = useAppLock();
 
     const [apiKey, setApiKeyState] = useState('');
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
@@ -198,7 +184,6 @@ export const SettingsScreen = () => {
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
-    const [isAppLockExpanded, setIsAppLockExpanded] = useState(false);
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
 
     const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
@@ -444,34 +429,6 @@ export const SettingsScreen = () => {
         await setTranscriptionEnabled(value);
     };
 
-    const appLockStatusLabel = appLockStatus === 'not_configured'
-        ? 'Not configured'
-        : appLockStatus === 'unlocked'
-            ? 'Unlocked'
-            : appLockStatus === 'locked'
-                ? 'Locked'
-                : 'Loading';
-
-    const toggleAppLockBiometrics = useCallback(async (enabled: boolean) => {
-        if (!appLockAvailable) {
-            Alert.alert('Unavailable', 'App Lock biometrics are available only in iOS/Android app builds.');
-            return;
-        }
-        if (!biometricAvailable) {
-            Alert.alert('Unavailable', 'Biometric authentication is not available on this device.');
-            return;
-        }
-        if (!appLockUnlocked) {
-            Alert.alert('Unlock required', 'Unlock App Lock first to change biometric settings.');
-            return;
-        }
-        try {
-            await setBiometricEnabled(enabled);
-        } catch (error: any) {
-            Alert.alert('Biometric setup failed', error?.message || 'Could not update biometric unlock setting.');
-        }
-    }, [appLockAvailable, appLockUnlocked, biometricAvailable, setBiometricEnabled]);
-
     useEffect(() => {
         if (!preferencesReady) return;
         const timeout = setTimeout(() => {
@@ -663,7 +620,7 @@ export const SettingsScreen = () => {
                     />
                 </View>
 
-                {/* Combined Security & App Lock */}
+                {/* Security */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
@@ -723,53 +680,6 @@ export const SettingsScreen = () => {
                         </View>
                     </View>
 
-                    <View style={styles.separator} />
-
-                    <TouchableOpacity
-                        style={styles.preferenceRow}
-                        onPress={() => setIsAppLockExpanded(!isAppLockExpanded)}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <View style={[styles.iconContainer, { backgroundColor: colors.backgroundSecondary }]}>
-                                <MaterialIcons name={appLockStatus === 'locked' ? "lock" : "lock-open"} size={16} color={colors.text} />
-                            </View>
-                            <Text style={styles.preferenceTitle}>App Lock</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <Text style={styles.preferenceValue}>{appLockStatusLabel}</Text>
-                            <MaterialIcons name={isAppLockExpanded ? "expand-less" : "expand-more"} size={20} color={colors.textSecondary} />
-                        </View>
-                    </TouchableOpacity>
-
-                    {isAppLockExpanded && (
-                        <View style={{ marginTop: spacing.s, paddingLeft: 40 }}>
-                            <View style={styles.preferenceRow}>
-                                <Text style={styles.preferenceTitleSmall}>FaceID / Biometrics</Text>
-                                <Switch
-                                    value={biometricEnabled}
-                                    onValueChange={toggleAppLockBiometrics}
-                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                    thumbColor={colors.surface}
-                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                />
-                            </View>
-                            <View style={styles.preferenceRow}>
-                                <Text style={styles.preferenceTitleSmall}>Hide in Switcher</Text>
-                                <Switch
-                                    value={hideAppSwitcherContent}
-                                    onValueChange={setHideInAppSwitcher}
-                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                    thumbColor={colors.surface}
-                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                />
-                            </View>
-                            {appLockUnlocked && (
-                                <TouchableOpacity style={styles.smallButtonOutlined} onPress={lockApp}>
-                                    <Text style={styles.smallButtonTextOutlined}>Lock Now</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    )}
                 </View>
 
 

@@ -72,6 +72,15 @@ const wait = (ms: number) => new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
 });
 
+const shouldIgnoreRevenueCatLog = (message: string) => {
+    const normalized = String(message || '').toUpperCase();
+    return (
+        normalized.includes('USER_CANCELED') ||
+        normalized.includes('PURCHASECANCELLEDERROR') ||
+        normalized.includes('PURCHASE WAS CANCELLED')
+    );
+};
+
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isPro, setIsPro] = useState(false);
     const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
@@ -217,6 +226,26 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 } else if (Platform.OS === 'ios') {
                     await Purchases.configure({ apiKey: API_KEYS.apple, appUserID: userId || undefined });
                 }
+
+                Purchases.setLogHandler((level, message) => {
+                    if (shouldIgnoreRevenueCatLog(message)) {
+                        return;
+                    }
+
+                    // Avoid spewing debug logs in release builds even if native defaults change.
+                    if (!__DEV__ && level === LOG_LEVEL.DEBUG) {
+                        return;
+                    }
+
+                    const prefix = `[RevenueCat][${level}]`;
+                    if (level === LOG_LEVEL.ERROR) {
+                        console.error(prefix, message);
+                    } else if (level === LOG_LEVEL.WARN) {
+                        console.warn(prefix, message);
+                    } else {
+                        console.log(prefix, message);
+                    }
+                });
 
                 if (__DEV__) {
                     await Purchases.setLogLevel(LOG_LEVEL.DEBUG);

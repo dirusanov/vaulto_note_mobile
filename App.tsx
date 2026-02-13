@@ -7,23 +7,10 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/context/AuthContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';
 import { EncryptionProvider } from './src/context/EncryptionContext';
-import { AppLockProvider, useAppLock } from './src/context/AppLockContext';
 import { NotesProvider } from './src/contexts/NotesContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { EncryptionGate } from './src/components/EncryptionGate';
-import { AppLockGate } from './src/components/AppLockGate';
 import * as SplashScreen from 'expo-splash-screen';
-import { StyleSheet, View } from 'react-native';
-
-const AppPrivacyOverlay = () => {
-    const { shouldObscureApp } = useAppLock();
-
-    if (!shouldObscureApp) {
-        return null;
-    }
-
-    return <View style={styles.privacyOverlay} pointerEvents="none" />;
-};
 
 export default function App() {
     const [appIsReady, setAppIsReady] = useState(false);
@@ -68,17 +55,12 @@ export default function App() {
                 <AuthProvider>
                     <SubscriptionProvider>
                         <EncryptionProvider>
-                            <AppLockProvider>
-                                <EncryptionGate>
-                                    <NotesProvider>
-                                        <AppLockGate>
-                                            <StatusBar style="auto" />
-                                            <RootNavigator />
-                                            <AppPrivacyOverlay />
-                                        </AppLockGate>
-                                    </NotesProvider>
-                                </EncryptionGate>
-                            </AppLockProvider>
+                            <EncryptionGate>
+                                <NotesProvider>
+                                    <StatusBar style="auto" />
+                                    <RootNavigator />
+                                </NotesProvider>
+                            </EncryptionGate>
                         </EncryptionProvider>
                     </SubscriptionProvider>
                 </AuthProvider>
@@ -86,11 +68,3 @@ export default function App() {
         </GestureHandlerRootView>
     );
 }
-
-const styles = StyleSheet.create({
-    privacyOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#000',
-        zIndex: 9999,
-    },
-});
