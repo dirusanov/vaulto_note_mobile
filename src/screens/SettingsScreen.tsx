@@ -769,6 +769,36 @@ export const SettingsScreen = () => {
 
                     <View style={styles.separator} />
 
+                    {/* Auto-Transcribe Toggle */}
+                    <TouchableOpacity
+                        style={[styles.preferenceRow, { marginBottom: spacing.m }]}
+                        activeOpacity={0.85}
+                        disabled={!isGuestOrAnonymous}
+                        onPress={() => setShowTranscriptionAuthModal(true)}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons
+                                name="mic"
+                                size={24}
+                                color={transcriptionEnabled && !isGuestOrAnonymous ? colors.primary : colors.textSecondary}
+                            />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>Auto-Transcribe Audio</Text>
+                                <Text style={styles.preferenceDescription}>Automatic voice transcription</Text>
+                            </View>
+                        </View>
+                        <Switch
+                            value={isGuestOrAnonymous ? false : transcriptionEnabled}
+                            onValueChange={toggleTranscription}
+                            disabled={isGuestOrAnonymous}
+                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                            thumbColor={colors.surface}
+                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                        />
+                    </TouchableOpacity>
+
+                    <View style={styles.separator} />
+
                     {/* Compact Provider Selector */}
                     <View style={styles.compactProviderSelector}>
                         {providerOptions.map((option) => {
