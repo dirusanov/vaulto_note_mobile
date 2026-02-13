@@ -41,7 +41,7 @@ export const PaywallScreen = () => {
 
                     <View style={styles.featuresList}>
                         <FeatureItem text="Unlimited Cloud Sync" />
-                        <FeatureItem text="Extended Transcription Limits" />
+                        <FeatureItem text="150 mins/month transcription" />
                         <FeatureItem text="Custom API Key & Server" />
                     </View>
 
@@ -51,7 +51,13 @@ export const PaywallScreen = () => {
                         <View style={styles.packagesContainer}>
                             {packages.map((pack) => {
                                 const { backendPlan, product } = pack;
-                                const title = backendPlan?.display_name || product.title;
+                                const title = backendPlan?.display_name || (
+                                    pack.identifier.toLowerCase().includes('annual') || pack.identifier.toLowerCase().includes('yearly')
+                                        ? 'Yearly Plan'
+                                        : pack.identifier.toLowerCase().includes('monthly')
+                                            ? 'Monthly Plan'
+                                            : pack.identifier
+                                );
                                 const price = product.priceString;
                                 const isBestValue = pack.identifier.toLowerCase().includes('annual');
 

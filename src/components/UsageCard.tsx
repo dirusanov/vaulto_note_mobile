@@ -92,14 +92,14 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             <View style={styles.card}>
                 <View style={styles.headerRow}>
                     <View style={styles.titleRow}>
-                        <View style={[styles.iconContainer, { backgroundColor: colors.accentGreen + '15' }]}>
-                            <MaterialIcons name="card-giftcard" size={20} color={colors.accentGreen} />
+                        <View style={[styles.iconContainer, { backgroundColor: colors.warning + '15' }]}>
+                            <MaterialIcons name="lock-outline" size={20} color={colors.warning} />
                         </View>
-                        <Text style={styles.title}>Free Trial</Text>
+                        <Text style={styles.title}>Transcription</Text>
                     </View>
                 </View>
                 <Text style={styles.guestText}>
-                    Sign in with Email or Google to get 10 free minutes of transcription.
+                    Create an account to enable transcription.
                 </Text>
             </View>
         );

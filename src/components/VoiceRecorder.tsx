@@ -15,6 +15,9 @@ import { typography } from '../theme/typography';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { getTranscriptionEnabled, setTranscriptionEnabled } from '../utils/storage';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigation } from '@react-navigation/native';
+import { SignInRequiredModal } from './SignInRequiredModal';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -34,6 +37,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     onCancel,
     autoStart = false,
 }) => {
+    const navigation = useNavigation<any>();
+    const { isAuthenticated, isGuest } = useAuth();
+    const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
@@ -47,10 +53,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     useEffect(() => {
         if (visible) {
-            // Load preference
-            getTranscriptionEnabled().then(enabled => {
-                setTranscribe(enabled);
-            });
+            if (!isAuthenticated || isGuest) {
+                // Anonymous users cannot use transcription; keep toggle OFF.
+                setTranscribe(false);
+            } else {
+                // Load preference
+                getTranscriptionEnabled().then(enabled => {
+                    setTranscribe(enabled);
+                });
+            }
 
             if (autoStart) {
                 handleStartRecording();
@@ -65,28 +76,19 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             meteringSamples.current = 0;
             voiceSamples.current = 0;
         }
-    }, [visible]);
+    }, [visible, autoStart, isAuthenticated, isGuest]);
 
     const handleTranscriptionToggle = (value: boolean) => {
+        if ((!isAuthenticated || isGuest) && value) {
+            setShowTranscriptionAuthModal(true);
+            setTranscribe(false);
+            return;
+        }
         setTranscribe(value);
-        setTranscriptionEnabled(value);
+        if (isAuthenticated && !isGuest) {
+            setTranscriptionEnabled(value);
+        }
     };
-
-    // ... (rest of useEffects)
-
-    // ... inside return ...
-    {/* Transcription Toggle */ }
-    <View style={styles.toggleContainer}>
-        <Text style={styles.toggleLabel}>Transcribe Audio</Text>
-        <Switch
-            value={transcribe}
-            onValueChange={handleTranscriptionToggle}
-            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-            thumbColor="white"
-            // Scale transform for bigger switch
-            style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }}
-        />
-    </View>
 
     useEffect(() => {
         if (isRecording && !isPaused) {
@@ -299,6 +301,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     </View>
                 </View>
             </View>
+
+            <SignInRequiredModal
+                visible={showTranscriptionAuthModal}
+                title="Sign in to enable"
+                message="Transcription is available after you create an account."
+                onClose={() => setShowTranscriptionAuthModal(false)}
+                onSignIn={() => {
+                    setShowTranscriptionAuthModal(false);
+                    handleCancel();
+                    navigation.navigate('SignIn');
+                }}
+            />
         </Modal>
     );
 };

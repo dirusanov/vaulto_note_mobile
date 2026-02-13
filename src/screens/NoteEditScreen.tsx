@@ -71,6 +71,7 @@ import { TextAppearanceModal } from '../components/TextAppearanceModal';
 import { AIProcessingIndicator } from '../components/AIProcessingIndicator';
 
 import { ErrorModal } from '../components/ErrorModal';
+import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
 import { useEncryption } from '../context/EncryptionContext';
@@ -111,7 +112,7 @@ export const NoteEditScreen = () => {
         updateNoteStorageScope,
         updateNotePrivacy,
     } = useNotesContext();
-    const { isGuest, userId } = useAuth();
+    const { isAuthenticated, isGuest, userId } = useAuth();
     const { syncEnabled } = useEncryption();
     const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
@@ -423,6 +424,7 @@ export const NoteEditScreen = () => {
     // Error Modal State
     const [errorModalVisible, setErrorModalVisible] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
         const isPrivate = normalizeScope(storageScope) === 'local_only';
@@ -805,11 +807,15 @@ export const NoteEditScreen = () => {
 
     useEffect(() => {
         const loadSettings = async () => {
+            if (!isAuthenticated || isGuest) {
+                setTranscriptionEnabled(false);
+                return;
+            }
             const transcription = await getTranscriptionEnabled();
             setTranscriptionEnabled(transcription);
         };
         loadSettings();
-    }, []);
+    }, [isAuthenticated, isGuest]);
 
     useEffect(() => {
         const fetchAiOptions = async () => {
@@ -1511,6 +1517,10 @@ export const NoteEditScreen = () => {
     const handleRecordingFinish = async (recording: AudioRecording, transcribe: boolean = true) => {
         setShowVoiceRecorder(false);
         let shouldTranscribe = transcribe;
+        if ((!isAuthenticated || isGuest) && shouldTranscribe) {
+            // Anonymous users can't transcribe; keep audio flow intact.
+            shouldTranscribe = false;
+        }
         if (shouldTranscribe) {
             const consentGranted = await requestPrivateAIConsent();
             if (!consentGranted) {
@@ -1719,6 +1729,12 @@ export const NoteEditScreen = () => {
 
         // Show local loading state if needed, or re-use isTranscribing but that shows a global spinner
         // Let's use isAIProcessing to block interaction while transcribing instruction
+        if (!isAuthenticated || isGuest) {
+            setShowTranscriptionAuthModal(true);
+            await AudioService.deleteAudioFile(recording.uri).catch(() => undefined);
+            setIsRecordingInstruction(false);
+            return;
+        }
         setIsAIProcessing(true);
 
         try {
@@ -1760,6 +1776,10 @@ export const NoteEditScreen = () => {
     };
 
     const handleVoiceInstructionStart = async () => {
+        if (!isAuthenticated || isGuest) {
+            setShowTranscriptionAuthModal(true);
+            return;
+        }
         setIsRecordingInstruction(true);
         setShowCustomInput(true);
         setShowVoiceRecorder(true);
@@ -2108,6 +2128,10 @@ export const NoteEditScreen = () => {
 
     const handleRetryTranscription = async () => {
         if (!audioUri) return;
+        if (!isAuthenticated || isGuest) {
+            setShowTranscriptionAuthModal(true);
+            return;
+        }
         const consentGranted = await requestPrivateAIConsent();
         if (!consentGranted) return;
 
@@ -2936,6 +2960,17 @@ export const NoteEditScreen = () => {
                 visible={errorModalVisible}
                 message={errorMessage}
                 onClose={() => setErrorModalVisible(false)}
+            />
+
+            <SignInRequiredModal
+                visible={showTranscriptionAuthModal}
+                title="Sign in to enable"
+                message="Transcription is available after you create an account."
+                onClose={() => setShowTranscriptionAuthModal(false)}
+                onSignIn={() => {
+                    setShowTranscriptionAuthModal(false);
+                    navigation.navigate('SignIn');
+                }}
             />
 
             <EnableSyncModal
