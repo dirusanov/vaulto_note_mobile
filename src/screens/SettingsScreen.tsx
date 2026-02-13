@@ -654,7 +654,7 @@ export const SettingsScreen = () => {
                                     <Text style={styles.smallButtonText}>Unlock</Text>
                                 </TouchableOpacity>
                             )}
-                            {hasConfiguredKey ? (
+                            {hasConfiguredKey && !syncLocked ? (
                                 <Switch
                                     value={syncEnabled}
                                     onValueChange={(value) => {
