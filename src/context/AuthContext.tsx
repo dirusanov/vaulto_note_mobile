@@ -73,9 +73,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 is_verified: guestData.is_verified,
                 status: 'active',
                 provider: 'anonymous',
-                transcription_max_seconds: guestData.transcription_max_seconds || 600,
+                transcription_max_seconds: guestData.transcription_max_seconds || 1800,
                 transcription_used_seconds: guestData.transcription_used_seconds || 0,
-                transcription_remaining_seconds: guestData.transcription_remaining_seconds || 600,
+                transcription_remaining_seconds: guestData.transcription_remaining_seconds || 1800,
                 has_llm_access: guestData.has_llm_access ?? true,
             };
 

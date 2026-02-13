@@ -31,7 +31,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     const isUnlimited = user.transcription_max_seconds > 360000;
 
     // Trial Calculations
-    const totalSeconds = user.transcription_max_seconds || 600;
+    const totalSeconds = user.transcription_max_seconds || 1800;
     const usedSeconds = user.transcription_used_seconds || 0;
     const remainingSeconds = user.transcription_remaining_seconds !== undefined
         ? user.transcription_remaining_seconds
