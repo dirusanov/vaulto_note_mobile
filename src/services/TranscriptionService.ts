@@ -11,7 +11,7 @@ const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
 // Ensure we don't double up on /gateway if it's already in API_URL
-const BASE_URL = API_URL.endsWith('/gateway') ? API_URL : `${API_URL}/gateway`;
+const BASE_URL = API_URL;
 const BACKEND_TRANSCRIBE_URL = `${BASE_URL}/ai/transcribe`;
 const BACKEND_PROCESS_NOTE_URL = `${BASE_URL}/ai/process_voice_note`;
 
@@ -204,12 +204,7 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
 
         let response = await makeRequest(baseUrl);
 
-        // Fallback: If 404 and url contained /gateway, try removing it
-        if (response.status === 404 && baseUrl.includes('/gateway/')) {
-            console.log('[Transcription] 404 on gateway URL, retrying without /gateway prefix...');
-            const fallbackUrl = baseUrl.replace('/gateway/', '/');
-            response = await makeRequest(fallbackUrl);
-        }
+
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -430,12 +425,7 @@ export async function processVoiceNote(
 
         // Fallback checks
         if (!response.ok) {
-            // 1. URL Fix: If 404 and url contained /gateway, try removing it FIRST
-            if (response.status === 404 && baseUrl.includes('/gateway/')) {
-                console.log('[VoiceAgent] 404 on gateway URL, retrying without /gateway prefix...');
-                const fallbackUrl = baseUrl.replace('/gateway/', '/');
-                response = await makeRequest(fallbackUrl);
-            }
+
 
             // 2. If STILL failing (or wasn't a URL issue), try standard fallback
             if (!response.ok) {
