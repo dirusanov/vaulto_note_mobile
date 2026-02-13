@@ -736,7 +736,7 @@ export const SettingsScreen = () => {
                             </Animated.View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.preferenceTitle}>Agent Mode</Text>
-                                <Text style={styles.preferenceDescription}>Analyze notes & answer questions</Text>
+                                <Text style={styles.preferenceDescription}>Intelligent assistance</Text>
                             </View>
                         </View>
                         <Switch
