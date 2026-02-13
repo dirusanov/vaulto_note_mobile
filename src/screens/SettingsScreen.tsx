@@ -665,7 +665,7 @@ export const SettingsScreen = () => {
                                     thumbColor={colors.surface}
                                     style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                                 />
-                            ) : (
+                            ) : (!hasConfiguredKey ? (
                                 <TouchableOpacity
                                     style={[
                                         styles.smallButton,
@@ -684,7 +684,7 @@ export const SettingsScreen = () => {
                                 >
                                     <Text style={styles.smallButtonText}>Enable</Text>
                                 </TouchableOpacity>
-                            )}
+                            ) : null)}
                         </View>
                     </View>
 
