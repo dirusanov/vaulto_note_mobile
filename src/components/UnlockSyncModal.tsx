@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { useEncryption } from '../context/EncryptionContext';
-import { getSecretValidationError, PIN_LENGTH, SEED_PHRASE_WORDS, SecretMode } from '../crypto/e2ee';
+import { getSecretValidationError, SecretMode } from '../crypto/e2ee';
 import { Button } from './Button';
-import { PinCodeInput } from './PinCodeInput';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { TextInput } from './TextInput';
-import { SeedWordsGrid } from './SeedWordsGrid';
+import { ResetEncryptionModal } from './ResetEncryptionModal';
 
 interface UnlockSyncModalProps {
     visible: boolean;
@@ -18,9 +17,6 @@ interface UnlockSyncModalProps {
     onError?: (message: string) => void;
     errorMessage?: string | null;
 }
-
-const createEmptySeedWords = (): string[] => Array.from({ length: SEED_PHRASE_WORDS }, () => '');
-const normalizeSeedWordInput = (value: string): string => value.toLowerCase().replace(/\s+/g, '');
 
 export const UnlockSyncModal = ({
     visible,
@@ -33,18 +29,20 @@ export const UnlockSyncModal = ({
     const { unlock, bundle, custodyMode } = useEncryption();
     const effectiveMode: SecretMode = custodyMode === 'strict_seed'
         ? 'seed_phrase'
-        : (bundle?.secret_mode ?? 'pin');
+        : (bundle?.secret_mode ?? 'passphrase');
+    const isLegacyNumericPassphrase = effectiveMode === 'pin';
+    const isRecoveryPhrase = effectiveMode === 'seed_phrase';
     const [secret, setSecret] = useState('');
-    const [seedWords, setSeedWords] = useState<string[]>(createEmptySeedWords);
     const [showSecret, setShowSecret] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showReset, setShowReset] = useState(false);
 
     const reset = () => {
         setSecret('');
-        setSeedWords(createEmptySeedWords());
         setShowSecret(false);
         setError(null);
+        setShowReset(false);
     };
 
     useEffect(() => {
@@ -54,9 +52,9 @@ export const UnlockSyncModal = ({
             return;
         }
         setSecret('');
-        setSeedWords(createEmptySeedWords());
         setShowSecret(false);
         setError(null);
+        setShowReset(false);
     }, [visible, effectiveMode, errorMessage]);
 
     const handleClose = () => {
@@ -67,11 +65,19 @@ export const UnlockSyncModal = ({
 
     const handleUnlock = async () => {
         setError(null);
-        const rawSecret = effectiveMode === 'seed_phrase' ? seedWords.join(' ') : secret;
-        const validationError = getSecretValidationError(rawSecret, effectiveMode);
-        if (validationError) {
-            setError(validationError);
-            return;
+        const rawSecret = secret;
+
+        if (isLegacyNumericPassphrase) {
+            if (!/^\d{8}$/.test(rawSecret.trim())) {
+                setError('Passphrase must be exactly 8 digits.');
+                return;
+            }
+        } else {
+            const validationError = getSecretValidationError(rawSecret, effectiveMode);
+            if (validationError) {
+                setError(validationError);
+                return;
+            }
         }
 
         setLoading(true);
@@ -103,56 +109,41 @@ export const UnlockSyncModal = ({
                         <View style={styles.card}>
                             <Text style={styles.title}>Unlock Sync</Text>
                             <Text style={styles.subtitle}>
-                                Enter your access key to unlock sync. This does not affect local access.
+                                Enter your passphrase to unlock sync. This does not affect local access.
                             </Text>
 
-                            {effectiveMode === 'pin' && custodyMode !== 'strict_seed' ? (
-                                <PinCodeInput
-                                    label={`PIN (${PIN_LENGTH} digits)`}
-                                    value={secret}
-                                    onChange={setSecret}
-                                    length={PIN_LENGTH}
-                                />
-                            ) : (custodyMode === 'strict_seed') ? (
-                                <>
-                                    <Text style={styles.seedLabel}>{`Recovery phrase (${SEED_PHRASE_WORDS} words)`}</Text>
-                                    <SeedWordsGrid
-                                        words={seedWords}
-                                        onChangeWord={(index, value) => {
-                                            setSeedWords((prev) => {
-                                                const next = [...prev];
-                                                next[index] = normalizeSeedWordInput(value);
-                                                return next;
-                                            });
-                                        }}
-                                    />
-                                </>
-                            ) : (
-                                <>
-                                    <TextInput
-                                        label="Passphrase"
-                                        value={secret}
-                                        onChangeText={setSecret}
-                                        secureTextEntry={!showSecret}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        placeholder="Enter your passphrase"
-                                    />
-                                    <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
-                                        <Text style={styles.revealText}>
-                                            {showSecret ? 'Hide phrase' : 'Show phrase'}
-                                        </Text>
-                                    </Pressable>
-                                </>
-                            )}
+                            <TextInput
+                                label={isRecoveryPhrase ? 'Recovery passphrase' : 'Passphrase'}
+                                value={secret}
+                                onChangeText={setSecret}
+                                secureTextEntry={!showSecret}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                placeholder={isRecoveryPhrase ? 'Enter your 12-word recovery phrase' : 'Enter your passphrase'}
+                            />
+                            <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
+                                <Text style={styles.revealText}>
+                                    {showSecret ? 'Hide passphrase' : 'Show passphrase'}
+                                </Text>
+                            </Pressable>
+
                             <Text style={styles.hint}>
-                                {custodyMode === 'strict_seed'
-                                    ? 'Recovery phrase mode: only your recovery phrase can unlock synced data.'
-                                    : effectiveMode === 'passphrase'
-                                        ? 'Use your exact passphrase. Unlock happens locally.'
-                                        : 'PIN unlock is local and fast.'}
+                                {isRecoveryPhrase
+                                    ? 'Recovery phrase mode: only your 12-word recovery phrase can unlock synced data.'
+                                    : isLegacyNumericPassphrase
+                                        ? 'Legacy mode: your passphrase is an 8-digit code.'
+                                        : 'Use your exact passphrase. Unlock happens locally.'}
                             </Text>
                             {error && <Text style={styles.error}>{error}</Text>}
+
+                            <Pressable
+                                onPress={() => setShowReset(true)}
+                                style={styles.resetRow}
+                                disabled={loading}
+                            >
+                                <Text style={styles.resetText}>Forgot passphrase? Reset encryption</Text>
+                            </Pressable>
+
                             <View style={styles.actions}>
                                 <Button
                                     title="Cancel"
@@ -173,6 +164,14 @@ export const UnlockSyncModal = ({
                     </TouchableWithoutFeedback>
                 </View>
             </TouchableWithoutFeedback>
+            <ResetEncryptionModal
+                visible={showReset}
+                onClose={() => setShowReset(false)}
+                onReset={() => {
+                    setShowReset(false);
+                    handleClose();
+                }}
+            />
         </Modal>
     );
 };
@@ -213,11 +212,6 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.primary,
     },
-    seedLabel: {
-        ...typography.captionBold,
-        color: colors.textSecondary,
-        marginBottom: spacing.s,
-    },
     hint: {
         ...typography.caption,
         color: colors.textMuted,
@@ -232,6 +226,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: spacing.s,
         marginTop: spacing.s,
+    },
+    resetRow: {
+        marginTop: spacing.xs,
+        marginBottom: spacing.s,
+        alignSelf: 'flex-start',
+    },
+    resetText: {
+        ...typography.captionBold,
+        color: colors.error,
     },
     actionButton: {
         flex: 1,

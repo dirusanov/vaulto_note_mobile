@@ -198,7 +198,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         void loadState();
     }, [loadState]);
 
-    const enableE2EE = useCallback(async (secret: string, nextMode: SecretMode = 'pin') => {
+    const enableE2EE = useCallback(async (secret: string, nextMode: SecretMode = 'passphrase') => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to enable sync');
         }
@@ -276,9 +276,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
 
         const formatIncorrectSecretMessage = (secretMode: SecretMode): string => {
-            if (secretMode === 'pin') return 'Incorrect PIN.';
-            if (secretMode === 'passphrase') return 'Incorrect passphrase.';
-            return 'Incorrect seed phrase.';
+            if (secretMode === 'seed_phrase') return 'Incorrect recovery phrase.';
+            return 'Incorrect passphrase.';
         };
 
         const expectedSecretMode: SecretMode =
@@ -315,7 +314,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                     } catch (error: any) {
                         const message = String(error?.message || '').toLowerCase();
                         if (
-                            message.includes('incorrect seed phrase') ||
+                            message.includes('incorrect recovery phrase') ||
                             message.includes('invalid tag') ||
                             message.includes('invalid ciphertext')
                         ) {
@@ -356,7 +355,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
     }, [bundle, custodyMode, userId, scheduleDatabaseInit, persistMasterKey]);
 
-    const changePin = useCallback(async (secret: string, nextMode: SecretMode = 'pin') => {
+    const changePin = useCallback(async (secret: string, nextMode: SecretMode = 'passphrase') => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to change access key');
         }

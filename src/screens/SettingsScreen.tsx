@@ -37,7 +37,6 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
-import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -169,7 +168,7 @@ export const SettingsScreen = () => {
         isPro,
         isLoading: subscriptionLoading,
     } = useSubscription();
-    const { syncEnabled, syncLocked, bundle, custodyMode } = useEncryption();
+    const { syncEnabled, syncLocked } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
@@ -183,7 +182,6 @@ export const SettingsScreen = () => {
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
     const [showChangePinModal, setShowChangePinModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
-    const [showResetEncryptionModal, setShowResetEncryptionModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
@@ -253,17 +251,12 @@ export const SettingsScreen = () => {
         ? 'Off'
         : syncLocked
             ? 'Locked'
-            : custodyMode === 'strict_seed'
-                ? 'Recovery phrase'
-                : bundle?.secret_mode === 'passphrase'
-                    ? 'Passphrase'
-                    : 'PIN';
+            : 'Set';
     const accessKeyColor = !syncEnabled
         ? colors.textSecondary
         : syncLocked
             ? colors.warning
             : colors.accentGreen;
-    const resetEncryptionDisabled = !isAuthenticated || isGuest;
 
     type ProviderOption = {
         key: AIProvider;
@@ -640,7 +633,7 @@ export const SettingsScreen = () => {
                             <View style={[styles.iconContainer, { backgroundColor: accessKeyColor + '20' }]}>
                                 <MaterialIcons name="vpn-key" size={16} color={accessKeyColor} />
                             </View>
-                            <Text style={styles.securityLabelMinimal}>Access key</Text>
+                            <Text style={styles.securityLabelMinimal}>Passphrase</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <Text style={[styles.securityValueMinimal, { color: accessKeyColor }]}>{accessKeyLabel}</Text>
@@ -649,38 +642,6 @@ export const SettingsScreen = () => {
                                     <Text style={styles.smallButtonTextOutlined}>Change</Text>
                                 </TouchableOpacity>
                             )}
-                        </View>
-                    </View>
-
-                    <View style={styles.separator} />
-
-                    <View style={styles.securityRowMinimal}>
-                        <View style={styles.securityRowLeft}>
-                            <View style={[styles.iconContainer, { backgroundColor: colors.error + '15' }]}>
-                                <MaterialIcons name="delete-forever" size={16} color={colors.error} />
-                            </View>
-                            <Text style={styles.securityLabelMinimal}>Reset</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <Text style={[styles.securityValueMinimal, { color: colors.textSecondary }]}>Delete all notes</Text>
-                            <TouchableOpacity
-                                style={[
-                                    styles.smallButton,
-                                    {
-                                        backgroundColor: resetEncryptionDisabled ? colors.border : colors.error,
-                                        opacity: resetEncryptionDisabled ? 0.65 : 1,
-                                    },
-                                ]}
-                                onPress={() => {
-                                    if (resetEncryptionDisabled) {
-                                        Alert.alert('Sign in required', 'Sign in to reset encryption and delete encrypted sync data.');
-                                        return;
-                                    }
-                                    setShowResetEncryptionModal(true);
-                                }}
-                            >
-                                <Text style={styles.smallButtonText}>Reset</Text>
-                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -1055,25 +1016,10 @@ export const SettingsScreen = () => {
                     }, 0);
                 }}
             />
-            <ResetEncryptionModal
-                visible={showResetEncryptionModal}
-                onClose={() => setShowResetEncryptionModal(false)}
-                onReset={(result) => {
-                    setShowResetEncryptionModal(false);
-                    if (result === 'purged') {
-                        Alert.alert('Encryption reset', 'Encryption was reset and all notes were deleted.');
-                    } else {
-                        Alert.alert(
-                            'Partial reset',
-                            'Encryption was reset locally, but server did not confirm full purge of encrypted sync data.'
-                        );
-                    }
-                }}
-            />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title="Verifying Access Key"
-                subtitle="Checking your key and decrypting sync. This may take up to a minute on some devices."
+                title="Verifying Passphrase"
+                subtitle="Checking your passphrase and decrypting sync. This may take up to a minute on some devices."
             />
 
             <SignOutChoiceDialog

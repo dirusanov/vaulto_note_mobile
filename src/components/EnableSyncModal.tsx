@@ -10,21 +10,17 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useEncryption } from '../context/EncryptionContext';
 import {
     getSecretValidationError,
     normalizeSecretInput,
     PASSPHRASE_MIN_LENGTH,
     PASSPHRASE_MIN_WORDS,
-    PIN_LENGTH,
-    SecretMode,
 } from '../crypto/e2ee';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { Button } from './Button';
-import { PinCodeInput } from './PinCodeInput';
 import { TextInput } from './TextInput';
 import { syncService } from '../services/SyncService';
 import { UnlockingOverlay } from './UnlockingOverlay';
@@ -38,8 +34,6 @@ interface EnableSyncModalProps {
     onChanging?: () => void;
     onError?: (message: string) => void;
 }
-
-type SetupStep = 'choose_method' | 'enter_secret';
 
 const waitForUiFrame = () => new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
@@ -57,8 +51,6 @@ export const EnableSyncModal = ({
     const { enableE2EE, changePin } = useEncryption();
     const isChangeFlow = flow === 'change';
 
-    const [step, setStep] = useState<SetupStep>('choose_method');
-    const [mode, setMode] = useState<Exclude<SecretMode, 'seed_phrase'>>('pin');
     const [secret, setSecret] = useState('');
     const [confirmSecret, setConfirmSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
@@ -66,8 +58,6 @@ export const EnableSyncModal = ({
     const [error, setError] = useState<string | null>(null);
 
     const reset = () => {
-        setStep('choose_method');
-        setMode('pin');
         setSecret('');
         setConfirmSecret('');
         setShowSecret(false);
@@ -88,16 +78,16 @@ export const EnableSyncModal = ({
     const handleEnable = async () => {
         setError(null);
 
-        const validationError = getSecretValidationError(secret, mode);
+        const validationError = getSecretValidationError(secret, 'passphrase');
         if (validationError) {
             setError(validationError);
             return;
         }
 
-        const normalizedSecret = normalizeSecretInput(secret, mode);
-        const normalizedConfirm = normalizeSecretInput(confirmSecret, mode);
+        const normalizedSecret = normalizeSecretInput(secret, 'passphrase');
+        const normalizedConfirm = normalizeSecretInput(confirmSecret, 'passphrase');
         if (normalizedSecret !== normalizedConfirm) {
-            setError(mode === 'pin' ? 'PINs do not match.' : 'Passphrases do not match.');
+            setError('Passphrases do not match.');
             return;
         }
 
@@ -109,9 +99,9 @@ export const EnableSyncModal = ({
         try {
             await waitForUiFrame();
             if (isChangeFlow) {
-                await changePin(normalizedSecret, mode);
+                await changePin(normalizedSecret, 'passphrase');
             } else {
-                await enableE2EE(normalizedSecret, mode);
+                await enableE2EE(normalizedSecret, 'passphrase');
             }
 
             setTimeout(() => {
@@ -135,17 +125,11 @@ export const EnableSyncModal = ({
 
     const loadingCopy = useMemo(() => {
         const actionVerb = isChangeFlow ? 'Updating' : 'Enabling';
-        if (mode === 'passphrase') {
-            return {
-                title: `${actionVerb} ${isChangeFlow ? 'Access Key' : 'Sync'} with Passphrase`,
-                subtitle: 'Deriving encryption keys from your passphrase. Please wait a few seconds.',
-            };
-        }
         return {
-            title: `${actionVerb} ${isChangeFlow ? 'Access Key' : 'Sync'} with PIN`,
-            subtitle: 'Wrapping your master key locally. Please wait a few seconds.',
+            title: `${actionVerb} ${isChangeFlow ? 'Passphrase' : 'Encrypted Sync'}`,
+            subtitle: 'Deriving encryption keys from your passphrase. Please wait a few seconds.',
         };
-    }, [isChangeFlow, mode]);
+    }, [isChangeFlow]);
 
     return (
         <Modal
@@ -161,10 +145,10 @@ export const EnableSyncModal = ({
                             <View style={styles.card}>
                                 <View style={styles.headerBlock}>
                                     <Text style={styles.title}>
-                                        {isChangeFlow ? 'Change Access Key' : 'Enable Encrypted Sync'}
+                                        {isChangeFlow ? 'Change Passphrase' : 'Enable Encrypted Sync'}
                                     </Text>
                                     <Text style={styles.subtitle}>
-                                        Choose a PIN (quick) or a passphrase (stronger). If you forget it, we cannot recover your encrypted notes.
+                                        Choose a strong passphrase. If you forget it, we cannot recover your encrypted notes.
                                     </Text>
                                 </View>
 
@@ -175,143 +159,54 @@ export const EnableSyncModal = ({
                                     keyboardShouldPersistTaps="handled"
                                     keyboardDismissMode="on-drag"
                                 >
-                                    {step === 'choose_method' && (
-                                        <>
-                                            <Pressable
-                                                style={styles.choiceCard}
-                                                onPress={() => {
-                                                    setMode('pin');
-                                                    setSecret('');
-                                                    setConfirmSecret('');
-                                                    setError(null);
-                                                    setStep('enter_secret');
-                                                }}
-                                            >
-                                                <View style={styles.choiceIcon}>
-                                                    <MaterialIcons name="dialpad" size={18} color={colors.primary} />
-                                                </View>
-                                                <View style={styles.choiceCopy}>
-                                                    <Text style={styles.choiceTitle}>PIN</Text>
-                                                    <Text style={styles.choiceDescription}>Fast to type, good for daily use</Text>
-                                                </View>
-                                            </Pressable>
+                                    <TextInput
+                                        label="Passphrase"
+                                        value={secret}
+                                        onChangeText={setSecret}
+                                        secureTextEntry={!showSecret}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        placeholder="e.g. orbit drift amber sunrise"
+                                    />
+                                    <TextInput
+                                        label="Confirm passphrase"
+                                        value={confirmSecret}
+                                        onChangeText={setConfirmSecret}
+                                        secureTextEntry={!showSecret}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        placeholder="Repeat your passphrase"
+                                    />
+                                    <Pressable
+                                        onPress={() => setShowSecret((prev) => !prev)}
+                                        style={styles.toggleRow}
+                                    >
+                                        <Text style={styles.toggleText}>
+                                            {showSecret ? 'Hide passphrase' : 'Show passphrase'}
+                                        </Text>
+                                    </Pressable>
+                                    <Text style={styles.hint}>
+                                        Use {PASSPHRASE_MIN_WORDS}+ words or {PASSPHRASE_MIN_LENGTH}+ characters.
+                                    </Text>
 
-                                            <Pressable
-                                                style={styles.choiceCard}
-                                                onPress={() => {
-                                                    setMode('passphrase');
-                                                    setSecret('');
-                                                    setConfirmSecret('');
-                                                    setError(null);
-                                                    setStep('enter_secret');
-                                                }}
-                                            >
-                                                <View style={styles.choiceIcon}>
-                                                    <MaterialIcons name="password" size={18} color={colors.primary} />
-                                                </View>
-                                                <View style={styles.choiceCopy}>
-                                                    <Text style={styles.choiceTitle}>Passphrase</Text>
-                                                    <Text style={styles.choiceDescription}>Stronger, but longer to type</Text>
-                                                </View>
-                                            </Pressable>
-
-                                            <View style={styles.actions}>
-                                                <Button
-                                                    title="Cancel"
-                                                    variant="outline"
-                                                    onPress={handleClose}
-                                                    disabled={loading}
-                                                    style={styles.actionButton}
-                                                />
-                                            </View>
-                                        </>
-                                    )}
-
-                                    {step === 'enter_secret' && (
-                                        <>
-                                            <Pressable
-                                                onPress={() => {
-                                                    setError(null);
-                                                    setStep('choose_method');
-                                                }}
-                                                style={styles.backRow}
-                                            >
-                                                <MaterialIcons name="arrow-back" size={16} color={colors.primary} />
-                                                <Text style={styles.backText}>Back</Text>
-                                            </Pressable>
-
-                                            {mode === 'pin' ? (
-                                                <>
-                                                    <PinCodeInput
-                                                        label={`PIN (${PIN_LENGTH} digits)`}
-                                                        value={secret}
-                                                        onChange={setSecret}
-                                                        length={PIN_LENGTH}
-                                                    />
-                                                    <PinCodeInput
-                                                        label="Confirm PIN"
-                                                        value={confirmSecret}
-                                                        onChange={setConfirmSecret}
-                                                        length={PIN_LENGTH}
-                                                    />
-                                                    <Text style={styles.hint}>
-                                                        PIN is convenient, but weaker if an attacker gets your key bundle.
-                                                    </Text>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <TextInput
-                                                        label="Passphrase"
-                                                        value={secret}
-                                                        onChangeText={setSecret}
-                                                        secureTextEntry={!showSecret}
-                                                        autoCapitalize="none"
-                                                        autoCorrect={false}
-                                                        placeholder="e.g. orbit drift amber sunrise"
-                                                    />
-                                                    <TextInput
-                                                        label="Confirm passphrase"
-                                                        value={confirmSecret}
-                                                        onChangeText={setConfirmSecret}
-                                                        secureTextEntry={!showSecret}
-                                                        autoCapitalize="none"
-                                                        autoCorrect={false}
-                                                        placeholder="Repeat your passphrase"
-                                                    />
-                                                    <Pressable
-                                                        onPress={() => setShowSecret((prev) => !prev)}
-                                                        style={styles.toggleRow}
-                                                    >
-                                                        <Text style={styles.toggleText}>
-                                                            {showSecret ? 'Hide passphrase' : 'Show passphrase'}
-                                                        </Text>
-                                                    </Pressable>
-                                                    <Text style={styles.hint}>
-                                                        Use {PASSPHRASE_MIN_WORDS}+ words or {PASSPHRASE_MIN_LENGTH}+ characters.
-                                                    </Text>
-                                                </>
-                                            )}
-
-                                            <View style={styles.actions}>
-                                                <Button
-                                                    title="Cancel"
-                                                    variant="outline"
-                                                    onPress={handleClose}
-                                                    disabled={loading}
-                                                    style={styles.actionButton}
-                                                />
-                                                <Button
-                                                    title={isChangeFlow ? 'Update Key' : 'Enable Sync'}
-                                                    onPress={() => {
-                                                        void handleEnable();
-                                                    }}
-                                                    loading={loading}
-                                                    disabled={loading}
-                                                    style={styles.actionButton}
-                                                />
-                                            </View>
-                                        </>
-                                    )}
+                                    <View style={styles.actions}>
+                                        <Button
+                                            title="Cancel"
+                                            variant="outline"
+                                            onPress={handleClose}
+                                            disabled={loading}
+                                            style={styles.actionButton}
+                                        />
+                                        <Button
+                                            title={isChangeFlow ? 'Update Passphrase' : 'Enable Sync'}
+                                            onPress={() => {
+                                                void handleEnable();
+                                            }}
+                                            loading={loading}
+                                            disabled={loading}
+                                            style={styles.actionButton}
+                                        />
+                                    </View>
 
                                     {error && <Text style={styles.error}>{error}</Text>}
                                 </ScrollView>
@@ -406,16 +301,6 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginTop: 2,
     },
-    backRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        marginBottom: spacing.m,
-    },
-    backText: {
-        ...typography.captionBold,
-        color: colors.primary,
-    },
     toggleRow: {
         marginTop: -spacing.s,
         marginBottom: spacing.s,
@@ -445,4 +330,3 @@ const styles = StyleSheet.create({
         minWidth: 120,
     },
 });
-

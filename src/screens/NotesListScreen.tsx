@@ -20,7 +20,6 @@ import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
-import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { notesApi } from '../api/notes';
 
 const { width } = Dimensions.get('window');
@@ -31,7 +30,7 @@ export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
     const { userId, isAuthenticated, isGuest } = useAuth();
-    const { syncLocked, bundle, custodyMode } = useEncryption();
+    const { syncLocked, custodyMode } = useEncryption();
     const {
         notes,
         loading,
@@ -47,7 +46,6 @@ export const NotesListScreen = () => {
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
-    const [showResetEncryptionModal, setShowResetEncryptionModal] = useState(false);
     const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
     const [hasServerNotes, setHasServerNotes] = useState(false);
 
@@ -136,16 +134,7 @@ export const NotesListScreen = () => {
         navigation.navigate('Settings');
     };
 
-    const secretModeLabel =
-        custodyMode === 'strict_seed'
-            ? 'Recovery phrase'
-            : bundle?.secret_mode === 'passphrase'
-                ? 'Passphrase'
-                : 'PIN';
-
-    const handleResetLockedSync = useCallback(() => {
-        setShowResetEncryptionModal(true);
-    }, []);
+    const secretModeLabel = custodyMode === 'strict_seed' ? 'recovery passphrase' : 'passphrase';
 
     const shouldShowLockBanner =
         !isSelectionMode &&
@@ -494,13 +483,6 @@ export const NotesListScreen = () => {
                         >
                             <Text style={styles.lockActionPrimaryText}>Unlock Sync</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.lockActionButton, styles.lockActionSecondary]}
-                            onPress={handleResetLockedSync}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={styles.lockActionSecondaryText}>Forgot key? Reset</Text>
-                        </TouchableOpacity>
                     </View>
                 </View>
             )}
@@ -639,25 +621,10 @@ export const NotesListScreen = () => {
                     }, 0);
                 }}
             />
-            <ResetEncryptionModal
-                visible={showResetEncryptionModal}
-                onClose={() => setShowResetEncryptionModal(false)}
-                onReset={(result) => {
-                    setShowResetEncryptionModal(false);
-                    if (result === 'purged') {
-                        Alert.alert('Encryption reset', 'Encryption was reset and all notes were deleted.');
-                    } else {
-                        Alert.alert(
-                            'Partial reset',
-                            'Encryption was reset locally, but server did not confirm full purge of encrypted sync data.'
-                        );
-                    }
-                }}
-            />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title="Verifying Access Key"
-                subtitle="Checking your key and decrypting sync. This may take up to a minute on some devices."
+                title="Verifying Passphrase"
+                subtitle="Checking your passphrase and decrypting sync. This may take up to a minute on some devices."
             />
         </ScreenContainer>
     );

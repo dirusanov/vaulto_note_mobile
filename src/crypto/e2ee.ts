@@ -86,21 +86,20 @@ export const getSecretValidationError = (
         ? normalizeMnemonic(secret)
         : secret.trim();
     if (!normalized) {
-        if (mode === 'pin') return 'PIN is required.';
-        if (mode === 'seed_phrase') return 'Seed phrase is required.';
+        if (mode === 'seed_phrase') return 'Recovery phrase is required.';
         return 'Passphrase is required.';
     }
 
     if (mode === 'pin') {
         return isValidPin(normalized)
             ? null
-            : `PIN must be exactly ${PIN_LENGTH} digits.`;
+            : `Passphrase must be exactly ${PIN_LENGTH} digits.`;
     }
 
     if (mode === 'seed_phrase') {
         return isValidSeedPhrase(normalized)
             ? null
-            : `Seed phrase must be a valid BIP39 phrase (${SEED_PHRASE_WORDS} words by default).`;
+            : `Recovery phrase must be a valid BIP39 phrase (${SEED_PHRASE_WORDS} words by default).`;
     }
 
     return isValidPassphrase(normalized)
@@ -149,7 +148,7 @@ export const deriveMasterKeyFromSeedAsync = async (seedPhrase: string): Promise<
 
 export const createKeyBundle = async (
     secret: string,
-    mode: SecretMode = 'pin',
+    mode: SecretMode = 'passphrase',
 ): Promise<{ bundle: KeyBundle; masterKey: Uint8Array }> => {
     const newMasterKey = await Crypto.getRandomBytesAsync(32);
     const bundle = await wrapMasterKey(newMasterKey, secret, mode);
@@ -160,7 +159,7 @@ export const createKeyBundle = async (
 export const wrapMasterKey = async (
     masterKey: Uint8Array,
     secret: string,
-    mode: SecretMode = 'pin',
+    mode: SecretMode = 'passphrase',
 ): Promise<KeyBundle> => {
     const salt = await Crypto.getRandomBytesAsync(16);
     const nonce = await Crypto.getRandomBytesAsync(24);
