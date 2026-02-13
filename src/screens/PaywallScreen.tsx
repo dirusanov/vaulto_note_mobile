@@ -1,16 +1,24 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth';
 
 export const PaywallScreen = () => {
     const { packages, purchasePackage, restorePurchases, isLoading, isPro } = useSubscription();
     const navigation = useNavigation();
+    const { isAuthenticated, isGuest } = useAuth();
+    const canPurchase = isAuthenticated && !isGuest;
 
     const handlePurchase = async (pack: MergedPackage) => {
+        if (!canPurchase) {
+            Alert.alert('Sign in required', 'Create an account to purchase Pro.');
+            (navigation as any).navigate('SignIn');
+            return;
+        }
         const purchased = await purchasePackage(pack);
         if (purchased || isPro) {
             navigation.goBack();
@@ -67,6 +75,7 @@ export const PaywallScreen = () => {
                                         style={[styles.planCard, isBestValue && styles.planCardBest]}
                                         onPress={() => handlePurchase(pack)}
                                         activeOpacity={0.9}
+                                        disabled={!canPurchase}
                                     >
                                         <View style={styles.planHeader}>
                                             <Text style={[styles.planTitle, isBestValue && styles.planTitleBest]}>{title}</Text>
@@ -84,7 +93,18 @@ export const PaywallScreen = () => {
                 </View>
 
                 <View style={styles.footer}>
-                    <TouchableOpacity onPress={restorePurchases} style={styles.restoreButton}>
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (!canPurchase) {
+                                Alert.alert('Sign in required', 'Sign in to restore purchases.');
+                                (navigation as any).navigate('SignIn');
+                                return;
+                            }
+                            restorePurchases();
+                        }}
+                        style={styles.restoreButton}
+                        disabled={!canPurchase}
+                    >
                         <Text style={styles.restoreButtonText}>Restore Purchases</Text>
                     </TouchableOpacity>
 

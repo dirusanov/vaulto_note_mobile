@@ -89,7 +89,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<{ title?: string; message: string; iconName?: string; iconColor?: string } | null>(null);
 
-    const { userId, user, refreshProfile } = useAuth();
+    const { userId, user, refreshProfile, isAuthenticated, isGuest } = useAuth();
     const isConfigured = useRef(false);
     const plansRef = useRef<SubscriptionPlan[]>([]);
     const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -337,6 +337,10 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const purchasePackage = async (pack: MergedPackage) => {
         try {
+            if (!isAuthenticated || isGuest || !userId) {
+                setError('Sign in required to purchase.');
+                return false;
+            }
             setIsLoading(true);
             const { customerInfo } = await Purchases.purchasePackage(pack.rcPackage);
             const revenueCatStatus = buildSubscriptionStatus(customerInfo, plansRef.current);
@@ -375,6 +379,10 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const restorePurchases = async () => {
         try {
+            if (!isAuthenticated || isGuest || !userId) {
+                setError('Sign in required to restore purchases.');
+                return;
+            }
             setIsLoading(true);
             const customerInfo = await Purchases.restorePurchases();
             const revenueCatStatus = buildSubscriptionStatus(customerInfo, plansRef.current);

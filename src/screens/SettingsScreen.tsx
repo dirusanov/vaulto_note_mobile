@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
@@ -167,6 +167,7 @@ export const SettingsScreen = () => {
     const {
         isPro,
         isLoading: subscriptionLoading,
+        packages,
     } = useSubscription();
     const {
         status: encryptionStatus,
@@ -253,6 +254,32 @@ export const SettingsScreen = () => {
     });
 
     const usingOpenAI = aiProvider === 'openai';
+    const pricingInfo = useMemo(() => {
+        if (subscriptionLoading) return null;
+        if (!packages || packages.length === 0) return null;
+
+        const byPeriod = (period: 'monthly' | 'yearly') =>
+            packages.find((p) => p.backendPlan?.billing_period === period)
+            ?? packages.find((p) => p.identifier.toLowerCase().includes(period))
+            ?? packages.find((p) => (period === 'yearly'
+                ? (p.identifier.toLowerCase().includes('annual') || p.identifier.toLowerCase().includes('year'))
+                : p.identifier.toLowerCase().includes('month')));
+
+        const monthly = byPeriod('monthly');
+        const yearly = byPeriod('yearly');
+
+        if (monthly?.product?.priceString && yearly?.product?.priceString) {
+            return `Pro: ${monthly.product.priceString}/mo or ${yearly.product.priceString}/yr`;
+        }
+        if (monthly?.product?.priceString) {
+            return `Pro: ${monthly.product.priceString}/mo`;
+        }
+        if (yearly?.product?.priceString) {
+            return `Pro: ${yearly.product.priceString}/yr`;
+        }
+        const any = packages[0]?.product?.priceString;
+        return any ? `Pro: ${any}` : null;
+    }, [packages, subscriptionLoading]);
     const hasConfiguredKey = custodyMode === 'strict_seed' || !!bundle || hasRemoteKeyBundle;
     const syncStatusLabel = !syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On';
     const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
@@ -608,6 +635,11 @@ export const SettingsScreen = () => {
                                 onPress={() => navigation.navigate('SignIn')}
                                 style={{ width: '100%' }}
                             />
+                            {!!pricingInfo && (
+                                <Text style={styles.pricingInfoText}>
+                                    {pricingInfo}
+                                </Text>
+                            )}
                         </View>
                     )}
 
@@ -1110,6 +1142,12 @@ export const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    pricingInfoText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginTop: spacing.s,
+        textAlign: 'center',
+    },
     agentModeWarning: {
         ...typography.caption,
         color: colors.error,
