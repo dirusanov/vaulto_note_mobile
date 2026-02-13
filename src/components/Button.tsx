@@ -1,4 +1,4 @@
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp, TextStyle } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -10,6 +10,7 @@ interface ButtonProps {
     loading?: boolean;
     disabled?: boolean;
     style?: StyleProp<ViewStyle>;
+    textStyle?: StyleProp<TextStyle>;
 }
 
 export const Button = ({
@@ -19,6 +20,7 @@ export const Button = ({
     loading = false,
     disabled = false,
     style,
+    textStyle,
 }: ButtonProps) => {
     const getBackgroundColor = () => {
         if (disabled) return colors.textMuted;
@@ -67,7 +69,7 @@ export const Button = ({
             {loading ? (
                 <ActivityIndicator color={getTextColor()} />
             ) : (
-                <Text style={[styles.text, { color: getTextColor() }]}>{title}</Text>
+                <Text style={[styles.text, { color: getTextColor() }, textStyle]}>{title}</Text>
             )}
         </TouchableOpacity>
     );

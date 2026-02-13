@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../utils/env';
-import { getAIProvider, getOpenAIApiKey, storage } from '../utils/storage';
+import { getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl, storage } from '../utils/storage';
+import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 
-const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const BACKEND_IMPROVE_URL = `${API_URL}/ai/improve`;
 const AI_PROMPTS_STORAGE_KEY = 'vaulto_ai_prompts_v1';
 const FALLBACK_SAMPLE_TEXT = 'your text';
@@ -122,7 +122,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     if (!option) throw new Error('Invalid option');
 
     const provider = await getAIProvider();
-    if (provider === 'secure_llm' || provider === 'selfhosted') {
+    if (provider === 'secure_llm') {
         return improveViaBackend(text, option);
     }
 
@@ -131,6 +131,8 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
 
     try {
         const promptForModel = buildPromptForRequest(option.prompt, text);
+        const baseUrl = await getOpenAIBaseUrl();
+        const chatUrl = buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/chat/completions');
 
         const requestBody: any = {
             model: 'gpt-3.5-turbo-1106',
@@ -152,7 +154,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
             requestBody.temperature = 0.2;
         }
 
-        const response = await fetch(OPENAI_CHAT_URL, {
+        const response = await fetch(chatUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -175,32 +177,11 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
 }
 
 async function improveViaBackend(text: string, option: AIImprovementOption): Promise<string> {
-    // Check if self-hosted provider is selected
-    const provider = await getAIProvider();
-    const isSelfHosted = provider === 'selfhosted';
+    const token = await storage.getToken();
+    const baseUrl = BACKEND_IMPROVE_URL;
 
-    let token: string | null;
-    let baseUrl: string;
-
-    if (isSelfHosted) {
-        // Use self-hosted configuration
-        const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
-        const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
-
-        if (!selfHostedUrl || !selfHostedApiKey) {
-            throw new Error('Self-hosted settings missing. Check URL and API Key.');
-        }
-
-        token = selfHostedApiKey;
-        baseUrl = `${selfHostedUrl}/ai/improve`;
-    } else {
-        // Use default backend
-        token = await storage.getToken();
-        baseUrl = BACKEND_IMPROVE_URL;
-
-        if (!token) {
-            throw new Error('Sign in required to use local LLM.');
-        }
+    if (!token) {
+        throw new Error('Sign in required to use Secure LLM.');
     }
 
     const body = {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, Switch } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -13,9 +13,13 @@ interface UsageCardProps {
     aiProvider?: AIProvider;
     isGuest?: boolean;
     isPro?: boolean;
+    compact?: boolean;
+    embedded?: boolean;
+    autoTranscribeEnabled?: boolean;
+    onToggleAutoTranscribe?: (value: boolean) => void;
 }
 
-export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false }) => {
+export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false, autoTranscribeEnabled, onToggleAutoTranscribe }) => {
     // Only show for Secure LLM provider
     if (aiProvider !== 'secure_llm') return null;
     if (!user) return null;
@@ -51,9 +55,26 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
         return colors.primary;
     };
 
+    if (compact) {
+        const label = isUnlimited
+            ? 'Transcription: Unlimited'
+            : `Transcription left: ${formatTimeMMSS(remainingSeconds)}`;
+
+        return (
+            <View style={styles.compactWrap}>
+                <View style={[styles.compactIcon, { backgroundColor: getProgressColor() + '15' }]}>
+                    <MaterialIcons name="graphic-eq" size={16} color={getProgressColor()} />
+                </View>
+                <Text style={styles.compactText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                    {label}
+                </Text>
+            </View>
+        );
+    }
+
     if (isUnlimited) {
         return (
-            <View style={styles.card}>
+            <View style={embedded ? styles.embeddedWrap : styles.card}>
                 <View style={styles.headerRow}>
                     <View style={styles.titleRow}>
                         <ProIcon
@@ -89,7 +110,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
 
     if (isGuest) {
         return (
-            <View style={styles.card}>
+            <View style={embedded ? styles.embeddedWrap : styles.card}>
                 <View style={styles.headerRow}>
                     <View style={styles.titleRow}>
                         <View style={[styles.iconContainer, { backgroundColor: colors.warning + '15' }]}>
@@ -106,7 +127,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     }
 
     return (
-        <View style={styles.card}>
+        <View style={embedded ? styles.embeddedWrap : styles.card}>
             <View style={styles.headerRow}>
                 <View style={styles.titleRow}>
                     <View style={[styles.iconContainer, { backgroundColor: getProgressColor() + '15' }]}>
@@ -117,8 +138,8 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                         />
                     </View>
                     <View>
-                        <Text style={styles.title}>Transcription Balance</Text>
-                        <Text style={styles.subtitle}>Transcription time</Text>
+                        <Text style={styles.title}>{isPro ? 'Transcription Balance' : 'Trial Balance'}</Text>
+                        <Text style={styles.subtitle}>{isPro ? 'Monthly Pro minutes' : 'One-time trial minutes'}</Text>
                     </View>
                 </View>
             </View>
@@ -161,11 +182,60 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                     </Text>
                 </View>
             )}
+
+            {onToggleAutoTranscribe && (
+                <View style={styles.autoTranscribeRow}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.autoTranscribeLabel}>Auto-transcribe</Text>
+                        <Text style={styles.subtitle}>Transcribe automatically</Text>
+                    </View>
+                    <Switch
+                        value={autoTranscribeEnabled}
+                        onValueChange={onToggleAutoTranscribe}
+                        trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                        thumbColor={colors.surface}
+                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                    />
+                </View>
+            )}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
+    compactWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 999,
+        backgroundColor: colors.backgroundSecondary,
+        borderWidth: 1,
+        borderColor: colors.border,
+        flexShrink: 1,
+        minWidth: 0,
+    },
+    embeddedWrap: {
+        marginTop: spacing.s,
+        paddingTop: spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+    },
+    compactIcon: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    compactText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        fontWeight: '700',
+        flexShrink: 1,
+        minWidth: 0,
+    },
     card: {
         backgroundColor: colors.surface,
         borderRadius: 16,
@@ -315,5 +385,20 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textSecondary,
         textAlign: 'center',
+    },
+    autoTranscribeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: spacing.s,
+        paddingTop: spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+    },
+    autoTranscribeLabel: {
+        ...typography.body,
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.text,
     },
 });

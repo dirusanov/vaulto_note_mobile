@@ -12,18 +12,17 @@ import {
     AIProvider,
     getAIProvider,
     getOpenAIApiKey,
-    getSelfHostedUrl,
-    getSelfHostedApiKey,
+    getOpenAIBaseUrl,
+    getLegacySelfHostedApiKey,
     setAIProvider,
     setOpenAIApiKey,
-    setSelfHostedUrl,
-    setSelfHostedApiKey,
+    setOpenAIBaseUrl,
     getAgentModeEnabled,
     setAgentModeEnabled,
     getTranscriptionEnabled,
     setTranscriptionEnabled
 } from '../utils/storage';
-import { testOpenAIConnection, testSelfHostedConnection } from '../services/TranscriptionService';
+import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
@@ -37,6 +36,8 @@ import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
 import { useSubscription } from '../context/SubscriptionContext';
 import { ProIcon } from '../components/ProIcon';
+import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
+import { SecurityInfoModal } from '../components/SecurityInfoModal';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -184,15 +185,14 @@ export const SettingsScreen = () => {
     } = useAppLock();
 
     const [apiKey, setApiKeyState] = useState('');
+    const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [transcriptionEnabled, setTranscriptionEnabledState] = useState(true);
     const [testingConnection, setTestingConnection] = useState(false);
-    const [testingSelfHosted, setTestingSelfHosted] = useState(false);
     const [aiProvider, setAiProviderState] = useState<AIProvider>('secure_llm');
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
     const [showOpenAIInfo, setShowOpenAIInfo] = useState(false);
-    const [showSelfHostedInfo, setShowSelfHostedInfo] = useState(false);
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
     const [showChangePinModal, setShowChangePinModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
@@ -203,20 +203,13 @@ export const SettingsScreen = () => {
 
     const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
-    const [showSelfHostedKey, setShowSelfHostedKey] = useState(false);
     const [openAITestStatus, setOpenAITestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
         type: 'idle',
         message: '',
     });
-    const [selfHostedTestStatus, setSelfHostedTestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
-        type: 'idle',
-        message: '',
-    });
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
-
-    // Self-hosted settings
-    const [selfHostedUrl, setSelfHostedUrlState] = useState('');
-    const [selfHostedApiKey, setSelfHostedApiKeyState] = useState('');
+    const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
+    const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
 
     // Agent Mode Animation - Swaying
     const swayAnim = useRef(new Animated.Value(0)).current;
@@ -267,18 +260,11 @@ export const SettingsScreen = () => {
     });
 
     const usingOpenAI = aiProvider === 'openai';
-    const usingSelfHosted = aiProvider === 'selfhosted';
     const syncStatusLabel = !syncEnabled ? 'Local only' : syncLocked ? 'Locked' : 'Enabled';
     const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
     const pinStatusLabel = syncEnabled ? 'Configured' : 'Not set';
     const pinStatusColor = syncEnabled ? colors.accentGreen : colors.textSecondary;
-    const securityNote = !syncEnabled
-        ? 'Enable sync to choose PIN (quick), code phrase (stronger), or Advanced Secure seed phrase.'
-        : syncLocked
-            ? hasRemoteKeyBundle
-                ? 'Encrypted sync data detected on server. Unlock with your original key to access it.'
-                : 'Sync is locked on this device. Unlock with your original key to resume syncing.'
-            : 'Master key is decrypted only on-device. Use seed phrase for strongest offline protection.';
+
 
     const handleResetSync = useCallback(() => {
         Alert.alert(
@@ -346,23 +332,12 @@ export const SettingsScreen = () => {
         },
         {
             key: 'openai',
-            title: 'OpenAI API',
-            blurb: 'Fast & Convenient',
-            description: 'Audio → Whisper, Chat → Completions. API Key required.',
-            icon: 'cloud-queue',
-            accent: colors.accentPurple,
-            chips: ['Whisper', 'GPT', 'Fast'],
-            isLocked: !isPro,
-            proMessage: 'Available in Pro',
-        },
-        {
-            key: 'selfhosted',
-            title: 'Self Hosted',
-            blurb: 'Full Control',
-            description: 'Connect to your server using Docker Compose.',
-            icon: 'dns',
+            title: 'OpenAI Compatible',
+            blurb: 'OpenAI or Custom URL',
+            description: 'Use OpenAI-style endpoints (chat + transcription). Works with OpenAI and compatible servers.',
+            icon: 'chat',
             accent: colors.accentGreen,
-            chips: ['Your Server', 'VPN/SSL'],
+            chips: ['GPT', 'Whisper', 'Custom URL'],
             isLocked: !isPro,
             proMessage: 'Available in Pro',
         },
@@ -393,21 +368,28 @@ export const SettingsScreen = () => {
 
     const loadPreferences = async () => {
         try {
-            const [storedOpenAIKey, provider, url, storedSelfHostedApiKey, agentMode, transcription] = await Promise.all([
+            const [storedOpenAIKey, storedBaseUrl, provider, legacySelfHostedApiKey, agentMode, transcription] = await Promise.all([
                 getOpenAIApiKey(),
+                getOpenAIBaseUrl(),
                 getAIProvider(),
-                getSelfHostedUrl(),
-                getSelfHostedApiKey(),
+                getLegacySelfHostedApiKey(),
                 getAgentModeEnabled(),
                 getTranscriptionEnabled()
             ]);
 
-            if (storedOpenAIKey) setApiKeyState(storedOpenAIKey);
+            if (storedBaseUrl) {
+                setOpenAIBaseUrlState(normalizeOpenAIBaseUrl(storedBaseUrl));
+            }
+
+            if (storedOpenAIKey) {
+                setApiKeyState(storedOpenAIKey);
+            } else if (legacySelfHostedApiKey) {
+                // Best-effort migration from legacy self-hosted token to OpenAI-compatible token.
+                setApiKeyState(legacySelfHostedApiKey);
+                void setOpenAIApiKey(legacySelfHostedApiKey);
+            }
 
             setAiProviderState(provider || 'secure_llm');
-
-            if (url) setSelfHostedUrlState(url);
-            if (storedSelfHostedApiKey) setSelfHostedApiKeyState(storedSelfHostedApiKey);
             setAgentModeEnabledState(agentMode);
             setTranscriptionEnabledState(transcription);
         } catch (error) {
@@ -423,32 +405,10 @@ export const SettingsScreen = () => {
         // Show upgrade alert for locked providers
         if (selectedOption?.isLocked) {
             if (!isAuthenticated || isGuest) {
-                Alert.alert(
-                    'Sign in required',
-                    `${selectedOption.title} is a Pro feature. Sign in to upgrade your account.`,
-                    [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Sign In', onPress: () => navigation.navigate('SignIn') },
-                    ]
-                );
+                setProviderGate({ kind: 'signin', providerTitle: selectedOption.title });
                 return;
             }
-            Alert.alert(
-                'Pro Feature',
-                `${selectedOption.title} is available in the Pro plan. Upgrade to unlock advanced AI providers and enhanced features.`,
-                [
-                    {
-                        text: 'Maybe Later',
-                        style: 'cancel'
-                    },
-                    {
-                        text: 'Upgrade to Pro',
-                        onPress: () => {
-                            navigation.navigate('Paywall');
-                        }
-                    }
-                ]
-            );
+            setProviderGate({ kind: 'upgrade', providerTitle: selectedOption.title });
             return;
         }
 
@@ -524,11 +484,11 @@ export const SettingsScreen = () => {
     useEffect(() => {
         if (!preferencesReady) return;
         const timeout = setTimeout(() => {
-            setSelfHostedUrl(selfHostedUrl.trim());
+            setOpenAIBaseUrl(normalizeOpenAIBaseUrl(openAIBaseUrl));
         }, 400);
 
         return () => clearTimeout(timeout);
-    }, [selfHostedUrl, preferencesReady]);
+    }, [openAIBaseUrl, preferencesReady]);
 
     useEffect(() => {
         // Anonymous users can't use transcription; force UI OFF.
@@ -542,18 +502,9 @@ export const SettingsScreen = () => {
             .catch(() => setTranscriptionEnabledState(true));
     }, [isAuthenticated, isGuest, preferencesReady]);
 
-    useEffect(() => {
-        if (!preferencesReady) return;
-        const timeout = setTimeout(() => {
-            setSelfHostedApiKey(selfHostedApiKey.trim());
-        }, 400);
-
-        return () => clearTimeout(timeout);
-    }, [selfHostedApiKey, preferencesReady]);
-
     const handleTestConnection = async () => {
         if (!usingOpenAI) {
-            setOpenAITestStatus({ type: 'error', message: 'Select OpenAI to test connection.' });
+            setOpenAITestStatus({ type: 'error', message: 'Select OpenAI Compatible to test connection.' });
             return;
         }
 
@@ -564,46 +515,18 @@ export const SettingsScreen = () => {
 
         setTestingConnection(true);
         setOpenAITestStatus({ type: 'idle', message: '' });
-        await setOpenAIApiKey(apiKey.trim());
-        const isConnected = await testOpenAIConnection();
+        const normalizedBaseUrl = normalizeOpenAIBaseUrl(openAIBaseUrl);
+        await Promise.all([
+            setOpenAIApiKey(apiKey.trim()),
+            setOpenAIBaseUrl(normalizedBaseUrl),
+        ]);
+        const isConnected = await testOpenAIConnection({ baseUrl: normalizedBaseUrl, apiKey: apiKey.trim() });
         setTestingConnection(false);
 
         if (isConnected) {
-            setOpenAITestStatus({ type: 'success', message: 'OpenAI connection working.' });
+            setOpenAITestStatus({ type: 'success', message: 'Connection working.' });
         } else {
-            setOpenAITestStatus({ type: 'error', message: 'Connection failed. Check API Key.' });
-        }
-    };
-
-    const handleTestSelfHostedConnection = async () => {
-        if (!usingSelfHosted) {
-            setSelfHostedTestStatus({ type: 'error', message: 'Select Self-Hosted to test connection.' });
-            return;
-        }
-
-        if (!selfHostedUrl) {
-            setSelfHostedTestStatus({ type: 'error', message: 'Enter Server URL.' });
-            return;
-        }
-
-        if (!selfHostedApiKey) {
-            setSelfHostedTestStatus({ type: 'error', message: 'Enter API Secret Key.' });
-            return;
-        }
-
-        setTestingSelfHosted(true);
-        setSelfHostedTestStatus({ type: 'idle', message: '' });
-        await Promise.all([
-            setSelfHostedUrl(selfHostedUrl.trim()),
-            setSelfHostedApiKey(selfHostedApiKey.trim()),
-        ]);
-        const isConnected = await testSelfHostedConnection(selfHostedUrl.trim(), selfHostedApiKey.trim());
-        setTestingSelfHosted(false);
-
-        if (isConnected) {
-            setSelfHostedTestStatus({ type: 'success', message: 'Connection to your server working.' });
-        } else {
-            setSelfHostedTestStatus({ type: 'error', message: 'Connection failed. Check URL and Key.' });
+            setOpenAITestStatus({ type: 'error', message: 'Connection failed. Check API URL and Key.' });
         }
     };
 
@@ -678,85 +601,57 @@ export const SettingsScreen = () => {
                     <MaterialIcons name="arrow-back" size={22} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.title}>Settings</Text>
-                <View style={styles.badge}>
-                    <MaterialIcons
-                        name={activeProvider?.icon as any || 'shield'}
-                        size={16}
-                        color={activeProvider?.accent || colors.primary}
-                    />
-                    <Text style={[styles.badgeText, { color: activeProvider?.accent || colors.primary }]}>
-                        {aiProvider === 'openai' ? 'OpenAI' : aiProvider === 'selfhosted' ? 'Self Hosted' : 'Secure LLM'}
-                    </Text>
-                </View>
             </View>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                 <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>Account</Text>
-                    </View>
                     {isAuthenticated && user ? (
-                        <View style={styles.userInfoContainer}>
-                            <View style={styles.userAvatar}>
-                                <Text style={styles.userAvatarText}>
-                                    {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
-                                </Text>
-                            </View>
-                            <View style={styles.userInfoText}>
-                                {user.full_name && (
-                                    <Text style={styles.userName}>{user.full_name}</Text>
-                                )}
-                                <Text style={user.full_name ? styles.userEmail : styles.userEmailPrimary}>
-                                    {user.email || 'Signed in'}
-                                </Text>
-                                <View style={styles.syncStatusRow}>
-                                    <MaterialIcons
-                                        name={
-                                            !syncEnabled
-                                                ? "cloud-off"
-                                                : syncLocked
-                                                    ? "lock"
-                                                    : unsyncedCount > 0
-                                                        ? "cloud-upload"
-                                                        : "cloud-done"
-                                        }
-                                        size={14}
-                                        color={
-                                            !syncEnabled
-                                                ? colors.textSecondary
-                                                : syncLocked
-                                                    ? colors.warning
-                                                    : unsyncedCount > 0
-                                                        ? colors.warning
-                                                        : colors.accentGreen
-                                        }
-                                    />
-                                    <Text style={[
-                                        styles.syncStatusText,
-                                        (syncLocked || unsyncedCount > 0) && { color: colors.warning }
-                                    ]}>
-                                        {syncEnabled
-                                            ? (syncLocked
-                                                ? "Sync locked"
-                                                : (unsyncedCount > 0 ? `${unsyncedCount} unsynced` : "Notes synced"))
-                                            : "Sync disabled"}
+                        <>
+                            <View style={styles.userInfoContainer}>
+                                <View style={styles.userAvatar}>
+                                    <Text style={styles.userAvatarText}>
+                                        {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
+                                    </Text>
+                                </View>
+                                <View style={styles.userInfoText}>
+                                    {user.full_name && (
+                                        <Text style={styles.userName}>{user.full_name}</Text>
+                                    )}
+                                    <Text style={user.full_name ? styles.userEmail : styles.userEmailPrimary}>
+                                        {user.email || 'Signed in'}
                                     </Text>
                                 </View>
                             </View>
-                        </View>
-                    ) : (
-                        <>
-                            <Text style={styles.syncHint}>Sign in to sync encrypted notes across devices</Text>
-                            <Button
-                                title="Sign In"
-                                onPress={() => navigation.navigate('SignIn')}
-                                style={styles.signInButton}
-                            />
+                            {!isPro && (
+                                <UsageCard
+                                    user={user}
+                                    aiProvider={aiProvider}
+                                    isGuest={isGuest}
+                                    isPro={isPro}
+                                    embedded
+                                    autoTranscribeEnabled={transcriptionEnabled}
+                                    onToggleAutoTranscribe={toggleTranscription}
+                                />
+                            )}
                         </>
+                    ) : (
+                        <View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.m }}>
+                                <View style={[styles.iconContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                                    <MaterialIcons name="account-circle" size={24} color={colors.textSecondary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.preferenceTitle}>Sign in</Text>
+                                    <Text style={styles.preferenceDescription}>Sync notes & access AI features</Text>
+                                </View>
+                            </View>
+                            <Button
+                                title="Sign In / Create Account"
+                                onPress={() => navigation.navigate('SignIn')}
+                                style={{ width: '100%' }}
+                            />
+                        </View>
                     )}
-
-
-                    {!isPro && <UsageCard user={user} aiProvider={aiProvider} isGuest={isGuest} isPro={isPro} />}
 
                     <SubscriptionStatusSection
                         isAuthenticated={isAuthenticated}
@@ -766,569 +661,314 @@ export const SettingsScreen = () => {
                         onUpgrade={() => navigation.navigate('Paywall')}
                         onOpenMinutesSheet={openMinutesSheet}
                     />
-
-
                 </View>
 
+                {/* Combined Security & App Lock */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>Security</Text>
-                    </View>
-                    <Text style={styles.sectionHint}>
-                        Notes are encrypted on this device before sync. Master key never leaves device in plaintext.
-                    </Text>
-                    <View style={styles.securityRow}>
-                        <Text style={styles.securityLabel}>Sync</Text>
-                        <Text style={[styles.securityValue, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
-                    </View>
-                    <View style={styles.securityRow}>
-                        <Text style={styles.securityLabel}>Access key</Text>
-                        <Text style={[styles.securityValue, { color: pinStatusColor }]}>{pinStatusLabel}</Text>
-                    </View>
-                    <Text style={styles.securityCopy}>{securityNote}</Text>
-                    {syncEnabled && syncLocked && (
-                        <View style={{ marginTop: spacing.m }}>
-                            <Button title="Unlock Sync" onPress={() => setShowUnlockSyncModal(true)} />
-                            <View style={{ marginTop: spacing.s }}>
-                                <Button
-                                    title="Reset Sync (Forgot key)"
-                                    variant="outline"
-                                    onPress={handleResetSync}
-                                />
-                            </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <MaterialIcons name="security" size={18} color={colors.primary} />
+                            <Text style={styles.sectionTitle}>Security</Text>
                         </View>
-                    )}
-                    {syncEnabled && !syncLocked && (
-                        <View style={{ marginTop: spacing.m }}>
-                            <Button
-                                title="Change Access Key"
-                                onPress={() => {
-                                    if (!isAuthenticated || isGuest) {
-                                        Alert.alert('Sign in required', 'Please sign in to change your access key.');
-                                        return;
-                                    }
-                                    setShowChangePinModal(true);
-                                }}
-                            />
-                        </View>
-                    )}
-                    {!syncEnabled && (
-                        <View style={{ marginTop: spacing.m }}>
-                            <Button
-                                title="Enable Sync & Choose Security"
-                                onPress={() => {
-                                    if (!isAuthenticated || isGuest) {
-                                        Alert.alert('Sign in required', 'Please sign in to enable sync.');
-                                        return;
-                                    }
-                                    setShowEnableSyncModal(true);
-                                }}
-                            />
-                        </View>
-                    )}
-                </View>
-
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>Preferences</Text>
-                    </View>
-
-                    <View style={styles.preferenceRow}>
-                        <View style={{ flex: 1, marginRight: spacing.s }}>
-                            <Text style={styles.preferenceTitle}>Auto-transcribe recordings</Text>
-                            <Text style={styles.preferenceDescription}>
-                                Automatically transcribe audio after recording
-                            </Text>
-                        </View>
-                        <Switch
-                            value={transcriptionEnabled}
-                            onValueChange={(val) => {
-                                toggleTranscription(val);
-                            }}
-                            trackColor={{ false: colors.border, true: colors.primary }}
-                            thumbColor={colors.surface}
-                            ios_backgroundColor={colors.border}
-                        />
-                    </View>
-                </View>
-
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>App Lock</Text>
                         <TouchableOpacity
-                            style={styles.sectionToggleButton}
-                            onPress={() => setIsAppLockExpanded(prev => !prev)}
-                            activeOpacity={0.8}
+                            onPress={() => setShowSecurityInfoModal(true)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
-                            <Text style={styles.sectionToggleText}>{isAppLockExpanded ? 'Hide' : 'Show'}</Text>
-                            <MaterialIcons
-                                name={isAppLockExpanded ? 'expand-less' : 'expand-more'}
-                                size={18}
-                                color={colors.textSecondary}
-                            />
+                            <MaterialIcons name="help-outline" size={18} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
-                    <View style={styles.securityRow}>
-                        <Text style={styles.securityLabel}>Status</Text>
-                        <Text style={styles.securityValue}>{appLockStatusLabel}</Text>
-                    </View>
-                    {isAppLockExpanded ? (
-                        <>
-                            <Text style={styles.sectionHint}>
-                                One lock for app UI access. Sync encryption key is managed separately.
-                            </Text>
-                            {!appLockAvailable && (
-                                <Text style={styles.securityCopy}>
-                                    App Lock is disabled in web builds.
-                                </Text>
+
+                    <View style={styles.securityRowMinimal}>
+                        <View style={styles.securityRowLeft}>
+                            <View style={[styles.iconContainer, { backgroundColor: !syncEnabled ? colors.backgroundSecondary : syncLocked ? colors.warning + '20' : colors.accentGreen + '20' }]}>
+                                <MaterialIcons
+                                    name={!syncEnabled ? "cloud-off" : syncLocked ? "lock" : "cloud-done"}
+                                    size={16}
+                                    color={!syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen}
+                                />
+                            </View>
+                            <Text style={styles.securityLabelMinimal}>Sync</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <Text style={[styles.securityValueMinimal, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
+                            {!syncEnabled && (
+                                <TouchableOpacity style={styles.smallButton} onPress={() => setShowEnableSyncModal(true)}>
+                                    <Text style={styles.smallButtonText}>Enable</Text>
+                                </TouchableOpacity>
                             )}
-                            <View style={styles.securityRow}>
-                                <Text style={styles.securityLabel}>Auto-lock</Text>
-                                <Text style={styles.securityValue}>{autoLockTimeout}</Text>
-                            </View>
+                            {syncEnabled && syncLocked && (
+                                <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
+                                    <Text style={styles.smallButtonText}>Unlock</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
 
-                            <View style={styles.securityRow}>
-                                <Text style={styles.securityLabel}>Biometric unlock</Text>
-                                <Text style={styles.securityValue}>
-                                    {!appLockAvailable ? 'Unavailable'
-                                        : !biometricAvailable ? 'Not supported'
-                                            : biometricEnabled ? 'Enabled' : 'Disabled'}
-                                </Text>
-                            </View>
+                    <View style={styles.separator} />
 
-                            <View style={styles.timeoutRow}>
-                                {(['immediate', '30s', '1m', '5m', '15m'] as const).map((item) => (
-                                    <TouchableOpacity
-                                        key={item}
-                                        style={[
-                                            styles.timeoutChip,
-                                            autoLockTimeout === item && styles.timeoutChipActive,
-                                        ]}
-                                        onPress={() => {
-                                            void setAutoLockTimeout(item);
-                                        }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.timeoutChipText,
-                                                autoLockTimeout === item && styles.timeoutChipTextActive,
-                                            ]}
-                                        >
-                                            {item}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
+                    <View style={styles.securityRowMinimal}>
+                        <View style={styles.securityRowLeft}>
+                            <View style={[styles.iconContainer, { backgroundColor: pinStatusColor + '20' }]}>
+                                <MaterialIcons name="vpn-key" size={16} color={pinStatusColor} />
                             </View>
+                            <Text style={styles.securityLabelMinimal}>Key</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <Text style={[styles.securityValueMinimal, { color: pinStatusColor }]}>{pinStatusLabel}</Text>
+                            {syncEnabled && !syncLocked && (
+                                <TouchableOpacity style={styles.iconButton} onPress={() => setShowChangePinModal(true)}>
+                                    <MaterialIcons name="edit" size={16} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
 
+                    <View style={styles.separator} />
+
+                    <TouchableOpacity
+                        style={styles.preferenceRow}
+                        onPress={() => setIsAppLockExpanded(!isAppLockExpanded)}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <View style={[styles.iconContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                                <MaterialIcons name={appLockStatus === 'locked' ? "lock" : "lock-open"} size={16} color={colors.text} />
+                            </View>
+                            <Text style={styles.preferenceTitle}>App Lock</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <Text style={styles.preferenceValue}>{appLockStatusLabel}</Text>
+                            <MaterialIcons name={isAppLockExpanded ? "expand-less" : "expand-more"} size={20} color={colors.textSecondary} />
+                        </View>
+                    </TouchableOpacity>
+
+                    {isAppLockExpanded && (
+                        <View style={{ marginTop: spacing.s, paddingLeft: 40 }}>
                             <View style={styles.preferenceRow}>
-                                <View style={{ flex: 1, marginRight: spacing.s }}>
-                                    <Text style={styles.preferenceTitle}>Use biometrics for App Lock</Text>
-                                    <Text style={styles.preferenceDescription}>
-                                        Fast unlock after PIN setup. Requires unlocked App Lock to change.
-                                    </Text>
-                                </View>
+                                <Text style={styles.preferenceTitleSmall}>FaceID / Biometrics</Text>
                                 <Switch
                                     value={biometricEnabled}
-                                    onValueChange={(value) => {
-                                        void toggleAppLockBiometrics(value);
-                                    }}
-                                    disabled={!appLockAvailable || !biometricAvailable}
-                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    onValueChange={toggleAppLockBiometrics}
+                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
                                     thumbColor={colors.surface}
-                                    ios_backgroundColor={colors.border}
+                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                 />
                             </View>
-
                             <View style={styles.preferenceRow}>
-                                <View style={{ flex: 1, marginRight: spacing.s }}>
-                                    <Text style={styles.preferenceTitle}>Hide app switcher preview</Text>
-                                    <Text style={styles.preferenceDescription}>
-                                        Obscure content when app goes background
-                                    </Text>
-                                </View>
+                                <Text style={styles.preferenceTitleSmall}>Hide in Switcher</Text>
                                 <Switch
                                     value={hideAppSwitcherContent}
-                                    onValueChange={(value) => {
-                                        void setHideInAppSwitcher(value);
-                                    }}
-                                    trackColor={{ false: colors.border, true: colors.primary }}
+                                    onValueChange={setHideInAppSwitcher}
+                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
                                     thumbColor={colors.surface}
-                                    ios_backgroundColor={colors.border}
-                                />
-                            </View>
-
-                            <View style={{ marginTop: spacing.s }}>
-                                <Button
-                                    title="Manage App Lock"
-                                    onPress={() => {
-                                        if (!appLockAvailable) {
-                                            Alert.alert('App Lock unavailable', 'App Lock works only in iOS/Android app builds.');
-                                            return;
-                                        }
-                                        navigation.navigate('AppLock');
-                                    }}
+                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                 />
                             </View>
                             {appLockUnlocked && (
-                                <View style={{ marginTop: spacing.s }}>
-                                    <Button title="Lock App Now" variant="outline" onPress={lockApp} />
-                                </View>
+                                <TouchableOpacity style={styles.smallButtonOutlined} onPress={lockApp}>
+                                    <Text style={styles.smallButtonTextOutlined}>Lock Now</Text>
+                                </TouchableOpacity>
                             )}
-                        </>
-                    ) : (
-                        <Text style={[styles.sectionHint, { marginBottom: 0 }]}>
-                            Tap Show to view App Lock settings.
-                        </Text>
+                        </View>
                     )}
                 </View>
 
+
+
+
+
+                {/* AI Configuration */}
+
+                {/* AI Configuration */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <Text style={styles.sectionTitle}>AI Provider</Text>
-                    </View>
-                    <Text style={styles.sectionHint}>Choose where prompts and transcription are processed.</Text>
-
-                    {/* Agent Mode Toggle */}
-                    <View style={styles.agentModeCard}>
-                        <View style={styles.agentModeHeader}>
-                            <View style={styles.agentModeTitleRow}>
-                                <View style={styles.agentModeIcon}>
-                                    <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled ? 1 : 0.4 }}>
-                                        <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled ? colors.primary : colors.textSecondary} />
-                                    </Animated.View>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.agentModeTitle}>Agent Mode</Text>
-                                    <Text style={styles.agentModeDescription}>
-                                        Intellectual assistant for note creation
-                                    </Text>
-                                    {aiProvider !== 'secure_llm' && (
-                                        <Text style={styles.agentModeWarning}>
-                                            Requires Secure LLM
-                                        </Text>
-                                    )}
-                                </View>
-                                <Switch
-                                    value={agentModeEnabled && aiProvider === 'secure_llm'}
-                                    onValueChange={toggleAgentMode}
-                                    trackColor={{ false: colors.border, true: colors.primary }}
-                                    thumbColor={colors.surface}
-                                    ios_backgroundColor={colors.border}
-                                    disabled={aiProvider !== 'secure_llm'}
-                                />
-                            </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <MaterialIcons name="psychology" size={18} color={colors.primary} />
+                            <Text style={styles.sectionTitle}>AI Model</Text>
                         </View>
                     </View>
 
-                    <View style={styles.providerSwitcher}>
+                    {/* Agent Mode Toggle */}
+                    <View style={[styles.preferenceRow, { marginBottom: spacing.m }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled ? 1 : 0.4 }}>
+                                <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled ? colors.primary : colors.textSecondary} />
+                            </Animated.View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>Agent Mode</Text>
+                                <Text style={styles.preferenceDescription}>Analyze notes & answer questions</Text>
+                            </View>
+                        </View>
+                        <Switch
+                            value={agentModeEnabled}
+                            onValueChange={toggleAgentMode}
+                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                            thumbColor={colors.surface}
+                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                        />
+                    </View>
+
+                    <View style={styles.separator} />
+
+                    {/* Compact Provider Selector */}
+                    <View style={styles.compactProviderSelector}>
                         {providerOptions.map((option) => {
-                            const isActive = aiProvider === option.key;
-                            const isLocked = option.isLocked || false;
+                            const isActive = option.key === aiProvider;
+                            const isLocked = option.isLocked;
+
                             return (
                                 <TouchableOpacity
                                     key={option.key}
                                     style={[
-                                        styles.providerPill,
-                                        isActive && styles.providerPillActive,
-                                        isLocked && !isActive && styles.providerPillLocked,
+                                        styles.compactProviderOption,
+                                        isActive && styles.compactProviderOptionActive,
+                                        isLocked && styles.compactProviderOptionLocked
                                     ]}
                                     onPress={() => updateProvider(option.key)}
-                                    activeOpacity={0.9}
+                                    disabled={activeProvider?.key === option.key}
                                 >
-                                    <View
-                                        style={[
-                                            styles.providerPillIcon,
-                                            { backgroundColor: isActive ? option.accent : colors.backgroundSecondary },
-                                        ]}
-                                    >
-                                        <MaterialIcons
-                                            name={option.icon as any}
-                                            size={18}
-                                            color={isActive ? colors.surface : isLocked ? colors.textSecondary : colors.textSecondary}
-                                        />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <View style={styles.providerPillTitleRow}>
-                                            <Text style={[styles.providerPillTitle, isLocked && styles.providerPillTitleLocked]}>{option.title}</Text>
-                                            {isLocked && (
-                                                <View style={styles.lockBadge}>
-                                                    <ProIcon
-                                                        size={10}
-                                                        containerSize={18}
-                                                        backgroundColor="#F3E8FF"
-                                                        borderColor="#D8B4FE"
-                                                    />
-                                                    <Text style={styles.lockBadgeText}>Pro</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <Text style={[styles.providerPillSubtitle, isLocked && styles.providerPillSubtitleLocked]}>
-                                            {isLocked ? option.proMessage : option.blurb}
-                                        </Text>
-                                    </View>
-                                    {!isLocked && (
-                                        <View style={[styles.radio, isActive && styles.radioActive]}>
-                                            {isActive && <View style={styles.radioDot} />}
-                                        </View>
+                                    {option.key === 'openai' ? (
+                                        <Text style={[styles.providerGlyphText, { color: isActive ? colors.surface : colors.textSecondary }]}>GPT</Text>
+                                    ) : (
+                                        <MaterialIcons name={option.icon as any} size={16} color={isActive ? colors.surface : colors.textSecondary} />
                                     )}
-                                    {isLocked && (
-                                        <MaterialIcons name="lock-outline" size={20} color={colors.textSecondary} />
-                                    )}
+                                    <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]}>
+                                        {option.title.replace(' Compatible', '').replace(' Hosted', '')}
+                                    </Text>
+                                    {isLocked && <MaterialIcons name="lock" size={12} color={colors.accentPurple} />}
                                 </TouchableOpacity>
                             );
                         })}
                     </View>
 
-                    {activeProvider && (
-                        <>
-                            <View style={styles.activeProviderCard}>
-                                <View style={[styles.activeProviderIcon, { backgroundColor: activeProvider.accent }]}>
-                                    <MaterialIcons name={activeProvider.icon as any} size={22} color={colors.surface} />
+                    {/* Setup for OpenAI/SelfHosted */}
+                    {usingOpenAI && (() => {
+                        const isStandardOpenAI = normalizeOpenAIBaseUrl(openAIBaseUrl) === DEFAULT_OPENAI_BASE_URL;
+
+                        return (
+                            <View style={styles.openAIConfigCard}>
+                                {/* Header with icon */}
+                                <View style={styles.openAIConfigHeader}>
+                                    <View style={[styles.iconContainer, { backgroundColor: isStandardOpenAI ? '#10A37F15' : colors.backgroundSecondary }]}>
+                                        <MaterialIcons
+                                            name={isStandardOpenAI ? 'chat' : 'dns'}
+                                            size={20}
+                                            color={isStandardOpenAI ? '#10A37F' : colors.primary}
+                                        />
+                                    </View>
+                                    <Text style={styles.openAIConfigTitle}>
+                                        {isStandardOpenAI ? 'ChatGPT' : 'Custom Server'}
+                                    </Text>
                                 </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.activeProviderTitle}>{activeProvider.title}</Text>
-                                    <Text style={styles.activeProviderDescription}>{activeProvider.description}</Text>
-                                    <View style={styles.chipRow}>
-                                        {activeProvider.chips.map((chip) => (
-                                            <View key={chip} style={styles.microChip}>
-                                                <Text
-                                                    style={styles.microChipText}
-                                                    numberOfLines={1}
-                                                    adjustsFontSizeToFit
-                                                    minimumFontScale={0.8}
-                                                >
-                                                    {chip}
-                                                </Text>
-                                            </View>
-                                        ))}
+
+                                {/* Base URL - only show for custom */}
+                                {!isStandardOpenAI && (
+                                    <View style={styles.openAIInputGroup}>
+                                        <Text style={styles.openAILabel}>Base URL</Text>
+                                        <TextInput
+                                            value={openAIBaseUrl}
+                                            onChangeText={setOpenAIBaseUrlState}
+                                            placeholder="https://api.openai.com/v1"
+                                            autoCapitalize="none"
+                                            style={styles.openAIInput}
+                                            placeholderTextColor={colors.textSecondary}
+                                        />
+                                    </View>
+                                )}
+
+                                {/* API Key */}
+                                <View style={styles.openAIInputGroup}>
+                                    <Text style={styles.openAILabel}>API Key</Text>
+                                    <View style={styles.openAISecretRow}>
+                                        <TextInput
+                                            value={apiKey}
+                                            onChangeText={setApiKeyState}
+                                            placeholder="sk-..."
+                                            autoCapitalize="none"
+                                            secureTextEntry={!showOpenAIKey}
+                                            style={styles.openAIInput}
+                                            placeholderTextColor={colors.textSecondary}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.openAIEyeButton}
+                                            onPress={() => setShowOpenAIKey(!showOpenAIKey)}
+                                        >
+                                            <MaterialIcons
+                                                name={showOpenAIKey ? 'visibility' : 'visibility-off'}
+                                                size={18}
+                                                color={colors.textSecondary}
+                                            />
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
-                            </View>
-                        </>
-                    )}
 
-                    {usingOpenAI && (
-                        <View style={styles.settingsPanel}>
-                            <View style={styles.settingsPanelHeader}>
-                                <View style={styles.inlineTitle}>
-                                    <MaterialIcons name="key" size={18} color={colors.primary} />
-                                    <Text style={styles.panelTitle}>OpenAI Access</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.infoToggleRow}
-                                onPress={() => setShowOpenAIInfo((prev) => !prev)}
-                                activeOpacity={0.85}
-                            >
-                                <MaterialIcons
-                                    name={showOpenAIInfo ? 'expand-less' : 'expand-more'}
-                                    size={20}
-                                    color={colors.textSecondary}
-                                />
-                                <Text style={styles.infoToggleText}>
-                                    {showOpenAIInfo ? 'Hide details' : 'How it works?'}
-                                </Text>
-                            </TouchableOpacity>
-                            {showOpenAIInfo && (
-                                <View style={styles.infoBox}>
-                                    <Text style={styles.infoBoxText}>
-                                        API key is stored on device and used only for OpenAI requests.
-                                    </Text>
-                                    <Text style={styles.infoBoxText}>
-                                        Key can be changed anytime — saves automatically.
-                                    </Text>
-                                </View>
-                            )}
-                            <View style={styles.inputCluster}>
-                                <Text style={styles.label}>OpenAI API Key</Text>
-                                <View style={styles.secretFieldRow}>
-                                    <TextInput
-                                        value={apiKey}
-                                        onChangeText={setApiKeyState}
-                                        placeholder="sk-..."
-                                        secureTextEntry={!showOpenAIKey}
-                                        style={[styles.compactInput, styles.flex]}
-                                        containerStyle={[styles.inputContainer, styles.noMarginContainer, styles.flex]}
-                                    />
+                                {/* Toggle for standard OpenAI */}
+                                {isStandardOpenAI && (
                                     <TouchableOpacity
-                                        style={styles.eyeButton}
-                                        onPress={() => setShowOpenAIKey((prev) => !prev)}
-                                        activeOpacity={0.8}
+                                        style={styles.openAICustomToggle}
+                                        onPress={() => setOpenAIBaseUrlState('https://')}
                                     >
-                                        <MaterialIcons
-                                            name={showOpenAIKey ? 'visibility-off' : 'visibility'}
-                                            size={20}
-                                            color={colors.textSecondary}
-                                        />
+                                        <MaterialIcons name="settings" size={14} color={colors.textSecondary} />
+                                        <Text style={styles.openAICustomToggleText}>Use custom URL</Text>
                                     </TouchableOpacity>
-                                </View>
+                                )}
+
+                                {/* Status message */}
+                                {openAITestStatus.message && (
+                                    <Text style={[
+                                        styles.openAIStatusText,
+                                        openAITestStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError
+                                    ]}>
+                                        {openAITestStatus.message}
+                                    </Text>
+                                )}
+
+                                {/* Test button */}
                                 <TouchableOpacity
-                                    style={[
-                                        styles.testActionButton,
-                                        testingConnection && styles.testActionButtonDisabled,
-                                    ]}
+                                    style={styles.openAITestButton}
                                     onPress={handleTestConnection}
-                                    activeOpacity={0.9}
                                     disabled={testingConnection}
                                 >
                                     {testingConnection ? (
-                                        <ActivityIndicator color={colors.surface} />
+                                        <ActivityIndicator size="small" color={colors.text} />
                                     ) : (
                                         <>
-                                            <MaterialIcons name="bolt" size={18} color={colors.surface} />
-                                            <Text style={styles.testActionText}>Test Connection</Text>
+                                            <MaterialIcons name="wifi-tethering" size={16} color={colors.text} />
+                                            <Text style={styles.openAITestButtonText}>Test Connection</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
-                                {openAITestStatus.type !== 'idle' && (
-                                    <View style={styles.statusRow}>
-                                        <MaterialIcons
-                                            name={openAITestStatus.type === 'success' ? 'check-circle' : 'error-outline'}
-                                            size={18}
-                                            color={openAITestStatus.type === 'success' ? colors.accentGreen : colors.error}
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.statusText,
-                                                openAITestStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError,
-                                            ]}
-                                        >
-                                            {openAITestStatus.message}
-                                        </Text>
-                                    </View>
-                                )}
                             </View>
-                        </View>
-                    )}
+                        );
+                    })()}
 
-                    {usingSelfHosted && (
-                        <View style={styles.settingsPanel}>
-                            <View style={styles.settingsPanelHeader}>
-                                <View style={styles.inlineTitle}>
-                                    <MaterialIcons name="router" size={18} color={colors.accentGreen} />
-                                    <Text style={styles.panelTitle}>Self-Hosted Access</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.infoToggleRow}
-                                onPress={() => setShowSelfHostedInfo((prev) => !prev)}
-                                activeOpacity={0.85}
-                            >
-                                <MaterialIcons
-                                    name={showSelfHostedInfo ? 'expand-less' : 'expand-more'}
-                                    size={20}
-                                    color={colors.textSecondary}
-                                />
-                                <Text style={styles.infoToggleText}>
-                                    {showSelfHostedInfo ? 'Hide details' : 'How to setup?'}
-                                </Text>
+                </View>
+
+                {/* Sign Out & About */}
+                <View style={{ marginTop: spacing.l, marginBottom: spacing.xl, gap: spacing.m }}>
+                    <TouchableOpacity
+                        style={styles.signOutButton}
+                        onPress={handleSignOut}
+                    >
+                        <MaterialIcons name="logout" size={18} color={colors.error} />
+                        <Text style={styles.signOutText}>Sign Out</Text>
+                    </TouchableOpacity>
+
+                    <View style={{ alignItems: 'center', gap: spacing.s, opacity: 0.7 }}>
+                        <View style={{ flexDirection: 'row', gap: spacing.l }}>
+                            <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>
+                                <Text style={styles.legalLink}>Privacy Policy</Text>
                             </TouchableOpacity>
-                            {showSelfHostedInfo && (
-                                <View style={styles.infoBox}>
-                                    <Text style={styles.infoBoxText}>
-                                        Enter full URL to your API (with port and /api/v1).
-                                    </Text>
-                                    <Text style={styles.infoBoxText}>
-                                        API Secret Key comes from your .env. It is encrypted and stored automatically.
-                                    </Text>
-                                </View>
-                            )}
-                            <View style={styles.inputCluster}>
-                                <Text style={styles.label}>Server URL</Text>
-                                <TextInput
-                                    value={selfHostedUrl}
-                                    onChangeText={setSelfHostedUrlState}
-                                    placeholder="http://192.168.1.100:8000/api/v1"
-                                    style={styles.compactInput}
-                                    containerStyle={styles.inputContainer}
-                                />
-
-                                <Text style={[styles.label, styles.labelSpacing]}>API Secret Key</Text>
-                                <View style={styles.secretFieldRow}>
-                                    <TextInput
-                                        value={selfHostedApiKey}
-                                        onChangeText={setSelfHostedApiKeyState}
-                                        placeholder="your_secret_api_key_here"
-                                        secureTextEntry={!showSelfHostedKey}
-                                        style={[styles.compactInput, styles.flex]}
-                                        containerStyle={[styles.inputContainer, styles.noMarginContainer, styles.flex]}
-                                    />
-                                    <TouchableOpacity
-                                        style={styles.eyeButton}
-                                        onPress={() => setShowSelfHostedKey((prev) => !prev)}
-                                        activeOpacity={0.8}
-                                    >
-                                        <MaterialIcons
-                                            name={showSelfHostedKey ? 'visibility-off' : 'visibility'}
-                                            size={20}
-                                            color={colors.textSecondary}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.testActionButton,
-                                        testingSelfHosted && styles.testActionButtonDisabled,
-                                    ]}
-                                    onPress={handleTestSelfHostedConnection}
-                                    activeOpacity={0.9}
-                                    disabled={testingSelfHosted}
-                                >
-                                    {testingSelfHosted ? (
-                                        <ActivityIndicator color={colors.surface} />
-                                    ) : (
-                                        <>
-                                            <MaterialIcons name="bolt" size={18} color={colors.surface} />
-                                            <Text style={styles.testActionText}>Test Connection</Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-                                {selfHostedTestStatus.type !== 'idle' && (
-                                    <View style={styles.statusRow}>
-                                        <MaterialIcons
-                                            name={selfHostedTestStatus.type === 'success' ? 'check-circle' : 'error-outline'}
-                                            size={18}
-                                            color={selfHostedTestStatus.type === 'success' ? colors.accentGreen : colors.error}
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.statusText,
-                                                selfHostedTestStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError,
-                                            ]}
-                                        >
-                                            {selfHostedTestStatus.message}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
+                            <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')}>
+                                <Text style={styles.legalLink}>Terms of Service</Text>
+                            </TouchableOpacity>
                         </View>
-                    )}
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com')}>
+                            <Text style={styles.versionText}>Vaulto v1.0.24</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
-
-
-
-                <View style={styles.minimalAppInfo}>
-                    <Text style={styles.minimalAppInfoText}>
-                        Version {Constants.expoConfig?.version || '1.0.0'} • <Text style={styles.minimalAppInfoLink} onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>Privacy</Text> • <Text style={styles.minimalAppInfoLink} onPress={() => Linking.openURL('https://vaultonote.com/terms')}>Terms</Text>
-                    </Text>
-                </View>
-
-                {
-                    isAuthenticated && (
-                        <View style={[styles.footer, { marginBottom: spacing.xxl + spacing.l }]}>
-                            <Button
-                                title="Sign Out"
-                                onPress={handleSignOut}
-                                variant="destructive"
-                                style={[styles.button, { backgroundColor: 'transparent' }]}
-                            />
-                        </View>
-                    )
-                }
-
-
-
+                <View style={{ height: 20 }} />
 
             </ScrollView >
 
@@ -1446,6 +1086,23 @@ export const SettingsScreen = () => {
                 }}
             />
 
+            <SignInRequiredModal
+                visible={!!providerGate}
+                title={providerGate?.kind === 'upgrade' ? 'Upgrade to Pro' : 'Sign in to upgrade'}
+                message={providerGate ? `${providerGate.providerTitle} is available in Pro.` : ''}
+                signInLabel={providerGate?.kind === 'upgrade' ? 'Upgrade' : 'Sign In'}
+                onClose={() => setProviderGate(null)}
+                onSignIn={() => {
+                    const kind = providerGate?.kind;
+                    setProviderGate(null);
+                    if (kind === 'upgrade') {
+                        navigation.navigate('Paywall');
+                    } else {
+                        navigation.navigate('SignIn');
+                    }
+                }}
+            />
+
             <EnableSyncModal
                 visible={showEnableSyncModal}
                 onClose={() => setShowEnableSyncModal(false)}
@@ -1503,6 +1160,10 @@ export const SettingsScreen = () => {
                 }}
                 onCancel={() => setShowSignOutDialog(false)}
             />
+            <SecurityInfoModal
+                visible={showSecurityInfoModal}
+                onClose={() => setShowSecurityInfoModal(false)}
+            />
         </ScreenContainer >
     );
 };
@@ -1513,18 +1174,6 @@ const styles = StyleSheet.create({
         color: colors.error,
         marginTop: 4,
         fontWeight: '600',
-    },
-    scrollContent: {
-        paddingVertical: spacing.s,
-        gap: spacing.m,
-        paddingBottom: spacing.xxl, // Ensure bottom content is visible
-    },
-    topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-        marginBottom: spacing.m,
-        marginTop: spacing.xl,
     },
     backButton: {
         width: 42,
@@ -1554,18 +1203,6 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.primary,
         fontWeight: '700',
-    },
-    card: {
-        backgroundColor: colors.surface,
-        borderRadius: 20,
-        padding: spacing.l,
-        shadowColor: colors.cardShadow,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: colors.border,
     },
     proStatusCard: {
         marginTop: spacing.m,
@@ -1601,6 +1238,133 @@ const styles = StyleSheet.create({
         ...typography.captionBold,
         color: colors.primary,
         fontSize: 11,
+    },
+    scrollContent: {
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        gap: spacing.m,
+        paddingBottom: spacing.xxl,
+    },
+    card: {
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        padding: spacing.m, // Reduced from spacing.l
+        borderWidth: 1,
+        borderColor: colors.border,
+        // Removed heavy shadow for flatness/compactness
+    },
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        paddingHorizontal: spacing.m,
+        paddingTop: spacing.l, // Status bar
+        paddingBottom: spacing.s,
+    },
+    userAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    userAvatarText: {
+        ...typography.h3,
+        color: colors.surface,
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    userName: {
+        ...typography.h3,
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    preferenceTitleSmall: {
+        ...typography.body,
+        fontSize: 14,
+        color: colors.text,
+    },
+    preferenceValue: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    compactProviderSelector: {
+        flexDirection: 'row',
+        gap: spacing.s,
+        marginBottom: spacing.s,
+    },
+    compactProviderOption: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 10,
+        gap: 6,
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    compactProviderOptionActive: {
+        backgroundColor: colors.primary,
+    },
+    compactProviderOptionLocked: {
+        opacity: 0.6,
+    },
+    compactProviderText: {
+        ...typography.captionBold,
+        color: colors.textSecondary,
+        fontSize: 12,
+    },
+    compactProviderTextActive: {
+        color: colors.surface,
+    },
+    compactConfigBox: {
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 12,
+        padding: spacing.s,
+    },
+    inputContainerCompact: {
+        marginBottom: spacing.xs,
+    },
+    labelCompact: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginBottom: 2,
+        fontSize: 11,
+    },
+    compactInput: {
+        backgroundColor: colors.surface,
+        borderRadius: 8,
+        paddingVertical: 4, // Very compact
+        paddingHorizontal: 8,
+        fontSize: 13,
+        borderWidth: 1,
+        borderColor: colors.border,
+        height: 32,
+        color: colors.text,
+    },
+    eyeButtonCompact: {
+        height: 32,
+        width: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    smallButtonOutlined: {
+        marginTop: spacing.s,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignSelf: 'flex-start',
+    },
+    smallButtonTextOutlined: {
+        ...typography.captionBold,
+        color: colors.text,
     },
     proStatusAction: {
         borderRadius: 12,
@@ -2017,6 +1781,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    providerGlyphText: {
+        fontSize: 12,
+        fontWeight: '800',
+        letterSpacing: 0.6,
+    },
     providerPillTitle: {
         ...typography.h3,
         fontSize: 16,
@@ -2212,9 +1981,6 @@ const styles = StyleSheet.create({
     inputContainer: {
         marginBottom: spacing.xs,
     },
-    compactInput: {
-        marginBottom: spacing.xs,
-    },
     secretFieldRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2339,34 +2105,9 @@ const styles = StyleSheet.create({
         paddingVertical: spacing.xs,
         marginBottom: spacing.s,
     },
-    userAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    userAvatarText: {
-        ...typography.h2,
-        color: colors.surface,
-        fontSize: 20,
-        fontWeight: '700',
-    },
     userInfoText: {
         flex: 1,
         gap: 2,
-    },
-    userName: {
-        ...typography.h3,
-        fontSize: 17,
-        fontWeight: '600',
-        color: colors.text,
     },
     userEmail: {
         ...typography.bodySmall,
@@ -2403,5 +2144,174 @@ const styles = StyleSheet.create({
     },
     minimalAppInfoLink: {
         textDecorationLine: 'underline',
+    },
+    securityRowMinimal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: spacing.s,
+    },
+    securityRowLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+        flex: 1,
+    },
+    iconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    securityLabelMinimal: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        fontWeight: '500',
+    },
+    securityValueMinimal: {
+        ...typography.bodySmall,
+        fontWeight: '600',
+        marginTop: 2,
+    },
+    smallButton: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    smallButtonText: {
+        ...typography.caption,
+        color: colors.surface,
+    },
+    iconButton: {
+        padding: spacing.s,
+    },
+    resetLink: {
+        alignItems: 'center',
+        paddingVertical: spacing.s,
+        marginTop: spacing.xs,
+    },
+    resetLinkText: {
+        ...typography.caption,
+        color: colors.error,
+        fontWeight: '600',
+    },
+    separator: {
+        height: 1,
+        backgroundColor: colors.border,
+        opacity: 0.5,
+    },
+    signOutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.s,
+        paddingVertical: spacing.m,
+        borderRadius: 12,
+        backgroundColor: colors.error + '10',
+        borderWidth: 1,
+        borderColor: colors.error + '20',
+    },
+    signOutText: {
+        ...typography.button,
+        color: colors.error,
+        fontSize: 15,
+    },
+    legalLink: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        textDecorationLine: 'underline',
+    },
+    versionText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    // OpenAI Configuration Card Styles
+    openAIConfigCard: {
+        marginTop: spacing.m,
+        padding: spacing.m,
+        borderRadius: 14,
+        backgroundColor: colors.backgroundSecondary,
+        borderWidth: 1,
+        borderColor: colors.border,
+        gap: spacing.m,
+    },
+    openAIConfigHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    openAIConfigTitle: {
+        ...typography.h3,
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    openAIInputGroup: {
+        gap: spacing.xs,
+    },
+    openAILabel: {
+        ...typography.caption,
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    openAIInput: {
+        ...typography.body,
+        fontSize: 14,
+        color: colors.text,
+        backgroundColor: colors.surface,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    openAISecretRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    openAIEyeButton: {
+        position: 'absolute',
+        right: spacing.s,
+        top: '50%',
+        transform: [{ translateY: -9 }],
+        padding: spacing.xs,
+    },
+    openAICustomToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        alignSelf: 'flex-start',
+        paddingVertical: spacing.xs,
+    },
+    openAICustomToggleText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        fontSize: 12,
+    },
+    openAIStatusText: {
+        ...typography.caption,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    openAITestButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        borderRadius: 10,
+        backgroundColor: colors.backgroundSecondary,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    openAITestButtonText: {
+        ...typography.button,
+        fontSize: 13,
+        color: colors.text,
     },
 });

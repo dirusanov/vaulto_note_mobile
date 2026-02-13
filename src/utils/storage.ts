@@ -5,7 +5,8 @@ import { Platform } from 'react-native';
 import { UserProfile } from '../api/auth';
 import { KeyBundle } from '../crypto/e2ee';
 
-export type AIProvider = 'secure_llm' | 'openai' | 'selfhosted';
+// NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
+export type AIProvider = 'secure_llm' | 'openai';
 export type CryptoMode = 'local' | 'e2ee';
 export type CustodyMode = 'standard' | 'strict_seed';
 export type AppLockTimeout = 'immediate' | '30s' | '1m' | '5m' | '15m';
@@ -26,8 +27,10 @@ const MASTER_KEY_PREFIX = 'vaulto_master_key_v1';
 const SYNC_RESET_BLOCK_PREFIX = 'vaulto_sync_reset_block_v1';
 const CUSTODY_MODE_PREFIX = 'vaulto_custody_mode_v1';
 
-const SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
-const SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
+// OpenAI-compatible settings (legacy self-hosted keys are read for migration).
+const OPENAI_BASE_URL_KEY = 'vaulto_openai_base_url_v1';
+const LEGACY_SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
+const LEGACY_SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
 const LOCAL_ONLY_WARNING_DISMISSED_KEY = 'vaulto_local_only_warning_dismissed_v1';
 const PRIVATE_AI_ALLOWED_KEY = 'vaulto_private_ai_allowed_v1';
 const APP_LOCK_AUTOBLOCK_KEY = 'vaulto_app_lock_autoblock_v1';
@@ -336,12 +339,35 @@ export const setOpenAIApiKey = async (apiKey: string): Promise<void> => {
     }
 };
 
+export const getOpenAIBaseUrl = async (): Promise<string | null> => {
+    try {
+        const value = await AsyncStorage.getItem(OPENAI_BASE_URL_KEY);
+        if (value) return value;
+        // Backward-compat: previously stored as "self-hosted url".
+        return await AsyncStorage.getItem(LEGACY_SELF_HOSTED_URL_KEY);
+    } catch (e) {
+        console.error('Failed to get OpenAI base URL', e);
+        return null;
+    }
+};
+
+export const setOpenAIBaseUrl = async (baseUrl: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(OPENAI_BASE_URL_KEY, baseUrl);
+    } catch (e) {
+        console.error('Failed to set OpenAI base URL', e);
+    }
+};
+
 // AI Provider
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
-        if (value === 'openai' || value === 'secure_llm' || value === 'selfhosted') {
-            return value as AIProvider;
+        if (value === 'openai' || value === 'secure_llm') return value;
+        if (value === 'selfhosted') {
+            // Migrate legacy self-hosted to OpenAI-compatible.
+            await AsyncStorage.setItem(AI_PROVIDER_KEY, 'openai');
+            return 'openai';
         }
         // Fallback or migration: mapping 'local' to 'secure_llm' logic could go here, but for now default to 'secure_llm'
         return 'secure_llm';
@@ -405,38 +431,22 @@ export const setMaxRecordingDuration = async (seconds: number): Promise<void> =>
     }
 };
 
-// Self-Hosted Backend Settings
-export const getSelfHostedUrl = async (): Promise<string | null> => {
+// Legacy Self-Hosted Backend Settings (kept for reading during migration).
+export const getLegacySelfHostedUrl = async (): Promise<string | null> => {
     try {
-        return await AsyncStorage.getItem(SELF_HOSTED_URL_KEY);
+        return await AsyncStorage.getItem(LEGACY_SELF_HOSTED_URL_KEY);
     } catch (e) {
-        console.error('Failed to get self-hosted URL', e);
+        console.error('Failed to get legacy self-hosted URL', e);
         return null;
     }
 };
 
-export const setSelfHostedUrl = async (url: string): Promise<void> => {
+export const getLegacySelfHostedApiKey = async (): Promise<string | null> => {
     try {
-        await AsyncStorage.setItem(SELF_HOSTED_URL_KEY, url);
+        return await secureGet(LEGACY_SELF_HOSTED_API_KEY);
     } catch (e) {
-        console.error('Failed to set self-hosted URL', e);
-    }
-};
-
-export const getSelfHostedApiKey = async (): Promise<string | null> => {
-    try {
-        return await secureGet(SELF_HOSTED_API_KEY);
-    } catch (e) {
-        console.error('Failed to get self-hosted API key', e);
+        console.error('Failed to get legacy self-hosted API key', e);
         return null;
-    }
-};
-
-export const setSelfHostedApiKey = async (apiKey: string): Promise<void> => {
-    try {
-        await secureSet(SELF_HOSTED_API_KEY, apiKey);
-    } catch (e) {
-        console.error('Failed to set self-hosted API key', e);
     }
 };
 

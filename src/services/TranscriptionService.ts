@@ -1,13 +1,12 @@
 /**
  * Transcription service for sending audio to OpenAI Whisper API.
  */
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { API_URL } from '../utils/env';
-import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey } from '../utils/storage';
+import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl } from '../utils/storage';
+import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 
-const OPENAI_WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
 // Ensure we don't double up on /gateway if it's already in API_URL
@@ -39,7 +38,7 @@ export async function transcribeAudio(
     language?: string
 ): Promise<TranscriptionResult> {
     const provider = await getAIProvider();
-    if (provider === 'secure_llm' || provider === 'selfhosted') {
+    if (provider === 'secure_llm') {
         return transcribeViaBackend(audioUri, language);
     }
 
@@ -95,8 +94,11 @@ export async function transcribeAudio(
                 formData.append('language', language);
             }
 
+            const baseUrl = await getOpenAIBaseUrl();
+            const whisperUrl = buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/audio/transcriptions');
+
             // Send request
-            const response = await fetch(OPENAI_WHISPER_URL, {
+            const response = await fetch(whisperUrl, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${apiKey}`,
@@ -134,40 +136,15 @@ export async function transcribeAudio(
 }
 
 async function transcribeViaBackend(audioUri: string, language?: string): Promise<TranscriptionResult> {
-    // Check if self-hosted provider is selected
-    const provider = await getAIProvider();
-    const isSelfHosted = provider === 'selfhosted';
+    const token = await storage.getToken();
+    const baseUrl = BACKEND_TRANSCRIBE_URL;
 
-    let token: string | null;
-    let baseUrl: string;
-
-    if (isSelfHosted) {
-        // Use self-hosted configuration
-        const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
-        const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
-
-        if (!selfHostedUrl || !selfHostedApiKey) {
-            return {
-                text: '',
-                success: false,
-                error: 'Self-hosted settings missing. Check URL and API Key.',
-            };
-        }
-
-        token = selfHostedApiKey;
-        baseUrl = `${selfHostedUrl}/ai/transcribe`;
-    } else {
-        // Use default backend
-        token = await storage.getToken();
-        baseUrl = BACKEND_TRANSCRIBE_URL;
-
-        if (!token) {
-            return {
-                text: '',
-                success: false,
-                error: 'Sign in required to use local Whisper.',
-            };
-        }
+    if (!token) {
+        return {
+            text: '',
+            success: false,
+            error: 'Sign in required to use Secure LLM.',
+        };
     }
 
     try {
@@ -226,19 +203,17 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
 /**
  * Test connection to OpenAI API
  */
-export async function testOpenAIConnection(): Promise<boolean> {
+export async function testOpenAIConnection(options?: { baseUrl?: string; apiKey?: string }): Promise<boolean> {
     try {
-        const provider = await getAIProvider();
-        if (provider !== 'openai') {
-            return false;
-        }
-
-        const apiKey = await getOpenAIApiKey();
+        const apiKey = options?.apiKey ?? await getOpenAIApiKey();
         if (!apiKey) {
             return false;
         }
 
-        const response = await fetch('https://api.openai.com/v1/models', {
+        const storedBaseUrl = options?.baseUrl ?? await getOpenAIBaseUrl();
+        const modelsUrl = buildOpenAICompatibleUrl(storedBaseUrl || DEFAULT_OPENAI_BASE_URL, '/models');
+
+        const response = await fetch(modelsUrl, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -248,30 +223,6 @@ export async function testOpenAIConnection(): Promise<boolean> {
         return response.ok;
     } catch (error) {
         console.error('OpenAI connection test failed:', error);
-        return false;
-    }
-}
-
-/**
- * Test connection to Self-Hosted backend healthcheck
- */
-export async function testSelfHostedConnection(url: string, apiKey: string): Promise<boolean> {
-    try {
-        if (!url || !apiKey) return false;
-
-        const normalizedUrl = url.replace(/\/+$/, '');
-        const healthUrl = `${normalizedUrl}/health`;
-
-        const response = await fetch(healthUrl, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-            },
-        });
-
-        return response.ok;
-    } catch (error) {
-        console.error('Self-hosted connection test failed:', error);
         return false;
     }
 }
@@ -348,26 +299,12 @@ export async function processVoiceNote(
         };
     }
 
-    // Use Backend (Self-hosted or Cloud)
-    let token: string | null;
-    let baseUrl: string;
-    const isSelfHosted = provider === 'selfhosted';
-
-    if (isSelfHosted) {
-        const selfHostedUrl = await AsyncStorage.getItem('vaulto_self_hosted_url');
-        const selfHostedApiKey = await AsyncStorage.getItem('vaulto_self_hosted_api_key');
-        if (!selfHostedUrl || !selfHostedApiKey) {
-            return { originalText: '', success: false, error: 'Self-hosted settings missing', hasInstruction: false };
-        }
-        token = selfHostedApiKey;
-        baseUrl = `${selfHostedUrl}/ai/process_voice_note`;
-    } else {
-        token = await storage.getToken();
-        baseUrl = BACKEND_PROCESS_NOTE_URL;
-        if (!token) {
-            console.log('[VoiceAgent] No auth token found.');
-            return { originalText: '', success: false, error: 'Sign in required', hasInstruction: false };
-        }
+    // Use Backend (Secure LLM)
+    const token = await storage.getToken();
+    const baseUrl = BACKEND_PROCESS_NOTE_URL;
+    if (!token) {
+        console.log('[VoiceAgent] No auth token found.');
+        return { originalText: '', success: false, error: 'Sign in required', hasInstruction: false };
     }
 
     try {
