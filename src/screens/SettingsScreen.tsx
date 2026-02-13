@@ -654,16 +654,37 @@ export const SettingsScreen = () => {
                                     <Text style={styles.smallButtonText}>Unlock</Text>
                                 </TouchableOpacity>
                             )}
-                            <Switch
-                                value={syncEnabled}
-                                onValueChange={(value) => {
-                                    void handleToggleSync(value);
-                                }}
-                                disabled={showUnlockingOverlay}
-                                trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                thumbColor={colors.surface}
-                                style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                            />
+                            {hasConfiguredKey ? (
+                                <Switch
+                                    value={syncEnabled}
+                                    onValueChange={(value) => {
+                                        void handleToggleSync(value);
+                                    }}
+                                    disabled={showUnlockingOverlay}
+                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                    thumbColor={colors.surface}
+                                    style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                />
+                            ) : (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.smallButton,
+                                        {
+                                            backgroundColor: syncToggleDisabled ? colors.border : colors.primary,
+                                            opacity: syncToggleDisabled ? 0.65 : 1,
+                                        },
+                                    ]}
+                                    onPress={() => {
+                                        if (syncToggleDisabled) {
+                                            Alert.alert('Sign in required', 'Sign in to enable sync.');
+                                            return;
+                                        }
+                                        setShowEnableSyncModal(true);
+                                    }}
+                                >
+                                    <Text style={styles.smallButtonText}>Enable</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
 
