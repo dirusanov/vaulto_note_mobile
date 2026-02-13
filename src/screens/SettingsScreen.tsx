@@ -256,7 +256,8 @@ export const SettingsScreen = () => {
     const hasConfiguredKey = custodyMode === 'strict_seed' || !!bundle || hasRemoteKeyBundle;
     const syncStatusLabel = !syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On';
     const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
-    const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : 'Configured';
+    // When configured, we show the Change button only (no extra "Configured" label).
+    const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
 
@@ -676,7 +677,11 @@ export const SettingsScreen = () => {
                             <Text style={styles.securityLabelMinimal}>Passphrase</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <Text style={[styles.securityValueMinimal, { color: passphraseStatusColor }]}>{passphraseStatusLabel}</Text>
+                            {!!passphraseStatusLabel && (
+                                <Text style={[styles.securityValueMinimal, { color: passphraseStatusColor }]}>
+                                    {passphraseStatusLabel}
+                                </Text>
+                            )}
                             {hasConfiguredKey && encryptionStatus !== 'locked' && (
                                 <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangePinModal(true)}>
                                     <Text style={styles.smallButtonTextOutlined}>Change</Text>
