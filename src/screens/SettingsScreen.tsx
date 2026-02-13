@@ -786,7 +786,19 @@ export const SettingsScreen = () => {
                                     onPress={() => updateProvider(option.key)}
                                     disabled={activeProvider?.key === option.key && !isLocked}
                                 >
-                                    <MaterialIcons name={option.icon as any} size={16} color={isActive ? colors.surface : colors.textSecondary} />
+                                    {option.key === 'secure_llm' ? (
+                                        <Image
+                                            source={require('../../assets/icon.png')}
+                                            style={{
+                                                width: 16,
+                                                height: 16,
+                                                tintColor: isActive ? colors.surface : colors.textSecondary,
+                                            }}
+                                            resizeMode="contain"
+                                        />
+                                    ) : (
+                                        <MaterialIcons name={option.icon as any} size={16} color={isActive ? colors.surface : colors.textSecondary} />
+                                    )}
                                     <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]}>
                                         {option.title.replace(' Compatible', '').replace(' Hosted', '')}
                                     </Text>
