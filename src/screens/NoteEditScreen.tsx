@@ -38,7 +38,7 @@ import { typography } from '../theme/typography';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
-import { EnableSyncModal } from '../components/EnableSyncModal';
+
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
@@ -85,6 +85,16 @@ const normalizeTextForComparison = (value: string): string =>
 const areTextsEquivalent = (a: string, b: string): boolean =>
     normalizeTextForComparison(a) === normalizeTextForComparison(b);
 
+const appendSnippetToContent = (base: string, snippet: string): string => {
+    const normalizedBase = (base || '').replace(/\s+$/g, '');
+    const normalizedSnippet = (snippet || '').trim();
+
+    if (!normalizedSnippet) return normalizedBase;
+    if (!normalizedBase) return normalizedSnippet;
+    if (normalizedBase.endsWith('\n')) return `${normalizedBase}${normalizedSnippet}`;
+    return `${normalizedBase}\n${normalizedSnippet}`;
+};
+
 // History stack implementation - separate history for each variant
 interface HistoryState {
     content: string;
@@ -97,6 +107,8 @@ interface VariantHistory {
 }
 
 export const NoteEditScreen = () => {
+    const AGENT_HISTORY_LIMIT = 5;
+    const AGENT_TASK_TIMEOUT_MS = 60000;
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
     const route = useRoute<NoteEditScreenRouteProp>();
     const insets = useSafeAreaInsets();
@@ -126,7 +138,7 @@ export const NoteEditScreen = () => {
 
     const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
     const localNoteIdRef = useRef(localNoteId);
-    const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
+
 
     useEffect(() => {
         localNoteIdRef.current = localNoteId;
@@ -474,42 +486,7 @@ export const NoteEditScreen = () => {
         callback();
     };
 
-    const maybePromptSyncChoice = useCallback(async (text: string) => {
-        if (syncEnabled || !text.trim()) return;
-        Alert.alert(
-            'Save transcription',
-            'Choose how to store this text:',
-            [
-                { text: 'Save locally', style: 'default' },
-                {
-                    text: 'Save & Sync',
-                    onPress: () => {
-                        if (isGuest) {
-                            Alert.alert(
-                                'Sign in required',
-                                'Please sign in to enable sync.',
-                                [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                        text: 'Sign In',
-                                        onPress: () => navigation.navigate('SignIn')
-                                    }
-                                ]
-                            );
-                            return;
-                        }
-                        setShowEnableSyncModal(true);
-                    },
-                },
-                {
-                    text: 'Copy text',
-                    onPress: async () => {
-                        await Clipboard.setStringAsync(text);
-                    }
-                }
-            ]
-        );
-    }, [syncEnabled, isGuest, navigation]);
+
 
     const confirmLocalOnlyWarning = useCallback(async (): Promise<boolean> => {
         const dismissed = await getLocalOnlyWarningDismissed();
@@ -594,6 +571,7 @@ export const NoteEditScreen = () => {
 
     // AI Request History (Session based)
     const [requestHistory, setRequestHistory] = useState<string[]>([]);
+    const requestHistoryRef = useRef<string[]>([]);
 
     const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
     const editorRef = useRef<RichTextEditorHandle>(null);
@@ -601,15 +579,17 @@ export const NoteEditScreen = () => {
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
 
-    // Queue for Agent Requests to prevent race conditions
+    // Queue for transcribed text tasks to ensure strict sequential agent processing
     const agentQueue = useRef<{
-        recordingUri: string;
+        id: string;
         transcribedText: string;
+        sessionId: number;
+        noteId: string | undefined;
         isBackground?: boolean;
-        intentHint?: string;
     }[]>([]);
     const [queueLength, setQueueLength] = useState(0);
     const isProcessingQueue = useRef(false);
+    const agentSessionIdRef = useRef(0);
 
     // Ref to hold the absolute latest content to ensure queue picks up changes from previous steps
     const currentContentRef = useRef(content);
@@ -635,6 +615,19 @@ export const NoteEditScreen = () => {
     useEffect(() => {
         currentTitleRef.current = title;
     }, [title]);
+
+    // Keep latest request history for queued async processing.
+    useEffect(() => {
+        requestHistoryRef.current = requestHistory;
+    }, [requestHistory]);
+
+    const clearAgentSessionState = useCallback(() => {
+        agentSessionIdRef.current += 1;
+        setRequestHistory([]);
+        requestHistoryRef.current = [];
+        agentQueue.current = [];
+        setQueueLength(0);
+    }, []);
 
     const loadSettings = async () => {
         const [size, scaling, privateAIAllowed] = await Promise.all([
@@ -1273,11 +1266,23 @@ export const NoteEditScreen = () => {
         });
 
         return unsubscribe;
-    }, [content, navigation, saveNote, title]);
+    }, [clearAgentSessionState, content, navigation, saveNote, title]);
 
-    // Auto-save when app goes to background or inactive state
+    useFocusEffect(
+        useCallback(() => {
+            return () => {
+                // We do NOT clear session state on blur/unmount here to allow background/navigation processing to continue totally uninterrupted.
+                // clearAgentSessionState();
+            };
+        }, [clearAgentSessionState])
+    );
+
+    // Auto-save on app state changes
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextAppState) => {
+            if (nextAppState === 'background') {
+                // Do not clear agent session state on background to allow queue processing to continue
+            }
             if (nextAppState === 'background' || nextAppState === 'inactive') {
                 // Critical: clear temporary decrypted playback files on app backgrounding.
                 void AudioService.cleanupTempFiles();
@@ -1296,7 +1301,7 @@ export const NoteEditScreen = () => {
         return () => {
             subscription.remove();
         };
-    }, [saveNote]);
+    }, [clearAgentSessionState, saveNote]);
 
     const handleBack = async () => {
         Keyboard.dismiss();
@@ -1366,65 +1371,92 @@ export const NoteEditScreen = () => {
 
 
 
-    // Process the queue strictly sequentially
+    // Process transcribed text queue strictly sequentially
     const processAgentQueue = async () => {
         if (isProcessingQueue.current) return;
         isProcessingQueue.current = true;
 
         try {
             while (agentQueue.current.length > 0) {
-                // Peek first
-                const task = agentQueue.current[0];
+                // Peek first item
+                let task = agentQueue.current[0];
+                if (!task) {
+                    agentQueue.current.shift();
+                    continue;
+                }
 
+                // Check session validity (skip if stale, e.g. from previous note load)
+                if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
+                    console.log(`[NoteEditScreen] Skipping stale task ${task.id} (sess: ${task.sessionId}/${agentSessionIdRef.current})`);
+                    agentQueue.current.shift();
+                    setQueueLength(agentQueue.current.length);
+                    continue;
+                }
 
-                // Get fresh context from REFS (strict chaining)
+                if (!task.transcribedText?.trim()) {
+                    agentQueue.current.shift();
+                    setQueueLength(agentQueue.current.length);
+                    continue;
+                }
+
                 const contextContent = currentContentRef.current;
                 const currentVariantId = activeVariantIdRef.current;
 
-                console.log('[NoteEditScreen] Processing queued task');
+                console.log(`[NoteEditScreen] Processing agent task ${task.id} (queue=${agentQueue.current.length})`);
 
                 try {
                     setIsAIProcessing(true);
-                    // Pass the text we just got
-                    const agentResult = await processVoiceNote(
-                        task.recordingUri,
-                        undefined,
-                        contextContent,
-                        task.transcribedText,
-                        requestHistory
-                    );
 
-                    if (agentResult.success) {
-                        // Update History
+                    // Process the note
+                    const agentResult = await Promise.race([
+                        processVoiceNote(
+                            '',
+                            undefined,
+                            contextContent,
+                            task.transcribedText,
+                            requestHistoryRef.current
+                        ),
+                        new Promise<never>((_, reject) => {
+                            setTimeout(() => reject(new Error('Agent task timeout')), AGENT_TASK_TIMEOUT_MS);
+                        })
+                    ]) as Awaited<ReturnType<typeof processVoiceNote>>;
+
+                    // Check session again after async op
+                    if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
+                        console.log(`[NoteEditScreen] Task finished but session stale, discarding result for task ${task.id}`);
+                        // We still shift below
+                    } else if (agentResult.success) {
+                        // SUCCESS HANDLER
                         if (task.transcribedText.trim()) {
                             setRequestHistory(prev => {
                                 const newHistory = [...prev, task.transcribedText.trim()];
-                                return newHistory.slice(-7);
+                                return newHistory.slice(-AGENT_HISTORY_LIMIT);
                             });
                         }
 
                         const originalText = agentResult.originalText || task.transcribedText;
 
                         if (currentVariantId === 'original') {
-                            // Check if the agent wants to create a separate improvement
-                            // ... (Same logic as before) ...
                             const shouldCreateVoiceImprovement =
                                 agentResult.hasInstruction &&
                                 typeof agentResult.processedText === 'string' &&
                                 agentResult.processedText.trim().length > 0 &&
-                                !!localNoteIdRef.current && // Use Ref for noteId
+                                !!localNoteIdRef.current &&
                                 !areTextsEquivalent(agentResult.processedText, originalText);
 
                             if (shouldCreateVoiceImprovement && localNoteIdRef.current) {
-                                const label = agentResult.mode
-                                    ? `AI(${agentResult.mode})`
-                                    : 'AI Improvement';
+                                const label = agentResult.mode ? `AI(${agentResult.mode})` : 'AI Improvement';
+                                const processed = agentResult.processedText?.trim();
+                                const contentToSave = !processed
+                                    ? ''
+                                    : agentResult.mode === 'edit_content'
+                                        ? processed
+                                        : appendSnippetToContent(contextContent, processed);
 
-                                const contentToSave = agentResult.processedText?.trim();
                                 if (contentToSave) {
                                     const newImprovement = await createImprovement(localNoteIdRef.current, {
                                         content: contentToSave,
-                                        label: label,
+                                        label,
                                         optionId: 'voice_instruction'
                                     });
 
@@ -1437,25 +1469,30 @@ export const NoteEditScreen = () => {
                                         };
 
                                         setActiveVariantId(newImprovement.id);
-                                        activeVariantIdRef.current = newImprovement.id; // Immediate Ref Update
+                                        activeVariantIdRef.current = newImprovement.id;
                                         optimisticActiveVariant.current = newImprovement.id;
-                                        // Update Content AND Ref
                                         setContent(contentToSave);
-                                        // currentContentRef is updated via useEffect, but for immediate next loop we might need it?
-                                        // Actually React state update might be async, so let's update ref manually to be safe for next loop
                                         currentContentRef.current = contentToSave;
-
                                         await setActiveVariant(localNoteIdRef.current, newImprovement.id);
                                     }
                                 }
                             }
                         } else {
-                            // Variant In-Place Update
-                            const newText = agentResult.processedText;
-                            if (newText && !areTextsEquivalent(newText, contextContent + (contextContent ? '\n\n' : '') + task.transcribedText)) {
-                                setContent(newText);
-                                currentContentRef.current = newText; // Immediate Ref Update
+                            // Apply to current variant
+                            const processed = agentResult.processedText?.trim();
+                            let newText: string | null = null;
 
+                            if (processed) {
+                                if (agentResult.mode === 'edit_content') {
+                                    newText = processed;
+                                } else if (agentResult.mode === 'todo' || agentResult.mode === 'list' || agentResult.mode === 'format') {
+                                    newText = appendSnippetToContent(contextContent, processed);
+                                }
+                            }
+
+                            if (newText && !areTextsEquivalent(newText, contextContent)) {
+                                setContent(newText);
+                                currentContentRef.current = newText;
                                 updateHistoryImmediate('', newText);
                                 improvementDraftsRef.current[currentVariantId] = newText;
                                 if (localNoteIdRef.current) {
@@ -1469,28 +1506,35 @@ export const NoteEditScreen = () => {
                             }
                         }
                     } else {
+                        // LOGIC FAIL (e.g. backend error)
+                        console.error('[NoteEditScreen] Agent processing returned fail:', agentResult.error);
+                        // We do NOT show error modal for background queue processing to avoid interrupting user? 
+                        // Or maybe we do. User asked for robustness.
+                        // If it fails, we assume it's done. User can retry by speaking again.
+                        // Showing modal might be annoying if stuck in a loop, but we shift the task so it won't loop.
                         setErrorMessage(getErrorMessage(agentResult.error, 'Agent processing failed'));
                         setErrorModalVisible(true);
                     }
                 } catch (error) {
-                    console.error('[NoteEditScreen] Agent flow error:', error);
+                    console.error('[NoteEditScreen] Agent flow exception:', error);
                     setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
                     setErrorModalVisible(true);
+                } finally {
+                    // ALWAYS move to next task
+                    agentQueue.current.shift();
+                    setQueueLength(agentQueue.current.length);
                 }
-
-                // Remove finished task
-                agentQueue.current.shift();
-                setQueueLength(prev => Math.max(0, prev - 1));
             }
+        } catch (outerError) {
+            console.error('[NoteEditScreen] Critical queue process error:', outerError);
         } finally {
             isProcessingQueue.current = false;
             setIsAIProcessing(false);
-
+            setQueueLength(agentQueue.current.length);
         }
     };
 
     const executeAgentFlow = async (
-        recordingUri: string,
         transcribedText: string,
         isBackground: boolean = false
     ) => {
@@ -1504,13 +1548,22 @@ export const NoteEditScreen = () => {
             return;
         }
 
+        const normalizedText = transcribedText.trim();
+        if (!normalizedText) {
+            return;
+        }
+
+        const taskId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         agentQueue.current.push({
-            recordingUri,
-            transcribedText,
+            id: taskId,
+            transcribedText: normalizedText,
+            sessionId: agentSessionIdRef.current,
+            noteId: localNoteIdRef.current,
             isBackground
         });
-        setQueueLength(prev => prev + 1);
-        processAgentQueue();
+        setQueueLength(agentQueue.current.length);
+        console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${agentQueue.current.length})`);
+        void processAgentQueue();
     };
 
 
@@ -1714,13 +1767,12 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        void maybePromptSyncChoice(transcribedText);
+
 
         // 5. AGENT PROCESSING (If enabled)
         // Note: processAgentQueue uses currentContentRef internally, so we don't strictly need to pass content here,
         // but passing the updated version we just set helps consistency if that function used the arg.
-        await executeAgentFlow(recording.uri, transcribedText, true);
-
+        await executeAgentFlow(transcribedText, true);
     };
 
     const handleInstructionRecordingFinish = async (recording: AudioRecording) => {
@@ -2170,10 +2222,10 @@ export const NoteEditScreen = () => {
 
             setHasTranscription(true);
 
-            void maybePromptSyncChoice(text);
+
 
             // Trigger Agent Flow
-            await executeAgentFlow(audioUri, text, false);
+            await executeAgentFlow(text, false);
 
         } catch (error: any) {
             setIsTranscribing(false);
@@ -2973,11 +3025,7 @@ export const NoteEditScreen = () => {
                 }}
             />
 
-            <EnableSyncModal
-                visible={showEnableSyncModal}
-                onClose={() => setShowEnableSyncModal(false)}
-                onEnabled={() => setShowEnableSyncModal(false)}
-            />
+
 
             <AIProcessingIndicator
                 visible={(isAIProcessing || queueLength > 0 || isTranscribing)}

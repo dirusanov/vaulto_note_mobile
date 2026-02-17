@@ -103,7 +103,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                     {isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
                 </Text>
                 {(!isTranscribing && queueSize > 0) && (
-                    <Text style={styles.subtitle}>{queueSize} task{queueSize > 1 ? 's' : ''} pending</Text>
+                    <Text style={styles.subtitle}>Tasks in work: {queueSize}</Text>
                 )}
             </View>
         </Animated.View>
