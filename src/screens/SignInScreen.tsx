@@ -30,6 +30,7 @@ export const SignInScreen = () => {
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handlePostLogin = async (result: LoginResult, provider: 'google' | 'email') => {
@@ -109,14 +110,27 @@ export const SignInScreen = () => {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Password</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your password"
-                                placeholderTextColor={colors.textSecondary}
-                                secureTextEntry
-                                value={password}
-                                onChangeText={setPassword}
-                            />
+                            <View style={styles.passwordInputWrapper}>
+                                <TextInput
+                                    style={[styles.input, styles.passwordInput]}
+                                    placeholder="Enter your password"
+                                    placeholderTextColor={colors.textSecondary}
+                                    secureTextEntry={!showPassword}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeButton}
+                                    onPress={() => setShowPassword(prev => !prev)}
+                                    activeOpacity={0.8}
+                                >
+                                    <MaterialIcons
+                                        name={showPassword ? 'visibility-off' : 'visibility'}
+                                        size={20}
+                                        color={colors.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <TouchableOpacity
@@ -215,9 +229,26 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: 12,
-        padding: spacing.m,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
         color: colors.text,
         fontSize: 16,
+    },
+    passwordInputWrapper: {
+        position: 'relative',
+    },
+    passwordInput: {
+        paddingRight: spacing.xxl + spacing.s,
+    },
+    eyeButton: {
+        position: 'absolute',
+        right: spacing.s,
+        top: '50%',
+        marginTop: -12,
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     forgotPasswordButton: {
         alignSelf: 'flex-end',

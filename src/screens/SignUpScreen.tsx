@@ -25,12 +25,20 @@ export const SignUpScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
 
     const handleSignUp = async () => {
-        if (!email || !password) {
+        if (!email || !password || !confirmPassword) {
             Alert.alert('Error', 'Please fill in all fields');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            Alert.alert('Error', 'Passwords do not match');
             return;
         }
 
@@ -100,14 +108,52 @@ export const SignUpScreen = () => {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Password</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Create a password"
-                                placeholderTextColor={colors.textSecondary}
-                                secureTextEntry
-                                value={password}
-                                onChangeText={setPassword}
-                            />
+                            <View style={styles.passwordInputWrapper}>
+                                <TextInput
+                                    style={[styles.input, styles.passwordInput]}
+                                    placeholder="Create a password"
+                                    placeholderTextColor={colors.textSecondary}
+                                    secureTextEntry={!showPassword}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeButton}
+                                    onPress={() => setShowPassword(prev => !prev)}
+                                    activeOpacity={0.8}
+                                >
+                                    <MaterialIcons
+                                        name={showPassword ? 'visibility-off' : 'visibility'}
+                                        size={20}
+                                        color={colors.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Confirm Password</Text>
+                            <View style={styles.passwordInputWrapper}>
+                                <TextInput
+                                    style={[styles.input, styles.passwordInput]}
+                                    placeholder="Repeat your password"
+                                    placeholderTextColor={colors.textSecondary}
+                                    secureTextEntry={!showConfirmPassword}
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeButton}
+                                    onPress={() => setShowConfirmPassword(prev => !prev)}
+                                    activeOpacity={0.8}
+                                >
+                                    <MaterialIcons
+                                        name={showConfirmPassword ? 'visibility-off' : 'visibility'}
+                                        size={20}
+                                        color={colors.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <View style={styles.termsContainer}>
@@ -215,9 +261,26 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: 12,
-        padding: spacing.m,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
         color: colors.text,
         fontSize: 16,
+    },
+    passwordInputWrapper: {
+        position: 'relative',
+    },
+    passwordInput: {
+        paddingRight: spacing.xxl + spacing.s,
+    },
+    eyeButton: {
+        position: 'absolute',
+        right: spacing.s,
+        top: '50%',
+        marginTop: -12,
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     termsContainer: {
         flexDirection: 'row',
