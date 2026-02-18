@@ -34,6 +34,7 @@ import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { syncService } from '../services/SyncService';
 import { useSubscription } from '../context/SubscriptionContext';
+import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
@@ -60,6 +61,8 @@ interface SubscriptionStatusSectionProps {
     isLoading: boolean;
     onUpgrade: () => void;
     onOpenMinutesSheet: () => void;
+    canManageSubscription: boolean;
+    onManageSubscription: () => void;
 }
 
 const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
@@ -69,6 +72,8 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     isLoading,
     onUpgrade,
     onOpenMinutesSheet,
+    canManageSubscription,
+    onManageSubscription,
 }) => {
     if (!isAuthenticated || isGuest) return null;
 
@@ -132,6 +137,21 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     </View>
                     <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
+                {canManageSubscription && (
+                    <TouchableOpacity
+                        style={styles.proStatusAction}
+                        onPress={onManageSubscription}
+                        activeOpacity={0.9}
+                    >
+                        <View style={styles.proStatusActionLeft}>
+                            <MaterialIcons name="manage-accounts" size={16} color={colors.primary} />
+                            <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>
+                                Manage in Google Play
+                            </Text>
+                        </View>
+                        <MaterialIcons name="open-in-new" size={16} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                )}
             </View>
         );
     }
@@ -166,6 +186,7 @@ export const SettingsScreen = () => {
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
     const {
         isPro,
+        subscriptionStatus,
         isLoading: subscriptionLoading,
     } = useSubscription();
     const {
@@ -203,6 +224,8 @@ export const SettingsScreen = () => {
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
+    const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
+    const [isUsageLoading, setIsUsageLoading] = useState(false);
 
     // Agent Mode Animation - Swaying
     const swayAnim = useRef(new Animated.Value(0)).current;
@@ -262,6 +285,26 @@ export const SettingsScreen = () => {
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
+    const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
+
+    const openManageSubscription = useCallback(async () => {
+        const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
+        const targetUrl = (Platform.OS === 'android'
+            ? (subscriptionStatus?.managementURL || fallbackGooglePlayUrl)
+            : subscriptionStatus?.managementURL) || fallbackGooglePlayUrl;
+
+        try {
+            const supported = await Linking.canOpenURL(targetUrl);
+            if (!supported) {
+                Alert.alert('Unavailable', 'Unable to open subscription management right now.');
+                return;
+            }
+            await Linking.openURL(targetUrl);
+        } catch (error) {
+            console.error('Failed to open subscription management URL:', error);
+            Alert.alert('Unavailable', 'Unable to open subscription management right now.');
+        }
+    }, [subscriptionStatus?.managementURL]);
 
     const handleToggleSync = useCallback(async (enabled: boolean) => {
         if (syncToggleDisabled) {
@@ -353,6 +396,31 @@ export const SettingsScreen = () => {
             console.log('[SettingsScreen] Refreshing profile data...');
             refreshProfile();
         }, [isAuthenticated, isGuest, refreshProfile])
+    );
+
+    const USAGE_REFRESH_INTERVAL_MS = 30000;
+    const lastUsageRefreshAt = useRef(0);
+    useFocusEffect(
+        useCallback(() => {
+            if (!isAuthenticated || isGuest) {
+                setCurrentPeriodUsage(null);
+                return;
+            }
+            const now = Date.now();
+            if (now - lastUsageRefreshAt.current < USAGE_REFRESH_INTERVAL_MS) {
+                return;
+            }
+            lastUsageRefreshAt.current = now;
+            setIsUsageLoading(true);
+            subscriptionApi.getCurrentPeriodUsage()
+                .then((usage) => setCurrentPeriodUsage(usage))
+                .catch((error) => {
+                    console.error('[SettingsScreen] Failed to load current period usage', error);
+                })
+                .finally(() => {
+                    setIsUsageLoading(false);
+                });
+        }, [isAuthenticated, isGuest])
     );
 
     const loadPreferences = async () => {
@@ -562,6 +630,20 @@ export const SettingsScreen = () => {
     };
     const refillAtLabel = formatSubscriptionDate(user?.subscription_next_refill_at ?? null);
     const refillInDays = getDaysUntilDate(user?.subscription_next_refill_at ?? null);
+    const usagePeriodStartLabel = formatSubscriptionDate(
+        currentPeriodUsage?.period_start_at
+        ?? user?.current_usage_period_start_at
+        ?? null
+    );
+    const usagePeriodEndLabel = formatSubscriptionDate(
+        currentPeriodUsage?.period_end_at
+        ?? user?.current_usage_period_end_at
+        ?? null
+    );
+    const llmUsedTokens = currentPeriodUsage?.usage.llm_total_tokens ?? (user?.llm_used_tokens ?? 0);
+    const llmInputTokens = currentPeriodUsage?.usage.llm_input_tokens ?? 0;
+    const llmOutputTokens = currentPeriodUsage?.usage.llm_output_tokens ?? 0;
+    const llmLimitTokens = currentPeriodUsage?.limits.llm_max_tokens ?? (user?.llm_max_tokens ?? 0);
 
     return (
         <ScreenContainer>
@@ -636,6 +718,8 @@ export const SettingsScreen = () => {
                         isLoading={subscriptionLoading}
                         onUpgrade={() => navigation.navigate('Paywall')}
                         onOpenMinutesSheet={openMinutesSheet}
+                        canManageSubscription={isSubscriptionActive}
+                        onManageSubscription={openManageSubscription}
                     />
                 </View>
 
@@ -1056,6 +1140,36 @@ export const SettingsScreen = () => {
                             {refillAtLabel && (
                                 <Text style={styles.minutesRefillText}>Next refill: {refillAtLabel}</Text>
                             )}
+                        </View>
+
+                        <View style={styles.llmUsageCard}>
+                            <View style={styles.llmUsageHeader}>
+                                <Text style={styles.llmUsageTitle}>LLM Usage</Text>
+                                {isUsageLoading ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                    <Text style={styles.llmUsagePeriod}>
+                                        {usagePeriodStartLabel && usagePeriodEndLabel
+                                            ? `${usagePeriodStartLabel} - ${usagePeriodEndLabel}`
+                                            : 'Current period'}
+                                    </Text>
+                                )}
+                            </View>
+                            <View style={styles.llmUsageRow}>
+                                <Text style={styles.llmUsageLabel}>Total</Text>
+                                <Text style={styles.llmUsageValue}>
+                                    {llmUsedTokens.toLocaleString()}
+                                    {llmLimitTokens > 0 ? ` / ${llmLimitTokens.toLocaleString()}` : ''}
+                                </Text>
+                            </View>
+                            <View style={styles.llmUsageRow}>
+                                <Text style={styles.llmUsageLabel}>Input</Text>
+                                <Text style={styles.llmUsageValue}>{llmInputTokens.toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.llmUsageRow}>
+                                <Text style={styles.llmUsageLabel}>Output</Text>
+                                <Text style={styles.llmUsageValue}>{llmOutputTokens.toLocaleString()}</Text>
+                            </View>
                         </View>
                     </Pressable>
                 </Pressable>
@@ -1575,6 +1689,48 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.textSecondary,
         marginTop: spacing.s,
+    },
+    llmUsageCard: {
+        marginTop: spacing.m,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 14,
+        padding: spacing.s,
+        backgroundColor: colors.backgroundSecondary,
+        gap: spacing.xs,
+    },
+    llmUsageHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing.xs,
+        gap: spacing.s,
+    },
+    llmUsageTitle: {
+        ...typography.body,
+        color: colors.text,
+        fontWeight: '700',
+    },
+    llmUsagePeriod: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        flexShrink: 1,
+        textAlign: 'right',
+    },
+    llmUsageRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    llmUsageLabel: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    llmUsageValue: {
+        ...typography.body,
+        color: colors.text,
+        fontSize: 13,
+        fontWeight: '600',
     },
     premiumUpgradeCard: {
         marginTop: spacing.m,
