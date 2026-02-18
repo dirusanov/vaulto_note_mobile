@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { API_URL } from '../utils/env';
 import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
+import { generateUUID } from '../utils/uuid';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -138,6 +139,7 @@ export async function transcribeAudio(
 async function transcribeViaBackend(audioUri: string, language?: string): Promise<TranscriptionResult> {
     const token = await storage.getToken();
     const baseUrl = BACKEND_TRANSCRIBE_URL;
+    const idempotencyKey = await generateUUID();
 
     if (!token) {
         return {
@@ -174,6 +176,7 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
+                    'Idempotency-Key': idempotencyKey,
                 },
                 body: formData,
             });

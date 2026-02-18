@@ -36,6 +36,11 @@ export interface UserProfile {
     transcription_subscription_used_seconds?: number;
     transcription_subscription_remaining_seconds?: number;
     has_llm_access: boolean;
+    llm_max_tokens?: number;
+    llm_used_tokens?: number;
+    llm_remaining_tokens?: number;
+    current_usage_period_start_at?: string | null;
+    current_usage_period_end_at?: string | null;
 }
 
 export interface GuestProfile {
