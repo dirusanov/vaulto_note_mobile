@@ -1451,7 +1451,18 @@ export const NoteEditScreen = () => {
                                     ? ''
                                     : agentResult.mode === 'edit_content'
                                         ? processed
-                                        : appendSnippetToContent(contextContent, processed);
+                                        : (() => {
+                                            // Smart Replace: If the note content ends with the raw transcript (which acts as a placeholder),
+                                            // replace it with the improved version. Otherwise, append.
+                                            const trimmedContext = contextContent.trimEnd();
+                                            const trimmedOriginal = originalText.trim();
+                                            if (trimmedOriginal && trimmedContext.endsWith(trimmedOriginal)) {
+                                                // Keep the whitespace before the transcript
+                                                const prefix = contextContent.slice(0, contextContent.lastIndexOf(trimmedOriginal));
+                                                return prefix + processed;
+                                            }
+                                            return appendSnippetToContent(contextContent, processed);
+                                        })();
 
                                 if (contentToSave) {
                                     const newImprovement = await createImprovement(localNoteIdRef.current, {
