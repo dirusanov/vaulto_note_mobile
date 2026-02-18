@@ -106,6 +106,14 @@ interface VariantHistory {
     index: number;
 }
 
+const mergeQueuedTranscriptions = (base: string, next: string): string => {
+    const head = (base || '').trim();
+    const tail = (next || '').trim();
+    if (!head) return tail;
+    if (!tail) return head;
+    return `${head}\n\n${tail}`;
+};
+
 export const NoteEditScreen = () => {
     const AGENT_HISTORY_LIMIT = 5;
     const AGENT_TASK_TIMEOUT_MS = 60000;
@@ -1378,6 +1386,33 @@ export const NoteEditScreen = () => {
 
         try {
             while (agentQueue.current.length > 0) {
+                if (agentQueue.current.length > 2) {
+                    const activeTask = agentQueue.current[0];
+                    const pendingTasks = agentQueue.current.slice(1);
+                    const mergeablePending = pendingTasks.filter(
+                        (item) =>
+                            item.sessionId === activeTask.sessionId &&
+                            item.noteId === activeTask.noteId &&
+                            !!item.transcribedText?.trim()
+                    );
+                    const foreignPending = pendingTasks.filter(
+                        (item) => !(item.sessionId === activeTask.sessionId && item.noteId === activeTask.noteId)
+                    );
+
+                    if (mergeablePending.length > 1) {
+                        const mergedPending = mergeablePending.reduce((acc, item, index) => {
+                            if (index === 0) return { ...item };
+                            return {
+                                ...acc,
+                                transcribedText: mergeQueuedTranscriptions(acc.transcribedText, item.transcribedText),
+                            };
+                        });
+                        agentQueue.current = [activeTask, mergedPending, ...foreignPending];
+                        setQueueLength(agentQueue.current.length);
+                        console.log(`[NoteEditScreen] Merged pending agent tasks (queue=${agentQueue.current.length})`);
+                    }
+                }
+
                 // Peek first item
                 let task = agentQueue.current[0];
                 if (!task) {
@@ -1565,15 +1600,35 @@ export const NoteEditScreen = () => {
         }
 
         const taskId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        agentQueue.current.push({
-            id: taskId,
-            transcribedText: normalizedText,
-            sessionId: agentSessionIdRef.current,
-            noteId: localNoteIdRef.current,
-            isBackground
-        });
+        const mergeStartIndex = isProcessingQueue.current ? 1 : 0;
+        let merged = false;
+
+        for (let i = agentQueue.current.length - 1; i >= mergeStartIndex; i--) {
+            const queuedTask = agentQueue.current[i];
+            if (!queuedTask) continue;
+            if (queuedTask.sessionId !== agentSessionIdRef.current || queuedTask.noteId !== localNoteIdRef.current) {
+                continue;
+            }
+
+            queuedTask.transcribedText = mergeQueuedTranscriptions(queuedTask.transcribedText, normalizedText);
+            queuedTask.isBackground = queuedTask.isBackground || isBackground;
+            merged = true;
+            console.log(`[NoteEditScreen] Merged into queued agent task ${queuedTask.id} (queue=${agentQueue.current.length})`);
+            break;
+        }
+
+        if (!merged) {
+            agentQueue.current.push({
+                id: taskId,
+                transcribedText: normalizedText,
+                sessionId: agentSessionIdRef.current,
+                noteId: localNoteIdRef.current,
+                isBackground
+            });
+            console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${agentQueue.current.length})`);
+        }
+
         setQueueLength(agentQueue.current.length);
-        console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${agentQueue.current.length})`);
         void processAgentQueue();
     };
 
