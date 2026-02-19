@@ -3713,101 +3713,90 @@ export const NoteEditScreen = () => {
                                                         }
                                                     }}
                                                 >
-                                                    <View style={[
-                                                        styles.recordingIconContainer,
-                                                        isPlaying && { backgroundColor: '#FFFFFF', borderColor: 'rgba(0,0,0,0.05)', borderWidth: 1 }
-                                                    ]}>
-                                                        <MaterialIcons
-                                                            name={isPlaying ? "graphic-eq" : "play-arrow"}
-                                                            size={24}
-                                                            color={isPlaying ? colors.primary : colors.textSecondary}
-                                                        />
-                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+                                                            <View style={[
+                                                                styles.recordingIconContainer,
+                                                                isPlaying && { backgroundColor: '#FFFFFF', borderColor: 'rgba(0,0,0,0.05)', borderWidth: 1 }
+                                                            ]}>
+                                                                <MaterialIcons
+                                                                    name={isPlaying ? "graphic-eq" : "play-arrow"}
+                                                                    size={24}
+                                                                    color={isPlaying ? colors.primary : colors.textSecondary}
+                                                                />
+                                                            </View>
 
-                                                    <View style={styles.recordingInfo}>
-                                                        <Text style={[
-                                                            styles.recordingTitle,
-                                                            isPlaying && { color: colors.text, fontWeight: '700' }
-                                                        ]}>
-                                                            {new Date(rec.created_at).toLocaleDateString()}
-                                                        </Text>
-                                                        <Text style={[
-                                                            styles.recordingSubtitle,
-                                                            isPlaying && { color: colors.textSecondary } // Ensure good contrast
-                                                        ]}>
-                                                            {new Date(rec.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {formatDuration(rec.duration)}
-                                                        </Text>
-                                                        <Text style={styles.recordingStatusText} numberOfLines={1}>
-                                                            {getRecordingStatus(rec.id)}
-                                                        </Text>
-                                                    </View>
+                                                            <View style={styles.recordingInfo}>
+                                                                <Text style={[
+                                                                    styles.recordingTitle,
+                                                                    isPlaying && { color: colors.text, fontWeight: '700' }
+                                                                ]}>
+                                                                    {new Date(rec.created_at).toLocaleDateString()}
+                                                                </Text>
+                                                                <Text style={[
+                                                                    styles.recordingSubtitle,
+                                                                    isPlaying && { color: colors.textSecondary }
+                                                                ]}>
+                                                                    {new Date(rec.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {formatDuration(rec.duration)}
+                                                                </Text>
+                                                            </View>
 
-                                                    <View style={styles.recordingActionsRow}>
-                                                        <TouchableOpacity
-                                                            style={styles.recordingActionSmall}
-                                                            disabled={hasAudioPlayerInCurrentVariant}
-                                                            onPress={() => {
-                                                                void handleInsertRecordingAudioPlayer(rec);
-                                                            }}
-                                                        >
-                                                            <MaterialIcons name="add" size={18} color={hasAudioPlayerInCurrentVariant ? colors.textMuted : colors.primary} />
-                                                            <Text style={[styles.recordingActionSmallText, hasAudioPlayerInCurrentVariant && { color: colors.textMuted }]}>Insert</Text>
-                                                        </TouchableOpacity>
+                                                            <TouchableOpacity
+                                                                style={{ padding: spacing.s }}
+                                                                onPress={() => confirmDeleteRecording(rec.id)}
+                                                            >
+                                                                <MaterialIcons name="delete-outline" size={22} color={colors.error} />
+                                                            </TouchableOpacity>
+                                                        </View>
 
-                                                        {canTranscribeThisRecording && (
+                                                        <View style={[styles.recordingActionsRow, { marginLeft: 0 }]}>
                                                             <TouchableOpacity
                                                                 style={styles.recordingActionSmall}
-                                                                disabled={isAnyTranscribing}
+                                                                disabled={hasAudioPlayerInCurrentVariant}
                                                                 onPress={() => {
-                                                                    void handleRetryTranscription(rec);
+                                                                    void handleInsertRecordingAudioPlayer(rec);
                                                                 }}
                                                             >
-                                                                {isTranscribingThisRecording ? (
-                                                                    <ActivityIndicator size="small" color={colors.primary} />
-                                                                ) : (
-                                                                    <>
-                                                                        <MaterialIcons name="auto-awesome" size={16} color={colors.primary} />
-                                                                        <Text style={styles.recordingActionSmallText}>Transcribe</Text>
-                                                                    </>
-                                                                )}
+                                                                <MaterialIcons name="add" size={16} color={hasAudioPlayerInCurrentVariant ? colors.textMuted : colors.primary} />
+                                                                <Text style={[styles.recordingActionSmallText, hasAudioPlayerInCurrentVariant && { color: colors.textMuted }]}>Insert</Text>
                                                             </TouchableOpacity>
+
+                                                            {canTranscribeThisRecording && (
+                                                                <TouchableOpacity
+                                                                    style={styles.recordingActionSmall}
+                                                                    disabled={isAnyTranscribing}
+                                                                    onPress={() => {
+                                                                        void handleRetryTranscription(rec);
+                                                                    }}
+                                                                >
+                                                                    {isTranscribingThisRecording ? (
+                                                                        <ActivityIndicator size="small" color={colors.primary} />
+                                                                    ) : (
+                                                                        <>
+                                                                            <MaterialIcons name="auto-awesome" size={14} color={colors.primary} />
+                                                                            <Text style={styles.recordingActionSmallText}>Transcribe</Text>
+                                                                        </>
+                                                                    )}
+                                                                </TouchableOpacity>
+                                                            )}
+
+                                                            {hasRecognizedText && (
+                                                                <TouchableOpacity
+                                                                    style={styles.recordingActionSmall}
+                                                                    onPress={() => openRecordingTextView(rec)}
+                                                                >
+                                                                    <MaterialIcons name="visibility" size={16} color={colors.primary} />
+                                                                    <Text style={styles.recordingActionSmallText}>View</Text>
+                                                                </TouchableOpacity>
+                                                            )}
+                                                        </View>
+
+                                                        {getRecordingStatus(rec.id) && (
+                                                            <Text style={[styles.recordingStatusText, { marginLeft: 0, marginTop: 4 }]}>
+                                                                {getRecordingStatus(rec.id)}
+                                                            </Text>
                                                         )}
-
-                                                        <TouchableOpacity
-                                                            style={styles.recordingActionSmall}
-                                                            onPress={() => confirmDeleteRecording(rec.id)}
-                                                        >
-                                                            <MaterialIcons name="delete-outline" size={18} color={colors.error} />
-                                                        </TouchableOpacity>
                                                     </View>
-                                                    {hasRecognizedText && (
-                                                        <TouchableOpacity
-                                                            style={[styles.recordingDeleteButton, { marginRight: 8 }]}
-                                                            onPress={() => openRecordingTextView(rec)}
-                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                        >
-                                                            <View style={styles.recordingViewButton}>
-                                                                <MaterialIcons
-                                                                    name="visibility"
-                                                                    size={16}
-                                                                    color={colors.primary}
-                                                                />
-                                                                <Text style={styles.recordingViewButtonText}>View</Text>
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    )}
-
-                                                    <TouchableOpacity
-                                                        style={styles.recordingDeleteButton}
-                                                        onPress={() => handleDeleteRecording(rec.id, rec.file_path)}
-                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                    >
-                                                        <MaterialIcons
-                                                            name="delete-outline"
-                                                            size={22}
-                                                            color={isPlaying ? colors.textSecondary : colors.textMuted}
-                                                        />
-                                                    </TouchableOpacity>
                                                 </TouchableOpacity>
                                             );
                                         })
@@ -4450,14 +4439,13 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     recordingItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.s,
-        marginBottom: spacing.s,
-        borderRadius: 12,
+        padding: spacing.m,
+        marginBottom: spacing.m,
+        borderRadius: 16,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
+        // Removed flexDirection: 'row' to allow interior grouping
     },
     recordingItemActive: {
         borderColor: colors.primary,
