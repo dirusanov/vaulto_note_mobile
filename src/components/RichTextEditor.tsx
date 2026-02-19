@@ -544,10 +544,34 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
     }));
 
+    // Reconstruct markdown
+    const serializeBlocks = (currentBlocks: Block[]) => {
+        return currentBlocks.map(block => {
+            const serializedContent = serializeBlockToMarkdown(block.content, block.formats);
+
+            if (block.type === 'todo') {
+                return `- [${block.checked ? 'x' : ' '}] ${serializedContent}`;
+            }
+            if (block.type === 'h1') return `# ${serializedContent}`;
+            if (block.type === 'h2') return `## ${serializedContent}`;
+            if (block.type === 'h3') return `### ${serializedContent}`;
+            if (block.type === 'audio') return `![audio](${block.content})`;
+            return serializedContent;
+        }).join('\n');
+    };
+
     // Initial parsing
     useEffect(() => {
+        // 1. If we marked this as an internal update, definitely skip re-parsing
         if (isInternalUpdate.current) {
             isInternalUpdate.current = false;
+            return;
+        }
+
+        // 2. Even if not marked, check if content is actually different to avoid race conditions
+        // serializeBlocks is relatively cheap compared to a full re-parse and re-mount
+        const currentSerialized = serializeBlocks(blocks);
+        if (initialContent === currentSerialized) {
             return;
         }
 
@@ -631,21 +655,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         setBlocks(parsedBlocks);
     }, [initialContent, reparseTrigger]);
 
-    // Reconstruct markdown
-    const serializeBlocks = (currentBlocks: Block[]) => {
-        return currentBlocks.map(block => {
-            const serializedContent = serializeBlockToMarkdown(block.content, block.formats);
-
-            if (block.type === 'todo') {
-                return `- [${block.checked ? 'x' : ' '}] ${serializedContent}`;
-            }
-            if (block.type === 'h1') return `# ${serializedContent}`;
-            if (block.type === 'h2') return `## ${serializedContent}`;
-            if (block.type === 'h3') return `### ${serializedContent}`;
-            if (block.type === 'audio') return `![audio](${block.content})`;
-            return serializedContent;
-        }).join('\n');
-    };
 
     const handleBlockChange = (id: string, text: string) => {
         let newBlocks = [...blocks];
