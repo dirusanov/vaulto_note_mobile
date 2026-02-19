@@ -17,6 +17,7 @@ import {
     Animated,
     AppState,
 } from 'react-native';
+import Svg, { Path, Text as SvgText, TextPath, Defs, G } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -93,6 +94,29 @@ const appendSnippetToContent = (base: string, snippet: string): string => {
     if (!normalizedBase) return normalizedSnippet;
     if (normalizedBase.endsWith('\n')) return `${normalizedBase}${normalizedSnippet}`;
     return `${normalizedBase}\n${normalizedSnippet}`;
+};
+
+const escapeRegExp = (value: string): string =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildAudioMarkdownTag = (audioPath: string): string =>
+    `![audio](${audioPath})`;
+
+const hasAudioTagInContent = (content: string, audioPath: string): boolean => {
+    const normalizedPath = (audioPath || '').trim();
+    if (!normalizedPath) return false;
+
+    const normalizedContent = content || '';
+    const exactPathRegex = new RegExp(`!\\[audio\\]\\(${escapeRegExp(normalizedPath)}\\)`);
+    if (exactPathRegex.test(normalizedContent)) {
+        return true;
+    }
+
+    const filename = normalizedPath.split('/').pop();
+    if (!filename) return false;
+
+    const filenameRegex = new RegExp(`!\\[audio\\]\\([^)]*${escapeRegExp(filename)}\\)`);
+    return filenameRegex.test(normalizedContent);
 };
 
 const deriveTitleFromText = (text: string): string => {
@@ -509,20 +533,11 @@ export const NoteEditScreen = () => {
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
 
     const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
+    const [transcribingRecordingId, setTranscribingRecordingId] = useState<string | null>(null);
     const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
-
-
-    // Add state to track if audio holds a transcription
-    const [hasTranscription, setHasTranscription] = useState(!!existingNote?.encrypted_transcription);
 
     // Ref to track the intentionally selected variant to avoid flickering during async updates
     const optimisticActiveVariant = useRef<string | null>(null);
-
-    useEffect(() => {
-        if (existingNote) {
-            setHasTranscription(!!existingNote.encrypted_transcription);
-        }
-    }, [existingNote?.encrypted_transcription]);
 
     useEffect(() => {
         if (existingNote) {
@@ -1244,6 +1259,59 @@ export const NoteEditScreen = () => {
         }
         return true;
     }, [buildInsertedTextForVariant, resolveVariantContent, updateImprovement, updateNote]);
+
+    const applyAudioPlayerToVariant = useCallback(async (
+        variantId: string,
+        audioPath: string
+    ): Promise<boolean> => {
+        const normalizedPath = (audioPath || '').trim();
+        if (!normalizedPath) return false;
+
+        const baseContent = resolveVariantContent(variantId);
+        if (hasAudioTagInContent(baseContent, normalizedPath)) {
+            return false;
+        }
+
+        const newText = appendSnippetToContent(baseContent, buildAudioMarkdownTag(normalizedPath));
+        if (areTextsEquivalent(newText, baseContent)) {
+            return false;
+        }
+
+        if (variantId === 'original') {
+            if (activeVariantIdRef.current === 'original') {
+                setContent(newText);
+                currentContentRef.current = newText;
+            }
+            updateHistoryImmediate(currentTitleRef.current, newText, 'original');
+            if (localNoteIdRef.current) {
+                await updateNote(localNoteIdRef.current, { content: newText });
+                lastSavedContent.current = newText;
+            }
+            return true;
+        }
+
+        if (activeVariantIdRef.current === variantId) {
+            setContent(newText);
+            currentContentRef.current = newText;
+        }
+        improvementDraftsRef.current[variantId] = newText;
+        updateHistoryImmediate('', newText, variantId);
+        if (localNoteIdRef.current) {
+            try {
+                await updateImprovement(localNoteIdRef.current, variantId, { content: newText });
+                improvementSavedRef.current[variantId] = newText;
+            } catch (error) {
+                console.error('Failed to save inserted audio player into improvement:', error);
+            }
+        }
+        return true;
+    }, [resolveVariantContent, updateImprovement, updateNote]);
+
+    const isAudioAlreadyInsertedInCurrentVariant = useCallback((audioPath: string): boolean => {
+        const targetVariantId = activeVariantIdRef.current;
+        const variantContent = resolveVariantContent(targetVariantId);
+        return hasAudioTagInContent(variantContent, audioPath);
+    }, [resolveVariantContent]);
 
     const handleTitleChange = (text: string) => {
         setTitle(text);
@@ -2170,7 +2238,10 @@ export const NoteEditScreen = () => {
         setAudioDuration(recording.duration);
         setShowAudioPlayer(true);
         setPlayingRecordingId(voiceId);
-        setHasTranscription(!!transcribedText);
+
+        if (targetVariantId === 'original') {
+            await applyAudioPlayerToVariant('original', savedPath);
+        }
 
         // 4. STOP IF NO TEXT
         if (!isTranscriptionSuccess) {
@@ -2284,6 +2355,16 @@ export const NoteEditScreen = () => {
         setSelectedRecordingForText(recording);
         setShowRecordingTextModal(true);
     };
+
+    const handleInsertRecordingAudioPlayer = useCallback(async (recording: VoiceRecording) => {
+        const targetVariant = activeVariantIdRef.current;
+        const inserted = await applyAudioPlayerToVariant(targetVariant, recording.file_path);
+        if (!inserted) {
+            return;
+        }
+
+        setRecordingOutcomeStatus(recording.id, 'Inserted audio player');
+    }, [applyAudioPlayerToVariant, setRecordingOutcomeStatus]);
 
     const handleInsertSelectedRecordingText = useCallback(async () => {
         const selected = selectedRecordingForText;
@@ -2611,6 +2692,14 @@ export const NoteEditScreen = () => {
     const canShareOrExport = effectiveStorageScope !== 'local_only';
     const micHintText = 'Hold: no agent';
     const selectedRecordingText = selectedRecordingForText?.transcription?.trim() || '';
+    const currentPlaybackRecording = useMemo(() => {
+        if (playingRecordingId) {
+            const exact = voiceRecordings.find((rec) => rec.id === playingRecordingId);
+            if (exact) return exact;
+        }
+        return voiceRecordings[0] || null;
+    }, [playingRecordingId, voiceRecordings]);
+    const currentPlaybackHasTranscription = !!currentPlaybackRecording?.transcription?.trim();
 
     // Handle initial recording passed from navigation
     useEffect(() => {
@@ -2640,8 +2729,11 @@ export const NoteEditScreen = () => {
         };
     }, []);
 
-    const handleRetryTranscription = async () => {
-        if (!audioUri) return;
+    const handleRetryTranscription = async (recording?: VoiceRecording) => {
+        const targetRecording = recording
+            || voiceRecordings.find((rec) => rec.id === playingRecordingId)
+            || voiceRecordings[0];
+        if (!targetRecording) return;
         if (!isAuthenticated || isGuest) {
             setShowTranscriptionAuthModal(true);
             return;
@@ -2649,14 +2741,15 @@ export const NoteEditScreen = () => {
         const consentGranted = await requestPrivateAIConsent();
         if (!consentGranted) return;
 
-        // Use Ref for latest content
-
-
         setTrackedIsTranscribing(true);
+        setTranscribingRecordingId(targetRecording.id);
+        setRecordingOutcomeStatus(targetRecording.id, 'Transcribing...');
         try {
-            const transcription = await transcribeAudio(audioUri);
+            const sourceUri = await AudioService.readAudioFile(targetRecording.file_path);
+            const transcription = await transcribeAudio(sourceUri);
 
             if (!transcription.success || !transcription.text) {
+                setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 setErrorMessage(getErrorMessage(transcription.error, 'Check internet connection'));
                 setErrorModalVisible(true);
                 return;
@@ -2664,9 +2757,25 @@ export const NoteEditScreen = () => {
 
             const text = transcription.text.trim();
             if (!text) {
+                setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 setErrorMessage('Recognition returned empty text');
                 setErrorModalVisible(true);
                 return;
+            }
+
+            if (userId) {
+                await saveVoiceRecordingLocal(userId, {
+                    ...targetRecording,
+                    transcription: text,
+                });
+                if (localNoteId) {
+                    const refreshed = await getVoiceRecordingsLocal(userId, localNoteId);
+                    setVoiceRecordings(refreshed);
+                    if (selectedRecordingForText?.id) {
+                        const refreshedSelected = refreshed.find((rec) => rec.id === selectedRecordingForText.id) || null;
+                        setSelectedRecordingForText(refreshedSelected);
+                    }
+                }
             }
 
             if (localNoteId) {
@@ -2675,16 +2784,23 @@ export const NoteEditScreen = () => {
                 });
             }
 
-            setHasTranscription(true);
+            const targetVariantId = activeVariantIdRef.current;
+            let preInsertedToOriginal = false;
+            if (targetVariantId === 'original') {
+                preInsertedToOriginal = await applyPlainTextToVariant('original', text);
+            }
 
+            setRecordingOutcomeStatus(targetRecording.id, 'Processing...');
             await executeAgentFlow(text, {
                 isBackground: false,
-                targetVariantId: activeVariantIdRef.current,
+                targetVariantId,
                 micMode: 'agent',
+                recordingId: targetRecording.id,
+                preInsertedToOriginal,
             });
 
         } catch (error: any) {
-            setTrackedIsTranscribing(false);
+            setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
             // Handle Trial Limit 403 specifically
             if (error?.message?.includes('403') || error?.status === 403 || error?.response?.status === 403) {
                 setErrorMessage('Trial limit exceeded.\nTo continue AI editing and transcription, please upgrade your plan.');
@@ -2695,6 +2811,7 @@ export const NoteEditScreen = () => {
             }
         } finally {
             setTrackedIsTranscribing(false);
+            setTranscribingRecordingId(null);
         }
     };
 
@@ -2912,23 +3029,33 @@ export const NoteEditScreen = () => {
 
 
             {/* Inline Player for Empty Voice Notes */}
-            {voiceRecordings.length > 0 && !title && (!content || content.trim().length === 0) && !hasTranscription && !isTranscribing && transcriptionEnabled && (
+            {voiceRecordings.length > 0 && !title && (!content || content.trim().length === 0) && !isTranscribing && transcriptionEnabled && (
                 <View style={{ marginBottom: spacing.m, marginTop: spacing.s }}>
                     {showAudioPlayer && audioUri && (
                         <AudioPlayer
                             audioUri={audioUri}
                             duration={audioDuration}
                             onClose={() => setShowAudioPlayer(false)}
-                            hasTranscription={hasTranscription}
                         />
                     )}
-                    <TouchableOpacity
-                        style={[styles.retryTranscriptionButton, { alignSelf: 'stretch', justifyContent: 'center', marginTop: spacing.s }]}
-                        onPress={handleRetryTranscription}
-                    >
-                        <MaterialIcons name="auto-awesome" size={18} color={colors.background} style={{ marginRight: 8 }} />
-                        <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
-                    </TouchableOpacity>
+                    {!currentPlaybackHasTranscription && (
+                        <TouchableOpacity
+                            style={[styles.retryTranscriptionButton, { alignSelf: 'stretch', justifyContent: 'center', marginTop: spacing.s }]}
+                            onPress={() => {
+                                void handleRetryTranscription(currentPlaybackRecording || undefined);
+                            }}
+                            disabled={!!transcribingRecordingId}
+                        >
+                            {transcribingRecordingId ? (
+                                <ActivityIndicator size="small" color={colors.background} />
+                            ) : (
+                                <>
+                                    <MaterialIcons name="auto-awesome" size={18} color={colors.background} style={{ marginRight: 8 }} />
+                                    <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
 
@@ -3459,6 +3586,21 @@ export const NoteEditScreen = () => {
             {/* Floating Mic Button */}
             {!isEditing && (
                 <View style={styles.micFloatingContainer}>
+                    <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
+                        <Svg height="120" width="120" viewBox="0 0 120 120">
+                            <Defs>
+                                <Path
+                                    id="micCurve"
+                                    d="M 20,60 A 40,40 0 0 1 100,60"
+                                />
+                            </Defs>
+                            <SvgText fill={colors.textSecondary} fontSize="10" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
+                                <TextPath href="#micCurve" startOffset="50%">
+                                    {micHintText.toUpperCase()}
+                                </TextPath>
+                            </SvgText>
+                        </Svg>
+                    </View>
                     <TouchableOpacity
                         style={styles.micButton}
                         onPress={handleMicPress}
@@ -3468,9 +3610,6 @@ export const NoteEditScreen = () => {
                     >
                         <MaterialIcons name="mic" size={28} color="white" />
                     </TouchableOpacity>
-                    <View style={styles.micHintBubble}>
-                        <Text style={styles.micHintText}>{micHintText}</Text>
-                    </View>
                 </View>
             )}
 
@@ -3549,14 +3688,20 @@ export const NoteEditScreen = () => {
                                                 setShowAudioPlayer(false);
                                                 setPlayingRecordingId(null);
                                             }}
-                                            hasTranscription={hasTranscription}
                                         />
-                                        {!hasTranscription && transcriptionEnabled && (
+                                        {!currentPlaybackHasTranscription && transcriptionEnabled && (
                                             <TouchableOpacity
                                                 style={styles.retryTranscriptionButton}
-                                                onPress={handleRetryTranscription}
+                                                onPress={() => {
+                                                    void handleRetryTranscription(currentPlaybackRecording || undefined);
+                                                }}
+                                                disabled={!!transcribingRecordingId}
                                             >
-                                                <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
+                                                {transcribingRecordingId ? (
+                                                    <ActivityIndicator size="small" color={colors.background} />
+                                                ) : (
+                                                    <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
+                                                )}
                                             </TouchableOpacity>
                                         )}
                                     </View>
@@ -3571,6 +3716,10 @@ export const NoteEditScreen = () => {
                                         voiceRecordings.map((rec) => {
                                             const isPlaying = playingRecordingId === rec.id;
                                             const hasRecognizedText = !!rec.transcription?.trim();
+                                            const hasAudioPlayerInCurrentVariant = isAudioAlreadyInsertedInCurrentVariant(rec.file_path);
+                                            const canTranscribeThisRecording = transcriptionEnabled;
+                                            const isAnyTranscribing = !!transcribingRecordingId;
+                                            const isTranscribingThisRecording = transcribingRecordingId === rec.id;
 
                                             return (
                                                 <TouchableOpacity
@@ -3625,6 +3774,50 @@ export const NoteEditScreen = () => {
                                                             {getRecordingStatus(rec.id)}
                                                         </Text>
                                                     </View>
+
+                                                    <TouchableOpacity
+                                                        style={[styles.recordingDeleteButton, { marginRight: 8 }]}
+                                                        disabled={hasAudioPlayerInCurrentVariant}
+                                                        onPress={() => {
+                                                            void handleInsertRecordingAudioPlayer(rec);
+                                                        }}
+                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                    >
+                                                        <View style={[styles.recordingViewButton, hasAudioPlayerInCurrentVariant && styles.recordingActionDisabled]}>
+                                                            <MaterialIcons
+                                                                name="add"
+                                                                size={16}
+                                                                color={colors.primary}
+                                                            />
+                                                            <Text style={styles.recordingViewButtonText}>Insert</Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+
+                                                    {canTranscribeThisRecording && (
+                                                        <TouchableOpacity
+                                                            style={[styles.recordingDeleteButton, { marginRight: 8 }]}
+                                                            disabled={isAnyTranscribing}
+                                                            onPress={() => {
+                                                                void handleRetryTranscription(rec);
+                                                            }}
+                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                        >
+                                                            <View style={styles.recordingViewButton}>
+                                                                {isTranscribingThisRecording ? (
+                                                                    <ActivityIndicator size="small" color={colors.primary} />
+                                                                ) : (
+                                                                    <>
+                                                                        <MaterialIcons
+                                                                            name="auto-awesome"
+                                                                            size={16}
+                                                                            color={colors.primary}
+                                                                        />
+                                                                        <Text style={styles.recordingViewButtonText}>Transcribe</Text>
+                                                                    </>
+                                                                )}
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    )}
 
                                                     {hasRecognizedText && (
                                                         <TouchableOpacity
@@ -3932,24 +4125,9 @@ const styles = StyleSheet.create({
         right: spacing.xl,
         bottom: spacing.xxl,
         alignItems: 'center',
-        gap: spacing.xs,
+        justifyContent: 'center',
     },
-    micHintBubble: {
-        paddingHorizontal: spacing.s,
-        paddingVertical: 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-    },
-    micHintText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        opacity: 0.95,
-        fontSize: 10,
-        lineHeight: 12,
-        textAlign: 'center',
-    },
+    // micHintBubble and micHintText removed
     micButton: {
         width: 56,
         height: 56,

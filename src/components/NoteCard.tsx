@@ -140,7 +140,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
             )}
             <View style={styles.content}>
                 <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle]} numberOfLines={1}>
-                    {title || (hasAudio ? 'Voice Note' : ' ')}
+                    {title || (hasAudio ? 'Voice Recording' : ' ')}
                 </Text>
                 {(!isEmpty && previewString && previewString !== title) && (
                     <Text style={styles.preview} numberOfLines={6}>
@@ -148,7 +148,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     </Text>
                 )}
                 {(isEmpty && hasAudio) && (
-                    <Text style={styles.audioPreviewLabel}> Audio recording available</Text>
+                    <Text style={styles.audioPreviewLabel}>Voice note attached</Text>
                 )}
             </View>
             <View style={styles.footer}>

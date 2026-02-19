@@ -1038,6 +1038,45 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const fontSizeH2 = baseFontSize * 1.25; // e.g. 16 -> 20
     const fontSizeH3 = baseFontSize * 1.125; // e.g. 16 -> 18
 
+    const focusForTypingAtEnd = () => {
+        if (blocks.length === 0) {
+            const newId = generateId();
+            setBlocks([{ id: newId, type: 'text', content: '', formats: [] }]);
+            setFocusedBlockId(newId);
+            blockSelections.current[newId] = { start: 0, end: 0 };
+            requestAnimationFrame(() => {
+                inputRefs.current[newId]?.focus();
+            });
+            return;
+        }
+
+        const lastBlock = blocks[blocks.length - 1];
+        if (lastBlock.type === 'audio') {
+            const newId = generateId();
+            const newBlocks = [...blocks, { id: newId, type: 'text' as const, content: '', formats: [] }];
+            setBlocks(newBlocks);
+            setFocusedBlockId(newId);
+            blockSelections.current[newId] = { start: 0, end: 0 };
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    inputRefs.current[newId]?.focus();
+                });
+            });
+            return;
+        }
+
+        const lastId = lastBlock.id;
+        const lastLength = lastBlock.content.length;
+        blockSelections.current[lastId] = { start: lastLength, end: lastLength };
+        setFocusedBlockId(lastId);
+        requestAnimationFrame(() => {
+            inputRefs.current[lastId]?.focus();
+            requestAnimationFrame(() => {
+                inputRefs.current[lastId]?.setNativeProps({ selection: blockSelections.current[lastId] });
+            });
+        });
+    };
+
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
         const isAudio = item.type === 'audio';
@@ -1182,12 +1221,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         <TouchableOpacity
                             style={{ flex: 1, minHeight: 100 }}
                             activeOpacity={1}
-                            onPress={() => {
-                                if (blocks.length > 0) {
-                                    const lastId = blocks[blocks.length - 1].id;
-                                    inputRefs.current[lastId]?.focus();
-                                }
-                            }}
+                            onPress={focusForTypingAtEnd}
                         />
                     </>
                 }
