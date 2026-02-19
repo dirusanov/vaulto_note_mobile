@@ -998,3 +998,69 @@ export const setActiveVariant = async (userId: string, parentNoteId: string, act
         console.error('[DatabaseService] Failed to set active variant (native)', e);
     }
 };
+
+export const migrateGuestData = async (fromUserId: string, toUserId: string): Promise<void> => {
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return;
+
+    console.log(`[DatabaseService] Migrating data from ${fromUserId} to ${toUserId}`);
+
+    if (Platform.OS === 'web') {
+        try {
+            const guestNotes = getWebStore(fromUserId);
+            if (guestNotes.length === 0) return;
+
+            const targetNotes = getWebStore(toUserId);
+            const targetIds = new Set(targetNotes.map(n => n.id));
+
+            const migratedNotes = guestNotes.map(note => ({
+                ...note,
+                dirty: normalizeStorageScope(note.storage_scope) === 'sync',
+                synced: 0,
+            }));
+
+            // Avoid duplicates
+            const filteredMigrated = migratedNotes.filter(n => !targetIds.has(n.id));
+            const merged = [...targetNotes, ...filteredMigrated];
+
+            saveWebStore(toUserId, merged);
+            localStorage.removeItem(getStorageKey(fromUserId));
+            console.log(`[DatabaseService] Migrated ${filteredMigrated.length} notes (web)`);
+        } catch (e) {
+            console.error('[DatabaseService] Failed to migrate guest data (web)', e);
+        }
+        return;
+    }
+
+    try {
+        const database = await getDb();
+        if (!database) return;
+
+        await database.withTransactionAsync(async () => {
+            // Update notes
+            await database.runAsync(
+                "UPDATE notes SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')",
+                [toUserId, fromUserId]
+            );
+            // Local-only notes just change owner without marking dirty for sync
+            await database.runAsync(
+                "UPDATE notes SET user_id = ? WHERE user_id = ? AND storage_scope = 'local_only'",
+                [toUserId, fromUserId]
+            );
+
+            // Update improvements
+            await database.runAsync(
+                "UPDATE note_improvements SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ?",
+                [toUserId, fromUserId]
+            );
+
+            // Update voice recordings
+            await database.runAsync(
+                "UPDATE voice_recordings SET user_id = ? WHERE user_id = ?",
+                [toUserId, fromUserId]
+            );
+        });
+        console.log('[DatabaseService] Guest data migration completed (native)');
+    } catch (e) {
+        console.error('[DatabaseService] Failed to migrate guest data (native)', e);
+    }
+};

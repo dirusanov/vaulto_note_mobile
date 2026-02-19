@@ -15,6 +15,7 @@ import {
     getAllImprovementsLocal,
     saveImprovementLocal,
     markAllDirty,
+    migrateGuestData,
 } from './DatabaseService';
 import { decrypt, encrypt, encryptForSync, decryptFromSync } from '../crypto/encryption';
 import { hasMasterKey } from '../crypto/e2ee';
@@ -99,6 +100,12 @@ class SyncService {
         }
 
         const lastKnown = previousUserId ?? this.currentUserId;
+
+        // If we have a new authenticated user and a previous guest user, migrate data
+        if (userId && lastKnown && userId !== lastKnown) {
+            await migrateGuestData(lastKnown, userId);
+        }
+
         if (userId === lastKnown) {
             this.currentUserId = userId;
             return;
