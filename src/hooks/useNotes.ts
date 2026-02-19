@@ -695,21 +695,17 @@ export const useNotes = () => {
 
             if (!improvement) throw new Error('Failed to build local improvement');
 
-            // Update parent note's updated_at so it moves to top of list
-            // Ensure we preserve encrypted_content. If not in memory note, refetch from DB.
-            if (!note.encrypted_content) {
-                const refreshedParent = await getNoteById(userId, noteId);
-                if (refreshedParent) {
-                    note = refreshedParent;
-                }
-            }
+            // Always base parent update on the freshest DB state to avoid clobbering
+            // fields like title during concurrent note/improvement updates.
+            const refreshedParent = await getNoteById(userId, noteId);
+            const parentBase = refreshedParent || note;
 
             const parentUpdate: Note = {
-                ...note,
-                encrypted_content: note.encrypted_content || '', // Fallback to avoid constraint viol
+                ...parentBase,
+                encrypted_content: parentBase.encrypted_content || '', // Fallback to avoid constraint viol
                 updated_at: new Date().toISOString(),
                 synced: 0,
-                dirty: shouldSyncNote(note) || !!note.pending_server_delete,
+                dirty: shouldSyncNote(parentBase) || !!parentBase.pending_server_delete,
             };
             await saveNoteLocal(userId, parentUpdate);
 
@@ -786,12 +782,15 @@ export const useNotes = () => {
             await saveImprovementLocal(userId, updated);
 
 
-            // Update parent note's updated_at so it moves to top of list
+            // Use freshest parent from DB to avoid overwriting recently changed title/content.
+            const refreshedParent = await getNoteById(userId, noteId);
+            const parentBase = refreshedParent || note;
+
             const parentUpdate: Note = {
-                ...note,
+                ...parentBase,
                 updated_at: new Date().toISOString(),
                 synced: 0,
-                dirty: shouldSyncNote(note) || !!note.pending_server_delete,
+                dirty: shouldSyncNote(parentBase) || !!parentBase.pending_server_delete,
             };
             await saveNoteLocal(userId, parentUpdate);
 

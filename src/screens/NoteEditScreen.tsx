@@ -95,6 +95,29 @@ const appendSnippetToContent = (base: string, snippet: string): string => {
     return `${normalizedBase}\n${normalizedSnippet}`;
 };
 
+const deriveTitleFromText = (text: string): string => {
+    const cleaned = (text || '')
+        .replace(/!\[audio\]\([^)]+\)/g, ' ')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/^\s*[-*]\s+\[[ xX]\]\s+/gm, '')
+        .replace(/^\s*[-*]\s+/gm, '')
+        .replace(/^\s*\d+[\.\)]\s+/gm, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!cleaned) return '';
+
+    const sentence = cleaned.split(/[.!?;\n]/)[0]?.trim() || '';
+    const source = sentence || cleaned;
+    if (!source) return '';
+
+    const words = source.split(' ').filter(Boolean).slice(0, 6);
+    if (words.length === 0) return '';
+
+    const title = words.join(' ').trim();
+    return title.length > 80 ? title.slice(0, 80).trim() : title;
+};
+
 // History stack implementation - separate history for each variant
 interface HistoryState {
     content: string;
@@ -608,6 +631,7 @@ export const NoteEditScreen = () => {
     const isCreatingNote = useRef(false);
     const pendingSaveAfterCreate = useRef(false);
     const currentTitleRef = useRef(title);
+    const titleLockRef = useRef<boolean>(!!(existingNote?.title || '').trim());
 
     // Sync contentRef whenever content state changes
     useEffect(() => {
@@ -623,6 +647,12 @@ export const NoteEditScreen = () => {
     useEffect(() => {
         currentTitleRef.current = title;
     }, [title]);
+
+    useEffect(() => {
+        if ((existingNote?.title || '').trim()) {
+            titleLockRef.current = true;
+        }
+    }, [existingNote?.title]);
 
     // Keep latest request history for queued async processing.
     useEffect(() => {
@@ -739,7 +769,11 @@ export const NoteEditScreen = () => {
 
         if (activeVariantId === 'original') {
             if (lastSavedTitle.current === title) {
-                setTitle(existingNote.title || '');
+                const nextTitle = existingNote.title || '';
+                // Avoid regressing non-empty in-memory title to transient empty value from stale refresh.
+                if (nextTitle.trim().length > 0 || !title.trim()) {
+                    setTitle(nextTitle);
+                }
             }
             if (lastSavedContent.current === content) {
                 setContent(existingNote.content || '');
@@ -921,6 +955,9 @@ export const NoteEditScreen = () => {
 
     const handleTitleChange = (text: string) => {
         setTitle(text);
+        if (text.trim().length > 0) {
+            titleLockRef.current = true;
+        }
         // Only original variant has a title
         if (activeVariantId === 'original') {
             updateHistory(text, content);
@@ -1061,9 +1098,19 @@ export const NoteEditScreen = () => {
         }
     }, [activeVariantId, localNoteId, updateImprovement]);
 
+    const saveTitleIfChanged = useCallback(async () => {
+        if (!localNoteIdRef.current) return;
+        const nextTitle = currentTitleRef.current;
+        if (nextTitle === lastSavedTitle.current) return;
+
+        await updateNote(localNoteIdRef.current, { title: nextTitle });
+        lastSavedTitle.current = nextTitle;
+    }, [updateNote]);
+
     const saveNote = useCallback(async () => {
         if (activeVariantId !== 'original') {
             await saveImprovementDraft();
+            await saveTitleIfChanged();
             return;
         }
 
@@ -1173,7 +1220,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [activeVariantId, content, createNote, deleteNote, existingNote?.privacy, localNoteId, noteImprovements.length, privacy, saveImprovementDraft, storageScope, title, updateNote]);
+    }, [activeVariantId, content, createNote, deleteNote, existingNote?.privacy, localNoteId, noteImprovements.length, privacy, saveImprovementDraft, saveTitleIfChanged, storageScope, title, updateNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1239,9 +1286,10 @@ export const NoteEditScreen = () => {
             const unchanged = title === lastSavedTitle.current && content === lastSavedContent.current;
             const improvementDraft = improvementDraftsRef.current[activeVariantId] ?? '';
             const improvementSaved = improvementSavedRef.current[activeVariantId] ?? '';
+            const titleChanged = title !== lastSavedTitle.current;
             const hasChanges = activeVariantId === 'original'
                 ? !(nothingToSave || unchanged)
-                : improvementDraft !== improvementSaved;
+                : titleChanged || improvementDraft !== improvementSaved;
 
             if (!hasChanges) {
                 return;
@@ -1470,6 +1518,48 @@ export const NoteEditScreen = () => {
                         }
 
                         const originalText = agentResult.originalText || task.transcribedText;
+                        const explicitTitle = (agentResult.titleValue || '').trim();
+
+                        if (agentResult.titleAction === 'set' && explicitTitle && localNoteIdRef.current) {
+                            try {
+                                await updateNote(localNoteIdRef.current, { title: explicitTitle });
+                                setTitle(explicitTitle);
+                                currentTitleRef.current = explicitTitle;
+                                lastSavedTitle.current = explicitTitle;
+                                titleLockRef.current = true;
+                                if (activeVariantIdRef.current === 'original') {
+                                    updateHistoryImmediate(explicitTitle, currentContentRef.current);
+                                }
+                            } catch (titleError) {
+                                console.error('[NoteEditScreen] Failed to apply explicit agent title', titleError);
+                            }
+                            // Explicit title command should not mutate note content.
+                            continue;
+                        }
+
+                        const suggestedTitleRaw = (agentResult.suggestedTitle || '').trim();
+                        const suggestedTitle = suggestedTitleRaw || deriveTitleFromText(
+                            agentResult.processedText || contextContent || originalText
+                        );
+                        const hasStableTitle =
+                            !!currentTitleRef.current.trim() ||
+                            !!lastSavedTitle.current.trim() ||
+                            !!(existingNote?.title || '').trim();
+
+                        if (!titleLockRef.current && !hasStableTitle && suggestedTitle && localNoteIdRef.current) {
+                            try {
+                                await updateNote(localNoteIdRef.current, { title: suggestedTitle });
+                                setTitle(suggestedTitle);
+                                currentTitleRef.current = suggestedTitle;
+                                lastSavedTitle.current = suggestedTitle;
+                                titleLockRef.current = true;
+                                if (activeVariantIdRef.current === 'original') {
+                                    updateHistoryImmediate(suggestedTitle, currentContentRef.current);
+                                }
+                            } catch (titleError) {
+                                console.error('[NoteEditScreen] Failed to auto-apply agent title', titleError);
+                            }
+                        }
 
                         if (currentVariantId === 'original') {
                             const shouldCreateVoiceImprovement =

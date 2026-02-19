@@ -27,6 +27,9 @@ export interface VoiceNoteResult {
     hasInstruction: boolean;
     instruction?: string | null;
     mode?: string | null;
+    titleAction?: 'set' | 'none';
+    titleValue?: string | null;
+    suggestedTitle?: string | null;
     success: boolean;
     error?: string;
 }
@@ -260,6 +263,9 @@ export async function processVoiceNote(
                 hasInstruction: false,
                 instruction: null,
                 mode: 'none',
+                titleAction: 'none',
+                titleValue: null,
+                suggestedTitle: null,
                 success: true,
             };
         }
@@ -270,6 +276,9 @@ export async function processVoiceNote(
             hasInstruction: false,
             instruction: null,
             mode: 'none',
+            titleAction: 'none',
+            titleValue: null,
+            suggestedTitle: null,
             success: transResult.success,
             error: transResult.error,
         };
@@ -287,6 +296,9 @@ export async function processVoiceNote(
                 hasInstruction: false,
                 instruction: null,
                 mode: null,
+                titleAction: 'none',
+                titleValue: null,
+                suggestedTitle: null,
                 success: true
             };
         }
@@ -297,6 +309,9 @@ export async function processVoiceNote(
             hasInstruction: false,
             instruction: null,
             mode: null,
+            titleAction: 'none',
+            titleValue: null,
+            suggestedTitle: null,
             success: transResult.success,
             error: transResult.error
         };
@@ -382,6 +397,9 @@ export async function processVoiceNote(
             hasInstruction: typeof result.has_instruction === 'boolean' ? result.has_instruction : (result.mode !== "none"),
             instruction: null,
             mode: result.mode,
+            titleAction: result.title_action === 'set' ? 'set' : 'none',
+            titleValue: typeof result.title_value === 'string' ? result.title_value : null,
+            suggestedTitle: typeof result.suggested_title === 'string' ? result.suggested_title : null,
             success: true
         };
 
