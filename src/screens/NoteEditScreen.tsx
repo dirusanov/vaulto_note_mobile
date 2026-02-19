@@ -755,6 +755,7 @@ export const NoteEditScreen = () => {
         noteId: string | undefined;
         targetVariantId: string;
         micMode: MicInputMode;
+        preInsertedToOriginal?: boolean;
         recordingId?: string;
         isBackground?: boolean;
     }[]>([]);
@@ -1771,6 +1772,12 @@ export const NoteEditScreen = () => {
                 const applyFallbackInsertion = async (fallbackText?: string) => {
                     const textToInsert = (fallbackText || task.transcribedText || '').trim();
                     if (!textToInsert) return;
+                    if (taskVariantId === 'original' && task.preInsertedToOriginal) {
+                        const status = 'Added to Original';
+                        setRecordingOutcomeStatus(task.recordingId, status);
+                        showVoiceResultStatus(status, task.recordingId);
+                        return;
+                    }
                     const applied = await applyPlainTextToVariant(taskVariantId, textToInsert);
                     if (!applied) return;
                     const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
@@ -1971,6 +1978,7 @@ export const NoteEditScreen = () => {
             targetVariantId?: string;
             recordingId?: string;
             micMode?: MicInputMode;
+            preInsertedToOriginal?: boolean;
         }
     ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
@@ -1986,6 +1994,12 @@ export const NoteEditScreen = () => {
         }
 
         if (!shouldUseAgentMode) {
+            if (targetVariantId === 'original' && options?.preInsertedToOriginal) {
+                const status = 'Added to Original';
+                setRecordingOutcomeStatus(options?.recordingId, status);
+                showVoiceResultStatus(status, options?.recordingId);
+                return;
+            }
             const inserted = await applyPlainTextToVariant(targetVariantId, normalizedText);
             if (inserted) {
                 const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
@@ -2003,6 +2017,7 @@ export const NoteEditScreen = () => {
             noteId: localNoteIdRef.current,
             targetVariantId,
             micMode: options?.micMode ?? 'agent',
+            preInsertedToOriginal: options?.preInsertedToOriginal ?? false,
             recordingId: options?.recordingId,
             isBackground: options?.isBackground ?? false,
         });
@@ -2179,12 +2194,23 @@ export const NoteEditScreen = () => {
             return;
         }
 
+        let preInsertedToOriginal = false;
+        if (targetVariantId === 'original') {
+            preInsertedToOriginal = await applyPlainTextToVariant('original', transcribedText);
+            if (preInsertedToOriginal) {
+                const status = 'Added to Original';
+                setRecordingOutcomeStatus(voiceId, status);
+                showVoiceResultStatus(status, voiceId);
+            }
+        }
+
         setRecordingOutcomeStatus(voiceId, 'Processing...');
         await executeAgentFlow(transcribedText, {
             isBackground: true,
             targetVariantId,
             recordingId: voiceId,
             micMode,
+            preInsertedToOriginal,
         });
     };
 
