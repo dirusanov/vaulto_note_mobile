@@ -298,6 +298,28 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
                     {/* Toggles Row */}
                     <View style={styles.togglesRow}>
+                        {/* Transcription Toggle Badge */}
+                        <TouchableOpacity
+                            style={[
+                                styles.badgeToggle,
+                                { backgroundColor: transcribe ? colors.primary + '15' : colors.backgroundSecondary }
+                            ]}
+                            onPress={() => handleTranscriptionToggle(!transcribe)}
+                            activeOpacity={0.7}
+                        >
+                            <MaterialIcons
+                                name="mic"
+                                size={20}
+                                color={transcribe ? colors.primary : colors.textTertiary}
+                            />
+                            <Text style={[
+                                styles.badgeLabel,
+                                { color: transcribe ? colors.primary : colors.textSecondary }
+                            ]}>
+                                Transcribe {transcribe ? 'ON' : 'OFF'}
+                            </Text>
+                        </TouchableOpacity>
+
                         {/* Agent Toggle Badge */}
                         <TouchableOpacity
                             style={[
@@ -319,28 +341,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 { color: effectiveAgentEnabled ? colors.primary : colors.textSecondary }
                             ]}>
                                 {effectiveAgentEnabled ? 'AI Agent ON' : 'AI Agent OFF'}
-                            </Text>
-                        </TouchableOpacity>
-
-                        {/* Transcription Toggle Badge */}
-                        <TouchableOpacity
-                            style={[
-                                styles.badgeToggle,
-                                { backgroundColor: transcribe ? colors.primary + '15' : colors.backgroundSecondary }
-                            ]}
-                            onPress={() => handleTranscriptionToggle(!transcribe)}
-                            activeOpacity={0.7}
-                        >
-                            <MaterialIcons
-                                name="mic"
-                                size={20}
-                                color={transcribe ? colors.primary : colors.textTertiary}
-                            />
-                            <Text style={[
-                                styles.badgeLabel,
-                                { color: transcribe ? colors.primary : colors.textSecondary }
-                            ]}>
-                                Transcribe {transcribe ? 'ON' : 'OFF'}
                             </Text>
                         </TouchableOpacity>
                     </View>
