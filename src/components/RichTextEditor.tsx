@@ -571,7 +571,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         // 2. Even if not marked, check if content is actually different to avoid race conditions
         // serializeBlocks is relatively cheap compared to a full re-parse and re-mount
         const currentSerialized = serializeBlocks(blocks);
-        if (initialContent === currentSerialized) {
+        // On a fresh empty note we still need to create the first editable block.
+        // Skip reparse only when blocks are already initialized and content truly matches.
+        if (blocks.length > 0 && initialContent === currentSerialized) {
             return;
         }
 
