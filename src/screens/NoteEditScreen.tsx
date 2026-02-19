@@ -4123,7 +4123,7 @@ const styles = StyleSheet.create({
     micFloatingContainer: {
         position: 'absolute',
         right: spacing.xl,
-        bottom: spacing.xxl,
+        bottom: spacing.xxl + 20,
         alignItems: 'center',
         justifyContent: 'center',
     },
