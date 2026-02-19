@@ -3544,6 +3544,8 @@ export const NoteEditScreen = () => {
                                     ) : (
                                         voiceRecordings.map((rec) => {
                                             const isPlaying = playingRecordingId === rec.id;
+                                            const hasRecognizedText = !!rec.transcription?.trim();
+
                                             return (
                                                 <TouchableOpacity
                                                     key={rec.id}
@@ -3598,20 +3600,22 @@ export const NoteEditScreen = () => {
                                                         </Text>
                                                     </View>
 
-                                                    <TouchableOpacity
-                                                        style={[styles.recordingDeleteButton, { marginRight: 8 }]}
-                                                        onPress={() => openRecordingTextView(rec)}
-                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                    >
-                                                        <View style={styles.recordingViewButton}>
-                                                            <MaterialIcons
-                                                                name="visibility"
-                                                                size={16}
-                                                                color={colors.primary}
-                                                            />
-                                                            <Text style={styles.recordingViewButtonText}>View</Text>
-                                                        </View>
-                                                    </TouchableOpacity>
+                                                    {hasRecognizedText && (
+                                                        <TouchableOpacity
+                                                            style={[styles.recordingDeleteButton, { marginRight: 8 }]}
+                                                            onPress={() => openRecordingTextView(rec)}
+                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                        >
+                                                            <View style={styles.recordingViewButton}>
+                                                                <MaterialIcons
+                                                                    name="visibility"
+                                                                    size={16}
+                                                                    color={colors.primary}
+                                                                />
+                                                                <Text style={styles.recordingViewButtonText}>View</Text>
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    )}
 
                                                     <TouchableOpacity
                                                         style={styles.recordingDeleteButton}
