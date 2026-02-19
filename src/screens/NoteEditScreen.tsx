@@ -3038,24 +3038,6 @@ export const NoteEditScreen = () => {
                             onClose={() => setShowAudioPlayer(false)}
                         />
                     )}
-                    {!currentPlaybackHasTranscription && (
-                        <TouchableOpacity
-                            style={[styles.retryTranscriptionButton, { alignSelf: 'stretch', justifyContent: 'center', marginTop: spacing.s }]}
-                            onPress={() => {
-                                void handleRetryTranscription(currentPlaybackRecording || undefined);
-                            }}
-                            disabled={!!transcribingRecordingId}
-                        >
-                            {transcribingRecordingId ? (
-                                <ActivityIndicator size="small" color={colors.background} />
-                            ) : (
-                                <>
-                                    <MaterialIcons name="auto-awesome" size={18} color={colors.background} style={{ marginRight: 8 }} />
-                                    <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    )}
                 </View>
             )}
 
@@ -3689,21 +3671,6 @@ export const NoteEditScreen = () => {
                                                 setPlayingRecordingId(null);
                                             }}
                                         />
-                                        {!currentPlaybackHasTranscription && transcriptionEnabled && (
-                                            <TouchableOpacity
-                                                style={styles.retryTranscriptionButton}
-                                                onPress={() => {
-                                                    void handleRetryTranscription(currentPlaybackRecording || undefined);
-                                                }}
-                                                disabled={!!transcribingRecordingId}
-                                            >
-                                                {transcribingRecordingId ? (
-                                                    <ActivityIndicator size="small" color={colors.background} />
-                                                ) : (
-                                                    <Text style={styles.retryTranscriptionText}>Process Voice Note</Text>
-                                                )}
-                                            </TouchableOpacity>
-                                        )}
                                     </View>
                                 )}
 
@@ -3775,50 +3742,44 @@ export const NoteEditScreen = () => {
                                                         </Text>
                                                     </View>
 
-                                                    <TouchableOpacity
-                                                        style={[styles.recordingDeleteButton, { marginRight: 8 }]}
-                                                        disabled={hasAudioPlayerInCurrentVariant}
-                                                        onPress={() => {
-                                                            void handleInsertRecordingAudioPlayer(rec);
-                                                        }}
-                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                    >
-                                                        <View style={[styles.recordingViewButton, hasAudioPlayerInCurrentVariant && styles.recordingActionDisabled]}>
-                                                            <MaterialIcons
-                                                                name="add"
-                                                                size={16}
-                                                                color={colors.primary}
-                                                            />
-                                                            <Text style={styles.recordingViewButtonText}>Insert</Text>
-                                                        </View>
-                                                    </TouchableOpacity>
-
-                                                    {canTranscribeThisRecording && (
+                                                    <View style={styles.recordingActionsRow}>
                                                         <TouchableOpacity
-                                                            style={[styles.recordingDeleteButton, { marginRight: 8 }]}
-                                                            disabled={isAnyTranscribing}
+                                                            style={styles.recordingActionSmall}
+                                                            disabled={hasAudioPlayerInCurrentVariant}
                                                             onPress={() => {
-                                                                void handleRetryTranscription(rec);
+                                                                void handleInsertRecordingAudioPlayer(rec);
                                                             }}
-                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                                         >
-                                                            <View style={styles.recordingViewButton}>
+                                                            <MaterialIcons name="add" size={18} color={hasAudioPlayerInCurrentVariant ? colors.textMuted : colors.primary} />
+                                                            <Text style={[styles.recordingActionSmallText, hasAudioPlayerInCurrentVariant && { color: colors.textMuted }]}>Insert</Text>
+                                                        </TouchableOpacity>
+
+                                                        {canTranscribeThisRecording && (
+                                                            <TouchableOpacity
+                                                                style={styles.recordingActionSmall}
+                                                                disabled={isAnyTranscribing}
+                                                                onPress={() => {
+                                                                    void handleRetryTranscription(rec);
+                                                                }}
+                                                            >
                                                                 {isTranscribingThisRecording ? (
                                                                     <ActivityIndicator size="small" color={colors.primary} />
                                                                 ) : (
                                                                     <>
-                                                                        <MaterialIcons
-                                                                            name="auto-awesome"
-                                                                            size={16}
-                                                                            color={colors.primary}
-                                                                        />
-                                                                        <Text style={styles.recordingViewButtonText}>Transcribe</Text>
+                                                                        <MaterialIcons name="auto-awesome" size={16} color={colors.primary} />
+                                                                        <Text style={styles.recordingActionSmallText}>Transcribe</Text>
                                                                     </>
                                                                 )}
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    )}
+                                                            </TouchableOpacity>
+                                                        )}
 
+                                                        <TouchableOpacity
+                                                            style={styles.recordingActionSmall}
+                                                            onPress={() => confirmDeleteRecording(rec.id)}
+                                                        >
+                                                            <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                                                        </TouchableOpacity>
+                                                    </View>
                                                     {hasRecognizedText && (
                                                         <TouchableOpacity
                                                             style={[styles.recordingDeleteButton, { marginRight: 8 }]}
@@ -4548,6 +4509,27 @@ const styles = StyleSheet.create({
     recordingDeleteButton: {
         padding: spacing.s,
         marginLeft: spacing.s,
+    },
+    recordingActionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    recordingActionSmall: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: colors.border,
+        gap: 4,
+    },
+    recordingActionSmallText: {
+        ...typography.captionBold,
+        color: colors.primary,
+        fontSize: 11,
     },
     recordingViewButton: {
         flexDirection: 'row',
