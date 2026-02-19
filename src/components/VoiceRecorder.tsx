@@ -309,11 +309,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             disabled={isForceTextMode}
                             activeOpacity={0.7}
                         >
-                            <View
-                                style={[
-                                    styles.indicatorDot,
-                                    { backgroundColor: effectiveAgentEnabled ? colors.primary : colors.textTertiary },
-                                ]}
+                            <MaterialIcons
+                                name="smart-toy"
+                                size={20}
+                                color={effectiveAgentEnabled ? colors.primary : colors.textTertiary}
                             />
                             <Text style={[
                                 styles.badgeLabel,
@@ -332,11 +331,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             onPress={() => handleTranscriptionToggle(!transcribe)}
                             activeOpacity={0.7}
                         >
-                            <View
-                                style={[
-                                    styles.indicatorDot,
-                                    { backgroundColor: transcribe ? colors.primary : colors.textTertiary },
-                                ]}
+                            <MaterialIcons
+                                name="mic"
+                                size={20}
+                                color={transcribe ? colors.primary : colors.textTertiary}
                             />
                             <Text style={[
                                 styles.badgeLabel,
@@ -436,24 +434,20 @@ const styles = StyleSheet.create({
     badgeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: spacing.m,
-        paddingVertical: 8,
-        borderRadius: 20,
-        gap: 6,
-        minWidth: 100,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 24,
+        gap: 8,
+        minWidth: 120,
         justifyContent: 'center',
     },
     badgeToggleDisabled: {
         opacity: 0.8,
     },
-    indicatorDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
+
     badgeLabel: {
         ...typography.captionBold,
-        fontSize: 12,
+        fontSize: 14,
     },
     waveformContainer: {
         flexDirection: 'row',
