@@ -410,14 +410,7 @@ export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRe
     try {
         const database = await getDb();
         if (!database) return;
-        const noteMeta = await database.getFirstAsync<{ privacy: string | null; storage_scope: string | null }>(
-            'SELECT privacy, storage_scope FROM notes WHERE id = ? AND user_id = ? LIMIT 1',
-            [recording.note_id, userId]
-        );
-        const isPrivateRecording = !noteMeta
-            || normalizePrivacy(noteMeta.privacy) !== 'normal'
-            || normalizeStorageScope(noteMeta.storage_scope) === 'local_only';
-        const safeTranscription = isPrivateRecording ? null : (recording.transcription || null);
+        const safeTranscription = recording.transcription || null;
         await database.runAsync(
             `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)

@@ -118,6 +118,74 @@ const deriveTitleFromText = (text: string): string => {
     return title.length > 80 ? title.slice(0, 80).trim() : title;
 };
 
+type MicInputMode = 'agent' | 'force_text';
+
+const TODO_LIST_LINE_REGEX = /^\s*-\s+\[[ xX]\]\s+/m;
+const TODO_LABEL_REGEX = /(todo|task|checklist|to-do|список|дела|чеклист)/i;
+
+const stripListMarker = (value: string): string =>
+    value
+        .replace(/^\s*[-*]\s+/, '')
+        .replace(/^\s*\d+[\.\)]\s+/, '')
+        .trim();
+
+const extractListLikeItems = (text: string): string[] => {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return [];
+
+    if (trimmed.includes('\n')) {
+        return trimmed
+            .split('\n')
+            .map(stripListMarker)
+            .filter(Boolean);
+    }
+
+    if (/[;,]/.test(trimmed)) {
+        return trimmed
+            .split(/[;,]/)
+            .map(stripListMarker)
+            .filter(Boolean);
+    }
+
+    return [];
+};
+
+const looksLikeListDictation = (text: string): boolean => {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return false;
+    if (/^\s*[-*]\s+/.test(trimmed) || /^\s*\d+[\.\)]\s+/.test(trimmed)) return true;
+    const items = extractListLikeItems(trimmed);
+    return items.length >= 2;
+};
+
+const appendDictationToTodoContent = (base: string, dictatedText: string): string => {
+    const normalizedBase = (base || '').trimEnd();
+    const normalizedDictation = (dictatedText || '').trim();
+    if (!normalizedDictation) return normalizedBase;
+
+    if (looksLikeListDictation(normalizedDictation)) {
+        const items = extractListLikeItems(normalizedDictation);
+        const checklist = (items.length > 0 ? items : [normalizedDictation]).map((item) => `- [ ] ${item}`);
+        return appendSnippetToContent(normalizedBase, checklist.join('\n'));
+    }
+
+    return appendSnippetToContent(normalizedBase, normalizedDictation);
+};
+
+const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'updated' = 'updated'): string => {
+    const normalizedMode = (mode || '').toLowerCase();
+    if (normalizedMode === 'todo' || normalizedMode === 'list') {
+        return action === 'created' ? 'Created checklist' : 'Updated checklist';
+    }
+    if (normalizedMode === 'format') {
+        return action === 'created' ? 'Created improved view' : 'Updated formatting';
+    }
+    if (normalizedMode === 'edit_content') {
+        return action === 'created' ? 'Created improved view' : 'Updated Improved';
+    }
+    return action === 'created' ? 'Created improved view' : 'Updated Improved';
+};
+
 // History stack implementation - separate history for each variant
 interface HistoryState {
     content: string;
@@ -134,14 +202,6 @@ interface NoteProcessingState {
     isAIProcessing: boolean;
     queueLength: number;
 }
-
-const mergeQueuedTranscriptions = (base: string, next: string): string => {
-    const head = (base || '').trim();
-    const tail = (next || '').trim();
-    if (!head) return tail;
-    if (!tail) return head;
-    return `${head}\n\n${tail}`;
-};
 
 const noteProcessingStateById = new Map<string, NoteProcessingState>();
 const noteProcessingListeners = new Map<string, Set<(state: NoteProcessingState) => void>>();
@@ -493,6 +553,25 @@ export const NoteEditScreen = () => {
 
     // Voice Recordings List State
     const [showRecordingsList, setShowRecordingsList] = useState(false);
+    const [showRecordingTextModal, setShowRecordingTextModal] = useState(false);
+    const [selectedRecordingForText, setSelectedRecordingForText] = useState<VoiceRecording | null>(null);
+    const [recordingStatusById, setRecordingStatusById] = useState<Record<string, string>>({});
+    const [pendingMicInputMode, setPendingMicInputMode] = useState<MicInputMode>('agent');
+    const pendingMicInputModeRef = useRef<MicInputMode>('agent');
+    const micLongPressHandledRef = useRef(false);
+
+    const showVoiceResultStatus = useCallback((_message: string, _recordingId?: string) => {
+        // Intentionally disabled per UX request: no floating status popups.
+    }, []);
+
+    const setRecordingOutcomeStatus = useCallback((recordingId: string | undefined, status: string) => {
+        if (!recordingId) return;
+        setRecordingStatusById((prev) => ({ ...prev, [recordingId]: status }));
+    }, []);
+
+    useEffect(() => {
+        pendingMicInputModeRef.current = pendingMicInputMode;
+    }, [pendingMicInputMode]);
 
     // Refresh recordings when list modal opens
     useEffect(() => {
@@ -674,6 +753,9 @@ export const NoteEditScreen = () => {
         transcribedText: string;
         sessionId: number;
         noteId: string | undefined;
+        targetVariantId: string;
+        micMode: MicInputMode;
+        recordingId?: string;
         isBackground?: boolean;
     }[]>([]);
     const [queueLength, setQueueLengthState] = useState(0);
@@ -1081,6 +1163,86 @@ export const NoteEditScreen = () => {
         };
 
     };
+
+    const resolveVariantContent = useCallback((variantId: string): string => {
+        if (variantId === 'original') {
+            if (activeVariantIdRef.current === 'original') {
+                return currentContentRef.current;
+            }
+            return existingNote?.content || '';
+        }
+        const draft = improvementDraftsRef.current[variantId];
+        if (typeof draft === 'string') {
+            return draft;
+        }
+        const improvement = noteImprovements.find((imp) => imp.id === variantId);
+        return improvement?.content || '';
+    }, [existingNote?.content, noteImprovements]);
+
+    const isTodoImprovementVariant = useCallback((variantId: string, baseContent: string): boolean => {
+        if (variantId === 'original') return false;
+        if (TODO_LIST_LINE_REGEX.test(baseContent || '')) return true;
+        const label = noteImprovements.find((imp) => imp.id === variantId)?.label || '';
+        return TODO_LABEL_REGEX.test(label);
+    }, [noteImprovements]);
+
+    const buildInsertedTextForVariant = useCallback((variantId: string, baseContent: string, dictatedText: string): string => {
+        const normalizedText = dictatedText.trim();
+        if (!normalizedText) return baseContent;
+        if (variantId === 'original') {
+            return appendSnippetToContent(baseContent, normalizedText);
+        }
+
+        if (isTodoImprovementVariant(variantId, baseContent)) {
+            return appendDictationToTodoContent(baseContent, normalizedText);
+        }
+
+        return appendSnippetToContent(baseContent, normalizedText);
+    }, [isTodoImprovementVariant]);
+
+    const applyPlainTextToVariant = useCallback(async (
+        variantId: string,
+        dictatedText: string
+    ): Promise<boolean> => {
+        const normalizedText = dictatedText.trim();
+        if (!normalizedText) return false;
+
+        const baseContent = resolveVariantContent(variantId);
+        const newText = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
+
+        if (areTextsEquivalent(newText, baseContent)) {
+            return false;
+        }
+
+        if (variantId === 'original') {
+            if (activeVariantIdRef.current === 'original') {
+                setContent(newText);
+                currentContentRef.current = newText;
+            }
+            updateHistoryImmediate(currentTitleRef.current, newText, 'original');
+            if (localNoteIdRef.current) {
+                await updateNote(localNoteIdRef.current, { content: newText });
+                lastSavedContent.current = newText;
+            }
+            return true;
+        }
+
+        if (activeVariantIdRef.current === variantId) {
+            setContent(newText);
+            currentContentRef.current = newText;
+        }
+        improvementDraftsRef.current[variantId] = newText;
+        updateHistoryImmediate('', newText, variantId);
+        if (localNoteIdRef.current) {
+            try {
+                await updateImprovement(localNoteIdRef.current, variantId, { content: newText });
+                improvementSavedRef.current[variantId] = newText;
+            } catch (error) {
+                console.error('Failed to save dictated text into improvement:', error);
+            }
+        }
+        return true;
+    }, [buildInsertedTextForVariant, resolveVariantContent, updateImprovement, updateNote]);
 
     const handleTitleChange = (text: string) => {
         setTitle(text);
@@ -1544,10 +1706,24 @@ export const NoteEditScreen = () => {
         );
     };
 
-    const handleMicPress = async () => {
-        // Check removed to allow recording for improvements
-        // if (activeVariantId !== 'original') { ... }
+    const openVoiceRecorderForMode = useCallback((mode: MicInputMode) => {
+        setPendingMicInputMode(mode);
+        pendingMicInputModeRef.current = mode;
         setShowVoiceRecorder(true);
+    }, []);
+
+    const handleMicPress = async () => {
+        if (micLongPressHandledRef.current) {
+            micLongPressHandledRef.current = false;
+            return;
+        }
+        openVoiceRecorderForMode('agent');
+    };
+
+    const handleMicLongPress = () => {
+        micLongPressHandledRef.current = true;
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        openVoiceRecorderForMode('force_text');
     };
 
     const handlePrivacyAccept = () => {
@@ -1564,35 +1740,8 @@ export const NoteEditScreen = () => {
 
         try {
             while (agentQueue.current.length > 0) {
-                if (agentQueue.current.length > 2) {
-                    const activeTask = agentQueue.current[0];
-                    const pendingTasks = agentQueue.current.slice(1);
-                    const mergeablePending = pendingTasks.filter(
-                        (item) =>
-                            item.sessionId === activeTask.sessionId &&
-                            item.noteId === activeTask.noteId &&
-                            !!item.transcribedText?.trim()
-                    );
-                    const foreignPending = pendingTasks.filter(
-                        (item) => !(item.sessionId === activeTask.sessionId && item.noteId === activeTask.noteId)
-                    );
-
-                    if (mergeablePending.length > 1) {
-                        const mergedPending = mergeablePending.reduce((acc, item, index) => {
-                            if (index === 0) return { ...item };
-                            return {
-                                ...acc,
-                                transcribedText: mergeQueuedTranscriptions(acc.transcribedText, item.transcribedText),
-                            };
-                        });
-                        agentQueue.current = [activeTask, mergedPending, ...foreignPending];
-                        setTrackedQueueLength(agentQueue.current.length);
-                        console.log(`[NoteEditScreen] Merged pending agent tasks (queue=${agentQueue.current.length})`);
-                    }
-                }
-
                 // Peek first item
-                let task = agentQueue.current[0];
+                const task = agentQueue.current[0];
                 if (!task) {
                     agentQueue.current.shift();
                     continue;
@@ -1601,21 +1750,33 @@ export const NoteEditScreen = () => {
                 // Check session validity (skip if stale, e.g. from previous note load)
                 if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
                     console.log(`[NoteEditScreen] Skipping stale task ${task.id} (sess: ${task.sessionId}/${agentSessionIdRef.current})`);
+                    setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                     agentQueue.current.shift();
                     setTrackedQueueLength(agentQueue.current.length);
                     continue;
                 }
 
                 if (!task.transcribedText?.trim()) {
+                    setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                     agentQueue.current.shift();
                     setTrackedQueueLength(agentQueue.current.length);
                     continue;
                 }
 
-                const contextContent = currentContentRef.current;
-                const currentVariantId = activeVariantIdRef.current;
+                const taskVariantId = task.targetVariantId || 'original';
+                const contextContent = resolveVariantContent(taskVariantId);
 
                 console.log(`[NoteEditScreen] Processing agent task ${task.id} (queue=${agentQueue.current.length})`);
+
+                const applyFallbackInsertion = async (fallbackText?: string) => {
+                    const textToInsert = (fallbackText || task.transcribedText || '').trim();
+                    if (!textToInsert) return;
+                    const applied = await applyPlainTextToVariant(taskVariantId, textToInsert);
+                    if (!applied) return;
+                    const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                    setRecordingOutcomeStatus(task.recordingId, status);
+                    showVoiceResultStatus(status, task.recordingId);
+                };
 
                 try {
                     setTrackedIsAIProcessing(true);
@@ -1637,6 +1798,7 @@ export const NoteEditScreen = () => {
                     // Check session again after async op
                     if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
                         console.log(`[NoteEditScreen] Task finished but session stale, discarding result for task ${task.id}`);
+                        setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                         // We still shift below
                     } else if (agentResult.success) {
                         // SUCCESS HANDLER
@@ -1647,7 +1809,7 @@ export const NoteEditScreen = () => {
                             });
                         }
 
-                        const originalText = agentResult.originalText || task.transcribedText;
+                        const originalText = (agentResult.originalText || task.transcribedText || '').trim();
                         const explicitTitle = (agentResult.titleValue || '').trim();
 
                         if (agentResult.titleAction === 'set' && explicitTitle && localNoteIdRef.current) {
@@ -1663,6 +1825,8 @@ export const NoteEditScreen = () => {
                             } catch (titleError) {
                                 console.error('[NoteEditScreen] Failed to apply explicit agent title', titleError);
                             }
+                            setRecordingOutcomeStatus(task.recordingId, 'Updated title');
+                            showVoiceResultStatus('Updated title', task.recordingId);
                             // Explicit title command should not mutate note content.
                             continue;
                         }
@@ -1691,101 +1855,98 @@ export const NoteEditScreen = () => {
                             }
                         }
 
-                        if (currentVariantId === 'original') {
-                            const shouldCreateVoiceImprovement =
-                                agentResult.hasInstruction &&
-                                typeof agentResult.processedText === 'string' &&
-                                agentResult.processedText.trim().length > 0 &&
-                                !!localNoteIdRef.current &&
-                                !areTextsEquivalent(agentResult.processedText, originalText);
+                        const processedText = typeof agentResult.processedText === 'string'
+                            ? agentResult.processedText.trim()
+                            : '';
+                        const hasApplicableInstruction =
+                            agentResult.hasInstruction &&
+                            !!processedText &&
+                            !areTextsEquivalent(processedText, originalText);
 
-                            if (shouldCreateVoiceImprovement && localNoteIdRef.current) {
+                        if (taskVariantId === 'original') {
+                            if (hasApplicableInstruction && localNoteIdRef.current) {
                                 const label = agentResult.mode ? `AI(${agentResult.mode})` : 'AI Improvement';
-                                const processed = agentResult.processedText?.trim();
-                                const contentToSave = !processed
-                                    ? ''
-                                    : agentResult.mode === 'edit_content'
-                                        ? processed
-                                        : (() => {
-                                            // Smart Replace: If the note content ends with the raw transcript (which acts as a placeholder),
-                                            // replace it with the improved version. Otherwise, append.
-                                            const trimmedContext = contextContent.trimEnd();
-                                            const trimmedOriginal = originalText.trim();
-                                            if (trimmedOriginal && trimmedContext.endsWith(trimmedOriginal)) {
-                                                // Keep the whitespace before the transcript
-                                                const prefix = contextContent.slice(0, contextContent.lastIndexOf(trimmedOriginal));
-                                                return prefix + processed;
-                                            }
-                                            return appendSnippetToContent(contextContent, processed);
-                                        })();
+                                const newImprovement = await createImprovement(localNoteIdRef.current, {
+                                    content: processedText,
+                                    label,
+                                    optionId: 'voice_instruction'
+                                });
 
-                                if (contentToSave) {
-                                    const newImprovement = await createImprovement(localNoteIdRef.current, {
-                                        content: contentToSave,
-                                        label,
-                                        optionId: 'voice_instruction'
-                                    });
+                                if (newImprovement?.id) {
+                                    improvementDraftsRef.current[newImprovement.id] = processedText;
+                                    improvementSavedRef.current[newImprovement.id] = processedText;
+                                    variantHistories.current[newImprovement.id] = {
+                                        history: [{ title: currentTitleRef.current || '', content: processedText }],
+                                        index: 0
+                                    };
 
-                                    if (newImprovement?.id) {
-                                        improvementDraftsRef.current[newImprovement.id] = contentToSave;
-                                        improvementSavedRef.current[newImprovement.id] = contentToSave;
-                                        variantHistories.current[newImprovement.id] = {
-                                            history: [{ title: title || '', content: contentToSave }],
-                                            index: 0
-                                        };
-
-                                        setActiveVariantId(newImprovement.id);
-                                        activeVariantIdRef.current = newImprovement.id;
-                                        optimisticActiveVariant.current = newImprovement.id;
-                                        setContent(contentToSave);
-                                        currentContentRef.current = contentToSave;
-                                        await setActiveVariant(localNoteIdRef.current, newImprovement.id);
-                                    }
+                                    setActiveVariantId(newImprovement.id);
+                                    activeVariantIdRef.current = newImprovement.id;
+                                    optimisticActiveVariant.current = newImprovement.id;
+                                    setContent(processedText);
+                                    currentContentRef.current = processedText;
+                                    await setActiveVariant(localNoteIdRef.current, newImprovement.id);
                                 }
+
+                                const status = buildAgentStatusMessage(agentResult.mode, 'created');
+                                setRecordingOutcomeStatus(task.recordingId, status);
+                                showVoiceResultStatus(status, task.recordingId);
+                            } else {
+                                await applyFallbackInsertion(originalText || task.transcribedText);
                             }
                         } else {
-                            // Apply to current variant
-                            const processed = agentResult.processedText?.trim();
-                            let newText: string | null = null;
-
-                            if (processed) {
+                            if (hasApplicableInstruction) {
+                                let newText: string | null = null;
                                 if (agentResult.mode === 'edit_content') {
-                                    newText = processed;
+                                    newText = processedText;
                                 } else if (agentResult.mode === 'todo' || agentResult.mode === 'list' || agentResult.mode === 'format') {
-                                    newText = appendSnippetToContent(contextContent, processed);
+                                    const looksLikeFullDocument =
+                                        processedText.includes('\n') &&
+                                        processedText.length >= Math.max(40, Math.floor(contextContent.length * 0.5));
+                                    newText = looksLikeFullDocument
+                                        ? processedText
+                                        : appendSnippetToContent(contextContent, processedText);
+                                } else {
+                                    newText = appendSnippetToContent(contextContent, processedText);
                                 }
-                            }
 
-                            if (newText && !areTextsEquivalent(newText, contextContent)) {
-                                const shouldApplyToVisibleContent = activeVariantIdRef.current === currentVariantId;
-                                if (shouldApplyToVisibleContent) {
-                                    setContent(newText);
-                                    currentContentRef.current = newText;
-                                    updateHistoryImmediate('', newText, currentVariantId);
-                                }
-                                improvementDraftsRef.current[currentVariantId] = newText;
-                                if (localNoteIdRef.current) {
-                                    try {
-                                        await updateImprovement(localNoteIdRef.current, currentVariantId, { content: newText });
-                                        improvementSavedRef.current[currentVariantId] = newText;
-                                    } catch (e) {
-                                        console.error('Failed to save updated improvement', e);
+                                if (newText && !areTextsEquivalent(newText, contextContent)) {
+                                    const shouldApplyToVisibleContent = activeVariantIdRef.current === taskVariantId;
+                                    if (shouldApplyToVisibleContent) {
+                                        setContent(newText);
+                                        currentContentRef.current = newText;
                                     }
+                                    updateHistoryImmediate('', newText, taskVariantId);
+                                    improvementDraftsRef.current[taskVariantId] = newText;
+                                    if (localNoteIdRef.current) {
+                                        try {
+                                            await updateImprovement(localNoteIdRef.current, taskVariantId, { content: newText });
+                                            improvementSavedRef.current[taskVariantId] = newText;
+                                        } catch (e) {
+                                            console.error('Failed to save updated improvement', e);
+                                        }
+                                    }
+
+                                    const status = buildAgentStatusMessage(agentResult.mode, 'updated');
+                                    setRecordingOutcomeStatus(task.recordingId, status);
+                                    showVoiceResultStatus(status, task.recordingId);
+                                } else {
+                                    await applyFallbackInsertion(originalText || task.transcribedText);
                                 }
+                            } else {
+                                await applyFallbackInsertion(originalText || task.transcribedText);
                             }
                         }
                     } else {
                         // LOGIC FAIL (e.g. backend error)
                         console.error('[NoteEditScreen] Agent processing returned fail:', agentResult.error);
-                        // We do NOT show error modal for background queue processing to avoid interrupting user? 
-                        // Or maybe we do. User asked for robustness.
-                        // If it fails, we assume it's done. User can retry by speaking again.
-                        // Showing modal might be annoying if stuck in a loop, but we shift the task so it won't loop.
+                        await applyFallbackInsertion(task.transcribedText);
                         setErrorMessage(getErrorMessage(agentResult.error, 'Agent processing failed'));
                         setErrorModalVisible(true);
                     }
                 } catch (error) {
                     console.error('[NoteEditScreen] Agent flow exception:', error);
+                    await applyFallbackInsertion(task.transcribedText);
                     setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
                     setErrorModalVisible(true);
                 } finally {
@@ -1805,63 +1966,67 @@ export const NoteEditScreen = () => {
 
     const executeAgentFlow = async (
         transcribedText: string,
-        isBackground: boolean = false
+        options?: {
+            isBackground?: boolean;
+            targetVariantId?: string;
+            recordingId?: string;
+            micMode?: MicInputMode;
+        }
     ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
             getAgentModeEnabled(),
             getAIProvider(),
         ]);
         const shouldUseAgentMode = storedAgentModeEnabled && provider === 'secure_llm';
-
-        if (!shouldUseAgentMode) {
-            return;
-        }
-
+        const targetVariantId = options?.targetVariantId ?? activeVariantIdRef.current;
         const normalizedText = transcribedText.trim();
+
         if (!normalizedText) {
             return;
         }
 
-        const taskId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const mergeStartIndex = isProcessingQueue.current ? 1 : 0;
-        let merged = false;
-
-        for (let i = agentQueue.current.length - 1; i >= mergeStartIndex; i--) {
-            const queuedTask = agentQueue.current[i];
-            if (!queuedTask) continue;
-            if (queuedTask.sessionId !== agentSessionIdRef.current || queuedTask.noteId !== localNoteIdRef.current) {
-                continue;
+        if (!shouldUseAgentMode) {
+            const inserted = await applyPlainTextToVariant(targetVariantId, normalizedText);
+            if (inserted) {
+                const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                setRecordingOutcomeStatus(options?.recordingId, status);
+                showVoiceResultStatus(status, options?.recordingId);
             }
-
-            queuedTask.transcribedText = mergeQueuedTranscriptions(queuedTask.transcribedText, normalizedText);
-            queuedTask.isBackground = queuedTask.isBackground || isBackground;
-            merged = true;
-            console.log(`[NoteEditScreen] Merged into queued agent task ${queuedTask.id} (queue=${agentQueue.current.length})`);
-            break;
+            return;
         }
 
-        if (!merged) {
-            agentQueue.current.push({
-                id: taskId,
-                transcribedText: normalizedText,
-                sessionId: agentSessionIdRef.current,
-                noteId: localNoteIdRef.current,
-                isBackground
-            });
-            console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${agentQueue.current.length})`);
-        }
+        const taskId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        agentQueue.current.push({
+            id: taskId,
+            transcribedText: normalizedText,
+            sessionId: agentSessionIdRef.current,
+            noteId: localNoteIdRef.current,
+            targetVariantId,
+            micMode: options?.micMode ?? 'agent',
+            recordingId: options?.recordingId,
+            isBackground: options?.isBackground ?? false,
+        });
+        console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${agentQueue.current.length})`);
 
         setTrackedQueueLength(agentQueue.current.length);
         void processAgentQueue();
     };
 
 
-    const handleRecordingFinish = async (recording: AudioRecording, transcribe: boolean = true) => {
+    const handleRecordingFinish = async (
+        recording: AudioRecording,
+        transcribe: boolean = true,
+        micMode: MicInputMode = 'agent'
+    ) => {
         setShowVoiceRecorder(false);
-        let shouldTranscribe = transcribe;
+        const targetVariantId = activeVariantIdRef.current;
+        let shouldTranscribe = micMode === 'force_text' ? true : transcribe;
         if ((!isAuthenticated || isGuest) && shouldTranscribe) {
             // Anonymous users can't transcribe; keep audio flow intact.
             shouldTranscribe = false;
+            if (micMode === 'force_text') {
+                setShowTranscriptionAuthModal(true);
+            }
         }
         if (shouldTranscribe) {
             const consentGranted = await requestPrivateAIConsent();
@@ -1916,7 +2081,6 @@ export const NoteEditScreen = () => {
             await new Promise(r => setTimeout(r, 100));
         }
 
-        let finalTranscribedContent = content; // Default to existing
         let currentNoteId = localNoteIdRef.current;
 
         // 2. SAVE AUDIO (ALWAYS)
@@ -1924,8 +2088,7 @@ export const NoteEditScreen = () => {
             recording.uri,
             true
         );
-        const isPrivateVoiceContext = normalizeScope(storageScope) === 'local_only';
-        const recordingTranscription = isPrivateVoiceContext ? undefined : transcribedText;
+        const recordingTranscription = transcribedText || undefined;
 
         // Ensure Note Exists (Create if not)
         if (!currentNoteId) {
@@ -1984,85 +2147,45 @@ export const NoteEditScreen = () => {
             has_audio: true,
             audio_file_path: savedPath, // Update "primary" audio path to latest
             audio_duration: recording.duration,
-            // Only update "primary" transcription if we actually have one, or if it was empty
             ...(transcribedText ? { encrypted_transcription: transcribedText } : {})
         });
 
-
-        // 3. UI UPDATE & LOGIC
-        if (activeVariantId === 'original') {
-            // Append text immediately if we have it
-            if (transcribedText) {
-                // Use Ref to get the LATEST content (fixing valid overwrite race condition)
-                const currentContent = currentContentRef.current;
-                finalTranscribedContent = currentContent + (currentContent ? '\n\n' : '') + transcribedText;
-                setContent(finalTranscribedContent);
-                // Also update the Ref immediately to ensure subsequent steps use the new state
-                currentContentRef.current = finalTranscribedContent;
-
-                updateHistoryImmediate(title, finalTranscribedContent);
-                // Save Content with new text
-                await updateNote(currentNoteId, {
-                    content: finalTranscribedContent
-                });
-            } else {
-                // No transcription (or failed) -> Insert Audio Block
-                const currentContent = currentContentRef.current;
-
-                // Use persistent path for markdown to ensure it survives app restarts
-                // The AudioPlayer component handles decryption/playback
-
-                // Construct audio block
-                // We add newlines to ensure it's on its own block
-                const audioBlock = `${currentContent ? '\n' : ''} ![audio](${savedPath}) \n`;
-
-                finalTranscribedContent = currentContent + audioBlock;
-                setContent(finalTranscribedContent);
-                currentContentRef.current = finalTranscribedContent;
-
-                updateHistoryImmediate(title, finalTranscribedContent);
-                await updateNote(currentNoteId, {
-                    content: finalTranscribedContent
-                });
-            }
-
-            // Set Player
-            const playbackUri = await AudioService.readAudioFile(savedPath);
-            setAudioUri(playbackUri);
-            setAudioDuration(recording.duration);
-            setShowAudioPlayer(true);
-            setPlayingRecordingId(voiceId); // Track the ID
-            setHasTranscription(!!transcribedText);
-
-        } else {
-            // Improvement Mode
-            // Audio is already saved to parent and state updated.
-
-            // If transcription failed, just show player and stop
-            if (!isTranscriptionSuccess) {
-                const playbackUri = await AudioService.readAudioFile(savedPath);
-                setAudioUri(playbackUri);
-                setAudioDuration(recording.duration);
-                setShowAudioPlayer(true);
-                setPlayingRecordingId(voiceId); // Track the ID
-                setHasTranscription(false);
-                return;
-            }
-
-            // If transcription success, we let the agent process it below
-        }
+        const playbackUri = await AudioService.readAudioFile(savedPath);
+        setAudioUri(playbackUri);
+        setAudioDuration(recording.duration);
+        setShowAudioPlayer(true);
+        setPlayingRecordingId(voiceId);
+        setHasTranscription(!!transcribedText);
 
         // 4. STOP IF NO TEXT
         if (!isTranscriptionSuccess) {
+            const status = 'Saved recording (no text)';
+            setRecordingOutcomeStatus(voiceId, status);
+            showVoiceResultStatus(status, voiceId);
             return;
         }
 
+        if (micMode === 'force_text') {
+            const inserted = await applyPlainTextToVariant(targetVariantId, transcribedText);
+            if (inserted) {
+                const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                setRecordingOutcomeStatus(voiceId, status);
+                showVoiceResultStatus(status, voiceId);
+            } else {
+                const status = 'Saved recording';
+                setRecordingOutcomeStatus(voiceId, status);
+                showVoiceResultStatus(status, voiceId);
+            }
+            return;
+        }
 
-
-        // 5. AGENT PROCESSING (If enabled)
-        // Note: processAgentQueue uses currentContentRef internally, so we don't strictly need to pass content here,
-        // but passing the updated version we just set helps consistency if that function used the arg.
-        await executeAgentFlow(transcribedText, true);
+        setRecordingOutcomeStatus(voiceId, 'Processing...');
+        await executeAgentFlow(transcribedText, {
+            isBackground: true,
+            targetVariantId,
+            recordingId: voiceId,
+            micMode,
+        });
     };
 
     const handleInstructionRecordingFinish = async (recording: AudioRecording) => {
@@ -2127,33 +2250,44 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(true);
     };
 
-    const handleInsertAudioToNote = async (recording: VoiceRecording) => {
-        try {
-            // Use persistent path directly to ensure it matches what is stored in DB and used for deletion
-            const uri = recording.file_path; // await AudioService.readAudioFile(recording.file_path);
-            const currentContent = currentContentRef.current;
-            const audioBlock = `${currentContent ? '\n' : ''} ![audio](${uri}) \n`;
+    const getRecordingStatus = useCallback((recordingId: string): string => {
+        return recordingStatusById[recordingId] || 'Saved recording';
+    }, [recordingStatusById]);
 
-            const newContent = currentContent + audioBlock;
-            setContent(newContent);
-            currentContentRef.current = newContent;
-
-            if (activeVariantId === 'original') {
-                updateHistoryImmediate(title, newContent);
-                if (localNoteId) {
-                    await updateNote(localNoteId, { content: newContent });
-                }
-            } else {
-                improvementDraftsRef.current[activeVariantId] = newContent;
-                updateHistoryImmediate(title, newContent);
-            }
-
-            setShowRecordingsList(false);
-        } catch (error) {
-            console.error('Failed to insert audio:', error);
-            Alert.alert('Error', 'Failed to insert audio');
-        }
+    const openRecordingTextView = (recording: VoiceRecording) => {
+        setSelectedRecordingForText(recording);
+        setShowRecordingTextModal(true);
     };
+
+    const handleInsertSelectedRecordingText = useCallback(async () => {
+        const selected = selectedRecordingForText;
+        const recognizedText = selected?.transcription?.trim() || '';
+        if (!selected || !recognizedText) {
+            Alert.alert('No recognized text', 'This recording has no saved transcript yet.');
+            return;
+        }
+
+        const targetVariant = activeVariantIdRef.current;
+
+        const inserted = await applyPlainTextToVariant(targetVariant, recognizedText);
+        if (!inserted) return;
+
+        const status = targetVariant === 'original' ? 'Added to Original' : 'Added to Improved';
+        setRecordingOutcomeStatus(selected.id, status);
+        showVoiceResultStatus(status, selected.id);
+        setShowRecordingTextModal(false);
+    }, [applyPlainTextToVariant, selectedRecordingForText, setRecordingOutcomeStatus, showVoiceResultStatus]);
+
+    const handleCopySelectedRecordingText = useCallback(async () => {
+        const selected = selectedRecordingForText;
+        const recognizedText = selected?.transcription?.trim() || '';
+        if (!recognizedText) {
+            Alert.alert('No recognized text', 'This recording has no saved transcript yet.');
+            return;
+        }
+        await Clipboard.setStringAsync(recognizedText);
+        showVoiceResultStatus('Copied transcript', selected?.id);
+    }, [selectedRecordingForText, showVoiceResultStatus]);
 
 
 
@@ -2449,6 +2583,8 @@ export const NoteEditScreen = () => {
     const effectivePrivacy = normalizePrivacy(privacy);
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only';
+    const micHintText = 'Hold: no agent';
+    const selectedRecordingText = selectedRecordingForText?.transcription?.trim() || '';
 
     // Handle initial recording passed from navigation
     useEffect(() => {
@@ -2500,32 +2636,26 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            const text = transcription.text;
+            const text = transcription.text.trim();
+            if (!text) {
+                setErrorMessage('Recognition returned empty text');
+                setErrorModalVisible(true);
+                return;
+            }
 
-            // Append text to LATEST content
-            // Need to fetch fresh ref again in case it changed during `transcribeAudio`
-            const freshContent = currentContentRef.current;
-            const newContent = freshContent + (freshContent ? '\n\n' : '') + text;
-
-            setContent(newContent);
-            currentContentRef.current = newContent; // Update Ref
-
-            updateHistoryImmediate(title, newContent);
-
-            // Update DB
             if (localNoteId) {
                 await updateNote(localNoteId, {
-                    content: newContent,
                     encrypted_transcription: text
                 });
             }
 
             setHasTranscription(true);
 
-
-
-            // Trigger Agent Flow
-            await executeAgentFlow(text, false);
+            await executeAgentFlow(text, {
+                isBackground: false,
+                targetVariantId: activeVariantIdRef.current,
+                micMode: 'agent',
+            });
 
         } catch (error: any) {
             setTrackedIsTranscribing(false);
@@ -2573,6 +2703,16 @@ export const NoteEditScreen = () => {
                         // Calculate new list state
                         const remaining = voiceRecordings.filter(r => r.id !== id);
                         setVoiceRecordings(remaining);
+                        setRecordingStatusById((prev) => {
+                            if (!prev[id]) return prev;
+                            const next = { ...prev };
+                            delete next[id];
+                            return next;
+                        });
+                        if (selectedRecordingForText?.id === id) {
+                            setSelectedRecordingForText(null);
+                            setShowRecordingTextModal(false);
+                        }
 
                         // 1. Close player if playing deleted file OR if no recordings left
                         if (remaining.length === 0) {
@@ -3292,15 +3432,21 @@ export const NoteEditScreen = () => {
 
             {/* Floating Mic Button */}
             {!isEditing && (
-                <TouchableOpacity
-                    style={styles.micButton}
-                    onPress={handleMicPress}
-                    activeOpacity={0.8}
-                >
-                    <MaterialIcons name="mic" size={28} color="white" />
-                </TouchableOpacity>
-            )
-            }
+                <View style={styles.micFloatingContainer}>
+                    <TouchableOpacity
+                        style={styles.micButton}
+                        onPress={handleMicPress}
+                        onLongPress={handleMicLongPress}
+                        delayLongPress={250}
+                        activeOpacity={0.8}
+                    >
+                        <MaterialIcons name="mic" size={28} color="white" />
+                    </TouchableOpacity>
+                    <View style={styles.micHintBubble}>
+                        <Text style={styles.micHintText}>{micHintText}</Text>
+                    </View>
+                </View>
+            )}
 
             <PrivacyWarningModal
                 visible={showPrivacyWarning}
@@ -3339,12 +3485,16 @@ export const NoteEditScreen = () => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec, transcribe);
+                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current);
                     }
+                    setPendingMicInputMode('agent');
+                    pendingMicInputModeRef.current = 'agent';
                 }}
                 onCancel={() => {
                     setShowVoiceRecorder(false);
                     setIsRecordingInstruction(false);
+                    setPendingMicInputMode('agent');
+                    pendingMicInputModeRef.current = 'agent';
                 }}
                 autoStart={true}
             />
@@ -3442,18 +3592,24 @@ export const NoteEditScreen = () => {
                                                         ]}>
                                                             {new Date(rec.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {formatDuration(rec.duration)}
                                                         </Text>
+                                                        <Text style={styles.recordingStatusText} numberOfLines={1}>
+                                                            {getRecordingStatus(rec.id)}
+                                                        </Text>
                                                     </View>
 
                                                     <TouchableOpacity
                                                         style={[styles.recordingDeleteButton, { marginRight: 8 }]}
-                                                        onPress={() => handleInsertAudioToNote(rec)}
+                                                        onPress={() => openRecordingTextView(rec)}
                                                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                                     >
-                                                        <MaterialIcons
-                                                            name="playlist-add" // or "input" or "add-circle-outline"
-                                                            size={24}
-                                                            color={colors.primary}
-                                                        />
+                                                        <View style={styles.recordingViewButton}>
+                                                            <MaterialIcons
+                                                                name="visibility"
+                                                                size={16}
+                                                                color={colors.primary}
+                                                            />
+                                                            <Text style={styles.recordingViewButtonText}>View</Text>
+                                                        </View>
                                                     </TouchableOpacity>
 
                                                     <TouchableOpacity
@@ -3473,6 +3629,60 @@ export const NoteEditScreen = () => {
                                     )}
                                 </ScrollView>
 
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </GestureHandlerRootView>
+                </TouchableWithoutFeedback>
+            </Modal>
+
+            <Modal
+                visible={showRecordingTextModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowRecordingTextModal(false)}
+            >
+                <TouchableWithoutFeedback onPress={() => setShowRecordingTextModal(false)}>
+                    <GestureHandlerRootView style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View
+                                style={[
+                                    styles.recordingTextModalContent,
+                                    { paddingBottom: (Platform.OS === 'android' ? spacing.xxl : spacing.l) + insets.bottom },
+                                ]}
+                            >
+                                <Text style={styles.aiModalTitle}>Recognized text</Text>
+                                <ScrollView style={styles.recordingTextBody}>
+                                    <Text style={styles.recordingTextValue}>
+                                        {selectedRecordingText || 'No recognized text for this recording yet.'}
+                                    </Text>
+                                </ScrollView>
+
+                                <TouchableOpacity
+                                    style={[styles.recordingActionButton, !selectedRecordingText && styles.recordingActionDisabled]}
+                                    disabled={!selectedRecordingText}
+                                    onPress={() => {
+                                        void handleInsertSelectedRecordingText();
+                                    }}
+                                >
+                                    <Text style={styles.recordingActionText}>Insert</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.recordingSecondaryAction, !selectedRecordingText && styles.recordingActionDisabled]}
+                                    disabled={!selectedRecordingText}
+                                    onPress={() => {
+                                        void handleCopySelectedRecordingText();
+                                    }}
+                                >
+                                    <Text style={styles.recordingSecondaryText}>Copy</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.recordingCloseAction}
+                                    onPress={() => setShowRecordingTextModal(false)}
+                                >
+                                    <Text style={styles.recordingCloseText}>Close</Text>
+                                </TouchableOpacity>
                             </View>
                         </TouchableWithoutFeedback>
                     </GestureHandlerRootView>
@@ -3686,10 +3896,30 @@ const styles = StyleSheet.create({
         minHeight: 200,
         padding: 0,
     },
-    micButton: {
+    micFloatingContainer: {
         position: 'absolute',
-        bottom: spacing.xxl,
         right: spacing.xl,
+        bottom: spacing.xxl,
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    micHintBubble: {
+        paddingHorizontal: spacing.s,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+    },
+    micHintText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        opacity: 0.95,
+        fontSize: 10,
+        lineHeight: 12,
+        textAlign: 'center',
+    },
+    micButton: {
         width: 56,
         height: 56,
         borderRadius: 28,
@@ -4101,8 +4331,98 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textMuted,
     },
+    recordingStatusText: {
+        marginTop: 2,
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
     recordingDeleteButton: {
         padding: spacing.s,
         marginLeft: spacing.s,
+    },
+    recordingViewButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: spacing.s,
+        paddingVertical: 6,
+        borderRadius: 999,
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    recordingViewButtonText: {
+        ...typography.caption,
+        color: colors.primary,
+        fontWeight: '600',
+    },
+    recordingTextModalContent: {
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: spacing.l,
+        maxHeight: '80%',
+    },
+    recordingTextBody: {
+        maxHeight: 280,
+        marginBottom: spacing.m,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        padding: spacing.m,
+        backgroundColor: colors.background,
+    },
+    recordingTextValue: {
+        ...typography.body,
+        color: colors.text,
+        lineHeight: 22,
+    },
+    recordingActionButton: {
+        backgroundColor: colors.primary,
+        borderRadius: 14,
+        height: 50,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.s,
+        shadowColor: colors.cardShadow,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+        elevation: 4,
+    },
+    recordingActionText: {
+        ...typography.button,
+        color: colors.surface,
+    },
+    recordingSecondaryAction: {
+        borderRadius: 12,
+        height: 46,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: spacing.xs,
+        backgroundColor: colors.surface,
+    },
+    recordingSecondaryText: {
+        ...typography.captionBold,
+        color: colors.text,
+    },
+    recordingCloseAction: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 46,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        marginTop: spacing.xs,
+    },
+    recordingCloseText: {
+        ...typography.captionBold,
+        color: colors.textSecondary,
+    },
+    recordingActionDisabled: {
+        opacity: 0.45,
     },
 });

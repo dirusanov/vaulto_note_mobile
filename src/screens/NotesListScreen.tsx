@@ -573,7 +573,7 @@ export const NotesListScreen = () => {
                             {/* Right Secondary Button */}
                             <SecondaryButton />
                         </View>
-                        <Text style={styles.hintText}>Long press to swap</Text>
+                        <Text style={styles.hintText}>Hold to switch</Text>
                     </View>
                 </View>
             )}

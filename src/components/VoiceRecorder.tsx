@@ -13,7 +13,12 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { AudioService, AudioRecording } from '../services/AudioService';
-import { getTranscriptionEnabled, setTranscriptionEnabled } from '../utils/storage';
+import {
+    getAgentModeEnabled,
+    getTranscriptionEnabled,
+    setAgentModeEnabled,
+    setTranscriptionEnabled
+} from '../utils/storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
@@ -44,6 +49,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
+    const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -53,6 +59,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     useEffect(() => {
         if (visible) {
+            getAgentModeEnabled().then(enabled => {
+                setAgentModeEnabledState(enabled);
+            });
+
             if (!isAuthenticated || isGuest) {
                 // Anonymous users cannot use transcription; keep toggle OFF.
                 setTranscribe(false);
@@ -88,6 +98,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (isAuthenticated && !isGuest) {
             setTranscriptionEnabled(value);
         }
+    };
+
+    const handleAgentModeToggle = (value: boolean) => {
+        setAgentModeEnabledState(value);
+        setAgentModeEnabled(value);
     };
 
     useEffect(() => {
@@ -211,6 +226,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     onCancel();
                     return;
                 }
+                // Persist the current switch state before handing off recording flow.
+                await setAgentModeEnabled(agentModeEnabled);
                 onFinish(recording, transcribe);
             }
         } catch (error) {
@@ -246,6 +263,28 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
                     {/* Timer */}
                     <Text style={styles.timer} numberOfLines={1} adjustsFontSizeToFit>{formatDuration(duration)}</Text>
+
+                    {/* Agent Mode Indicator & Toggle */}
+                    <View style={styles.agentToggleContainer}>
+                        <View style={styles.agentIndicatorWrap}>
+                            <View
+                                style={[
+                                    styles.agentIndicatorDot,
+                                    { backgroundColor: agentModeEnabled ? colors.primary : colors.textMuted },
+                                ]}
+                            />
+                            <Text style={styles.agentToggleLabel}>
+                                {agentModeEnabled ? 'Agent ON' : 'Agent OFF'}
+                            </Text>
+                        </View>
+                        <Switch
+                            value={agentModeEnabled}
+                            onValueChange={handleAgentModeToggle}
+                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                            thumbColor="white"
+                            style={{ transform: [{ scaleX: 1.05 }, { scaleY: 1.05 }] }}
+                        />
+                    </View>
 
                     {/* Waveform Visualization */}
                     <View style={styles.waveformContainer}>
@@ -348,10 +387,36 @@ const styles = StyleSheet.create({
         lineHeight: 72, // Explicit line height to prevent clipping
         fontWeight: '200',
         color: colors.text,
-        marginBottom: spacing.xl,
+        marginBottom: spacing.s,
         fontVariant: ['tabular-nums'],
         textAlign: 'center',
         width: '100%',
+    },
+    agentToggleContainer: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 16,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 8,
+        marginBottom: spacing.l,
+    },
+    agentIndicatorWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    agentIndicatorDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    agentToggleLabel: {
+        ...typography.body2,
+        color: colors.text,
+        fontWeight: '600',
     },
     waveformContainer: {
         flexDirection: 'row',
