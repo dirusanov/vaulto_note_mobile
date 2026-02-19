@@ -3591,10 +3591,10 @@ export const NoteEditScreen = () => {
                             <Defs>
                                 <Path
                                     id="micCurve"
-                                    d="M 20,60 A 40,40 0 0 1 100,60"
+                                    d="M 20,60 A 40,40 0 0 0 100,60"
                                 />
                             </Defs>
-                            <SvgText fill={colors.textSecondary} fontSize="10" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
+                            <SvgText fill={colors.textSecondary} fontSize="8" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
                                 <TextPath href="#micCurve" startOffset="50%">
                                     {micHintText.toUpperCase()}
                                 </TextPath>
