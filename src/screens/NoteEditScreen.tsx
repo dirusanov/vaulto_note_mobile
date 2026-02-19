@@ -3481,6 +3481,7 @@ export const NoteEditScreen = () => {
 
             <VoiceRecorder
                 visible={showVoiceRecorder}
+                micMode={pendingMicInputMode}
                 onFinish={(rec, transcribe) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);

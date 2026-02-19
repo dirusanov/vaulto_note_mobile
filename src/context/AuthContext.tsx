@@ -177,14 +177,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     await storage.setUserProfile(profile);
                     await syncService.setCurrentUser(profile.id, storedUserId);
                     console.log('[AuthContext] Profile loaded:', profile.id, 'isGuest:', !profile.is_verified);
-                } catch (err) {
-                    console.error('[AuthContext] Failed to load profile, creating guest session', err);
-                    if (keepLocalNotes && storedUserId) {
-                        setUserId(storedUserId);
+                } catch (err: any) {
+                    const status = err?.response?.status;
+                    if (status === 401) {
+                        console.error('[AuthContext] Profile unauthorized, creating guest session', err);
+                        if (keepLocalNotes && storedUserId) {
+                            setUserId(storedUserId);
+                        } else {
+                            setUserId(null);
+                        }
+                        await createGuestSession({ preserveLocalUserId: keepLocalNotes });
                     } else {
-                        setUserId(null);
+                        console.error('[AuthContext] Failed to load profile (keeping existing token state)', err);
+                        if (storedUserId) {
+                            setUserId(storedUserId);
+                            await syncService.setCurrentUser(storedUserId, storedUserId);
+                        } else {
+                            setUserId(null);
+                        }
+                        setIsGuest(false);
                     }
-                    await createGuestSession({ preserveLocalUserId: keepLocalNotes });
                 }
                 setIsLoading(false);
             } else {

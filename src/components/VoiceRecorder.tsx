@@ -29,6 +29,7 @@ interface VoiceRecorderProps {
     onFinish: (recording: AudioRecording, transcribe: boolean) => void;
     onCancel: () => void;
     autoStart?: boolean;
+    micMode?: 'agent' | 'force_text';
 }
 
 
@@ -41,6 +42,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     onFinish,
     onCancel,
     autoStart = false,
+    micMode = 'agent',
 }) => {
     const navigation = useNavigation<any>();
     const { isAuthenticated, isGuest } = useAuth();
@@ -50,6 +52,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isPaused, setIsPaused] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
+    const isForceTextMode = micMode === 'force_text';
+    const effectiveAgentEnabled = !isForceTextMode && agentModeEnabled;
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -60,7 +64,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     useEffect(() => {
         if (visible) {
             getAgentModeEnabled().then(enabled => {
-                setAgentModeEnabledState(enabled);
+                if (!isAuthenticated || isGuest) {
+                    setAgentModeEnabledState(false);
+                } else {
+                    setAgentModeEnabledState(enabled);
+                }
             });
 
             if (!isAuthenticated || isGuest) {
@@ -101,6 +109,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     };
 
     const handleAgentModeToggle = (value: boolean) => {
+        if (isForceTextMode) return;
+        if ((!isAuthenticated || isGuest) && value) {
+            setShowTranscriptionAuthModal(true);
+            setAgentModeEnabledState(false);
+            return;
+        }
         setAgentModeEnabledState(value);
         setAgentModeEnabled(value);
     };
@@ -227,7 +241,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     return;
                 }
                 // Persist the current switch state before handing off recording flow.
-                await setAgentModeEnabled(agentModeEnabled);
+                if (!isForceTextMode) {
+                    await setAgentModeEnabled(agentModeEnabled);
+                }
                 onFinish(recording, transcribe);
             }
         } catch (error) {
@@ -261,31 +277,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     {/* Header */}
                     <Text style={styles.title}>{isPaused ? 'Recording Paused' : 'Recording Audio...'}</Text>
 
-                    {/* Timer */}
-                    <Text style={styles.timer} numberOfLines={1} adjustsFontSizeToFit>{formatDuration(duration)}</Text>
-
-                    {/* Agent Mode Indicator & Toggle */}
-                    <View style={styles.agentToggleContainer}>
-                        <View style={styles.agentIndicatorWrap}>
-                            <View
-                                style={[
-                                    styles.agentIndicatorDot,
-                                    { backgroundColor: agentModeEnabled ? colors.primary : colors.textMuted },
-                                ]}
-                            />
-                            <Text style={styles.agentToggleLabel}>
-                                {agentModeEnabled ? 'Agent ON' : 'Agent OFF'}
-                            </Text>
-                        </View>
-                        <Switch
-                            value={agentModeEnabled}
-                            onValueChange={handleAgentModeToggle}
-                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                            thumbColor="white"
-                            style={{ transform: [{ scaleX: 1.05 }, { scaleY: 1.05 }] }}
-                        />
-                    </View>
-
                     {/* Waveform Visualization */}
                     <View style={styles.waveformContainer}>
                         {animations.map((anim, index) => (
@@ -295,24 +286,65 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                     styles.bar,
                                     {
                                         transform: [{ scaleY: anim }],
-                                        opacity: isRecording && !isPaused ? 1 : 0.3,
+                                        opacity: isRecording && !isPaused ? 1 : 0.2,
                                     },
                                 ]}
                             />
                         ))}
                     </View>
 
-                    {/* Transcription Toggle */}
-                    <View style={styles.toggleContainer}>
-                        <Text style={styles.toggleLabel}>Transcribe Audio</Text>
-                        <Switch
-                            value={transcribe}
-                            onValueChange={handleTranscriptionToggle}
-                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                            thumbColor="white"
-                            // Scale transform for bigger switch
-                            style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }}
-                        />
+                    {/* Timer */}
+                    <Text style={styles.timer} numberOfLines={1} adjustsFontSizeToFit>{formatDuration(duration)}</Text>
+
+                    {/* Toggles Row */}
+                    <View style={styles.togglesRow}>
+                        {/* Agent Toggle Badge */}
+                        <TouchableOpacity
+                            style={[
+                                styles.badgeToggle,
+                                { backgroundColor: effectiveAgentEnabled ? colors.primary + '15' : colors.backgroundSecondary },
+                                isForceTextMode && styles.badgeToggleDisabled,
+                            ]}
+                            onPress={() => handleAgentModeToggle(!agentModeEnabled)}
+                            disabled={isForceTextMode}
+                            activeOpacity={0.7}
+                        >
+                            <View
+                                style={[
+                                    styles.indicatorDot,
+                                    { backgroundColor: effectiveAgentEnabled ? colors.primary : colors.textTertiary },
+                                ]}
+                            />
+                            <Text style={[
+                                styles.badgeLabel,
+                                { color: effectiveAgentEnabled ? colors.primary : colors.textSecondary }
+                            ]}>
+                                {effectiveAgentEnabled ? 'AI Agent ON' : 'AI Agent OFF'}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* Transcription Toggle Badge */}
+                        <TouchableOpacity
+                            style={[
+                                styles.badgeToggle,
+                                { backgroundColor: transcribe ? colors.primary + '15' : colors.backgroundSecondary }
+                            ]}
+                            onPress={() => handleTranscriptionToggle(!transcribe)}
+                            activeOpacity={0.7}
+                        >
+                            <View
+                                style={[
+                                    styles.indicatorDot,
+                                    { backgroundColor: transcribe ? colors.primary : colors.textTertiary },
+                                ]}
+                            />
+                            <Text style={[
+                                styles.badgeLabel,
+                                { color: transcribe ? colors.primary : colors.textSecondary }
+                            ]}>
+                                Transcribe {transcribe ? 'ON' : 'OFF'}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Controls */}
@@ -321,7 +353,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={styles.cancelButton}
                             onPress={handleCancel}
                         >
-                            <MaterialIcons name="close" size={36} color="white" />
+                            <MaterialIcons name="close" size={32} color={colors.textSecondary} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -376,73 +408,64 @@ const styles = StyleSheet.create({
         elevation: 20,
     },
     title: {
-        ...typography.caption,
-        color: colors.primary,
-        marginBottom: spacing.s,
-        letterSpacing: 1,
+        ...typography.captionBold,
+        color: colors.textSecondary,
+        marginBottom: spacing.xl,
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
     },
     timer: {
         ...typography.h1,
-        fontSize: 64, // Kept large, but added adjustsFontSizeToFit
-        lineHeight: 72, // Explicit line height to prevent clipping
-        fontWeight: '200',
+        fontSize: 72,
+        lineHeight: 80,
+        fontWeight: '300',
         color: colors.text,
-        marginBottom: spacing.s,
+        marginBottom: spacing.l,
         fontVariant: ['tabular-nums'],
         textAlign: 'center',
         width: '100%',
     },
-    agentToggleContainer: {
-        width: '100%',
+    togglesRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: colors.backgroundSecondary,
-        borderRadius: 16,
+        justifyContent: 'center',
+        gap: spacing.s,
+        marginBottom: spacing.xxl,
+        width: '100%',
+    },
+    badgeToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: spacing.m,
         paddingVertical: 8,
-        marginBottom: spacing.l,
+        borderRadius: 20,
+        gap: 6,
+        minWidth: 100,
+        justifyContent: 'center',
     },
-    agentIndicatorWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
+    badgeToggleDisabled: {
+        opacity: 0.8,
     },
-    agentIndicatorDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+    indicatorDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
     },
-    agentToggleLabel: {
-        ...typography.body2,
-        color: colors.text,
-        fontWeight: '600',
+    badgeLabel: {
+        ...typography.captionBold,
+        fontSize: 12,
     },
     waveformContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 60,
+        height: 80,
         marginBottom: spacing.l,
-        gap: 4,
-    },
-    toggleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.xl,
-        backgroundColor: colors.backgroundSecondary,
-        paddingHorizontal: spacing.l,
-        paddingVertical: spacing.xs,
-        borderRadius: 20,
-    },
-    toggleLabel: {
-        ...typography.body2,
-        color: colors.text,
-        marginRight: spacing.m,
+        gap: 6,
     },
     bar: {
-        width: 4,
-        height: 40,
+        width: 3.5,
+        height: 48,
         backgroundColor: colors.primary,
         borderRadius: 2,
     },
@@ -450,42 +473,36 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.xxl, // Increased gap for perceived minimalism
+        gap: spacing.xl,
         width: '100%',
     },
     finishButton: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         backgroundColor: colors.success,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: colors.success,
-        shadowOffset: { width: 0, height: 8 }, // Softer, deeper shadow
-        shadowOpacity: 0.2, // Reduced opacity
-        shadowRadius: 16, // Smoother blur
-        elevation: 12,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 8,
     },
     pauseButton: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         backgroundColor: colors.backgroundSecondary,
         justifyContent: 'center',
         alignItems: 'center',
-        // Minimalistic: No heavy shadow for neutral action
     },
     cancelButton: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: colors.error,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: colors.backgroundSecondary,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.error,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 16,
-        elevation: 12,
     },
 });

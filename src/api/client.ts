@@ -13,6 +13,16 @@ const client = axios.create({
 
 let refreshPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
 let unauthorizedEmitted = false;
+let lastRefreshFailureWasInvalid = false;
+
+const isInvalidRefreshStatus = (status?: number): boolean => {
+    return status === 400 || status === 401 || status === 403;
+};
+
+type RefreshAttemptResult =
+    | { kind: 'success'; tokens: { accessToken: string; refreshToken: string } }
+    | { kind: 'invalid_refresh' }
+    | { kind: 'transient_failure' };
 
 const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken: string } | null> => {
     if (refreshPromise) {
@@ -20,9 +30,11 @@ const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken
     }
 
     refreshPromise = (async () => {
+        lastRefreshFailureWasInvalid = false;
         const refreshToken = await storage.getRefreshToken();
         if (!refreshToken) {
             console.log('[client] No refresh token available');
+            lastRefreshFailureWasInvalid = true;
             return null;
         }
 
@@ -43,6 +55,11 @@ const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken
             };
         } catch (refreshError) {
             console.error('[client] Refresh failed:', refreshError);
+            if (axios.isAxiosError(refreshError)) {
+                lastRefreshFailureWasInvalid = isInvalidRefreshStatus(refreshError.response?.status);
+            } else {
+                lastRefreshFailureWasInvalid = false;
+            }
             return null;
         } finally {
             refreshPromise = null;
@@ -50,6 +67,24 @@ const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken
     })();
 
     return refreshPromise;
+};
+
+const refreshAccessTokenSafely = async (): Promise<RefreshAttemptResult> => {
+    const refreshToken = await storage.getRefreshToken();
+    if (!refreshToken) {
+        return { kind: 'invalid_refresh' };
+    }
+
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+        return { kind: 'success', tokens: refreshed };
+    }
+
+    if (lastRefreshFailureWasInvalid) {
+        return { kind: 'invalid_refresh' };
+    }
+
+    return { kind: 'transient_failure' };
 };
 
 const emitUnauthorizedOnce = async () => {
@@ -88,15 +123,25 @@ client.interceptors.response.use(
             console.log('[client] 401 received, attempting refresh...');
             originalRequest._retry = true;
 
-            const refreshedTokens = await refreshAccessToken();
-            if (refreshedTokens) {
+            const refreshResult = await refreshAccessTokenSafely();
+            if (refreshResult.kind === 'success') {
                 originalRequest.headers = originalRequest.headers ?? {};
-                originalRequest.headers.Authorization = `Bearer ${refreshedTokens.accessToken}`;
+                originalRequest.headers.Authorization = `Bearer ${refreshResult.tokens.accessToken}`;
                 return client(originalRequest);
             }
 
-            console.log('[client] 401 unrecoverable, emitting unauthorized event');
-            await emitUnauthorizedOnce();
+            if (refreshResult.kind === 'invalid_refresh') {
+                console.log('[client] 401 unrecoverable (invalid refresh), emitting unauthorized event');
+                await emitUnauthorizedOnce();
+            } else {
+                console.log('[client] Refresh failed due to transient issue, keeping current session');
+            }
+        } else if (error.response && error.response.status === 401 && originalRequest?._retry) {
+            const refreshToken = await storage.getRefreshToken();
+            if (!refreshToken) {
+                console.log('[client] 401 after retry and no refresh token, emitting unauthorized event');
+                await emitUnauthorizedOnce();
+            }
         }
 
         // Expanded logging for Network Errors
