@@ -278,8 +278,8 @@ export const SettingsScreen = () => {
     const usingOpenAI = aiProvider === 'openai';
     const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
     const hasConfiguredKey = custodyMode === 'strict_seed' || !!bundle || hasRemoteKeyBundle;
-    const syncStatusLabel = !syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On';
-    const syncStatusColor = !syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen;
+    const syncStatusLabel = encryptionStatus === 'loading' ? 'Checking...' : (!syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On');
+    const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (!syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen);
     // When configured, we show the Change button only (no extra "Configured" label).
     const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
@@ -751,37 +751,43 @@ export const SettingsScreen = () => {
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <Text style={[styles.securityValueMinimal, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
-                            {syncEnabled && syncLocked && !syncToggleDisabled && (
-                                <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
-                                    <Text style={styles.smallButtonText}>Unlock</Text>
-                                </TouchableOpacity>
+                            {encryptionStatus === 'loading' ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                                <>
+                                    {syncEnabled && syncLocked && !syncToggleDisabled && (
+                                        <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
+                                            <Text style={styles.smallButtonText}>Unlock</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    {!syncToggleDisabled && hasConfiguredKey && !syncLocked ? (
+                                        <Switch
+                                            value={syncEnabled}
+                                            onValueChange={(value) => {
+                                                void handleToggleSync(value);
+                                            }}
+                                            disabled={showUnlockingOverlay}
+                                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                            thumbColor={colors.surface}
+                                            style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                        />
+                                    ) : (!syncToggleDisabled && !hasConfiguredKey ? (
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.smallButton,
+                                                {
+                                                    backgroundColor: colors.primary,
+                                                },
+                                            ]}
+                                            onPress={() => {
+                                                setShowEnableSyncModal(true);
+                                            }}
+                                        >
+                                            <Text style={styles.smallButtonText}>Enable</Text>
+                                        </TouchableOpacity>
+                                    ) : null)}
+                                </>
                             )}
-                            {!syncToggleDisabled && hasConfiguredKey && !syncLocked ? (
-                                <Switch
-                                    value={syncEnabled}
-                                    onValueChange={(value) => {
-                                        void handleToggleSync(value);
-                                    }}
-                                    disabled={showUnlockingOverlay}
-                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                    thumbColor={colors.surface}
-                                    style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                                />
-                            ) : (!syncToggleDisabled && !hasConfiguredKey ? (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.smallButton,
-                                        {
-                                            backgroundColor: colors.primary,
-                                        },
-                                    ]}
-                                    onPress={() => {
-                                        setShowEnableSyncModal(true);
-                                    }}
-                                >
-                                    <Text style={styles.smallButtonText}>Enable</Text>
-                                </TouchableOpacity>
-                            ) : null)}
                         </View>
                     </View>
 
