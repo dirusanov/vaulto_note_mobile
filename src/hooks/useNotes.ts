@@ -96,6 +96,45 @@ export const useNotes = () => {
         return '';
     }, []);
 
+    const buildNumberedImprovementLabel = useCallback((baseLabel: string, index: number): string => {
+        if (baseLabel.endsWith(')')) {
+            return `${baseLabel.slice(0, -1)} ${index})`;
+        }
+        return `${baseLabel} ${index}`;
+    }, []);
+
+    const ensureUniqueImprovementLabel = useCallback(
+        (
+            label: string | null | undefined,
+            siblings: Array<Pick<NoteImprovement, 'id' | 'label'>> = [],
+            currentId?: string
+        ): string | undefined => {
+            const base = (label || '').trim();
+            if (!base) return undefined;
+
+            const usedLabels = new Set(
+                siblings
+                    .filter(imp => imp.id !== currentId)
+                    .map(imp => (imp.label || '').trim())
+                    .filter(Boolean)
+                    .map(value => value.toLowerCase())
+            );
+
+            if (!usedLabels.has(base.toLowerCase())) {
+                return base;
+            }
+
+            let suffix = 2;
+            let candidate = buildNumberedImprovementLabel(base, suffix);
+            while (usedLabels.has(candidate.toLowerCase())) {
+                suffix += 1;
+                candidate = buildNumberedImprovementLabel(base, suffix);
+            }
+            return candidate;
+        },
+        [buildNumberedImprovementLabel]
+    );
+
     const normalizeStorageScope = useCallback((scope?: StorageScope): StorageScope => {
         return scope === 'local_only' ? 'local_only' : 'sync';
     }, []);
@@ -683,11 +722,13 @@ export const useNotes = () => {
                 label: params.label
             });
 
+            const uniqueLabel = ensureUniqueImprovementLabel(params.label, note.improvements || []);
+
             const improvement = await buildLocalImprovement({
                 id,
                 noteId,
                 content: safeContent,
-                label: params.label,
+                label: uniqueLabel,
                 optionId: params.optionId,
                 storage_scope: note.storage_scope,
                 privacy: note.privacy,
@@ -713,7 +754,7 @@ export const useNotes = () => {
             syncService.scheduleAutoSync();
             return improvement;
         },
-        [buildLocalImprovement, refreshFromLocal, userId]
+        [buildLocalImprovement, ensureUniqueImprovementLabel, refreshFromLocal, userId]
     );
 
     const updateImprovement = useCallback(
@@ -771,7 +812,11 @@ export const useNotes = () => {
                 note_id: noteId, // Ensure parent ID is preserved
                 encrypted_content: encryptedContent,
                 content: plainContent,
-                label: updates.label ?? improvement.label,
+                label: ensureUniqueImprovementLabel(
+                    updates.label ?? improvement.label,
+                    note.improvements || [],
+                    improvementId
+                ),
                 option_id: updates.optionId ?? improvement.option_id,
                 deleted: updates.deleted ?? improvement.deleted ?? false,
                 updated_at: new Date().toISOString(),
@@ -800,7 +845,7 @@ export const useNotes = () => {
             console.log('[useNotes] Improvement update complete');
             return updated;
         },
-        [refreshFromLocal, userId]
+        [ensureUniqueImprovementLabel, refreshFromLocal, userId]
     );
 
     const deleteImprovement = useCallback(
