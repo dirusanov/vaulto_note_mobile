@@ -1034,7 +1034,7 @@ export const SettingsScreen = () => {
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com')}>
-                            <Text style={styles.versionText}>Vaulto v1.0.24</Text>
+                            <Text style={styles.versionText}>Vaulto v1.0.25</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
