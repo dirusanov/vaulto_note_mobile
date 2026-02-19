@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { storage } from '../utils/storage';
+import { clearSyncLockBannerDismissed, storage } from '../utils/storage';
 import { authApi, UserProfile } from '../api/auth';
 import { syncService } from '../services/SyncService';
 import { getAllImprovementsLocal, getNotesLocal, wipeLocalDatabase } from '../services/DatabaseService';
@@ -105,6 +105,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 const previousUserId = await storage.getUserId();
                 if (previousUserId) {
                     await storage.removeStoredMasterKey(previousUserId);
+                    await clearSyncLockBannerDismissed(previousUserId);
                 }
                 if (!keepLocalNotes) {
                     setUserId(null);
@@ -240,6 +241,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.log('[AuthContext] Signing out, reverting to guest...');
         if (previousUserId) {
             await storage.removeStoredMasterKey(previousUserId);
+            await clearSyncLockBannerDismissed(previousUserId);
         }
         await storage.removeToken();
         await storage.removeRefreshToken();

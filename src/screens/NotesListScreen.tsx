@@ -21,10 +21,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { notesApi } from '../api/notes';
+import { getSyncLockBannerDismissed, setSyncLockBannerDismissed } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
-const LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
 
 export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -46,7 +46,7 @@ export const NotesListScreen = () => {
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
-    const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
+    const [lockBannerDismissed, setLockBannerDismissed] = useState<boolean | null>(null);
     const [hasServerNotes, setHasServerNotes] = useState(false);
 
     // Selection mode state
@@ -142,7 +142,7 @@ export const NotesListScreen = () => {
         !isGuest &&
         syncLocked &&
         hasServerNotes &&
-        !lockBannerDismissed;
+        lockBannerDismissed === false;
 
     useEffect(() => {
         let cancelled = false;
@@ -188,21 +188,16 @@ export const NotesListScreen = () => {
 
     useEffect(() => {
         let mounted = true;
-        const key = userId ? `${LOCK_BANNER_DISMISS_PREFIX}_${userId}` : null;
 
         const hydrateDismissState = async () => {
-            if (!key) {
-                if (mounted) setLockBannerDismissed(false);
+            if (!userId || !isAuthenticated || isGuest) {
+                if (mounted) setLockBannerDismissed(null);
                 return;
             }
-            if (!isAuthenticated || isGuest || !syncLocked || !hasServerNotes) {
-                await AsyncStorage.removeItem(key);
-                if (mounted) setLockBannerDismissed(false);
-                return;
-            }
-            const stored = await AsyncStorage.getItem(key);
+            if (mounted) setLockBannerDismissed(null);
+            const stored = await getSyncLockBannerDismissed(userId);
             if (mounted) {
-                setLockBannerDismissed(stored === '1');
+                setLockBannerDismissed(stored);
             }
         };
 
@@ -210,12 +205,12 @@ export const NotesListScreen = () => {
         return () => {
             mounted = false;
         };
-    }, [userId, isAuthenticated, isGuest, syncLocked, hasServerNotes]);
+    }, [userId, isAuthenticated, isGuest]);
 
     const dismissLockBanner = useCallback(() => {
         setLockBannerDismissed(true);
         if (!userId) return;
-        void AsyncStorage.setItem(`${LOCK_BANNER_DISMISS_PREFIX}_${userId}`, '1');
+        void setSyncLockBannerDismissed(userId);
     }, [userId]);
 
     const handleMicPress = () => {

@@ -25,6 +25,7 @@ const KEY_BUNDLE_PREFIX = 'vaulto_key_bundle_v1';
 const MASTER_KEY_PREFIX = 'vaulto_master_key_v1';
 const SYNC_RESET_BLOCK_PREFIX = 'vaulto_sync_reset_block_v1';
 const CUSTODY_MODE_PREFIX = 'vaulto_custody_mode_v1';
+const SYNC_LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
 
 // OpenAI-compatible settings (legacy self-hosted keys are read for migration).
 const OPENAI_BASE_URL_KEY = 'vaulto_openai_base_url_v1';
@@ -565,5 +566,34 @@ export const setPrivateAIAllowed = async (enabled: boolean): Promise<void> => {
         await AsyncStorage.setItem(PRIVATE_AI_ALLOWED_KEY, enabled.toString());
     } catch (e) {
         console.error('Failed to set private AI setting', e);
+    }
+};
+
+export const getSyncLockBannerDismissed = async (userId: string): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+        const value = await AsyncStorage.getItem(`${SYNC_LOCK_BANNER_DISMISS_PREFIX}_${userId}`);
+        return value === '1';
+    } catch (e) {
+        console.error('Failed to get sync lock banner dismissed state', e);
+        return false;
+    }
+};
+
+export const setSyncLockBannerDismissed = async (userId: string): Promise<void> => {
+    if (!userId) return;
+    try {
+        await AsyncStorage.setItem(`${SYNC_LOCK_BANNER_DISMISS_PREFIX}_${userId}`, '1');
+    } catch (e) {
+        console.error('Failed to set sync lock banner dismissed state', e);
+    }
+};
+
+export const clearSyncLockBannerDismissed = async (userId: string): Promise<void> => {
+    if (!userId) return;
+    try {
+        await AsyncStorage.removeItem(`${SYNC_LOCK_BANNER_DISMISS_PREFIX}_${userId}`);
+    } catch (e) {
+        console.error('Failed to clear sync lock banner dismissed state', e);
     }
 };
