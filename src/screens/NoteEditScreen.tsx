@@ -902,14 +902,16 @@ export const NoteEditScreen = () => {
     }, [activeVariantId, noteImprovements, existingNote?.content]);
 
     // Handle history updates for current variant
-    const updateHistory = (newTitle: string, newContent: string) => {
+    const updateHistory = (newTitle: string, newContent: string, variantIdOverride?: string) => {
         // Clear existing timeout to debounce history updates
         if (historyTimeoutRef.current) {
             clearTimeout(historyTimeoutRef.current);
         }
 
+        const targetVariantId = variantIdOverride ?? activeVariantIdRef.current;
+
         historyTimeoutRef.current = setTimeout(() => {
-            const variantId = activeVariantId;
+            const variantId = targetVariantId;
             const currentHistory = variantHistories.current[variantId] || {
                 history: [],
                 index: -1
@@ -936,12 +938,12 @@ export const NoteEditScreen = () => {
     };
 
     // Immediate history update for discrete actions (AI, Voice)
-    const updateHistoryImmediate = (newTitle: string, newContent: string) => {
+    const updateHistoryImmediate = (newTitle: string, newContent: string, variantIdOverride?: string) => {
         if (historyTimeoutRef.current) {
             clearTimeout(historyTimeoutRef.current);
         }
 
-        const variantId = activeVariantId;
+        const variantId = variantIdOverride ?? activeVariantIdRef.current;
         const currentHistory = variantHistories.current[variantId] || {
             history: [],
             index: -1
@@ -1637,9 +1639,12 @@ export const NoteEditScreen = () => {
                             }
 
                             if (newText && !areTextsEquivalent(newText, contextContent)) {
-                                setContent(newText);
-                                currentContentRef.current = newText;
-                                updateHistoryImmediate('', newText);
+                                const shouldApplyToVisibleContent = activeVariantIdRef.current === currentVariantId;
+                                if (shouldApplyToVisibleContent) {
+                                    setContent(newText);
+                                    currentContentRef.current = newText;
+                                    updateHistoryImmediate('', newText, currentVariantId);
+                                }
                                 improvementDraftsRef.current[currentVariantId] = newText;
                                 if (localNoteIdRef.current) {
                                     try {
@@ -2048,6 +2053,7 @@ export const NoteEditScreen = () => {
     const handleAIImprovement = async (option: AIImprovementOption) => {
         setShowAIModal(false);
         setIsAIProcessing(true);
+        const variantAtRequestStart = activeVariantIdRef.current;
         try {
             const consentGranted = await requestPrivateAIConsent();
             if (!consentGranted) {
@@ -2124,7 +2130,7 @@ export const NoteEditScreen = () => {
                 setLocalNoteId(newNote.id);
                 lastSavedTitle.current = title;
                 lastSavedContent.current = content;
-            } else if (activeVariantId === 'original') {
+            } else if (variantAtRequestStart === 'original') {
                 await saveNote();
             } else {
                 await saveImprovementDraft();
@@ -2137,7 +2143,7 @@ export const NoteEditScreen = () => {
             // Check if we're on the original note or a child variant
             console.log('[NoteEditScreen] Applying improvement');
 
-            if (activeVariantId === 'original') {
+            if (variantAtRequestStart === 'original') {
                 // Create new child variant from parent
                 console.log('[NoteEditScreen] Creating new improvement variant');
                 const improvement = await createImprovement(targetNoteId, {
@@ -2155,16 +2161,20 @@ export const NoteEditScreen = () => {
                 };
                 // No need to call setHistoryUpdateCount because index 0 means no undo yet, which is correct for new "file"
 
-                setActiveVariantId(improvement.id);
-                optimisticActiveVariant.current = improvement.id;
-                setContent(finalText);
-
-                // Persist active variant asynchronously after optimistic switch to avoid UI fallback flicker.
-                await setActiveVariant(targetNoteId, improvement.id);
+                const shouldSwitchToNewImprovement = activeVariantIdRef.current === 'original';
+                if (shouldSwitchToNewImprovement) {
+                    setActiveVariantId(improvement.id);
+                    activeVariantIdRef.current = improvement.id;
+                    optimisticActiveVariant.current = improvement.id;
+                    setContent(finalText);
+                    currentContentRef.current = finalText;
+                    // Persist active variant asynchronously after optimistic switch to avoid UI fallback flicker.
+                    await setActiveVariant(targetNoteId, improvement.id);
+                }
             } else {
                 // Update existing child variant in-place (no new children from children)
                 console.log('[NoteEditScreen] Updating existing improvement in-place');
-                await updateImprovement(targetNoteId, activeVariantId, {
+                await updateImprovement(targetNoteId, variantAtRequestStart, {
                     content: finalText,
                     label: option.label,
                     optionId: option.id,
@@ -2173,12 +2183,15 @@ export const NoteEditScreen = () => {
                 console.log('[NoteEditScreen] Improvement updated successfully');
 
                 // Update refs and UI with new content
-                improvementDraftsRef.current[activeVariantId] = finalText;
-                improvementSavedRef.current[activeVariantId] = finalText;
-                setContent(finalText);
+                improvementDraftsRef.current[variantAtRequestStart] = finalText;
+                improvementSavedRef.current[variantAtRequestStart] = finalText;
+                if (activeVariantIdRef.current === variantAtRequestStart) {
+                    setContent(finalText);
+                    currentContentRef.current = finalText;
+                }
 
                 // Update history for this variant
-                updateHistoryImmediate('', finalText);
+                updateHistoryImmediate('', finalText, variantAtRequestStart);
             }
         } catch (error: any) {
             // Handle Trial Limit 403 specifically
