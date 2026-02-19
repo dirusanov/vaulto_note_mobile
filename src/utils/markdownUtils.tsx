@@ -256,7 +256,12 @@ export const serializeBlockToMarkdown = (content: string, formats: BlockFormat[]
 /**
  * Renders the content as nested Text components with styles applied based on formats.
  */
-export const renderFormattedText = (content: string, formats: BlockFormat[], baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {
+export const renderFormattedText = (
+    content: string,
+    formats: BlockFormat[],
+    baseStyle?: StyleProp<TextStyle>,
+    keyPrefix: string = ''
+): React.ReactNode[] => {
     if (!content && formats.length === 0) return [];
     if (content.length === 0) return [];
 
@@ -301,7 +306,7 @@ export const renderFormattedText = (content: string, formats: BlockFormat[], bas
         });
 
         segments.push(
-            <Text key={`${start}-${end}`} style={style}>
+            <Text key={`${keyPrefix}${start}-${end}`} style={style}>
                 {segmentText}
             </Text>
         );
@@ -314,9 +319,13 @@ export const renderFormattedText = (content: string, formats: BlockFormat[], bas
  * Simple text rendering support (reading mode).
  * Wraps the new range-based logic.
  */
-export const parseMarkdownText = (text: string, baseStyle?: StyleProp<TextStyle>): React.ReactNode[] => {
+export const parseMarkdownText = (
+    text: string,
+    baseStyle?: StyleProp<TextStyle>,
+    keyPrefix: string = ''
+): React.ReactNode[] => {
     const { content, formats } = parseMarkdownToData(text);
-    return renderFormattedText(content, formats, baseStyle);
+    return renderFormattedText(content, formats, baseStyle, keyPrefix);
 
     /**
      * Strips markdown syntax from text to return plain text.

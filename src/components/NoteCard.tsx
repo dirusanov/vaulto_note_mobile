@@ -76,7 +76,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 
     parts.forEach((part, index) => {
         if (part) {
-            previewNodes.push(...parseMarkdownText(part, styles.preview));
+            previewNodes.push(...parseMarkdownText(part, styles.preview, `preview-part-${index}-`));
         }
 
         if (index < parts.length - 1) {

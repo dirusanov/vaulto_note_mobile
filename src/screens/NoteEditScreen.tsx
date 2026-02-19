@@ -2104,7 +2104,7 @@ export const NoteEditScreen = () => {
     ) => {
         setShowVoiceRecorder(false);
         const targetVariantId = activeVariantIdRef.current;
-        let shouldTranscribe = micMode === 'force_text' ? true : transcribe;
+        let shouldTranscribe = transcribe;
         if ((!isAuthenticated || isGuest) && shouldTranscribe) {
             // Anonymous users can't transcribe; keep audio flow intact.
             shouldTranscribe = false;

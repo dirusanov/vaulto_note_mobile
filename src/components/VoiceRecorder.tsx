@@ -308,7 +308,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         <TouchableOpacity
                             style={[
                                 styles.badgeToggle,
-                                { backgroundColor: transcribe ? colors.primary + '15' : colors.backgroundSecondary }
+                                { backgroundColor: transcribe ? colors.primary + '15' : colors.backgroundSecondary },
                             ]}
                             onPress={() => handleTranscriptionToggle(!transcribe)}
                             activeOpacity={0.7}
@@ -445,10 +445,6 @@ const styles = StyleSheet.create({
         minWidth: 120,
         justifyContent: 'center',
     },
-    badgeToggleDisabled: {
-        opacity: 0.8,
-    },
-
     badgeLabel: {
         ...typography.captionBold,
         fontSize: 14,
