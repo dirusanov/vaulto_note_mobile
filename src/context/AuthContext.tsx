@@ -101,20 +101,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const unsubscribe = onUnauthorized.subscribe(() => {
             const handleUnauthorized = async () => {
                 console.log('[AuthContext] Received unauthorized event, recreating guest session...');
-                const keepLocalNotes = await storage.getKeepLocalNotes();
                 const previousUserId = await storage.getUserId();
-                if (previousUserId) {
-                    await storage.removeStoredMasterKey(previousUserId);
-                    await clearSyncLockBannerDismissed(previousUserId);
-                }
-                if (!keepLocalNotes) {
-                    setUserId(null);
-                }
+                setUserId(previousUserId ?? null);
                 setToken(null);
                 setUser(null);
                 setIsGuest(false);
                 syncService.setAuthenticated(false);
-                createGuestSession({ preserveLocalUserId: keepLocalNotes });
+                await createGuestSession({ preserveLocalUserId: true });
             };
             void handleUnauthorized();
         });

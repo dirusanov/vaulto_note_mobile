@@ -11,11 +11,64 @@ const client = axios.create({
     },
 });
 
+let refreshPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
+let unauthorizedEmitted = false;
+
+const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken: string } | null> => {
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+
+    refreshPromise = (async () => {
+        const refreshToken = await storage.getRefreshToken();
+        if (!refreshToken) {
+            console.log('[client] No refresh token available');
+            return null;
+        }
+
+        try {
+            const refreshResponse = await axios.post(`${API_URL}/auth/refresh`, {
+                refresh_token: refreshToken,
+            });
+
+            const { access_token, refresh_token } = refreshResponse.data;
+            await storage.setToken(access_token);
+            await storage.setRefreshToken(refresh_token);
+            unauthorizedEmitted = false;
+            console.log('[client] Token refresh successful');
+
+            return {
+                accessToken: access_token,
+                refreshToken: refresh_token,
+            };
+        } catch (refreshError) {
+            console.error('[client] Refresh failed:', refreshError);
+            return null;
+        } finally {
+            refreshPromise = null;
+        }
+    })();
+
+    return refreshPromise;
+};
+
+const emitUnauthorizedOnce = async () => {
+    if (unauthorizedEmitted) {
+        return;
+    }
+    unauthorizedEmitted = true;
+    await storage.removeToken();
+    await storage.removeRefreshToken();
+    onUnauthorized.emit();
+};
+
 // Add a request interceptor to attach the token
 client.interceptors.request.use(
     async (config) => {
         const token = await storage.getToken();
         if (token) {
+            // A fresh token exists (e.g. after manual sign-in), allow future unauthorized handling again.
+            unauthorizedEmitted = false;
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -31,43 +84,19 @@ client.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+        if (error.response && error.response.status === 401 && originalRequest && !originalRequest._retry) {
             console.log('[client] 401 received, attempting refresh...');
             originalRequest._retry = true;
 
-            const refreshToken = await storage.getRefreshToken();
-            if (refreshToken) {
-                try {
-                    // Create a new axios instance to avoid interceptor loops
-                    const refreshResponse = await axios.post(`${API_URL}/auth/refresh`, {
-                        refresh_token: refreshToken
-                    });
-
-                    const { access_token, refresh_token } = refreshResponse.data;
-
-                    console.log('[client] Token refresh successful');
-
-                    await storage.setToken(access_token);
-                    await storage.setRefreshToken(refresh_token);
-
-                    // Update auth headers for the original request
-                    originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-                    return client(originalRequest);
-                } catch (refreshError) {
-                    console.error('[client] Refresh failed:', refreshError);
-                    // Fall through to logout logic
-                }
-            } else {
-                console.log('[client] No refresh token available');
+            const refreshedTokens = await refreshAccessToken();
+            if (refreshedTokens) {
+                originalRequest.headers = originalRequest.headers ?? {};
+                originalRequest.headers.Authorization = `Bearer ${refreshedTokens.accessToken}`;
+                return client(originalRequest);
             }
 
-            // Token might be expired or invalid and refresh failed
             console.log('[client] 401 unrecoverable, emitting unauthorized event');
-            await storage.removeToken();
-            await storage.removeRefreshToken();
-            // Notify AuthContext to recreate session
-            onUnauthorized.emit();
+            await emitUnauthorizedOnce();
         }
 
         // Expanded logging for Network Errors
