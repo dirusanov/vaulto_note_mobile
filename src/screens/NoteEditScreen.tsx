@@ -4441,11 +4441,15 @@ const styles = StyleSheet.create({
     recordingItem: {
         padding: spacing.m,
         marginBottom: spacing.m,
-        borderRadius: 16,
+        borderRadius: 20,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
-        // Removed flexDirection: 'row' to allow interior grouping
+        shadowColor: 'rgba(0,0,0,0.02)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 1,
     },
     recordingItemActive: {
         borderColor: colors.primary,
@@ -4497,6 +4501,51 @@ const styles = StyleSheet.create({
     recordingDeleteButton: {
         padding: spacing.s,
         marginLeft: spacing.s,
+    },
+    recordingActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: spacing.xs,
+        paddingTop: spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: colors.border + '40',
+    },
+    recordingActionLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    recordingActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.backgroundSecondary,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        gap: 6,
+    },
+    recordingActionBtnText: {
+        ...typography.captionBold,
+        color: colors.primary,
+        fontSize: 12,
+    },
+    recordingActionDelete: {
+        padding: 8,
+        borderRadius: 10,
+        backgroundColor: colors.error + '10',
+    },
+    recordingBadge: {
+        backgroundColor: colors.backgroundSecondary,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    recordingBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: colors.textSecondary,
+        textTransform: 'uppercase',
     },
     recordingActionsRow: {
         flexDirection: 'row',
