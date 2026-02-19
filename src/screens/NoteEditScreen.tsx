@@ -3684,7 +3684,8 @@ export const NoteEditScreen = () => {
                                             const isPlaying = playingRecordingId === rec.id;
                                             const hasRecognizedText = !!rec.transcription?.trim();
                                             const hasAudioPlayerInCurrentVariant = isAudioAlreadyInsertedInCurrentVariant(rec.file_path);
-                                            const canTranscribeThisRecording = transcriptionEnabled;
+                                            // Decoupled from transcriptionEnabled per user request
+                                            const canTranscribeThisRecording = true;
                                             const isAnyTranscribing = !!transcribingRecordingId;
                                             const isTranscribingThisRecording = transcribingRecordingId === rec.id;
 
@@ -3762,6 +3763,16 @@ export const NoteEditScreen = () => {
                                                                             <Text style={styles.recordingActionChipText}>AI</Text>
                                                                         </>
                                                                     )}
+                                                                </TouchableOpacity>
+                                                            )}
+
+                                                            {hasRecognizedText && (
+                                                                <TouchableOpacity
+                                                                    style={[styles.recordingActionChip, { backgroundColor: colors.backgroundSecondary }]}
+                                                                    onPress={() => openRecordingTextView(rec)}
+                                                                >
+                                                                    <MaterialIcons name="visibility" size={14} color={colors.textSecondary} />
+                                                                    <Text style={[styles.recordingActionChipText, { color: colors.textSecondary }]}>View</Text>
                                                                 </TouchableOpacity>
                                                             )}
 
@@ -4415,40 +4426,55 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     recordingItem: {
-        paddingVertical: spacing.s,
+        paddingVertical: spacing.xs,
         paddingHorizontal: spacing.m,
-        marginBottom: spacing.s,
-        borderRadius: 16,
+        marginBottom: spacing.xs,
+        borderRadius: 12,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
     },
+    recordingItemActive: {
+        borderColor: colors.primary,
+        backgroundColor: '#E6F0FF', // Distinct light blue tint
+        borderWidth: 1.5,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
     recordingIconContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
         backgroundColor: colors.backgroundSecondary,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: spacing.s,
+    },
+    recordingIconContainerActive: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 102, 255, 0.2)',
     },
     recordingInfo: {
         flex: 1,
         justifyContent: 'center',
     },
     recordingTitle: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '600',
         color: colors.text,
     },
     recordingSubtitle: {
-        fontSize: 10,
+        fontSize: 9,
         color: colors.textMuted,
     },
     recordingCompactActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
     },
     recordingActionChip: {
         flexDirection: 'row',
@@ -4456,13 +4482,13 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary + '10',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 8,
+        borderRadius: 6,
         gap: 4,
     },
     recordingActionChipText: {
         ...typography.captionBold,
         color: colors.primary,
-        fontSize: 11,
+        fontSize: 10,
     },
     recordingDeleteButton: {
         padding: spacing.s,
