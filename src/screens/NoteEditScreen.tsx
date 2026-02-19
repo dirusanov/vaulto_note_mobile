@@ -129,12 +129,70 @@ interface VariantHistory {
     index: number;
 }
 
+interface NoteProcessingState {
+    isTranscribing: boolean;
+    isAIProcessing: boolean;
+    queueLength: number;
+}
+
 const mergeQueuedTranscriptions = (base: string, next: string): string => {
     const head = (base || '').trim();
     const tail = (next || '').trim();
     if (!head) return tail;
     if (!tail) return head;
     return `${head}\n\n${tail}`;
+};
+
+const noteProcessingStateById = new Map<string, NoteProcessingState>();
+const noteProcessingListeners = new Map<string, Set<(state: NoteProcessingState) => void>>();
+const emptyNoteProcessingState: NoteProcessingState = {
+    isTranscribing: false,
+    isAIProcessing: false,
+    queueLength: 0,
+};
+
+const getNoteProcessingState = (noteId: string): NoteProcessingState => {
+    return noteProcessingStateById.get(noteId) ?? emptyNoteProcessingState;
+};
+
+const notifyNoteProcessingListeners = (noteId: string, state: NoteProcessingState) => {
+    const listeners = noteProcessingListeners.get(noteId);
+    if (!listeners) return;
+    listeners.forEach((listener) => listener(state));
+};
+
+const setNoteProcessingState = (noteId: string, patch: Partial<NoteProcessingState>) => {
+    const previous = getNoteProcessingState(noteId);
+    const next: NoteProcessingState = {
+        isTranscribing: patch.isTranscribing ?? previous.isTranscribing,
+        isAIProcessing: patch.isAIProcessing ?? previous.isAIProcessing,
+        queueLength: patch.queueLength ?? previous.queueLength,
+    };
+    const shouldClear = !next.isTranscribing && !next.isAIProcessing && next.queueLength <= 0;
+    if (shouldClear) {
+        noteProcessingStateById.delete(noteId);
+    } else {
+        noteProcessingStateById.set(noteId, next);
+    }
+    notifyNoteProcessingListeners(noteId, shouldClear ? emptyNoteProcessingState : next);
+};
+
+const subscribeNoteProcessingState = (
+    noteId: string,
+    listener: (state: NoteProcessingState) => void
+) => {
+    const listeners = noteProcessingListeners.get(noteId) ?? new Set<(state: NoteProcessingState) => void>();
+    listeners.add(listener);
+    noteProcessingListeners.set(noteId, listeners);
+    listener(getNoteProcessingState(noteId));
+    return () => {
+        const current = noteProcessingListeners.get(noteId);
+        if (!current) return;
+        current.delete(listener);
+        if (current.size === 0) {
+            noteProcessingListeners.delete(noteId);
+        }
+    };
 };
 
 export const NoteEditScreen = () => {
@@ -379,7 +437,7 @@ export const NoteEditScreen = () => {
     const [showPrivacyWarning, setShowPrivacyWarning] = useState(false);
     const [audioUri, setAudioUri] = useState<string | null>(null);
     const [audioDuration, setAudioDuration] = useState<number>(0);
-    const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isTranscribing, setIsTranscribingState] = useState(false);
 
     const lastSavedTitle = useRef(existingNote?.title || '');
     const lastSavedContent = useRef(existingNote?.content || '');
@@ -425,7 +483,7 @@ export const NoteEditScreen = () => {
 
     // AI State
     const [showAIModal, setShowAIModal] = useState(false);
-    const [isAIProcessing, setIsAIProcessing] = useState(false);
+    const [isAIProcessing, setIsAIProcessingState] = useState(false);
     const [aiOptions, setAiOptions] = useState<AIImprovementOption[]>(DEFAULT_IMPROVEMENT_OPTIONS);
     const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
     const [showPromptBuilder, setShowPromptBuilder] = useState(false);
@@ -618,9 +676,12 @@ export const NoteEditScreen = () => {
         noteId: string | undefined;
         isBackground?: boolean;
     }[]>([]);
-    const [queueLength, setQueueLength] = useState(0);
+    const [queueLength, setQueueLengthState] = useState(0);
     const isProcessingQueue = useRef(false);
     const agentSessionIdRef = useRef(0);
+    const isTranscribingRef = useRef(isTranscribing);
+    const isAIProcessingRef = useRef(isAIProcessing);
+    const queueLengthRef = useRef(queueLength);
 
     // Ref to hold the absolute latest content to ensure queue picks up changes from previous steps
     const currentContentRef = useRef(content);
@@ -632,6 +693,62 @@ export const NoteEditScreen = () => {
     const pendingSaveAfterCreate = useRef(false);
     const currentTitleRef = useRef(title);
     const titleLockRef = useRef<boolean>(!!(existingNote?.title || '').trim());
+
+    const applyTrackedProcessingState = useCallback((patch: Partial<NoteProcessingState>, noteIdOverride?: string) => {
+        const noteId = noteIdOverride ?? localNoteIdRef.current;
+        if (!noteId) return;
+        setNoteProcessingState(noteId, patch);
+    }, []);
+
+    const setTrackedIsTranscribing = useCallback((value: boolean, noteIdOverride?: string) => {
+        setIsTranscribingState(value);
+        applyTrackedProcessingState({ isTranscribing: value }, noteIdOverride);
+    }, [applyTrackedProcessingState]);
+
+    const setTrackedIsAIProcessing = useCallback((value: boolean, noteIdOverride?: string) => {
+        setIsAIProcessingState(value);
+        applyTrackedProcessingState({ isAIProcessing: value }, noteIdOverride);
+    }, [applyTrackedProcessingState]);
+
+    const setTrackedQueueLength = useCallback((value: number, noteIdOverride?: string) => {
+        const normalized = Math.max(0, value);
+        setQueueLengthState(normalized);
+        applyTrackedProcessingState({ queueLength: normalized }, noteIdOverride);
+    }, [applyTrackedProcessingState]);
+
+    const syncTrackedProcessingToNote = useCallback((noteId: string) => {
+        setNoteProcessingState(noteId, {
+            isTranscribing: isTranscribingRef.current,
+            isAIProcessing: isAIProcessingRef.current,
+            queueLength: queueLengthRef.current,
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!localNoteId) {
+            setIsTranscribingState(false);
+            setIsAIProcessingState(false);
+            setQueueLengthState(0);
+            return;
+        }
+        return subscribeNoteProcessingState(localNoteId, (next) => {
+            setIsTranscribingState(next.isTranscribing);
+            setIsAIProcessingState(next.isAIProcessing);
+            setQueueLengthState(next.queueLength);
+        });
+    }, [localNoteId]);
+
+    useEffect(() => {
+        isTranscribingRef.current = isTranscribing;
+    }, [isTranscribing]);
+
+    useEffect(() => {
+        isAIProcessingRef.current = isAIProcessing;
+    }, [isAIProcessing]);
+
+    useEffect(() => {
+        queueLengthRef.current = queueLength;
+    }, [queueLength]);
 
     // Sync contentRef whenever content state changes
     useEffect(() => {
@@ -664,8 +781,8 @@ export const NoteEditScreen = () => {
         setRequestHistory([]);
         requestHistoryRef.current = [];
         agentQueue.current = [];
-        setQueueLength(0);
-    }, []);
+        setTrackedQueueLength(0);
+    }, [setTrackedQueueLength]);
 
     const loadSettings = async () => {
         const [size, scaling, privateAIAllowed] = await Promise.all([
@@ -1192,6 +1309,7 @@ export const NoteEditScreen = () => {
                     if (isMounted.current) {
                         setLocalNoteId(newNote.id);
                         localNoteIdRef.current = newNote.id; // Immediate ref update for other async flows
+                        syncTrackedProcessingToNote(newNote.id);
                     }
 
                     // CHECK FOR PENDING UPDATES (Race condition fix)
@@ -1232,7 +1350,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [activeVariantId, content, createNote, deleteNote, existingNote?.privacy, localNoteId, noteImprovements.length, privacy, saveImprovementDraft, saveTitleIfChanged, storageScope, title, updateNote]);
+    }, [activeVariantId, content, createNote, deleteNote, existingNote?.privacy, localNoteId, noteImprovements.length, privacy, saveImprovementDraft, saveTitleIfChanged, storageScope, syncTrackedProcessingToNote, title, updateNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1468,7 +1586,7 @@ export const NoteEditScreen = () => {
                             };
                         });
                         agentQueue.current = [activeTask, mergedPending, ...foreignPending];
-                        setQueueLength(agentQueue.current.length);
+                        setTrackedQueueLength(agentQueue.current.length);
                         console.log(`[NoteEditScreen] Merged pending agent tasks (queue=${agentQueue.current.length})`);
                     }
                 }
@@ -1484,13 +1602,13 @@ export const NoteEditScreen = () => {
                 if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
                     console.log(`[NoteEditScreen] Skipping stale task ${task.id} (sess: ${task.sessionId}/${agentSessionIdRef.current})`);
                     agentQueue.current.shift();
-                    setQueueLength(agentQueue.current.length);
+                    setTrackedQueueLength(agentQueue.current.length);
                     continue;
                 }
 
                 if (!task.transcribedText?.trim()) {
                     agentQueue.current.shift();
-                    setQueueLength(agentQueue.current.length);
+                    setTrackedQueueLength(agentQueue.current.length);
                     continue;
                 }
 
@@ -1500,7 +1618,7 @@ export const NoteEditScreen = () => {
                 console.log(`[NoteEditScreen] Processing agent task ${task.id} (queue=${agentQueue.current.length})`);
 
                 try {
-                    setIsAIProcessing(true);
+                    setTrackedIsAIProcessing(true);
 
                     // Process the note
                     const agentResult = await Promise.race([
@@ -1673,15 +1791,15 @@ export const NoteEditScreen = () => {
                 } finally {
                     // ALWAYS move to next task
                     agentQueue.current.shift();
-                    setQueueLength(agentQueue.current.length);
+                    setTrackedQueueLength(agentQueue.current.length);
                 }
             }
         } catch (outerError) {
             console.error('[NoteEditScreen] Critical queue process error:', outerError);
         } finally {
             isProcessingQueue.current = false;
-            setIsAIProcessing(false);
-            setQueueLength(agentQueue.current.length);
+            setTrackedIsAIProcessing(false);
+            setTrackedQueueLength(agentQueue.current.length);
         }
     };
 
@@ -1733,7 +1851,7 @@ export const NoteEditScreen = () => {
             console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${agentQueue.current.length})`);
         }
 
-        setQueueLength(agentQueue.current.length);
+        setTrackedQueueLength(agentQueue.current.length);
         void processAgentQueue();
     };
 
@@ -1763,14 +1881,14 @@ export const NoteEditScreen = () => {
                 console.log('[NoteEditScreen] Transcription skipped (Toggle OFF)');
                 transcription = { success: false, text: '', error: 'Transcription disabled' };
             } else {
-                setIsTranscribing(true);
+                setTrackedIsTranscribing(true);
                 transcription = await transcribeAudio(recording.uri);
             }
         } catch (err) {
             console.error('[NoteEditScreen] Transcription unexpected error:', err);
             transcription = { success: false, text: '', error: 'Unexpected transcription error' };
         } finally {
-            setIsTranscribing(false);
+            setTrackedIsTranscribing(false);
         }
 
         isTranscriptionSuccess = transcription.success && !!transcription.text;
@@ -1826,6 +1944,7 @@ export const NoteEditScreen = () => {
                 });
                 setLocalNoteId(newNote.id);
                 localNoteIdRef.current = newNote.id;
+                syncTrackedProcessingToNote(newNote.id);
                 currentNoteId = newNote.id;
                 lastSavedTitle.current = title;
                 lastSavedContent.current = content;
@@ -1958,7 +2077,7 @@ export const NoteEditScreen = () => {
             setIsRecordingInstruction(false);
             return;
         }
-        setIsAIProcessing(true);
+        setTrackedIsAIProcessing(true);
 
         try {
             const consentGranted = await requestPrivateAIConsent();
@@ -1979,7 +2098,7 @@ export const NoteEditScreen = () => {
             setErrorMessage('Failed to transcribe instruction');
             setErrorModalVisible(true);
         } finally {
-            setIsAIProcessing(false);
+            setTrackedIsAIProcessing(false);
             setIsRecordingInstruction(false);
         }
     };
@@ -2052,7 +2171,7 @@ export const NoteEditScreen = () => {
 
     const handleAIImprovement = async (option: AIImprovementOption) => {
         setShowAIModal(false);
-        setIsAIProcessing(true);
+        setTrackedIsAIProcessing(true);
         const variantAtRequestStart = activeVariantIdRef.current;
         try {
             const consentGranted = await requestPrivateAIConsent();
@@ -2081,7 +2200,7 @@ export const NoteEditScreen = () => {
                     // If the AI says it's correct, we stop here.
                     if (jsonRes.is_correct) {
                         Alert.alert('✨ Perfect!', 'No grammar errors found.');
-                        setIsAIProcessing(false);
+                        setTrackedIsAIProcessing(false);
                         return;
                     }
 
@@ -2103,13 +2222,13 @@ export const NoteEditScreen = () => {
                     // However, we verify if it matches source text to avoid false positives.
                     if (areTextsEquivalent(sourceText, improvedText)) {
                         Alert.alert('✨ Perfect!', 'No grammar errors found.');
-                        setIsAIProcessing(false);
+                        setTrackedIsAIProcessing(false);
                         return;
                     }
                 }
             } else if (areTextsEquivalent(sourceText, improvedText)) {
                 Alert.alert('No changes', 'The text remains unchanged.');
-                setIsAIProcessing(false);
+                setTrackedIsAIProcessing(false);
                 return;
             }
 
@@ -2128,6 +2247,8 @@ export const NoteEditScreen = () => {
                 });
                 targetNoteId = newNote.id;
                 setLocalNoteId(newNote.id);
+                localNoteIdRef.current = newNote.id;
+                syncTrackedProcessingToNote(newNote.id);
                 lastSavedTitle.current = title;
                 lastSavedContent.current = content;
             } else if (variantAtRequestStart === 'original') {
@@ -2204,7 +2325,7 @@ export const NoteEditScreen = () => {
                 setErrorModalVisible(true);
             }
         } finally {
-            setIsAIProcessing(false);
+            setTrackedIsAIProcessing(false);
         }
     };
 
@@ -2369,7 +2490,7 @@ export const NoteEditScreen = () => {
         // Use Ref for latest content
 
 
-        setIsTranscribing(true);
+        setTrackedIsTranscribing(true);
         try {
             const transcription = await transcribeAudio(audioUri);
 
@@ -2407,7 +2528,7 @@ export const NoteEditScreen = () => {
             await executeAgentFlow(text, false);
 
         } catch (error: any) {
-            setIsTranscribing(false);
+            setTrackedIsTranscribing(false);
             // Handle Trial Limit 403 specifically
             if (error?.message?.includes('403') || error?.status === 403 || error?.response?.status === 403) {
                 setErrorMessage('Trial limit exceeded.\nTo continue AI editing and transcription, please upgrade your plan.');
@@ -2417,7 +2538,7 @@ export const NoteEditScreen = () => {
                 setErrorModalVisible(true);
             }
         } finally {
-            setIsTranscribing(false);
+            setTrackedIsTranscribing(false);
         }
     };
 
