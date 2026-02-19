@@ -26,7 +26,7 @@ import { SignInRequiredModal } from './SignInRequiredModal';
 
 interface VoiceRecorderProps {
     visible: boolean;
-    onFinish: (recording: AudioRecording, transcribe: boolean) => void;
+    onFinish: (recording: AudioRecording, transcribe: boolean, agentEnabled?: boolean) => void;
     onCancel: () => void;
     autoStart?: boolean;
     micMode?: 'agent' | 'force_text';
@@ -52,8 +52,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isPaused, setIsPaused] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
+    const agentModeToggleTouchedRef = useRef(false);
     const isForceTextMode = micMode === 'force_text';
-    const effectiveAgentEnabled = !isForceTextMode && agentModeEnabled;
+    const effectiveAgentEnabled = agentModeEnabled;
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -66,10 +67,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             getAgentModeEnabled().then(enabled => {
                 if (!isAuthenticated || isGuest) {
                     setAgentModeEnabledState(false);
+                } else if (isForceTextMode) {
+                    // HOLD mode starts with agent disabled by design, but user can enable it.
+                    setAgentModeEnabledState(false);
                 } else {
                     setAgentModeEnabledState(enabled);
                 }
             });
+            agentModeToggleTouchedRef.current = false;
 
             if (!isAuthenticated || isGuest) {
                 // Anonymous users cannot use transcription; keep toggle OFF.
@@ -93,8 +98,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             currentMetering.current = -160;
             meteringSamples.current = 0;
             voiceSamples.current = 0;
+            agentModeToggleTouchedRef.current = false;
         }
-    }, [visible, autoStart, isAuthenticated, isGuest]);
+    }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
 
     const handleTranscriptionToggle = (value: boolean) => {
         if ((!isAuthenticated || isGuest) && value) {
@@ -109,7 +115,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     };
 
     const handleAgentModeToggle = (value: boolean) => {
-        if (isForceTextMode) return;
+        agentModeToggleTouchedRef.current = true;
         if ((!isAuthenticated || isGuest) && value) {
             setShowTranscriptionAuthModal(true);
             setAgentModeEnabledState(false);
@@ -240,11 +246,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     onCancel();
                     return;
                 }
-                // Persist the current switch state before handing off recording flow.
-                if (!isForceTextMode) {
+                // Persist for normal mode, or when user explicitly changed agent state in HOLD mode.
+                if (!isForceTextMode || agentModeToggleTouchedRef.current) {
                     await setAgentModeEnabled(agentModeEnabled);
                 }
-                onFinish(recording, transcribe);
+                onFinish(recording, transcribe, agentModeEnabled);
             }
         } catch (error) {
             Alert.alert('Error', 'Could not stop recording');
@@ -325,10 +331,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={[
                                 styles.badgeToggle,
                                 { backgroundColor: effectiveAgentEnabled ? colors.primary + '15' : colors.backgroundSecondary },
-                                isForceTextMode && styles.badgeToggleDisabled,
                             ]}
                             onPress={() => handleAgentModeToggle(!agentModeEnabled)}
-                            disabled={isForceTextMode}
                             activeOpacity={0.7}
                         >
                             <MaterialIcons

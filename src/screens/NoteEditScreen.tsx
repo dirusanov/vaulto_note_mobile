@@ -2099,7 +2099,8 @@ export const NoteEditScreen = () => {
     const handleRecordingFinish = async (
         recording: AudioRecording,
         transcribe: boolean = true,
-        micMode: MicInputMode = 'agent'
+        micMode: MicInputMode = 'agent',
+        agentEnabledOverride?: boolean
     ) => {
         setShowVoiceRecorder(false);
         const targetVariantId = activeVariantIdRef.current;
@@ -2239,7 +2240,8 @@ export const NoteEditScreen = () => {
         setShowAudioPlayer(true);
         setPlayingRecordingId(voiceId);
 
-        if (targetVariantId === 'original') {
+        const shouldAutoInsertAudioPlayer = !shouldTranscribe;
+        if (targetVariantId === 'original' && shouldAutoInsertAudioPlayer) {
             await applyAudioPlayerToVariant('original', savedPath);
         }
 
@@ -2251,7 +2253,15 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        if (micMode === 'force_text') {
+        let shouldBypassAgentForThisRecording = micMode === 'force_text';
+        if (shouldBypassAgentForThisRecording) {
+            const agentEnabledForThisRecording = typeof agentEnabledOverride === 'boolean'
+                ? agentEnabledOverride
+                : await getAgentModeEnabled();
+            shouldBypassAgentForThisRecording = !agentEnabledForThisRecording;
+        }
+
+        if (shouldBypassAgentForThisRecording) {
             const inserted = await applyPlainTextToVariant(targetVariantId, transcribedText);
             if (inserted) {
                 const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
@@ -3629,11 +3639,11 @@ export const NoteEditScreen = () => {
             <VoiceRecorder
                 visible={showVoiceRecorder}
                 micMode={pendingMicInputMode}
-                onFinish={(rec, transcribe) => {
+                onFinish={(rec, transcribe, agentEnabled) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current);
+                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current, agentEnabled);
                     }
                     setPendingMicInputMode('agent');
                     pendingMicInputModeRef.current = 'agent';
@@ -3728,10 +3738,10 @@ export const NoteEditScreen = () => {
 
                                                         <View style={{ flex: 1, marginRight: spacing.s }}>
                                                             <Text style={[styles.recordingTitle, isPlaying && { color: colors.primary }]}>
-                                                                {new Date(rec.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {formatDuration(rec.duration)}
+                                                                {formatDuration(rec.duration)}
                                                             </Text>
-                                                            <Text style={styles.recordingSubtitle}>
-                                                                {new Date(rec.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                            <Text style={styles.recordingSubtitle} numberOfLines={1}>
+                                                                {new Date(rec.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                                                             </Text>
                                                         </View>
 
@@ -3743,7 +3753,7 @@ export const NoteEditScreen = () => {
                                                                     void handleInsertRecordingAudioPlayer(rec);
                                                                 }}
                                                             >
-                                                                <MaterialIcons name="add" size={14} color={hasAudioPlayerInCurrentVariant ? colors.textMuted : colors.primary} />
+                                                                <MaterialIcons name="headset" size={14} color={hasAudioPlayerInCurrentVariant ? colors.textMuted : colors.primary} />
                                                                 <Text style={[styles.recordingActionChipText, hasAudioPlayerInCurrentVariant && { color: colors.textMuted }]}>Insert</Text>
                                                             </TouchableOpacity>
 
@@ -4463,8 +4473,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     recordingTitle: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 13,
+        fontWeight: '700',
         color: colors.text,
     },
     recordingSubtitle: {
