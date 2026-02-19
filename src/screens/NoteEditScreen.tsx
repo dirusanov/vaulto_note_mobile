@@ -3757,7 +3757,7 @@ export const NoteEditScreen = () => {
                                                                 <Text style={[styles.recordingActionChipText, hasAudioPlayerInCurrentVariant && { color: colors.textMuted }]}>Insert</Text>
                                                             </TouchableOpacity>
 
-                                                            {canTranscribeThisRecording && (
+                                                            {canTranscribeThisRecording && !hasRecognizedText && (
                                                                 <TouchableOpacity
                                                                     style={styles.recordingActionChip}
                                                                     disabled={isAnyTranscribing}
@@ -4436,10 +4436,10 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     recordingItem: {
-        paddingVertical: spacing.xs,
+        paddingVertical: 12,
         paddingHorizontal: spacing.m,
-        marginBottom: spacing.xs,
-        borderRadius: 12,
+        marginBottom: spacing.s,
+        borderRadius: 16,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
@@ -4455,9 +4455,9 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     recordingIconContainer: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: colors.backgroundSecondary,
         alignItems: 'center',
         justifyContent: 'center',
@@ -4473,12 +4473,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     recordingTitle: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '700',
         color: colors.text,
     },
     recordingSubtitle: {
-        fontSize: 9,
+        fontSize: 11,
         color: colors.textMuted,
     },
     recordingCompactActions: {
@@ -4490,9 +4490,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.primary + '10',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
         gap: 4,
     },
     recordingActionChipText: {
