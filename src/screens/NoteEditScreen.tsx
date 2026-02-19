@@ -826,7 +826,11 @@ export const NoteEditScreen = () => {
 
             // Update content to show the correct variant
             if (correctActiveVariantId === 'original') {
-                setTitle(existingNote.title || '');
+                const nextTitle = existingNote.title || '';
+                // Avoid wiping a non-empty in-memory title because of transient stale refresh.
+                if (nextTitle.trim().length > 0 || !currentTitleRef.current.trim()) {
+                    setTitle(nextTitle);
+                }
                 setContent(existingNote.content || '');
             } else {
                 const improvement = existingNote.improvements?.find(i => i.id === correctActiveVariantId);
@@ -884,7 +888,13 @@ export const NoteEditScreen = () => {
     useEffect(() => {
         if (activeVariantId !== 'original') {
             const exists = noteImprovements.some(imp => imp.id === activeVariantId);
-            if (!exists) {
+            const isPendingOptimistic = optimisticActiveVariant.current === activeVariantId;
+            const hasLocalVariantState =
+                improvementDraftsRef.current[activeVariantId] !== undefined ||
+                improvementSavedRef.current[activeVariantId] !== undefined;
+
+            // Newly created/switching variants may be temporarily missing in refreshed list.
+            if (!exists && !isPendingOptimistic && !hasLocalVariantState) {
                 setActiveVariantId('original');
                 setContent(existingNote?.content || '');
             }
@@ -2145,12 +2155,12 @@ export const NoteEditScreen = () => {
                 };
                 // No need to call setHistoryUpdateCount because index 0 means no undo yet, which is correct for new "file"
 
-                // Set this improvement as active in the database
-                await setActiveVariant(targetNoteId, improvement.id);
-
                 setActiveVariantId(improvement.id);
                 optimisticActiveVariant.current = improvement.id;
                 setContent(finalText);
+
+                // Persist active variant asynchronously after optimistic switch to avoid UI fallback flicker.
+                await setActiveVariant(targetNoteId, improvement.id);
             } else {
                 // Update existing child variant in-place (no new children from children)
                 console.log('[NoteEditScreen] Updating existing improvement in-place');
