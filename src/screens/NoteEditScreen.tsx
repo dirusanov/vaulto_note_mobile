@@ -607,6 +607,11 @@ export const NoteEditScreen = () => {
     const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
     const [transcribingRecordingId, setTranscribingRecordingId] = useState<string | null>(null);
     const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+    const lastTranscribedExpectationRef = useRef<{
+        text: string;
+        expiresAt: number;
+        satisfied: boolean;
+    } | null>(null);
 
     // Ref to track the intentionally selected variant to avoid flickering during async updates
     const optimisticActiveVariant = useRef<string | null>(null);
@@ -637,6 +642,7 @@ export const NoteEditScreen = () => {
     const [newPromptTitle, setNewPromptTitle] = useState('');
     const [newPromptTemplate, setNewPromptTemplate] = useState('');
     const [newPromptIcon, setNewPromptIcon] = useState<string>(ICON_CHOICES[0]);
+    const [agentModeIndicatorEnabled, setAgentModeIndicatorEnabled] = useState(false);
 
     // Voice Recordings List State
     const [showRecordingsList, setShowRecordingsList] = useState(false);
@@ -654,9 +660,47 @@ export const NoteEditScreen = () => {
         // Intentionally disabled per UX request: no per-recording status badges.
     }, []);
 
+    const registerTranscribedInsertion = useCallback((rawText: string) => {
+        const normalized = normalizeTextForComparison(rawText);
+        if (!normalized) return;
+        lastTranscribedExpectationRef.current = {
+            text: normalized,
+            expiresAt: Date.now() + 5000,
+            satisfied: false,
+        };
+    }, []);
+
     useEffect(() => {
         pendingMicInputModeRef.current = pendingMicInputMode;
     }, [pendingMicInputMode]);
+
+    useEffect(() => {
+        const expectation = lastTranscribedExpectationRef.current;
+        if (!expectation) return;
+        if (Date.now() > expectation.expiresAt) {
+            lastTranscribedExpectationRef.current = null;
+            return;
+        }
+        const normalizedContent = normalizeTextForComparison(content);
+        const hasText = normalizedContent.includes(expectation.text);
+        if (!expectation.satisfied) {
+            if (hasText) {
+                expectation.satisfied = true;
+            }
+            return;
+        }
+        if (!hasText) {
+            const message = 'Transcribed text vanished after insertion';
+            console.error(message, {
+                expectation,
+                content,
+            });
+            lastTranscribedExpectationRef.current = null;
+            if (__DEV__) {
+                throw new Error(`${message}: ${expectation.text}`);
+            }
+        }
+    }, [content]);
 
     // Refresh recordings when list modal opens
     useEffect(() => {
@@ -1553,7 +1597,7 @@ export const NoteEditScreen = () => {
         const baseContent = resolveVariantContent(variantId);
         const dictationContent = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
         const processingMarker = createVoiceProcessingMarker(normalizedText);
-        const temporaryContent = appendSnippetToContent(baseContent, processingMarker);
+        const temporaryContent = appendSnippetToContent(dictationContent, processingMarker);
         const pending: PendingVoiceInsertion = {
             recordingId,
             variantId,
@@ -1573,6 +1617,7 @@ export const NoteEditScreen = () => {
             pendingVoiceInsertionsRef.current.delete(recordingId);
             return false;
         }
+        registerTranscribedInsertion(normalizedText);
         return true;
     }, [buildInsertedTextForVariant, resolveVariantContent, setVariantContentWithOptions]);
 
@@ -2547,6 +2592,35 @@ export const NoteEditScreen = () => {
         showVoiceResultStatus,
     ]);
 
+    const shouldUseAgentModeGlobally = useCallback(
+        async (agentModeOverride?: boolean): Promise<boolean> => {
+            const provider = await getAIProvider();
+            if (provider !== 'vaulto_ai') {
+                return false;
+            }
+            if (typeof agentModeOverride === 'boolean') {
+                return agentModeOverride;
+            }
+            return await getAgentModeEnabled();
+        },
+        [],
+    );
+
+    useFocusEffect(
+        useCallback(() => {
+            let active = true;
+            void (async () => {
+                const enabled = await shouldUseAgentModeGlobally();
+                if (active) {
+                    setAgentModeIndicatorEnabled(enabled);
+                }
+            })();
+            return () => {
+                active = false;
+            };
+        }, [shouldUseAgentModeGlobally]),
+    );
+
     const executeAgentFlow = async (
         transcribedText: string,
         options?: {
@@ -2558,11 +2632,7 @@ export const NoteEditScreen = () => {
             dictationAlreadyApplied?: boolean;
         }
     ) => {
-        const [storedAgentModeEnabled, provider] = await Promise.all([
-            getAgentModeEnabled(),
-            getAIProvider(),
-        ]);
-        const shouldUseAgentMode = storedAgentModeEnabled && provider === 'vaulto_ai';
+        const shouldUseAgentMode = await shouldUseAgentModeGlobally();
         const targetVariantId = options?.targetVariantId ?? activeVariantIdRef.current;
         const normalizedText = transcribedText.trim();
 
@@ -2607,7 +2677,8 @@ export const NoteEditScreen = () => {
     const handleRecordingFinish = async (
         recording: AudioRecording,
         transcribe: boolean = true,
-        micMode: MicInputMode = 'agent'
+        micMode: MicInputMode = 'agent',
+        agentModeEnabled?: boolean
     ) => {
         setShowVoiceRecorder(false);
         setIsRecordingFlowActive(true);
@@ -2615,6 +2686,8 @@ export const NoteEditScreen = () => {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
             const isUserTranscriptionRestricted = !isAuthenticated || isGuest;
+            const shouldUseAgentModeForThisRecording =
+                micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
             let shouldAutoInsertAudioPlayer = false;
             if (isUserTranscriptionRestricted && shouldTranscribe) {
@@ -2634,6 +2707,9 @@ export const NoteEditScreen = () => {
             let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
             let isTranscriptionSuccess = false;
             let transcribedText = '';
+            const voiceId = Date.now().toString() + Math.random().toString(36).substring(2);
+            let insertedPlainTextEarly = false;
+            let insertedPendingEarly = false;
 
             // 1. TRY TO TRANSCRIBE (But don't fail if it doesn't work)
             try {
@@ -2654,6 +2730,23 @@ export const NoteEditScreen = () => {
 
             isTranscriptionSuccess = transcription.success && !!transcription.text;
             transcribedText = isTranscriptionSuccess ? transcription.text : '';
+
+            const shouldBypassAgentForThisRecording = micMode === 'force_text';
+            if (isTranscriptionSuccess) {
+                if (shouldBypassAgentForThisRecording || !shouldUseAgentModeForThisRecording) {
+                    insertedPlainTextEarly = await applyPlainTextToVariant(targetVariantId, transcribedText);
+                    if (insertedPlainTextEarly) {
+                        registerTranscribedInsertion(transcribedText);
+                    }
+                } else if (wasNewNoteCreation && targetVariantId === 'original') {
+                    insertedPlainTextEarly = await applyPlainTextToVariant('original', transcribedText);
+                    if (insertedPlainTextEarly) {
+                        registerTranscribedInsertion(transcribedText);
+                    }
+                } else {
+                    insertedPendingEarly = await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
+                }
+            }
 
             // Show informative message if transcription failed (but don't block saving)
             if (!isTranscriptionSuccess) {
@@ -2703,7 +2796,7 @@ export const NoteEditScreen = () => {
                     const titleToUse = title.trim();
                     const newNote = await createNote({
                         title: titleToUse,
-                        content: content,
+                        content: currentContentRef.current,
                         storage_scope: storageScope,
                         privacy,
                         audio: {
@@ -2729,7 +2822,6 @@ export const NoteEditScreen = () => {
             }
 
             // Save Metadata to DB
-            const voiceId = Date.now().toString() + Math.random().toString(36).substring(2);
             const voiceRecording: VoiceRecording = {
                 id: voiceId,
                 note_id: currentNoteId,
@@ -2775,11 +2867,14 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            const shouldBypassAgentForThisRecording = micMode === 'force_text';
-
-            if (shouldBypassAgentForThisRecording) {
-                const inserted = await applyPlainTextToVariant(targetVariantId, transcribedText);
+            if (shouldBypassAgentForThisRecording || !shouldUseAgentModeForThisRecording) {
+                const inserted = insertedPlainTextEarly
+                    ? true
+                    : await applyPlainTextToVariant(targetVariantId, transcribedText);
                 if (inserted) {
+                    if (!insertedPlainTextEarly) {
+                        registerTranscribedInsertion(transcribedText);
+                    }
                     const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
                     setRecordingOutcomeStatus(voiceId, status);
                     showVoiceResultStatus(status, voiceId);
@@ -2795,18 +2890,16 @@ export const NoteEditScreen = () => {
             // keep plain transcription in Original, skip processing marker,
             // then run Agent in background to create improvement when applicable.
             if (wasNewNoteCreation && targetVariantId === 'original') {
-                const inserted = await applyPlainTextToVariant('original', transcribedText);
+                const inserted = insertedPlainTextEarly
+                    ? true
+                    : await applyPlainTextToVariant('original', transcribedText);
                 const status = inserted ? 'Added to Original' : 'Saved recording';
                 setRecordingOutcomeStatus(voiceId, status);
                 showVoiceResultStatus(status, voiceId);
-
-                const [storedAgentModeEnabled, provider] = await Promise.all([
-                    getAgentModeEnabled(),
-                    getAIProvider(),
-                ]);
-                const shouldUseAgentMode = storedAgentModeEnabled && provider === 'vaulto_ai';
-                if (!shouldUseAgentMode) {
-                    return;
+                if (inserted) {
+                    if (!insertedPlainTextEarly) {
+                        registerTranscribedInsertion(transcribedText);
+                    }
                 }
 
                 setRecordingOutcomeStatus(voiceId, 'Processing...');
@@ -2820,7 +2913,9 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
+            if (!insertedPendingEarly) {
+                await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
+            }
 
             setRecordingOutcomeStatus(voiceId, 'Processing...');
             await executeAgentFlow(transcribedText, {
@@ -3245,6 +3340,10 @@ export const NoteEditScreen = () => {
     const canShareOrExport = effectiveStorageScope !== 'local_only';
     const micHintText = 'Hold: no agent';
     const selectedRecordingText = selectedRecordingForText?.transcription?.trim() || '';
+    const agentProcessingActive =
+        agentModeIndicatorEnabled && (isAIProcessing || queueLength > 0);
+    const aiIndicatorVisible = isAIProcessing || queueLength > 0 || isTranscribing;
+    const aiIndicatorCanCancel = agentProcessingActive && !isTranscribing;
 
     // Handle initial recording passed from navigation
     useEffect(() => {
@@ -3285,6 +3384,7 @@ export const NoteEditScreen = () => {
         }
         const consentGranted = await requestPrivateAIConsent();
         if (!consentGranted) return;
+        const shouldUseAgentModeForRetry = await shouldUseAgentModeGlobally();
 
         setTrackedIsTranscribing(true);
         setTranscribingRecordingId(targetRecording.id);
@@ -3310,6 +3410,14 @@ export const NoteEditScreen = () => {
                 return;
             }
 
+            const targetVariantId = activeVariantIdRef.current;
+            const insertedEarly = !shouldUseAgentModeForRetry
+                ? await applyPlainTextToVariant(targetVariantId, text)
+                : await insertPendingTranscriptionToVariant(targetVariantId, targetRecording.id, text);
+            if (insertedEarly && !shouldUseAgentModeForRetry) {
+                registerTranscribedInsertion(text);
+            }
+
             if (userId) {
                 await saveVoiceRecordingLocal(userId, {
                     ...targetRecording,
@@ -3331,8 +3439,24 @@ export const NoteEditScreen = () => {
                 });
             }
 
-            const targetVariantId = activeVariantIdRef.current;
-            await insertPendingTranscriptionToVariant(targetVariantId, targetRecording.id, text);
+            if (!shouldUseAgentModeForRetry) {
+                const inserted = insertedEarly
+                    ? true
+                    : await applyPlainTextToVariant(targetVariantId, text);
+                const status = inserted
+                    ? (targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved')
+                    : 'Saved recording';
+                setRecordingOutcomeStatus(targetRecording.id, status);
+                showVoiceResultStatus(status, targetRecording.id);
+                if (inserted && !insertedEarly) {
+                    registerTranscribedInsertion(text);
+                }
+                return;
+            }
+
+            if (!insertedEarly) {
+                await insertPendingTranscriptionToVariant(targetVariantId, targetRecording.id, text);
+            }
 
             setRecordingOutcomeStatus(targetRecording.id, 'Processing...');
             await executeAgentFlow(text, {
@@ -4196,10 +4320,10 @@ export const NoteEditScreen = () => {
 
 
             <AIProcessingIndicator
-                visible={(isAIProcessing || queueLength > 0 || isTranscribing)}
+                visible={aiIndicatorVisible}
                 queueSize={queueLength}
                 isTranscribing={isTranscribing}
-                canCancel={!isTranscribing && (isAIProcessing || queueLength > 0)}
+                canCancel={aiIndicatorCanCancel}
                 onCancel={() => {
                     void cancelAgentProcessing();
                 }}
@@ -4208,11 +4332,11 @@ export const NoteEditScreen = () => {
             <VoiceRecorder
                 visible={showVoiceRecorder}
                 micMode={pendingMicInputMode}
-                onFinish={(rec, transcribe) => {
+                onFinish={(rec, transcribe, agentEnabled) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current);
+                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current, agentEnabled);
                     }
                     setPendingMicInputMode('agent');
                     pendingMicInputModeRef.current = 'agent';
