@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { useEncryption } from '../context/EncryptionContext';
-import { getSecretValidationError, SecretMode } from '../crypto/e2ee';
+import { getSecretValidationError } from '../crypto/e2ee';
 import { Button } from './Button';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -26,12 +26,8 @@ export const UnlockSyncModal = ({
     onError,
     errorMessage = null,
 }: UnlockSyncModalProps) => {
-    const { unlock, bundle, custodyMode } = useEncryption();
-    const effectiveMode: SecretMode = custodyMode === 'strict_seed'
-        ? 'seed_phrase'
-        : (bundle?.secret_mode === 'seed_phrase' ? 'seed_phrase' : 'passphrase');
-    const isLegacyNumericPassphrase = custodyMode !== 'strict_seed' && bundle?.secret_mode === 'pin';
-    const isRecoveryPhrase = effectiveMode === 'seed_phrase';
+    const { unlock, bundle } = useEncryption();
+    const isLegacyNumericPassphrase = bundle?.secret_mode === 'pin';
     const [secret, setSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -55,7 +51,7 @@ export const UnlockSyncModal = ({
         setShowSecret(false);
         setError(null);
         setShowReset(false);
-    }, [visible, effectiveMode, errorMessage]);
+    }, [visible, errorMessage]);
 
     const handleClose = () => {
         if (loading) return;
@@ -73,7 +69,7 @@ export const UnlockSyncModal = ({
                 return;
             }
         } else {
-            const validationError = getSecretValidationError(rawSecret, effectiveMode);
+            const validationError = getSecretValidationError(rawSecret, 'passphrase');
             if (validationError) {
                 setError(validationError);
                 return;
@@ -113,13 +109,13 @@ export const UnlockSyncModal = ({
                             </Text>
 
                             <TextInput
-                                label={isRecoveryPhrase ? 'Recovery passphrase' : 'Passphrase'}
+                                label="Passphrase"
                                 value={secret}
                                 onChangeText={setSecret}
                                 secureTextEntry={!showSecret}
                                 autoCapitalize="none"
                                 autoCorrect={false}
-                                placeholder={isRecoveryPhrase ? 'Enter your 12-word recovery phrase' : 'Enter your passphrase'}
+                                placeholder="Enter your passphrase"
                             />
                             <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
                                 <Text style={styles.revealText}>
@@ -128,11 +124,9 @@ export const UnlockSyncModal = ({
                             </Pressable>
 
                             <Text style={styles.hint}>
-                                {isRecoveryPhrase
-                                    ? 'Recovery phrase mode: only your 12-word recovery phrase can unlock synced data.'
-                                    : isLegacyNumericPassphrase
-                                        ? 'Legacy mode detected: your passphrase is an 8-digit numeric code.'
-                                        : 'Use your exact passphrase. Unlock happens locally.'}
+                                {isLegacyNumericPassphrase
+                                    ? 'Legacy mode detected: your passphrase is an 8-digit numeric code.'
+                                    : 'Use your exact passphrase. Unlock happens locally.'}
                             </Text>
                             {error && <Text style={styles.error}>{error}</Text>}
 

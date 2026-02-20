@@ -194,7 +194,6 @@ export const SettingsScreen = () => {
         syncLocked,
         hasRemoteKeyBundle,
         bundle,
-        custodyMode,
         setSyncEnabledPreference,
     } = useEncryption();
 
@@ -207,7 +206,7 @@ export const SettingsScreen = () => {
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
-    const [showChangePinModal, setShowChangePinModal] = useState(false);
+    const [showChangeSecretModal, setShowChangeSecretModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
@@ -274,7 +273,7 @@ export const SettingsScreen = () => {
 
     const usingOpenAI = aiProvider === 'openai';
     const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
-    const hasConfiguredKey = custodyMode === 'strict_seed' || !!bundle || hasRemoteKeyBundle;
+    const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
     const syncStatusLabel = encryptionStatus === 'loading' ? 'Checking...' : (!syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On');
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (!syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen);
     // When configured, we show the Change button only (no extra "Configured" label).
@@ -804,7 +803,7 @@ export const SettingsScreen = () => {
                                 </Text>
                             )}
                             {hasConfiguredKey && encryptionStatus !== 'locked' && (
-                                <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangePinModal(true)}>
+                                <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangeSecretModal(true)}>
                                     <Text style={styles.smallButtonTextOutlined}>Change</Text>
                                 </TouchableOpacity>
                             )}
@@ -1216,11 +1215,11 @@ export const SettingsScreen = () => {
                 onEnabled={() => setShowEnableSyncModal(false)}
             />
             <EnableSyncModal
-                visible={showChangePinModal}
+                visible={showChangeSecretModal}
                 flow="change"
-                onClose={() => setShowChangePinModal(false)}
+                onClose={() => setShowChangeSecretModal(false)}
                 onChanged={() => {
-                    setShowChangePinModal(false);
+                    setShowChangeSecretModal(false);
                 }}
             />
             <UnlockSyncModal

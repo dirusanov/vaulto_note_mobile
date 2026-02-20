@@ -3,10 +3,9 @@ import { KeyBundle } from '../crypto/e2ee';
 
 export type DeleteKeyBundleResult = 'deleted' | 'unsupported';
 export type ResetSyncResult = 'deleted';
-export type CustodyMode = 'standard' | 'strict_seed';
 
 export interface E2EEConfigResponse {
-    custody_mode: CustodyMode;
+    custody_mode: 'standard';
 }
 
 export const e2eeApi = {
@@ -20,13 +19,19 @@ export const e2eeApi = {
             return { custody_mode: 'standard' };
         }
 
-        return response.data;
+        if (response.data?.custody_mode === 'standard') {
+            return response.data;
+        }
+        return { custody_mode: 'standard' };
     },
-    setConfig: async (custodyMode: CustodyMode): Promise<E2EEConfigResponse> => {
+    setConfig: async (syncMode: 'standard' = 'standard'): Promise<E2EEConfigResponse> => {
         const response = await client.put('/e2ee/config', {
-            custody_mode: custodyMode,
+            custody_mode: syncMode,
         });
-        return response.data;
+        if (response.data?.custody_mode === 'standard') {
+            return response.data;
+        }
+        return { custody_mode: 'standard' };
     },
     fetchKeyBundle: async (): Promise<KeyBundle | null> => {
         const response = await client.get('/e2ee/master-key');
@@ -37,7 +42,7 @@ export const e2eeApi = {
             validateStatus: (status) => (status >= 200 && status < 300) || status === 409,
         });
         if (response.status === 409) {
-            throw new Error('Server rejected key bundle in strict seed mode');
+            throw new Error('Server rejected key bundle');
         }
     },
     deleteKeyBundle: async (): Promise<DeleteKeyBundleResult> => {

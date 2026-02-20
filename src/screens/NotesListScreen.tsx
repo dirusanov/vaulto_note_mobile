@@ -30,7 +30,7 @@ export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
     const { userId, isAuthenticated, isGuest } = useAuth();
-    const { syncLocked, custodyMode } = useEncryption();
+    const { syncLocked } = useEncryption();
     const {
         notes,
         loading,
@@ -133,8 +133,6 @@ export const NotesListScreen = () => {
     const handleSettingsPress = () => {
         navigation.navigate('Settings');
     };
-
-    const secretModeLabel = custodyMode === 'strict_seed' ? 'recovery passphrase' : 'passphrase';
 
     const shouldShowLockBanner =
         !isSelectionMode &&
@@ -468,7 +466,7 @@ export const NotesListScreen = () => {
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.lockBannerText}>
-                        {`Encrypted sync data detected on server. Unlock using your ${secretModeLabel} to access notes on this device.`}
+                        Encrypted sync data detected on server. Unlock using your passphrase to access notes on this device.
                     </Text>
                     <View style={styles.lockBannerActions}>
                         <TouchableOpacity

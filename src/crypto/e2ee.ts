@@ -1,24 +1,19 @@
 import * as Crypto from 'expo-crypto';
-import { pbkdf2, pbkdf2Async } from '@noble/hashes/pbkdf2';
+import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
-import { isValidMnemonic, normalizeMnemonic } from './bip39';
 
 export const KEY_BUNDLE_VERSION = 2;
 export const CIPHER_VERSION = 'v2';
 export const DEFAULT_KDF_ITERATIONS = 150_000;
 export const PASSPHRASE_MIN_LENGTH = 12;
 export const PASSPHRASE_MIN_WORDS = 3;
-export const SEED_PHRASE_WORDS = 12;
 const INVISIBLE_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
-const STRICT_SEED_KDF_ITERATIONS = 300_000;
-const STRICT_SEED_DOMAIN_SALT = utf8ToBytes('vaulto.strict-seed.master-key.v1');
-const STRICT_SEED_ASYNC_TICK_MS = 1;
 
 // PIN-based wrapping was removed; keep legacy 'pin' only for backward compatibility
 // when parsing old key bundles from storage/server.
-export type SecretMode = 'passphrase' | 'seed_phrase';
+export type SecretMode = 'passphrase';
 export type KeyBundleSecretMode = SecretMode | 'pin';
 
 export type KeyBundleKdf = {
@@ -72,26 +67,13 @@ export const isValidPassphrase = (passphrase: string): boolean => {
     );
 };
 
-export const isValidSeedPhrase = (seedPhrase: string): boolean => {
-    return isValidMnemonic(normalizeMnemonic(seedPhrase));
-};
-
 export const getSecretValidationError = (
     secret: string,
-    mode: SecretMode,
+    _mode: SecretMode,
 ): string | null => {
-    const normalized = mode === 'seed_phrase'
-        ? normalizeMnemonic(secret)
-        : secret.trim();
+    const normalized = secret.trim();
     if (!normalized) {
-        if (mode === 'seed_phrase') return 'Recovery phrase is required.';
         return 'Passphrase is required.';
-    }
-
-    if (mode === 'seed_phrase') {
-        return isValidSeedPhrase(normalized)
-            ? null
-            : `Recovery phrase must be a valid BIP39 phrase (${SEED_PHRASE_WORDS} words by default).`;
     }
 
     return isValidPassphrase(normalized)
@@ -101,41 +83,19 @@ export const getSecretValidationError = (
 
 export const normalizeSecretInput = (secret: string, mode: SecretMode): string => {
     const cleaned = secret.replace(INVISIBLE_CHARS_REGEX, '').normalize('NFKC');
-    if (mode === 'seed_phrase') {
-        return normalizeMnemonic(cleaned);
-    }
     if (mode === 'passphrase') {
         return cleaned.trim().replace(/\s+/g, ' ');
     }
     return cleaned.trim();
 };
 
-const deriveKey = (material: string, salt: Uint8Array, iterations: number): Uint8Array => {
+const deriveKey = (
+    material: string,
+    salt: Uint8Array,
+    iterations: number,
+): Uint8Array => {
     const materialBytes = utf8ToBytes(material);
     return pbkdf2(sha256, materialBytes, salt, { c: iterations, dkLen: 32 });
-};
-
-export const deriveMasterKeyFromSeed = (seedPhrase: string): Uint8Array => {
-    const normalizedSeed = normalizeSecretInput(seedPhrase, 'seed_phrase');
-    const validationError = getSecretValidationError(normalizedSeed, 'seed_phrase');
-    if (validationError) {
-        throw new Error(validationError);
-    }
-    return deriveKey(normalizedSeed, STRICT_SEED_DOMAIN_SALT, STRICT_SEED_KDF_ITERATIONS);
-};
-
-export const deriveMasterKeyFromSeedAsync = async (seedPhrase: string): Promise<Uint8Array> => {
-    const normalizedSeed = normalizeSecretInput(seedPhrase, 'seed_phrase');
-    const validationError = getSecretValidationError(normalizedSeed, 'seed_phrase');
-    if (validationError) {
-        throw new Error(validationError);
-    }
-    const materialBytes = utf8ToBytes(normalizedSeed);
-    return await pbkdf2Async(sha256, materialBytes, STRICT_SEED_DOMAIN_SALT, {
-        c: STRICT_SEED_KDF_ITERATIONS,
-        dkLen: 32,
-        asyncTick: STRICT_SEED_ASYNC_TICK_MS,
-    });
 };
 
 export const createKeyBundle = async (
@@ -179,8 +139,6 @@ export const wrapMasterKey = async (
 };
 
 export const unwrapMasterKey = (bundle: KeyBundle, secret: string): Uint8Array => {
-    const mode: SecretMode | undefined =
-        bundle.secret_mode === 'pin' ? 'passphrase' : bundle.secret_mode;
     const candidates = new Set<string>();
     const addCandidate = (value: string) => {
         if (value) {
@@ -189,11 +147,7 @@ export const unwrapMasterKey = (bundle: KeyBundle, secret: string): Uint8Array =
     };
     addCandidate(secret);
     addCandidate(secret.trim());
-    if (mode === 'passphrase') {
-        addCandidate(normalizeSecretInput(secret, 'passphrase'));
-    } else if (mode === 'seed_phrase') {
-        addCandidate(normalizeSecretInput(secret, 'seed_phrase'));
-    }
+    addCandidate(normalizeSecretInput(secret, 'passphrase'));
 
     const tryUnwrap = (material: string, kdf: KeyBundleKdf, wrap: KeyBundleWrap, wrappedKeyHex: string): Uint8Array | null => {
         try {
@@ -225,7 +179,6 @@ export const isKeyBundle = (value: any): value is KeyBundle => {
         typeof value.wrapped_key === 'string' &&
         (value.secret_mode === undefined ||
             value.secret_mode === 'passphrase' ||
-            value.secret_mode === 'seed_phrase' ||
             value.secret_mode === 'pin')
     );
 };

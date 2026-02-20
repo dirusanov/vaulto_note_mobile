@@ -7,19 +7,17 @@ import {
     KeyBundle,
     clearMasterKey,
     createKeyBundle,
-    deriveMasterKeyFromSeedAsync,
     getMasterKey,
     getSecretValidationError,
     hasMasterKey,
     isKeyBundle,
     normalizeSecretInput,
-    SecretMode,
     setMasterKey,
     unwrapMasterKey,
     wrapMasterKey,
 } from '../crypto/e2ee';
 import { decrypt, encrypt, setCryptoMode } from '../crypto/encryption';
-import { CustodyMode, e2eeApi } from '../api/e2ee';
+import { e2eeApi } from '../api/e2ee';
 import { initDatabase, wipeLocalDatabase } from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 
@@ -28,14 +26,13 @@ export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
 interface EncryptionContextType {
     status: EncryptionStatus;
     mode: CryptoMode;
-    custodyMode: CustodyMode;
     syncEnabled: boolean;
     syncLocked: boolean;
     hasRemoteKeyBundle: boolean;
     bundle: KeyBundle | null;
-    enableE2EE: (secret: string, mode?: SecretMode) => Promise<void>;
+    enableE2EE: (secret: string) => Promise<void>;
     unlock: (secret: string) => Promise<void>;
-    changePin: (secret: string, mode?: SecretMode) => Promise<void>;
+    changePin: (secret: string) => Promise<void>;
     setSyncEnabledPreference: (enabled: boolean) => Promise<void>;
     resetSync: () => Promise<'purged' | 'partial'>;
     resetEncryption: () => Promise<'purged' | 'partial'>;
@@ -48,7 +45,6 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const { userId, isGuest, isAuthenticated } = useAuth();
     const [status, setStatus] = useState<EncryptionStatus>('loading');
     const [mode, setMode] = useState<CryptoMode>('local');
-    const [custodyMode, setCustodyMode] = useState<CustodyMode>('standard');
     const [syncEnabled, setSyncEnabled] = useState(false);
     const [bundle, setBundle] = useState<KeyBundle | null>(null);
     const [syncUnlocked, setSyncUnlocked] = useState(false);
@@ -88,18 +84,13 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         });
     }, [runDatabaseInit]);
 
-    const persistCustodyMode = useCallback(async (currentUserId: string, nextMode: CustodyMode) => {
-        await storage.setCustodyMode(currentUserId, nextMode);
-        setCustodyMode(nextMode);
-    }, []);
-
     const loadState = useCallback(async () => {
         setStatus('loading');
         clearMasterKey();
         setSyncUnlocked(false);
         setBundle(null);
         setHasRemoteKeyBundle(false);
-        setCustodyMode('standard');
+
         const storedSyncEnabled = await storage.getSyncEnabled();
         const isAuthReady = !!userId && isAuthenticated && !isGuest;
         const shouldEnableSync = isAuthReady && storedSyncEnabled;
@@ -114,29 +105,6 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             if (userId) {
                 scheduleDatabaseInit(userId);
             }
-            return;
-        }
-
-        let effectiveCustodyMode: CustodyMode = 'standard';
-        const localCustodyMode = await storage.getCustodyMode(userId);
-        if (localCustodyMode === 'strict_seed') {
-            effectiveCustodyMode = 'strict_seed';
-        }
-        try {
-            const remoteConfig = await e2eeApi.fetchConfig();
-            effectiveCustodyMode = remoteConfig.custody_mode;
-            await storage.setCustodyMode(userId, effectiveCustodyMode);
-        } catch (error) {
-            console.warn('[Encryption] Failed to fetch e2ee config from server:', error);
-        }
-
-        setCustodyMode(effectiveCustodyMode);
-
-        if (effectiveCustodyMode === 'strict_seed') {
-            setHasRemoteKeyBundle(false);
-            setBundle(null);
-            const restored = await restoreMasterKey(userId);
-            setStatus(restored ? 'ready' : 'locked');
             return;
         }
 
@@ -198,19 +166,20 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         void loadState();
     }, [loadState]);
 
-    const enableE2EE = useCallback(async (secret: string, nextMode: SecretMode = 'passphrase') => {
+    const enableE2EE = useCallback(async (secret: string) => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to enable sync');
         }
         if (!userId) {
             throw new Error('User not available');
         }
-        const validationError = getSecretValidationError(secret, nextMode);
+
+        const validationError = getSecretValidationError(secret, 'passphrase');
         if (validationError) {
             throw new Error(validationError);
         }
 
-        const normalizedSecret = normalizeSecretInput(secret, nextMode);
+        const normalizedSecret = normalizeSecretInput(secret, 'passphrase');
         await storage.clearSyncResetBlocked(userId);
         await storage.setSyncEnabled(true);
         await storage.setCryptoMode('local');
@@ -219,39 +188,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setSyncEnabled(true);
         syncService.setSyncEnabled(true);
 
-        if (nextMode === 'seed_phrase') {
-            const derivedMasterKey = await deriveMasterKeyFromSeedAsync(normalizedSecret);
-            setMasterKey(derivedMasterKey);
-            setSyncUnlocked(true);
-            setBundle(null);
-            setHasRemoteKeyBundle(false);
-            setStatus('ready');
-            await persistMasterKey(userId, derivedMasterKey);
-            await storage.removeKeyBundle(userId);
-            await persistCustodyMode(userId, 'strict_seed');
-
-            try {
-                await e2eeApi.setConfig('strict_seed');
-            } catch (error) {
-                console.warn('[Encryption] Failed to set strict seed mode on server:', error);
-            }
-            try {
-                await e2eeApi.deleteKeyBundle();
-            } catch (error) {
-                console.warn('[Encryption] Failed to delete key bundle on server:', error);
-            }
-
-            await syncService.resetSyncState(userId);
-            scheduleDatabaseInit(userId);
-            return;
-        }
-
-        const { bundle: newBundle, masterKey } = await createKeyBundle(normalizedSecret, nextMode);
+        const { bundle: newBundle, masterKey } = await createKeyBundle(normalizedSecret, 'passphrase');
         setMasterKey(masterKey);
         setSyncUnlocked(true);
         await persistMasterKey(userId, masterKey);
         await storage.setKeyBundle(userId, newBundle);
-        await persistCustodyMode(userId, 'standard');
         setBundle(newBundle);
         setHasRemoteKeyBundle(true);
         setStatus('ready');
@@ -268,75 +209,25 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
 
         scheduleDatabaseInit(userId);
-    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey, persistCustodyMode]);
+    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey]);
 
     const unlock = useCallback(async (secret: string) => {
         if (!secret.trim()) {
             throw new Error('Access key is required.');
         }
-
-        const formatIncorrectSecretMessage = (secretMode: SecretMode): string => {
-            if (secretMode === 'seed_phrase') return 'Incorrect recovery phrase.';
-            return 'Incorrect passphrase.';
-        };
-
-        const expectedSecretMode: SecretMode =
-            custodyMode === 'strict_seed'
-                ? 'seed_phrase'
-                : (bundle?.secret_mode === 'seed_phrase' ? 'seed_phrase' : 'passphrase');
+        if (!bundle) {
+            throw new Error('Key bundle missing');
+        }
 
         let resolvedMasterKey: Uint8Array;
-        if (custodyMode === 'strict_seed') {
-            const validationError = getSecretValidationError(secret, 'seed_phrase');
-            if (validationError) {
-                throw new Error(validationError);
+        try {
+            resolvedMasterKey = unwrapMasterKey(bundle, secret);
+        } catch (error: any) {
+            const message = String(error?.message || '').toLowerCase();
+            if (message.includes('invalid access key') || message.includes('invalid tag')) {
+                throw new Error('Incorrect passphrase.');
             }
-            try {
-                resolvedMasterKey = await deriveMasterKeyFromSeedAsync(secret);
-            } catch (error: any) {
-                const message = String(error?.message || '');
-                if (message.toLowerCase().includes('invalid')) {
-                    throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
-                }
-                throw error;
-            }
-
-            // In strict-seed mode, verify against locally cached master key when available.
-            // This gives immediate "incorrect seed" feedback on devices that already unlocked before.
-            if (userId) {
-                const storedWrappedMasterKey = await storage.getStoredMasterKey(userId);
-                if (storedWrappedMasterKey) {
-                    try {
-                        const storedMasterKeyHex = await decrypt(storedWrappedMasterKey);
-                        if (storedMasterKeyHex !== bytesToHex(resolvedMasterKey)) {
-                            throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
-                        }
-                    } catch (error: any) {
-                        const message = String(error?.message || '').toLowerCase();
-                        if (
-                            message.includes('incorrect recovery phrase') ||
-                            message.includes('invalid tag') ||
-                            message.includes('invalid ciphertext')
-                        ) {
-                            throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
-                        }
-                        console.warn('[Encryption] Failed to verify strict-seed master key from local cache:', error);
-                    }
-                }
-            }
-        } else {
-            if (!bundle) {
-                throw new Error('Key bundle missing');
-            }
-            try {
-                resolvedMasterKey = unwrapMasterKey(bundle, secret);
-            } catch (error: any) {
-                const message = String(error?.message || '').toLowerCase();
-                if (message.includes('invalid access key') || message.includes('invalid tag')) {
-                    throw new Error(formatIncorrectSecretMessage(expectedSecretMode));
-                }
-                throw error;
-            }
+            throw error;
         }
 
         setMasterKey(resolvedMasterKey);
@@ -353,9 +244,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (userId) {
             scheduleDatabaseInit(userId);
         }
-    }, [bundle, custodyMode, userId, scheduleDatabaseInit, persistMasterKey]);
+    }, [bundle, userId, scheduleDatabaseInit, persistMasterKey]);
 
-    const changePin = useCallback(async (secret: string, nextMode: SecretMode = 'passphrase') => {
+    const changePin = useCallback(async (secret: string) => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to change access key');
         }
@@ -365,7 +256,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (!hasMasterKey()) {
             throw new Error('Sync key is locked');
         }
-        const validationError = getSecretValidationError(secret, nextMode);
+
+        const validationError = getSecretValidationError(secret, 'passphrase');
         if (validationError) {
             throw new Error(validationError);
         }
@@ -375,46 +267,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('Master key missing');
         }
 
-        const normalizedSecret = normalizeSecretInput(secret, nextMode);
+        const normalizedSecret = normalizeSecretInput(secret, 'passphrase');
         await storage.clearSyncResetBlocked(userId);
 
-        if (nextMode === 'seed_phrase') {
-            const previousMasterHex = bytesToHex(currentMasterKey);
-            const derivedMasterKey = await deriveMasterKeyFromSeedAsync(normalizedSecret);
-            const nextMasterHex = bytesToHex(derivedMasterKey);
-            const requiresReSync = custodyMode !== 'strict_seed' || previousMasterHex !== nextMasterHex;
-
-            setMasterKey(derivedMasterKey);
-            setSyncUnlocked(true);
-            setBundle(null);
-            setHasRemoteKeyBundle(false);
-            await persistMasterKey(userId, derivedMasterKey);
-            await storage.removeKeyBundle(userId);
-            await persistCustodyMode(userId, 'strict_seed');
-
-            try {
-                await e2eeApi.setConfig('strict_seed');
-            } catch (error) {
-                console.warn('[Encryption] Failed to set strict seed mode on server:', error);
-            }
-            try {
-                await e2eeApi.deleteKeyBundle();
-            } catch (error) {
-                console.warn('[Encryption] Failed to delete key bundle on server:', error);
-            }
-
-            if (requiresReSync) {
-                await syncService.resetSyncState(userId);
-                setTimeout(() => {
-                    void syncService.syncNow('manual');
-                }, 0);
-            }
-            return;
-        }
-
-        const newBundle = await wrapMasterKey(currentMasterKey, normalizedSecret, nextMode);
+        const newBundle = await wrapMasterKey(currentMasterKey, normalizedSecret, 'passphrase');
         await storage.setKeyBundle(userId, newBundle);
-        await persistCustodyMode(userId, 'standard');
         setBundle(newBundle);
         setHasRemoteKeyBundle(true);
 
@@ -428,7 +285,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         } catch (error) {
             console.warn('[Encryption] Failed to update key bundle on server:', error);
         }
-    }, [isAuthenticated, isGuest, userId, custodyMode, persistMasterKey, persistCustodyMode]);
+    }, [isAuthenticated, isGuest, userId]);
 
     const setSyncEnabledPreference = useCallback(async (enabled: boolean) => {
         if (!isAuthenticated || isGuest) {
@@ -465,16 +322,14 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         try {
             await e2eeApi.setConfig('standard');
         } catch (error) {
-            console.warn('[Encryption] Failed to reset custody mode on server:', error);
+            console.warn('[Encryption] Failed to reset server sync mode:', error);
         }
 
         await storage.removeKeyBundle(userId);
         await storage.removeStoredMasterKey(userId);
-        await storage.removeCustodyMode(userId);
         await storage.setSyncEnabled(false);
         clearMasterKey();
         setBundle(null);
-        setCustodyMode('standard');
         setSyncUnlocked(false);
         setHasRemoteKeyBundle(false);
         setSyncEnabled(false);
@@ -515,17 +370,16 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const lock = useCallback(() => {
         clearMasterKey();
         setSyncUnlocked(false);
-        if (bundle || custodyMode === 'strict_seed') {
+        if (bundle) {
             setStatus('locked');
         } else {
             setStatus('uninitialized');
         }
-    }, [bundle, custodyMode]);
+    }, [bundle]);
 
     const value = useMemo(() => ({
         status,
         mode,
-        custodyMode,
         syncEnabled,
         syncLocked: syncEnabled && !syncUnlocked,
         hasRemoteKeyBundle,
@@ -537,7 +391,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         resetSync,
         resetEncryption,
         lock,
-    }), [status, mode, custodyMode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

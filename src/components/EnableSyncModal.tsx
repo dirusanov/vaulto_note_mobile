@@ -99,9 +99,9 @@ export const EnableSyncModal = ({
         try {
             await waitForUiFrame();
             if (isChangeFlow) {
-                await changePin(normalizedSecret, 'passphrase');
+                await changePin(normalizedSecret);
             } else {
-                await enableE2EE(normalizedSecret, 'passphrase');
+                await enableE2EE(normalizedSecret);
             }
 
             setTimeout(() => {
