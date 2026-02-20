@@ -49,6 +49,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
+    const [isStopping, setIsStopping] = useState(false);
+    const [isStartPending, setIsStartPending] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const agentModeToggleTouchedRef = useRef(false);
@@ -93,6 +95,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             // Don't reset transcribe here, keep user preference or reload next open
             setIsRecording(false);
             setIsPaused(false);
+            setIsStopping(false);
+            setIsStartPending(false);
             setDuration(0);
             currentMetering.current = -160;
             meteringSamples.current = 0;
@@ -195,6 +199,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     };
 
     const handleStartRecording = async () => {
+        if (isStartPending || isStopping || isRecording) {
+            return;
+        }
+        setIsStartPending(true);
         try {
             currentMetering.current = -160;
             meteringSamples.current = 0;
@@ -212,10 +220,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         } catch (error) {
             Alert.alert('Error', 'Could not start recording');
             console.error(error);
+        } finally {
+            setIsStartPending(false);
         }
     };
 
     const handlePauseResume = async () => {
+        if (!isRecording || isStopping) {
+            return;
+        }
         try {
             if (isPaused) {
                 await AudioService.resumeRecording();
@@ -229,6 +242,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     };
 
     const handleStopRecording = async () => {
+        if (!isRecording || isStopping || isStartPending) {
+            return;
+        }
+        setIsStopping(true);
         try {
             const recording = await AudioService.stopRecording();
             setIsRecording(false);
@@ -252,18 +269,29 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 onFinish(recording, transcribe, agentModeEnabled);
             }
         } catch (error) {
+            // Recovery path: if stop failed, the native recorder may already be invalid.
+            // Force local UI out of recording state so the modal does not get stuck.
+            setIsRecording(false);
+            setIsPaused(false);
             Alert.alert('Error', 'Could not stop recording');
             console.error(error);
+        } finally {
+            setIsStopping(false);
         }
     };
 
     const handleCancel = async () => {
+        if (isStopping) {
+            return;
+        }
         try {
             if (isRecording) {
                 await AudioService.cancelRecording();
             }
             setIsRecording(false);
             setIsPaused(false);
+            setIsStopping(false);
+            setIsStartPending(false);
             onCancel();
         } catch (error) {
             console.error(error);
@@ -353,6 +381,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         <TouchableOpacity
                             style={styles.cancelButton}
                             onPress={handleCancel}
+                            disabled={isStopping}
                         >
                             <MaterialIcons name="close" size={32} color={colors.textSecondary} />
                         </TouchableOpacity>
@@ -360,13 +389,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         <TouchableOpacity
                             style={styles.pauseButton}
                             onPress={handlePauseResume}
+                            disabled={!isRecording || isStopping}
                         >
                             <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={40} color={colors.text} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={styles.finishButton}
+                            style={[styles.finishButton, (isStopping || !isRecording) && styles.buttonDisabled]}
                             onPress={handleStopRecording}
+                            disabled={isStopping || !isRecording}
                         >
                             <MaterialIcons name="check" size={36} color="white" />
                         </TouchableOpacity>
@@ -481,6 +512,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 8,
+    },
+    buttonDisabled: {
+        opacity: 0.45,
     },
     pauseButton: {
         width: 80,
