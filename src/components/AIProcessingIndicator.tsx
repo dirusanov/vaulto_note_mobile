@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -9,12 +9,16 @@ interface AIProcessingIndicatorProps {
     visible: boolean;
     queueSize?: number;
     isTranscribing?: boolean;
+    canCancel?: boolean;
+    onCancel?: () => void;
 }
 
 export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     visible,
     queueSize = 0,
-    isTranscribing = false
+    isTranscribing = false,
+    canCancel = false,
+    onCancel,
 }) => {
     const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -106,6 +110,17 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                     <Text style={styles.subtitle}>Tasks in work: {queueSize}</Text>
                 )}
             </View>
+            {canCancel && onCancel && (
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel AI processing"
+                    onPress={onCancel}
+                    hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                    style={styles.cancelButton}
+                >
+                    <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+            )}
         </Animated.View>
     );
 };
@@ -143,6 +158,7 @@ const styles = StyleSheet.create({
     },
     textContainer: {
         flexDirection: 'column',
+        flexShrink: 1,
     },
     title: {
         ...typography.body2,
@@ -152,5 +168,12 @@ const styles = StyleSheet.create({
     subtitle: {
         ...typography.caption,
         color: colors.textSecondary,
-    }
+    },
+    cancelButton: {
+        marginLeft: spacing.s,
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });
