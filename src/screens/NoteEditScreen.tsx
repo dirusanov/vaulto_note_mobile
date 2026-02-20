@@ -75,7 +75,7 @@ import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
-import { VOICE_PROCESSING_MARKER } from '../utils/voiceDraft';
+import { createVoiceProcessingMarker } from '../utils/voiceDraft';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -1298,8 +1298,8 @@ export const NoteEditScreen = () => {
         return true;
     }, [resolveVariantContent, updateHistoryImmediate, updateImprovement, updateNote]);
 
-    const stripTrailingVoiceProcessingMarker = useCallback((value: string): string => {
-        const markerRegex = new RegExp(`(?:\\n)?${escapeRegExp(VOICE_PROCESSING_MARKER)}\\s*$`);
+    const stripTrailingVoiceProcessingMarker = useCallback((value: string) => {
+        const markerRegex = /(?:\n)?\s*!\[processing\]\([^)]*\)\s*$/;
         return (value || '').replace(markerRegex, '').trimEnd();
     }, []);
 
@@ -1360,7 +1360,8 @@ export const NoteEditScreen = () => {
 
         const baseContent = resolveVariantContent(variantId);
         const dictationContent = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
-        const temporaryContent = appendSnippetToContent(dictationContent, VOICE_PROCESSING_MARKER);
+        const processingMarker = createVoiceProcessingMarker(normalizedText);
+        const temporaryContent = appendSnippetToContent(baseContent, processingMarker);
         const applied = await setVariantContentWithOptions(variantId, temporaryContent, {
             persist: true,
             updateHistory: false,

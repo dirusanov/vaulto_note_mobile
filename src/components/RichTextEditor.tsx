@@ -8,7 +8,8 @@ import {
     NativeSyntheticEvent,
     TextInputKeyPressEventData,
     Platform,
-    TextInputSelectionChangeEventData
+    TextInputSelectionChangeEventData,
+    Animated
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -20,7 +21,7 @@ import { parseMarkdownToData, serializeBlockToMarkdown, renderFormattedText, Blo
 import { AudioPlayer } from './AudioPlayer';
 import {
     VOICE_PROCESSING_LABEL,
-    VOICE_PROCESSING_MARKER,
+    getVoiceProcessingText,
     isVoiceProcessingMarkerLine,
 } from '../utils/voiceDraft';
 
@@ -51,8 +52,37 @@ interface Block {
     formats: BlockFormat[];
 }
 
-// Simple ID generator for blocks to avoid async uuid overhead during typing
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const ProcessingBadge = ({ content }: { content: string }) => {
+    const spinAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.timing(spinAnim, {
+                toValue: 1,
+                duration: 2000,
+                useNativeDriver: true,
+            })
+        ).start();
+    }, [spinAnim]);
+
+    const spin = spinAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg']
+    });
+
+    return (
+        <View style={styles.processingBadge}>
+            <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <MaterialIcons name="hourglass-top" size={14} color={colors.textSecondary} />
+            </Animated.View>
+            <Text style={styles.processingText}>
+                {content || VOICE_PROCESSING_LABEL}
+            </Text>
+        </View>
+    );
+};
 
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>((props, ref) => {
     const {
@@ -565,7 +595,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (block.type === 'h2') return `## ${serializedContent}`;
             if (block.type === 'h3') return `### ${serializedContent}`;
             if (block.type === 'audio') return `![audio](${block.content})`;
-            if (block.type === 'processing') return VOICE_PROCESSING_MARKER;
+            if (block.type === 'processing') return `![processing](${encodeURIComponent(block.content || '')})`;
             return serializedContent;
         }).join('\n');
     };
@@ -626,7 +656,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     rawContent = audioMatch[1];
                 } else if (processingMatch) {
                     type = 'processing';
-                    rawContent = VOICE_PROCESSING_LABEL;
+                    rawContent = getVoiceProcessingText(line);
                 }
 
                 // Parse inner markdown for formats
@@ -1163,12 +1193,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             </TouchableOpacity>
                         </View>
                     ) : isProcessing ? (
-                        <View style={styles.processingBadge}>
-                            <MaterialIcons name="hourglass-top" size={14} color={colors.textSecondary} />
-                            <Text style={styles.processingText}>
-                                {item.content || VOICE_PROCESSING_LABEL}
-                            </Text>
-                        </View>
+                        <ProcessingBadge content={item.content} />
                     ) : (
                         <>
                             {isTodo && (
@@ -1299,20 +1324,23 @@ const styles = StyleSheet.create({
     processingBadge: {
         flex: 1,
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.xs,
+        alignItems: 'flex-start',
+        paddingVertical: spacing.s,
         paddingHorizontal: spacing.s,
         borderRadius: 10,
         borderWidth: 1,
         borderStyle: 'dashed',
         borderColor: colors.border,
         backgroundColor: colors.backgroundSecondary,
+        marginVertical: spacing.xs,
     },
     processingText: {
-        marginLeft: spacing.xs,
+        flex: 1,
+        marginLeft: spacing.s,
         color: colors.textSecondary,
         fontStyle: 'italic',
-        fontSize: 14,
+        fontSize: 16,
+        lineHeight: 22,
     },
     h1: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, marginTop: 8 },
     h2: { fontSize: 20, fontWeight: 'bold', marginBottom: 6, marginTop: 6 },
