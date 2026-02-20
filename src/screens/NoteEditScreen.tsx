@@ -227,13 +227,23 @@ const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'upda
     return action === 'created' ? 'Created improved view' : 'Updated Improved';
 };
 
-const buildAgentImprovementLabel = (mode?: string | null): string => {
-    const normalizedMode = (mode || '').toLowerCase();
-    if (!normalizedMode || normalizedMode === 'none') return 'Improved';
-    if (normalizedMode === 'todo' || normalizedMode === 'list') return 'todo';
-    if (normalizedMode === 'format') return 'format';
-    if (normalizedMode === 'edit_content') return 'edit';
-    return normalizedMode.replace(/_/g, ' ');
+const buildAgentImprovementLabel = (
+    primaryTitle?: string | null,
+    fallbackTitle?: string | null,
+): string => {
+    const normalizeTitleLabel = (value: string): string =>
+        (value || '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    const candidates = [primaryTitle || '', fallbackTitle || ''];
+    for (const candidate of candidates) {
+        const normalized = normalizeTitleLabel(candidate);
+        if (normalized) {
+            return normalized;
+        }
+    }
+    return '';
 };
 
 // History stack implementation - separate history for each variant
@@ -2178,9 +2188,13 @@ export const NoteEditScreen = () => {
                                         throw new Error('Failed to resolve note ID for agent improvement');
                                     }
 
+                                    const generatedLabel = buildAgentImprovementLabel(
+                                        currentTitleRef.current || title || (existingNote?.title || ''),
+                                        suggestedTitle,
+                                    );
                                     const improvement = await createImprovement(targetNoteId, {
                                         content: newText,
-                                        label: buildAgentImprovementLabel(agentResult.mode),
+                                        label: generatedLabel || undefined,
                                     });
 
                                     improvementDraftsRef.current[improvement.id] = newText;
