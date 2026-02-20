@@ -75,6 +75,7 @@ import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
+import { VOICE_PROCESSING_MARKER } from '../utils/voiceDraft';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -163,11 +164,27 @@ const extractListLikeItems = (text: string): string[] => {
             .filter(Boolean);
     }
 
-    if (/[;,]/.test(trimmed)) {
+    if (trimmed.includes(';')) {
         return trimmed
-            .split(/[;,]/)
+            .split(';')
             .map(stripListMarker)
             .filter(Boolean);
+    }
+
+    if (trimmed.includes(',')) {
+        const commaItems = trimmed
+            .split(',')
+            .map(stripListMarker)
+            .filter(Boolean);
+
+        // Commas are common in normal dictation. Treat as list only for compact multi-item phrases.
+        const isCompactCommaList =
+            commaItems.length >= 3 &&
+            commaItems.every((item) => item.length <= 32 && !/[.!?]/.test(item));
+
+        if (isCompactCommaList) {
+            return commaItems;
+        }
     }
 
     return [];
@@ -218,6 +235,14 @@ interface HistoryState {
 interface VariantHistory {
     history: HistoryState[];
     index: number;
+}
+
+interface PendingVoiceInsertion {
+    recordingId: string;
+    variantId: string;
+    baseContent: string;
+    dictationContent: string;
+    temporaryContent: string;
 }
 
 interface NoteProcessingState {
@@ -753,10 +778,10 @@ export const NoteEditScreen = () => {
         noteId: string | undefined;
         targetVariantId: string;
         micMode: MicInputMode;
-        preInsertedToOriginal?: boolean;
         recordingId?: string;
         isBackground?: boolean;
     }[]>([]);
+    const pendingVoiceInsertionsRef = useRef<Map<string, PendingVoiceInsertion>>(new Map());
     const [queueLength, setQueueLengthState] = useState(0);
     const isProcessingQueue = useRef(false);
     const agentSessionIdRef = useRef(0);
@@ -862,6 +887,7 @@ export const NoteEditScreen = () => {
         setRequestHistory([]);
         requestHistoryRef.current = [];
         agentQueue.current = [];
+        pendingVoiceInsertionsRef.current.clear();
         setTrackedQueueLength(0);
     }, [setTrackedQueueLength]);
 
@@ -1163,6 +1189,29 @@ export const NoteEditScreen = () => {
 
     };
 
+    const replaceCurrentHistoryState = useCallback((
+        variantId: string,
+        titleValue: string,
+        contentValue: string
+    ) => {
+        const currentHistory = variantHistories.current[variantId];
+        if (!currentHistory || currentHistory.history.length === 0 || currentHistory.index < 0) {
+            variantHistories.current[variantId] = {
+                history: [{ title: titleValue, content: contentValue }],
+                index: 0,
+            };
+            return;
+        }
+
+        const safeIndex = Math.max(0, Math.min(currentHistory.index, currentHistory.history.length - 1));
+        const nextHistory = [...currentHistory.history];
+        nextHistory[safeIndex] = { title: titleValue, content: contentValue };
+        variantHistories.current[variantId] = {
+            history: nextHistory,
+            index: safeIndex,
+        };
+    }, []);
+
     const resolveVariantContent = useCallback((variantId: string): string => {
         if (variantId === 'original') {
             if (activeVariantIdRef.current === 'original') {
@@ -1199,17 +1248,19 @@ export const NoteEditScreen = () => {
         return appendSnippetToContent(baseContent, normalizedText);
     }, [isTodoImprovementVariant]);
 
-    const applyPlainTextToVariant = useCallback(async (
+    const setVariantContentWithOptions = useCallback(async (
         variantId: string,
-        dictatedText: string
+        newText: string,
+        options?: {
+            persist?: boolean;
+            updateHistory?: boolean;
+        }
     ): Promise<boolean> => {
-        const normalizedText = dictatedText.trim();
-        if (!normalizedText) return false;
+        const persist = options?.persist ?? true;
+        const updateHistoryState = options?.updateHistory ?? true;
+        const currentVariantContent = resolveVariantContent(variantId);
 
-        const baseContent = resolveVariantContent(variantId);
-        const newText = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
-
-        if (areTextsEquivalent(newText, baseContent)) {
+        if (areTextsEquivalent(newText, currentVariantContent)) {
             return false;
         }
 
@@ -1218,8 +1269,10 @@ export const NoteEditScreen = () => {
                 setContent(newText);
                 currentContentRef.current = newText;
             }
-            updateHistoryImmediate(currentTitleRef.current, newText, 'original');
-            if (localNoteIdRef.current) {
+            if (updateHistoryState) {
+                updateHistoryImmediate(currentTitleRef.current, newText, 'original');
+            }
+            if (persist && localNoteIdRef.current) {
                 await updateNote(localNoteIdRef.current, { content: newText });
                 lastSavedContent.current = newText;
             }
@@ -1231,17 +1284,114 @@ export const NoteEditScreen = () => {
             currentContentRef.current = newText;
         }
         improvementDraftsRef.current[variantId] = newText;
-        updateHistoryImmediate('', newText, variantId);
-        if (localNoteIdRef.current) {
+        if (updateHistoryState) {
+            updateHistoryImmediate('', newText, variantId);
+        }
+        if (persist && localNoteIdRef.current) {
             try {
                 await updateImprovement(localNoteIdRef.current, variantId, { content: newText });
                 improvementSavedRef.current[variantId] = newText;
             } catch (error) {
-                console.error('Failed to save dictated text into improvement:', error);
+                console.error('Failed to save variant content update:', error);
             }
         }
         return true;
-    }, [buildInsertedTextForVariant, resolveVariantContent, updateImprovement, updateNote]);
+    }, [resolveVariantContent, updateHistoryImmediate, updateImprovement, updateNote]);
+
+    const stripTrailingVoiceProcessingMarker = useCallback((value: string): string => {
+        const markerRegex = new RegExp(`(?:\\n)?${escapeRegExp(VOICE_PROCESSING_MARKER)}\\s*$`);
+        return (value || '').replace(markerRegex, '').trimEnd();
+    }, []);
+
+    const resolvePendingInsertionContext = useCallback((
+        variantId: string,
+        recordingId?: string
+    ) => {
+        const currentVariantContent = resolveVariantContent(variantId);
+        if (!recordingId) {
+            return {
+                pending: null as PendingVoiceInsertion | null,
+                contentWithoutPending: currentVariantContent,
+                dictationContent: stripTrailingVoiceProcessingMarker(currentVariantContent),
+            };
+        }
+
+        const pending = pendingVoiceInsertionsRef.current.get(recordingId);
+        if (!pending || pending.variantId !== variantId) {
+            return {
+                pending: null as PendingVoiceInsertion | null,
+                contentWithoutPending: currentVariantContent,
+                dictationContent: stripTrailingVoiceProcessingMarker(currentVariantContent),
+            };
+        }
+
+        if (currentVariantContent === pending.temporaryContent) {
+            return {
+                pending,
+                contentWithoutPending: pending.baseContent,
+                dictationContent: pending.dictationContent,
+            };
+        }
+
+        if (currentVariantContent.startsWith(pending.temporaryContent)) {
+            const suffix = currentVariantContent.slice(pending.temporaryContent.length);
+            return {
+                pending,
+                contentWithoutPending: `${pending.baseContent}${suffix}`,
+                dictationContent: `${pending.dictationContent}${suffix}`,
+            };
+        }
+
+        const fallbackDictationContent = stripTrailingVoiceProcessingMarker(currentVariantContent);
+        return {
+            pending,
+            contentWithoutPending: pending.baseContent,
+            dictationContent: fallbackDictationContent || pending.dictationContent,
+        };
+    }, [resolveVariantContent, stripTrailingVoiceProcessingMarker]);
+
+    const insertPendingTranscriptionToVariant = useCallback(async (
+        variantId: string,
+        recordingId: string,
+        dictatedText: string
+    ): Promise<boolean> => {
+        const normalizedText = dictatedText.trim();
+        if (!normalizedText) return false;
+
+        const baseContent = resolveVariantContent(variantId);
+        const dictationContent = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
+        const temporaryContent = appendSnippetToContent(dictationContent, VOICE_PROCESSING_MARKER);
+        const applied = await setVariantContentWithOptions(variantId, temporaryContent, {
+            persist: true,
+            updateHistory: false,
+        });
+
+        if (!applied) return false;
+
+        pendingVoiceInsertionsRef.current.set(recordingId, {
+            recordingId,
+            variantId,
+            baseContent,
+            dictationContent,
+            temporaryContent,
+        });
+        return true;
+    }, [buildInsertedTextForVariant, resolveVariantContent, setVariantContentWithOptions]);
+
+    const applyPlainTextToVariant = useCallback(async (
+        variantId: string,
+        dictatedText: string
+    ): Promise<boolean> => {
+        const normalizedText = dictatedText.trim();
+        if (!normalizedText) return false;
+
+        const baseContent = resolveVariantContent(variantId);
+        const newText = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
+        return await setVariantContentWithOptions(variantId, newText, {
+            persist: true,
+            updateHistory: true,
+        });
+    }, [buildInsertedTextForVariant, resolveVariantContent, setVariantContentWithOptions]);
 
     const applyAudioPlayerToVariant = useCallback(async (
         variantId: string,
@@ -1256,39 +1406,30 @@ export const NoteEditScreen = () => {
         }
 
         const newText = appendSnippetToContent(baseContent, buildAudioMarkdownTag(normalizedPath));
-        if (areTextsEquivalent(newText, baseContent)) {
-            return false;
+        return await setVariantContentWithOptions(variantId, newText, {
+            persist: true,
+            updateHistory: true,
+        });
+    }, [resolveVariantContent, setVariantContentWithOptions]);
+
+    const finalizePendingInsertionAsDictation = useCallback(async (
+        variantId: string,
+        recordingId?: string,
+        fallbackText?: string
+    ): Promise<boolean> => {
+        const { pending, dictationContent } = resolvePendingInsertionContext(variantId, recordingId);
+        if (recordingId && pending) {
+            pendingVoiceInsertionsRef.current.delete(recordingId);
+            return await setVariantContentWithOptions(variantId, dictationContent, {
+                persist: true,
+                updateHistory: true,
+            });
         }
 
-        if (variantId === 'original') {
-            if (activeVariantIdRef.current === 'original') {
-                setContent(newText);
-                currentContentRef.current = newText;
-            }
-            updateHistoryImmediate(currentTitleRef.current, newText, 'original');
-            if (localNoteIdRef.current) {
-                await updateNote(localNoteIdRef.current, { content: newText });
-                lastSavedContent.current = newText;
-            }
-            return true;
-        }
-
-        if (activeVariantIdRef.current === variantId) {
-            setContent(newText);
-            currentContentRef.current = newText;
-        }
-        improvementDraftsRef.current[variantId] = newText;
-        updateHistoryImmediate('', newText, variantId);
-        if (localNoteIdRef.current) {
-            try {
-                await updateImprovement(localNoteIdRef.current, variantId, { content: newText });
-                improvementSavedRef.current[variantId] = newText;
-            } catch (error) {
-                console.error('Failed to save inserted audio player into improvement:', error);
-            }
-        }
-        return true;
-    }, [resolveVariantContent, updateImprovement, updateNote]);
+        const textToInsert = (fallbackText || '').trim();
+        if (!textToInsert) return false;
+        return await applyPlainTextToVariant(variantId, textToInsert);
+    }, [applyPlainTextToVariant, resolvePendingInsertionContext, setVariantContentWithOptions]);
 
     const isAudioAlreadyInsertedInCurrentVariant = useCallback((audioPath: string): boolean => {
         const targetVariantId = activeVariantIdRef.current;
@@ -1802,6 +1943,9 @@ export const NoteEditScreen = () => {
                 // Check session validity (skip if stale, e.g. from previous note load)
                 if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
                     console.log(`[NoteEditScreen] Skipping stale task ${task.id} (sess: ${task.sessionId}/${agentSessionIdRef.current})`);
+                    if (task.recordingId) {
+                        pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                    }
                     setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                     agentQueue.current.shift();
                     setTrackedQueueLength(agentQueue.current.length);
@@ -1809,6 +1953,9 @@ export const NoteEditScreen = () => {
                 }
 
                 if (!task.transcribedText?.trim()) {
+                    if (task.recordingId) {
+                        pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                    }
                     setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                     agentQueue.current.shift();
                     setTrackedQueueLength(agentQueue.current.length);
@@ -1816,20 +1963,18 @@ export const NoteEditScreen = () => {
                 }
 
                 const taskVariantId = task.targetVariantId || 'original';
-                const contextContent = resolveVariantContent(taskVariantId);
+                const normalizedTaskText = task.transcribedText.trim();
+                const pendingContextAtStart = resolvePendingInsertionContext(taskVariantId, task.recordingId);
+                const contextContent = pendingContextAtStart.contentWithoutPending;
 
                 console.log(`[NoteEditScreen] Processing agent task ${task.id} (queue=${agentQueue.current.length})`);
 
-                const applyFallbackInsertion = async (fallbackText?: string) => {
-                    const textToInsert = (fallbackText || task.transcribedText || '').trim();
-                    if (!textToInsert) return;
-                    if (taskVariantId === 'original' && task.preInsertedToOriginal) {
-                        const status = 'Added to Original';
-                        setRecordingOutcomeStatus(task.recordingId, status);
-                        showVoiceResultStatus(status, task.recordingId);
-                        return;
-                    }
-                    const applied = await applyPlainTextToVariant(taskVariantId, textToInsert);
+                const finalizeAsDictation = async (fallbackText?: string) => {
+                    const applied = await finalizePendingInsertionAsDictation(
+                        taskVariantId,
+                        task.recordingId,
+                        fallbackText || normalizedTaskText
+                    );
                     if (!applied) return;
                     const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
                     setRecordingOutcomeStatus(task.recordingId, status);
@@ -1845,7 +1990,7 @@ export const NoteEditScreen = () => {
                             '',
                             undefined,
                             contextContent,
-                            task.transcribedText,
+                            normalizedTaskText,
                             requestHistoryRef.current
                         ),
                         new Promise<never>((_, reject) => {
@@ -1856,30 +2001,47 @@ export const NoteEditScreen = () => {
                     // Check session again after async op
                     if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
                         console.log(`[NoteEditScreen] Task finished but session stale, discarding result for task ${task.id}`);
+                        if (task.recordingId) {
+                            pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                        }
                         setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                         // We still shift below
                     } else if (agentResult.success) {
                         // SUCCESS HANDLER
-                        if (task.transcribedText.trim()) {
+                        if (normalizedTaskText) {
                             setRequestHistory(prev => {
-                                const newHistory = [...prev, task.transcribedText.trim()];
+                                const newHistory = [...prev, normalizedTaskText];
                                 return newHistory.slice(-AGENT_HISTORY_LIMIT);
                             });
                         }
 
-                        const originalText = (agentResult.originalText || task.transcribedText || '').trim();
+                        const originalText = (agentResult.originalText || normalizedTaskText || '').trim();
                         const explicitTitle = (agentResult.titleValue || '').trim();
+                        const pendingContext = resolvePendingInsertionContext(taskVariantId, task.recordingId);
+                        const commandBaseContent = pendingContext.contentWithoutPending;
+                        const dictatedContentForUndo = pendingContext.dictationContent;
+                        const hasPendingDraft = !!(task.recordingId && pendingContext.pending);
 
                         if (agentResult.titleAction === 'set' && explicitTitle && localNoteIdRef.current) {
+                            if (hasPendingDraft && task.recordingId) {
+                                pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                                replaceCurrentHistoryState(
+                                    taskVariantId,
+                                    taskVariantId === 'original' ? currentTitleRef.current : '',
+                                    dictatedContentForUndo
+                                );
+                            }
+                            await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
+                                persist: true,
+                                updateHistory: false,
+                            });
                             try {
                                 await updateNote(localNoteIdRef.current, { title: explicitTitle });
                                 setTitle(explicitTitle);
                                 currentTitleRef.current = explicitTitle;
                                 lastSavedTitle.current = explicitTitle;
                                 titleLockRef.current = true;
-                                if (activeVariantIdRef.current === 'original') {
-                                    updateHistoryImmediate(explicitTitle, currentContentRef.current);
-                                }
+                                updateHistoryImmediate(explicitTitle, commandBaseContent, taskVariantId);
                             } catch (titleError) {
                                 console.error('[NoteEditScreen] Failed to apply explicit agent title', titleError);
                             }
@@ -1905,9 +2067,6 @@ export const NoteEditScreen = () => {
                                 currentTitleRef.current = suggestedTitle;
                                 lastSavedTitle.current = suggestedTitle;
                                 titleLockRef.current = true;
-                                if (activeVariantIdRef.current === 'original') {
-                                    updateHistoryImmediate(suggestedTitle, currentContentRef.current);
-                                }
                             } catch (titleError) {
                                 console.error('[NoteEditScreen] Failed to auto-apply agent title', titleError);
                             }
@@ -1921,90 +2080,53 @@ export const NoteEditScreen = () => {
                             !!processedText &&
                             !areTextsEquivalent(processedText, originalText);
 
-                        if (taskVariantId === 'original') {
-                            if (hasApplicableInstruction && localNoteIdRef.current) {
-                                const label = agentResult.mode ? `AI(${agentResult.mode})` : 'AI Improvement';
-                                const newImprovement = await createImprovement(localNoteIdRef.current, {
-                                    content: processedText,
-                                    label,
-                                    optionId: 'voice_instruction'
-                                });
+                        if (hasApplicableInstruction) {
+                            let newText: string | null = null;
+                            if (agentResult.mode === 'edit_content') {
+                                newText = processedText;
+                            } else if (agentResult.mode === 'todo' || agentResult.mode === 'list' || agentResult.mode === 'format') {
+                                const looksLikeFullDocument =
+                                    processedText.includes('\n') &&
+                                    processedText.length >= Math.max(40, Math.floor(commandBaseContent.length * 0.5));
+                                newText = looksLikeFullDocument
+                                    ? processedText
+                                    : appendSnippetToContent(commandBaseContent, processedText);
+                            } else {
+                                newText = appendSnippetToContent(commandBaseContent, processedText);
+                            }
 
-                                if (newImprovement?.id) {
-                                    improvementDraftsRef.current[newImprovement.id] = processedText;
-                                    improvementSavedRef.current[newImprovement.id] = processedText;
-                                    variantHistories.current[newImprovement.id] = {
-                                        history: [{ title: currentTitleRef.current || '', content: processedText }],
-                                        index: 0
-                                    };
-
-                                    setActiveVariantId(newImprovement.id);
-                                    activeVariantIdRef.current = newImprovement.id;
-                                    optimisticActiveVariant.current = newImprovement.id;
-                                    setContent(processedText);
-                                    currentContentRef.current = processedText;
-                                    await setActiveVariant(localNoteIdRef.current, newImprovement.id);
+                            if (newText && !areTextsEquivalent(newText, commandBaseContent)) {
+                                if (hasPendingDraft && task.recordingId) {
+                                    pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                                    replaceCurrentHistoryState(
+                                        taskVariantId,
+                                        taskVariantId === 'original' ? currentTitleRef.current : '',
+                                        dictatedContentForUndo
+                                    );
                                 }
-
-                                const status = buildAgentStatusMessage(agentResult.mode, 'created');
+                                await setVariantContentWithOptions(taskVariantId, newText, {
+                                    persist: true,
+                                    updateHistory: true,
+                                });
+                                const status = buildAgentStatusMessage(agentResult.mode, 'updated');
                                 setRecordingOutcomeStatus(task.recordingId, status);
                                 showVoiceResultStatus(status, task.recordingId);
                             } else {
-                                await applyFallbackInsertion(originalText || task.transcribedText);
+                                await finalizeAsDictation(originalText || normalizedTaskText);
                             }
                         } else {
-                            if (hasApplicableInstruction) {
-                                let newText: string | null = null;
-                                if (agentResult.mode === 'edit_content') {
-                                    newText = processedText;
-                                } else if (agentResult.mode === 'todo' || agentResult.mode === 'list' || agentResult.mode === 'format') {
-                                    const looksLikeFullDocument =
-                                        processedText.includes('\n') &&
-                                        processedText.length >= Math.max(40, Math.floor(contextContent.length * 0.5));
-                                    newText = looksLikeFullDocument
-                                        ? processedText
-                                        : appendSnippetToContent(contextContent, processedText);
-                                } else {
-                                    newText = appendSnippetToContent(contextContent, processedText);
-                                }
-
-                                if (newText && !areTextsEquivalent(newText, contextContent)) {
-                                    const shouldApplyToVisibleContent = activeVariantIdRef.current === taskVariantId;
-                                    if (shouldApplyToVisibleContent) {
-                                        setContent(newText);
-                                        currentContentRef.current = newText;
-                                    }
-                                    updateHistoryImmediate('', newText, taskVariantId);
-                                    improvementDraftsRef.current[taskVariantId] = newText;
-                                    if (localNoteIdRef.current) {
-                                        try {
-                                            await updateImprovement(localNoteIdRef.current, taskVariantId, { content: newText });
-                                            improvementSavedRef.current[taskVariantId] = newText;
-                                        } catch (e) {
-                                            console.error('Failed to save updated improvement', e);
-                                        }
-                                    }
-
-                                    const status = buildAgentStatusMessage(agentResult.mode, 'updated');
-                                    setRecordingOutcomeStatus(task.recordingId, status);
-                                    showVoiceResultStatus(status, task.recordingId);
-                                } else {
-                                    await applyFallbackInsertion(originalText || task.transcribedText);
-                                }
-                            } else {
-                                await applyFallbackInsertion(originalText || task.transcribedText);
-                            }
+                            await finalizeAsDictation(originalText || normalizedTaskText);
                         }
                     } else {
                         // LOGIC FAIL (e.g. backend error)
                         console.error('[NoteEditScreen] Agent processing returned fail:', agentResult.error);
-                        await applyFallbackInsertion(task.transcribedText);
+                        await finalizeAsDictation(normalizedTaskText);
                         setErrorMessage(getErrorMessage(agentResult.error, 'Agent processing failed'));
                         setErrorModalVisible(true);
                     }
                 } catch (error) {
                     console.error('[NoteEditScreen] Agent flow exception:', error);
-                    await applyFallbackInsertion(task.transcribedText);
+                    await finalizeAsDictation(normalizedTaskText);
                     setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
                     setErrorModalVisible(true);
                 } finally {
@@ -2029,7 +2151,6 @@ export const NoteEditScreen = () => {
             targetVariantId?: string;
             recordingId?: string;
             micMode?: MicInputMode;
-            preInsertedToOriginal?: boolean;
         }
     ) => {
         const [storedAgentModeEnabled, provider] = await Promise.all([
@@ -2045,13 +2166,11 @@ export const NoteEditScreen = () => {
         }
 
         if (!shouldUseAgentMode) {
-            if (targetVariantId === 'original' && options?.preInsertedToOriginal) {
-                const status = 'Added to Original';
-                setRecordingOutcomeStatus(options?.recordingId, status);
-                showVoiceResultStatus(status, options?.recordingId);
-                return;
-            }
-            const inserted = await applyPlainTextToVariant(targetVariantId, normalizedText);
+            const inserted = await finalizePendingInsertionAsDictation(
+                targetVariantId,
+                options?.recordingId,
+                normalizedText
+            );
             if (inserted) {
                 const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
                 setRecordingOutcomeStatus(options?.recordingId, status);
@@ -2068,7 +2187,6 @@ export const NoteEditScreen = () => {
             noteId: localNoteIdRef.current,
             targetVariantId,
             micMode: options?.micMode ?? 'agent',
-            preInsertedToOriginal: options?.preInsertedToOriginal ?? false,
             recordingId: options?.recordingId,
             isBackground: options?.isBackground ?? false,
         });
@@ -2082,8 +2200,7 @@ export const NoteEditScreen = () => {
     const handleRecordingFinish = async (
         recording: AudioRecording,
         transcribe: boolean = true,
-        micMode: MicInputMode = 'agent',
-        agentEnabledOverride?: boolean
+        micMode: MicInputMode = 'agent'
     ) => {
         setShowVoiceRecorder(false);
         const targetVariantId = activeVariantIdRef.current;
@@ -2236,13 +2353,7 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        let shouldBypassAgentForThisRecording = micMode === 'force_text';
-        if (shouldBypassAgentForThisRecording) {
-            const agentEnabledForThisRecording = typeof agentEnabledOverride === 'boolean'
-                ? agentEnabledOverride
-                : await getAgentModeEnabled();
-            shouldBypassAgentForThisRecording = !agentEnabledForThisRecording;
-        }
+        const shouldBypassAgentForThisRecording = micMode === 'force_text';
 
         if (shouldBypassAgentForThisRecording) {
             const inserted = await applyPlainTextToVariant(targetVariantId, transcribedText);
@@ -2258,15 +2369,7 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        let preInsertedToOriginal = false;
-        if (targetVariantId === 'original') {
-            preInsertedToOriginal = await applyPlainTextToVariant('original', transcribedText);
-            if (preInsertedToOriginal) {
-                const status = 'Added to Original';
-                setRecordingOutcomeStatus(voiceId, status);
-                showVoiceResultStatus(status, voiceId);
-            }
-        }
+        await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
 
         setRecordingOutcomeStatus(voiceId, 'Processing...');
         await executeAgentFlow(transcribedText, {
@@ -2274,7 +2377,6 @@ export const NoteEditScreen = () => {
             targetVariantId,
             recordingId: voiceId,
             micMode,
-            preInsertedToOriginal,
         });
     };
 
@@ -2765,10 +2867,7 @@ export const NoteEditScreen = () => {
             }
 
             const targetVariantId = activeVariantIdRef.current;
-            let preInsertedToOriginal = false;
-            if (targetVariantId === 'original') {
-                preInsertedToOriginal = await applyPlainTextToVariant('original', text);
-            }
+            await insertPendingTranscriptionToVariant(targetVariantId, targetRecording.id, text);
 
             setRecordingOutcomeStatus(targetRecording.id, 'Processing...');
             await executeAgentFlow(text, {
@@ -2776,7 +2875,6 @@ export const NoteEditScreen = () => {
                 targetVariantId,
                 micMode: 'agent',
                 recordingId: targetRecording.id,
-                preInsertedToOriginal,
             });
 
         } catch (error: any) {
@@ -3605,11 +3703,11 @@ export const NoteEditScreen = () => {
             <VoiceRecorder
                 visible={showVoiceRecorder}
                 micMode={pendingMicInputMode}
-                onFinish={(rec, transcribe, agentEnabled) => {
+                onFinish={(rec, transcribe) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current, agentEnabled);
+                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current);
                     }
                     setPendingMicInputMode('agent');
                     pendingMicInputModeRef.current = 'agent';

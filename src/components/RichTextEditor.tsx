@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import {
     View,
+    Text,
     TextInput,
     StyleSheet,
     TouchableOpacity,
@@ -17,6 +18,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MarkdownFormatType } from './MarkdownToolbar';
 import { parseMarkdownToData, serializeBlockToMarkdown, renderFormattedText, BlockFormat } from '../utils/markdownUtils';
 import { AudioPlayer } from './AudioPlayer';
+import {
+    VOICE_PROCESSING_LABEL,
+    VOICE_PROCESSING_MARKER,
+    isVoiceProcessingMarkerLine,
+} from '../utils/voiceDraft';
 
 interface RichTextEditorProps {
     initialContent: string;
@@ -39,7 +45,7 @@ export interface RichTextEditorHandle {
 
 interface Block {
     id: string;
-    type: 'text' | 'todo' | 'h1' | 'h2' | 'h3' | 'audio';
+    type: 'text' | 'todo' | 'h1' | 'h2' | 'h3' | 'audio' | 'processing';
     content: string;
     checked?: boolean;
     formats: BlockFormat[];
@@ -152,6 +158,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (blockIndex === -1) return;
 
             const block = blocks[blockIndex];
+            if (block.type === 'processing') {
+                return;
+            }
             let selection = blockSelections.current[focusedBlockId] || { start: block.content.length, end: block.content.length };
             let newBlocks = [...blocks];
 
@@ -556,6 +565,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (block.type === 'h2') return `## ${serializedContent}`;
             if (block.type === 'h3') return `### ${serializedContent}`;
             if (block.type === 'audio') return `![audio](${block.content})`;
+            if (block.type === 'processing') return VOICE_PROCESSING_MARKER;
             return serializedContent;
         }).join('\n');
     };
@@ -588,8 +598,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             const header2Match = line.startsWith('## ');
             const header3Match = line.startsWith('### ');
             const audioMatch = line.match(/^\s*!\[audio\]\((.*?)\)\s*$/);
+            const processingMatch = isVoiceProcessingMarkerLine(line);
 
-            const isStructure = todoMatch || header1Match || header2Match || header3Match || audioMatch;
+            const isStructure = todoMatch || header1Match || header2Match || header3Match || audioMatch || processingMatch;
 
             if (isStructure) {
                 // Determine type
@@ -613,6 +624,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 } else if (audioMatch) {
                     type = 'audio';
                     rawContent = audioMatch[1];
+                } else if (processingMatch) {
+                    type = 'processing';
+                    rawContent = VOICE_PROCESSING_LABEL;
                 }
 
                 // Parse inner markdown for formats
@@ -1051,7 +1065,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
 
         const lastBlock = blocks[blocks.length - 1];
-        if (lastBlock.type === 'audio') {
+        if (lastBlock.type === 'audio' || lastBlock.type === 'processing') {
             const newId = generateId();
             const newBlocks = [...blocks, { id: newId, type: 'text' as const, content: '', formats: [] }];
             setBlocks(newBlocks);
@@ -1080,6 +1094,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const renderItem = ({ item, drag, isActive }: RenderItemParams<Block>) => {
         const isTodo = item.type === 'todo';
         const isAudio = item.type === 'audio';
+        const isProcessing = item.type === 'processing';
 
         // Font size logic:
         // Todo: base * scaleFactor
@@ -1122,6 +1137,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         isAudio && {
                             paddingVertical: spacing.s,
                             backgroundColor: 'transparent',
+                        },
+                        isProcessing && {
+                            paddingVertical: spacing.xs,
+                            backgroundColor: 'transparent',
                         }
                     ]}
                 >
@@ -1142,6 +1161,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                     }}
                                 />
                             </TouchableOpacity>
+                        </View>
+                    ) : isProcessing ? (
+                        <View style={styles.processingBadge}>
+                            <MaterialIcons name="hourglass-top" size={14} color={colors.textSecondary} />
+                            <Text style={styles.processingText}>
+                                {item.content || VOICE_PROCESSING_LABEL}
+                            </Text>
                         </View>
                     ) : (
                         <>
@@ -1269,6 +1295,24 @@ const styles = StyleSheet.create({
     todoInputChecked: {
         textDecorationLine: 'line-through',
         color: colors.textMuted,
+    },
+    processingBadge: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.s,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: colors.border,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    processingText: {
+        marginLeft: spacing.xs,
+        color: colors.textSecondary,
+        fontStyle: 'italic',
+        fontSize: 14,
     },
     h1: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, marginTop: 8 },
     h2: { fontSize: 20, fontWeight: 'bold', marginBottom: 6, marginTop: 6 },
