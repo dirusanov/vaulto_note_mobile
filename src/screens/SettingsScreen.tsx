@@ -680,8 +680,6 @@ export const SettingsScreen = () => {
                                     isGuest={isGuest}
                                     isPro={isPro}
                                     embedded
-                                    autoTranscribeEnabled={transcriptionEnabled}
-                                    onToggleAutoTranscribe={toggleTranscription}
                                 />
                             )}
                         </>

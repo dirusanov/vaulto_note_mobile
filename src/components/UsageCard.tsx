@@ -15,11 +15,9 @@ interface UsageCardProps {
     isPro?: boolean;
     compact?: boolean;
     embedded?: boolean;
-    autoTranscribeEnabled?: boolean;
-    onToggleAutoTranscribe?: (value: boolean) => void;
 }
 
-export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false, autoTranscribeEnabled, onToggleAutoTranscribe }) => {
+export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false }) => {
     // Only show for Vaulto AI provider
     if (aiProvider !== 'secure_llm') return null;
     if (!user) return null;
@@ -180,22 +178,6 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                     <Text style={[styles.warningText, { color: colors.warning }]}>
                         {isPro ? 'Running low on monthly transcription minutes' : 'Running low on transcription time'}
                     </Text>
-                </View>
-            )}
-
-            {onToggleAutoTranscribe && (
-                <View style={styles.autoTranscribeRow}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.autoTranscribeLabel}>Auto-transcribe</Text>
-                        <Text style={styles.subtitle}>Transcribe automatically</Text>
-                    </View>
-                    <Switch
-                        value={autoTranscribeEnabled}
-                        onValueChange={onToggleAutoTranscribe}
-                        trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                        thumbColor={colors.surface}
-                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                    />
                 </View>
             )}
         </View>
@@ -385,20 +367,5 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textSecondary,
         textAlign: 'center',
-    },
-    autoTranscribeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: spacing.s,
-        paddingTop: spacing.s,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    autoTranscribeLabel: {
-        ...typography.body,
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.text,
     },
 });
