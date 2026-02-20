@@ -202,7 +202,7 @@ export const SettingsScreen = () => {
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [transcriptionEnabled, setTranscriptionEnabledState] = useState(true);
     const [testingConnection, setTestingConnection] = useState(false);
-    const [aiProvider, setAiProviderState] = useState<AIProvider>('secure_llm');
+    const [aiProvider, setAiProviderState] = useState<AIProvider>('vaulto_ai');
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
@@ -349,7 +349,7 @@ export const SettingsScreen = () => {
 
     const providerOptions: ProviderOption[] = [
         {
-            key: 'secure_llm',
+            key: 'vaulto_ai',
             title: 'Vaulto AI',
             blurb: 'Private & Anonymous',
             description: 'Whisper + LLM on our server. No data stored or analyzed. Fully anonymous and secure.',
@@ -442,7 +442,7 @@ export const SettingsScreen = () => {
                 void setOpenAIApiKey(legacySelfHostedApiKey);
             }
 
-            setAiProviderState(provider || 'secure_llm');
+            setAiProviderState(provider || 'vaulto_ai');
             setAgentModeEnabledState(agentMode);
             setTranscriptionEnabledState(transcription);
         } catch (error) {
@@ -900,7 +900,7 @@ export const SettingsScreen = () => {
                                     onPress={() => updateProvider(option.key)}
                                     disabled={activeProvider?.key === option.key && !isLocked}
                                 >
-                                    {option.key === 'secure_llm' ? (
+                                    {option.key === 'vaulto_ai' ? (
                                         <Image
                                             source={require('../../assets/icon.png')}
                                             style={{

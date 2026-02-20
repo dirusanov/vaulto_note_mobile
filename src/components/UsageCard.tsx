@@ -19,7 +19,7 @@ interface UsageCardProps {
 
 export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false }) => {
     // Only show for Vaulto AI provider
-    if (aiProvider !== 'secure_llm') return null;
+    if (aiProvider !== 'vaulto_ai') return null;
     if (!user) return null;
 
     console.log('[UsageCard] Rendering for user:', user.email || 'Guest');

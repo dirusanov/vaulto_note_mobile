@@ -42,7 +42,7 @@ export async function transcribeAudio(
     language?: string
 ): Promise<TranscriptionResult> {
     const provider = await getAIProvider();
-    if (provider === 'secure_llm') {
+    if (provider === 'vaulto_ai') {
         return transcribeViaBackend(audioUri, language);
     }
 

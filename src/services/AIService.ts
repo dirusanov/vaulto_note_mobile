@@ -123,7 +123,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     if (!option) throw new Error('Invalid option');
 
     const provider = await getAIProvider();
-    if (provider === 'secure_llm') {
+    if (provider === 'vaulto_ai') {
         return improveViaBackend(text, option);
     }
 

@@ -6,7 +6,7 @@ import { UserProfile } from '../api/auth';
 import { KeyBundle } from '../crypto/e2ee';
 
 // NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
-export type AIProvider = 'secure_llm' | 'openai';
+export type AIProvider = 'vaulto_ai' | 'openai';
 export type CryptoMode = 'local' | 'e2ee';
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
@@ -331,17 +331,21 @@ export const setOpenAIBaseUrl = async (baseUrl: string): Promise<void> => {
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
-        if (value === 'openai' || value === 'secure_llm') return value;
+        if (value === 'openai' || value === 'vaulto_ai') return value;
+        if (value === 'secure_llm') {
+            await AsyncStorage.setItem(AI_PROVIDER_KEY, 'vaulto_ai');
+            return 'vaulto_ai';
+        }
         if (value === 'selfhosted') {
             // Migrate legacy self-hosted to OpenAI-compatible.
             await AsyncStorage.setItem(AI_PROVIDER_KEY, 'openai');
             return 'openai';
         }
-        // Fallback or migration: mapping 'local' to 'secure_llm' logic could go here, but for now default to 'secure_llm'
-        return 'secure_llm';
+        // Fallback or migration: mapping 'local' to 'vaulto_ai' logic could go here, but for now default to 'vaulto_ai'
+        return 'vaulto_ai';
     } catch (e) {
         console.error('Failed to get AI provider', e);
-        return 'secure_llm';
+        return 'vaulto_ai';
     }
 };
 

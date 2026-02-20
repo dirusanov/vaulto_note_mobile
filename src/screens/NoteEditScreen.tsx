@@ -255,6 +255,19 @@ interface PendingVoiceInsertion {
     temporaryContent: string;
 }
 
+interface AgentQueueTask {
+    id: string;
+    transcribedText: string;
+    sessionId: number;
+    noteId: string | undefined;
+    targetVariantId: string;
+    micMode: MicInputMode;
+    recordingId?: string;
+    isBackground?: boolean;
+    preserveOriginalOnInstruction?: boolean;
+    dictationAlreadyApplied?: boolean;
+}
+
 interface NoteProcessingState {
     isTranscribing: boolean;
     isAIProcessing: boolean;
@@ -784,18 +797,9 @@ export const NoteEditScreen = () => {
     const improvementSavedRef = useRef<Record<string, string>>({});
 
     // Queue for transcribed text tasks to ensure strict sequential agent processing
-    const agentQueue = useRef<{
-        id: string;
-        transcribedText: string;
-        sessionId: number;
-        noteId: string | undefined;
-        targetVariantId: string;
-        micMode: MicInputMode;
-        recordingId?: string;
-        isBackground?: boolean;
-        preserveOriginalOnInstruction?: boolean;
-        dictationAlreadyApplied?: boolean;
-    }[]>([]);
+    const agentQueue = useRef<AgentQueueTask[]>([]);
+    const activeAgentTaskRef = useRef<AgentQueueTask | null>(null);
+    const isCancelingAgentRef = useRef(false);
     const pendingVoiceInsertionsRef = useRef<Map<string, PendingVoiceInsertion>>(new Map());
     const [queueLength, setQueueLengthState] = useState(0);
     const isProcessingQueue = useRef(false);
@@ -902,6 +906,7 @@ export const NoteEditScreen = () => {
         setRequestHistory([]);
         requestHistoryRef.current = [];
         agentQueue.current = [];
+        activeAgentTaskRef.current = null;
         pendingVoiceInsertionsRef.current.clear();
         setTrackedQueueLength(0);
     }, [setTrackedQueueLength]);
@@ -1467,7 +1472,7 @@ export const NoteEditScreen = () => {
         recordingId?: string,
         fallbackText?: string
     ): Promise<boolean> => {
-        const { pending, dictationContent } = resolvePendingInsertionContext(variantId, recordingId);
+        const { pending, dictationContent, contentWithoutPending } = resolvePendingInsertionContext(variantId, recordingId);
         if (recordingId && pending) {
             pendingVoiceInsertionsRef.current.delete(recordingId);
             return await setVariantContentWithOptions(variantId, dictationContent, {
@@ -1478,8 +1483,12 @@ export const NoteEditScreen = () => {
 
         const textToInsert = (fallbackText || '').trim();
         if (!textToInsert) return false;
-        return await applyPlainTextToVariant(variantId, textToInsert);
-    }, [applyPlainTextToVariant, resolvePendingInsertionContext, setVariantContentWithOptions]);
+        const textWithFallback = buildInsertedTextForVariant(variantId, contentWithoutPending, textToInsert);
+        return await setVariantContentWithOptions(variantId, textWithFallback, {
+            persist: true,
+            updateHistory: true,
+        });
+    }, [buildInsertedTextForVariant, resolvePendingInsertionContext, setVariantContentWithOptions]);
 
     const isAudioAlreadyInsertedInCurrentVariant = useCallback((audioPath: string): boolean => {
         const targetVariantId = activeVariantIdRef.current;
@@ -1992,6 +2001,7 @@ export const NoteEditScreen = () => {
                     continue;
                 }
 
+                activeAgentTaskRef.current = task;
                 const taskVariantId = task.targetVariantId || 'original';
                 const normalizedTaskText = task.transcribedText.trim();
                 const pendingContextAtStart = resolvePendingInsertionContext(taskVariantId, task.recordingId);
@@ -2253,6 +2263,7 @@ export const NoteEditScreen = () => {
                     setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
                     setErrorModalVisible(true);
                 } finally {
+                    activeAgentTaskRef.current = null;
                     // ALWAYS move to next task
                     agentQueue.current.shift();
                     setTrackedQueueLength(agentQueue.current.length);
@@ -2261,11 +2272,73 @@ export const NoteEditScreen = () => {
         } catch (outerError) {
             console.error('[NoteEditScreen] Critical queue process error:', outerError);
         } finally {
+            activeAgentTaskRef.current = null;
             isProcessingQueue.current = false;
             setTrackedIsAIProcessing(false);
             setTrackedQueueLength(agentQueue.current.length);
         }
     };
+
+    const cancelAgentProcessing = useCallback(async () => {
+        if (isCancelingAgentRef.current) return;
+        isCancelingAgentRef.current = true;
+
+        try {
+            const snapshot = [activeAgentTaskRef.current, ...agentQueue.current]
+                .filter((task): task is AgentQueueTask => !!task);
+            const uniqueTasks: AgentQueueTask[] = [];
+            const seenTaskIds = new Set<string>();
+            snapshot.forEach((task) => {
+                if (seenTaskIds.has(task.id)) return;
+                seenTaskIds.add(task.id);
+                uniqueTasks.push(task);
+            });
+
+            // Invalidate current in-flight session and clear queue immediately.
+            agentSessionIdRef.current += 1;
+            setRequestHistory([]);
+            requestHistoryRef.current = [];
+            agentQueue.current = [];
+            activeAgentTaskRef.current = null;
+            setTrackedQueueLength(0);
+            setTrackedIsAIProcessing(false);
+
+            for (const task of uniqueTasks) {
+                const normalizedTaskText = task.transcribedText?.trim() || '';
+                if (!normalizedTaskText) continue;
+                if (task.noteId && task.noteId !== localNoteIdRef.current) continue;
+
+                const taskVariantId = task.targetVariantId || 'original';
+                const pendingContext = resolvePendingInsertionContext(taskVariantId, task.recordingId);
+                const shouldSkipDictationApply =
+                    !!task.dictationAlreadyApplied && !pendingContext.pending;
+                if (shouldSkipDictationApply) continue;
+
+                try {
+                    const inserted = await finalizePendingInsertionAsDictation(
+                        taskVariantId,
+                        task.recordingId,
+                        normalizedTaskText
+                    );
+                    if (!inserted) continue;
+                    const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                    setRecordingOutcomeStatus(task.recordingId, status);
+                    showVoiceResultStatus(status, task.recordingId);
+                } catch (error) {
+                    console.error('[NoteEditScreen] Failed to finalize dictation after agent cancel', error);
+                }
+            }
+        } finally {
+            isCancelingAgentRef.current = false;
+        }
+    }, [
+        finalizePendingInsertionAsDictation,
+        resolvePendingInsertionContext,
+        setRecordingOutcomeStatus,
+        setTrackedIsAIProcessing,
+        setTrackedQueueLength,
+        showVoiceResultStatus,
+    ]);
 
     const executeAgentFlow = async (
         transcribedText: string,
@@ -2282,7 +2355,7 @@ export const NoteEditScreen = () => {
             getAgentModeEnabled(),
             getAIProvider(),
         ]);
-        const shouldUseAgentMode = storedAgentModeEnabled && provider === 'secure_llm';
+        const shouldUseAgentMode = storedAgentModeEnabled && provider === 'vaulto_ai';
         const targetVariantId = options?.targetVariantId ?? activeVariantIdRef.current;
         const normalizedText = transcribedText.trim();
 
@@ -2524,7 +2597,7 @@ export const NoteEditScreen = () => {
                     getAgentModeEnabled(),
                     getAIProvider(),
                 ]);
-                const shouldUseAgentMode = storedAgentModeEnabled && provider === 'secure_llm';
+                const shouldUseAgentMode = storedAgentModeEnabled && provider === 'vaulto_ai';
                 if (!shouldUseAgentMode) {
                     return;
                 }
@@ -3893,6 +3966,10 @@ export const NoteEditScreen = () => {
                 visible={(isAIProcessing || queueLength > 0 || isTranscribing)}
                 queueSize={queueLength}
                 isTranscribing={isTranscribing}
+                canCancel={!isTranscribing && (isAIProcessing || queueLength > 0)}
+                onCancel={() => {
+                    void cancelAgentProcessing();
+                }}
             />
 
             <VoiceRecorder
