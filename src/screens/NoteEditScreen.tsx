@@ -1011,39 +1011,35 @@ export const NoteEditScreen = () => {
         return `${task.targetVariantId}|${task.micMode}|${!!task.isBackground}|${!!task.preserveOriginalOnInstruction}`;
     };
 
-    const mergeTaskBatch = (tasks: AgentQueueTask[]): AgentQueueTask => {
-        const baseTask = tasks[0];
-        const combinedText = tasks
-            .map((item) => (item.transcribedText || '').trim())
-            .filter(Boolean)
-            .join('\n\n') || baseTask.transcribedText;
-        const combinedRecordingIds = tasks.flatMap((item) => getTaskRecordingIds(item));
-        return {
-            ...baseTask,
-            id: `merged-${baseTask.id}-${Date.now()}`,
-            transcribedText: combinedText,
-            recordingId: combinedRecordingIds[0] ?? baseTask.recordingId,
-            recordingIds: combinedRecordingIds.length > 0 ? combinedRecordingIds : undefined,
-            dictationAlreadyApplied: tasks.some((item) => item.dictationAlreadyApplied),
-        };
-    };
-
-    const combinePendingAgentTasks = (): boolean => {
-        if (agentQueue.current.length <= 1) return false;
-        const key = getTaskKey(agentQueue.current[0]);
-        if (!agentQueue.current.every((task) => getTaskKey(task) === key)) {
-            return false;
-        }
-        const merged = mergeTaskBatch(agentQueue.current);
-        agentQueue.current.splice(0, agentQueue.current.length, merged);
-        return true;
-    };
-
     const getRepresentativeRecordingId = (task: AgentQueueTask): string | undefined => {
         if (task.recordingIds && task.recordingIds.length > 0) {
             return task.recordingIds[task.recordingIds.length - 1];
         }
         return task.recordingId;
+    };
+
+    const appendTranscribedToTask = (target: AgentQueueTask, addition: AgentQueueTask) => {
+        const existingText = (target.transcribedText || '').trim();
+        const additionText = (addition.transcribedText || '').trim();
+        const joinedText = [existingText, additionText].filter(Boolean).join('\n\n');
+        target.transcribedText = joinedText || target.transcribedText;
+
+        const mergedIds = [...getTaskRecordingIds(target), ...getTaskRecordingIds(addition)];
+        if (mergedIds.length > 0) {
+            target.recordingIds = mergedIds;
+            target.recordingId = mergedIds[0];
+        }
+        target.dictationAlreadyApplied = target.dictationAlreadyApplied || addition.dictationAlreadyApplied;
+    };
+
+    const tryAppendToPendingTask = (incoming: AgentQueueTask): boolean => {
+        if (agentQueue.current.length <= 1) return false;
+        const pendingTask = agentQueue.current[agentQueue.current.length - 1];
+        if (getTaskKey(pendingTask) !== getTaskKey(incoming)) {
+            return false;
+        }
+        appendTranscribedToTask(pendingTask, incoming);
+        return true;
     };
 
     const syncTrackedProcessingToNote = useCallback((noteId: string) => {
@@ -2255,7 +2251,6 @@ export const NoteEditScreen = () => {
                     }
                     setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                     agentQueue.current.shift();
-                    combinePendingAgentTasks();
                     refreshTrackedQueueLength();
                     continue;
                 }
@@ -2266,7 +2261,6 @@ export const NoteEditScreen = () => {
                     }
                     setRecordingOutcomeStatus(task.recordingId, 'Saved recording');
                     agentQueue.current.shift();
-                    combinePendingAgentTasks();
                     refreshTrackedQueueLength();
                     continue;
                 }
@@ -2595,7 +2589,6 @@ export const NoteEditScreen = () => {
                     activeAgentTaskRef.current = null;
                     // ALWAYS move to next task
                     agentQueue.current.shift();
-                    combinePendingAgentTasks();
                     refreshTrackedQueueLength();
                 }
             }
@@ -2733,7 +2726,7 @@ export const NoteEditScreen = () => {
         }
 
         const taskId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        agentQueue.current.push({
+        const newTask: AgentQueueTask = {
             id: taskId,
             transcribedText: normalizedText,
             sessionId: agentSessionIdRef.current,
@@ -2745,7 +2738,11 @@ export const NoteEditScreen = () => {
             isBackground: options?.isBackground ?? false,
             preserveOriginalOnInstruction: options?.preserveOriginalOnInstruction ?? false,
             dictationAlreadyApplied: options?.dictationAlreadyApplied ?? false,
-        });
+        };
+        const appended = tryAppendToPendingTask(newTask);
+        if (!appended) {
+            agentQueue.current.push(newTask);
+        }
         console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${getPendingTaskCount(agentQueue.current)})`);
 
         refreshTrackedQueueLength();
