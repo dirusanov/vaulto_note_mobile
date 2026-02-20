@@ -6,14 +6,18 @@ import { spacing } from '../theme/spacing';
 
 interface DeleteConfirmationDialogProps {
     visible: boolean;
-    noteCount: number;
+    noteCount?: number;
+    title?: string;
+    message?: string;
     onConfirm: () => void;
     onCancel: () => void;
 }
 
 export const DeleteConfirmationDialog = ({
     visible,
-    noteCount,
+    noteCount = 1,
+    title,
+    message,
     onConfirm,
     onCancel,
 }: DeleteConfirmationDialogProps) => {
@@ -33,11 +37,13 @@ export const DeleteConfirmationDialog = ({
                         </View>
 
                         {/* Title */}
-                        <Text style={styles.title}>Delete {noteCount} {noteCount === 1 ? 'Note' : 'Notes'}?</Text>
+                        <Text style={styles.title}>
+                            {title || `Delete ${noteCount} ${noteCount === 1 ? 'Note' : 'Notes'}?`}
+                        </Text>
 
                         {/* Message */}
                         <Text style={styles.message}>
-                            This action cannot be undone. The selected {noteCount === 1 ? 'note' : 'notes'} will be permanently deleted.
+                            {message || `This action cannot be undone. The selected ${noteCount === 1 ? 'note' : 'notes'} will be permanently deleted.`}
                         </Text>
 
                         {/* Actions */}
