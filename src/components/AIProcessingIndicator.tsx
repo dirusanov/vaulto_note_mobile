@@ -87,38 +87,40 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     });
 
     return (
-        <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-            <View style={styles.iconContainer}>
-                {isTranscribing ? (
-                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                        <MaterialIcons name="graphic-eq" size={24} color={colors.primary} />
-                    </Animated.View>
-                ) : (
-                    <>
-                        <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                            <MaterialIcons name="settings" size={20} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
+        <Animated.View style={[styles.wrapper, { opacity: fadeAnim }]}>
+            <View style={styles.container}>
+                <View style={styles.iconContainer}>
+                    {isTranscribing ? (
+                        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                            <MaterialIcons name="graphic-eq" size={24} color={colors.primary} />
                         </Animated.View>
-                        <MaterialIcons name="smart-toy" size={24} color={colors.primary} />
-                    </>
-                )}
-            </View>
-            <View style={styles.textContainer}>
-                <Text style={styles.title}>
-                    {isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
-                </Text>
-                {(!isTranscribing && queueSize > 0) && (
-                    <Text style={styles.subtitle}>Tasks in work: {queueSize}</Text>
-                )}
+                    ) : (
+                        <>
+                            <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                                <MaterialIcons name="settings" size={20} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
+                            </Animated.View>
+                            <MaterialIcons name="smart-toy" size={24} color={colors.primary} />
+                        </>
+                    )}
+                </View>
+                <View style={styles.textContainer}>
+                    <Text style={styles.title}>
+                        {isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
+                    </Text>
+                    {(!isTranscribing && queueSize > 0) && (
+                        <Text style={styles.subtitle}>Tasks in work: {queueSize}</Text>
+                    )}
+                </View>
             </View>
             {canCancel && onCancel && (
                 <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel="Cancel AI processing"
                     onPress={onCancel}
-                    hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                    activeOpacity={0.8}
                     style={styles.cancelButton}
                 >
-                    <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                    <MaterialIcons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
             )}
         </Animated.View>
@@ -126,10 +128,14 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
 };
 
 const styles = StyleSheet.create({
-    container: {
+    wrapper: {
         position: 'absolute',
-        bottom: 100,
+        bottom: 70,
         alignSelf: 'center',
+        alignItems: 'center',
+        zIndex: 9999,
+    },
+    container: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.surface,
@@ -146,7 +152,6 @@ const styles = StyleSheet.create({
         elevation: 8,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.05)',
-        zIndex: 9999,
         minWidth: 180,
     },
     iconContainer: {
@@ -170,10 +175,22 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
     },
     cancelButton: {
-        marginLeft: spacing.s,
-        width: 24,
-        height: 24,
+        marginTop: spacing.s,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
 });
