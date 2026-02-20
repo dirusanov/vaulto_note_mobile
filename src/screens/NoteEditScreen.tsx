@@ -3882,134 +3882,134 @@ export const NoteEditScreen = () => {
                         <View style={styles.modalOverlay}>
                             <TouchableWithoutFeedback onPress={() => { }}>
                                 <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 16 }]}>
-                                <View style={styles.aiModalHeader}>
-                                    <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Improve Text with AI</Text>
-                                    <View style={styles.aiActions}>
-                                        <TouchableOpacity
-                                            style={styles.aiActionButton}
-                                            onPress={() => setShowPromptBuilder(true)}
-                                        >
-                                            <MaterialIcons name="add" size={18} color={colors.primary} />
-                                            <Text style={styles.aiActionText}>Create</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                {/* Custom Instruction Box */}
-                                <View style={styles.customInstructionBox}>
-                                    <View style={styles.customHeaderRow}>
-                                        <TouchableOpacity
-                                            style={styles.customLabelContainer}
-                                            onPress={() => setShowCustomInput(!showCustomInput)}
-                                        >
-                                            <MaterialIcons
-                                                name={showCustomInput ? "expand-less" : "expand-more"}
-                                                size={24}
-                                                color={colors.text}
-                                            />
-                                            <Text style={styles.customBoxLabel}>Custom Instruction</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={styles.customMicHeaderButton}
-                                            onPress={handleVoiceInstructionStart}
-                                        >
-                                            <MaterialIcons name="mic" size={24} color={colors.primary} />
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    {showCustomInput && (
-                                        <View style={styles.customExpandedContent}>
-                                            <View style={styles.customInputRow}>
-                                                <TextInput
-                                                    style={styles.customInstructionInput}
-                                                    placeholder="e.g. 'Make it funnier' or 'Translate to Spanish'"
-                                                    placeholderTextColor={colors.textMuted}
-                                                    value={customInstruction}
-                                                    onChangeText={setCustomInstruction}
-                                                    multiline
-                                                    maxLength={200}
-                                                />
-                                            </View>
+                                    <View style={styles.aiModalHeader}>
+                                        <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Improve Text with AI</Text>
+                                        <View style={styles.aiActions}>
                                             <TouchableOpacity
-                                                style={[
-                                                    styles.runCustomButton,
-                                                    !customInstruction.trim() && styles.runCustomButtonDisabled
-                                                ]}
-                                                onPress={handleApplyCustomInstruction}
-                                                disabled={!customInstruction.trim() || isAIProcessing}
+                                                style={styles.aiActionButton}
+                                                onPress={() => setShowPromptBuilder(true)}
                                             >
-                                                <Text style={styles.runCustomButtonText}>Apply Instruction</Text>
-                                                <MaterialIcons name="arrow-forward" size={16} color="white" />
+                                                <MaterialIcons name="add" size={18} color={colors.primary} />
+                                                <Text style={styles.aiActionText}>Create</Text>
                                             </TouchableOpacity>
                                         </View>
-                                    )}
-                                </View>
+                                    </View>
 
-                                <View style={styles.divider} />
-                                <View style={styles.aiScrollableArea}>
-                                    {aiOptionsLoading ? (
-                                        <View style={styles.aiLoader}>
-                                            <ActivityIndicator color={colors.primary} />
+                                    {/* Custom Instruction Box */}
+                                    <View style={styles.customInstructionBox}>
+                                        <View style={styles.customHeaderRow}>
+                                            <TouchableOpacity
+                                                style={styles.customLabelContainer}
+                                                onPress={() => setShowCustomInput(!showCustomInput)}
+                                            >
+                                                <MaterialIcons
+                                                    name={showCustomInput ? "expand-less" : "expand-more"}
+                                                    size={24}
+                                                    color={colors.text}
+                                                />
+                                                <Text style={styles.customBoxLabel}>Custom Instruction</Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                style={styles.customMicHeaderButton}
+                                                onPress={handleVoiceInstructionStart}
+                                            >
+                                                <MaterialIcons name="mic" size={24} color={colors.primary} />
+                                            </TouchableOpacity>
                                         </View>
-                                    ) : (
-                                        <DraggableFlatList
-                                            style={styles.aiList}
-                                            contentContainerStyle={styles.aiListContent}
-                                            data={aiOptions.length > 0 ? aiOptions : DEFAULT_IMPROVEMENT_OPTIONS}
-                                            keyExtractor={(item) => item.id}
-                                            onDragEnd={({ data }) => handleReorderEnd(data)}
-                                            showsVerticalScrollIndicator
-                                            scrollIndicatorInsets={{ right: 1 }}
-                                            nestedScrollEnabled
-                                            keyboardShouldPersistTaps="handled"
-                                            renderItem={({ item, drag, isActive }: RenderItemParams<AIImprovementOption>) => (
-                                                <ScaleDecorator>
-                                                    <TouchableOpacity
-                                                        style={[
-                                                            styles.aiOptionItem,
-                                                            styles.aiReorderItem,
-                                                            isActive && styles.aiOptionActive
-                                                        ]}
-                                                        onPress={() => {
-                                                            if (!isActive) handleAIImprovement(item);
-                                                        }}
-                                                        onLongPress={() => {
-                                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                                            drag();
-                                                        }}
-                                                        disabled={isActive}
-                                                        activeOpacity={0.7}
-                                                    >
-                                                        <View style={styles.aiOptionIconContainer}>
-                                                            <MaterialIcons name={item.icon as any} size={24} color={colors.primary} />
-                                                        </View>
-                                                        <View style={styles.aiOptionTextWrapper}>
-                                                            <Text style={styles.aiOptionLabel}>{item.label}</Text>
-                                                            {renderOptionPrompt(item.prompt)}
-                                                        </View>
-                                                        {item.isCustom && (
-                                                            <TouchableOpacity
-                                                                onPress={() => handleDeletePrompt(item.id)}
-                                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                                style={{ padding: 8, marginRight: 4 }}
-                                                            >
-                                                                <MaterialIcons name="delete-outline" size={22} color={colors.error} />
-                                                            </TouchableOpacity>
-                                                        )}
-                                                        <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
-                                                    </TouchableOpacity>
-                                                </ScaleDecorator>
-                                            )}
-                                        />
-                                    )}
-                                </View>
-                                <TouchableOpacity
-                                    style={styles.aiCloseButton}
-                                    onPress={() => setShowAIModal(false)}
-                                >
-                                    <Text style={styles.aiCloseButtonText}>Cancel</Text>
-                                </TouchableOpacity>
+
+                                        {showCustomInput && (
+                                            <View style={styles.customExpandedContent}>
+                                                <View style={styles.customInputRow}>
+                                                    <TextInput
+                                                        style={styles.customInstructionInput}
+                                                        placeholder="e.g. 'Make it funnier' or 'Translate to Spanish'"
+                                                        placeholderTextColor={colors.textMuted}
+                                                        value={customInstruction}
+                                                        onChangeText={setCustomInstruction}
+                                                        multiline
+                                                        maxLength={200}
+                                                    />
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.runCustomButton,
+                                                        !customInstruction.trim() && styles.runCustomButtonDisabled
+                                                    ]}
+                                                    onPress={handleApplyCustomInstruction}
+                                                    disabled={!customInstruction.trim() || isAIProcessing}
+                                                >
+                                                    <Text style={styles.runCustomButtonText}>Apply Instruction</Text>
+                                                    <MaterialIcons name="arrow-forward" size={16} color="white" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View style={styles.divider} />
+                                    <View style={styles.aiScrollableArea}>
+                                        {aiOptionsLoading ? (
+                                            <View style={styles.aiLoader}>
+                                                <ActivityIndicator color={colors.primary} />
+                                            </View>
+                                        ) : (
+                                            <DraggableFlatList
+                                                style={styles.aiList}
+                                                contentContainerStyle={styles.aiListContent}
+                                                data={aiOptions.length > 0 ? aiOptions : DEFAULT_IMPROVEMENT_OPTIONS}
+                                                keyExtractor={(item) => item.id}
+                                                onDragEnd={({ data }) => handleReorderEnd(data)}
+                                                showsVerticalScrollIndicator
+                                                scrollIndicatorInsets={{ right: 1 }}
+                                                nestedScrollEnabled
+                                                keyboardShouldPersistTaps="handled"
+                                                renderItem={({ item, drag, isActive }: RenderItemParams<AIImprovementOption>) => (
+                                                    <ScaleDecorator>
+                                                        <TouchableOpacity
+                                                            style={[
+                                                                styles.aiOptionItem,
+                                                                styles.aiReorderItem,
+                                                                isActive && styles.aiOptionActive
+                                                            ]}
+                                                            onPress={() => {
+                                                                if (!isActive) handleAIImprovement(item);
+                                                            }}
+                                                            onLongPress={() => {
+                                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                                drag();
+                                                            }}
+                                                            disabled={isActive}
+                                                            activeOpacity={0.7}
+                                                        >
+                                                            <View style={styles.aiOptionIconContainer}>
+                                                                <MaterialIcons name={item.icon as any} size={24} color={colors.primary} />
+                                                            </View>
+                                                            <View style={styles.aiOptionTextWrapper}>
+                                                                <Text style={styles.aiOptionLabel}>{item.label}</Text>
+                                                                {renderOptionPrompt(item.prompt)}
+                                                            </View>
+                                                            {item.isCustom && (
+                                                                <TouchableOpacity
+                                                                    onPress={() => handleDeletePrompt(item.id)}
+                                                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                                    style={{ padding: 8, marginRight: 4 }}
+                                                                >
+                                                                    <MaterialIcons name="delete-outline" size={22} color={colors.error} />
+                                                                </TouchableOpacity>
+                                                            )}
+                                                            <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
+                                                        </TouchableOpacity>
+                                                    </ScaleDecorator>
+                                                )}
+                                            />
+                                        )}
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.aiCloseButton}
+                                        onPress={() => setShowAIModal(false)}
+                                    >
+                                        <Text style={styles.aiCloseButtonText}>Cancel</Text>
+                                    </TouchableOpacity>
                                 </View>
                             </TouchableWithoutFeedback>
                         </View>
@@ -4765,7 +4765,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     titleInput: {
-        fontSize: 32,
+        fontSize: 24,
         fontWeight: '400',
         color: colors.text,
         marginBottom: spacing.xs,

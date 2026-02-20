@@ -1078,9 +1078,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     // Headers scale based on baseFontSize but NOT the density scaleFactor (usually) 
     // OR we might want everything to scale? 
     // Let's scale text only for todos via scaleFactor as before, but Headers relative to baseFontSize.
-    const fontSizeH1 = baseFontSize * 1.5; // e.g. 16 -> 24
-    const fontSizeH2 = baseFontSize * 1.25; // e.g. 16 -> 20
-    const fontSizeH3 = baseFontSize * 1.125; // e.g. 16 -> 18
+    const fontSizeH1 = baseFontSize * 1.25; // e.g. 16 -> 20.0
+    const fontSizeH2 = baseFontSize * 1.15; // e.g. 16 -> 18.4
+    const fontSizeH3 = baseFontSize * 1.05; // e.g. 16 -> 16.8
 
     const focusForTypingAtEnd = () => {
         if (blocks.length === 0) {
@@ -1342,7 +1342,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 22,
     },
-    h1: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, marginTop: 8 },
-    h2: { fontSize: 20, fontWeight: 'bold', marginBottom: 6, marginTop: 6 },
-    h3: { fontSize: 18, fontWeight: 'bold', marginBottom: 4, marginTop: 4 },
+    h1: { fontSize: 20, fontWeight: 'bold', marginBottom: 8, marginTop: 8 },
+    h2: { fontSize: 18, fontWeight: 'bold', marginBottom: 6, marginTop: 6 },
+    h3: { fontSize: 17, fontWeight: 'bold', marginBottom: 4, marginTop: 4 },
 });
