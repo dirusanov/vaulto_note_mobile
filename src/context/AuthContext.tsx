@@ -41,14 +41,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isGuest, setIsGuest] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [isRecreatingSession, setIsRecreatingSession] = useState(false);
+    const isRecreatingSessionRef = useRef(false);
 
     const createGuestSession = useCallback(async (options?: { preserveLocalUserId?: boolean }) => {
-        if (isRecreatingSession) {
+        if (isRecreatingSessionRef.current) {
             console.log('[AuthContext] Already recreating session, skipping...');
             return;
         }
-        setIsRecreatingSession(true);
+        isRecreatingSessionRef.current = true;
         try {
             const preserveLocalUserId = options?.preserveLocalUserId ?? false;
             const existingLocalUserId = await storage.getUserId();
@@ -92,9 +92,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             console.error('[AuthContext] Failed to create guest session', err);
             // App will still work locally, just without trial tracking
         } finally {
-            setIsRecreatingSession(false);
+            isRecreatingSessionRef.current = false;
         }
-    }, [isRecreatingSession]);
+    }, []);
 
     // Subscribe to 401 unauthorized events
     useEffect(() => {

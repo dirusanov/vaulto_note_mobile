@@ -99,11 +99,13 @@ class SyncService {
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        const lastKnown = previousUserId ?? this.currentUserId;
+        const lastKnown = this.currentUserId;
+        const migrationSourceUserId = previousUserId ?? null;
 
-        // If we have a new authenticated user and a previous guest user, migrate data
-        if (userId && lastKnown && userId !== lastKnown) {
-            await migrateGuestData(lastKnown, userId);
+        // Run migration only when caller explicitly provides the previous user.
+        // This avoids accidental guest->guest merges on transient session switches.
+        if (userId && migrationSourceUserId && userId !== migrationSourceUserId) {
+            await migrateGuestData(migrationSourceUserId, userId);
         }
 
         if (userId === lastKnown) {
