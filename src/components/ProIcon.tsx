@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface ProIconProps {
     size?: number;
@@ -76,6 +77,20 @@ export const ProIcon: React.FC<ProIconProps> = ({
                     },
                 ]}
             >
+                <View style={{ position: 'absolute', top: -20, zIndex: 10 }}>
+                    <MaterialCommunityIcons
+                        name="crown"
+                        size={containerSize * 0.9}
+                        color="#FCD34D"
+                        style={{
+                            transform: [{ rotate: '-15deg' }],
+                            shadowColor: '#FCD34D',
+                            shadowOffset: { width: 0, height: 3 },
+                            shadowOpacity: 0.7,
+                            shadowRadius: 4,
+                        }}
+                    />
+                </View>
                 <Image
                     source={require('../../assets/icon.png')}
                     style={{

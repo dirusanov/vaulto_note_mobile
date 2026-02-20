@@ -24,7 +24,7 @@ import {
 } from '../utils/storage';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { useEncryption } from '../context/EncryptionContext';
@@ -84,38 +84,54 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
         return (
             <View style={styles.proStatusCard}>
                 <View style={styles.proStatusHeader}>
-                    {/* Unified PRO Badge (Restored) */}
-                    <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: colors.primary,
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 10, // Pill shape
-                        gap: 4,
-                        shadowColor: colors.primary,
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.3,
-                        shadowRadius: 4,
-                        elevation: 2,
-                    }}>
-                        <Image
-                            source={require('../../assets/icon.png')}
+                    {/* Unified PRO Badge with Crown */}
+                    <View style={{ alignItems: 'center' }}>
+                        <MaterialCommunityIcons
+                            name="crown"
+                            size={32}
+                            color="#FCD34D"
                             style={{
-                                width: 10,
-                                height: 10,
-                                tintColor: '#FFFFFF',
-                                opacity: 1,
+                                marginBottom: -12,
+                                transform: [{ rotate: '-15deg' }],
+                                zIndex: 1,
+                                shadowColor: '#FCD34D',
+                                shadowOffset: { width: 0, height: 3 },
+                                shadowOpacity: 0.7,
+                                shadowRadius: 4,
                             }}
-                            resizeMode="contain"
                         />
-                        <Text style={{
-                            ...typography.caption,
-                            color: '#fff',
-                            fontWeight: '800', // Extra bold
-                            fontSize: 11,
-                            letterSpacing: 0.5,
-                        }}>PRO</Text>
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: colors.primary,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 10, // Pill shape
+                            gap: 4,
+                            shadowColor: colors.primary,
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 4,
+                            elevation: 2,
+                        }}>
+                            <Image
+                                source={require('../../assets/icon.png')}
+                                style={{
+                                    width: 10,
+                                    height: 10,
+                                    tintColor: '#FFFFFF',
+                                    opacity: 1,
+                                }}
+                                resizeMode="contain"
+                            />
+                            <Text style={{
+                                ...typography.caption,
+                                color: '#fff',
+                                fontWeight: '800', // Extra bold
+                                fontSize: 11,
+                                letterSpacing: 0.5,
+                            }}>PRO</Text>
+                        </View>
                     </View>
 
                     {/* Spacer to push "ACTIVE" to the right */}
@@ -131,7 +147,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     activeOpacity={0.9}
                 >
                     <View style={styles.proStatusActionLeft}>
-                        {/* Hourglass icon removed as requested */}
+                        <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
                         <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>Subscription details</Text>
                     </View>
                     <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
@@ -1141,36 +1157,6 @@ export const SettingsScreen = () => {
                                 <Text style={styles.minutesRefillText}>Next refill: {refillAtLabel}</Text>
                             )}
                         </View>
-
-                        <View style={styles.llmUsageCard}>
-                            <View style={styles.llmUsageHeader}>
-                                <Text style={styles.llmUsageTitle}>LLM Usage</Text>
-                                {isUsageLoading ? (
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                ) : (
-                                    <Text style={styles.llmUsagePeriod}>
-                                        {usagePeriodStartLabel && usagePeriodEndLabel
-                                            ? `${usagePeriodStartLabel} - ${usagePeriodEndLabel}`
-                                            : 'Current period'}
-                                    </Text>
-                                )}
-                            </View>
-                            <View style={styles.llmUsageRow}>
-                                <Text style={styles.llmUsageLabel}>Total</Text>
-                                <Text style={styles.llmUsageValue}>
-                                    {llmUsedTokens.toLocaleString()}
-                                    {llmLimitTokens > 0 ? ` / ${llmLimitTokens.toLocaleString()}` : ''}
-                                </Text>
-                            </View>
-                            <View style={styles.llmUsageRow}>
-                                <Text style={styles.llmUsageLabel}>Input</Text>
-                                <Text style={styles.llmUsageValue}>{llmInputTokens.toLocaleString()}</Text>
-                            </View>
-                            <View style={styles.llmUsageRow}>
-                                <Text style={styles.llmUsageLabel}>Output</Text>
-                                <Text style={styles.llmUsageValue}>{llmOutputTokens.toLocaleString()}</Text>
-                            </View>
-                        </View>
                     </Pressable>
                 </Pressable>
             </Modal>
@@ -1315,13 +1301,15 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     proStatusCard: {
-        marginTop: spacing.m,
+        marginTop: spacing.s,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
-        padding: spacing.m,
-        gap: spacing.m,
+        paddingHorizontal: spacing.m,
+        paddingBottom: spacing.s,
+        paddingTop: spacing.xs,
+        gap: spacing.s,
     },
     proStatusHeader: {
         flexDirection: 'row',
@@ -1690,48 +1678,7 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginTop: spacing.s,
     },
-    llmUsageCard: {
-        marginTop: spacing.m,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 14,
-        padding: spacing.s,
-        backgroundColor: colors.backgroundSecondary,
-        gap: spacing.xs,
-    },
-    llmUsageHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.xs,
-        gap: spacing.s,
-    },
-    llmUsageTitle: {
-        ...typography.body,
-        color: colors.text,
-        fontWeight: '700',
-    },
-    llmUsagePeriod: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        flexShrink: 1,
-        textAlign: 'right',
-    },
-    llmUsageRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    llmUsageLabel: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-    llmUsageValue: {
-        ...typography.body,
-        color: colors.text,
-        fontSize: 13,
-        fontWeight: '600',
-    },
+
     premiumUpgradeCard: {
         marginTop: spacing.m,
         borderRadius: 20,
