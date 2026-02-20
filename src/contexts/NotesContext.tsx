@@ -20,11 +20,11 @@ interface NotesContextType {
     searchNotes: (query: string) => Promise<void>;
     attachAudioToNote: (id: string, audio: NoteAudio) => Promise<Note>;
     removeAudioFromNote: (id: string) => Promise<Note>;
-    createImprovement: (noteId: string, params: { content: string; label?: string; optionId?: string }) => Promise<NoteImprovement>;
+    createImprovement: (noteId: string, params: { content: string; title?: string; label?: string; optionId?: string }) => Promise<NoteImprovement>;
     updateImprovement: (
         noteId: string,
         improvementId: string,
-        updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
+        updates: { content?: string; title?: string; label?: string; optionId?: string; deleted?: boolean }
     ) => Promise<NoteImprovement>;
     deleteImprovement: (noteId: string, improvementId: string) => Promise<void>;
     setActiveVariant: (noteId: string, variantId: string | null) => Promise<void>;

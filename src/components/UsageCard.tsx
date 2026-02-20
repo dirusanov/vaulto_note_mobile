@@ -23,14 +23,12 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     if (!user) return null;
 
     console.log('[UsageCard] Rendering for user:', user.email || 'Guest');
-    console.log('[UsageCard] Credits:', user.transcription_max_seconds, 'Used:', user.transcription_used_seconds, 'Remaining:', user.transcription_remaining_seconds);
+    const totalSeconds = user.transcription_total_seconds ?? 1800;
+    const usedSeconds = user.transcription_total_used_seconds ?? 0;
+    console.log('[UsageCard] Credits:', totalSeconds, 'Used:', usedSeconds, 'Remaining:', user.transcription_remaining_seconds);
 
-    // "Unlimited" logic: If max seconds > 100 hours (360000s)
-    const isUnlimited = user.transcription_max_seconds > 360000;
-
-    // Trial Calculations
-    const totalSeconds = user.transcription_max_seconds || 1800;
-    const usedSeconds = user.transcription_used_seconds || 0;
+    // "Unlimited" logic: If total seconds > 100 hours (360000s)
+    const isUnlimited = totalSeconds > 360000;
     const remainingSeconds = user.transcription_remaining_seconds !== undefined
         ? user.transcription_remaining_seconds
         : Math.max(0, totalSeconds - usedSeconds);
@@ -161,14 +159,9 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                     <View style={styles.warningBox}>
                         <MaterialIcons name="info-outline" size={18} color={colors.error} />
                         <Text style={styles.warningText}>
-                            {isPro ? "You've used all monthly minutes" : "You've used all 10 free minutes"}
+                            {isPro ? "You've used all monthly minutes" : `You've used all ${Math.round(totalSeconds / 60)} free minutes`}
                         </Text>
                     </View>
-                    {!isPro && (
-                        <Text style={styles.upgradeHint}>
-                            Upgrade to continue transcribing (coming soon)
-                        </Text>
-                    )}
                 </View>
             )}
 

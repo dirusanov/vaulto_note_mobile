@@ -70,13 +70,13 @@ import {
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
-import { AIProcessingIndicator } from '../components/AIProcessingIndicator';
+import { AIProcessingIndicator, AIActiveTask } from '../components/AIProcessingIndicator';
 
+import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
-import { createVoiceProcessingMarker, isVoiceProcessingMarkerLine } from '../utils/voiceDraft';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -262,7 +262,6 @@ interface PendingVoiceInsertion {
     variantId: string;
     baseContent: string;
     dictationContent: string;
-    temporaryContent: string;
 }
 
 type QuotaLimitKind = 'trial_minutes' | 'pro_minutes' | 'llm_tokens';
@@ -736,62 +735,29 @@ export const NoteEditScreen = () => {
     const [errorMessage, setErrorMessage] = useState('');
     const [errorTitle, setErrorTitle] = useState<string | undefined>(undefined);
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
-    const [quotaGate, setQuotaGate] = useState<null | ParsedQuotaLimit>(null);
-
-    const parseQuotaLimit = useCallback((errorValue: unknown): ParsedQuotaLimit | null => {
-        const raw = getErrorMessage(errorValue, '').toLowerCase();
-        const isProPlan = ((user?.plan || '').trim().toLowerCase() === 'pro') || user?.is_pro === true;
-
-        if (
-            raw.includes('llm_tokens_exhausted')
-            || raw.includes('trial prompt usage limit')
-            || raw.includes('prompt usage limit')
-        ) {
-            return {
-                kind: 'llm_tokens',
-                message: 'AI token limit reached. Please try again later.',
-            };
-        }
-
-        if (
-            raw.includes('transcription_exhausted')
-            || raw.includes('not enough transcription minutes')
-            || (raw.includes('trial limit exceeded'))
-        ) {
-            if (isProPlan) {
-                return {
-                    kind: 'pro_minutes',
-                    message: 'Your PRO minutes for this period are exhausted. Access will renew in the next billing cycle.',
-                };
-            }
-            return {
-                kind: 'trial_minutes',
-                message: 'Your trial minutes are exhausted. Upgrade to continue transcribing.',
-            };
-        }
-
-        return null;
-    }, [user?.is_pro, user?.plan]);
-
+    const [activeImprovementTask, setActiveImprovementTask] = useState<AIActiveTask | null>(null);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
-        const parsed = parseQuotaLimit(errorValue);
-        if (!parsed) {
-            setErrorTitle(undefined);
-            setErrorMessage(fallback);
-            setErrorModalVisible(true);
-            return false;
-        }
+        const raw = getErrorMessage(errorValue, '').toLowerCase();
 
-        if (parsed.kind === 'llm_tokens') {
-            setErrorTitle('Token Limit Reached');
-            setErrorMessage(parsed.message);
-            setErrorModalVisible(true);
+        // If it's the standard generic usage limit error from our Service layer 403 intercept,
+        // the LimitModal will already handle it via onLimitReached event.
+        if (
+            raw.includes('403') ||
+            raw.includes('usage limit reached') ||
+            raw.includes('token limit exceeded') ||
+            raw.includes('transcription_exhausted') ||
+            raw.includes('not enough transcription minutes') ||
+            raw.includes('trial limit exceeded')
+        ) {
+            console.log('[NoteEditScreen] Skipping normal error modal because LimitModal should handle 403');
             return true;
         }
 
-        setQuotaGate(parsed);
-        return true;
-    }, [parseQuotaLimit]);
+        setErrorTitle(undefined);
+        setErrorMessage(fallback || raw || 'An error occurred');
+        setErrorModalVisible(true);
+        return false;
+    }, []);
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
         const isPrivate = normalizeScope(storageScope) === 'local_only';
@@ -947,6 +913,7 @@ export const NoteEditScreen = () => {
     const isCancelingAgentRef = useRef(false);
     const pendingVoiceInsertionsRef = useRef<Map<string, PendingVoiceInsertion>>(new Map());
     const [queueLength, setQueueLengthState] = useState(0);
+    const [activeAITasks, setActiveAITasks] = useState<AIActiveTask[]>([]);
     const isProcessingQueue = useRef(false);
     const agentSessionIdRef = useRef(0);
     const isTranscribingRef = useRef(isTranscribing);
@@ -1005,6 +972,25 @@ export const NoteEditScreen = () => {
 
     const refreshTrackedQueueLength = useCallback(() => {
         setTrackedQueueLength(getPendingTaskCount(agentQueue.current));
+
+        const tasksMap = new Map<string, AIActiveTask>();
+        if (activeAgentTaskRef.current) {
+            tasksMap.set(activeAgentTaskRef.current.id, {
+                id: activeAgentTaskRef.current.id,
+                text: activeAgentTaskRef.current.transcribedText || '',
+                isTranscribing: false,
+            });
+        }
+        agentQueue.current.forEach(t => {
+            if (!tasksMap.has(t.id)) {
+                tasksMap.set(t.id, {
+                    id: t.id,
+                    text: t.transcribedText || '',
+                    isTranscribing: false,
+                });
+            }
+        });
+        setActiveAITasks(Array.from(tasksMap.values()));
     }, [setTrackedQueueLength]);
 
     const getTaskKey = (task: AgentQueueTask): string => {
@@ -1564,84 +1550,36 @@ export const NoteEditScreen = () => {
         return true;
     }, [resolveImprovementVariantTitle, resolveVariantContent, updateHistoryImmediate, updateImprovement, updateNote]);
 
-    const stripVoiceProcessingMarkers = useCallback((value: string) => {
-        const lines = (value || '').split('\n');
-        const filtered = lines.filter((line) => !isVoiceProcessingMarkerLine(line));
-        return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
-    }, []);
-
     const resolvePendingInsertionContext = useCallback((
         variantId: string,
         recordingId?: string
     ) => {
         const currentVariantContent = resolveVariantContent(variantId);
         if (!recordingId) {
-            const cleaned = stripVoiceProcessingMarkers(currentVariantContent);
             return {
                 pending: null as PendingVoiceInsertion | null,
-                contentWithoutPending: cleaned,
-                dictationContent: cleaned,
+                contentWithoutPending: currentVariantContent,
+                dictationContent: currentVariantContent,
             };
         }
 
         const pending = pendingVoiceInsertionsRef.current.get(recordingId);
         if (!pending || pending.variantId !== variantId) {
-            const cleaned = stripVoiceProcessingMarkers(currentVariantContent);
             return {
                 pending: null as PendingVoiceInsertion | null,
-                contentWithoutPending: cleaned,
-                dictationContent: cleaned,
+                contentWithoutPending: currentVariantContent,
+                dictationContent: currentVariantContent,
             };
         }
 
-        if (currentVariantContent === pending.temporaryContent) {
-            return {
-                pending,
-                contentWithoutPending: pending.baseContent,
-                dictationContent: pending.dictationContent,
-            };
-        }
-
-        if (currentVariantContent.startsWith(pending.temporaryContent)) {
-            const suffix = currentVariantContent.slice(pending.temporaryContent.length);
-            return {
-                pending,
-                contentWithoutPending: `${pending.baseContent}${suffix}`,
-                dictationContent: `${pending.dictationContent}${suffix}`,
-            };
-        }
-
-        const fallbackDictationContent = stripVoiceProcessingMarkers(currentVariantContent);
         return {
             pending,
-            contentWithoutPending: fallbackDictationContent || pending.baseContent,
-            dictationContent: fallbackDictationContent || pending.dictationContent,
+            contentWithoutPending: currentVariantContent,
+            dictationContent: appendSnippetToContent(currentVariantContent, pending.dictationContent.startsWith(pending.baseContent) ? pending.dictationContent.slice(pending.baseContent.length) : pending.dictationContent),
         };
-    }, [resolveVariantContent, stripVoiceProcessingMarkers]);
+    }, [resolveVariantContent]);
 
-    useEffect(() => {
-        const idle = !isAIProcessing && !isTranscribing && queueLength <= 0;
-        if (!idle) return;
-        if (pendingVoiceInsertionsRef.current.size > 0) return;
-        if (!(content || '').split('\n').some((line) => isVoiceProcessingMarkerLine(line))) return;
-
-        const cleaned = stripVoiceProcessingMarkers(content);
-        if (areTextsEquivalent(cleaned, content)) return;
-
-        void setVariantContentWithOptions(activeVariantIdRef.current, cleaned, {
-            persist: true,
-            updateHistory: false,
-        }).catch((error) => {
-            console.error('[NoteEditScreen] Failed to cleanup stale processing marker', error);
-        });
-    }, [
-        content,
-        isAIProcessing,
-        isTranscribing,
-        queueLength,
-        setVariantContentWithOptions,
-        stripVoiceProcessingMarkers,
-    ]);
+    // Removed the stale processing marker auto-cleanup useEffect since there are no more markers
 
     const insertPendingTranscriptionToVariant = useCallback(async (
         variantId: string,
@@ -1653,27 +1591,15 @@ export const NoteEditScreen = () => {
 
         const baseContent = resolveVariantContent(variantId);
         const dictationContent = buildInsertedTextForVariant(variantId, baseContent, normalizedText);
-        const processingMarker = createVoiceProcessingMarker(normalizedText);
-        const temporaryContent = appendSnippetToContent(dictationContent, processingMarker);
         const pending: PendingVoiceInsertion = {
             recordingId,
             variantId,
             baseContent,
             dictationContent,
-            temporaryContent,
         };
 
-        // Register pending before content update to avoid cleanup race removing marker too early.
+        // Register pending so we know where to append when finished
         pendingVoiceInsertionsRef.current.set(recordingId, pending);
-        const applied = await setVariantContentWithOptions(variantId, temporaryContent, {
-            persist: true,
-            updateHistory: false,
-        });
-
-        if (!applied) {
-            pendingVoiceInsertionsRef.current.delete(recordingId);
-            return false;
-        }
         registerTranscribedInsertion(normalizedText);
         return true;
     }, [buildInsertedTextForVariant, resolveVariantContent, setVariantContentWithOptions]);
@@ -2663,6 +2589,82 @@ export const NoteEditScreen = () => {
         showVoiceResultStatus,
     ]);
 
+    const cancelAgentTask = useCallback(async (taskId: string) => {
+        const isActiveTask = activeAgentTaskRef.current?.id === taskId;
+        const queuedIndex = agentQueue.current.findIndex(t => t.id === taskId);
+
+        if (!isActiveTask && queuedIndex === -1) {
+            return; // Task not found
+        }
+
+        let taskToCancel: AgentQueueTask;
+
+        if (isActiveTask) {
+            taskToCancel = activeAgentTaskRef.current!;
+
+            // Re-queue the remaining items to let them process after we interrupt the active session
+            const remainingTasks = [...agentQueue.current];
+
+            // Invalidate current in-flight session and clear queue immediately.
+            agentSessionIdRef.current += 1;
+            setRequestHistory([]);
+            requestHistoryRef.current = [];
+            agentQueue.current = [];
+            activeAgentTaskRef.current = null;
+            refreshTrackedQueueLength();
+            setTrackedIsAIProcessing(false);
+
+            // Push the remaining tasks back into the queue so they aren't lost
+            if (remainingTasks.length > 0) {
+                // Wait a tiny bit for React state to settle before restarting the queue
+                setTimeout(() => {
+                    agentQueue.current = remainingTasks;
+                    refreshTrackedQueueLength();
+                    processAgentQueue();
+                }, 100);
+            }
+        } else {
+            // Task is just sitting in the queue, hasn't started yet. 
+            // Just splice it out.
+            const removed = agentQueue.current.splice(queuedIndex, 1);
+            taskToCancel = removed[0];
+            refreshTrackedQueueLength();
+        }
+
+        // Apply dictation for the cancelled task
+        const normalizedTaskText = taskToCancel.transcribedText?.trim() || '';
+        if (normalizedTaskText && (!taskToCancel.noteId || taskToCancel.noteId === localNoteIdRef.current)) {
+            const taskVariantId = taskToCancel.targetVariantId || 'original';
+            const pendingContext = resolvePendingInsertionContext(taskVariantId, taskToCancel.recordingId);
+            const shouldSkipDictationApply = !!taskToCancel.dictationAlreadyApplied && !pendingContext.pending;
+
+            if (!shouldSkipDictationApply) {
+                try {
+                    const inserted = await finalizePendingInsertionAsDictation(
+                        taskVariantId,
+                        taskToCancel.recordingId,
+                        normalizedTaskText
+                    );
+                    if (inserted) {
+                        const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                        setRecordingOutcomeStatus(taskToCancel.recordingId, status);
+                        showVoiceResultStatus(status, taskToCancel.recordingId);
+                    }
+                } catch (error) {
+                    console.error('[NoteEditScreen] Failed to finalize dictation after individual task cancel', error);
+                }
+            }
+        }
+    }, [
+        finalizePendingInsertionAsDictation,
+        processAgentQueue,
+        refreshTrackedQueueLength,
+        resolvePendingInsertionContext,
+        setRecordingOutcomeStatus,
+        setTrackedIsAIProcessing,
+        showVoiceResultStatus,
+    ]);
+
     const shouldUseAgentModeGlobally = useCallback(
         async (agentModeOverride?: boolean): Promise<boolean> => {
             const provider = await getAIProvider();
@@ -3130,6 +3132,11 @@ export const NoteEditScreen = () => {
     const handleAIImprovement = async (option: AIImprovementOption) => {
         setShowAIModal(false);
         setTrackedIsAIProcessing(true);
+        setActiveImprovementTask({
+            id: 'improvement-' + Date.now(),
+            text: option.label || 'Improving text...',
+            isTranscribing: false,
+        });
         const variantAtRequestStart = activeVariantIdRef.current;
         try {
             const consentGranted = await requestPrivateAIConsent();
@@ -3292,6 +3299,7 @@ export const NoteEditScreen = () => {
             showPrettyQuotaNotification(error, prettyMessage);
         } finally {
             setTrackedIsAIProcessing(false);
+            setActiveImprovementTask(null);
         }
     };
 
@@ -3869,136 +3877,142 @@ export const NoteEditScreen = () => {
                 animationType="slide"
                 onRequestClose={() => setShowAIModal(false)}
             >
-                <TouchableWithoutFeedback onPress={() => setShowAIModal(false)}>
-                    <GestureHandlerRootView style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback>
-                            <View style={styles.aiModalContent}>
-                                <View style={styles.aiModalHeader}>
-                                    <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Improve Text with AI</Text>
-                                    <View style={styles.aiActions}>
-                                        <TouchableOpacity
-                                            style={styles.aiActionButton}
-                                            onPress={() => setShowPromptBuilder(true)}
-                                        >
-                                            <MaterialIcons name="add" size={18} color={colors.primary} />
-                                            <Text style={styles.aiActionText}>Create</Text>
-                                        </TouchableOpacity>
-                                    </View>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                    <TouchableOpacity
+                        style={styles.modalOverlay}
+                        activeOpacity={1}
+                        onPressOut={() => setShowAIModal(false)}
+                    >
+                        <TouchableOpacity
+                            activeOpacity={1}
+                            style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 40 }]}
+                            onPress={() => { }}
+                        >
+                            <View style={styles.aiModalHeader}>
+                                <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Improve Text with AI</Text>
+                                <View style={styles.aiActions}>
+                                    <TouchableOpacity
+                                        style={styles.aiActionButton}
+                                        onPress={() => setShowPromptBuilder(true)}
+                                    >
+                                        <MaterialIcons name="add" size={18} color={colors.primary} />
+                                        <Text style={styles.aiActionText}>Create</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Custom Instruction Box */}
+                            <View style={styles.customInstructionBox}>
+                                <View style={styles.customHeaderRow}>
+                                    <TouchableOpacity
+                                        style={styles.customLabelContainer}
+                                        onPress={() => setShowCustomInput(!showCustomInput)}
+                                    >
+                                        <MaterialIcons
+                                            name={showCustomInput ? "expand-less" : "expand-more"}
+                                            size={24}
+                                            color={colors.text}
+                                        />
+                                        <Text style={styles.customBoxLabel}>Custom Instruction</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={styles.customMicHeaderButton}
+                                        onPress={handleVoiceInstructionStart}
+                                    >
+                                        <MaterialIcons name="mic" size={24} color={colors.primary} />
+                                    </TouchableOpacity>
                                 </View>
 
-                                {/* Custom Instruction Box */}
-                                <View style={styles.customInstructionBox}>
-                                    <View style={styles.customHeaderRow}>
-                                        <TouchableOpacity
-                                            style={styles.customLabelContainer}
-                                            onPress={() => setShowCustomInput(!showCustomInput)}
-                                        >
-                                            <MaterialIcons
-                                                name={showCustomInput ? "expand-less" : "expand-more"}
-                                                size={24}
-                                                color={colors.text}
+                                {showCustomInput && (
+                                    <View style={styles.customExpandedContent}>
+                                        <View style={styles.customInputRow}>
+                                            <TextInput
+                                                style={styles.customInstructionInput}
+                                                placeholder="e.g. 'Make it funnier' or 'Translate to Spanish'"
+                                                placeholderTextColor={colors.textMuted}
+                                                value={customInstruction}
+                                                onChangeText={setCustomInstruction}
+                                                multiline
+                                                maxLength={200}
                                             />
-                                            <Text style={styles.customBoxLabel}>Custom Instruction</Text>
-                                        </TouchableOpacity>
-
+                                        </View>
                                         <TouchableOpacity
-                                            style={styles.customMicHeaderButton}
-                                            onPress={handleVoiceInstructionStart}
+                                            style={[
+                                                styles.runCustomButton,
+                                                !customInstruction.trim() && styles.runCustomButtonDisabled
+                                            ]}
+                                            onPress={handleApplyCustomInstruction}
+                                            disabled={!customInstruction.trim() || isAIProcessing}
                                         >
-                                            <MaterialIcons name="mic" size={24} color={colors.primary} />
+                                            <Text style={styles.runCustomButtonText}>Apply Instruction</Text>
+                                            <MaterialIcons name="arrow-forward" size={16} color="white" />
                                         </TouchableOpacity>
                                     </View>
+                                )}
+                            </View>
 
-                                    {showCustomInput && (
-                                        <View style={styles.customExpandedContent}>
-                                            <View style={styles.customInputRow}>
-                                                <TextInput
-                                                    style={styles.customInstructionInput}
-                                                    placeholder="e.g. 'Make it funnier' or 'Translate to Spanish'"
-                                                    placeholderTextColor={colors.textMuted}
-                                                    value={customInstruction}
-                                                    onChangeText={setCustomInstruction}
-                                                    multiline
-                                                    maxLength={200}
-                                                />
-                                            </View>
+                            <View style={styles.divider} />
+                            {aiOptionsLoading ? (
+                                <View style={styles.aiLoader}>
+                                    <ActivityIndicator color={colors.primary} />
+                                </View>
+                            ) : (
+                                <DraggableFlatList
+                                    style={styles.aiList}
+                                    contentContainerStyle={styles.aiListContent}
+                                    data={aiOptions}
+                                    keyExtractor={(item) => item.id}
+                                    onDragEnd={({ data }) => handleReorderEnd(data)}
+                                    renderItem={({ item, drag, isActive }: RenderItemParams<AIImprovementOption>) => (
+                                        <ScaleDecorator>
                                             <TouchableOpacity
                                                 style={[
-                                                    styles.runCustomButton,
-                                                    !customInstruction.trim() && styles.runCustomButtonDisabled
+                                                    styles.aiOptionItem,
+                                                    styles.aiReorderItem,
+                                                    isActive && styles.aiOptionActive
                                                 ]}
-                                                onPress={handleApplyCustomInstruction}
-                                                disabled={!customInstruction.trim() || isAIProcessing}
+                                                onPress={() => {
+                                                    if (!isActive) handleAIImprovement(item);
+                                                }}
+                                                onLongPress={() => {
+                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                    drag();
+                                                }}
+                                                disabled={isActive}
+                                                activeOpacity={0.7}
                                             >
-                                                <Text style={styles.runCustomButtonText}>Apply Instruction</Text>
-                                                <MaterialIcons name="arrow-forward" size={16} color="white" />
+                                                <View style={styles.aiOptionIconContainer}>
+                                                    <MaterialIcons name={item.icon as any} size={24} color={isActive ? colors.primary : colors.primary} />
+                                                </View>
+                                                <View style={styles.aiOptionTextWrapper}>
+                                                    <Text style={styles.aiOptionLabel}>{item.label}</Text>
+                                                    {renderOptionPrompt(item.prompt)}
+                                                </View>
+                                                {item.isCustom && (
+                                                    <TouchableOpacity
+                                                        onPress={() => handleDeletePrompt(item.id)}
+                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                        style={{ padding: 8, marginRight: 4 }}
+                                                    >
+                                                        <MaterialIcons name="delete-outline" size={22} color={colors.error} />
+                                                    </TouchableOpacity>
+                                                )}
+                                                <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
                                             </TouchableOpacity>
-                                        </View>
+                                        </ScaleDecorator>
                                     )}
-                                </View>
-
-                                <View style={styles.divider} />
-                                {aiOptionsLoading ? (
-                                    <View style={styles.aiLoader}>
-                                        <ActivityIndicator color={colors.primary} />
-                                    </View>
-                                ) : (
-                                    <DraggableFlatList
-                                        style={styles.aiList}
-                                        contentContainerStyle={styles.aiListContent}
-                                        data={aiOptions}
-                                        keyExtractor={(item) => item.id}
-                                        onDragEnd={({ data }) => handleReorderEnd(data)}
-                                        renderItem={({ item, drag, isActive }: RenderItemParams<AIImprovementOption>) => (
-                                            <ScaleDecorator>
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.aiOptionItem,
-                                                        styles.aiReorderItem,
-                                                        isActive && styles.aiOptionActive
-                                                    ]}
-                                                    onPress={() => {
-                                                        if (!isActive) handleAIImprovement(item);
-                                                    }}
-                                                    onLongPress={() => {
-                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                                        drag();
-                                                    }}
-                                                    disabled={isActive}
-                                                    activeOpacity={0.7}
-                                                >
-                                                    <View style={styles.aiOptionIconContainer}>
-                                                        <MaterialIcons name={item.icon as any} size={24} color={isActive ? colors.primary : colors.primary} />
-                                                    </View>
-                                                    <View style={styles.aiOptionTextWrapper}>
-                                                        <Text style={styles.aiOptionLabel}>{item.label}</Text>
-                                                        {renderOptionPrompt(item.prompt)}
-                                                    </View>
-                                                    {item.isCustom && (
-                                                        <TouchableOpacity
-                                                            onPress={() => handleDeletePrompt(item.id)}
-                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                            style={{ padding: 8, marginRight: 4 }}
-                                                        >
-                                                            <MaterialIcons name="delete-outline" size={22} color={colors.error} />
-                                                        </TouchableOpacity>
-                                                    )}
-                                                    <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
-                                                </TouchableOpacity>
-                                            </ScaleDecorator>
-                                        )}
-                                    />
-                                )}
-                                <TouchableOpacity
-                                    style={styles.aiCloseButton}
-                                    onPress={() => setShowAIModal(false)}
-                                >
-                                    <Text style={styles.aiCloseButtonText}>Cancel</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </TouchableWithoutFeedback>
-                    </GestureHandlerRootView>
-                </TouchableWithoutFeedback>
+                                />
+                            )}
+                            <TouchableOpacity
+                                style={styles.aiCloseButton}
+                                onPress={() => setShowAIModal(false)}
+                            >
+                                <Text style={styles.aiCloseButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </GestureHandlerRootView>
             </Modal>
 
             {/* Prompt Builder Modal */}
@@ -4298,34 +4312,36 @@ export const NoteEditScreen = () => {
             </KeyboardAvoidingView>
 
             {/* Floating Mic Button */}
-            {!isEditing && (
-                <View style={styles.micFloatingContainer}>
-                    <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
-                        <Svg height="120" width="120" viewBox="0 0 120 120">
-                            <Defs>
-                                <Path
-                                    id="micCurve"
-                                    d="M 20,60 A 40,40 0 0 0 100,60"
-                                />
-                            </Defs>
-                            <SvgText fill={colors.textSecondary} fontSize="8" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
-                                <TextPath href="#micCurve" startOffset="50%">
-                                    {micHintText.toUpperCase()}
-                                </TextPath>
-                            </SvgText>
-                        </Svg>
+            {
+                !isEditing && (
+                    <View style={styles.micFloatingContainer}>
+                        <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
+                            <Svg height="120" width="120" viewBox="0 0 120 120">
+                                <Defs>
+                                    <Path
+                                        id="micCurve"
+                                        d="M 20,60 A 40,40 0 0 0 100,60"
+                                    />
+                                </Defs>
+                                <SvgText fill={colors.textSecondary} fontSize="8" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
+                                    <TextPath href="#micCurve" startOffset="50%">
+                                        {micHintText.toUpperCase()}
+                                    </TextPath>
+                                </SvgText>
+                            </Svg>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.micButton}
+                            onPress={handleMicPress}
+                            onLongPress={handleMicLongPress}
+                            delayLongPress={250}
+                            activeOpacity={0.8}
+                        >
+                            <MaterialIcons name="mic" size={28} color="white" />
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                        style={styles.micButton}
-                        onPress={handleMicPress}
-                        onLongPress={handleMicLongPress}
-                        delayLongPress={250}
-                        activeOpacity={0.8}
-                    >
-                        <MaterialIcons name="mic" size={28} color="white" />
-                    </TouchableOpacity>
-                </View>
-            )}
+                )
+            }
 
             <PrivacyWarningModal
                 visible={showPrivacyWarning}
@@ -4375,35 +4391,30 @@ export const NoteEditScreen = () => {
                 }}
             />
 
-            <SignInRequiredModal
-                visible={quotaGate !== null}
-                title={quotaGate?.kind === 'trial_minutes' ? 'Minutes Exhausted' : 'PRO Minutes Exhausted'}
-                message={quotaGate?.message || ''}
-                signInLabel={quotaGate?.kind === 'trial_minutes' ? 'Upgrade' : 'Open Settings'}
-                cancelLabel="Later"
-                onClose={() => setQuotaGate(null)}
-                onSignIn={() => {
-                    const kind = quotaGate?.kind;
-                    setQuotaGate(null);
-                    if (kind === 'trial_minutes') {
-                        (navigation as any).navigate('Paywall');
-                    } else {
-                        navigation.navigate('Settings');
+            <LimitModal />
+
+            {
+                (() => {
+                    const indicatorTasks: AIActiveTask[] = [];
+                    if (isTranscribing) {
+                        indicatorTasks.push({ id: 'transcribing', text: '', isTranscribing: true });
                     }
-                }}
-            />
+                    if (activeImprovementTask) {
+                        indicatorTasks.push(activeImprovementTask as AIActiveTask);
+                    }
+                    indicatorTasks.push(...activeAITasks);
 
-
-
-            <AIProcessingIndicator
-                visible={aiIndicatorVisible}
-                queueSize={queueLength}
-                isTranscribing={isTranscribing}
-                canCancel={aiIndicatorCanCancel}
-                onCancel={() => {
-                    void cancelAgentProcessing();
-                }}
-            />
+                    return (
+                        <AIProcessingIndicator
+                            visible={aiIndicatorVisible}
+                            tasks={indicatorTasks}
+                            onCancelTask={(taskId) => {
+                                void cancelAgentTask(taskId);
+                            }}
+                        />
+                    );
+                })()
+            }
 
             <VoiceRecorder
                 visible={showVoiceRecorder}
@@ -4440,10 +4451,10 @@ export const NoteEditScreen = () => {
                             <View style={styles.aiModalContent}>
                                 <Text style={styles.aiModalTitle}>Voice Recordings</Text>
 
-                                {showAudioPlayer && audioUri && (
+                                {showAudioPlayer && !!audioUri && (
                                     <View style={{ marginBottom: spacing.m }}>
                                         <AudioPlayer
-                                            audioUri={audioUri}
+                                            audioUri={audioUri as string}
                                             duration={audioDuration}
                                             onClose={() => {
                                                 setShowAudioPlayer(false);
@@ -4638,7 +4649,7 @@ export const NoteEditScreen = () => {
                 onAutoScalingChange={handleAutoScalingChange}
             />
 
-        </ScreenContainer>
+        </ScreenContainer >
     );
 };
 
@@ -4880,7 +4891,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: spacing.l,
-        maxHeight: '70%',
+        maxHeight: '90%',
     },
     aiModalTitle: {
         ...typography.h3,
@@ -4924,7 +4935,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     aiList: {
-        maxHeight: 420,
+        flexShrink: 1,
     },
     aiListContent: {
         paddingBottom: spacing.m,

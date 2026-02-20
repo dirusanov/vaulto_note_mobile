@@ -187,7 +187,15 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
 
         let response = await makeRequest(baseUrl);
 
-
+        if (response.status === 403) {
+            const { onLimitReached } = await import('../utils/limitEvents');
+            onLimitReached.emit();
+            return {
+                text: '',
+                success: false,
+                error: 'Usage limit reached',
+            };
+        }
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -367,6 +375,18 @@ export async function processVoiceNote(
         };
 
         let response = await makeRequest(baseUrl);
+
+        if (response.status === 403) {
+            const { onLimitReached } = await import('../utils/limitEvents');
+            onLimitReached.emit();
+            return {
+                originalText: transcriptText,
+                processedText: null,
+                hasInstruction: false,
+                success: false,
+                error: 'Usage limit reached'
+            };
+        }
 
         // Fallback checks
         if (!response.ok) {

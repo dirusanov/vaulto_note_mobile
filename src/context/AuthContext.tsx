@@ -66,6 +66,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
 
             // Build a UserProfile-like object from GuestProfile
+            const legacyGuestData = guestData as unknown as {
+                transcription_max_seconds?: number;
+                transcription_used_seconds?: number;
+            };
+            const guestTotalSeconds =
+                guestData.transcription_total_seconds
+                ?? legacyGuestData.transcription_max_seconds
+                ?? 1800;
+            const guestTotalUsed =
+                guestData.transcription_total_used_seconds
+                ?? legacyGuestData.transcription_used_seconds
+                ?? 0;
             const guestUser: UserProfile = {
                 id: guestData.user_id,
                 email: '',
@@ -73,9 +85,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 is_verified: guestData.is_verified,
                 status: 'active',
                 provider: 'anonymous',
-                transcription_max_seconds: guestData.transcription_max_seconds || 1800,
-                transcription_used_seconds: guestData.transcription_used_seconds || 0,
-                transcription_remaining_seconds: guestData.transcription_remaining_seconds || 1800,
+                transcription_total_seconds: guestTotalSeconds,
+                transcription_total_used_seconds: guestTotalUsed,
+                transcription_remaining_seconds: guestData.transcription_remaining_seconds ?? guestTotalSeconds,
                 has_llm_access: guestData.has_llm_access ?? true,
             };
 

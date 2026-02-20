@@ -216,6 +216,7 @@ export const useNotes = () => {
             id: string;
             noteId: string;
             content: string;
+            title?: string;
             label?: string;
             optionId?: string;
             storage_scope?: StorageScope;
@@ -223,8 +224,9 @@ export const useNotes = () => {
         }): Promise<NoteImprovement> => {
             if (!userId) throw new Error('Cannot save improvement without user ID');
 
-            const { id, noteId, content, label, optionId, storage_scope, privacy } = params;
+            const { id, noteId, content, title, label, optionId, storage_scope, privacy } = params;
             let encryptedContent = await encrypt(content);
+            let encryptedTitle = title ? await encrypt(title) : undefined;
 
             if (encryptedContent === undefined || encryptedContent === null) {
                 console.warn('[useNotes] Encryption returned null/undefined, defaulting to empty string');
@@ -240,6 +242,7 @@ export const useNotes = () => {
                 id,
                 note_id: noteId,
                 encrypted_content: encryptedContent,
+                encrypted_title: encryptedTitle,
                 label,
                 option_id: optionId,
                 content,
@@ -579,7 +582,7 @@ export const useNotes = () => {
     const createImprovement = useCallback(
         async (
             noteId: string,
-            params: { content: string; label?: string; optionId?: string }
+            params: { content: string; title?: string; label?: string; optionId?: string }
         ): Promise<NoteImprovement> => {
             if (!userId) throw new Error('No user');
 
@@ -607,6 +610,7 @@ export const useNotes = () => {
                 id,
                 noteId,
                 content: safeContent,
+                title: params.title,
                 label: uniqueLabel,
                 optionId: params.optionId,
                 storage_scope: note.storage_scope,
@@ -640,7 +644,7 @@ export const useNotes = () => {
         async (
             noteId: string,
             improvementId: string,
-            updates: { content?: string; label?: string; optionId?: string; deleted?: boolean }
+            updates: { content?: string; title?: string; label?: string; optionId?: string; deleted?: boolean }
         ): Promise<NoteImprovement> => {
             if (!userId) throw new Error('No user');
 
@@ -686,10 +690,18 @@ export const useNotes = () => {
                 plainContent = updates.content;
             }
 
+            let encryptedTitle = improvement.encrypted_title;
+            if (typeof updates.title === 'string') {
+                encryptedTitle = await encrypt(updates.title);
+            } else if (updates.title === null) {
+                // If it were nullable
+            }
+
             const updated: NoteImprovement = {
                 ...improvement,
                 note_id: noteId, // Ensure parent ID is preserved
                 encrypted_content: encryptedContent,
+                encrypted_title: encryptedTitle,
                 content: plainContent,
                 label: ensureUniqueImprovementLabel(
                     updates.label ?? improvement.label,

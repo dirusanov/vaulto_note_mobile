@@ -1,85 +1,55 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
-interface AIProcessingIndicatorProps {
-    visible: boolean;
-    queueSize?: number;
-    isTranscribing?: boolean;
-    canCancel?: boolean;
-    onCancel?: () => void;
+export interface AIActiveTask {
+    id: string;
+    text: string;
+    isTranscribing: boolean;
 }
 
-export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
-    visible,
-    queueSize = 0,
-    isTranscribing = false,
-    canCancel = false,
-    onCancel,
-}) => {
-    const fadeAnim = React.useRef(new Animated.Value(0)).current;
+interface AIProcessingIndicatorProps {
+    visible: boolean;
+    tasks: AIActiveTask[];
+    onCancelTask?: (taskId: string) => void;
+}
 
-    // Animations for AI (Spin)
-    const rotateAnim = React.useRef(new Animated.Value(0)).current;
-
-    // Animations for Transcribing (Pulse)
-    const pulseAnim = React.useRef(new Animated.Value(1)).current;
+const AIAnimatedIcon = ({ isTranscribing }: { isTranscribing: boolean }) => {
+    const rotateAnim = useRef(new Animated.Value(0)).current;
+    const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
-        if (visible) {
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-            }).start();
-
-            if (isTranscribing) {
-                // Pulse Animation for Transcription
-                Animated.loop(
-                    Animated.sequence([
-                        Animated.timing(pulseAnim, {
-                            toValue: 1.2,
-                            duration: 800,
-                            easing: Easing.inOut(Easing.ease),
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(pulseAnim, {
-                            toValue: 1,
-                            duration: 800,
-                            easing: Easing.inOut(Easing.ease),
-                            useNativeDriver: true,
-                        }),
-                    ])
-                ).start();
-                rotateAnim.setValue(0); // Reset rotation
-            } else {
-                // Spin Animation for AI
-                Animated.loop(
-                    Animated.timing(rotateAnim, {
-                        toValue: 1,
-                        duration: 2000,
-                        easing: Easing.linear,
+        if (isTranscribing) {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, {
+                        toValue: 1.2,
+                        duration: 800,
+                        easing: Easing.inOut(Easing.ease),
                         useNativeDriver: true,
-                    })
-                ).start();
-                pulseAnim.setValue(1); // Reset pulse
-            }
-
+                    }),
+                    Animated.timing(pulseAnim, {
+                        toValue: 1,
+                        duration: 800,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: true,
+                    }),
+                ])
+            ).start();
         } else {
-            Animated.timing(fadeAnim, {
-                toValue: 0,
-                duration: 300,
-                useNativeDriver: true,
-            }).start();
-            rotateAnim.setValue(0);
-            pulseAnim.setValue(1);
+            Animated.loop(
+                Animated.timing(rotateAnim, {
+                    toValue: 1,
+                    duration: 2000,
+                    easing: Easing.linear,
+                    useNativeDriver: true,
+                })
+            ).start();
         }
-    }, [visible, isTranscribing]);
-
-    if (!visible) return null;
+    }, [isTranscribing, pulseAnim, rotateAnim]);
 
     const spin = rotateAnim.interpolate({
         inputRange: [0, 1],
@@ -87,42 +57,84 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     });
 
     return (
-        <Animated.View style={[styles.wrapper, { opacity: fadeAnim }]}>
-            <View style={styles.container}>
-                <View style={styles.iconContainer}>
-                    {isTranscribing ? (
-                        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                            <MaterialIcons name="graphic-eq" size={24} color={colors.primary} />
-                        </Animated.View>
-                    ) : (
-                        <>
-                            <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                                <MaterialIcons name="settings" size={20} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
-                            </Animated.View>
-                            <MaterialIcons name="smart-toy" size={24} color={colors.primary} />
-                        </>
-                    )}
-                </View>
-                <View style={styles.textContainer}>
-                    <Text style={styles.title}>
-                        {isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
-                    </Text>
-                    {(!isTranscribing && queueSize > 0) && (
-                        <Text style={styles.subtitle}>Tasks in work: {queueSize}</Text>
-                    )}
-                </View>
-            </View>
-            {canCancel && onCancel && (
-                <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel AI processing"
-                    onPress={onCancel}
-                    activeOpacity={0.8}
-                    style={styles.cancelButton}
-                >
-                    <MaterialIcons name="close" size={24} color={colors.textSecondary} />
-                </TouchableOpacity>
+        <View style={styles.iconContainer}>
+            {isTranscribing ? (
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                    <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
+                </Animated.View>
+            ) : (
+                <>
+                    <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                        <MaterialIcons name="settings" size={16} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
+                    </Animated.View>
+                    <MaterialIcons name="smart-toy" size={20} color={colors.primary} />
+                </>
             )}
+        </View>
+    );
+};
+
+export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
+    visible,
+    tasks = [],
+    onCancelTask,
+}) => {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (visible && tasks.length > 0) {
+            Animated.spring(fadeAnim, {
+                toValue: 1,
+                useNativeDriver: true,
+                speed: 12,
+                bounciness: 6,
+            }).start();
+        } else {
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [visible, tasks.length, fadeAnim]);
+
+    if (!visible || tasks.length === 0) return null;
+
+    const sortedTasks = [...tasks].sort((a, b) => {
+        if (a.isTranscribing === b.isTranscribing) return 0;
+        return a.isTranscribing ? 1 : -1;
+    });
+
+    return (
+        <Animated.View style={[styles.wrapper, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
+            <View style={styles.listContainer}>
+                {sortedTasks.map((task, index) => (
+                    <View key={task.id} style={[styles.container, index > 0 && { marginTop: spacing.s }]}>
+                        <AIAnimatedIcon isTranscribing={task.isTranscribing} />
+                        <View style={styles.textContainer}>
+                            <Text style={styles.title} numberOfLines={1}>
+                                {task.isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
+                            </Text>
+                            {!!task.text && (
+                                <Text style={styles.subtitle} numberOfLines={2}>
+                                    "{task.text}"
+                                </Text>
+                            )}
+                        </View>
+                        {!!onCancelTask && !task.isTranscribing && (
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Cancel task"
+                                onPress={() => onCancelTask(task.id)}
+                                activeOpacity={0.7}
+                                style={styles.taskCancelButton}
+                            >
+                                <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                ))}
+            </View>
         </Animated.View>
     );
 };
@@ -130,18 +142,22 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
 const styles = StyleSheet.create({
     wrapper: {
         position: 'absolute',
-        bottom: 70,
+        bottom: 140,
         alignSelf: 'center',
         alignItems: 'center',
         zIndex: 9999,
+        maxWidth: '90%',
+    },
+    listContainer: {
+        alignItems: 'center',
     },
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.surface,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         paddingVertical: spacing.s,
         paddingHorizontal: spacing.m,
-        borderRadius: 24,
+        borderRadius: 20,
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
@@ -152,14 +168,16 @@ const styles = StyleSheet.create({
         elevation: 8,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.05)',
-        minWidth: 180,
+        alignSelf: 'center',
     },
     iconContainer: {
         marginRight: spacing.m,
         justifyContent: 'center',
         alignItems: 'center',
-        width: 24,
-        height: 24,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: colors.primary + '15',
     },
     textContainer: {
         flexDirection: 'column',
@@ -173,24 +191,17 @@ const styles = StyleSheet.create({
     subtitle: {
         ...typography.caption,
         color: colors.textSecondary,
+        fontStyle: 'italic',
+        marginTop: 2,
     },
-    cancelButton: {
-        marginTop: spacing.s,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+    taskCancelButton: {
+        marginLeft: spacing.s,
+        padding: spacing.xs,
+        borderRadius: 12,
         backgroundColor: colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(0,0,0,0.1)',
     },
 });

@@ -186,9 +186,11 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         throw new Error('Sign in required to use Vaulto AI.');
     }
 
+    const promptToSend = `You are a helpful writing assistant. Return ONLY the improved output, without any conversational filler, explanations, or echoing the original text. ${option.prompt.replace(/{text}/gi, '').trim()}`.trim();
+
     const body = {
         text,
-        prompt: option.prompt,
+        prompt: promptToSend,
     };
 
     const response = await fetch(baseUrl, {
@@ -200,6 +202,12 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         },
         body: JSON.stringify(body),
     });
+
+    if (response.status === 403) {
+        const { onLimitReached } = await import('../utils/limitEvents');
+        onLimitReached.emit();
+        throw new Error('Usage limit reached');
+    }
 
     if (!response.ok) {
         const errorText = await response.text();

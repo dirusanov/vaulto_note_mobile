@@ -26,8 +26,8 @@ export interface UserProfile {
     plan?: string;
     is_pro?: boolean;
     subscription_next_refill_at?: string | null;
-    transcription_max_seconds: number;
-    transcription_used_seconds: number;
+    transcription_total_seconds: number;
+    transcription_total_used_seconds: number;
     transcription_remaining_seconds: number;
     transcription_trial_total_seconds?: number;
     transcription_trial_used_seconds?: number;
@@ -48,8 +48,8 @@ export interface GuestProfile {
     expires_in: number;
     user_id: string;
     is_verified: boolean;
-    transcription_max_seconds: number;
-    transcription_used_seconds: number;
+    transcription_total_seconds: number;
+    transcription_total_used_seconds: number;
     transcription_remaining_seconds: number;
     has_llm_access: boolean;
 }
