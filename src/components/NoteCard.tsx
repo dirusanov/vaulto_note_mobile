@@ -148,7 +148,12 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     </Text>
                 )}
                 {(isEmpty && hasAudio) && (
-                    <Text style={styles.audioPreviewLabel}>Voice note attached</Text>
+                    <View style={{ marginTop: spacing.xs, alignSelf: 'flex-start' }}>
+                        <View style={[styles.audioChip, { transform: [] }]}>
+                            <MaterialIcons name="headset" size={12} color={colors.textSecondary} style={{ marginRight: 2 }} />
+                            <Text style={styles.audioChipText}>audio</Text>
+                        </View>
+                    </View>
                 )}
             </View>
             <View style={styles.footer}>

@@ -75,7 +75,7 @@ import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
-import { createVoiceProcessingMarker } from '../utils/voiceDraft';
+import { createVoiceProcessingMarker, isVoiceProcessingMarkerLine } from '../utils/voiceDraft';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -224,6 +224,15 @@ const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'upda
         return action === 'created' ? 'Created improved view' : 'Updated Improved';
     }
     return action === 'created' ? 'Created improved view' : 'Updated Improved';
+};
+
+const buildAgentImprovementLabel = (mode?: string | null): string => {
+    const normalizedMode = (mode || '').toLowerCase();
+    if (!normalizedMode || normalizedMode === 'none') return 'Improved';
+    if (normalizedMode === 'todo' || normalizedMode === 'list') return 'todo';
+    if (normalizedMode === 'format') return 'format';
+    if (normalizedMode === 'edit_content') return 'edit';
+    return normalizedMode.replace(/_/g, ' ');
 };
 
 // History stack implementation - separate history for each variant
@@ -1047,6 +1056,7 @@ export const NoteEditScreen = () => {
             });
 
             setActiveVariantId(correctActiveVariantId);
+            activeVariantIdRef.current = correctActiveVariantId;
 
             // Update content to show the correct variant
             if (correctActiveVariantId === 'original') {
@@ -1120,6 +1130,7 @@ export const NoteEditScreen = () => {
             // Newly created/switching variants may be temporarily missing in refreshed list.
             if (!exists && !isPendingOptimistic && !hasLocalVariantState) {
                 setActiveVariantId('original');
+                activeVariantIdRef.current = 'original';
                 setContent(existingNote?.content || '');
             }
         }
@@ -1298,9 +1309,10 @@ export const NoteEditScreen = () => {
         return true;
     }, [resolveVariantContent, updateHistoryImmediate, updateImprovement, updateNote]);
 
-    const stripTrailingVoiceProcessingMarker = useCallback((value: string) => {
-        const markerRegex = /(?:\n)?\s*!\[processing\]\([^)]*\)\s*$/;
-        return (value || '').replace(markerRegex, '').trimEnd();
+    const stripVoiceProcessingMarkers = useCallback((value: string) => {
+        const lines = (value || '').split('\n');
+        const filtered = lines.filter((line) => !isVoiceProcessingMarkerLine(line));
+        return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
     }, []);
 
     const resolvePendingInsertionContext = useCallback((
@@ -1309,19 +1321,21 @@ export const NoteEditScreen = () => {
     ) => {
         const currentVariantContent = resolveVariantContent(variantId);
         if (!recordingId) {
+            const cleaned = stripVoiceProcessingMarkers(currentVariantContent);
             return {
                 pending: null as PendingVoiceInsertion | null,
-                contentWithoutPending: currentVariantContent,
-                dictationContent: stripTrailingVoiceProcessingMarker(currentVariantContent),
+                contentWithoutPending: cleaned,
+                dictationContent: cleaned,
             };
         }
 
         const pending = pendingVoiceInsertionsRef.current.get(recordingId);
         if (!pending || pending.variantId !== variantId) {
+            const cleaned = stripVoiceProcessingMarkers(currentVariantContent);
             return {
                 pending: null as PendingVoiceInsertion | null,
-                contentWithoutPending: currentVariantContent,
-                dictationContent: stripTrailingVoiceProcessingMarker(currentVariantContent),
+                contentWithoutPending: cleaned,
+                dictationContent: cleaned,
             };
         }
 
@@ -1342,13 +1356,37 @@ export const NoteEditScreen = () => {
             };
         }
 
-        const fallbackDictationContent = stripTrailingVoiceProcessingMarker(currentVariantContent);
+        const fallbackDictationContent = stripVoiceProcessingMarkers(currentVariantContent);
         return {
             pending,
-            contentWithoutPending: pending.baseContent,
+            contentWithoutPending: fallbackDictationContent || pending.baseContent,
             dictationContent: fallbackDictationContent || pending.dictationContent,
         };
-    }, [resolveVariantContent, stripTrailingVoiceProcessingMarker]);
+    }, [resolveVariantContent, stripVoiceProcessingMarkers]);
+
+    useEffect(() => {
+        const idle = !isAIProcessing && !isTranscribing && queueLength <= 0;
+        if (!idle) return;
+        if (pendingVoiceInsertionsRef.current.size > 0) return;
+        if (!(content || '').split('\n').some((line) => isVoiceProcessingMarkerLine(line))) return;
+
+        const cleaned = stripVoiceProcessingMarkers(content);
+        if (areTextsEquivalent(cleaned, content)) return;
+
+        void setVariantContentWithOptions(activeVariantIdRef.current, cleaned, {
+            persist: true,
+            updateHistory: false,
+        }).catch((error) => {
+            console.error('[NoteEditScreen] Failed to cleanup stale processing marker', error);
+        });
+    }, [
+        content,
+        isAIProcessing,
+        isTranscribing,
+        queueLength,
+        setVariantContentWithOptions,
+        stripVoiceProcessingMarkers,
+    ]);
 
     const insertPendingTranscriptionToVariant = useCallback(async (
         variantId: string,
@@ -1475,6 +1513,7 @@ export const NoteEditScreen = () => {
             // If deleting active variant, switch to original
             if (activeVariantId === improvementId) {
                 setActiveVariantId('original');
+                activeVariantIdRef.current = 'original';
                 setContent(existingNote?.content || '');
                 // Set parent as active
                 await setActiveVariant(localNoteId, null);
@@ -1747,6 +1786,7 @@ export const NoteEditScreen = () => {
         }
 
         setActiveVariantId(variantId);
+        activeVariantIdRef.current = variantId;
         optimisticActiveVariant.current = variantId;
         if (variantId === 'original') {
             setContent(existingNote?.content || '');
@@ -1967,19 +2007,26 @@ export const NoteEditScreen = () => {
                 const normalizedTaskText = task.transcribedText.trim();
                 const pendingContextAtStart = resolvePendingInsertionContext(taskVariantId, task.recordingId);
                 const contextContent = pendingContextAtStart.contentWithoutPending;
+                let dictationFinalized = false;
+                let shouldFallbackToDictationOnError = true;
 
                 console.log(`[NoteEditScreen] Processing agent task ${task.id} (queue=${agentQueue.current.length})`);
 
-                const finalizeAsDictation = async (fallbackText?: string) => {
+                const finalizeAsDictation = async (fallbackText?: string, options?: { silent?: boolean }) => {
+                    if (dictationFinalized) return false;
                     const applied = await finalizePendingInsertionAsDictation(
                         taskVariantId,
                         task.recordingId,
                         fallbackText || normalizedTaskText
                     );
-                    if (!applied) return;
-                    const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
-                    setRecordingOutcomeStatus(task.recordingId, status);
-                    showVoiceResultStatus(status, task.recordingId);
+                    if (!applied) return false;
+                    dictationFinalized = true;
+                    if (!options?.silent) {
+                        const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                        setRecordingOutcomeStatus(task.recordingId, status);
+                        showVoiceResultStatus(status, task.recordingId);
+                    }
+                    return true;
                 };
 
                 try {
@@ -2097,21 +2144,71 @@ export const NoteEditScreen = () => {
                             }
 
                             if (newText && !areTextsEquivalent(newText, commandBaseContent)) {
-                                if (hasPendingDraft && task.recordingId) {
-                                    pendingVoiceInsertionsRef.current.delete(task.recordingId);
-                                    replaceCurrentHistoryState(
-                                        taskVariantId,
-                                        taskVariantId === 'original' ? currentTitleRef.current : '',
-                                        dictatedContentForUndo
-                                    );
+                                // Original must keep only raw dictation; AI transformation is stored as improvement.
+                                if (taskVariantId === 'original') {
+                                    if (hasPendingDraft && task.recordingId) {
+                                        pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                                        replaceCurrentHistoryState(
+                                            taskVariantId,
+                                            taskVariantId === 'original' ? currentTitleRef.current : '',
+                                            dictatedContentForUndo
+                                        );
+                                    }
+
+                                    // Command phrase should not stay in original content.
+                                    await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
+                                        persist: true,
+                                        updateHistory: false,
+                                    });
+                                    dictationFinalized = true;
+                                    shouldFallbackToDictationOnError = false;
+
+                                    const targetNoteId = localNoteIdRef.current;
+                                    if (!targetNoteId) {
+                                        throw new Error('Failed to resolve note ID for agent improvement');
+                                    }
+
+                                    const improvement = await createImprovement(targetNoteId, {
+                                        content: newText,
+                                        label: buildAgentImprovementLabel(agentResult.mode),
+                                    });
+
+                                    improvementDraftsRef.current[improvement.id] = newText;
+                                    improvementSavedRef.current[improvement.id] = newText;
+                                    variantHistories.current[improvement.id] = {
+                                        history: [{ title: currentTitleRef.current || '', content: newText }],
+                                        index: 0,
+                                    };
+
+                                    if (activeVariantIdRef.current === 'original') {
+                                        setActiveVariantId(improvement.id);
+                                        activeVariantIdRef.current = improvement.id;
+                                        optimisticActiveVariant.current = improvement.id;
+                                        setContent(newText);
+                                        currentContentRef.current = newText;
+                                        await setActiveVariant(targetNoteId, improvement.id);
+                                    }
+
+                                    const status = buildAgentStatusMessage(agentResult.mode, 'created');
+                                    setRecordingOutcomeStatus(task.recordingId, status);
+                                    showVoiceResultStatus(status, task.recordingId);
+                                } else {
+                                    if (hasPendingDraft && task.recordingId) {
+                                        pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                                        replaceCurrentHistoryState(
+                                            taskVariantId,
+                                            taskVariantId === 'original' ? currentTitleRef.current : '',
+                                            dictatedContentForUndo
+                                        );
+                                    }
+                                    await setVariantContentWithOptions(taskVariantId, newText, {
+                                        persist: true,
+                                        updateHistory: true,
+                                    });
+                                    const status = buildAgentStatusMessage(agentResult.mode, 'updated');
+                                    setRecordingOutcomeStatus(task.recordingId, status);
+                                    showVoiceResultStatus(status, task.recordingId);
                                 }
-                                await setVariantContentWithOptions(taskVariantId, newText, {
-                                    persist: true,
-                                    updateHistory: true,
-                                });
-                                const status = buildAgentStatusMessage(agentResult.mode, 'updated');
-                                setRecordingOutcomeStatus(task.recordingId, status);
-                                showVoiceResultStatus(status, task.recordingId);
                             } else {
                                 await finalizeAsDictation(originalText || normalizedTaskText);
                             }
@@ -2127,7 +2224,9 @@ export const NoteEditScreen = () => {
                     }
                 } catch (error) {
                     console.error('[NoteEditScreen] Agent flow exception:', error);
-                    await finalizeAsDictation(normalizedTaskText);
+                    if (shouldFallbackToDictationOnError) {
+                        await finalizeAsDictation(normalizedTaskText);
+                    }
                     setErrorMessage(getErrorMessage(error, 'An error occurred during agent processing'));
                     setErrorModalVisible(true);
                 } finally {
