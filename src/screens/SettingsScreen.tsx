@@ -411,7 +411,7 @@ export const SettingsScreen = () => {
             subscriptionApi.getCurrentPeriodUsage()
                 .then((usage) => setCurrentPeriodUsage(usage))
                 .catch((error) => {
-                    console.error('[SettingsScreen] Failed to load current period usage', error);
+                    console.warn('[SettingsScreen] Failed to load current period usage', error.message);
                 })
                 .finally(() => {
                     setIsUsageLoading(false);
