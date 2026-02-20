@@ -1076,7 +1076,6 @@ export const useNotes = () => {
                 throw new Error('Note not found');
             }
 
-            const currentPrivacy = normalizePrivacy(existing.privacy);
             const nextPrivacy = normalizePrivacy(privacy);
             const currentScope = normalizeStorageScope(existing.storage_scope);
             const nextScope: StorageScope = currentScope;

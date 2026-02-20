@@ -15,12 +15,12 @@ const normalizePrivacy = (value: unknown): 'normal' | 'hidden' => {
     return 'normal';
 };
 
-const encryptForPrivacy = async (plaintext: string, privacy: unknown): Promise<string> => {
+const encryptForPrivacy = async (plaintext: string): Promise<string> => {
     if (!plaintext) return '';
     return await encrypt(plaintext);
 };
 
-const decryptByPrivacy = async (ciphertext: string, privacy: unknown): Promise<string> => {
+const decryptByPrivacy = async (ciphertext: string): Promise<string> => {
     if (!ciphertext) return '';
     return await decrypt(ciphertext);
 };
@@ -213,13 +213,13 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         const privacy = requestedPrivacy;
         const storageScope = normalizeStorageScope(note.storage_scope);
         const encryptedTitle = (typeof note.title === 'string' && (note.title.length > 0 || !note.encrypted_title))
-            ? await encryptForPrivacy(note.title, privacy)
+            ? await encryptForPrivacy(note.title)
             : note.encrypted_title;
         const encryptedContent = (typeof note.content === 'string' && (note.content.length > 0 || !note.encrypted_content))
-            ? await encryptForPrivacy(note.content, privacy)
+            ? await encryptForPrivacy(note.content)
             : note.encrypted_content;
         const encryptedTranscription = (typeof note.transcription === 'string' && (note.transcription.length > 0 || !note.encrypted_transcription))
-            ? await encryptForPrivacy(note.transcription, privacy)
+            ? await encryptForPrivacy(note.transcription)
             : note.encrypted_transcription;
         const normalizedNote = {
             ...note,
@@ -273,13 +273,13 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         const pendingServerDelete = note.pending_server_delete ? 1 : 0;
 
         const encryptedTitle = (typeof note.title === 'string' && (note.title.length > 0 || !note.encrypted_title))
-            ? await encryptForPrivacy(note.title, privacy)
+            ? await encryptForPrivacy(note.title)
             : note.encrypted_title;
         const encryptedContent = (typeof note.content === 'string' && (note.content.length > 0 || !note.encrypted_content))
-            ? await encryptForPrivacy(note.content, privacy)
+            ? await encryptForPrivacy(note.content)
             : note.encrypted_content;
         const encryptedTranscription = (typeof note.transcription === 'string' && (note.transcription.length > 0 || !note.encrypted_transcription))
-            ? await encryptForPrivacy(note.transcription, privacy)
+            ? await encryptForPrivacy(note.transcription)
             : note.encrypted_transcription;
 
         await database.runAsync(
@@ -359,7 +359,6 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
         const database = await getDb();
         if (!database) return;
         // Native DB does not store improvements as child notes, so we only delete the note itself.
-        const relatedIds = [id];
         let audioPathsToDelete: Array<string | null | undefined> = [];
 
         const [voiceRows, noteRows] = await Promise.all([
@@ -492,10 +491,10 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
         const decryptedNotes = await Promise.all(allNotes.map(async (n): Promise<Note | null> => {
             try {
                 const privacy = normalizePrivacy(n.privacy);
-                const title = n.encrypted_title ? await decryptByPrivacy(n.encrypted_title, privacy) : '';
-                const content = await decryptByPrivacy(n.encrypted_content, privacy);
+                const title = n.encrypted_title ? await decryptByPrivacy(n.encrypted_title) : '';
+                const content = await decryptByPrivacy(n.encrypted_content);
                 const transcription = n.encrypted_transcription
-                    ? await decryptByPrivacy(n.encrypted_transcription, privacy)
+                    ? await decryptByPrivacy(n.encrypted_transcription)
                     : undefined;
 
                 return {
@@ -589,7 +588,7 @@ const processImprovements = async (
             if (!noteId) continue;
 
             const privacy = normalizePrivacy(imp.privacy);
-            const content = await decryptByPrivacy(imp.encrypted_content, privacy);
+            const content = await decryptByPrivacy(imp.encrypted_content);
             const improvement: NoteImprovement = {
                 ...imp,
                 note_id: noteId,
@@ -638,10 +637,10 @@ const processNotes = async (
         try {
             const privacy = normalizePrivacy(n.privacy);
             const hasEncryptedTitle = n.encrypted_title !== undefined && n.encrypted_title !== null;
-            const titlePromise = hasEncryptedTitle ? decryptByPrivacy(n.encrypted_title, privacy) : Promise.resolve('');
-            const contentPromise = decryptByPrivacy(n.encrypted_content, privacy);
+            const titlePromise = hasEncryptedTitle ? decryptByPrivacy(n.encrypted_title) : Promise.resolve('');
+            const contentPromise = decryptByPrivacy(n.encrypted_content);
             const transcriptionPromise = n.encrypted_transcription
-                ? decryptByPrivacy(n.encrypted_transcription, privacy)
+                ? decryptByPrivacy(n.encrypted_transcription)
                 : Promise.resolve(undefined);
 
             const [title, content, transcription] = await Promise.all([titlePromise, contentPromise, transcriptionPromise]);
@@ -691,10 +690,10 @@ export const searchNotesLocal = async (userId: string, query: string): Promise<N
         const decrypted = await Promise.all(rawMainNotes.map(async (n): Promise<Note | null> => {
             try {
                 const privacy = normalizePrivacy(n.privacy);
-                const title = n.encrypted_title ? await decryptByPrivacy(n.encrypted_title, privacy) : '';
-                const content = await decryptByPrivacy(n.encrypted_content, privacy);
+                const title = n.encrypted_title ? await decryptByPrivacy(n.encrypted_title) : '';
+                const content = await decryptByPrivacy(n.encrypted_content);
                 const transcription = n.encrypted_transcription
-                    ? await decryptByPrivacy(n.encrypted_transcription, privacy)
+                    ? await decryptByPrivacy(n.encrypted_transcription)
                     : undefined;
                 return {
                     ...n,

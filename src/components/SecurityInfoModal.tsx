@@ -1,10 +1,9 @@
 import React from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, TouchableOpacity, Image } from 'react-native';
+import { Modal, View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { ProIcon } from './ProIcon';
 
 interface SecurityInfoModalProps {
     visible: boolean;

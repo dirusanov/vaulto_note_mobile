@@ -28,7 +28,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { useEncryption } from '../context/EncryptionContext';
-import Constants from 'expo-constants';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
@@ -207,7 +206,6 @@ export const SettingsScreen = () => {
     const [aiProvider, setAiProviderState] = useState<AIProvider>('secure_llm');
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
-    const [showOpenAIInfo, setShowOpenAIInfo] = useState(false);
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
     const [showChangePinModal, setShowChangePinModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
@@ -215,7 +213,6 @@ export const SettingsScreen = () => {
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
 
-    const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
     const [openAITestStatus, setOpenAITestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
         type: 'idle',

@@ -17,7 +17,7 @@ import {
     Animated,
     AppState,
 } from 'react-native';
-import Svg, { Path, Text as SvgText, TextPath, Defs, G } from 'react-native-svg';
+import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -75,7 +75,6 @@ import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripMarkdownSyntax } from '../utils/markdownUtils';
-import { useEncryption } from '../context/EncryptionContext';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -295,10 +294,8 @@ export const NoteEditScreen = () => {
         deleteImprovement,
         setActiveVariant,
         updateNoteStorageScope,
-        updateNotePrivacy,
     } = useNotesContext();
     const { isAuthenticated, isGuest, userId } = useAuth();
-    const { syncEnabled } = useEncryption();
     const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
     const normalizePrivacy = (value?: NotePrivacy): NotePrivacy => {
@@ -570,7 +567,6 @@ export const NoteEditScreen = () => {
     const [showRecordingsList, setShowRecordingsList] = useState(false);
     const [showRecordingTextModal, setShowRecordingTextModal] = useState(false);
     const [selectedRecordingForText, setSelectedRecordingForText] = useState<VoiceRecording | null>(null);
-    const [recordingStatusById, setRecordingStatusById] = useState<Record<string, string>>({});
     const [pendingMicInputMode, setPendingMicInputMode] = useState<MicInputMode>('agent');
     const pendingMicInputModeRef = useRef<MicInputMode>('agent');
     const micLongPressHandledRef = useRef(false);
@@ -579,9 +575,8 @@ export const NoteEditScreen = () => {
         // Intentionally disabled per UX request: no floating status popups.
     }, []);
 
-    const setRecordingOutcomeStatus = useCallback((recordingId: string | undefined, status: string) => {
-        if (!recordingId) return;
-        setRecordingStatusById((prev) => ({ ...prev, [recordingId]: status }));
+    const setRecordingOutcomeStatus = useCallback((_recordingId: string | undefined, _status: string) => {
+        // Intentionally disabled per UX request: no per-recording status badges.
     }, []);
 
     useEffect(() => {
@@ -734,18 +729,6 @@ export const NoteEditScreen = () => {
         }
         setStorageScope(normalizedScope);
     }, [confirmLocalOnlyWarning, existingNote, localNoteId, storageScope, updateNoteStorageScope]);
-
-    const applyPrivacy = useCallback(async (nextPrivacyRaw: NotePrivacy) => {
-        const nextPrivacy = normalizePrivacy(nextPrivacyRaw);
-        if (localNoteId) {
-            await updateNotePrivacy(localNoteId, nextPrivacy);
-        }
-        setPrivacy(nextPrivacy);
-    }, [localNoteId, updateNotePrivacy]);
-
-
-
-
 
     // Text Appearance State
     const [fontSize, setFontSizeState] = useState(16);
@@ -2357,10 +2340,6 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(true);
     };
 
-    const getRecordingStatus = useCallback((recordingId: string): string => {
-        return recordingStatusById[recordingId] || 'Saved recording';
-    }, [recordingStatusById]);
-
     const openRecordingTextView = (recording: VoiceRecording) => {
         setSelectedRecordingForText(recording);
         setShowRecordingTextModal(true);
@@ -2697,19 +2676,10 @@ export const NoteEditScreen = () => {
 
     const charCount = content.length;
     const canUseAI = content.trim().length > 0;
-    const effectivePrivacy = normalizePrivacy(privacy);
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only';
     const micHintText = 'Hold: no agent';
     const selectedRecordingText = selectedRecordingForText?.transcription?.trim() || '';
-    const currentPlaybackRecording = useMemo(() => {
-        if (playingRecordingId) {
-            const exact = voiceRecordings.find((rec) => rec.id === playingRecordingId);
-            if (exact) return exact;
-        }
-        return voiceRecordings[0] || null;
-    }, [playingRecordingId, voiceRecordings]);
-    const currentPlaybackHasTranscription = !!currentPlaybackRecording?.transcription?.trim();
 
     // Handle initial recording passed from navigation
     useEffect(() => {
@@ -2856,12 +2826,6 @@ export const NoteEditScreen = () => {
                         // Calculate new list state
                         const remaining = voiceRecordings.filter(r => r.id !== id);
                         setVoiceRecordings(remaining);
-                        setRecordingStatusById((prev) => {
-                            if (!prev[id]) return prev;
-                            const next = { ...prev };
-                            delete next[id];
-                            return next;
-                        });
                         if (selectedRecordingForText?.id === id) {
                             setSelectedRecordingForText(null);
                             setShowRecordingTextModal(false);

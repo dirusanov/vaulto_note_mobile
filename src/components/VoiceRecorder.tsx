@@ -7,7 +7,6 @@ import {
     Modal,
     Animated,
     Alert,
-    Switch,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';

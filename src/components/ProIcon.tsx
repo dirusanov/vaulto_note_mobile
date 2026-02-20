@@ -10,7 +10,6 @@ interface ProIconProps {
     // When undefined, tint is chosen automatically based on backgroundColor.
     // When null, tint is disabled and the full-color icon is used.
     tintColor?: string | null;
-    variant?: 'default' | 'medal'; // Kept for interface compatibility but treated as minimal
 }
 
 const parseHexColor = (value: string): { r: number; g: number; b: number } | null => {
@@ -47,7 +46,6 @@ export const ProIcon: React.FC<ProIconProps> = ({
     backgroundColor = colors.primary, // Default to Blue
     borderColor = 'transparent',
     tintColor,
-    variant,
 }) => {
     const resolvedTintColor =
         tintColor === null
