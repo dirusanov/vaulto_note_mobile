@@ -22,7 +22,7 @@ import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import { captureRef } from 'react-native-view-shot';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
@@ -2937,8 +2937,10 @@ export const NoteEditScreen = () => {
 
             {noteImprovements.length > 0 && (
                 <View style={styles.variantContainer}>
-                    <ScrollView
+                    <GestureHandlerScrollView
                         horizontal
+                        nestedScrollEnabled
+                        directionalLockEnabled
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.variantScrollContent}
                         keyboardShouldPersistTaps="always"
@@ -2996,7 +2998,7 @@ export const NoteEditScreen = () => {
                                 </TouchableOpacity>
                             </View>
                         ))}
-                    </ScrollView>
+                    </GestureHandlerScrollView>
                 </View>
             )}
 

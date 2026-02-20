@@ -1205,6 +1205,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         <GestureHandlerRootView style={{ flex: 1 }}>
             <DraggableFlatList
                 data={blocks}
+                nestedScrollEnabled
                 onDragEnd={({ data }) => {
                     setBlocks(data);
                     isInternalUpdate.current = true;
