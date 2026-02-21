@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -107,7 +107,11 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
 
     return (
         <Animated.View style={[styles.wrapper, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
-            <View style={styles.listContainer}>
+            <ScrollView
+                style={styles.listContainer}
+                contentContainerStyle={styles.listContentContainer}
+                showsVerticalScrollIndicator={false}
+            >
                 {sortedTasks.map((task, index) => (
                     <View key={task.id} style={[styles.container, index > 0 && { marginTop: spacing.s }]}>
                         <AIAnimatedIcon isTranscribing={task.isTranscribing} />
@@ -134,7 +138,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                         )}
                     </View>
                 ))}
-            </View>
+            </ScrollView>
         </Animated.View>
     );
 };
@@ -147,9 +151,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 9999,
         maxWidth: '90%',
+        maxHeight: 250, // Added to limit height when multiple notifications are present
     },
     listContainer: {
+        width: '100%',
+    },
+    listContentContainer: {
         alignItems: 'center',
+        paddingVertical: spacing.s,
     },
     container: {
         flexDirection: 'row',
