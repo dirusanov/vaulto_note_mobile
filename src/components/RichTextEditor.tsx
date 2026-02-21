@@ -42,6 +42,7 @@ export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
     focusBlockAt: (lineIndex: number, ratio?: number) => void;
     removeAudioBlock: (audioPath: string) => void;
+    blur: () => void;
 }
 
 interface Block {
@@ -579,6 +580,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 setBlocks(newBlocks);
                 isInternalUpdate.current = true;
                 onChange(serializeBlocks(newBlocks));
+            }
+        },
+        blur: () => {
+            if (focusedBlockId) {
+                inputRefs.current[focusedBlockId]?.blur();
+                setFocusedBlockId(null);
             }
         }
     }));

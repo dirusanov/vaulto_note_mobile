@@ -3461,6 +3461,7 @@ export const NoteEditScreen = () => {
         });
         const hideSub = Keyboard.addListener('keyboardDidHide', () => {
             isKeyboardVisible.current = false;
+            editorRef.current?.blur();
             if (!isColorPickerOpen.current) {
                 setIsEditing(false);
             }
