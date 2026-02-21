@@ -8,7 +8,7 @@ import { typography } from '../theme/typography';
 export interface AIActiveTask {
     id: string;
     text: string;
-    isTranscribing: boolean;
+    isTranscribing?: boolean;
 }
 
 interface AIProcessingIndicatorProps {
@@ -17,39 +17,19 @@ interface AIProcessingIndicatorProps {
     onCancelTask?: (taskId: string) => void;
 }
 
-const AIAnimatedIcon = ({ isTranscribing }: { isTranscribing: boolean }) => {
+const AIAnimatedIcon = () => {
     const rotateAnim = useRef(new Animated.Value(0)).current;
-    const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
-        if (isTranscribing) {
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(pulseAnim, {
-                        toValue: 1.2,
-                        duration: 800,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(pulseAnim, {
-                        toValue: 1,
-                        duration: 800,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                ])
-            ).start();
-        } else {
-            Animated.loop(
-                Animated.timing(rotateAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    easing: Easing.linear,
-                    useNativeDriver: true,
-                })
-            ).start();
-        }
-    }, [isTranscribing, pulseAnim, rotateAnim]);
+        Animated.loop(
+            Animated.timing(rotateAnim, {
+                toValue: 1,
+                duration: 2000,
+                easing: Easing.linear,
+                useNativeDriver: true,
+            })
+        ).start();
+    }, [rotateAnim]);
 
     const spin = rotateAnim.interpolate({
         inputRange: [0, 1],
@@ -58,18 +38,10 @@ const AIAnimatedIcon = ({ isTranscribing }: { isTranscribing: boolean }) => {
 
     return (
         <View style={styles.iconContainer}>
-            {isTranscribing ? (
-                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                    <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
-                </Animated.View>
-            ) : (
-                <>
-                    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                        <MaterialIcons name="settings" size={16} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
-                    </Animated.View>
-                    <MaterialIcons name="smart-toy" size={20} color={colors.primary} />
-                </>
-            )}
+            <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <MaterialIcons name="settings" size={16} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
+            </Animated.View>
+            <MaterialIcons name="smart-toy" size={20} color={colors.primary} />
         </View>
     );
 };
@@ -100,10 +72,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
 
     if (!visible || tasks.length === 0) return null;
 
-    const sortedTasks = [...tasks].sort((a, b) => {
-        if (a.isTranscribing === b.isTranscribing) return 0;
-        return a.isTranscribing ? 1 : -1;
-    });
+    const filteredTasks = tasks.filter(t => !t.isTranscribing);
 
     return (
         <Animated.View style={[styles.wrapper, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
@@ -112,12 +81,12 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                 contentContainerStyle={styles.listContentContainer}
                 showsVerticalScrollIndicator={false}
             >
-                {sortedTasks.map((task, index) => (
+                {filteredTasks.map((task, index) => (
                     <View key={task.id} style={[styles.container, index > 0 && { marginTop: spacing.s }]}>
-                        <AIAnimatedIcon isTranscribing={task.isTranscribing} />
+                        <AIAnimatedIcon />
                         <View style={styles.textContainer}>
                             <Text style={styles.title} numberOfLines={1}>
-                                {task.isTranscribing ? 'Transcribing...' : 'AI Agent working...'}
+                                AI Agent working...
                             </Text>
                             {!!task.text && (
                                 <Text style={styles.subtitle} numberOfLines={2}>
@@ -125,7 +94,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                                 </Text>
                             )}
                         </View>
-                        {!!onCancelTask && !task.isTranscribing && (
+                        {!!onCancelTask && (
                             <TouchableOpacity
                                 accessibilityRole="button"
                                 accessibilityLabel="Cancel task"

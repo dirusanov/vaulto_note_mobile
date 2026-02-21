@@ -71,7 +71,7 @@ import {
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
 import { AIProcessingIndicator, AIActiveTask } from '../components/AIProcessingIndicator';
-
+import { TranscriptionIndicator } from '../components/TranscriptionIndicator';
 import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
@@ -4400,9 +4400,6 @@ export const NoteEditScreen = () => {
             {
                 (() => {
                     const indicatorTasks: AIActiveTask[] = [];
-                    if (isTranscribing) {
-                        indicatorTasks.push({ id: 'transcribing', text: '', isTranscribing: true });
-                    }
                     if (activeImprovementTask) {
                         indicatorTasks.push(activeImprovementTask as AIActiveTask);
                     }
@@ -4441,6 +4438,7 @@ export const NoteEditScreen = () => {
                 autoStart={true}
             />
 
+            <TranscriptionIndicator visible={isTranscribing} />
 
             {/* Recordings List Modal */}
             <Modal
