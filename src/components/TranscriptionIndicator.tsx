@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     },
     text: {
         ...typography.caption,
-        color: colors.primary,
+        color: colors.text,
         fontWeight: '500',
     },
 });
