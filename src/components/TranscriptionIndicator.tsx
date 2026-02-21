@@ -64,7 +64,7 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
         ]}>
             <View style={styles.content}>
                 <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                    <MaterialIcons name="graphic-eq" size={16} color={colors.textSecondary} />
+                    <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
                 </Animated.View>
                 <Text style={styles.text}>Transcribing...</Text>
             </View>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     },
     text: {
         ...typography.caption,
-        color: colors.textSecondary,
+        color: colors.primary,
         fontWeight: '500',
     },
 });
