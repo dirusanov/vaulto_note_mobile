@@ -3,7 +3,7 @@
     "name": "Vaulto Note",
     "slug": "vaulto-note-mobile",
     "owner": "random1k11",
-    "version": "1.0.29",
+    "version": "1.0.30",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -36,7 +36,7 @@
         "com.android.vending.BILLING"
       ],
       "package": "com.vaultonotemobile",
-      "versionCode": 29,
+      "versionCode": 30,
       "usesCleartextTraffic": true
     },
     "web": {
