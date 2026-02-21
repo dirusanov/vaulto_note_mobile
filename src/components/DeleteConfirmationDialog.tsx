@@ -1,8 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Dimensions, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { typography } from '../theme/typography';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DeleteConfirmationDialogProps {
     visible: boolean;
@@ -21,51 +24,89 @@ export const DeleteConfirmationDialog = ({
     onConfirm,
     onCancel,
 }: DeleteConfirmationDialogProps) => {
+    const scaleAnim = useRef(new Animated.Value(0.85)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (visible) {
+            Animated.parallel([
+                Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    friction: 7,
+                    tension: 50,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacityAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        } else {
+            scaleAnim.setValue(0.85);
+            opacityAnim.setValue(0);
+        }
+    }, [visible]);
+
     return (
         <Modal
             visible={visible}
             transparent={true}
-            animationType="fade"
+            animationType="none"
             onRequestClose={onCancel}
+            statusBarTranslucent
         >
             <View style={styles.overlay}>
-                <View style={styles.dialogContainer}>
+                <Animated.View
+                    style={[
+                        styles.dialogContainer,
+                        {
+                            opacity: opacityAnim,
+                            transform: [{ scale: scaleAnim }],
+                        },
+                    ]}
+                >
                     <View style={styles.dialog}>
-                        {/* Icon */}
-                        <View style={styles.iconContainer}>
-                            <MaterialIcons name="delete-outline" size={48} color={colors.error} />
+                        {/* Status Bar Indicator */}
+                        <View style={styles.topAccent} />
+
+                        {/* Icon Container */}
+                        <View style={styles.iconWrapper}>
+                            <View style={styles.iconCircle}>
+                                <MaterialIcons name="delete-forever" size={42} color={colors.error} />
+                            </View>
                         </View>
 
                         {/* Title */}
                         <Text style={styles.title}>
-                            {title || `Delete ${noteCount} ${noteCount === 1 ? 'Note' : 'Notes'}?`}
+                            {title || (noteCount === 1 ? 'Delete Note?' : `Delete ${noteCount} Notes?`)}
                         </Text>
 
                         {/* Message */}
                         <Text style={styles.message}>
-                            {message || `This action cannot be undone. The selected ${noteCount === 1 ? 'note' : 'notes'} will be permanently deleted.`}
+                            {message || `This action is permanent and cannot be undone.`}
                         </Text>
 
                         {/* Actions */}
-                        <View style={styles.actions}>
+                        <View style={styles.buttonRow}>
                             <TouchableOpacity
-                                style={[styles.button, styles.cancelButton]}
+                                style={[styles.btn, styles.btnCancel]}
                                 onPress={onCancel}
                                 activeOpacity={0.7}
                             >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                                <Text style={styles.btnCancelText}>Keep it</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.button, styles.deleteButton]}
+                                style={[styles.btn, styles.btnDelete]}
                                 onPress={onConfirm}
-                                activeOpacity={0.7}
+                                activeOpacity={0.9}
                             >
-                                <Text style={styles.deleteButtonText}>Delete</Text>
+                                <Text style={styles.btnDeleteText}>Delete</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </Animated.View>
             </View>
         </Modal>
     );
@@ -76,75 +117,103 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)', // Darker overlay for more focus
     },
     dialogContainer: {
-        width: '85%',
-        maxWidth: 400,
+        width: SCREEN_WIDTH * 0.88,
+        maxWidth: 360,
     },
     dialog: {
         backgroundColor: colors.surface,
-        borderRadius: 24,
+        borderRadius: 32,
         padding: spacing.xl,
         alignItems: 'center',
-        // Elegant shadow
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 10,
+        overflow: 'hidden',
+        // Sophisticated shadow for premium feel
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 20 },
+                shadowOpacity: 0.2,
+                shadowRadius: 30,
+            },
+            android: {
+                elevation: 24,
+            },
+        }),
     },
-    iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: `${colors.error}15`,
+    topAccent: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 6,
+        backgroundColor: colors.error,
+        opacity: 0.8,
+    },
+    iconWrapper: {
+        marginBottom: spacing.l,
+        marginTop: spacing.s,
+    },
+    iconCircle: {
+        width: 84,
+        height: 84,
+        borderRadius: 42,
+        backgroundColor: `${colors.error}10`,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: spacing.m,
+        borderWidth: 1,
+        borderColor: `${colors.error}20`,
     },
     title: {
-        fontSize: 22,
+        ...typography.h3,
+        fontSize: 24,
         fontWeight: '700',
         color: colors.text,
         marginBottom: spacing.s,
         textAlign: 'center',
     },
     message: {
-        fontSize: 15,
+        ...typography.body,
+        fontSize: 16,
         color: colors.textSecondary,
         textAlign: 'center',
         lineHeight: 22,
-        marginBottom: spacing.xl,
+        marginBottom: spacing.xxl,
+        paddingHorizontal: spacing.m,
     },
-    actions: {
+    buttonRow: {
         flexDirection: 'row',
         gap: spacing.m,
         width: '100%',
     },
-    button: {
+    btn: {
         flex: 1,
-        paddingVertical: spacing.m,
-        borderRadius: 12,
+        height: 56,
+        borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    cancelButton: {
-        backgroundColor: colors.background,
-        borderWidth: 1,
-        borderColor: colors.border,
+    btnCancel: {
+        backgroundColor: colors.backgroundSecondary,
     },
-    cancelButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
+    btnCancelText: {
+        ...typography.button,
         color: colors.text,
-    },
-    deleteButton: {
-        backgroundColor: colors.error,
-    },
-    deleteButtonText: {
-        fontSize: 16,
         fontWeight: '600',
+    },
+    btnDelete: {
+        backgroundColor: colors.error,
+        // Glossy effect logic removed for simplicity, using solid premium red
+        shadowColor: colors.error,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    btnDeleteText: {
+        ...typography.button,
         color: '#FFFFFF',
+        fontWeight: '700',
     },
 });

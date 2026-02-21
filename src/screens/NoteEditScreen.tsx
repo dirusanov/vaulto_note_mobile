@@ -420,6 +420,7 @@ export const NoteEditScreen = () => {
     });
     const [improvementToDelete, setImprovementToDelete] = useState<string | null>(null);
     const [isDeletingNote, setIsDeletingNote] = useState<boolean>(false);
+    const [recordingToDelete, setRecordingToDelete] = useState<{ id: string, path: string } | null>(null);
     const [content, setContent] = useState(() => {
         const initialId = getInitialActiveVariantId();
         if (initialId === 'original') return existingNote?.content || '';
@@ -436,18 +437,21 @@ export const NoteEditScreen = () => {
     const toastOpacity = useRef(new Animated.Value(0)).current;
     const [toastMessage, setToastMessage] = useState('');
 
-    const showToast = (message: string) => {
+    const showToast = (message: string, duration = 2000) => {
         setToastMessage(message);
+        // Reset opacity in case another toast is running
+        toastOpacity.setValue(0);
+
         Animated.sequence([
             Animated.timing(toastOpacity, {
                 toValue: 1,
                 duration: 200,
                 useNativeDriver: true,
             }),
-            Animated.delay(2000),
+            Animated.delay(duration),
             Animated.timing(toastOpacity, {
                 toValue: 0,
-                duration: 200,
+                duration: 250,
                 useNativeDriver: true,
             }),
         ]).start();
@@ -3164,7 +3168,7 @@ export const NoteEditScreen = () => {
 
                     // If the AI says it's correct, we stop here.
                     if (jsonRes.is_correct) {
-                        Alert.alert('✨ Perfect!', 'No grammar errors found.');
+                        showToast('✨ Perfect! No grammar errors found.', 3000);
                         setTrackedIsAIProcessing(false);
                         return;
                     }
@@ -3186,7 +3190,7 @@ export const NoteEditScreen = () => {
                     // If it's chatty, we probably shouldn't blindly use it. 
                     // However, we verify if it matches source text to avoid false positives.
                     if (areTextsEquivalent(sourceText, improvedText)) {
-                        Alert.alert('✨ Perfect!', 'No grammar errors found.');
+                        showToast('✨ Perfect! No grammar errors found.', 3000);
                         setTrackedIsAIProcessing(false);
                         return;
                     }
@@ -3568,118 +3572,100 @@ export const NoteEditScreen = () => {
     };
 
     const handleDeleteRecording = async (id: string, path: string) => {
-        Alert.alert(
-            'Delete Recording',
-            'Are you sure?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        // 1. Cancel any pending auto-saves to prevent race condition overwriting our changes
-                        if (saveTimeoutRef.current) {
-                            clearTimeout(saveTimeoutRef.current);
-                        }
+        setRecordingToDelete({ id, path });
+    };
 
-                        if (userId) {
-                            await deleteVoiceRecordingLocal(userId, id);
-                        }
-                        await AudioService.deleteAudioFile(path);
+    const confirmDeleteRecording = async () => {
+        if (!recordingToDelete) return;
+        const { id, path } = recordingToDelete;
+        setRecordingToDelete(null);
 
-                        // Calculate new list state
-                        const remaining = voiceRecordings.filter(r => r.id !== id);
-                        setVoiceRecordings(remaining);
-                        if (selectedRecordingForText?.id === id) {
-                            setSelectedRecordingForText(null);
-                            setShowRecordingTextModal(false);
-                        }
+        // 1. Cancel any pending auto-saves to prevent race condition overwriting our changes
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
 
-                        // 1. Close player if playing deleted file OR if no recordings left
-                        if (remaining.length === 0) {
-                            setShowAudioPlayer(false);
-                            setAudioUri(null);
-                            setPlayingRecordingId(null);
-                        } else if (playingRecordingId === id) {
-                            // Precise match via ID
-                            setShowAudioPlayer(false);
-                            setAudioUri(null);
-                            setPlayingRecordingId(null);
-                        } else if (audioUri && (audioUri.includes(path) || path.includes(audioUri))) {
-                            // Fallback fuzzy match
-                            setShowAudioPlayer(false);
-                            setAudioUri(null);
-                            setPlayingRecordingId(null);
-                        }
+        if (userId) {
+            await deleteVoiceRecordingLocal(userId, id);
+        }
+        await AudioService.deleteAudioFile(path);
 
-                        // 2. Remove the specific audio markdown tag from content
+        // Calculate new list state
+        const remaining = voiceRecordings.filter(r => r.id !== id);
+        setVoiceRecordings(remaining);
+        if (selectedRecordingForText?.id === id) {
+            setSelectedRecordingForText(null);
+            setShowRecordingTextModal(false);
+        }
 
-                        // Check if we can use the Editor's native block removal (Proper Solution)
-                        if (editMode === 'visual' && editorRef.current) {
-                            console.log('[NoteEditScreen] Removing audio block via Editor API');
-                            editorRef.current.removeAudioBlock(path);
-                            // NOTE: Editor will trigger onChange -> handleContentChange -> setContent & debouncedSave
-                            // We do NOT call setReparseTrigger here, as the editor is already updated.
+        // 1. Close player if playing deleted file OR if no recordings left
+        if (remaining.length === 0) {
+            setShowAudioPlayer(false);
+            setAudioUri(null);
+            setPlayingRecordingId(null);
+        } else if (playingRecordingId === id) {
+            // Precise match via ID
+            setShowAudioPlayer(false);
+            setAudioUri(null);
+            setPlayingRecordingId(null);
+        } else if (audioUri && (audioUri.includes(path) || path.includes(audioUri))) {
+            // Fallback fuzzy match
+            setShowAudioPlayer(false);
+            setAudioUri(null);
+            setPlayingRecordingId(null);
+        }
 
-                        } else {
-                            // Fallback: Raw String Manipulation (for Raw Mode or if Ref missing)
-                            const currentContent = currentContentRef.current;
-                            let newContent = currentContent;
+        // 2. Remove the specific audio markdown tag from content
+        // Check if we can use the Editor's native block removal (Proper Solution)
+        if (editMode === 'visual' && editorRef.current) {
+            console.log('[NoteEditScreen] Removing audio block via Editor API');
+            editorRef.current.removeAudioBlock(path);
+            // NOTE: Editor will trigger onChange -> handleContentChange -> setContent & debouncedSave
+        } else {
+            // Fallback: Raw String Manipulation (for Raw Mode or if Ref missing)
+            const currentContent = currentContentRef.current;
+            let newContent = currentContent;
 
-                            const filename = path.split('/').pop();
-                            if (filename) {
-                                const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\([^)]*${escapedFilename}\\)\\s*`, 'g');
+            const filename = path.split('/').pop();
+            if (filename) {
+                const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\([^)]*${escapedFilename}\\)\\s*`, 'g');
+                newContent = newContent.replace(audioTagRegex, '');
+                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
+            } else {
+                const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\(${escapedPath}\\)\\s*`, 'g');
+                newContent = newContent.replace(audioTagRegex, '');
+                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
+            }
 
-                                newContent = newContent.replace(audioTagRegex, '');
-                                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
-                            } else {
-                                const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\(${escapedPath}\\)\\s*`, 'g');
-                                newContent = newContent.replace(audioTagRegex, '');
-                                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
-                            }
+            setContent(newContent);
+            currentContentRef.current = newContent;
 
-                            setContent(newContent);
-                            currentContentRef.current = newContent;
+            // Save immediately for Raw mode
+            if (localNoteId) {
+                await updateNote(localNoteId, { content: newContent });
+            }
 
-                            // Save immediately for Raw mode
-                            if (localNoteId) {
-                                await updateNote(localNoteId, { content: newContent });
-                            }
+            // Trigger reparse just in case if we switch back to visual
+            setReparseTrigger(prev => prev + 1);
+        }
 
-                            // Trigger reparse just in case if we switch back to visual
-                            setReparseTrigger(prev => prev + 1);
-                        }
+        // 3. Update DB state if no recordings left
+        if (remaining.length === 0 && localNoteId) {
+            await updateNote(localNoteId, { has_audio: false });
 
-                        // 3. Update DB state if no recordings left
-                        if (remaining.length === 0 && localNoteId) {
-                            await updateNote(localNoteId, { has_audio: false });
-
-                            // 4. Auto-delete check (Deferred to handleBack)
-                            // We don't delete immediately anymore based on user feedback.
-                            // The user might want to add more content.
-                            // The empty check in handleBack will take care of cleaning up if they exit now.
-                            // We need to calculate potential new content for this check
-                            const latestContent = currentContentRef.current;
-                            const isContentEmpty = !title.trim() && !latestContent.trim();
-                            if (isContentEmpty) {
-                                console.log('[AutoClean] Note came empty after deleting last audio. Will be auto-deleted on exit if left empty.');
-                            }
-                        } else {
-                            // If not deleting note, ensure consistent history/save
-                            // If visual mode, debounce save is triggered by onChange. 
-                            // If raw mode, we just updated note above.
-                            // But for safety:
-                            const latestContent = currentContentRef.current;
-                            updateHistory(title, latestContent);
-                            debouncedSave(latestContent, title);
-                        }
-                    }
-                }
-
-            ]
-        );
+            // 4. Auto-delete check (Deferred to handleBack)
+            const latestContent = currentContentRef.current;
+            const isContentEmpty = !title.trim() && !latestContent.trim();
+            if (isContentEmpty) {
+                console.log('[AutoClean] Note came empty after deleting last audio. Will be auto-deleted on exit if left empty.');
+            }
+        } else {
+            const latestContent = currentContentRef.current;
+            updateHistory(title, latestContent);
+            debouncedSave(latestContent, title);
+        }
     };
 
     const renderHeader = () => (
@@ -4365,6 +4351,14 @@ export const NoteEditScreen = () => {
             />
 
             <DeleteConfirmationDialog
+                visible={recordingToDelete !== null}
+                title="Delete Recording?"
+                message="Are you sure you want to delete this recording?"
+                onCancel={() => setRecordingToDelete(null)}
+                onConfirm={confirmDeleteRecording}
+            />
+
+            <DeleteConfirmationDialog
                 visible={isDeletingNote}
                 title="Delete Note"
                 message="Are you sure you want to delete this note?"
@@ -4733,7 +4727,7 @@ const styles = StyleSheet.create({
     },
     toastContainer: {
         position: 'absolute',
-        bottom: 100,
+        bottom: 180, // Moved up from 100
         left: 0,
         right: 0,
         alignItems: 'center',
