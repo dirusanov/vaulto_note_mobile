@@ -134,6 +134,17 @@ class AudioServiceClass {
                 },
             };
 
+            // Ensure any existing recording is unloaded before creating a new one
+            if (this.recording) {
+                try {
+                    console.log('[AudioService] Cleaning up dangling recording instance');
+                    await this.recording.stopAndUnloadAsync();
+                } catch (cleanupError) {
+                    console.warn('[AudioService] Failed to clean up dangling recording:', cleanupError);
+                }
+                this.recording = null;
+            }
+
             // Create recording - it will use its own temp storage
             const { recording } = await Audio.Recording.createAsync(
                 recordingOptions,
@@ -181,9 +192,6 @@ class AudioServiceClass {
             // Calculate duration
             const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
 
-            this.recording = null;
-            this.recordingStartTime = 0;
-
             return {
                 uri,
                 duration,
@@ -192,6 +200,9 @@ class AudioServiceClass {
         } catch (error) {
             console.error('Error stopping recording:', error);
             throw error;
+        } finally {
+            this.recording = null;
+            this.recordingStartTime = 0;
         }
     }
 
@@ -228,13 +239,18 @@ class AudioServiceClass {
      */
     async cancelRecording(): Promise<void> {
         if (this.recording) {
-            await this.recording.stopAndUnloadAsync();
-            const uri = this.recording.getURI();
-            if (uri) {
-                await this.deleteAudioFile(uri);
+            try {
+                await this.recording.stopAndUnloadAsync();
+                const uri = this.recording.getURI();
+                if (uri) {
+                    await this.deleteAudioFile(uri);
+                }
+            } catch (err) {
+                console.error('Error cancelling recording:', err);
+            } finally {
+                this.recording = null;
+                this.recordingStartTime = 0;
             }
-            this.recording = null;
-            this.recordingStartTime = 0;
         }
     }
 
