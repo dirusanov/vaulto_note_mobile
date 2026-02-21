@@ -289,6 +289,7 @@ interface NoteProcessingState {
     isTranscribing: boolean;
     isAIProcessing: boolean;
     queueLength: number;
+    activeTasks?: AIActiveTask[];
 }
 
 const noteProcessingStateById = new Map<string, NoteProcessingState>();
@@ -297,6 +298,7 @@ const emptyNoteProcessingState: NoteProcessingState = {
     isTranscribing: false,
     isAIProcessing: false,
     queueLength: 0,
+    activeTasks: [],
 };
 
 const getNoteProcessingState = (noteId: string): NoteProcessingState => {
@@ -315,6 +317,7 @@ const setNoteProcessingState = (noteId: string, patch: Partial<NoteProcessingSta
         isTranscribing: patch.isTranscribing ?? previous.isTranscribing,
         isAIProcessing: patch.isAIProcessing ?? previous.isAIProcessing,
         queueLength: patch.queueLength ?? previous.queueLength,
+        activeTasks: patch.activeTasks ?? previous.activeTasks,
     };
     const shouldClear = !next.isTranscribing && !next.isAIProcessing && next.queueLength <= 0;
     if (shouldClear) {
@@ -951,10 +954,12 @@ export const NoteEditScreen = () => {
         applyTrackedProcessingState({ isAIProcessing: value }, noteIdOverride);
     }, [applyTrackedProcessingState]);
 
-    const setTrackedQueueLength = useCallback((value: number, noteIdOverride?: string) => {
+    const setTrackedQueueLength = useCallback((value: number, tasksMap: Map<string, AIActiveTask>, noteIdOverride?: string) => {
         const normalized = Math.max(0, value);
         setQueueLengthState(normalized);
-        applyTrackedProcessingState({ queueLength: normalized }, noteIdOverride);
+        const activeTasks = Array.from(tasksMap.values());
+        setActiveAITasks(activeTasks);
+        applyTrackedProcessingState({ queueLength: normalized, activeTasks }, noteIdOverride);
     }, [applyTrackedProcessingState]);
 
     const getTaskRecordingIds = (task: AgentQueueTask): string[] => {
@@ -975,15 +980,12 @@ export const NoteEditScreen = () => {
     };
 
     const refreshTrackedQueueLength = useCallback(() => {
-        setTrackedQueueLength(getPendingTaskCount(agentQueue.current));
-
         const tasksMap = new Map<string, AIActiveTask>();
         if (activeAgentTasksRef.current.length > 0) {
             activeAgentTasksRef.current.forEach(t => {
                 tasksMap.set(t.id, {
                     id: t.id,
                     text: t.transcribedText || '',
-                    isTranscribing: false,
                 });
             });
         }
@@ -992,11 +994,10 @@ export const NoteEditScreen = () => {
                 tasksMap.set(t.id, {
                     id: t.id,
                     text: t.transcribedText || '',
-                    isTranscribing: false,
                 });
             }
         });
-        setActiveAITasks(Array.from(tasksMap.values()));
+        setTrackedQueueLength(getPendingTaskCount(agentQueue.current), tasksMap);
     }, [setTrackedQueueLength]);
 
     const getTaskKey = (task: AgentQueueTask): string => {
@@ -1024,12 +1025,14 @@ export const NoteEditScreen = () => {
             setIsTranscribingState(false);
             setIsAIProcessingState(false);
             setQueueLengthState(0);
+            setActiveAITasks([]);
             return;
         }
         return subscribeNoteProcessingState(localNoteId, (next) => {
             setIsTranscribingState(next.isTranscribing);
             setIsAIProcessingState(next.isAIProcessing);
             setQueueLengthState(next.queueLength);
+            setActiveAITasks(next.activeTasks || []);
         });
     }, [localNoteId]);
 
