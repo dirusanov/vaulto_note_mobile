@@ -102,6 +102,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
     const inputRefs = useRef<Record<string, TextInput>>({});
     const isInternalUpdate = useRef(false);
+    const pendingFocusTransferId = useRef<string | null>(null);
 
     // Track selection for each block to support inline formatting
     const blockSelections = useRef<Record<string, { start: number; end: number }>>({});
@@ -1014,7 +1015,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 const prevId = blocks[index - 1].id;
                 const prevBlock = blocks[index - 1];
                 const newBlocks = blocks.filter(b => b.id !== id);
-                setBlocks(newBlocks);
+                pendingFocusTransferId.current = prevId;
 
                 blockSelections.current[prevId] = {
                     start: prevBlock.content.length,
@@ -1022,15 +1023,30 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 };
                 setFocusedBlockId(prevId);
 
-                setTimeout(() => {
+                // Move focus before removing the active input to keep keyboard alive.
+                const prevRef = inputRefs.current[prevId];
+                prevRef?.focus();
+                prevRef?.setNativeProps({ selection: blockSelections.current[prevId] });
+
+                setBlocks(newBlocks);
+
+                requestAnimationFrame(() => {
                     const ref = inputRefs.current[prevId];
                     ref?.focus();
                     ref?.setNativeProps({ selection: blockSelections.current[prevId] });
-                }, 10);
+                    if (pendingFocusTransferId.current === prevId) {
+                        pendingFocusTransferId.current = null;
+                    }
+                });
 
                 isInternalUpdate.current = true;
                 onChange(serializeBlocks(newBlocks));
             } else if (isCursorAtStart) {
+                // Keep structured blocks isolated: don't merge checklist/header text into previous block.
+                if (currentBlock.type !== 'text') {
+                    return;
+                }
+
                 // Merge with previous block
                 e.preventDefault();
                 const prevIndex = index - 1;
@@ -1050,7 +1066,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 const newBlocks = [...blocks];
                 newBlocks[prevIndex] = { ...prevBlock, content: mergedContent, formats: mergedFormats };
                 newBlocks.splice(index, 1);
-                setBlocks(newBlocks);
+                pendingFocusTransferId.current = prevBlock.id;
 
                 blockSelections.current[prevBlock.id] = {
                     start: prevLength,
@@ -1058,11 +1074,20 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 };
                 setFocusedBlockId(prevBlock.id);
 
+                const prevRef = inputRefs.current[prevBlock.id];
+                prevRef?.focus();
+                prevRef?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
+
+                setBlocks(newBlocks);
+
                 setTimeout(() => {
                     const ref = inputRefs.current[prevBlock.id];
                     ref?.focus();
                     setTimeout(() => {
                         ref?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
+                        if (pendingFocusTransferId.current === prevBlock.id) {
+                            pendingFocusTransferId.current = null;
+                        }
                     }, 10);
                 }, 10);
 
@@ -1280,6 +1305,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                 spellCheck={false}
                                 onFocus={() => {
                                     if (onFocus) onFocus();
+                                    if (pendingFocusTransferId.current === item.id) {
+                                        pendingFocusTransferId.current = null;
+                                    }
                                     setFocusedBlockId(item.id);
                                     const selection = blockSelections.current[item.id];
                                     if (selection) {
@@ -1289,6 +1317,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                     }
                                 }}
                                 onBlur={() => {
+                                    if (pendingFocusTransferId.current) {
+                                        return;
+                                    }
                                     setFocusedBlockId(null);
                                 }}
                             >
