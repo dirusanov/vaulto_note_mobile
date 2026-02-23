@@ -105,6 +105,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
     // Track selection for each block to support inline formatting
     const blockSelections = useRef<Record<string, { start: number; end: number }>>({});
+    const pendingStructuredChangeSkips = useRef<Record<string, number>>({});
     const pendingFocusRef = useRef<{ index: number; ratio: number } | null>(null);
 
     const focusBlockByIndex = (blockIndex: number, ratio: number) => {
@@ -717,6 +718,20 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         const block = newBlocks[index];
         const oldText = block.content;
 
+        const pendingSkips = pendingStructuredChangeSkips.current[id] || 0;
+        if (pendingSkips > 0) {
+            pendingStructuredChangeSkips.current[id] = pendingSkips - 1;
+            return;
+        }
+
+        if (block.type !== 'text' && block.type !== 'audio' && block.type !== 'processing') {
+            const sanitizedStructuredText = text.replace(/[\r\n]+/g, '');
+            if (sanitizedStructuredText === oldText) {
+                return;
+            }
+            text = sanitizedStructuredText;
+        }
+
         // Calculate Diff
         // We know text changed. 
         // Find start index of change.
@@ -772,18 +787,19 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             const todoMatch = text.match(/^(\s*-\s\[([ xX])\]\s)(.*)$/);
 
             if (header1Match) {
-                newBlocks[index] = { ...block, type: 'h1', content: header1Match[1], formats: newFormats };
+                newBlocks[index] = { ...block, type: 'h1', content: header1Match[1].replace(/\n/g, ''), formats: newFormats };
                 // Note: We might want to clear formats if converting to header? Or keep them? Keeping is safer.
             } else if (header2Match) {
-                newBlocks[index] = { ...block, type: 'h2', content: header2Match[1], formats: newFormats };
+                newBlocks[index] = { ...block, type: 'h2', content: header2Match[1].replace(/\n/g, ''), formats: newFormats };
             } else if (header3Match) {
-                newBlocks[index] = { ...block, type: 'h3', content: header3Match[1], formats: newFormats };
+                newBlocks[index] = { ...block, type: 'h3', content: header3Match[1].replace(/\n/g, ''), formats: newFormats };
             } else if (todoMatch) {
+                const sanitizedTodoContent = todoMatch[3].replace(/\n/g, '');
                 newBlocks[index] = {
                     ...block,
                     type: 'todo',
                     checked: todoMatch[2].toLowerCase() === 'x',
-                    content: todoMatch[3],
+                    content: sanitizedTodoContent,
                     formats: newFormats // TODO: Shift formats back because we removed prefix? Yes.
                 };
                 // Fix formats for Todo conversion (stripping "- [ ] ")
@@ -798,8 +814,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             } else {
                 newBlocks[index] = { ...block, content: text, formats: newFormats };
             }
+        } else if (block.type !== 'audio' && block.type !== 'processing') {
+            // Structured blocks must stay single-line.
+            newBlocks[index] = { ...block, content: text.replace(/[\r\n]+/g, ''), formats: newFormats };
         } else {
-            // Already structured
             newBlocks[index] = { ...block, content: text, formats: newFormats };
         }
 
@@ -899,56 +917,77 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         onChange(serializeBlocks(newBlocks));
     };
 
+    const handleStructuredEnter = (id: string) => {
+        const index = blocks.findIndex(b => b.id === id);
+        if (index === -1) return;
+
+        const currentBlock = blocks[index];
+        if (currentBlock.type === 'text' || currentBlock.type === 'audio' || currentBlock.type === 'processing') {
+            return;
+        }
+
+        pendingStructuredChangeSkips.current[id] = 2;
+        const newBlockId = generateId();
+
+        const selection = blockSelections.current[id] || { start: currentBlock.content.length, end: currentBlock.content.length };
+        const splitIndex = currentBlock.type === 'todo' ? currentBlock.content.length : selection.start;
+
+        let beforeContent = currentBlock.content.substring(0, splitIndex);
+        let afterContent = currentBlock.content.substring(splitIndex);
+        beforeContent = beforeContent.replace(/[\r\n]+/g, '');
+        afterContent = afterContent.replace(/[\r\n]+/g, '');
+
+        let nextType: Block['type'] = 'text';
+        let nextChecked = false;
+
+        if (beforeContent.trim() === '' && afterContent.trim() === '' && currentBlock.type === 'todo') {
+            const updatedBlocks = [...blocks];
+            updatedBlocks[index] = { ...currentBlock, type: 'text', content: '' };
+            setBlocks(updatedBlocks);
+            isInternalUpdate.current = true;
+            onChange(serializeBlocks(updatedBlocks));
+            return;
+        } else if (currentBlock.type === 'todo') {
+            nextType = 'todo';
+        }
+
+        const beforeFormats = currentBlock.formats.filter(f => f.start < splitIndex)
+            .map(f => ({ ...f, end: Math.min(f.end, splitIndex) }));
+        const afterFormats = currentBlock.formats.filter(f => f.end > splitIndex)
+            .map(f => ({
+                ...f,
+                start: Math.max(0, f.start - splitIndex),
+                end: Math.max(0, f.end - splitIndex)
+            }));
+
+        const newBlock: Block = {
+            id: newBlockId,
+            type: nextType,
+            content: afterContent,
+            checked: nextChecked,
+            formats: afterFormats
+        };
+
+        const newBlocks = [...blocks];
+        newBlocks[index] = { ...currentBlock, content: beforeContent, formats: beforeFormats };
+        newBlocks.splice(index + 1, 0, newBlock);
+        setBlocks(newBlocks);
+
+        blockSelections.current[newBlockId] = { start: 0, end: 0 };
+        setTimeout(() => inputRefs.current[newBlockId]?.focus(), 10);
+        isInternalUpdate.current = true;
+        onChange(serializeBlocks(newBlocks));
+    };
+
     const handleKeyPress = (id: string, e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
         const key = e.nativeEvent.key;
         if (key === 'Enter') {
             const index = blocks.findIndex(b => b.id === id);
             if (index === -1) return;
-
             const currentBlock = blocks[index];
-
-            // Multiline Text Logic:
-            // If Text block, Enter = New line in same block.
-            if (currentBlock.type === 'text') {
-                return;
-            }
-
+            if (currentBlock.type === 'text') return;
             e.preventDefault();
-            const newBlockId = generateId();
-
-            // Structure Block Logic (Todo/Header): Split/Create new
-            let nextType: Block['type'] = 'text';
-            let nextChecked = false;
-
-            if (currentBlock.content.trim() === '' && currentBlock.type === 'todo') {
-                // Empty todo + Enter -> Convert to text
-                const updatedBlocks = [...blocks];
-                updatedBlocks[index] = { ...currentBlock, type: 'text' };
-                setBlocks(updatedBlocks);
-                isInternalUpdate.current = true;
-                onChange(serializeBlocks(updatedBlocks));
-                return;
-            } else if (currentBlock.type === 'todo') {
-                nextType = 'todo';
-            }
-
-
-            const newBlock: Block = {
-                id: newBlockId,
-                type: nextType,
-                content: '',
-                checked: nextChecked,
-                formats: []
-            };
-
-            const newBlocks = [...blocks];
-            newBlocks.splice(index + 1, 0, newBlock);
-            setBlocks(newBlocks);
-
-            setTimeout(() => inputRefs.current[newBlockId]?.focus(), 10);
-            isInternalUpdate.current = true;
-            onChange(serializeBlocks(newBlocks));
-
+            handleStructuredEnter(id);
         } else if (key === 'Backspace') {
             const index = blocks.findIndex(b => b.id === id);
             if (index === -1) return;
@@ -1132,6 +1171,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         const isTodo = item.type === 'todo';
         const isAudio = item.type === 'audio';
         const isProcessing = item.type === 'processing';
+        const isStructuredInput = item.type !== 'text' && !isAudio && !isProcessing;
 
         // Font size logic:
         // Todo: base * scaleFactor
@@ -1225,10 +1265,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                 style={textStyles}
                                 onChangeText={(text) => handleBlockChange(item.id, text)}
                                 onKeyPress={(e) => handleKeyPress(item.id, e)}
+                                onSubmitEditing={() => {
+                                    if (isStructuredInput) {
+                                        handleStructuredEnter(item.id);
+                                    }
+                                }}
                                 onSelectionChange={(e) => handleSelectionChange(item.id, e)}
                                 placeholder={placeholder && blocks.length === 1 ? placeholder : undefined}
                                 placeholderTextColor={colors.textMuted}
-                                multiline={true}
+                                multiline={!isStructuredInput}
+                                blurOnSubmit={false}
                                 scrollEnabled={false}
                                 autoCorrect={false}
                                 spellCheck={false}
