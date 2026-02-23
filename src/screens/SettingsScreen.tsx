@@ -765,12 +765,12 @@ export const SettingsScreen = () => {
                                 <ActivityIndicator size="small" color={colors.primary} />
                             ) : (
                                 <>
-                                    {syncEnabled && syncLocked && !syncToggleDisabled && (
+                                    {encryptionStatus === 'locked' && !syncToggleDisabled && (
                                         <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
                                             <Text style={styles.smallButtonText}>Unlock</Text>
                                         </TouchableOpacity>
                                     )}
-                                    {!syncToggleDisabled && hasConfiguredKey && !syncLocked ? (
+                                    {!syncToggleDisabled && hasConfiguredKey && encryptionStatus !== 'locked' ? (
                                         <Switch
                                             value={syncEnabled}
                                             onValueChange={(value) => {

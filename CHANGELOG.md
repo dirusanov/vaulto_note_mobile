@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.33] - 2026-02-23
+
+### Fixed
+- **Sync Settings UX**: Fixed a bug where a switch was shown instead of the "Unlock" button when the sync vault was locked but sync was disabled.
+
+
 All notable changes to this project will be documented in this file.
 
 ## [1.0.32] - 2026-02-23
