@@ -4390,7 +4390,7 @@ export const NoteEditScreen = () => {
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
-                title="Sign in to enable"
+                title="Sign in required"
                 message="Transcription is available after you create an account."
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {

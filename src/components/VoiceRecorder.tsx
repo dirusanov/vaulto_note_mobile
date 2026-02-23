@@ -13,8 +13,10 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import {
+    getAIProvider,
     getAgentModeEnabled,
     getTranscriptionEnabled,
+    setAIProvider,
     setAgentModeEnabled,
     setTranscriptionEnabled
 } from '../utils/storage';
@@ -22,6 +24,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
 import { SignInRequiredModal } from './SignInRequiredModal';
+import { AgentModeVaultoGateModal } from './AgentModeVaultoGateModal';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -46,6 +49,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const navigation = useNavigation<any>();
     const { isAuthenticated, isGuest } = useAuth();
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
+    const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
@@ -53,9 +57,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isStartPending, setIsStartPending] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
+    const [aiProvider, setAiProvider] = useState<'vaulto_ai' | 'openai'>('vaulto_ai');
     const agentModeToggleTouchedRef = useRef(false);
     const isForceTextMode = micMode === 'force_text';
-    const effectiveAgentEnabled = agentModeEnabled;
+    const effectiveAgentEnabled = agentModeEnabled && aiProvider === 'vaulto_ai';
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -73,6 +78,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     setAgentModeEnabledState(false);
                 } else {
                     setAgentModeEnabledState(enabled);
+                }
+            });
+            getAIProvider().then(provider => {
+                if (provider) {
+                    setAiProvider(provider);
+                    if (provider === 'openai') {
+                        setAgentModeEnabledState(false);
+                    }
                 }
             });
             agentModeToggleTouchedRef.current = false;
@@ -122,6 +135,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if ((!isAuthenticated || isGuest) && value) {
             setShowTranscriptionAuthModal(true);
             setAgentModeEnabledState(false);
+            return;
+        }
+        if (aiProvider === 'openai' && value) {
+            setAgentModeEnabledState(false);
+            setAgentModeEnabled(false);
+            setShowAgentVaultoGate(true);
             return;
         }
         setAgentModeEnabledState(value);
@@ -407,13 +426,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
-                title="Sign in to enable"
+                title="Sign in required"
                 message="Transcription is available after you create an account."
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
                     setShowTranscriptionAuthModal(false);
                     handleCancel();
                     navigation.navigate('SignIn');
+                }}
+            />
+
+            <AgentModeVaultoGateModal
+                visible={showAgentVaultoGate}
+                onClose={() => setShowAgentVaultoGate(false)}
+                onPrimaryAction={() => {
+                    setAIProvider('vaulto_ai').catch(() => {});
+                    setAiProvider('vaulto_ai');
                 }}
             />
         </Modal>

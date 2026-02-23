@@ -24,6 +24,7 @@ import {
 } from '../utils/storage';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
+import { AgentModeVaultoGateModal } from '../components/AgentModeVaultoGateModal';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
@@ -234,6 +235,7 @@ export const SettingsScreen = () => {
         message: '',
     });
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
+    const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
     const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
@@ -299,6 +301,13 @@ export const SettingsScreen = () => {
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
     const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
 
+    useEffect(() => {
+        if (usingOpenAI && agentModeEnabled) {
+            setAgentModeEnabledState(false);
+            void setAgentModeEnabled(false);
+        }
+    }, [usingOpenAI, agentModeEnabled]);
+
     const openManageSubscription = useCallback(async () => {
         const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
         const targetUrl = (Platform.OS === 'android'
@@ -320,7 +329,7 @@ export const SettingsScreen = () => {
 
     const handleToggleSync = useCallback(async (enabled: boolean) => {
         if (syncToggleDisabled) {
-            Alert.alert('Sign in required', 'Sign in to enable or disable sync.');
+            Alert.alert('Sign in required', 'Sign in required to enable or disable sync.');
             return;
         }
 
@@ -484,6 +493,10 @@ export const SettingsScreen = () => {
         setAiProviderState(provider);
         try {
             await setAIProvider(provider);
+            if (provider === 'openai') {
+                setAgentModeEnabledState(false);
+                await setAgentModeEnabled(false);
+            }
         } catch (e) {
             console.error('Failed to persist AI provider', e);
         }
@@ -499,6 +512,12 @@ export const SettingsScreen = () => {
     }, []);
 
     const toggleAgentMode = async (value: boolean) => {
+        if (usingOpenAI) {
+            setAgentModeEnabledState(false);
+            await setAgentModeEnabled(false);
+            setShowAgentVaultoGate(true);
+            return;
+        }
         setAgentModeEnabledState(value);
         await setAgentModeEnabled(value);
     };
@@ -858,8 +877,14 @@ export const SettingsScreen = () => {
                             </View>
                         </View>
                         <Switch
-                            value={isGuestOrAnonymous ? false : agentModeEnabled}
-                            onValueChange={toggleAgentMode}
+                            value={isGuestOrAnonymous || usingOpenAI ? false : agentModeEnabled}
+                            onValueChange={(value) => {
+                                if (usingOpenAI) {
+                                    setShowAgentVaultoGate(true);
+                                    return;
+                                }
+                                toggleAgentMode(value);
+                            }}
                             disabled={isGuestOrAnonymous}
                             trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
                             thumbColor={colors.surface}
@@ -1163,7 +1188,7 @@ export const SettingsScreen = () => {
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
-                title="Sign in to enable"
+                title="Sign in required"
                 message="Auto-transcription is available after you create an account."
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
@@ -1191,6 +1216,12 @@ export const SettingsScreen = () => {
                         navigation.navigate('SignIn');
                     }
                 }}
+            />
+
+            <AgentModeVaultoGateModal
+                visible={showAgentVaultoGate}
+                onClose={() => setShowAgentVaultoGate(false)}
+                onPrimaryAction={() => updateProvider('vaulto_ai')}
             />
 
             <EnableSyncModal
