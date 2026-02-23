@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.32] - 2026-02-23
+
+### Fixed
+- **Checklist Enter Behavior**: Fixed a bug where pressing Enter on checkbox items could create a phantom empty line.
+- **Checklist Input Stability**: Removed duplicate-word side effects around Enter handling in checkbox rows.
+- **Keyboard UX in Checklist**: Kept the keyboard open when creating the next checkbox item.
+
 ## [1.0.30] - 2026-02-21
 
 ### Added
