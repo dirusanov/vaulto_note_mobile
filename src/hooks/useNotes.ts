@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Note, NoteImprovement, NotePrivacy, StorageScope } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
 import {
@@ -18,6 +19,36 @@ import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
 import { AudioService } from '../services/AudioService';
+
+const DEMO_SEEDED_KEY = 'vaulto_demo_seeded_v3';
+const DEMO_IDS_KEY = 'vaulto_demo_note_ids';
+const demoSeedNotes = [
+    {
+        title: 'Weekly Grocery List',
+        content: [
+            '- [ ] Fresh milk',
+            '- [ ] Eggs',
+            '- [ ] Avocado',
+            '- [ ] Bread',
+            '- [ ] Apples',
+            '- [ ] Coffee beans',
+        ].join('\n'),
+    },
+    {
+        title: 'Welcome to Vaulto',
+        content: [
+            '# Welcome',
+            'This is your private space for notes, drafts, and ideas.',
+            '',
+            '## Quick tips',
+            '- Tap any note to edit',
+            '- Hold note cards to select multiple',
+            '- Use voice recording for fast capture',
+            '',
+            'Start writing your first note.',
+        ].join('\n'),
+    },
+];
 
 
 export interface NoteAudio {
@@ -261,6 +292,68 @@ export const useNotes = () => {
         [shouldSyncNote, userId]
     );
 
+    const seedDemoNotes = useCallback(async () => {
+        try {
+            const alreadySeeded = await AsyncStorage.getItem(DEMO_SEEDED_KEY);
+            if (alreadySeeded === '1') {
+                return false;
+            }
+            if (!userId) return false;
+
+            const demoIds: string[] = [];
+            const existingNotes = await getNotesLocal(userId);
+
+            for (const demo of demoSeedNotes) {
+                const alreadyExists = existingNotes.some(
+                    n => n.title === demo.title || (n.title && n.title.includes(demo.title.substring(0, 10)))
+                );
+                if (alreadyExists) {
+                    continue;
+                }
+
+                const id = await generateUUID();
+                demoIds.push(id);
+                // Keep seed notes local until user edits them.
+                await buildLocalNote({ id, title: demo.title, content: demo.content, dirty: false });
+            }
+
+            await AsyncStorage.setItem(DEMO_SEEDED_KEY, '1');
+            await AsyncStorage.setItem(DEMO_IDS_KEY, JSON.stringify(demoIds));
+            return demoIds.length > 0;
+        } catch (error) {
+            console.error('[useNotes] Failed to seed demo notes:', error);
+            return false;
+        }
+    }, [buildLocalNote, userId]);
+
+    const cleanupDemoNotesIfNeeded = useCallback(async (allNotes: Note[]) => {
+        try {
+            const hasServerNotes = allNotes.some(n => n.synced === 1);
+            if (!hasServerNotes || !userId) return;
+
+            const demoIdsJson = await AsyncStorage.getItem(DEMO_IDS_KEY);
+            if (!demoIdsJson) return;
+
+            const demoIds = JSON.parse(demoIdsJson) as string[];
+            if (!Array.isArray(demoIds) || demoIds.length === 0) return;
+
+            let didDelete = false;
+            for (const id of demoIds) {
+                const note = allNotes.find(n => n.id === id);
+                if (note && !note.dirty && note.synced === 0) {
+                    await deleteNoteLocal(userId, id);
+                    didDelete = true;
+                }
+            }
+
+            if (didDelete) {
+                await AsyncStorage.removeItem(DEMO_IDS_KEY);
+            }
+        } catch (e) {
+            console.error('[useNotes] Failed to cleanup demo notes', e);
+        }
+    }, [userId]);
+
     const refreshFromLocal = useCallback(async () => {
         if (!userId) {
             setNotes([]);
@@ -269,12 +362,22 @@ export const useNotes = () => {
         }
 
         let localNotes = await getNotesLocal(userId);
+        await cleanupDemoNotesIfNeeded(localNotes);
+        localNotes = await getNotesLocal(userId);
         let visibleMain = await filterAndCleanupNotes(localNotes);
+
+        if (visibleMain.length === 0) {
+            const seeded = await seedDemoNotes();
+            if (seeded) {
+                localNotes = await getNotesLocal(userId);
+                visibleMain = await filterAndCleanupNotes(localNotes);
+            }
+        }
 
         allNotesRef.current = visibleMain;
         setNotes(visibleMain);
         return visibleMain;
-    }, [filterAndCleanupNotes, userId]);
+    }, [cleanupDemoNotesIfNeeded, filterAndCleanupNotes, seedDemoNotes, userId]);
 
     // Subscribe to SyncService updatess
     useEffect(() => {

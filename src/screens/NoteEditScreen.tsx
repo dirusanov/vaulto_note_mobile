@@ -80,6 +80,7 @@ import { stripMarkdownSyntax } from '../utils/markdownUtils';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
+const CUSTOM_AI_UNIVERSAL_ERROR = 'Unable to connect to your Custom AI provider. Check provider API key and provider settings.';
 
 const normalizeTextForComparison = (value: string): string =>
     value.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim();
@@ -741,6 +742,8 @@ export const NoteEditScreen = () => {
     const [errorModalVisible, setErrorModalVisible] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [errorTitle, setErrorTitle] = useState<string | undefined>(undefined);
+    const [errorShowSettingsAction, setErrorShowSettingsAction] = useState(false);
+    const [currentAIProvider, setCurrentAIProvider] = useState<'vaulto_ai' | 'openai'>('vaulto_ai');
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [activeImprovementTask, setActiveImprovementTask] = useState<AIActiveTask | null>(null);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
@@ -760,11 +763,20 @@ export const NoteEditScreen = () => {
             return true;
         }
 
+        if (currentAIProvider === 'openai') {
+            setErrorTitle('Custom AI Error');
+            setErrorMessage(CUSTOM_AI_UNIVERSAL_ERROR);
+            setErrorShowSettingsAction(true);
+            setErrorModalVisible(true);
+            return false;
+        }
+
         setErrorTitle(undefined);
         setErrorMessage(fallback || raw || 'An error occurred');
+        setErrorShowSettingsAction(false);
         setErrorModalVisible(true);
         return false;
-    }, []);
+    }, [currentAIProvider]);
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
         const isPrivate = normalizeScope(storageScope) === 'local_only';
@@ -2701,9 +2713,13 @@ export const NoteEditScreen = () => {
         useCallback(() => {
             let active = true;
             void (async () => {
-                const enabled = await shouldUseAgentModeGlobally();
+                const [enabled, provider] = await Promise.all([
+                    shouldUseAgentModeGlobally(),
+                    getAIProvider(),
+                ]);
                 if (active) {
                     setAgentModeIndicatorEnabled(enabled);
+                    setCurrentAIProvider(provider);
                 }
             })();
             return () => {
@@ -2909,6 +2925,7 @@ export const NoteEditScreen = () => {
                     // Critical: avoid orphan ciphertext files when note creation fails.
                     await AudioService.deleteAudioFile(savedPath).catch(() => undefined);
                     setErrorMessage('Failed to save note');
+                    setErrorShowSettingsAction(false);
                     setErrorModalVisible(true);
                     return;
                 }
@@ -3506,6 +3523,7 @@ export const NoteEditScreen = () => {
             if (!text) {
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 setErrorMessage('Recognition returned empty text');
+                setErrorShowSettingsAction(false);
                 setErrorModalVisible(true);
                 return;
             }
@@ -4382,9 +4400,17 @@ export const NoteEditScreen = () => {
                 visible={errorModalVisible}
                 title={errorTitle}
                 message={errorMessage}
+                secondaryActionLabel={errorShowSettingsAction ? 'Open Settings' : undefined}
+                onSecondaryAction={() => {
+                    setErrorModalVisible(false);
+                    setErrorTitle(undefined);
+                    setErrorShowSettingsAction(false);
+                    navigation.navigate('Settings');
+                }}
                 onClose={() => {
                     setErrorModalVisible(false);
                     setErrorTitle(undefined);
+                    setErrorShowSettingsAction(false);
                 }}
             />
 

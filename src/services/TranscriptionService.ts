@@ -56,7 +56,7 @@ export async function transcribeAudio(
                 return {
                     text: '',
                     success: false,
-                    error: 'OpenAI API key not found',
+                    error: 'API key not found',
                 };
             }
 

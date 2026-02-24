@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.34] - 2026-02-24
+
+### Added
+- **First-Install Demo Notes**: Restored the two starter demo cards on fresh installs with one-time seeding and duplicate protection.
+
+### Changed
+- **Custom AI Error UX**: Added a universal provider error in editor flows with an `Open Settings` action button.
+- **Agent Mode Gate Copy**: Enforced clear Vaulto-only messaging when trying to enable Agent Mode with Custom AI.
+
+### Fixed
+- **Sync Lock Row**: Prevented `Off` status + toggle from appearing alongside `Unlock`; locked state now shows only `Locked` + `Unlock`.
+- **Provider-Neutral Errors**: Removed `OpenAI` wording from missing-key errors for Custom AI provider flows.
+
 ## [1.0.33] - 2026-02-23
 
 ### Fixed

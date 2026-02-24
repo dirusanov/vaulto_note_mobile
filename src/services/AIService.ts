@@ -128,7 +128,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     }
 
     const apiKey = await getOpenAIApiKey();
-    if (!apiKey) throw new Error('OpenAI API key not found');
+    if (!apiKey) throw new Error('API key not found');
 
     try {
         const promptForModel = buildPromptForRequest(option.prompt, text);

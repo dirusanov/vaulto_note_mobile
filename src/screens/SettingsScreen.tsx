@@ -292,8 +292,9 @@ export const SettingsScreen = () => {
     const usingOpenAI = aiProvider === 'openai';
     const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
     const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
-    const syncStatusLabel = encryptionStatus === 'loading' ? 'Checking...' : (!syncEnabled ? 'Off' : syncLocked ? 'Locked' : 'On');
-    const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (!syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen);
+    const isSyncLocked = syncLocked || encryptionStatus === 'locked';
+    const syncStatusLabel = encryptionStatus === 'loading' ? 'Checking...' : (isSyncLocked ? 'Locked' : !syncEnabled ? 'Off' : 'On');
+    const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     // When configured, we show the Change button only (no extra "Configured" label).
     const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
@@ -769,11 +770,11 @@ export const SettingsScreen = () => {
 
                     <View style={styles.securityRowMinimal}>
                         <View style={styles.securityRowLeft}>
-                            <View style={[styles.iconContainer, { backgroundColor: !syncEnabled ? colors.backgroundSecondary : syncLocked ? colors.warning + '20' : colors.accentGreen + '20' }]}>
+                            <View style={[styles.iconContainer, { backgroundColor: isSyncLocked ? colors.warning + '20' : !syncEnabled ? colors.backgroundSecondary : colors.accentGreen + '20' }]}>
                                 <MaterialIcons
-                                    name={!syncEnabled ? "cloud-off" : syncLocked ? "lock" : "cloud-done"}
+                                    name={isSyncLocked ? "lock" : !syncEnabled ? "cloud-off" : "cloud-done"}
                                     size={16}
-                                    color={!syncEnabled ? colors.textSecondary : syncLocked ? colors.warning : colors.accentGreen}
+                                    color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
                                 />
                             </View>
                             <Text style={styles.securityLabelMinimal}>Sync</Text>
@@ -784,12 +785,12 @@ export const SettingsScreen = () => {
                                 <ActivityIndicator size="small" color={colors.primary} />
                             ) : (
                                 <>
-                                    {encryptionStatus === 'locked' && !syncToggleDisabled && (
+                                    {isSyncLocked && !syncToggleDisabled && (
                                         <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
                                             <Text style={styles.smallButtonText}>Unlock</Text>
                                         </TouchableOpacity>
                                     )}
-                                    {!syncToggleDisabled && hasConfiguredKey && encryptionStatus !== 'locked' ? (
+                                    {!isSyncLocked && !syncToggleDisabled && hasConfiguredKey ? (
                                         <Switch
                                             value={syncEnabled}
                                             onValueChange={(value) => {

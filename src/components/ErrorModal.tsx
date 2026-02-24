@@ -17,6 +17,8 @@ interface ErrorModalProps {
     title?: string;
     message: string;
     onClose: () => void;
+    secondaryActionLabel?: string;
+    onSecondaryAction?: () => void;
 }
 
 export const ErrorModal: React.FC<ErrorModalProps> = ({
@@ -24,6 +26,8 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({
     title = 'Error',
     message,
     onClose,
+    secondaryActionLabel,
+    onSecondaryAction,
 }) => {
     return (
         <Modal
@@ -50,13 +54,24 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({
                                 {message}
                             </Text>
 
-                            <TouchableOpacity
-                                style={styles.button}
-                                onPress={onClose}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={styles.buttonText}>Okay</Text>
-                            </TouchableOpacity>
+                            <View style={styles.actionsRow}>
+                                {!!secondaryActionLabel && onSecondaryAction && (
+                                    <TouchableOpacity
+                                        style={styles.secondaryButton}
+                                        onPress={onSecondaryAction}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={styles.secondaryButtonText}>{secondaryActionLabel}</Text>
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity
+                                    style={styles.button}
+                                    onPress={onClose}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.buttonText}>Okay</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </TouchableWithoutFeedback>
                 </View>
@@ -108,17 +123,35 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xl,
         lineHeight: 22,
     },
+    actionsRow: {
+        width: '100%',
+        flexDirection: 'row',
+        gap: spacing.s,
+    },
     button: {
         backgroundColor: colors.primary,
         paddingVertical: spacing.m,
-        paddingHorizontal: spacing.xl,
         borderRadius: 12,
-        width: '100%',
+        flex: 1,
         alignItems: 'center',
     },
     buttonText: {
         ...typography.button,
         color: colors.surface,
+        fontSize: 16,
+    },
+    secondaryButton: {
+        backgroundColor: colors.backgroundSecondary,
+        borderWidth: 1,
+        borderColor: colors.border,
+        paddingVertical: spacing.m,
+        borderRadius: 12,
+        flex: 1,
+        alignItems: 'center',
+    },
+    secondaryButtonText: {
+        ...typography.button,
+        color: colors.textSecondary,
         fontSize: 16,
     },
 });
