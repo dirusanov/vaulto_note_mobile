@@ -5,7 +5,7 @@ import { onUnauthorized } from '../utils/authEvents';
 
 const authClient = axios.create({
     baseURL: AUTH_API_URL,
-    timeout: 5000,
+    timeout: 15000,
     headers: {
         'Content-Type': 'application/json',
     },

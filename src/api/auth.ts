@@ -1,4 +1,8 @@
 import authClient from './authClient';
+import client from './client';
+import { AUTH_AUDIENCE } from '../utils/env';
+import axios from 'axios';
+import { AUTH_API_URL } from '../utils/env';
 
 export interface AuthTokens {
     access_token: string;
@@ -72,7 +76,11 @@ export const authApi = {
     },
 
     login: async (email: string, password: string): Promise<LoginResult> => {
-        const response = await authClient.post('/auth/login', { email, password });
+        const response = await authClient.post('/auth/login', {
+            email,
+            password,
+            audience: AUTH_AUDIENCE,
+        });
         return response.data;
     },
 
@@ -81,7 +89,16 @@ export const authApi = {
         return response.data;
     },
 
-    getProfile: async (): Promise<UserProfile> => {
+    getProfile: async (accessToken?: string): Promise<UserProfile> => {
+        if (accessToken) {
+            const response = await axios.get(`${AUTH_API_URL}/auth/me`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            return response.data;
+        }
+
         const response = await authClient.get('/auth/me');
         return response.data;
     },
@@ -100,6 +117,7 @@ export const authApi = {
         const queryParams: Record<string, string> = {
             code: params.code,
             state: params.state,
+            audience: AUTH_AUDIENCE,
         };
         if (params.code_verifier) {
             queryParams.code_verifier = params.code_verifier;
@@ -114,12 +132,14 @@ export const authApi = {
     acceptLegal: async (legalToken: string): Promise<AuthTokens> => {
         const response = await authClient.post('/auth/legal/accept', {
             legal_token: legalToken,
+            audience: AUTH_AUDIENCE,
         });
         return response.data;
     },
 
     anonymousAuth: async (deviceKey: string, platform: string): Promise<GuestProfile> => {
-        const response = await authClient.post('/auth/anonymous', {
+        // Anonymous sessions are owned by gateway domain service.
+        const response = await client.post('/auth/anonymous', {
             device_key: deviceKey,
             platform: platform,
         });
