@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.35] - 2026-03-04
+
+### Changed
+- **Version Bump**: Updated project versions and build numbers across all platforms.
+
 ## [1.0.34] - 2026-02-24
 
 ### Added
