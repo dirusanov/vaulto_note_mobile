@@ -12,10 +12,10 @@ export const e2eeApi = {
     fetchConfig: async (): Promise<E2EEConfigResponse> => {
         const response = await client.get('/e2ee/config', {
             validateStatus: (status) =>
-                (status >= 200 && status < 300) || status === 404 || status === 405,
+                (status >= 200 && status < 300) || status === 401 || status === 404 || status === 405,
         });
 
-        if (response.status === 404 || response.status === 405) {
+        if (response.status === 401 || response.status === 404 || response.status === 405) {
             return { custody_mode: 'standard' };
         }
 
@@ -34,7 +34,15 @@ export const e2eeApi = {
         return { custody_mode: 'standard' };
     },
     fetchKeyBundle: async (): Promise<KeyBundle | null> => {
-        const response = await client.get('/e2ee/master-key');
+        const response = await client.get('/e2ee/master-key', {
+            validateStatus: (status) =>
+                (status >= 200 && status < 300) || status === 401 || status === 404 || status === 405,
+        });
+
+        if (response.status === 401 || response.status === 404 || response.status === 405) {
+            return null;
+        }
+
         return response.data;
     },
     storeKeyBundle: async (bundle: KeyBundle): Promise<void> => {

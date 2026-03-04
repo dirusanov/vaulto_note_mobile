@@ -234,7 +234,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setIsGuest(false);
 
         try {
-            const profile = await authApi.getProfile();
+            const profile = await authApi.getProfile(newAccessToken);
             const previousUserId = await storage.getUserId();
             await storage.setUserId(profile.id);
             await storage.setUserProfile(profile);

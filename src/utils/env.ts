@@ -25,27 +25,39 @@ const detectedDevServerHost =
 
 const DEFAULT_HOST = detectedDevServerHost ?? LOCALHOST;
 const DEFAULT_GATEWAY_PORT = '8000';
+const DEFAULT_AUTH_PORT = '8000';
 
 const GATEWAY_HOST = process.env.EXPO_PUBLIC_GATEWAY_API_HOST ?? DEFAULT_HOST;
 const GATEWAY_PORT = process.env.EXPO_PUBLIC_GATEWAY_API_PORT ?? DEFAULT_GATEWAY_PORT;
+const AUTH_HOST = process.env.EXPO_PUBLIC_AUTH_API_HOST ?? DEFAULT_HOST;
+const AUTH_PORT = process.env.EXPO_PUBLIC_AUTH_API_PORT ?? DEFAULT_AUTH_PORT;
 
 const sanitizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
 const DEFAULT_SCHEME = __DEV__ ? 'http' : 'https';
 const DEFAULT_GATEWAY_BASE = `${DEFAULT_SCHEME}://${GATEWAY_HOST}:${GATEWAY_PORT}`;
+const DEFAULT_AUTH_BASE = `${DEFAULT_SCHEME}://${AUTH_HOST}:${AUTH_PORT}`;
 
 // Prioritize the full Base URL if provided
 const GATEWAY_BASE_URL = sanitizeBaseUrl(
     process.env.EXPO_PUBLIC_GATEWAY_API_BASE_URL ?? DEFAULT_GATEWAY_BASE,
 );
+const AUTH_BASE_URL = sanitizeBaseUrl(
+    process.env.EXPO_PUBLIC_AUTH_API_BASE_URL ?? DEFAULT_AUTH_BASE,
+);
 
 export const API_URL = GATEWAY_BASE_URL;
-export const AUTH_API_URL = GATEWAY_BASE_URL;
+export const AUTH_API_URL = AUTH_BASE_URL;
+export const AUTH_AUDIENCE = process.env.EXPO_PUBLIC_AUTH_AUDIENCE ?? 'vaulto_note_mobile';
 
 if (!__DEV__ && !GATEWAY_BASE_URL.startsWith('https://')) {
     throw new Error(`[ENV] Non-HTTPS API URL is not allowed in production: ${GATEWAY_BASE_URL}`);
 }
+if (!__DEV__ && !AUTH_BASE_URL.startsWith('https://')) {
+    throw new Error(`[ENV] Non-HTTPS AUTH API URL is not allowed in production: ${AUTH_BASE_URL}`);
+}
 
 console.log('[ENV] Raw EXPO_PUBLIC_GATEWAY_API_BASE_URL:', process.env.EXPO_PUBLIC_GATEWAY_API_BASE_URL);
+console.log('[ENV] Raw EXPO_PUBLIC_AUTH_API_BASE_URL:', process.env.EXPO_PUBLIC_AUTH_API_BASE_URL);
 console.log('[ENV] Resolved AUTH_API_URL:', AUTH_API_URL);
 console.log('[ENV] Resolved API_URL:', API_URL);

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_URL } from '../utils/env';
+import { API_URL, AUTH_API_URL } from '../utils/env';
 import { storage } from '../utils/storage';
 import { onUnauthorized } from '../utils/authEvents';
 
@@ -39,7 +39,7 @@ const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken
         }
 
         try {
-            const refreshResponse = await axios.post(`${API_URL}/auth/refresh`, {
+            const refreshResponse = await axios.post(`${AUTH_API_URL}/auth/refresh`, {
                 refresh_token: refreshToken,
             });
 
