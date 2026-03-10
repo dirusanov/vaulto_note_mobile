@@ -581,6 +581,7 @@ export const NotesListScreen = () => {
                 onFinish={(rec, transcribe) => handleVoiceFinish(rec, transcribe)}
                 onCancel={() => setIsVoiceRecorderVisible(false)}
                 autoStart={true}
+                isMainScreen={true}
             />
 
             <DeleteConfirmationDialog

@@ -4331,7 +4331,7 @@ export const NoteEditScreen = () => {
 
             {/* Floating Mic Button */}
             {
-                !isEditing && (
+                !isEditing && !showVoiceRecorder && (
                     <View style={styles.micFloatingContainer}>
                         <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
                             <Svg height="120" width="120" viewBox="0 0 120 120">

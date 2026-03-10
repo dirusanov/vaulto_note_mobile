@@ -32,6 +32,7 @@ interface VoiceRecorderProps {
     onCancel: () => void;
     autoStart?: boolean;
     micMode?: 'agent' | 'force_text';
+    isMainScreen?: boolean;
 }
 
 
@@ -45,6 +46,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     onCancel,
     autoStart = false,
     micMode = 'agent',
+    isMainScreen = false,
 }) => {
     const navigation = useNavigation<any>();
     const { isAuthenticated, isGuest } = useAuth();
@@ -175,9 +177,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 // Add some randomness so bars don't look identical
                 const jitter = Math.random() * 0.2 - 0.1;
 
-                // Scale up significantly - allow going up to 1.6x height (64px)
+                // Scale up significantly - allow going up to 1.6x height (64px) or 2.5x for main screen
                 // Lower minimum to 0.1 for more contrast
-                const targetHeight = Math.max(0.1, Math.min(1.6, boosted * 2.2 + 0.1 + jitter));
+                const maxHeight = isMainScreen ? 2.5 : 1.6;
+                const multiplier = isMainScreen ? 3.5 : 2.2;
+                const targetHeight = Math.max(0.1, Math.min(maxHeight, boosted * multiplier + 0.1 + jitter));
 
                 Animated.sequence([
                     Animated.timing(anim, {
@@ -324,101 +328,102 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             transparent
             onRequestClose={handleCancel}
         >
-            <View style={styles.overlay}>
-                <View style={styles.container}>
-                    {/* Header */}
-                    <Text style={styles.title}>{isPaused ? 'Recording Paused' : 'Recording Audio...'}</Text>
-
-                    {/* Waveform Visualization */}
-                    <View style={styles.waveformContainer}>
-                        {animations.map((anim, index) => (
-                            <Animated.View
-                                key={index}
-                                style={[
-                                    styles.bar,
-                                    {
-                                        transform: [{ scaleY: anim }],
-                                        opacity: isRecording && !isPaused ? 1 : 0.2,
-                                    },
-                                ]}
-                            />
-                        ))}
-                    </View>
-
-                    {/* Timer */}
-                    <Text style={styles.timer} numberOfLines={1} adjustsFontSizeToFit>{formatDuration(duration)}</Text>
-
+            <View style={styles.overlay} pointerEvents="box-none">
+                <View style={styles.container} pointerEvents="box-none">
                     {/* Toggles Row */}
                     <View style={styles.togglesRow}>
-                        {/* Transcription Toggle Badge */}
                         <TouchableOpacity
                             style={[
                                 styles.badgeToggle,
-                                { backgroundColor: transcribe ? colors.primary + '15' : colors.backgroundSecondary },
+                                { backgroundColor: transcribe ? colors.primary : colors.surface },
                             ]}
                             onPress={() => handleTranscriptionToggle(!transcribe)}
                             activeOpacity={0.7}
                         >
                             <MaterialIcons
                                 name="mic"
-                                size={20}
-                                color={transcribe ? colors.primary : colors.textTertiary}
+                                size={14}
+                                color={transcribe ? 'white' : colors.textSecondary}
                             />
                             <Text style={[
                                 styles.badgeLabel,
-                                { color: transcribe ? colors.primary : colors.textSecondary }
+                                { color: transcribe ? 'white' : colors.textSecondary }
                             ]}>
                                 Transcribe {transcribe ? 'ON' : 'OFF'}
                             </Text>
                         </TouchableOpacity>
 
-                        {/* Agent Toggle Badge */}
                         <TouchableOpacity
                             style={[
                                 styles.badgeToggle,
-                                { backgroundColor: effectiveAgentEnabled ? colors.primary + '15' : colors.backgroundSecondary },
+                                { backgroundColor: effectiveAgentEnabled ? colors.primary : colors.surface },
                             ]}
                             onPress={() => handleAgentModeToggle(!agentModeEnabled)}
                             activeOpacity={0.7}
                         >
                             <MaterialIcons
                                 name="smart-toy"
-                                size={20}
-                                color={effectiveAgentEnabled ? colors.primary : colors.textTertiary}
+                                size={14}
+                                color={effectiveAgentEnabled ? 'white' : colors.textSecondary}
                             />
                             <Text style={[
                                 styles.badgeLabel,
-                                { color: effectiveAgentEnabled ? colors.primary : colors.textSecondary }
+                                { color: effectiveAgentEnabled ? 'white' : colors.textSecondary }
                             ]}>
                                 {effectiveAgentEnabled ? 'AI Agent ON' : 'AI Agent OFF'}
                             </Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* Controls */}
-                    <View style={styles.controls}>
+                    {/* Main Bar */}
+                    <View style={[styles.mainBar, isMainScreen && styles.mainBarLarge]}>
                         <TouchableOpacity
-                            style={styles.cancelButton}
+                            style={styles.cancelButtonCompact}
                             onPress={handleCancel}
                             disabled={isStopping}
                         >
-                            <MaterialIcons name="close" size={32} color={colors.textSecondary} />
+                            <MaterialIcons name="delete-outline" size={isMainScreen ? 32 : 26} color={colors.textTertiary} />
                         </TouchableOpacity>
 
+                        <View style={styles.centerSection}>
+                            <Text style={[styles.timerCompact, isMainScreen && styles.timerCompactLarge, isPaused && { color: colors.error }]}>
+                                {formatDuration(duration)}
+                            </Text>
+                            <View style={[styles.waveformContainerCompact, isMainScreen && styles.waveformContainerCompactLarge]}>
+                                {animations.map((anim, index) => (
+                                    <Animated.View
+                                        key={index}
+                                        style={[
+                                            styles.barCompact,
+                                            isMainScreen && styles.barCompactLarge,
+                                            {
+                                                transform: [{ scaleY: anim }],
+                                                opacity: isRecording && !isPaused ? 1 : 0.2,
+                                            },
+                                        ]}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+
                         <TouchableOpacity
-                            style={styles.pauseButton}
+                            style={styles.pauseButtonCompact}
                             onPress={handlePauseResume}
                             disabled={!isRecording || isStopping}
                         >
-                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={40} color={colors.text} />
+                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={isMainScreen ? 32 : 26} color={colors.textSecondary} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.finishButton, (isStopping || !isRecording) && styles.buttonDisabled]}
+                            style={[
+                                styles.finishButtonCompact,
+                                isMainScreen && styles.finishButtonCompactLarge,
+                                (isStopping || !isRecording) && styles.buttonDisabled
+                            ]}
                             onPress={handleStopRecording}
                             disabled={isStopping || !isRecording}
                         >
-                            <MaterialIcons name="check" size={36} color="white" />
+                            <MaterialIcons name="send" size={isMainScreen ? 24 : 20} color="white" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -451,38 +456,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'transparent',
         justifyContent: 'flex-end',
+        paddingHorizontal: spacing.m,
+        paddingBottom: spacing.xxl * 1.5,
     },
     container: {
-        backgroundColor: colors.surface,
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
-        padding: spacing.xl,
-        paddingBottom: spacing.xxl * 2,
+        backgroundColor: 'transparent',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 20,
-    },
-    title: {
-        ...typography.captionBold,
-        color: colors.textSecondary,
-        marginBottom: spacing.xl,
-        textTransform: 'uppercase',
-        letterSpacing: 1.5,
-    },
-    timer: {
-        ...typography.h1,
-        fontSize: 72,
-        lineHeight: 80,
-        fontWeight: '300',
-        color: colors.text,
-        marginBottom: spacing.l,
-        fontVariant: ['tabular-nums'],
-        textAlign: 'center',
         width: '100%',
     },
     togglesRow: {
@@ -490,74 +471,110 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.s,
-        marginBottom: spacing.xxl,
+        marginBottom: spacing.m,
         width: '100%',
     },
     badgeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 24,
-        gap: 8,
-        minWidth: 120,
-        justifyContent: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        gap: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     badgeLabel: {
         ...typography.captionBold,
-        fontSize: 14,
+        fontSize: 12,
     },
-    waveformContainer: {
+    mainBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        height: 80,
-        marginBottom: spacing.l,
-        gap: 6,
-    },
-    bar: {
-        width: 3.5,
-        height: 48,
-        backgroundColor: colors.primary,
-        borderRadius: 2,
-    },
-    controls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.xl,
+        backgroundColor: colors.surface,
+        borderRadius: 30,
+        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.s,
         width: '100%',
-    },
-    finishButton: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: colors.success,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: colors.success,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 8,
+        shadowRadius: 12,
+        elevation: 10,
+    },
+    mainBarLarge: {
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.m,
+        borderRadius: 40,
+    },
+    cancelButtonCompact: {
+        padding: spacing.s,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    centerSection: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.s,
+        gap: spacing.xs,
+        overflow: 'hidden',
+    },
+    timerCompact: {
+        ...typography.bodyBold,
+        color: colors.text,
+        fontVariant: ['tabular-nums'],
+    },
+    timerCompactLarge: {
+        fontSize: 24,
+    },
+    waveformContainerCompact: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        height: 32,
+        gap: 3,
+        marginLeft: spacing.xs,
+        overflow: 'hidden',
+    },
+    waveformContainerCompactLarge: {
+        height: 48,
+        gap: 4,
+    },
+    barCompact: {
+        width: 3,
+        height: 16,
+        backgroundColor: colors.primary,
+        borderRadius: 1.5,
+    },
+    barCompactLarge: {
+        width: 4,
+        borderRadius: 2,
+    },
+    pauseButtonCompact: {
+        padding: spacing.s,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    finishButtonCompact: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: spacing.xs,
+    },
+    finishButtonCompactLarge: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
     },
     buttonDisabled: {
         opacity: 0.45,
-    },
-    pauseButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: colors.backgroundSecondary,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    cancelButton: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: colors.backgroundSecondary,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
 });
