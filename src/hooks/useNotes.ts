@@ -20,46 +20,6 @@ import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
 import { AudioService } from '../services/AudioService';
 
-const DEMO_SEEDED_KEY = 'vaulto_demo_seeded_v3';
-const DEMO_IDS_KEY = 'vaulto_demo_note_ids';
-const demoSeedNotes = [
-    {
-        title: 'Weekly Grocery List',
-        content: [
-            '- [ ] Fresh milk',
-            '- [ ] Eggs',
-            '- [ ] Avocado',
-            '- [ ] Bread',
-            '- [ ] Apples',
-            '- [ ] Coffee beans',
-        ].join('\n'),
-    },
-    {
-        title: 'Welcome to Vaulto',
-        content: [
-            '# Welcome',
-            'This is your private space for notes, drafts, and ideas.',
-            '',
-            '## Quick tips',
-            '- Tap any note to edit',
-            '- Hold note cards to select multiple',
-            '- Use voice recording for fast capture',
-            '',
-            'Start writing your first note.',
-        ].join('\n'),
-    },
-];
-
-const normalizeDemoText = (value?: string | null): string => (value || '').trim();
-
-const getDemoSignature = (title?: string | null, content?: string | null): string => {
-    return `${normalizeDemoText(title)}\n---\n${normalizeDemoText(content)}`;
-};
-
-const demoSeedSignatures = new Set(
-    demoSeedNotes.map((demo) => getDemoSignature(demo.title, demo.content))
-);
-
 export interface NoteAudio {
     filePath: string;
     duration: number;
@@ -73,7 +33,6 @@ export const useNotes = () => {
     const [error, setError] = useState<string | null>(null);
     const notesRef = useRef<Note[]>([]);
     const allNotesRef = useRef<Note[]>([]);
-    const demoSeedInFlightRef = useRef<Promise<boolean> | null>(null);
 
     // Update SyncService auth state
     useEffect(() => {
@@ -302,142 +261,6 @@ export const useNotes = () => {
         [shouldSyncNote, userId]
     );
 
-    const isDemoSeedNote = useCallback((note: Partial<Note>) => {
-        return demoSeedSignatures.has(getDemoSignature(note.title, note.content));
-    }, []);
-
-    const syncDemoSeedState = useCallback(async (allNotes: Note[]) => {
-        const demoIds = allNotes.filter(isDemoSeedNote).map(note => note.id);
-        if (demoIds.length > 0) {
-            await AsyncStorage.setItem(DEMO_SEEDED_KEY, '1');
-            await AsyncStorage.setItem(DEMO_IDS_KEY, JSON.stringify(demoIds));
-            return;
-        }
-
-        await AsyncStorage.removeItem(DEMO_IDS_KEY);
-    }, [isDemoSeedNote]);
-
-    const dedupeDemoNotes = useCallback(async (allNotes: Note[]) => {
-        if (!userId) return false;
-
-        let deletedAny = false;
-        const keptDemoIds = new Set<string>();
-
-        for (const demo of demoSeedNotes) {
-            const matching = allNotes.filter(
-                note => getDemoSignature(note.title, note.content) === getDemoSignature(demo.title, demo.content)
-            );
-
-            if (matching.length === 0) {
-                continue;
-            }
-
-            const sorted = [...matching].sort((a, b) => {
-                const aScore = Number(!!a.synced) + Number(!!a.dirty);
-                const bScore = Number(!!b.synced) + Number(!!b.dirty);
-                if (aScore !== bScore) {
-                    return bScore - aScore;
-                }
-                const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                return dateA - dateB;
-            });
-
-            const [keep, ...duplicates] = sorted;
-            keptDemoIds.add(keep.id);
-
-            for (const duplicate of duplicates) {
-                await deleteNoteLocal(userId, duplicate.id);
-                deletedAny = true;
-            }
-        }
-
-        if (deletedAny || keptDemoIds.size > 0) {
-            const nextNotes = deletedAny
-                ? allNotes.filter(note => !isDemoSeedNote(note) || keptDemoIds.has(note.id))
-                : allNotes;
-            await syncDemoSeedState(nextNotes);
-        }
-
-        return deletedAny;
-    }, [isDemoSeedNote, syncDemoSeedState, userId]);
-
-    const seedDemoNotes = useCallback(async () => {
-        if (demoSeedInFlightRef.current) {
-            return demoSeedInFlightRef.current;
-        }
-
-        const seedPromise = (async () => {
-            try {
-                const alreadySeeded = await AsyncStorage.getItem(DEMO_SEEDED_KEY);
-                if (!userId) return false;
-
-                const existingNotes = await getNotesLocal(userId);
-                const existingDemoIds = existingNotes.filter(isDemoSeedNote).map(note => note.id);
-
-                if (existingDemoIds.length > 0) {
-                    await AsyncStorage.setItem(DEMO_SEEDED_KEY, '1');
-                    await AsyncStorage.setItem(DEMO_IDS_KEY, JSON.stringify(existingDemoIds));
-                    return false;
-                }
-
-                if (alreadySeeded === '1') {
-                    await AsyncStorage.setItem(DEMO_IDS_KEY, JSON.stringify([]));
-                    return false;
-                }
-
-                const demoIds: string[] = [];
-                for (const demo of demoSeedNotes) {
-                    const id = await generateUUID();
-                    demoIds.push(id);
-                    // Keep seed notes local until user edits them.
-                    await buildLocalNote({ id, title: demo.title, content: demo.content, dirty: false });
-                }
-
-                await AsyncStorage.setItem(DEMO_SEEDED_KEY, '1');
-                await AsyncStorage.setItem(DEMO_IDS_KEY, JSON.stringify(demoIds));
-                return demoIds.length > 0;
-            } catch (error) {
-                console.error('[useNotes] Failed to seed demo notes:', error);
-                return false;
-            } finally {
-                demoSeedInFlightRef.current = null;
-            }
-        })();
-
-        demoSeedInFlightRef.current = seedPromise;
-        return seedPromise;
-    }, [buildLocalNote, isDemoSeedNote, userId]);
-
-    const cleanupDemoNotesIfNeeded = useCallback(async (allNotes: Note[]) => {
-        try {
-            const hasServerNotes = allNotes.some(n => n.synced === 1);
-            if (!hasServerNotes || !userId) return;
-
-            const demoIdsJson = await AsyncStorage.getItem(DEMO_IDS_KEY);
-            if (!demoIdsJson) return;
-
-            const demoIds = JSON.parse(demoIdsJson) as string[];
-            if (!Array.isArray(demoIds) || demoIds.length === 0) return;
-
-            let didDelete = false;
-            for (const id of demoIds) {
-                const note = allNotes.find(n => n.id === id);
-                if (note && isDemoSeedNote(note) && !note.dirty && note.synced === 0) {
-                    await deleteNoteLocal(userId, id);
-                    didDelete = true;
-                }
-            }
-
-            if (didDelete) {
-                const remaining = allNotes.filter(note => !(demoIds.includes(note.id) && isDemoSeedNote(note) && !note.dirty && note.synced === 0));
-                await syncDemoSeedState(remaining);
-            }
-        } catch (e) {
-            console.error('[useNotes] Failed to cleanup demo notes', e);
-        }
-    }, [isDemoSeedNote, syncDemoSeedState, userId]);
-
     const refreshFromLocal = useCallback(async () => {
         if (!userId) {
             setNotes([]);
@@ -445,29 +268,13 @@ export const useNotes = () => {
             return [];
         }
 
-        let localNotes = await getNotesLocal(userId);
-        const removedDuplicates = await dedupeDemoNotes(localNotes);
-        if (removedDuplicates) {
-            localNotes = await getNotesLocal(userId);
-        } else {
-            await syncDemoSeedState(localNotes);
-        }
-        await cleanupDemoNotesIfNeeded(localNotes);
-        localNotes = await getNotesLocal(userId);
-        let visibleMain = await filterAndCleanupNotes(localNotes);
-
-        if (visibleMain.length === 0) {
-            const seeded = await seedDemoNotes();
-            if (seeded) {
-                localNotes = await getNotesLocal(userId);
-                visibleMain = await filterAndCleanupNotes(localNotes);
-            }
-        }
+        const localNotes = await getNotesLocal(userId);
+        const visibleMain = await filterAndCleanupNotes(localNotes);
 
         allNotesRef.current = visibleMain;
         setNotes(visibleMain);
         return visibleMain;
-    }, [cleanupDemoNotesIfNeeded, dedupeDemoNotes, filterAndCleanupNotes, seedDemoNotes, syncDemoSeedState, userId]);
+    }, [filterAndCleanupNotes, userId]);
 
     // Subscribe to SyncService updatess
     useEffect(() => {
