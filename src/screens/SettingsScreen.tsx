@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
     AIProvider,
+    TranscriptionLanguage,
     getAIProvider,
     getOpenAIApiKey,
     getOpenAIBaseUrl,
@@ -20,11 +21,14 @@ import {
     getAgentModeEnabled,
     setAgentModeEnabled,
     getTranscriptionEnabled,
-    setTranscriptionEnabled
+    setTranscriptionEnabled,
+    getTranscriptionLanguage,
+    setTranscriptionLanguage,
 } from '../utils/storage';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { AgentModeVaultoGateModal } from '../components/AgentModeVaultoGateModal';
+import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
@@ -38,6 +42,15 @@ import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
+import {
+    deleteLocalWhisperModel,
+    downloadLocalWhisperModel,
+    getAvailableLocalWhisperModels,
+    getLocalWhisperModelStatus,
+    LocalWhisperModelKey,
+    setSelectedLocalWhisperModel,
+} from '../services/LocalWhisperService';
+import { SearchableLanguageSelector } from '../components/SearchableLanguageSelector';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -218,6 +231,7 @@ export const SettingsScreen = () => {
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [transcriptionEnabled, setTranscriptionEnabledState] = useState(true);
+    const [transcriptionLanguage, setTranscriptionLanguageState] = useState<TranscriptionLanguage>('auto');
     const [testingConnection, setTestingConnection] = useState(false);
     const [aiProvider, setAiProviderState] = useState<AIProvider>('vaulto_ai');
     const [preferencesReady, setPreferencesReady] = useState(false);
@@ -236,10 +250,14 @@ export const SettingsScreen = () => {
     });
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
+    const [showLocalWhisperDeleteConfirm, setShowLocalWhisperDeleteConfirm] = useState(false);
     const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
     const [isUsageLoading, setIsUsageLoading] = useState(false);
+    const [localWhisperStatus, setLocalWhisperStatus] = useState<Awaited<ReturnType<typeof getLocalWhisperModelStatus>> | null>(null);
+    const [localWhisperBusy, setLocalWhisperBusy] = useState(false);
+    const [localWhisperProgress, setLocalWhisperProgress] = useState(0);
 
     // Agent Mode Animation - Swaying
     const swayAnim = useRef(new Animated.Value(0)).current;
@@ -290,6 +308,7 @@ export const SettingsScreen = () => {
     });
 
     const usingOpenAI = aiProvider === 'openai';
+    const usingLocalWhisper = aiProvider === 'local_whisper';
     const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
     const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
     const isSyncLocked = syncLocked || encryptionStatus === 'locked';
@@ -300,14 +319,15 @@ export const SettingsScreen = () => {
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
+    const transcriptionAuthRequired = isGuestOrAnonymous && !usingLocalWhisper && !usingOpenAI;
     const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
 
     useEffect(() => {
-        if (usingOpenAI && agentModeEnabled) {
+        if ((usingOpenAI || usingLocalWhisper) && agentModeEnabled) {
             setAgentModeEnabledState(false);
             void setAgentModeEnabled(false);
         }
-    }, [usingOpenAI, agentModeEnabled]);
+    }, [usingLocalWhisper, usingOpenAI, agentModeEnabled]);
 
     const openManageSubscription = useCallback(async () => {
         const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
@@ -392,16 +412,40 @@ export const SettingsScreen = () => {
             icon: 'dns',
             accent: colors.accentGreen,
             chips: ['OpenAI', 'Custom', 'Self-hosted'],
-            isLocked: !isPro,
-            proMessage: 'Available in Pro',
+        },
+        {
+            key: 'local_whisper',
+            title: 'Local Whisper',
+            blurb: 'On-device transcription',
+            description: 'Downloads a Whisper model to the device and transcribes locally without sending audio to your server.',
+            icon: 'memory',
+            accent: '#0F766E',
+            chips: ['Offline', 'Private', 'Optional download'],
         },
     ];
 
     const activeProvider = providerOptions.find((provider) => provider.key === aiProvider);
+    const localWhisperModels = getAvailableLocalWhisperModels();
+
+    const refreshLocalWhisperStatus = useCallback(async () => {
+        try {
+            const status = await getLocalWhisperModelStatus();
+            setLocalWhisperStatus(status);
+        } catch (error) {
+            console.error('Failed to load Local Whisper status', error);
+            setLocalWhisperStatus(null);
+        }
+    }, []);
 
     useEffect(() => {
         loadPreferences();
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            refreshLocalWhisperStatus();
+        }, [refreshLocalWhisperStatus])
+    );
 
     const PROFILE_REFRESH_INTERVAL_MS = 60000;
     const lastProfileRefreshAt = useRef(0);
@@ -447,13 +491,15 @@ export const SettingsScreen = () => {
 
     const loadPreferences = async () => {
         try {
-            const [storedOpenAIKey, storedBaseUrl, provider, legacySelfHostedApiKey, agentMode, transcription] = await Promise.all([
+            const [storedOpenAIKey, storedBaseUrl, provider, legacySelfHostedApiKey, agentMode, transcription, whisperStatus, savedLanguage] = await Promise.all([
                 getOpenAIApiKey(),
                 getOpenAIBaseUrl(),
                 getAIProvider(),
                 getLegacySelfHostedApiKey(),
                 getAgentModeEnabled(),
-                getTranscriptionEnabled()
+                getTranscriptionEnabled(),
+                getLocalWhisperModelStatus(),
+                getTranscriptionLanguage(),
             ]);
 
             if (storedBaseUrl) {
@@ -471,6 +517,8 @@ export const SettingsScreen = () => {
             setAiProviderState(provider || 'vaulto_ai');
             setAgentModeEnabledState(agentMode);
             setTranscriptionEnabledState(transcription);
+            setLocalWhisperStatus(whisperStatus);
+            setTranscriptionLanguageState(savedLanguage);
         } catch (error) {
             console.error('Failed to load settings', error);
         } finally {
@@ -494,7 +542,7 @@ export const SettingsScreen = () => {
         setAiProviderState(provider);
         try {
             await setAIProvider(provider);
-            if (provider === 'openai') {
+            if (provider === 'openai' || provider === 'local_whisper') {
                 setAgentModeEnabledState(false);
                 await setAgentModeEnabled(false);
             }
@@ -513,7 +561,7 @@ export const SettingsScreen = () => {
     }, []);
 
     const toggleAgentMode = async (value: boolean) => {
-        if (usingOpenAI) {
+        if (usingOpenAI || usingLocalWhisper) {
             setAgentModeEnabledState(false);
             await setAgentModeEnabled(false);
             setShowAgentVaultoGate(true);
@@ -524,7 +572,7 @@ export const SettingsScreen = () => {
     };
 
     const toggleTranscription = async (value: boolean) => {
-        if ((!isAuthenticated || isGuest) && value) {
+        if (transcriptionAuthRequired && value) {
             setShowTranscriptionAuthModal(true);
             setTranscriptionEnabledState(false);
             return;
@@ -532,6 +580,11 @@ export const SettingsScreen = () => {
         setTranscriptionEnabledState(value);
         await setTranscriptionEnabled(value);
     };
+
+    const updateTranscriptionLanguage = useCallback(async (language: TranscriptionLanguage) => {
+        setTranscriptionLanguageState(language);
+        await setTranscriptionLanguage(language);
+    }, []);
 
     useEffect(() => {
         if (!preferencesReady) return;
@@ -552,16 +605,15 @@ export const SettingsScreen = () => {
     }, [openAIBaseUrl, preferencesReady]);
 
     useEffect(() => {
-        // Anonymous users can't use transcription; force UI OFF.
         if (!preferencesReady) return;
-        if (!isAuthenticated || isGuest) {
+        if (transcriptionAuthRequired) {
             setTranscriptionEnabledState(false);
             return;
         }
         getTranscriptionEnabled()
             .then(enabled => setTranscriptionEnabledState(enabled))
             .catch(() => setTranscriptionEnabledState(true));
-    }, [isAuthenticated, isGuest, preferencesReady]);
+    }, [preferencesReady, transcriptionAuthRequired]);
 
     useEffect(() => {
         // Guest/anonymous users can't use Agent Mode; force UI OFF (don't persist).
@@ -602,6 +654,45 @@ export const SettingsScreen = () => {
             setOpenAITestStatus({ type: 'error', message: 'Connection failed. Check API URL and Key.' });
         }
     };
+
+    const handleSelectLocalWhisperModel = useCallback(async (modelKey: LocalWhisperModelKey) => {
+        setLocalWhisperBusy(true);
+        try {
+            await setSelectedLocalWhisperModel(modelKey);
+            await refreshLocalWhisperStatus();
+        } finally {
+            setLocalWhisperBusy(false);
+        }
+    }, [refreshLocalWhisperStatus]);
+
+    const handleDownloadLocalWhisper = useCallback(async () => {
+        const modelKey = (localWhisperStatus?.selectedModel.key || 'tiny') as LocalWhisperModelKey;
+        setLocalWhisperBusy(true);
+        setLocalWhisperProgress(0);
+        try {
+            const status = await downloadLocalWhisperModel(modelKey, setLocalWhisperProgress);
+            setLocalWhisperStatus(status);
+            Alert.alert('Model ready', `${status.selectedModel.label} Whisper was downloaded to this device.`);
+        } catch (error: any) {
+            Alert.alert('Download failed', error?.message || 'Unable to download the Whisper model.');
+        } finally {
+            setLocalWhisperBusy(false);
+            setLocalWhisperProgress(0);
+        }
+    }, [localWhisperStatus?.selectedModel.key]);
+
+    const handleDeleteLocalWhisper = useCallback(async () => {
+        setLocalWhisperBusy(true);
+        setShowLocalWhisperDeleteConfirm(false);
+        try {
+            await deleteLocalWhisperModel(localWhisperStatus?.selectedModel.key);
+            await refreshLocalWhisperStatus();
+        } catch (error: any) {
+            Alert.alert('Delete failed', error?.message || 'Unable to remove the local Whisper model.');
+        } finally {
+            setLocalWhisperBusy(false);
+        }
+    }, [localWhisperStatus?.selectedModel.key, refreshLocalWhisperStatus]);
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
@@ -865,8 +956,13 @@ export const SettingsScreen = () => {
                     <TouchableOpacity
                         style={[styles.preferenceRow, { marginBottom: spacing.m }]}
                         activeOpacity={0.85}
-                        disabled={!isGuestOrAnonymous}
-                        onPress={() => setProviderGate({ kind: 'signin', providerTitle: 'Agent Mode' })}
+                        onPress={() => {
+                            if (isGuestOrAnonymous) {
+                                setProviderGate({ kind: 'signin', providerTitle: 'Agent Mode' });
+                            } else if (usingOpenAI || usingLocalWhisper) {
+                                setShowAgentVaultoGate(true);
+                            }
+                        }}
                     >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
                             <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled && !isGuestOrAnonymous ? 1 : 0.4 }}>
@@ -878,12 +974,8 @@ export const SettingsScreen = () => {
                             </View>
                         </View>
                         <Switch
-                            value={isGuestOrAnonymous || usingOpenAI ? false : agentModeEnabled}
+                            value={isGuestOrAnonymous || usingOpenAI || usingLocalWhisper ? false : agentModeEnabled}
                             onValueChange={(value) => {
-                                if (usingOpenAI) {
-                                    setShowAgentVaultoGate(true);
-                                    return;
-                                }
                                 toggleAgentMode(value);
                             }}
                             disabled={isGuestOrAnonymous}
@@ -899,14 +991,14 @@ export const SettingsScreen = () => {
                     <TouchableOpacity
                         style={[styles.preferenceRow, { marginBottom: spacing.m }]}
                         activeOpacity={0.85}
-                        disabled={!isGuestOrAnonymous}
+                        disabled={!transcriptionAuthRequired}
                         onPress={() => setShowTranscriptionAuthModal(true)}
                     >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
                             <MaterialIcons
                                 name="mic"
                                 size={24}
-                                color={transcriptionEnabled && !isGuestOrAnonymous ? colors.primary : colors.textSecondary}
+                                color={transcriptionEnabled && !transcriptionAuthRequired ? colors.primary : colors.textSecondary}
                             />
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.preferenceTitle}>Auto-Transcribe Audio</Text>
@@ -914,9 +1006,9 @@ export const SettingsScreen = () => {
                             </View>
                         </View>
                         <Switch
-                            value={isGuestOrAnonymous ? false : transcriptionEnabled}
+                            value={transcriptionAuthRequired ? false : transcriptionEnabled}
                             onValueChange={toggleTranscription}
-                            disabled={isGuestOrAnonymous}
+                            disabled={transcriptionAuthRequired}
                             trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
                             thumbColor={colors.surface}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
@@ -925,43 +1017,72 @@ export const SettingsScreen = () => {
 
                     <View style={styles.separator} />
 
+                    <View style={styles.separator} />
+
                     {/* Compact Provider Selector */}
-                    <View style={styles.compactProviderSelector}>
-                        {providerOptions.map((option) => {
+                    <View style={[styles.compactProviderSelector, { flexDirection: 'column' }]}>
+                        {/* Top row: Vaulto AI + Custom AI */}
+                        <View style={{ flexDirection: 'row', gap: spacing.s }}>
+                            {providerOptions.filter(o => o.key !== 'local_whisper').map((option) => {
+                                const isActive = option.key === aiProvider;
+                                const isLocked = option.isLocked;
+                                return (
+                                    <TouchableOpacity
+                                        key={option.key}
+                                        style={[
+                                            styles.compactProviderOption,
+                                            isActive && styles.compactProviderOptionActive,
+                                            isLocked && styles.compactProviderOptionLocked,
+                                            { flex: 1 }
+                                        ]}
+                                        onPress={() => updateProvider(option.key)}
+                                        disabled={activeProvider?.key === option.key && !isLocked}
+                                    >
+                                        {option.key === 'vaulto_ai' ? (
+                                            <Image
+                                                source={require('../../assets/icon.png')}
+                                                style={{
+                                                    width: 14,
+                                                    height: 14,
+                                                    tintColor: isActive ? colors.surface : colors.textSecondary,
+                                                }}
+                                                resizeMode="contain"
+                                            />
+                                        ) : (
+                                            <MaterialIcons name={option.icon as any} size={14} color={isActive ? colors.surface : colors.textSecondary} />
+                                        )}
+                                        <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]} numberOfLines={1}>
+                                            {option.title.replace(' Compatible', '').replace(' Hosted', '')}
+                                        </Text>
+                                        {isLocked && <MaterialIcons name="lock" size={12} color={colors.accentPurple} />}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {/* Bottom row: Local */}
+                        {(() => {
+                            const option = providerOptions.find(o => o.key === 'local_whisper')!;
                             const isActive = option.key === aiProvider;
                             const isLocked = option.isLocked;
-
                             return (
                                 <TouchableOpacity
-                                    key={option.key}
                                     style={[
                                         styles.compactProviderOption,
                                         isActive && styles.compactProviderOptionActive,
-                                        isLocked && styles.compactProviderOptionLocked
+                                        isLocked && styles.compactProviderOptionLocked,
+                                        { paddingHorizontal: spacing.m }
                                     ]}
                                     onPress={() => updateProvider(option.key)}
                                     disabled={activeProvider?.key === option.key && !isLocked}
                                 >
-                                    {option.key === 'vaulto_ai' ? (
-                                        <Image
-                                            source={require('../../assets/icon.png')}
-                                            style={{
-                                                width: 16,
-                                                height: 16,
-                                                tintColor: isActive ? colors.surface : colors.textSecondary,
-                                            }}
-                                            resizeMode="contain"
-                                        />
-                                    ) : (
-                                        <MaterialIcons name={option.icon as any} size={16} color={isActive ? colors.surface : colors.textSecondary} />
-                                    )}
-                                    <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]}>
-                                        {option.title.replace(' Compatible', '').replace(' Hosted', '')}
+                                    <MaterialIcons name="memory" size={14} color={isActive ? colors.surface : colors.textSecondary} />
+                                    <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]} numberOfLines={1}>
+                                        Local
                                     </Text>
-                                    {isLocked && <MaterialIcons name="lock" size={12} color={colors.accentPurple} />}
                                 </TouchableOpacity>
                             );
-                        })}
+                        })()}
                     </View>
 
                     {/* Setup for Custom AI (OpenAI & Compatible) */}
@@ -1049,6 +1170,112 @@ export const SettingsScreen = () => {
                                     </>
                                 )}
                             </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {usingLocalWhisper && (
+                        <View style={[styles.openAIConfigCard, { padding: 8 }]}>
+                            {/* Language Selector - Extreme Compact Row */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 0, gap: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <MaterialIcons name="translate" size={16} color={colors.textSecondary} />
+                                    <Text style={[styles.localWhisperModelText, { color: colors.textSecondary, fontSize: 13 }]}>Language</Text>
+                                </View>
+                                <SearchableLanguageSelector
+                                    value={transcriptionLanguage}
+                                    onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
+                                />
+                            </View>
+
+                            {/* Model selection section - label merged closer */}
+                            <View style={{ alignItems: 'center', marginBottom: 2, marginTop: 4 }}>
+                                <Text style={[styles.localWhisperModelText, { color: colors.textSecondary, fontSize: 13 }]}>Model Selection</Text>
+                            </View>
+
+                            {/* Model selector row */}
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 0, marginTop: 2, justifyContent: 'center' }}>
+                                {localWhisperModels.map((model) => {
+                                    const isSelected = model.key === localWhisperStatus?.selectedModel.key;
+                                    return (
+                                        <TouchableOpacity
+                                            key={model.key}
+                                            style={[
+                                                styles.localWhisperModelPill,
+                                                isSelected && styles.localWhisperModelPillActive,
+                                                { minWidth: 80, paddingVertical: 8, paddingHorizontal: 16 }
+                                            ]}
+                                            onPress={() => { void handleSelectLocalWhisperModel(model.key); }}
+                                            disabled={localWhisperBusy}
+                                        >
+                                            <Text style={[
+                                                styles.localWhisperModelText,
+                                                isSelected && styles.localWhisperModelTextActive,
+                                                { fontSize: 13 }
+                                            ]}>
+                                                {model.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+
+                            {/* Technical name of selected model */}
+                            <View style={{ alignItems: 'center', marginBottom: 0 }}>
+                                <Text style={{ 
+                                    ...typography.caption, 
+                                    fontSize: 10, 
+                                    color: colors.textSecondary,
+                                    textTransform: 'lowercase'
+                                }}>
+                                    {localWhisperStatus?.selectedModel.filename.replace('.bin', '')}
+                                </Text>
+                            </View>
+
+                            {/* Actions */}
+                            <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'center' }}>
+                                {!localWhisperStatus?.isDownloaded && (
+                                    <TouchableOpacity
+                                        style={[styles.openAITestButton, { flex: 1, backgroundColor: colors.primary }]}
+                                        onPress={() => { void handleDownloadLocalWhisper(); }}
+                                        disabled={localWhisperBusy}
+                                    >
+                                        {localWhisperBusy ? (
+                                            <ActivityIndicator size="small" color={colors.surface} />
+                                        ) : (
+                                            <>
+                                                <MaterialIcons name="download" size={18} color={colors.surface} />
+                                                <Text style={styles.openAITestButtonText}>Download Model</Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+
+                                {localWhisperStatus?.isDownloaded && (
+                                    <TouchableOpacity
+                                        style={styles.localWhisperDeleteButton}
+                                        onPress={() => { setShowLocalWhisperDeleteConfirm(true); }}
+                                        disabled={localWhisperBusy}
+                                    >
+                                        {localWhisperBusy ? (
+                                            <ActivityIndicator size="small" color={colors.error} />
+                                        ) : (
+                                            <>
+                                                <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                                                <Text style={styles.localWhisperDeleteText}>Delete</Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {/* Download progress - Centered below actions */}
+                            {localWhisperBusy && localWhisperProgress > 0 && (
+                                <View style={{ marginTop: spacing.m, alignItems: 'center' }}>
+                                    <Text style={[styles.preferenceDescription, { color: colors.primary, fontWeight: '700' }]}>
+                                        Downloading: {Math.round(localWhisperProgress * 100)}%
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     )}
 
@@ -1223,6 +1450,14 @@ export const SettingsScreen = () => {
                 visible={showAgentVaultoGate}
                 onClose={() => setShowAgentVaultoGate(false)}
                 onPrimaryAction={() => updateProvider('vaulto_ai')}
+            />
+
+            <DeleteConfirmationDialog
+                visible={showLocalWhisperDeleteConfirm}
+                title="Remove Model?"
+                message={`The ${localWhisperStatus?.selectedModel.label || 'local'} Whisper model will be deleted from this device. You will need to download it again to use offline transcription.`}
+                onConfirm={handleDeleteLocalWhisper}
+                onCancel={() => setShowLocalWhisperDeleteConfirm(false)}
             />
 
             <EnableSyncModal
@@ -1431,10 +1666,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 8,
-        paddingHorizontal: 4,
+        paddingHorizontal: 8,
         backgroundColor: colors.backgroundSecondary,
         borderRadius: 10,
-        gap: 6,
+        gap: 4,
         borderWidth: 1,
         borderColor: 'transparent',
     },
@@ -1448,6 +1683,7 @@ const styles = StyleSheet.create({
         ...typography.captionBold,
         color: colors.textSecondary,
         fontSize: 12,
+        flexShrink: 1,
     },
     compactProviderTextActive: {
         color: colors.surface,
@@ -2504,5 +2740,48 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: colors.surface,
+    },
+    localWhisperModelPill: {
+        paddingHorizontal: spacing.m,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 70,
+    },
+    localWhisperModelPillActive: {
+        backgroundColor: colors.primary + '10',
+        borderColor: colors.primary,
+    },
+    localWhisperModelText: {
+        ...typography.captionBold,
+        fontSize: 13,
+        color: colors.textSecondary,
+    },
+    localWhisperModelTextActive: {
+        color: colors.primary,
+    },
+    localWhisperDeleteButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        paddingVertical: 10,
+        paddingHorizontal: spacing.m,
+        borderRadius: 12,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.error + '40',
+        minHeight: 44,
+        flex: 1,
+    },
+    localWhisperDeleteText: {
+        ...typography.button,
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.error,
     },
 });

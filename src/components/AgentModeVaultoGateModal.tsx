@@ -40,9 +40,6 @@ export const AgentModeVaultoGateModal: React.FC<AgentModeVaultoGateModalProps> =
                             <Text style={styles.message}>Agent Mode is available only with Vaulto AI.</Text>
 
                             <View style={styles.actionsRow}>
-                                <TouchableOpacity style={styles.secondaryButton} onPress={onClose} activeOpacity={0.85}>
-                                    <Text style={styles.secondaryText}>Close</Text>
-                                </TouchableOpacity>
                                 {onPrimaryAction && (
                                     <TouchableOpacity
                                         style={styles.primaryButton}
@@ -55,6 +52,9 @@ export const AgentModeVaultoGateModal: React.FC<AgentModeVaultoGateModalProps> =
                                         <Text style={styles.primaryText}>{primaryActionLabel}</Text>
                                     </TouchableOpacity>
                                 )}
+                                <TouchableOpacity style={styles.secondaryButton} onPress={onClose} activeOpacity={0.85}>
+                                    <Text style={styles.secondaryText}>Close</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     </TouchableWithoutFeedback>
@@ -70,14 +70,14 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: spacing.l,
+        padding: 0, // Removed padding
     },
     modal: {
         backgroundColor: colors.surface,
         borderRadius: 20,
-        padding: spacing.xl,
-        width: '100%',
-        maxWidth: 380,
+        padding: 12, // Ultra compact padding
+        width: '90%',
+        maxWidth: 320,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: colors.border,
@@ -86,14 +86,14 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 16,
         elevation: 10,
-        gap: spacing.s,
+        gap: 6, // Reduced gap
     },
     iconRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.xs,
+        gap: spacing.xs,
+        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.xxs, // Reduced from xs
         borderRadius: 14,
         backgroundColor: `${colors.primary}12`,
     },
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     },
     title: {
         ...typography.h3,
-        marginTop: spacing.s,
+        marginTop: 0, // Reduced from xs
         color: colors.text,
         textAlign: 'center',
     },
@@ -116,17 +116,17 @@ const styles = StyleSheet.create({
         ...typography.body,
         color: colors.textSecondary,
         textAlign: 'center',
-        marginBottom: spacing.s,
+        marginBottom: spacing.xs, // Reduced from s
     },
     actionsRow: {
-        flexDirection: 'row',
+        flexDirection: 'column',
         width: '100%',
-        gap: spacing.s,
-        marginTop: spacing.s,
+        gap: 4,
+        marginTop: 6,
     },
     primaryButton: {
-        flex: 1,
-        height: 48,
+        width: '100%',
+        height: 44,
         borderRadius: 12,
         backgroundColor: colors.primary,
         alignItems: 'center',
@@ -135,10 +135,11 @@ const styles = StyleSheet.create({
     primaryText: {
         ...typography.button,
         color: colors.surface,
+        fontSize: 14,
     },
     secondaryButton: {
-        flex: 1,
-        height: 48,
+        width: '100%',
+        height: 44,
         borderRadius: 12,
         backgroundColor: colors.backgroundSecondary,
         borderWidth: 1,
