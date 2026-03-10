@@ -42,8 +42,13 @@ export const subscriptionApi = {
         const response = await client.get<SubscriptionPlan[]>('/billing/plans');
         return response.data;
     },
-    getCurrentPeriodUsage: async (): Promise<CurrentPeriodUsage> => {
-        const response = await client.get<CurrentPeriodUsage>('/billing/usage/current-period');
+    getCurrentPeriodUsage: async (): Promise<CurrentPeriodUsage | null> => {
+        const response = await client.get<CurrentPeriodUsage>('/billing/usage/current-period', {
+            validateStatus: (status) => (status >= 200 && status < 300) || status === 401,
+        });
+        if (response.status === 401) {
+            return null;
+        }
         return response.data;
     },
 };

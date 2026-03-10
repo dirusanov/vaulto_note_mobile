@@ -93,13 +93,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             await storage.setUserProfile(guestUser);
 
-            setToken(guestData.access_token);
+            setIsGuest(true);
+            setUser(guestUser);
             if (!shouldPreserveLocalUserId) {
                 setUserId(guestData.user_id);
             }
-            setIsGuest(true);
-
-            setUser(guestUser);
+            setToken(guestData.access_token);
         } catch (err) {
             console.error('[AuthContext] Failed to create guest session', err);
             // App will still work locally, just without trial tracking

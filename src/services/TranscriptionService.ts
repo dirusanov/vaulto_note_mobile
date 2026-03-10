@@ -7,6 +7,7 @@ import { API_URL } from '../utils/env';
 import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
+import client from '../api/client';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -140,17 +141,7 @@ export async function transcribeAudio(
 }
 
 async function transcribeViaBackend(audioUri: string, language?: string): Promise<TranscriptionResult> {
-    const token = await storage.getToken();
-    const baseUrl = BACKEND_TRANSCRIBE_URL;
     const idempotencyKey = await generateUUID();
-
-    if (!token) {
-        return {
-            text: '',
-            success: false,
-            error: 'Sign in required to use Vaulto AI.',
-        };
-    }
 
     try {
         if (Platform.OS !== 'web') {
@@ -174,18 +165,12 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
             formData.append('language', language);
         }
 
-        const makeRequest = async (url: string) => {
-            return await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Idempotency-Key': idempotencyKey,
-                },
-                body: formData,
-            });
-        };
-
-        let response = await makeRequest(baseUrl);
+        const response = await client.post(BACKEND_TRANSCRIBE_URL, formData, {
+            headers: {
+                'Idempotency-Key': idempotencyKey,
+            },
+            validateStatus: (status) => (status >= 200 && status < 300) || status === 403,
+        });
 
         if (response.status === 403) {
             const { onLimitReached } = await import('../utils/limitEvents');
@@ -197,12 +182,7 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
             };
         }
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API error: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
+        const result = response.data;
         return {
             text: result.text || '',
             success: true,
@@ -326,15 +306,8 @@ export async function processVoiceNote(
     }
 
     // Use Backend (Vaulto AI)
-    const token = await storage.getToken();
-    const baseUrl = BACKEND_PROCESS_NOTE_URL;
-    if (!token) {
-        console.log('[VoiceAgent] No auth token found.');
-        return { originalText: '', success: false, error: 'Sign in required', hasInstruction: false };
-    }
-
     try {
-        console.log('[VoiceAgent] Request URL:', baseUrl);
+        console.log('[VoiceAgent] Request URL:', BACKEND_PROCESS_NOTE_URL);
 
         // Agent endpoint accepts only transcript text.
         // If text was not provided, transcribe first via standard transcription flow.
@@ -366,15 +339,10 @@ export async function processVoiceNote(
 
 
 
-        const makeRequest = async (url: string) => {
-            return await fetch(url, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData,
-            });
-        };
-
-        let response = await makeRequest(baseUrl);
+        const response = await client.post(BACKEND_PROCESS_NOTE_URL, formData, {
+            validateStatus: (status) =>
+                (status >= 200 && status < 300) || status === 403 || status === 404,
+        });
 
         if (response.status === 403) {
             const { onLimitReached } = await import('../utils/limitEvents');
@@ -389,26 +357,17 @@ export async function processVoiceNote(
         }
 
         // Fallback checks
-        if (!response.ok) {
-
-
-            // 2. If STILL failing (or wasn't a URL issue), try standard fallback
-            if (!response.ok) {
-                if (response.status === 404) {
-                    return {
-                        originalText: transcriptText,
-                        processedText: null,
-                        hasInstruction: false,
-                        success: true,
-                        error: 'Backend endpoint not found, using local transcript'
-                    };
-                }
-                const errorText = await response.text();
-                throw new Error(`API error: ${response.status} - ${errorText}`);
-            }
+        if (response.status === 404) {
+            return {
+                originalText: transcriptText,
+                processedText: null,
+                hasInstruction: false,
+                success: true,
+                error: 'Backend endpoint not found, using local transcript'
+            };
         }
 
-        const result = await response.json();
+        const result = response.data;
         // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool }
 
         return {

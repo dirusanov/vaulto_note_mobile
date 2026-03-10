@@ -100,6 +100,9 @@ const emitUnauthorizedOnce = async () => {
 // Add a request interceptor to attach the token
 client.interceptors.request.use(
     async (config) => {
+        if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+            config.headers.setContentType('multipart/form-data');
+        }
         const token = await storage.getToken();
         if (token) {
             // A fresh token exists (e.g. after manual sign-in), allow future unauthorized handling again.
@@ -144,8 +147,13 @@ client.interceptors.response.use(
             }
         }
 
-        // Expanded logging for Network Errors
+        const status = error.response?.status;
+
+        // Expanded logging for unexpected network/client errors.
         if (axios.isAxiosError(error)) {
+            if (status === 401) {
+                return Promise.reject(error);
+            }
             console.error('[client] Axios Error:', {
                 message: error.message,
                 code: error.code,
@@ -153,7 +161,7 @@ client.interceptors.response.use(
                 baseURL: originalRequest?.baseURL,
                 finalUrl: originalRequest?.baseURL ? `${originalRequest.baseURL}${originalRequest.url}` : originalRequest?.url,
                 method: originalRequest?.method,
-                status: error.response?.status
+                status,
             });
         }
 
