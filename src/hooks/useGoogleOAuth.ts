@@ -18,7 +18,7 @@ export const useGoogleOAuth = () => {
         });
     }, []);
 
-    const signInWithGoogle = useCallback(async (): Promise<LoginResult> => {
+    const signInWithGoogle = useCallback(async (): Promise<LoginResult | null> => {
         setLoading(true);
         setLastError(null);
         try {
@@ -57,10 +57,10 @@ export const useGoogleOAuth = () => {
                 switch (error.code) {
                     case statusCodes.SIGN_IN_CANCELLED:
                         // User cancelled the login flow
-                        break;
+                        return null;
                     case statusCodes.IN_PROGRESS:
                         // Operation (e.g. sign in) is in progress already
-                        break;
+                        return null;
                     case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
                         setLastError("Google Play Services not available or outdated.");
                         break;

@@ -72,9 +72,11 @@ export const SignInScreen = () => {
     const handleGoogleSignIn = async () => {
         try {
             const result = await signInWithGoogle();
-            await handlePostLogin(result, 'google');
+            if (result) {
+                await handlePostLogin(result, 'google');
+            }
         } catch (err) {
-            const message = getErrorMessage(err, 'Google sign-in was cancelled.');
+            const message = getErrorMessage(err, 'Google sign-in failed.');
             Alert.alert('Google Sign-In', message);
         }
     };
