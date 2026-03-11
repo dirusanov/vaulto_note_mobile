@@ -707,7 +707,35 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             parsedBlocks.push({ id: generateId(), type: 'text', content: '', formats: [] });
         }
 
-        setBlocks(parsedBlocks);
+        setBlocks(prevBlocks => {
+            const usedIndices = new Set<number>();
+            const newBlocks = parsedBlocks.map((newBlock, i) => {
+                // Optimize for exact same position
+                if (
+                    i < prevBlocks.length &&
+                    !usedIndices.has(i) &&
+                    prevBlocks[i].type === newBlock.type &&
+                    prevBlocks[i].content === newBlock.content &&
+                    prevBlocks[i].checked === newBlock.checked
+                ) {
+                    usedIndices.add(i);
+                    return { ...newBlock, id: prevBlocks[i].id };
+                }
+                
+                // Fallback search for shifted blocks
+                const matchIndex = prevBlocks.findIndex(
+                    (prev, idx) => !usedIndices.has(idx) && prev.type === newBlock.type && prev.content === newBlock.content && prev.checked === newBlock.checked
+                );
+                
+                if (matchIndex !== -1) {
+                    usedIndices.add(matchIndex);
+                    return { ...newBlock, id: prevBlocks[matchIndex].id };
+                }
+                
+                return newBlock;
+            });
+            return newBlocks;
+        });
     }, [initialContent, reparseTrigger]);
 
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -166,7 +166,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                             <MaterialIcons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={styles.modalTitle}>Select Language</Text>
-                        <View style={{ width: 44 }} /> {/* Spacer for centering */}
+                        <View style={{ width: 44 }} />
                     </View>
 
                     <View style={styles.searchContainer}>
@@ -240,7 +240,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + spacing.s : spacing.s,
+        paddingBottom: spacing.s,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },

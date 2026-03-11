@@ -6,8 +6,9 @@ import { UserProfile } from '../api/auth';
 import { KeyBundle } from '../crypto/e2ee';
 
 // NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
-export type AIProvider = 'vaulto_ai' | 'openai';
+export type AIProvider = 'vaulto_ai' | 'openai' | 'local_whisper' | 'local_llm' | 'local';
 export type CryptoMode = 'local' | 'e2ee';
+export type TranscriptionLanguage = string;
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
 const USER_ID_KEY = 'vaulto_user_id';
@@ -31,6 +32,9 @@ const LEGACY_SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
 const LEGACY_SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
 const LOCAL_ONLY_WARNING_DISMISSED_KEY = 'vaulto_local_only_warning_dismissed_v1';
 const PRIVATE_AI_ALLOWED_KEY = 'vaulto_private_ai_allowed_v1';
+const LOCAL_WHISPER_MODEL_KEY = 'vaulto_local_whisper_model_v1';
+const TRANSCRIPTION_LANGUAGE_KEY = 'vaulto_transcription_language_v1';
+const LOCAL_LLM_MODEL_KEY = 'vaulto_local_llm_model_v1';
 // NOTE: legacy App Lock keys may still exist on user devices, but the feature was removed.
 
 // Helper for SecureStore with web fallback (since SecureStore doesn't support web)
@@ -331,7 +335,14 @@ export const setOpenAIBaseUrl = async (baseUrl: string): Promise<void> => {
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
-        if (value === 'openai' || value === 'vaulto_ai') return value;
+        if (value === 'openai' || value === 'vaulto_ai' || value === 'local_whisper' || value === 'local_llm' || value === 'local') return value;
+        
+        // Migration to unified local
+        if (value === 'local_whisper' || value === 'local_llm') {
+            await AsyncStorage.setItem(AI_PROVIDER_KEY, 'local');
+            return 'local';
+        }
+
         if (value === 'secure_llm') {
             await AsyncStorage.setItem(AI_PROVIDER_KEY, 'vaulto_ai');
             return 'vaulto_ai';
@@ -354,6 +365,40 @@ export const setAIProvider = async (provider: AIProvider): Promise<void> => {
         await AsyncStorage.setItem(AI_PROVIDER_KEY, provider);
     } catch (e) {
         console.error('Failed to set AI provider', e);
+    }
+};
+
+export const getLocalWhisperModelKey = async (): Promise<string> => {
+    try {
+        return (await AsyncStorage.getItem(LOCAL_WHISPER_MODEL_KEY)) || 'tiny';
+    } catch (e) {
+        console.error('Failed to get local Whisper model key', e);
+        return 'tiny';
+    }
+};
+
+export const setLocalWhisperModelKey = async (modelKey: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(LOCAL_WHISPER_MODEL_KEY, modelKey);
+    } catch (e) {
+        console.error('Failed to set local Whisper model key', e);
+    }
+};
+
+export const getLocalLLMModelKey = async (): Promise<string> => {
+    try {
+        return (await AsyncStorage.getItem(LOCAL_LLM_MODEL_KEY)) || 'phi-2';
+    } catch (e) {
+        console.error('Failed to get local LLM model key', e);
+        return 'phi-2';
+    }
+};
+
+export const setLocalLLMModelKey = async (modelKey: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(LOCAL_LLM_MODEL_KEY, modelKey);
+    } catch (e) {
+        console.error('Failed to set local LLM model key', e);
     }
 };
 
@@ -503,6 +548,27 @@ export const setTranscriptionEnabled = async (enabled: boolean): Promise<void> =
         await AsyncStorage.setItem(TRANSCRIPTION_ENABLED_KEY, enabled.toString());
     } catch (e) {
         console.error('Failed to set transcription setting', e);
+    }
+};
+
+export const getTranscriptionLanguage = async (): Promise<TranscriptionLanguage> => {
+    try {
+        const value = await AsyncStorage.getItem(TRANSCRIPTION_LANGUAGE_KEY);
+        if (value) {
+            return value;
+        }
+        return 'auto';
+    } catch (e) {
+        console.error('Failed to get transcription language setting', e);
+        return 'auto';
+    }
+};
+
+export const setTranscriptionLanguage = async (language: TranscriptionLanguage): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(TRANSCRIPTION_LANGUAGE_KEY, language);
+    } catch (e) {
+        console.error('Failed to set transcription language setting', e);
     }
 };
 

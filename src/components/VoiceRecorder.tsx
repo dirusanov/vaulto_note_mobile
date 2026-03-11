@@ -13,6 +13,7 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { AudioService, AudioRecording } from '../services/AudioService';
 import {
+    AIProvider,
     getAIProvider,
     getAgentModeEnabled,
     getTranscriptionEnabled,
@@ -20,6 +21,7 @@ import {
     setAgentModeEnabled,
     setTranscriptionEnabled
 } from '../utils/storage';
+import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
@@ -59,7 +61,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isStartPending, setIsStartPending] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
-    const [aiProvider, setAiProvider] = useState<'vaulto_ai' | 'openai'>('vaulto_ai');
+    const [aiProvider, setAiProvider] = useState<AIProvider>('vaulto_ai');
+    const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
+    const warningOpacity = useRef(new Animated.Value(0)).current;
+    const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const agentModeToggleTouchedRef = useRef(false);
     const isForceTextMode = micMode === 'force_text';
     const effectiveAgentEnabled = agentModeEnabled && aiProvider === 'vaulto_ai';
@@ -85,34 +90,49 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             getAIProvider().then(provider => {
                 if (provider) {
                     setAiProvider(provider);
-                    if (provider === 'openai') {
+                    if (provider === 'openai' || provider === 'local_whisper') {
                         setAgentModeEnabledState(false);
                     }
                 }
             });
             agentModeToggleTouchedRef.current = false;
 
-            if (!isAuthenticated || isGuest) {
-                // Anonymous users cannot use transcription; keep toggle OFF.
-                setTranscribe(false);
-            } else {
-                // Load preference
+            getAIProvider().then(async (provider) => {
+                const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai';
+                if (isUserTranscriptionRestricted) {
+                    setTranscribe(false);
+                    return;
+                }
+
+                // Check model status if local
+                if (provider === 'local' || provider === 'local_whisper') {
+                    const status = await getLocalWhisperModelStatus();
+                    if (!status.isDownloaded) {
+                        setTranscribe(false);
+                        return;
+                    }
+                }
+
                 getTranscriptionEnabled().then(enabled => {
                     setTranscribe(enabled);
                 });
-            }
+            });
 
             if (autoStart) {
                 handleStartRecording();
             }
         } else {
             // Reset state when closed
-            // Don't reset transcribe here, keep user preference or reload next open
             setIsRecording(false);
             setIsPaused(false);
             setIsStopping(false);
             setIsStartPending(false);
             setDuration(0);
+            setShowModelMissingWarning(false);
+            warningOpacity.setValue(0);
+            if (warningTimeoutRef.current) {
+                clearTimeout(warningTimeoutRef.current);
+            }
             currentMetering.current = -160;
             meteringSamples.current = 0;
             voiceSamples.current = 0;
@@ -120,11 +140,45 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
     }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
 
-    const handleTranscriptionToggle = (value: boolean) => {
-        if ((!isAuthenticated || isGuest) && value) {
+    const handleTranscriptionToggle = async (value: boolean) => {
+        if ((!isAuthenticated || isGuest) && aiProvider === 'vaulto_ai' && value) {
             setShowTranscriptionAuthModal(true);
             setTranscribe(false);
             return;
+        }
+
+        if (value && (aiProvider === 'local' || aiProvider === 'local_whisper')) {
+            const status = await getLocalWhisperModelStatus();
+            if (!status.isDownloaded) {
+                setShowModelMissingWarning(true);
+                
+                // Reset any existing animation and timeout
+                warningOpacity.setValue(0);
+                if (warningTimeoutRef.current) {
+                    clearTimeout(warningTimeoutRef.current);
+                }
+
+                // Show it
+                Animated.timing(warningOpacity, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }).start();
+
+                // Auto hide after 3.5 seconds
+                warningTimeoutRef.current = setTimeout(() => {
+                    Animated.timing(warningOpacity, {
+                        toValue: 0,
+                        duration: 300,
+                        useNativeDriver: true,
+                    }).start(() => {
+                        setShowModelMissingWarning(false);
+                    });
+                }, 3500);
+
+                setTranscribe(false);
+                return;
+            }
         }
         setTranscribe(value);
         if (isAuthenticated && !isGuest) {
@@ -139,10 +193,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setAgentModeEnabledState(false);
             return;
         }
-        if (aiProvider === 'openai' && value) {
+        if ((aiProvider === 'openai' || aiProvider === 'local_whisper') && value) {
             setAgentModeEnabledState(false);
             setAgentModeEnabled(false);
-            setShowAgentVaultoGate(true);
+            if (aiProvider === 'openai') {
+                setShowAgentVaultoGate(true);
+            }
             return;
         }
         setAgentModeEnabledState(value);
@@ -375,6 +431,16 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         </TouchableOpacity>
                     </View>
 
+                    {/* Inline Warning Banner */}
+                    {showModelMissingWarning && (
+                        <Animated.View style={[styles.inlineWarningContainer, { opacity: warningOpacity }]}>
+                            <MaterialIcons name="error-outline" size={16} color={colors.warning} />
+                            <Text style={styles.inlineWarningText}>
+                                Model not downloaded. Check Settings.
+                            </Text>
+                        </Animated.View>
+                    )}
+
                     {/* Main Bar */}
                     <View style={[styles.mainBar, isMainScreen && styles.mainBarLarge]}>
                         <TouchableOpacity
@@ -576,5 +642,22 @@ const styles = StyleSheet.create({
     },
     buttonDisabled: {
         opacity: 0.45,
+    },
+    inlineWarningContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: `${colors.warning}15`,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.xs,
+        borderRadius: 16,
+        marginBottom: spacing.s,
+        gap: spacing.xs,
+        borderWidth: 1,
+        borderColor: `${colors.warning}30`,
+    },
+    inlineWarningText: {
+        ...typography.captionBold,
+        color: colors.warning,
+        fontSize: 13,
     },
 });

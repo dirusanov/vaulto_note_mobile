@@ -4,10 +4,18 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { API_URL } from '../utils/env';
-import { storage, getAgentModeEnabled, getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl } from '../utils/storage';
+import {
+    storage,
+    getAgentModeEnabled,
+    getAIProvider,
+    getOpenAIApiKey,
+    getOpenAIBaseUrl,
+    getTranscriptionLanguage,
+} from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
 import client from '../api/client';
+import { prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -42,9 +50,13 @@ export async function transcribeAudio(
     audioUri: string,
     language?: string
 ): Promise<TranscriptionResult> {
+    const selectedLanguage = language || await resolvePreferredTranscriptionLanguage();
     const provider = await getAIProvider();
     if (provider === 'vaulto_ai') {
-        return transcribeViaBackend(audioUri, language);
+        return transcribeViaBackend(audioUri, selectedLanguage);
+    }
+    if (provider === 'local_whisper' || provider === 'local_llm' || provider === 'local') {
+        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
     }
 
     let lastError: Error | null = null;
@@ -57,7 +69,7 @@ export async function transcribeAudio(
                 return {
                     text: '',
                     success: false,
-                    error: 'API key not found',
+                    error: 'Please check your Custom AI configuration in settings.',
                 };
             }
 
@@ -95,8 +107,8 @@ export async function transcribeAudio(
 
             formData.append('file', file);
             formData.append('model', 'whisper-1');
-            if (language) {
-                formData.append('language', language);
+            if (selectedLanguage) {
+                formData.append('language', selectedLanguage);
             }
 
             const baseUrl = await getOpenAIBaseUrl();
@@ -136,8 +148,63 @@ export async function transcribeAudio(
     return {
         text: '',
         success: false,
-        error: lastError?.message || 'Transcription failed after multiple attempts',
+        error: lastError?.message || 'Transcription failed. If using Custom AI, please check your Base URL settings and ensure the provider supports the Whisper API.',
     };
+}
+
+async function resolvePreferredTranscriptionLanguage(): Promise<string | undefined> {
+    const language = await getTranscriptionLanguage();
+    return language === 'auto' ? undefined : language;
+}
+
+async function resolvePreferredLocalWhisperLanguage(language?: string): Promise<string> {
+    if (language) {
+        return language;
+    }
+
+    const storedLanguage = await getTranscriptionLanguage();
+    return storedLanguage === 'auto' ? 'auto' : storedLanguage;
+}
+
+async function transcribeViaLocalWhisper(audioUri: string, language?: string): Promise<TranscriptionResult> {
+    let preparedAudioUri: string | null = null;
+    try {
+        if (Platform.OS === 'web') {
+            return {
+                text: '',
+                success: false,
+                error: 'Local Whisper is not supported on web',
+            };
+        }
+
+        const fileInfo = await FileSystem.getInfoAsync(audioUri);
+        if (!fileInfo.exists || fileInfo.size === 0) {
+            return {
+                text: '',
+                success: false,
+                error: 'Audio file not found or empty',
+            };
+        }
+
+        preparedAudioUri = await prepareAudioForLocalWhisper(audioUri);
+        const resolvedLanguage = await resolvePreferredLocalWhisperLanguage(language);
+        const text = await transcribeWithLocalWhisper(preparedAudioUri, { language: resolvedLanguage });
+        return {
+            text,
+            success: true,
+        };
+    } catch (error) {
+        console.error('[Transcription] Local Whisper failed', error);
+        return {
+            text: '',
+            success: false,
+            error: error instanceof Error ? error.message : 'Local Whisper transcription failed',
+        };
+    } finally {
+        if (preparedAudioUri && preparedAudioUri !== audioUri && preparedAudioUri.startsWith('file://')) {
+            await FileSystem.deleteAsync(preparedAudioUri, { idempotent: true }).catch(() => undefined);
+        }
+    }
 }
 
 async function transcribeViaBackend(audioUri: string, language?: string): Promise<TranscriptionResult> {
@@ -272,11 +339,10 @@ export async function processVoiceNote(
         };
     }
 
-    // Fallback for non-backend providers (e.g. direct OpenAI on client)
+    // Fallback for non-backend providers (e.g. direct OpenAI on client or Local options)
     // If not using the gateway, we can't use the agent logic easily without re-implementing it here.
-    // For now, if provider is 'openai' (client-side), we just transcribe and return no instruction.
-    if (provider === 'openai') {
-        console.log('[VoiceAgent] Provider is OpenAI. Falling back to simple transcription (no agents).');
+    if (provider !== 'vaulto_ai') {
+        console.log(`[VoiceAgent] Provider is ${provider}. Falling back to simple transcription (no agents).`);
         if (preTranscribedText) {
             return {
                 originalText: preTranscribedText,

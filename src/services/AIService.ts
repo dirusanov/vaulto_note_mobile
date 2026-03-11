@@ -3,6 +3,7 @@ import { API_URL } from '../utils/env';
 import { getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl, storage } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
+import { generateWithLocalLLM } from './LocalLLMService';
 
 const BACKEND_IMPROVE_URL = `${API_URL}/ai/improve`;
 const AI_PROMPTS_STORAGE_KEY = 'vaulto_ai_prompts_v1';
@@ -125,6 +126,11 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     const provider = await getAIProvider();
     if (provider === 'vaulto_ai') {
         return improveViaBackend(text, option);
+    }
+    
+    if (provider === 'local_llm' || provider === 'local') {
+        const promptForModel = buildPromptForRequest(option.prompt, text);
+        return generateWithLocalLLM(promptForModel);
     }
 
     const apiKey = await getOpenAIApiKey();

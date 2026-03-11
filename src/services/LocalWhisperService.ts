@@ -11,6 +11,7 @@ export interface LocalWhisperModelDescriptor {
     sizeBytes: number;
     filename: string;
     url: string;
+    power: number; // 1-4 scale
     recommended?: boolean;
 }
 
@@ -52,6 +53,7 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         sizeBytes: 75 * 1024 * 1024,
         filename: 'ggml-tiny.bin',
         url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+        power: 1,
         recommended: true,
     },
     base: {
@@ -61,6 +63,7 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         sizeBytes: 142 * 1024 * 1024,
         filename: 'ggml-base.bin',
         url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+        power: 2,
     },
     large: {
         key: 'large',
@@ -69,6 +72,7 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         sizeBytes: 2900 * 1024 * 1024,
         filename: 'ggml-large-v3.bin',
         url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
+        power: 4,
     },
 };
 
@@ -81,6 +85,7 @@ const MODELS_DIR = baseDir ? `${baseDir}whisper-models/` : null;
 
 let activeContext: WhisperRnContext | null = null;
 let activeModelUri: string | null = null;
+let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
 
 const ensureModelsDir = async () => {
     if (!MODELS_DIR) {
@@ -186,7 +191,7 @@ export const getLocalWhisperModelStatus = async (key?: string): Promise<LocalWhi
 
 export const downloadLocalWhisperModel = async (
     key: LocalWhisperModelKey,
-    onProgress?: (progress: number) => void,
+    onProgress?: (progress: number, loaded: number, total: number) => void,
 ): Promise<LocalWhisperModelStatus> => {
     if (Platform.OS === 'web') {
         throw new Error('Local Whisper is not supported in the browser');
@@ -199,23 +204,42 @@ export const downloadLocalWhisperModel = async (
     await FileSystem.deleteAsync(tempUri, { idempotent: true });
     await FileSystem.deleteAsync(fileUri, { idempotent: true });
 
-    const download = FileSystem.createDownloadResumable(
+    let activeLocalWhisperDownload = FileSystem.createDownloadResumable(
         model.url,
         tempUri,
         {},
         ({ totalBytesExpectedToWrite, totalBytesWritten }) => {
             if (!onProgress || !totalBytesExpectedToWrite) return;
-            onProgress(totalBytesWritten / totalBytesExpectedToWrite);
+            onProgress(totalBytesWritten / totalBytesExpectedToWrite, totalBytesWritten, totalBytesExpectedToWrite);
         },
     );
 
-    const result = await download.downloadAsync();
-    if (!result?.uri) {
-        throw new Error('Model download did not produce a file');
-    }
+    // Save it globally for cancellation
+    activeDownloadResumable = activeLocalWhisperDownload;
 
-    await FileSystem.moveAsync({ from: tempUri, to: fileUri });
-    return getLocalWhisperModelStatus(key);
+    try {
+        const result = await activeLocalWhisperDownload.downloadAsync();
+        if (!result || !result?.uri) {
+            throw new Error('Download cancelled');
+        }
+
+        await FileSystem.moveAsync({ from: tempUri, to: fileUri });
+        return getLocalWhisperModelStatus(key);
+    } finally {
+        activeDownloadResumable = null;
+    }
+};
+
+export const cancelLocalWhisperDownload = async (): Promise<void> => {
+    if (activeDownloadResumable) {
+        try {
+            await activeDownloadResumable.cancelAsync();
+        } catch (e) {
+            console.warn('Failed to cancel whisper download', e);
+        } finally {
+            activeDownloadResumable = null;
+        }
+    }
 };
 
 export const deleteLocalWhisperModel = async (key?: string): Promise<void> => {
