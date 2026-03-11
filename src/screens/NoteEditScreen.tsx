@@ -56,6 +56,7 @@ import {
     ensureTemplateHasPlaceholder,
 } from '../services/AIService';
 import {
+    AIProvider,
     getAgentModeEnabled,
     getTranscriptionEnabled,
     getAIProvider,
@@ -743,11 +744,12 @@ export const NoteEditScreen = () => {
     const [errorMessage, setErrorMessage] = useState('');
     const [errorTitle, setErrorTitle] = useState<string | undefined>(undefined);
     const [errorShowSettingsAction, setErrorShowSettingsAction] = useState(false);
-    const [currentAIProvider, setCurrentAIProvider] = useState<'vaulto_ai' | 'openai'>('vaulto_ai');
+    const [currentAIProvider, setCurrentAIProvider] = useState<AIProvider>('vaulto_ai');
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [activeImprovementTask, setActiveImprovementTask] = useState<AIActiveTask | null>(null);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
-        const raw = getErrorMessage(errorValue, '').toLowerCase();
+        const originalErrorMsg = getErrorMessage(errorValue, '');
+        const raw = originalErrorMsg.toLowerCase();
 
         // If it's the standard generic usage limit error from our Service layer 403 intercept,
         // the LimitModal will already handle it via onLimitReached event.
@@ -763,16 +765,16 @@ export const NoteEditScreen = () => {
             return true;
         }
 
-        if (currentAIProvider === 'openai') {
+        if (currentAIProvider === 'openai' || raw.includes('custom ai configuration') || raw.includes('custom ai, please check your base url')) {
             setErrorTitle('Custom AI Error');
-            setErrorMessage(CUSTOM_AI_UNIVERSAL_ERROR);
+            setErrorMessage(originalErrorMsg || CUSTOM_AI_UNIVERSAL_ERROR);
             setErrorShowSettingsAction(true);
             setErrorModalVisible(true);
             return false;
         }
 
         setErrorTitle(undefined);
-        setErrorMessage(fallback || raw || 'An error occurred');
+        setErrorMessage(originalErrorMsg || fallback || 'An error occurred');
         setErrorShowSettingsAction(false);
         setErrorModalVisible(true);
         return false;
@@ -780,7 +782,7 @@ export const NoteEditScreen = () => {
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
         const isPrivate = normalizeScope(storageScope) === 'local_only';
-        if (!isPrivate || allowPrivateAI) {
+        if (!isPrivate || allowPrivateAI || currentAIProvider === 'local_whisper') {
             return true;
         }
 
@@ -802,7 +804,7 @@ export const NoteEditScreen = () => {
                 ]
             );
         });
-    }, [allowPrivateAI, privacy, setAllowPrivateAI, storageScope]);
+    }, [allowPrivateAI, currentAIProvider, privacy, setAllowPrivateAI, storageScope]);
 
     const handleAiAccess = async (callback: () => void) => {
         if (isGuest) {
@@ -1316,7 +1318,8 @@ export const NoteEditScreen = () => {
 
     useEffect(() => {
         const loadSettings = async () => {
-            if (!isAuthenticated || isGuest) {
+            const provider = await getAIProvider();
+            if ((!isAuthenticated || isGuest) && provider !== 'local_whisper') {
                 setTranscriptionEnabled(false);
                 return;
             }
@@ -2794,7 +2797,8 @@ export const NoteEditScreen = () => {
         try {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
-            const isUserTranscriptionRestricted = !isAuthenticated || isGuest;
+            const provider = await getAIProvider();
+            const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai';
             const shouldUseAgentModeForThisRecording =
                 micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
@@ -2862,7 +2866,7 @@ export const NoteEditScreen = () => {
                 const errorMsg = transcription.error ? getErrorMessage(transcription.error, '') : '';
                 const errorMsgLower = errorMsg.toLowerCase();
                 const rawErrorLower = (transcription.error || '').toLowerCase();
-                // Auto-insert audio player only when transcription is unavailable due to auth/quota limits.
+                // Auto-insert audio player when there is no transcription (e.g., failed, disabled, or due to limits).
                 const isAuthOrQuotaError =
                     isUserTranscriptionRestricted ||
                     errorMsgLower.includes('sign in') ||
@@ -2874,14 +2878,17 @@ export const NoteEditScreen = () => {
                     rawErrorLower.includes('403') ||
                     rawErrorLower.includes('insufficient_quota') ||
                     rawErrorLower.includes('quota') ||
-                    rawErrorLower.includes('trial');
-                shouldAutoInsertAudioPlayer = isAuthOrQuotaError;
+                    rawErrorLower.includes('trial') ||
+                    rawErrorLower === 'transcription disabled' ||
+                    errorMsgLower === 'transcription disabled';
+                shouldAutoInsertAudioPlayer = true;
 
                 if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
                     console.log('[Transparency] Transcription skipped due to auth/guest status');
                 } else if (errorMsg) {
                     console.warn('[Transcription] Failed but audio will be saved:', errorMsg);
+                    showPrettyQuotaNotification(transcription.error, 'Transcription Failed');
                 }
             }
 
@@ -3045,7 +3052,8 @@ export const NoteEditScreen = () => {
 
         // Show local loading state if needed, or re-use isTranscribing but that shows a global spinner
         // Let's use isAIProcessing to block interaction while transcribing instruction
-        if (!isAuthenticated || isGuest) {
+        const provider = await getAIProvider();
+        if ((!isAuthenticated || isGuest) && provider === 'vaulto_ai') {
             setShowTranscriptionAuthModal(true);
             await AudioService.deleteAudioFile(recording.uri).catch(() => undefined);
             setIsRecordingInstruction(false);
@@ -3093,7 +3101,8 @@ export const NoteEditScreen = () => {
     };
 
     const handleVoiceInstructionStart = async () => {
-        if (!isAuthenticated || isGuest) {
+        const provider = await getAIProvider();
+        if ((!isAuthenticated || isGuest) && provider === 'vaulto_ai') {
             setShowTranscriptionAuthModal(true);
             return;
         }
@@ -3465,8 +3474,10 @@ export const NoteEditScreen = () => {
     useEffect(() => {
         if (route.params?.initialRecording) {
             handleRecordingFinish(route.params.initialRecording, route.params.initialTranscribe ?? true);
+            // Clear the params to prevent double execution (e.g. from StrictMode or navigation updates)
+            navigation.setParams({ initialRecording: undefined, initialTranscribe: undefined });
         }
-    }, [route.params?.initialRecording]);
+    }, [route.params?.initialRecording, navigation]);
 
     // Track keyboard visibility to handle color picker interactions
     const isKeyboardVisible = useRef(false);
@@ -3495,7 +3506,8 @@ export const NoteEditScreen = () => {
             || voiceRecordings.find((rec) => rec.id === playingRecordingId)
             || voiceRecordings[0];
         if (!targetRecording) return;
-        if (!isAuthenticated || isGuest) {
+        const provider = await getAIProvider();
+        if ((!isAuthenticated || isGuest) && provider !== 'local_whisper') {
             setShowTranscriptionAuthModal(true);
             return;
         }
@@ -4333,21 +4345,23 @@ export const NoteEditScreen = () => {
             {
                 !isEditing && !showVoiceRecorder && (
                     <View style={styles.micFloatingContainer}>
-                        <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
-                            <Svg height="120" width="120" viewBox="0 0 120 120">
-                                <Defs>
-                                    <Path
-                                        id="micCurve"
-                                        d="M 20,60 A 40,40 0 0 0 100,60"
-                                    />
-                                </Defs>
-                                <SvgText fill={colors.textSecondary} fontSize="8" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
-                                    <TextPath href="#micCurve" startOffset="50%">
-                                        {micHintText.toUpperCase()}
-                                    </TextPath>
-                                </SvgText>
-                            </Svg>
-                        </View>
+                        {agentModeIndicatorEnabled && (
+                            <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
+                                <Svg height="120" width="120" viewBox="0 0 120 120">
+                                    <Defs>
+                                        <Path
+                                            id="micCurve"
+                                            d="M 20,60 A 40,40 0 0 0 100,60"
+                                        />
+                                    </Defs>
+                                    <SvgText fill={colors.textSecondary} fontSize="8" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
+                                        <TextPath href="#micCurve" startOffset="50%">
+                                            {micHintText.toUpperCase()}
+                                        </TextPath>
+                                    </SvgText>
+                                </Svg>
+                            </View>
+                        )}
                         <TouchableOpacity
                             style={styles.micButton}
                             onPress={handleMicPress}
