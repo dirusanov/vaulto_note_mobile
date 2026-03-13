@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 import { UserProfile } from '../api/auth';
 import { KeyBundle } from '../crypto/e2ee';
+import { isLocalAIProvider, LOCAL_MODELS_ENABLED } from './featureFlags';
 
 // NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
 export type AIProvider = 'vaulto_ai' | 'openai' | 'local_whisper' | 'local_llm' | 'local';
@@ -335,11 +336,21 @@ export const setOpenAIBaseUrl = async (baseUrl: string): Promise<void> => {
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
-        if (value === 'openai' || value === 'vaulto_ai' || value === 'local_whisper' || value === 'local_llm' || value === 'local') return value;
-        
-        // Migration to unified local
+        if (value === 'openai' || value === 'vaulto_ai') {
+            return value;
+        }
+
         if (value === 'local_whisper' || value === 'local_llm') {
-            await AsyncStorage.setItem(AI_PROVIDER_KEY, 'local');
+            const migratedProvider: AIProvider = LOCAL_MODELS_ENABLED ? 'local' : 'vaulto_ai';
+            await AsyncStorage.setItem(AI_PROVIDER_KEY, migratedProvider);
+            return migratedProvider;
+        }
+
+        if (value === 'local') {
+            if (!LOCAL_MODELS_ENABLED) {
+                await AsyncStorage.setItem(AI_PROVIDER_KEY, 'vaulto_ai');
+                return 'vaulto_ai';
+            }
             return 'local';
         }
 
@@ -362,7 +373,9 @@ export const getAIProvider = async (): Promise<AIProvider> => {
 
 export const setAIProvider = async (provider: AIProvider): Promise<void> => {
     try {
-        await AsyncStorage.setItem(AI_PROVIDER_KEY, provider);
+        const providerToStore: AIProvider =
+            !LOCAL_MODELS_ENABLED && isLocalAIProvider(provider) ? 'vaulto_ai' : provider;
+        await AsyncStorage.setItem(AI_PROVIDER_KEY, providerToStore);
     } catch (e) {
         console.error('Failed to set AI provider', e);
     }

@@ -42,6 +42,7 @@ import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
+import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
 import {
     cancelLocalWhisperDownload,
     deleteLocalWhisperModel,
@@ -331,8 +332,8 @@ export const SettingsScreen = () => {
     });
 
     const usingOpenAI = aiProvider === 'openai';
-    const usingLocalWhisper = (aiProvider as string) === 'local_whisper' || (aiProvider as string) === 'local';
-    const usingLocalLLM = (aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local';
+    const usingLocalWhisper = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_whisper' || (aiProvider as string) === 'local');
+    const usingLocalLLM = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local');
     const usingLocal = usingLocalWhisper || usingLocalLLM;
     const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
     const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
@@ -438,15 +439,15 @@ export const SettingsScreen = () => {
             accent: colors.accentGreen,
             chips: ['OpenAI', 'Custom', 'Self-hosted'],
         },
-        {
-            key: 'local',
+        ...(LOCAL_MODELS_ENABLED ? [{
+            key: 'local' as AIProvider,
             title: 'Local',
             blurb: 'On-device AI',
             description: 'Uses on-device models for both transcription and reasoning, ensuring maximum privacy and offline capability.',
             icon: 'memory',
             accent: '#0F766E',
             chips: ['Offline', 'Private'],
-        },
+        }] : []),
     ];
 
     const activeProvider = providerOptions.find((provider) => provider.key === aiProvider);
@@ -1195,6 +1196,15 @@ export const SettingsScreen = () => {
                     <View style={styles.separator} />
 
                     {/* Compact Provider Selector */}
+                    {!LOCAL_MODELS_ENABLED && (
+                        <View style={[styles.inlineWarningContainer, { marginBottom: spacing.m }]}>
+                            <MaterialIcons name="hourglass-top" size={16} color={colors.warning} />
+                            <Text style={[styles.inlineWarningText, { flex: 1, lineHeight: 18 }]}>
+                                Local Whisper and Local LLM are temporarily hidden behind a feature flag so they can be restored later.
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={[styles.compactProviderSelector, { flexDirection: 'column' }]}>
                         {/* Top row: Vaulto AI + Custom AI */}
                         <View style={{ flexDirection: 'row', gap: spacing.s }}>
@@ -1235,20 +1245,21 @@ export const SettingsScreen = () => {
                             })}
                         </View>
 
-                        {/* Bottom row: Local */}
-                        <TouchableOpacity
-                            style={[
-                                styles.compactProviderOption,
-                                usingLocal && styles.compactProviderOptionActive,
-                                { paddingHorizontal: spacing.m, flex: 1 }
-                            ]}
-                            onPress={() => updateProvider('local')}
-                        >
-                            <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
-                            <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
-                                Local
-                            </Text>
-                        </TouchableOpacity>
+                        {LOCAL_MODELS_ENABLED && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.compactProviderOption,
+                                    usingLocal && styles.compactProviderOptionActive,
+                                    { paddingHorizontal: spacing.m, flex: 1 }
+                                ]}
+                                onPress={() => updateProvider('local')}
+                            >
+                                <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
+                                <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
+                                    Local
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Setup for Custom AI (OpenAI & Compatible) */}
@@ -1339,7 +1350,7 @@ export const SettingsScreen = () => {
                         </View>
                     )}
 
-                    {usingLocalWhisper && (
+                    {LOCAL_MODELS_ENABLED && usingLocalWhisper && (
                         <View style={[styles.openAIConfigCard, { padding: 8, gap: 10, borderBottomLeftRadius: usingLocalLLM ? 0 : spacing.m, borderBottomRightRadius: usingLocalLLM ? 0 : spacing.m }]}>
                             {/* Compact Header row: Label + Language */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
@@ -1488,11 +1499,11 @@ export const SettingsScreen = () => {
                         </View>
                     )}
 
-                    {usingLocalWhisper && usingLocalLLM && (
+                    {LOCAL_MODELS_ENABLED && usingLocalWhisper && usingLocalLLM && (
                         <View style={{ height: 1, backgroundColor: colors.backgroundSecondary, marginHorizontal: 8 }} />
                     )}
 
-                    {usingLocalLLM && (
+                    {LOCAL_MODELS_ENABLED && usingLocalLLM && (
                         <View style={[styles.openAIConfigCard, { padding: 8, gap: 10, borderTopLeftRadius: usingLocalWhisper ? 0 : spacing.m, borderTopRightRadius: usingLocalWhisper ? 0 : spacing.m }]}>
                             {/* Header row */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 }}>
