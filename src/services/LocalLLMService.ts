@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { Platform } from 'react-native';
+import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { getLocalLLMModelKey, setLocalLLMModelKey } from '../utils/storage';
 
 export type LocalLLMModelKey = 'phi-2' | 'tinyllama' | 'gemma-2b' | 'mistral-7b';
@@ -21,6 +21,27 @@ export interface LocalLLMModelStatus {
     fileUri: string;
     bytesOnDisk: number;
 }
+
+type LlamaCompletionResult = {
+    text?: string;
+    content?: string;
+};
+
+type LlamaContext = {
+    completion: (
+        params: Record<string, unknown>,
+        callback?: (data: unknown) => void
+    ) => Promise<LlamaCompletionResult>;
+    clearCache?: (clearData?: boolean) => Promise<void>;
+    release: () => Promise<void>;
+};
+
+type LlamaModule = {
+    initLlama: (
+        params: Record<string, unknown>,
+        onProgress?: (progress: number) => void
+    ) => Promise<LlamaContext>;
+};
 
 const MODELS: Record<LocalLLMModelKey, LocalLLMModelDescriptor> = {
     'phi-2': {
@@ -64,8 +85,64 @@ const MODELS: Record<LocalLLMModelKey, LocalLLMModelDescriptor> = {
 
 const baseDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? null;
 const MODELS_DIR = baseDir ? `${baseDir}llm-models/` : null;
+const STOP_WORDS = ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>', '<|im_end|>', '<|EOT|>', '<|END_OF_TURN_TOKEN|>', '<|end_of_turn|>', '<|endoftext|>'];
 
 let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
+let activeContext: LlamaContext | null = null;
+let activeModelUri: string | null = null;
+
+export const isLocalLLMRuntimeAvailable = (): boolean => {
+    const nativeModules = NativeModules as Record<string, unknown>;
+    return Boolean(
+        TurboModuleRegistry.get('RNLlama') ||
+        nativeModules.LlamaContext ||
+        nativeModules.RNLlama ||
+        nativeModules.Llama ||
+        nativeModules.LocalLLM
+    );
+};
+
+const resolveLlamaModule = (): LlamaModule | null => {
+    try {
+        const pkg = require('llama.rn');
+        if (pkg?.initLlama) {
+            return pkg as LlamaModule;
+        }
+    } catch {
+        // Optional dependency. If unavailable, runtime support is not present in this build.
+    }
+
+    return null;
+};
+
+const getReadyContext = async (modelUri: string): Promise<LlamaContext> => {
+    if (activeContext && activeModelUri === modelUri) {
+        return activeContext;
+    }
+
+    if (activeContext) {
+        await activeContext.release();
+    }
+
+    const llamaModule = resolveLlamaModule();
+    if (!llamaModule) {
+        throw new Error('Local LLM runtime is not installed in this build');
+    }
+
+    activeContext = await llamaModule.initLlama({
+        model: modelUri,
+        use_mmap: true,
+        use_mlock: false,
+        n_ctx: 2048,
+        n_batch: Platform.OS === 'ios' ? 512 : 256,
+        n_threads: 4,
+        n_parallel: 1,
+        ctx_shift: true,
+        n_gpu_layers: Platform.OS === 'ios' ? 99 : 0,
+    });
+    activeModelUri = modelUri;
+    return activeContext;
+};
 
 const ensureModelsDir = async () => {
     if (!MODELS_DIR) {
@@ -171,6 +248,13 @@ export const cancelLocalLLMDownload = async (): Promise<void> => {
 
 export const deleteLocalLLMModel = async (key?: string): Promise<void> => {
     const { fileUri } = await getFileUriForModel(key);
+
+    if (activeModelUri === fileUri) {
+        await activeContext?.release();
+        activeContext = null;
+        activeModelUri = null;
+    }
+
     await FileSystem.deleteAsync(fileUri, { idempotent: true });
 };
 
@@ -187,6 +271,46 @@ export const generateWithLocalLLM = async (
         throw new Error(`Local LLM model "${status.selectedModel.label}" is not downloaded`);
     }
 
-    // Placeholder: In a real implementation, we would call a native module like react-native-llama
-    throw new Error('Local LLM execution is not yet implemented in this build. Please download the preview build with Llama support.');
+    if (!isLocalLLMRuntimeAvailable()) {
+        throw new Error('Local LLM runtime is not included in this build. Install a build with LLM support or switch to Custom AI/Vaulto AI for text improvements.');
+    }
+
+    const context = await getReadyContext(status.fileUri);
+    await context.clearCache?.(true).catch(() => undefined);
+
+    const systemInstruction = 'You are a concise writing assistant. Follow the user instruction exactly and return only the requested output without commentary.';
+
+    let result: LlamaCompletionResult;
+    try {
+        result = await context.completion({
+            messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: prompt },
+            ],
+            n_predict: options?.maxTokens ?? 384,
+            temperature: 0.2,
+            top_p: 0.9,
+            top_k: 40,
+            penalty_repeat: 1.1,
+            stop: STOP_WORDS,
+            enable_thinking: false,
+        });
+    } catch (error) {
+        result = await context.completion({
+            prompt: `${systemInstruction}\n\n${prompt}`,
+            n_predict: options?.maxTokens ?? 384,
+            temperature: 0.2,
+            top_p: 0.9,
+            top_k: 40,
+            penalty_repeat: 1.1,
+            stop: STOP_WORDS,
+        });
+    }
+
+    const text = (result.content || result.text || '').trim();
+    if (!text) {
+        throw new Error('Local LLM returned empty response');
+    }
+
+    return text;
 };

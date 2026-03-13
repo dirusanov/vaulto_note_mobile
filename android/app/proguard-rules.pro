@@ -14,4 +14,7 @@
 # whisper.rn
 -keep class com.rnwhisper.** { *; }
 
+# llama.rn
+-keep class com.rnllama.** { *; }
+
 # Add any project specific keep options here:

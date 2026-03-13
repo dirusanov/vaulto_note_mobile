@@ -44,6 +44,7 @@ import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
+import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
 import { NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
 import * as Haptics from 'expo-haptics';
 
@@ -782,7 +783,13 @@ export const NoteEditScreen = () => {
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
         const isPrivate = normalizeScope(storageScope) === 'local_only';
-        if (!isPrivate || allowPrivateAI || currentAIProvider === 'local_whisper') {
+        if (
+            !isPrivate ||
+            allowPrivateAI ||
+            currentAIProvider === 'local_whisper' ||
+            currentAIProvider === 'local_llm' ||
+            currentAIProvider === 'local'
+        ) {
             return true;
         }
 
@@ -807,7 +814,24 @@ export const NoteEditScreen = () => {
     }, [allowPrivateAI, currentAIProvider, privacy, setAllowPrivateAI, storageScope]);
 
     const handleAiAccess = async (callback: () => void) => {
-        if (isGuest) {
+        const isLocalAiProvider =
+            currentAIProvider === 'local_llm' ||
+            currentAIProvider === 'local_whisper' ||
+            currentAIProvider === 'local';
+
+        const needsLocalLLMRuntime =
+            currentAIProvider === 'local_llm' ||
+            currentAIProvider === 'local';
+
+        if (needsLocalLLMRuntime && !isLocalLLMRuntimeAvailable()) {
+            Alert.alert(
+                'Local LLM unavailable',
+                'This build includes local Whisper, but not local LLM execution. Text improvements require a build with LLM support, or you can switch to Custom AI/Vaulto AI.'
+            );
+            return;
+        }
+
+        if (isGuest && !isLocalAiProvider) {
             Alert.alert(
                 'AI Features Locked',
                 'AI features are available only for signed-in users.',

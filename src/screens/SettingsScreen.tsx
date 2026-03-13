@@ -58,6 +58,7 @@ import {
     downloadLocalLLMModel,
     getAvailableLocalLLMModels,
     getLocalLLMModelStatus,
+    isLocalLLMRuntimeAvailable,
     LocalLLMModelKey,
     setSelectedLocalLLMModel,
 } from '../services/LocalLLMService';
@@ -280,6 +281,7 @@ export const SettingsScreen = () => {
     const [isDownloadingLocalLLM, setIsDownloadingLocalLLM] = useState(false);
     const [showLocalLLMDeleteConfirm, setShowLocalLLMDeleteConfirm] = useState(false);
     const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
+    const [showAdvancedAI, setShowAdvancedAI] = useState(false);
     const warningOpacity = useRef(new Animated.Value(0)).current;
     const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -334,6 +336,7 @@ export const SettingsScreen = () => {
     const usingOpenAI = aiProvider === 'openai';
     const usingLocalWhisper = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_whisper' || (aiProvider as string) === 'local');
     const usingLocalLLM = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local');
+    const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
     const usingLocal = usingLocalWhisper || usingLocalLLM;
     const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
     const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
@@ -1196,159 +1199,182 @@ export const SettingsScreen = () => {
                     <View style={styles.separator} />
 
                     {/* Compact Provider Selector */}
-                    {!LOCAL_MODELS_ENABLED && (
-                        <View style={[styles.inlineWarningContainer, { marginBottom: spacing.m }]}>
-                            <MaterialIcons name="hourglass-top" size={16} color={colors.warning} />
-                            <Text style={[styles.inlineWarningText, { flex: 1, lineHeight: 18 }]}>
-                                Local Whisper and Local LLM are temporarily hidden behind a feature flag so they can be restored later.
-                            </Text>
+                    <TouchableOpacity
+                        style={[styles.preferenceRow, showAdvancedAI ? { marginBottom: spacing.m } : undefined]}
+                        activeOpacity={0.85}
+                        onPress={() => setShowAdvancedAI(!showAdvancedAI)}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons name="tune" size={24} color={showAdvancedAI ? colors.primary : colors.textSecondary} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>Advanced AI Settings</Text>
+                                <Text style={styles.preferenceDescription}>
+                                    {LOCAL_MODELS_ENABLED
+                                        ? 'Local and Custom AI configurations'
+                                        : 'Custom AI configuration. Local models are temporarily unavailable.'}
+                                </Text>
+                            </View>
                         </View>
-                    )}
+                        <MaterialIcons name={showAdvancedAI ? 'expand-less' : 'expand-more'} size={24} color={colors.textSecondary} />
+                    </TouchableOpacity>
 
-                    <View style={[styles.compactProviderSelector, { flexDirection: 'column' }]}>
-                        {/* Top row: Vaulto AI + Custom AI */}
-                        <View style={{ flexDirection: 'row', gap: spacing.s }}>
-                            {providerOptions.filter(o => o.key !== 'local').map((option) => {
-                                const isActive = option.key === aiProvider;
-                                const isLocked = option.isLocked;
-                                return (
+                    {showAdvancedAI && (
+                        <View style={{ gap: spacing.m }}>
+                            {/* Compact Provider Selector Inside */}
+
+                            <View style={[styles.compactProviderSelector, { flexDirection: 'column' }]}>
+                                {/* Top row: Vaulto AI + Custom AI */}
+                                <View style={{ flexDirection: 'row', gap: spacing.s }}>
+                                    {providerOptions.filter(o => o.key !== 'local').map((option) => {
+                                        const isActive = option.key === aiProvider;
+                                        const isLocked = option.isLocked;
+                                        return (
+                                            <TouchableOpacity
+                                                key={option.key}
+                                                style={[
+                                                    styles.compactProviderOption,
+                                                    isActive && styles.compactProviderOptionActive,
+                                                    isLocked && styles.compactProviderOptionLocked,
+                                                    { flex: 1 }
+                                                ]}
+                                                onPress={() => updateProvider(option.key)}
+                                                disabled={activeProvider?.key === option.key && !isLocked}
+                                            >
+                                                {option.key === 'vaulto_ai' ? (
+                                                    <Image
+                                                        source={require('../../assets/icon.png')}
+                                                        style={{
+                                                            width: 14,
+                                                            height: 14,
+                                                            tintColor: isActive ? colors.surface : colors.textSecondary,
+                                                        }}
+                                                        resizeMode="contain"
+                                                    />
+                                                ) : (
+                                                    <MaterialIcons name={option.icon as any} size={14} color={isActive ? colors.surface : colors.textSecondary} />
+                                                )}
+                                                <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]} numberOfLines={1}>
+                                                    {option.title.replace(' Compatible', '').replace(' Hosted', '')}
+                                                </Text>
+                                                {isLocked && <MaterialIcons name="lock" size={12} color={colors.accentPurple} />}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                {LOCAL_MODELS_ENABLED && (
                                     <TouchableOpacity
-                                        key={option.key}
                                         style={[
                                             styles.compactProviderOption,
-                                            isActive && styles.compactProviderOptionActive,
-                                            isLocked && styles.compactProviderOptionLocked,
-                                            { flex: 1 }
+                                            usingLocal && styles.compactProviderOptionActive,
+                                            { paddingHorizontal: spacing.m, flex: 1 }
                                         ]}
-                                        onPress={() => updateProvider(option.key)}
-                                        disabled={activeProvider?.key === option.key && !isLocked}
+                                        onPress={() => updateProvider('local')}
                                     >
-                                        {option.key === 'vaulto_ai' ? (
-                                            <Image
-                                                source={require('../../assets/icon.png')}
-                                                style={{
-                                                    width: 14,
-                                                    height: 14,
-                                                    tintColor: isActive ? colors.surface : colors.textSecondary,
-                                                }}
-                                                resizeMode="contain"
-                                            />
-                                        ) : (
-                                            <MaterialIcons name={option.icon as any} size={14} color={isActive ? colors.surface : colors.textSecondary} />
-                                        )}
-                                        <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]} numberOfLines={1}>
-                                            {option.title.replace(' Compatible', '').replace(' Hosted', '')}
+                                        <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
+                                        <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
+                                            Local
                                         </Text>
-                                        {isLocked && <MaterialIcons name="lock" size={12} color={colors.accentPurple} />}
                                     </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-
-                        {LOCAL_MODELS_ENABLED && (
-                            <TouchableOpacity
-                                style={[
-                                    styles.compactProviderOption,
-                                    usingLocal && styles.compactProviderOptionActive,
-                                    { paddingHorizontal: spacing.m, flex: 1 }
-                                ]}
-                                onPress={() => updateProvider('local')}
-                            >
-                                <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
-                                <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
-                                    Local
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    {/* Setup for Custom AI (OpenAI & Compatible) */}
-                    {usingOpenAI && (
-                        <View style={styles.openAIConfigCard}>
-                            {/* Header */}
-                            <View style={styles.openAIConfigHeader}>
-                                <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-                                    <MaterialIcons name="dns" size={20} color={colors.primary} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.openAIConfigTitle}>Custom AI Configuration</Text>
-                                    <Text style={styles.openAIConfigSubtitle}>OpenAI or compatible API</Text>
-                                </View>
+                                )}
                             </View>
 
-                            {/* Base URL */}
-                            <View style={styles.openAIInputGroup}>
-                                <Text style={styles.openAILabel}>Base URL</Text>
-                                <TextInput
-                                    value={openAIBaseUrl}
-                                    onChangeText={setOpenAIBaseUrlState}
-                                    placeholder="https://api.openai.com/v1"
-                                    autoCapitalize="none"
-                                    style={styles.openAIInput}
-                                    placeholderTextColor={colors.textSecondary}
-                                />
-                            </View>
-
-                            {/* API Key */}
-                            <View style={styles.openAIInputGroup}>
-                                <Text style={styles.openAILabel}>API Key</Text>
-                                <View style={styles.openAISecretRow}>
-                                    <TextInput
-                                        value={apiKey}
-                                        onChangeText={setApiKeyState}
-                                        placeholder="sk-..."
-                                        autoCapitalize="none"
-                                        secureTextEntry={!showOpenAIKey}
-                                        style={[styles.openAIInput, styles.openAIInputWithButton]}
-                                        placeholderTextColor={colors.textSecondary}
-                                    />
-                                    <TouchableOpacity
-                                        style={styles.openAIEyeButton}
-                                        onPress={() => setShowOpenAIKey(!showOpenAIKey)}
-                                    >
-                                        <MaterialIcons
-                                            name={showOpenAIKey ? 'visibility' : 'visibility-off'}
-                                            size={18}
-                                            color={colors.textSecondary}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            {/* Status message */}
-                            {openAITestStatus.message && (
-                                <View style={styles.openAIStatusRow}>
-                                    <MaterialIcons
-                                        name={openAITestStatus.type === 'success' ? 'check-circle' : 'error'}
-                                        size={14}
-                                        color={openAITestStatus.type === 'success' ? colors.accentGreen : colors.error}
-                                    />
-                                    <Text style={[
-                                        styles.openAIStatusText,
-                                        openAITestStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError
-                                    ]}>
-                                        {openAITestStatus.message}
+                            {!LOCAL_MODELS_ENABLED && (
+                                <View style={styles.inlineWarningContainer}>
+                                    <MaterialIcons name="hourglass-top" size={16} color={colors.warning} />
+                                    <Text style={[styles.inlineWarningText, { flex: 1, lineHeight: 18 }]}>
+                                        Local Whisper and Local LLM are temporarily hidden behind a feature flag so they can be restored later.
                                     </Text>
                                 </View>
                             )}
 
-                            {/* Test button */}
-                            <TouchableOpacity
-                                style={styles.openAITestButton}
-                                onPress={handleTestConnection}
-                                disabled={testingConnection}
-                            >
-                                {testingConnection ? (
-                                    <ActivityIndicator size="small" color={colors.surface} />
-                                ) : (
-                                    <>
-                                        <MaterialIcons name="wifi-tethering" size={16} color={colors.surface} />
-                                        <Text style={styles.openAITestButtonText}>Test Connection</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                            {/* Setup for Custom AI (OpenAI & Compatible) */}
+                            {usingOpenAI && (
+                                <View style={styles.openAIConfigCard}>
+                                    {/* Header */}
+                                    <View style={styles.openAIConfigHeader}>
+                                        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
+                                            <MaterialIcons name="dns" size={20} color={colors.primary} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.openAIConfigTitle}>Custom AI Configuration</Text>
+                                            <Text style={styles.openAIConfigSubtitle}>OpenAI or compatible API</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Base URL */}
+                                    <View style={styles.openAIInputGroup}>
+                                        <Text style={styles.openAILabel}>Base URL</Text>
+                                        <TextInput
+                                            value={openAIBaseUrl}
+                                            onChangeText={setOpenAIBaseUrlState}
+                                            placeholder="https://api.openai.com/v1"
+                                            autoCapitalize="none"
+                                            style={styles.openAIInput}
+                                            placeholderTextColor={colors.textSecondary}
+                                        />
+                                    </View>
+
+                                    {/* API Key */}
+                                    <View style={styles.openAIInputGroup}>
+                                        <Text style={styles.openAILabel}>API Key</Text>
+                                        <View style={styles.openAISecretRow}>
+                                            <TextInput
+                                                value={apiKey}
+                                                onChangeText={setApiKeyState}
+                                                placeholder="sk-..."
+                                                autoCapitalize="none"
+                                                secureTextEntry={!showOpenAIKey}
+                                                style={[styles.openAIInput, styles.openAIInputWithButton]}
+                                                placeholderTextColor={colors.textSecondary}
+                                            />
+                                            <TouchableOpacity
+                                                style={styles.openAIEyeButton}
+                                                onPress={() => setShowOpenAIKey(!showOpenAIKey)}
+                                            >
+                                                <MaterialIcons
+                                                    name={showOpenAIKey ? 'visibility' : 'visibility-off'}
+                                                    size={18}
+                                                    color={colors.textSecondary}
+                                                />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+
+                                    {/* Status message */}
+                                    {openAITestStatus.message && (
+                                        <View style={styles.openAIStatusRow}>
+                                            <MaterialIcons
+                                                name={openAITestStatus.type === 'success' ? 'check-circle' : 'error'}
+                                                size={14}
+                                                color={openAITestStatus.type === 'success' ? colors.accentGreen : colors.error}
+                                            />
+                                            <Text style={[
+                                                styles.openAIStatusText,
+                                                openAITestStatus.type === 'success' ? styles.statusTextSuccess : styles.statusTextError
+                                            ]}>
+                                                {openAITestStatus.message}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {/* Test button */}
+                                    <TouchableOpacity
+                                        style={styles.openAITestButton}
+                                        onPress={handleTestConnection}
+                                        disabled={testingConnection}
+                                    >
+                                        {testingConnection ? (
+                                            <ActivityIndicator size="small" color={colors.surface} />
+                                        ) : (
+                                            <>
+                                                <MaterialIcons name="wifi-tethering" size={16} color={colors.surface} />
+                                                <Text style={styles.openAITestButtonText}>Test Connection</Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
 
                     {LOCAL_MODELS_ENABLED && usingLocalWhisper && (
                         <View style={[styles.openAIConfigCard, { padding: 8, gap: 10, borderBottomLeftRadius: usingLocalLLM ? 0 : spacing.m, borderBottomRightRadius: usingLocalLLM ? 0 : spacing.m }]}>
@@ -1514,7 +1540,11 @@ export const SettingsScreen = () => {
                                     flexDirection: 'row', 
                                     alignItems: 'center', 
                                     gap: 4, 
-                                    backgroundColor: localLLMStatus?.isDownloaded ? colors.success + '15' : colors.backgroundSecondary, 
+                                    backgroundColor: localLLMStatus?.isDownloaded && localLLMRuntimeAvailable
+                                        ? colors.success + '15'
+                                        : localLLMStatus?.isDownloaded
+                                            ? colors.warning + '15'
+                                            : colors.backgroundSecondary,
                                     paddingHorizontal: 6, 
                                     paddingVertical: 2, 
                                     borderRadius: 8 
@@ -1523,18 +1553,30 @@ export const SettingsScreen = () => {
                                         width: 5, 
                                         height: 5, 
                                         borderRadius: 2.5, 
-                                        backgroundColor: localLLMStatus?.isDownloaded ? colors.success : colors.textTertiary 
+                                        backgroundColor: localLLMStatus?.isDownloaded
+                                            ? (localLLMRuntimeAvailable ? colors.success : colors.warning)
+                                            : colors.textTertiary
                                     }} />
                                     <Text style={{ 
                                         fontSize: 8, 
                                         fontWeight: '800', 
-                                        color: localLLMStatus?.isDownloaded ? colors.success : colors.textSecondary, 
+                                        color: localLLMStatus?.isDownloaded
+                                            ? (localLLMRuntimeAvailable ? colors.success : colors.warning)
+                                            : colors.textSecondary,
                                         textTransform: 'uppercase' 
                                     }}>
-                                        {localLLMStatus?.isDownloaded ? 'Active' : 'Not ready'}
+                                        {localLLMStatus?.isDownloaded
+                                            ? (localLLMRuntimeAvailable ? 'Ready' : 'Runtime missing')
+                                            : 'Not ready'}
                                     </Text>
                                 </View>
                             </View>
+
+                            {localLLMStatus?.isDownloaded && !localLLMRuntimeAvailable && (
+                                <Text style={{ color: colors.warning, fontSize: 11, lineHeight: 16, paddingHorizontal: 4 }}>
+                                    Model is downloaded, but this app build does not include Local LLM runtime yet. Rebuild the app after installing native LLM support.
+                                </Text>
+                            )}
 
                             {/* Model selector row */}
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
@@ -1640,6 +1682,9 @@ export const SettingsScreen = () => {
                                     </Text>
                                 </View>
                             )}
+                        </View>
+                    )}
+
                         </View>
                     )}
 

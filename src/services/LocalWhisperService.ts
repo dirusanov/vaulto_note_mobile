@@ -52,7 +52,7 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         sizeLabel: '~75 MB',
         sizeBytes: 75 * 1024 * 1024,
         filename: 'ggml-tiny.bin',
-        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
         power: 1,
         recommended: true,
     },
@@ -62,7 +62,7 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         sizeLabel: '~142 MB',
         sizeBytes: 142 * 1024 * 1024,
         filename: 'ggml-base.bin',
-        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
         power: 2,
     },
     large: {
@@ -71,7 +71,7 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         sizeLabel: '~2.9 GB',
         sizeBytes: 2900 * 1024 * 1024,
         filename: 'ggml-large-v3.bin',
-        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
+        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
         power: 4,
     },
 };
