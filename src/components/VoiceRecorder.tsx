@@ -11,7 +11,7 @@ import {
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { AudioService, AudioRecording } from '../services/AudioService';
+import { AudioService, AudioRecording, MAX_RECORDING_DURATION_MS } from '../services/AudioService';
 import {
     AIProvider,
     getAIProvider,
@@ -41,6 +41,7 @@ interface VoiceRecorderProps {
 const BAR_COUNT = 20;
 const SILENCE_THRESHOLD_DB = -60;
 const MIN_VOICE_SAMPLES = 3;
+const MAX_RECORDING_DURATION_SECONDS = Math.floor(MAX_RECORDING_DURATION_MS / 1000);
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     visible,
@@ -71,6 +72,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
+    const maxDurationHandledRef = useRef(false);
+    const interruptionHandledRef = useRef(false);
 
     // Waveform animations
     const animations = useRef([...Array(BAR_COUNT)].map(() => new Animated.Value(0.3))).current;
@@ -136,6 +139,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             currentMetering.current = -160;
             meteringSamples.current = 0;
             voiceSamples.current = 0;
+            maxDurationHandledRef.current = false;
+            interruptionHandledRef.current = false;
             agentModeToggleTouchedRef.current = false;
         }
     }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
@@ -271,6 +276,88 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
     }, [isRecording, isPaused]);
 
+    useEffect(() => {
+        if (
+            !visible ||
+            !isRecording ||
+            isPaused ||
+            isStopping ||
+            isStartPending ||
+            interruptionHandledRef.current
+        ) {
+            return;
+        }
+
+        let disposed = false;
+        const interval = setInterval(() => {
+            void (async () => {
+                try {
+                    const status = await AudioService.getRecordingStatus();
+                    if (disposed || isPaused || isStopping || isStartPending) {
+                        return;
+                    }
+
+                    const canRecord = typeof (status as any)?.canRecord === 'boolean'
+                        ? (status as any).canRecord
+                        : true;
+                    const isDoneRecording = !!(status as any)?.isDoneRecording;
+
+                    if (!status || isDoneRecording || !canRecord) {
+                        interruptionHandledRef.current = true;
+                        setIsRecording(false);
+                        setIsPaused(false);
+                        setIsStopping(false);
+                        Alert.alert(
+                            'Recording interrupted',
+                            'The recording stopped unexpectedly before it could be sent. Please try again.'
+                        );
+                        onCancel();
+                    }
+                } catch (error) {
+                    if (disposed) {
+                        return;
+                    }
+
+                    interruptionHandledRef.current = true;
+                    setIsRecording(false);
+                    setIsPaused(false);
+                    setIsStopping(false);
+                    console.warn('[VoiceRecorder] Failed to read recording status', error);
+                    Alert.alert(
+                        'Recording interrupted',
+                        'The recording state was lost. Please try again.'
+                    );
+                    onCancel();
+                }
+            })();
+        }, 1200);
+
+        return () => {
+            disposed = true;
+            clearInterval(interval);
+        };
+    }, [visible, isRecording, isPaused, isStopping, isStartPending, onCancel]);
+
+    useEffect(() => {
+        if (
+            !visible ||
+            !isRecording ||
+            isPaused ||
+            isStopping ||
+            duration < MAX_RECORDING_DURATION_SECONDS ||
+            maxDurationHandledRef.current
+        ) {
+            return;
+        }
+
+        maxDurationHandledRef.current = true;
+        Alert.alert(
+            'Recording limit reached',
+            'A single recording is limited to 5 minutes. Sending the current recording now.'
+        );
+        void handleStopRecording();
+    }, [visible, duration, isRecording, isPaused, isStopping]);
+
     const formatDuration = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -286,6 +373,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             currentMetering.current = -160;
             meteringSamples.current = 0;
             voiceSamples.current = 0;
+            maxDurationHandledRef.current = false;
+            interruptionHandledRef.current = false;
             await AudioService.startRecording((level) => {
                 currentMetering.current = level;
                 meteringSamples.current += 1;
@@ -329,30 +418,40 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             const recording = await AudioService.stopRecording();
             setIsRecording(false);
             setIsPaused(false);
-            if (recording) {
-                const hasMetering = meteringSamples.current > 0;
-                const hasVoiceSignal = !hasMetering || voiceSamples.current >= MIN_VOICE_SAMPLES;
-                if (!hasVoiceSignal) {
-                    await AudioService.deleteAudioFile(recording.uri);
-                    Alert.alert(
-                        'No audio captured',
-                        'It looks like the microphone is being used by another app (e.g. WhatsApp call) or the input is muted. Please stop the other recording/call and try again.'
-                    );
-                    onCancel();
-                    return;
-                }
-                // Persist for normal mode, or when user explicitly changed agent state in HOLD mode.
-                if (!isForceTextMode || agentModeToggleTouchedRef.current) {
-                    await setAgentModeEnabled(agentModeEnabled);
-                }
-                onFinish(recording, transcribe, agentModeEnabled);
+            if (!recording) {
+                interruptionHandledRef.current = true;
+                Alert.alert(
+                    'Recording unavailable',
+                    'The recording stopped before it could be saved or transcribed. Please try again.'
+                );
+                onCancel();
+                return;
             }
+
+            const hasMetering = meteringSamples.current > 0;
+            const hasVoiceSignal = !hasMetering || voiceSamples.current >= MIN_VOICE_SAMPLES;
+            if (!hasVoiceSignal) {
+                await AudioService.deleteAudioFile(recording.uri);
+                Alert.alert(
+                    'No audio captured',
+                    'It looks like the microphone is being used by another app (e.g. WhatsApp call) or the input is muted. Please stop the other recording/call and try again.'
+                );
+                onCancel();
+                return;
+            }
+            // Persist for normal mode, or when user explicitly changed agent state in HOLD mode.
+            if (!isForceTextMode || agentModeToggleTouchedRef.current) {
+                await setAgentModeEnabled(agentModeEnabled);
+            }
+            onFinish(recording, transcribe, agentModeEnabled);
         } catch (error) {
             // Recovery path: if stop failed, the native recorder may already be invalid.
             // Force local UI out of recording state so the modal does not get stuck.
+            interruptionHandledRef.current = true;
             setIsRecording(false);
             setIsPaused(false);
-            Alert.alert('Error', 'Could not stop recording');
+            Alert.alert('Error', 'Could not finish recording. Please try again.');
+            onCancel();
             console.error(error);
         } finally {
             setIsStopping(false);

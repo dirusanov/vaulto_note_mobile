@@ -12,6 +12,10 @@ export const PaywallScreen = () => {
     const navigation = useNavigation();
     const { isAuthenticated, isGuest } = useAuth();
     const canPurchase = isAuthenticated && !isGuest;
+    const transcriptionMinutes = packages.reduce((maxMinutes, pack) => {
+        const planMinutes = pack.backendPlan?.transcription_minutes ?? 0;
+        return planMinutes > maxMinutes ? planMinutes : maxMinutes;
+    }, 500);
 
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
@@ -49,7 +53,7 @@ export const PaywallScreen = () => {
 
                     <View style={styles.featuresList}>
                         <FeatureItem text="Unlimited Cloud Sync" />
-                        <FeatureItem text="150 mins/month transcription" />
+                        <FeatureItem text={`${transcriptionMinutes} mins/month transcription with Vaulto AI`} />
                         <FeatureItem text="Custom API Key & Server" />
                     </View>
 
@@ -68,6 +72,9 @@ export const PaywallScreen = () => {
                                 );
                                 const price = product.priceString;
                                 const isBestValue = pack.identifier.toLowerCase().includes('annual');
+                                const minutesLabel = backendPlan?.transcription_minutes
+                                    ? `${backendPlan.transcription_minutes} Vaulto AI minutes / month`
+                                    : null;
 
                                 return (
                                     <TouchableOpacity
@@ -82,6 +89,11 @@ export const PaywallScreen = () => {
                                             {isBestValue && <View style={styles.badge}><Text style={styles.badgeText}>BEST VALUE</Text></View>}
                                         </View>
                                         <Text style={[styles.planPrice, isBestValue && styles.planPriceBest]}>{price}</Text>
+                                        {minutesLabel ? (
+                                            <Text style={[styles.planMinutes, isBestValue && styles.planMinutesBest]}>
+                                                {minutesLabel}
+                                            </Text>
+                                        ) : null}
                                         <Text style={[styles.planSubtext, isBestValue && styles.planSubtextBest]}>
                                             {product.description}
                                         </Text>
@@ -253,6 +265,15 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     planPriceBest: {
+        color: colors.primary,
+    },
+    planMinutes: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 4,
+    },
+    planMinutesBest: {
         color: colors.primary,
     },
     planSubtext: {

@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { encrypt, decrypt } from '../crypto/encryption';
 
-const MAX_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+export const MAX_RECORDING_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 
 
@@ -159,13 +159,6 @@ class AudioServiceClass {
             console.log('[V3] Recording created successfully');
             this.recording = recording;
             this.recordingStartTime = Date.now();
-
-            // Set up duration limit
-            setTimeout(async () => {
-                if (this.recording) {
-                    await this.stopRecording();
-                }
-            }, MAX_DURATION_MS);
         } catch (error) {
             console.error('Failed to start recording:', error);
             throw error;
