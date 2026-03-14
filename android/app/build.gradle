@@ -2,7 +2,9 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+import groovy.json.JsonSlurper
 import java.io.FileInputStream
+import java.nio.file.Paths
 import java.util.Properties
 
 def keystoreProperties = new Properties()
@@ -12,18 +14,47 @@ if (keystorePropertiesFile.exists()) {
 }
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def easBuildGradleFile = file("./eas-build.gradle")
+def credentialsJsonFile = rootProject.file("../credentials.json")
+def credentials = credentialsJsonFile.exists() ? new JsonSlurper().parse(credentialsJsonFile) : null
+def easKeystore = credentials?.android?.keystore
+
 def releaseStoreFile = keystoreProperties.getProperty("storeFile") ?: System.getenv("ANDROID_KEYSTORE_FILE")
+if (!releaseStoreFile && easKeystore?.keystorePath) {
+    def keystorePath = Paths.get(easKeystore.keystorePath.toString())
+    def storeFilePath = keystorePath.isAbsolute()
+        ? keystorePath
+        : rootProject.file("..").toPath().resolve(keystorePath)
+    releaseStoreFile = storeFilePath.toString()
+}
+
 def releaseStorePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+if (!releaseStorePassword && easKeystore?.keystorePassword) {
+    releaseStorePassword = easKeystore.keystorePassword.toString()
+}
+
 def releaseKeyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("ANDROID_KEY_ALIAS")
+if (!releaseKeyAlias && easKeystore?.keyAlias) {
+    releaseKeyAlias = easKeystore.keyAlias.toString()
+}
+
 def releaseKeyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("ANDROID_KEY_PASSWORD")
+if (!releaseKeyPassword && easKeystore?.keyPassword) {
+    releaseKeyPassword = easKeystore.keyPassword.toString()
+}
+if (!releaseKeyPassword && easKeystore?.keystorePassword) {
+    releaseKeyPassword = easKeystore.keystorePassword.toString()
+}
+
 def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { value ->
     value != null && value.toString().trim()
 }
+def hasEasInjectedSigning = easBuildGradleFile.exists()
 def isReleaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
 
-if (isReleaseTaskRequested && !hasReleaseSigning) {
+if (isReleaseTaskRequested && !hasReleaseSigning && !hasEasInjectedSigning) {
     throw new GradleException(
-        "Release signing is not configured. Create android/keystore.properties or set ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
+        "Release signing is not configured. Create android/keystore.properties, add credentials.json for EAS, or set ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
     )
 }
 
@@ -214,3 +245,7 @@ dependencies {
 }
 
 apply plugin: 'com.google.gms.google-services'
+
+if (easBuildGradleFile.exists()) {
+    apply from: easBuildGradleFile
+}
