@@ -54,6 +54,13 @@ interface Block {
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
+const isEditableBlock = (block: Block) => block.type !== 'audio' && block.type !== 'processing';
+const resolveChecklistScaleFactor = (count: number, enabled: boolean) => {
+    if (!enabled) return 1.0;
+    if (count <= 8) return 1.25;
+    if (count <= 15) return 1.15;
+    return 1.0;
+};
 
 const ProcessingBadge = ({ content }: { content: string }) => {
     const spinAnim = useRef(new Animated.Value(0)).current;
@@ -100,6 +107,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     } = props;
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+    // Freeze checklist scaling for the current parsed note to avoid whole-list jumps while editing.
+    const [stableChecklistScaleFactor, setStableChecklistScaleFactor] = useState(() =>
+        resolveChecklistScaleFactor(0, autoScalingEnabled)
+    );
     const inputRefs = useRef<Record<string, TextInput>>({});
     const isInternalUpdate = useRef(false);
     const pendingFocusTransferId = useRef<string | null>(null);
@@ -707,6 +718,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             parsedBlocks.push({ id: generateId(), type: 'text', content: '', formats: [] });
         }
 
+        setStableChecklistScaleFactor(resolveChecklistScaleFactor(parsedBlocks.length, autoScalingEnabled));
         setBlocks(prevBlocks => {
             const usedIndices = new Set<number>();
             const newBlocks = parsedBlocks.map((newBlock, i) => {
@@ -737,6 +749,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             return newBlocks;
         });
     }, [initialContent, reparseTrigger]);
+
+    useEffect(() => {
+        setStableChecklistScaleFactor(resolveChecklistScaleFactor(blocks.length, autoScalingEnabled));
+    }, [autoScalingEnabled]);
 
 
     const handleBlockChange = (id: string, text: string) => {
@@ -1040,31 +1056,36 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             if (isEffectivelyEmpty) {
                 // Delete empty block
                 e.preventDefault();
-                const prevId = blocks[index - 1].id;
                 const prevBlock = blocks[index - 1];
-                const newBlocks = blocks.filter(b => b.id !== id);
-                pendingFocusTransferId.current = prevId;
+                if (!isEditableBlock(prevBlock)) {
+                    return;
+                }
 
-                blockSelections.current[prevId] = {
+                const selectionAtEnd = {
                     start: prevBlock.content.length,
                     end: prevBlock.content.length,
                 };
-                setFocusedBlockId(prevId);
+                const newBlocks = [...blocks];
+                newBlocks[index] = {
+                    ...currentBlock,
+                    type: prevBlock.type,
+                    content: prevBlock.content,
+                    checked: prevBlock.checked,
+                    formats: prevBlock.formats.map((format) => ({ ...format })),
+                };
+                newBlocks.splice(index - 1, 1);
 
-                // Move focus before removing the active input to keep keyboard alive.
-                const prevRef = inputRefs.current[prevId];
-                prevRef?.focus();
-                prevRef?.setNativeProps({ selection: blockSelections.current[prevId] });
-
+                delete blockSelections.current[prevBlock.id];
+                delete inputRefs.current[prevBlock.id];
+                blockSelections.current[id] = selectionAtEnd;
+                pendingFocusTransferId.current = null;
+                setFocusedBlockId(id);
                 setBlocks(newBlocks);
 
                 requestAnimationFrame(() => {
-                    const ref = inputRefs.current[prevId];
-                    ref?.focus();
-                    ref?.setNativeProps({ selection: blockSelections.current[prevId] });
-                    if (pendingFocusTransferId.current === prevId) {
-                        pendingFocusTransferId.current = null;
-                    }
+                    const input = inputRefs.current[id];
+                    input?.focus();
+                    input?.setNativeProps({ selection: selectionAtEnd });
                 });
 
                 isInternalUpdate.current = true;
@@ -1075,10 +1096,14 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     return;
                 }
 
+                const prevBlock = blocks[index - 1];
+                if (!isEditableBlock(prevBlock)) {
+                    return;
+                }
+
                 // Merge with previous block
                 e.preventDefault();
                 const prevIndex = index - 1;
-                const prevBlock = blocks[prevIndex];
 
                 const prevLength = prevBlock.content.length;
                 const mergedContent = prevBlock.content + currentBlock.content;
@@ -1092,32 +1117,31 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 const mergedFormats = [...prevBlock.formats, ...shiftedFormats];
 
                 const newBlocks = [...blocks];
-                newBlocks[prevIndex] = { ...prevBlock, content: mergedContent, formats: mergedFormats };
-                newBlocks.splice(index, 1);
-                pendingFocusTransferId.current = prevBlock.id;
-
-                blockSelections.current[prevBlock.id] = {
+                newBlocks[index] = {
+                    ...currentBlock,
+                    type: prevBlock.type,
+                    content: mergedContent,
+                    checked: prevBlock.checked,
+                    formats: mergedFormats,
+                };
+                newBlocks.splice(prevIndex, 1);
+                const mergedSelection = {
                     start: prevLength,
                     end: prevLength,
                 };
-                setFocusedBlockId(prevBlock.id);
-
-                const prevRef = inputRefs.current[prevBlock.id];
-                prevRef?.focus();
-                prevRef?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
+                delete blockSelections.current[prevBlock.id];
+                delete inputRefs.current[prevBlock.id];
+                blockSelections.current[id] = mergedSelection;
+                pendingFocusTransferId.current = null;
+                setFocusedBlockId(id);
 
                 setBlocks(newBlocks);
 
-                setTimeout(() => {
-                    const ref = inputRefs.current[prevBlock.id];
-                    ref?.focus();
-                    setTimeout(() => {
-                        ref?.setNativeProps({ selection: blockSelections.current[prevBlock.id] });
-                        if (pendingFocusTransferId.current === prevBlock.id) {
-                            pendingFocusTransferId.current = null;
-                        }
-                    }, 10);
-                }, 10);
+                requestAnimationFrame(() => {
+                    const input = inputRefs.current[id];
+                    input?.focus();
+                    input?.setNativeProps({ selection: mergedSelection });
+                });
 
                 isInternalUpdate.current = true;
                 onChange(serializeBlocks(newBlocks));
@@ -1162,16 +1186,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
     }, [blocks, focusedBlockId]);
 
-    // Dynamic scaling logic based on content density
-    const getScaleFactor = () => {
-        if (!autoScalingEnabled) return 1.0;
-        const count = blocks.length;
-        if (count <= 8) return 1.25; // Large Mode
-        if (count <= 15) return 1.15; // Medium Mode
-        return 1.0; // Standard Mode
-    };
-
-    const scaleFactor = getScaleFactor();
+    const scaleFactor = stableChecklistScaleFactor;
 
     // Derived font sizes
     // Headers scale based on baseFontSize but NOT the density scaleFactor (usually) 
@@ -1378,7 +1393,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
                 keyboardShouldPersistTaps="always"
-                removeClippedSubviews={Platform.OS === 'android'} // Optimize android
+                removeClippedSubviews={false}
                 contentContainerStyle={{ flexGrow: 1 }}
                 ListFooterComponent={
                     <>
