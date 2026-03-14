@@ -1368,16 +1368,6 @@ export const NoteEditScreen = () => {
     }, []);
 
     useEffect(() => {
-        if (activeVariantId === 'original') {
-            setTitle(existingNote?.title || '');
-            setContent(existingNote?.content || '');
-        } else {
-            setTitle(resolveImprovementVariantTitle(activeVariantId));
-            setContent(improvementDraftsRef.current[activeVariantId] ?? '');
-        }
-    }, [activeVariantId, existingNote?.content, existingNote?.title, resolveImprovementVariantTitle]);
-
-    useEffect(() => {
         isMounted.current = true;
         return () => {
             isMounted.current = false;
@@ -1716,6 +1706,7 @@ export const NoteEditScreen = () => {
 
     // Debounced save
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const saveNoteRef = useRef<(() => Promise<void>) | null>(null);
 
 
 
@@ -1851,10 +1842,15 @@ export const NoteEditScreen = () => {
     }, [activeVariantId, localNoteId, resolveImprovementVariantTitle, updateImprovement]);
 
     const saveNote = useCallback(async () => {
-        if (activeVariantId !== 'original') {
+        const activeVariant = activeVariantIdRef.current;
+        if (activeVariant !== 'original') {
             await saveImprovementDraft();
             return;
         }
+
+        const noteId = localNoteIdRef.current;
+        const currentTitle = currentTitleRef.current;
+        const currentContent = currentContentRef.current;
 
         // CREATION LOCK: Prevent double-creation if already in progress
         if (isCreatingNote.current) {
@@ -1866,12 +1862,12 @@ export const NoteEditScreen = () => {
         // Correct source of truth for audio presence is the current list of recordings
         const hasAudio = voiceRecordingsRef.current.length > 0;
         const hasImprovements = noteImprovements.length > 0;
-        const emptyText = !title.trim() && !content.trim();
+        const emptyText = !currentTitle.trim() && !currentContent.trim();
 
         if (emptyText && !hasAudio && !hasImprovements) {
-            if (localNoteId) {
+            if (noteId) {
                 try {
-                    await deleteNote(localNoteId);
+                    await deleteNote(noteId);
                     if (isMounted.current) {
                         setLocalNoteId(undefined);
                     }
@@ -1886,7 +1882,7 @@ export const NoteEditScreen = () => {
 
         // Avoid duplicate save if nothing changed
         // NOTE: We check refs vs refs to avoid stale closures if this runs delayed
-        if (localNoteId && title === lastSavedTitle.current && content === lastSavedContent.current) {
+        if (noteId && currentTitle === lastSavedTitle.current && currentContent === lastSavedContent.current) {
             return;
         }
 
@@ -1894,10 +1890,10 @@ export const NoteEditScreen = () => {
             setIsSaving(true);
         }
         try {
-            if (localNoteId) {
-                await updateNote(localNoteId, {
-                    title,
-                    content,
+            if (noteId) {
+                await updateNote(noteId, {
+                    title: currentTitle,
+                    content: currentContent,
                     has_audio: hasAudio, // Explicitly sync has_audio state
                     storage_scope: storageScope,
                     privacy,
@@ -1909,8 +1905,8 @@ export const NoteEditScreen = () => {
 
                 try {
                     const newNote = await createNote({
-                        title,
-                        content,
+                        title: currentTitle,
+                        content: currentContent,
                         storage_scope: storageScope,
                         privacy,
                         // Note: createNote signature takes audio object, not has_audio flag directly.
@@ -1931,9 +1927,9 @@ export const NoteEditScreen = () => {
                     const latestTitle = currentTitleRef.current;
 
                     // currentTitleRef and currentContentRef hold the very latest state from the component
-                    // We check if it differs from what we *just* created (which was 'title' and 'content' from closure)
-                    const contentChanged = latestContent !== content;
-                    const titleChanged = latestTitle !== title;
+                    // We check if it differs from what we *just* created.
+                    const contentChanged = latestContent !== currentContent;
+                    const titleChanged = latestTitle !== currentTitle;
 
                     if (pendingSaveAfterCreate.current || contentChanged || titleChanged) {
                         console.log('[NoteEditScreen] Identifying pending changes after creation, triggering update...', { pending: pendingSaveAfterCreate.current, contentChanged, titleChanged });
@@ -1954,8 +1950,8 @@ export const NoteEditScreen = () => {
                     isCreatingNote.current = false;
                 }
             }
-            lastSavedTitle.current = title;
-            lastSavedContent.current = content;
+            lastSavedTitle.current = currentTitle;
+            lastSavedContent.current = currentContent;
         } catch (error) {
             console.error('Failed to save note:', error);
         } finally {
@@ -1963,14 +1959,18 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [activeVariantId, content, createNote, deleteNote, existingNote?.privacy, localNoteId, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, title, updateNote]);
+    }, [createNote, deleteNote, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
+
+    useEffect(() => {
+        saveNoteRef.current = saveNote;
+    }, [saveNote]);
 
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
-            saveNote();
+            void saveNoteRef.current?.();
         }, 500); // Reduced from 2000ms to 500ms for faster auto-save
-    }, [saveNote]);
+    }, []);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
         if (variantId === activeVariantId) {

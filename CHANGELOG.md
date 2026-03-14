@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.41] - 2026-03-14
+
+### Fixed
+- **Editor Input Stability**: Prevented recent text from being rolled back during autosave/state sync, which could dismiss the keyboard, drop the first character after a newline, or close the keyboard after a short pause.
+
 ## [1.0.35] - 2026-03-04
 
 ### Changed
