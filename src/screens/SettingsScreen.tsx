@@ -1279,15 +1279,6 @@ export const SettingsScreen = () => {
                                 )}
                             </View>
 
-                            {!LOCAL_MODELS_ENABLED && (
-                                <View style={styles.inlineWarningContainer}>
-                                    <MaterialIcons name="hourglass-top" size={16} color={colors.warning} />
-                                    <Text style={[styles.inlineWarningText, { flex: 1, lineHeight: 18 }]}>
-                                        Local Whisper and Local LLM are temporarily hidden behind a feature flag so they can be restored later.
-                                    </Text>
-                                </View>
-                            )}
-
                             {/* Setup for Custom AI (OpenAI & Compatible) */}
                             {usingOpenAI && (
                                 <View style={styles.openAIConfigCard}>
