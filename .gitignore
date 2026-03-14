@@ -25,10 +25,12 @@ android/.gradle/
 android/.idea/
 android/.cxx/
 android/local.properties
+android/keystore.properties
 android/captures/
 android/app/build/
 android/build/
 *.iml
+*.jks
 
 # iOS
 ios/Pods/
