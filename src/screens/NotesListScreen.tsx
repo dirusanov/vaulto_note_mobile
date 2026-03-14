@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -70,6 +70,23 @@ export const NotesListScreen = () => {
             fetchNotes();
         }, [fetchNotes])
     );
+
+    // Ensure modals/overlays do not block input after app background/restore
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'background' || nextState === 'inactive') {
+                setIsVoiceRecorderVisible(false);
+                setShowUnlockSyncModal(false);
+                setShowUnlockingOverlay(false);
+                setShowDeleteConfirm(false);
+                setIsSelectionMode(false);
+                setSelectedNoteIds(new Set());
+            }
+        });
+        return () => {
+            subscription.remove();
+        };
+    }, []);
 
     // Load dock preference when screen is focused
     useEffect(() => {
@@ -508,6 +525,7 @@ export const NotesListScreen = () => {
                         styles.scrollContent,
                         { flexGrow: 1, minHeight: screenHeight + 20 } // Ensure scrollable even with few notes
                     ]}
+                    keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                     onScroll={handleScroll}
                     scrollEventThrottle={4}
@@ -782,6 +800,8 @@ const styles = StyleSheet.create({
         right: 0,
         alignItems: 'center',
         justifyContent: 'center',
+        zIndex: 20,
+        elevation: 20,
     },
     dock: {
         flexDirection: 'column',

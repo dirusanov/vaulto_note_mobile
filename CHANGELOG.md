@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.43] - 2026-03-14
+
+### Fixed
+- **Home Screen Taps After Resume**: Improved tap handling after app background/restore so dock and other buttons respond immediately.
+
+## [1.0.42] - 2026-03-14
+
+### Changed
+- **Version Bump**: Updated app versions and build numbers across all platforms for the next release.
+
 ## [1.0.41] - 2026-03-14
 
 ### Fixed
