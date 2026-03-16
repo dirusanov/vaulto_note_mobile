@@ -1,4 +1,4 @@
-.PHONY: clean-android build-android-release rebuild-android
+.PHONY: clean-android build-android-release build-android-bundle rebuild-android rebuild-android-all
 
 # Clean all Android build artifacts and caches
 clean-android:
@@ -13,5 +13,14 @@ build-android-release:
 	cd android && ./gradlew assembleRelease
 	@echo "Build complete."
 
+# Build Android Release AAB
+build-android-bundle:
+	@echo "Building Android Release Bundle (AAB)..."
+	cd android && ./gradlew bundleRelease
+	@echo "Bundle build complete."
+
 # Clean and then Build
 rebuild-android: clean-android build-android-release
+
+# Clean and then Build APK + AAB
+rebuild-android-all: clean-android build-android-release build-android-bundle
