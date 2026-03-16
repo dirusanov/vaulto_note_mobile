@@ -74,6 +74,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const voiceSamples = useRef(0);
     const maxDurationHandledRef = useRef(false);
     const interruptionHandledRef = useRef(false);
+    const recordingStartAtRef = useRef<number | null>(null);
+    const INTERRUPTION_GRACE_MS = 1800;
 
     // Waveform animations
     const animations = useRef([...Array(BAR_COUNT)].map(() => new Animated.Value(0.3))).current;
@@ -141,6 +143,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             voiceSamples.current = 0;
             maxDurationHandledRef.current = false;
             interruptionHandledRef.current = false;
+            recordingStartAtRef.current = null;
             agentModeToggleTouchedRef.current = false;
         }
     }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
@@ -297,6 +300,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         return;
                     }
 
+                    const startedAt = recordingStartAtRef.current;
+                    if (startedAt && Date.now() - startedAt < INTERRUPTION_GRACE_MS) {
+                        return;
+                    }
+
                     const canRecord = typeof (status as any)?.canRecord === 'boolean'
                         ? (status as any).canRecord
                         : true;
@@ -385,6 +393,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsRecording(true);
             setIsPaused(false);
             setDuration(0);
+            recordingStartAtRef.current = Date.now();
         } catch (error) {
             Alert.alert('Error', 'Could not start recording');
             console.error(error);
@@ -444,6 +453,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 await setAgentModeEnabled(agentModeEnabled);
             }
             onFinish(recording, transcribe, agentModeEnabled);
+            recordingStartAtRef.current = null;
         } catch (error) {
             // Recovery path: if stop failed, the native recorder may already be invalid.
             // Force local UI out of recording state so the modal does not get stuck.
@@ -470,6 +480,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsPaused(false);
             setIsStopping(false);
             setIsStartPending(false);
+            recordingStartAtRef.current = null;
             onCancel();
         } catch (error) {
             console.error(error);
