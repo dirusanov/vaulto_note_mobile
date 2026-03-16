@@ -39,6 +39,8 @@ export const useNotes = () => {
     const hydratedRef = useRef(false);
     const initialSyncRef = useRef(false);
     const lastBootstrapSyncAtRef = useRef<number | null>(null);
+    const suppressSyncRefreshRef = useRef(true);
+    const pendingSyncRefreshRef = useRef(false);
 
     const markHydrated = useCallback(() => {
         if (hydratedRef.current) return;
@@ -326,6 +328,10 @@ export const useNotes = () => {
     useEffect(() => {
         const unsubscribe = syncService.subscribe(() => {
             console.log('[useNotes] Sync finished, refreshing local notes');
+            if (suppressSyncRefreshRef.current) {
+                pendingSyncRefreshRef.current = true;
+                return;
+            }
             refreshFromLocal();
         });
         return unsubscribe;
@@ -338,6 +344,8 @@ export const useNotes = () => {
 
         hydratedRef.current = false;
         initialSyncRef.current = false;
+        suppressSyncRefreshRef.current = true;
+        pendingSyncRefreshRef.current = false;
         setIsHydrated(false);
         setIsInitialSyncComplete(false);
         lastBootstrapSyncAtRef.current = null;
@@ -345,10 +353,17 @@ export const useNotes = () => {
         const bootstrap = async () => {
             await refreshFromLocal();
             if (cancelled || !userId) {
+                suppressSyncRefreshRef.current = false;
+                pendingSyncRefreshRef.current = false;
                 return;
             }
 
             if (!isAuthenticated) {
+                suppressSyncRefreshRef.current = false;
+                if (pendingSyncRefreshRef.current) {
+                    pendingSyncRefreshRef.current = false;
+                    await refreshFromLocal();
+                }
                 markInitialSyncComplete();
                 return;
             }
@@ -365,8 +380,17 @@ export const useNotes = () => {
             } catch (err) {
                 console.warn('[useNotes] Initial sync failed', err);
             } finally {
+                if (cancelled) {
+                    return;
+                }
                 if (timeoutId) {
                     clearTimeout(timeoutId);
+                }
+                await refreshFromLocal();
+                suppressSyncRefreshRef.current = false;
+                if (pendingSyncRefreshRef.current) {
+                    pendingSyncRefreshRef.current = false;
+                    await refreshFromLocal();
                 }
                 lastBootstrapSyncAtRef.current = Date.now();
                 if (!cancelled) {

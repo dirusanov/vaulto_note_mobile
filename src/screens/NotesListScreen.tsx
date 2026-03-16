@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibra
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
-import { Loader } from '../components/Loader';
 import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { SelectionActionPanel } from '../components/SelectionActionPanel';
@@ -50,8 +49,6 @@ export const NotesListScreen = () => {
     const [hasServerNotes, setHasServerNotes] = useState(false);
     const [dockInstanceKey, setDockInstanceKey] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [showLoader, setShowLoader] = useState(false);
-    const loaderDelayRef = useRef<NodeJS.Timeout | null>(null);
     const lastFetchAtRef = useRef(0);
     const initialFetchDoneRef = useRef(false);
     const columnAssignmentsRef = useRef<Map<string, 0 | 1>>(new Map());
@@ -413,28 +410,6 @@ export const NotesListScreen = () => {
         return hasTitle || hasContent || hasAudio;
     });
 
-    // Avoid loader flicker on fast loads.
-    useEffect(() => {
-        const shouldDelayLoader = loading && filteredNotes.length === 0;
-        if (shouldDelayLoader) {
-            if (!loaderDelayRef.current) {
-                loaderDelayRef.current = setTimeout(() => {
-                    setShowLoader(true);
-                    loaderDelayRef.current = null;
-                }, 250);
-            }
-            return;
-        }
-
-        if (loaderDelayRef.current) {
-            clearTimeout(loaderDelayRef.current);
-            loaderDelayRef.current = null;
-        }
-        if (showLoader) {
-            setShowLoader(false);
-        }
-    }, [loading, filteredNotes.length, showLoader]);
-
     const canShowEmptyState = !!userId && !loading && filteredNotes.length === 0;
 
     // Split notes into two columns for masonry layout
@@ -673,12 +648,6 @@ export const NotesListScreen = () => {
                 )}
                 <View style={{ height: 120 }} pointerEvents="none" />
             </ScrollView>
-
-            {showLoader && (
-                <View style={styles.loaderOverlay} pointerEvents="none">
-                    <Loader />
-                </View>
-            )}
 
             {/* Floating Dock - hide in selection mode */}
             {!isSelectionMode && (
@@ -975,10 +944,5 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         opacity: 0.75,
         fontSize: 9, // Reduced size
-    },
-    loaderOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
 });
