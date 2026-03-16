@@ -6,6 +6,8 @@ interface NotesContextType {
     notes: Note[];
     loading: boolean;
     error: string | null;
+    isHydrated: boolean;
+    isInitialSyncComplete: boolean;
     fetchNotes: () => Promise<void>;
     syncNotes: () => Promise<void>;
     createNote: (data: {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, AppState } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -49,6 +49,14 @@ export const NotesListScreen = () => {
     const [lockBannerDismissed, setLockBannerDismissed] = useState<boolean | null>(null);
     const [hasServerNotes, setHasServerNotes] = useState(false);
     const [dockInstanceKey, setDockInstanceKey] = useState(0);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showLoader, setShowLoader] = useState(false);
+    const loaderDelayRef = useRef<NodeJS.Timeout | null>(null);
+    const lastFetchAtRef = useRef(0);
+    const initialFetchDoneRef = useRef(false);
+    const columnAssignmentsRef = useRef<Map<string, 0 | 1>>(new Map());
+    const initialOrderRef = useRef<string[] | null>(null);
+    const sortFreezeUntilRef = useRef<number | null>(null);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -68,9 +76,23 @@ export const NotesListScreen = () => {
 
     useFocusEffect(
         useCallback(() => {
+            if (!userId) return;
+            const now = Date.now();
+            const shouldFetch = !initialFetchDoneRef.current || now - lastFetchAtRef.current > 30000;
+            if (!shouldFetch) return;
+            initialFetchDoneRef.current = true;
+            lastFetchAtRef.current = now;
             fetchNotes();
-        }, [fetchNotes])
+        }, [fetchNotes, userId])
     );
+
+    useEffect(() => {
+        initialFetchDoneRef.current = false;
+        lastFetchAtRef.current = 0;
+        columnAssignmentsRef.current.clear();
+        initialOrderRef.current = null;
+        sortFreezeUntilRef.current = null;
+    }, [userId]);
 
     // Ensure modals/overlays do not block input after app background/restore
     useEffect(() => {
@@ -163,6 +185,16 @@ export const NotesListScreen = () => {
         syncLocked &&
         hasServerNotes &&
         lockBannerDismissed === false;
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            UIManager.setLayoutAnimationEnabledExperimental?.(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }, [shouldShowLockBanner]);
 
     useEffect(() => {
         let cancelled = false;
@@ -287,8 +319,14 @@ export const NotesListScreen = () => {
     };
 
     const onRefresh = useCallback(async () => {
-        await syncNotes();
-    }, [syncNotes]);
+        if (isRefreshing) return;
+        setIsRefreshing(true);
+        try {
+            await syncNotes();
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [isRefreshing, syncNotes]);
 
 
     const { height: screenHeight } = Dimensions.get('window');
@@ -375,6 +413,30 @@ export const NotesListScreen = () => {
         return hasTitle || hasContent || hasAudio;
     });
 
+    // Avoid loader flicker on fast loads.
+    useEffect(() => {
+        const shouldDelayLoader = loading && filteredNotes.length === 0;
+        if (shouldDelayLoader) {
+            if (!loaderDelayRef.current) {
+                loaderDelayRef.current = setTimeout(() => {
+                    setShowLoader(true);
+                    loaderDelayRef.current = null;
+                }, 250);
+            }
+            return;
+        }
+
+        if (loaderDelayRef.current) {
+            clearTimeout(loaderDelayRef.current);
+            loaderDelayRef.current = null;
+        }
+        if (showLoader) {
+            setShowLoader(false);
+        }
+    }, [loading, filteredNotes.length, showLoader]);
+
+    const canShowEmptyState = !!userId && !loading && filteredNotes.length === 0;
+
     // Split notes into two columns for masonry layout
     // Sort pinned notes first
     const sortedNotes = [...filteredNotes].sort((a, b) => {
@@ -387,8 +449,50 @@ export const NotesListScreen = () => {
         return dateB - dateA;
     });
 
-    const leftColumnNotes = sortedNotes.filter((_, index) => index % 2 === 0);
-    const rightColumnNotes = sortedNotes.filter((_, index) => index % 2 !== 0);
+    useEffect(() => {
+        const existing = new Set(sortedNotes.map(note => note.id));
+        for (const key of columnAssignmentsRef.current.keys()) {
+            if (!existing.has(key)) {
+                columnAssignmentsRef.current.delete(key);
+            }
+        }
+    }, [sortedNotes]);
+
+    let orderedNotes = sortedNotes;
+    const nowMs = Date.now();
+    if (sortedNotes.length > 0 && initialOrderRef.current === null) {
+        initialOrderRef.current = sortedNotes.map(note => note.id);
+        sortFreezeUntilRef.current = nowMs + 2500;
+    }
+    if (initialOrderRef.current && sortFreezeUntilRef.current && nowMs < sortFreezeUntilRef.current) {
+        const byId = new Map(sortedNotes.map(note => [note.id, note]));
+        const frozen: typeof sortedNotes = [];
+        initialOrderRef.current.forEach((id) => {
+            const note = byId.get(id);
+            if (note) frozen.push(note);
+        });
+        const frozenIds = new Set(frozen.map(note => note.id));
+        const newcomers = sortedNotes.filter(note => !frozenIds.has(note.id));
+        orderedNotes = newcomers.length > 0 ? [...newcomers, ...frozen] : frozen;
+    } else if (sortedNotes.length > 0) {
+        initialOrderRef.current = sortedNotes.map(note => note.id);
+        sortFreezeUntilRef.current = null;
+    }
+
+    const leftColumnNotes: typeof sortedNotes = [];
+    const rightColumnNotes: typeof sortedNotes = [];
+    orderedNotes.forEach(note => {
+        let assigned = columnAssignmentsRef.current.get(note.id);
+        if (assigned === undefined) {
+            assigned = leftColumnNotes.length <= rightColumnNotes.length ? 0 : 1;
+            columnAssignmentsRef.current.set(note.id, assigned);
+        }
+        if (assigned === 0) {
+            leftColumnNotes.push(note);
+        } else {
+            rightColumnNotes.push(note);
+        }
+    });
 
     // Check if all selected notes are pinned
     const selectedNotes = sortedNotes.filter(n => selectedNoteIds.has(n.id));
@@ -521,57 +625,59 @@ export const NotesListScreen = () => {
                 </Animated.View>
             )}
 
-            {loading && filteredNotes.length === 0 ? (
-                <Loader />
-            ) : (
-                <ScrollView
-                    style={{ flex: 1 }}
-                    contentContainerStyle={[
-                        styles.scrollContent,
-                        { flexGrow: 1, minHeight: screenHeight + 20 } // Ensure scrollable even with few notes
-                    ]}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                    onScroll={handleScroll}
-                    scrollEventThrottle={4}
-                    refreshControl={
-                        <RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={colors.primary} />
-                    }
-                >
-                    {filteredNotes.length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                            <EmptyState message={isMicPrimary ? "Tap the microphone to record" : "Tap the pencil to write"} />
+            <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { flexGrow: 1, minHeight: screenHeight + 20 } // Ensure scrollable even with few notes
+                ]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                onScroll={handleScroll}
+                scrollEventThrottle={4}
+                refreshControl={
+                    <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+                }
+            >
+                {canShowEmptyState ? (
+                    <View style={styles.emptyContainer}>
+                        <EmptyState message={isMicPrimary ? "Tap the microphone to record" : "Tap the pencil to write"} />
+                    </View>
+                ) : (
+                    <View style={styles.masonryContainer}>
+                        <View style={styles.column}>
+                            {leftColumnNotes.map(note => (
+                                <NoteCard
+                                    key={note.id}
+                                    note={note}
+                                    onPress={() => handleNotePress(note)}
+                                    onLongPress={() => handleNoteLongPress(note)}
+                                    isSelectionMode={isSelectionMode}
+                                    isSelected={selectedNoteIds.has(note.id)}
+                                />
+                            ))}
                         </View>
-                    ) : (
-                        <View style={styles.masonryContainer}>
-                            <View style={styles.column}>
-                                {leftColumnNotes.map(note => (
-                                    <NoteCard
-                                        key={note.id}
-                                        note={note}
-                                        onPress={() => handleNotePress(note)}
-                                        onLongPress={() => handleNoteLongPress(note)}
-                                        isSelectionMode={isSelectionMode}
-                                        isSelected={selectedNoteIds.has(note.id)}
-                                    />
-                                ))}
-                            </View>
-                            <View style={styles.column}>
-                                {rightColumnNotes.map(note => (
-                                    <NoteCard
-                                        key={note.id}
-                                        note={note}
-                                        onPress={() => handleNotePress(note)}
-                                        onLongPress={() => handleNoteLongPress(note)}
-                                        isSelectionMode={isSelectionMode}
-                                        isSelected={selectedNoteIds.has(note.id)}
-                                    />
-                                ))}
-                            </View>
+                        <View style={styles.column}>
+                            {rightColumnNotes.map(note => (
+                                <NoteCard
+                                    key={note.id}
+                                    note={note}
+                                    onPress={() => handleNotePress(note)}
+                                    onLongPress={() => handleNoteLongPress(note)}
+                                    isSelectionMode={isSelectionMode}
+                                    isSelected={selectedNoteIds.has(note.id)}
+                                />
+                            ))}
                         </View>
-                    )}
-                    <View style={{ height: 120 }} pointerEvents="none" />
-                </ScrollView>
+                    </View>
+                )}
+                <View style={{ height: 120 }} pointerEvents="none" />
+            </ScrollView>
+
+            {showLoader && (
+                <View style={styles.loaderOverlay} pointerEvents="none">
+                    <Loader />
+                </View>
             )}
 
             {/* Floating Dock - hide in selection mode */}
@@ -869,5 +975,10 @@ const styles = StyleSheet.create({
         marginBottom: 2,
         opacity: 0.75,
         fontSize: 9, // Reduced size
+    },
+    loaderOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

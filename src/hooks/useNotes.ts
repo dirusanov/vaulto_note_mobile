@@ -31,8 +31,43 @@ export const useNotes = () => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isHydrated, setIsHydrated] = useState(false);
+    const [isInitialSyncComplete, setIsInitialSyncComplete] = useState(false);
     const notesRef = useRef<Note[]>([]);
     const allNotesRef = useRef<Note[]>([]);
+    const notesSignatureRef = useRef<string>('');
+    const hydratedRef = useRef(false);
+    const initialSyncRef = useRef(false);
+    const lastBootstrapSyncAtRef = useRef<number | null>(null);
+
+    const markHydrated = useCallback(() => {
+        if (hydratedRef.current) return;
+        hydratedRef.current = true;
+        setIsHydrated(true);
+    }, []);
+
+    const markInitialSyncComplete = useCallback(() => {
+        if (initialSyncRef.current) return;
+        initialSyncRef.current = true;
+        setIsInitialSyncComplete(true);
+    }, []);
+
+    const buildNotesSignature = useCallback((source: Note[]) => {
+        return source.map((note) => {
+            const activeChild = note.improvements?.find(imp => imp.is_active);
+            return [
+                note.id,
+                note.updated_at ?? '',
+                note.is_pinned ? '1' : '0',
+                note.has_audio ? '1' : '0',
+                note.storage_scope ?? '',
+                note.privacy ?? '',
+                activeChild?.id ?? '',
+                activeChild?.updated_at ?? '',
+                note.improvements?.length ?? 0,
+            ].join(':');
+        }).join('|');
+    }, []);
 
     // Update SyncService auth state
     useEffect(() => {
@@ -265,16 +300,27 @@ export const useNotes = () => {
         if (!userId) {
             setNotes([]);
             allNotesRef.current = [];
+            notesRef.current = [];
+            notesSignatureRef.current = '';
+            markHydrated();
+            markInitialSyncComplete();
             return [];
         }
 
         const localNotes = await getNotesLocal(userId);
         const visibleMain = await filterAndCleanupNotes(localNotes);
 
+        const nextSignature = buildNotesSignature(visibleMain);
+        const prevSignature = notesSignatureRef.current;
         allNotesRef.current = visibleMain;
-        setNotes(visibleMain);
+        notesRef.current = visibleMain;
+        notesSignatureRef.current = nextSignature;
+        if (nextSignature !== prevSignature) {
+            setNotes(visibleMain);
+        }
+        markHydrated();
         return visibleMain;
-    }, [filterAndCleanupNotes, userId]);
+    }, [buildNotesSignature, filterAndCleanupNotes, markHydrated, markInitialSyncComplete, userId]);
 
     // Subscribe to SyncService updatess
     useEffect(() => {
@@ -285,10 +331,56 @@ export const useNotes = () => {
         return unsubscribe;
     }, [refreshFromLocal]);
 
-    // Re-fetch when userId changes
+    // Re-fetch and run initial sync on user change
     useEffect(() => {
-        refreshFromLocal();
-    }, [refreshFromLocal]);
+        let cancelled = false;
+        const INITIAL_SYNC_TIMEOUT_MS = 8000;
+
+        hydratedRef.current = false;
+        initialSyncRef.current = false;
+        setIsHydrated(false);
+        setIsInitialSyncComplete(false);
+        lastBootstrapSyncAtRef.current = null;
+
+        const bootstrap = async () => {
+            await refreshFromLocal();
+            if (cancelled || !userId) {
+                return;
+            }
+
+            if (!isAuthenticated) {
+                markInitialSyncComplete();
+                return;
+            }
+
+            let timeoutId: NodeJS.Timeout | null = null;
+            try {
+                const timeoutPromise = new Promise<void>((resolve) => {
+                    timeoutId = setTimeout(resolve, INITIAL_SYNC_TIMEOUT_MS);
+                });
+                await Promise.race([
+                    syncService.syncNow('app_start'),
+                    timeoutPromise,
+                ]);
+            } catch (err) {
+                console.warn('[useNotes] Initial sync failed', err);
+            } finally {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
+                lastBootstrapSyncAtRef.current = Date.now();
+                if (!cancelled) {
+                    markInitialSyncComplete();
+                }
+            }
+        };
+
+        void bootstrap();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, markInitialSyncComplete, refreshFromLocal, userId]);
 
     // Periodic Sync Interval (30s)
     useEffect(() => {
@@ -322,7 +414,12 @@ export const useNotes = () => {
             await refreshFromLocal();
             // Trigger sync on fetch (e.g. screen mount)
             if (isAuthenticated && userId) {
-                syncService.syncNow('app_start');
+                const lastBootstrap = lastBootstrapSyncAtRef.current;
+                const now = Date.now();
+                const recentlyBootstrapped = !!lastBootstrap && now - lastBootstrap < 8000;
+                if (!recentlyBootstrapped) {
+                    syncService.syncNow('app_start');
+                }
             }
         } catch (err) {
             console.error('[useNotes] Error fetching notes:', err);
@@ -1025,6 +1122,8 @@ export const useNotes = () => {
         notes,
         loading,
         error,
+        isHydrated,
+        isInitialSyncComplete,
         fetchNotes,
         createNote,
         updateNote,

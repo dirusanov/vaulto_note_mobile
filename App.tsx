@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import React, { useEffect, useState } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import React, { useEffect, useRef, useState } from 'react';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/context/AuthContext';
@@ -13,17 +13,40 @@ import { EncryptionGate } from './src/components/EncryptionGate';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from './src/hooks/useAuth';
 import { useEncryption } from './src/context/EncryptionContext';
+import { useNotesContext } from './src/contexts/NotesContext';
+
+const MIN_SPLASH_MS = 1600;
+const BOOT_TIMEOUT_MS = 6000;
 
 const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
-    const { isLoading } = useAuth();
+    const { isLoading, userId } = useAuth();
     const { status } = useEncryption();
+    const { isHydrated, isInitialSyncComplete } = useNotesContext();
     const [splashHidden, setSplashHidden] = useState(false);
-    const appReady = !isLoading && status !== 'loading';
+    const [bootTimedOut, setBootTimedOut] = useState(false);
+    const bootStartedAtRef = useRef(Date.now());
+    const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const appReady =
+        !isLoading &&
+        status !== 'loading' &&
+        isHydrated &&
+        isInitialSyncComplete &&
+        (!!userId || bootTimedOut);
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            setBootTimedOut(true);
+        }, BOOT_TIMEOUT_MS);
+        return () => clearTimeout(timeout);
+    }, []);
 
     useEffect(() => {
         if (!appReady || splashHidden) {
             return;
         }
+
+        const elapsed = Date.now() - bootStartedAtRef.current;
+        const remaining = Math.max(MIN_SPLASH_MS - elapsed, 0);
 
         const hideSplash = async () => {
             try {
@@ -35,7 +58,25 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
             }
         };
 
-        void hideSplash();
+        if (remaining === 0) {
+            void hideSplash();
+            return;
+        }
+
+        if (hideTimeoutRef.current) {
+            clearTimeout(hideTimeoutRef.current);
+        }
+        hideTimeoutRef.current = setTimeout(() => {
+            hideTimeoutRef.current = null;
+            void hideSplash();
+        }, remaining);
+
+        return () => {
+            if (hideTimeoutRef.current) {
+                clearTimeout(hideTimeoutRef.current);
+                hideTimeoutRef.current = null;
+            }
+        };
     }, [appReady, splashHidden]);
 
     if (!splashHidden) {
@@ -60,18 +101,18 @@ export default function App() {
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaProvider>
+            <SafeAreaProvider initialMetrics={initialWindowMetrics}>
                 <AuthProvider>
                     <SubscriptionProvider>
                         <EncryptionProvider>
-                            <AppBootstrap>
-                                <EncryptionGate>
-                                    <NotesProvider>
+                            <NotesProvider>
+                                <AppBootstrap>
+                                    <EncryptionGate>
                                         <StatusBar style="auto" />
                                         <RootNavigator />
-                                    </NotesProvider>
-                                </EncryptionGate>
-                            </AppBootstrap>
+                                    </EncryptionGate>
+                                </AppBootstrap>
+                            </NotesProvider>
                         </EncryptionProvider>
                     </SubscriptionProvider>
                 </AuthProvider>
