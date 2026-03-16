@@ -11,26 +11,17 @@ import { NotesProvider } from './src/contexts/NotesContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { EncryptionGate } from './src/components/EncryptionGate';
 import * as SplashScreen from 'expo-splash-screen';
+import { useAuth } from './src/hooks/useAuth';
+import { useEncryption } from './src/context/EncryptionContext';
 
-export default function App() {
-    const [appIsReady, setAppIsReady] = useState(false);
-
-    useEffect(() => {
-        const prepare = async () => {
-            try {
-                await SplashScreen.preventAutoHideAsync();
-            } catch (error) {
-                console.warn('[App] Failed to prevent auto hide of splash screen', error);
-            } finally {
-                setAppIsReady(true);
-            }
-        };
-
-        void prepare();
-    }, []);
+const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
+    const { isLoading } = useAuth();
+    const { status } = useEncryption();
+    const [splashHidden, setSplashHidden] = useState(false);
+    const appReady = !isLoading && status !== 'loading';
 
     useEffect(() => {
-        if (!appIsReady) {
+        if (!appReady || splashHidden) {
             return;
         }
 
@@ -39,15 +30,33 @@ export default function App() {
                 await SplashScreen.hideAsync();
             } catch (error) {
                 console.warn('[App] Failed to hide splash screen', error);
+            } finally {
+                setSplashHidden(true);
             }
         };
 
         void hideSplash();
-    }, [appIsReady]);
+    }, [appReady, splashHidden]);
 
-    if (!appIsReady) {
+    if (!splashHidden) {
         return null;
     }
+
+    return <>{children}</>;
+};
+
+export default function App() {
+    useEffect(() => {
+        const prepare = async () => {
+            try {
+                await SplashScreen.preventAutoHideAsync();
+            } catch (error) {
+                console.warn('[App] Failed to prevent auto hide of splash screen', error);
+            }
+        };
+
+        void prepare();
+    }, []);
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -55,12 +64,14 @@ export default function App() {
                 <AuthProvider>
                     <SubscriptionProvider>
                         <EncryptionProvider>
-                            <EncryptionGate>
-                                <NotesProvider>
-                                    <StatusBar style="auto" />
-                                    <RootNavigator />
-                                </NotesProvider>
-                            </EncryptionGate>
+                            <AppBootstrap>
+                                <EncryptionGate>
+                                    <NotesProvider>
+                                        <StatusBar style="auto" />
+                                        <RootNavigator />
+                                    </NotesProvider>
+                                </EncryptionGate>
+                            </AppBootstrap>
                         </EncryptionProvider>
                     </SubscriptionProvider>
                 </AuthProvider>

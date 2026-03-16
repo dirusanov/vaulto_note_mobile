@@ -217,8 +217,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 } else {
                     setUserId(null);
                 }
-                await createGuestSession({ preserveLocalUserId: keepLocalNotes });
                 setIsLoading(false);
+                // Don't block UI on guest session creation (may fail offline)
+                void createGuestSession({ preserveLocalUserId: keepLocalNotes });
             }
         };
         loadSession();
