@@ -179,6 +179,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 if (storedRefreshToken) {
                     setRefreshToken(storedRefreshToken);
                 }
+                // Unblock UI immediately; profile can load in background (may fail offline)
+                setIsLoading(false);
                 try {
                     const profile = await authApi.getProfile();
                     setUserId(profile.id);
@@ -197,7 +199,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                         } else {
                             setUserId(null);
                         }
-                        await createGuestSession({ preserveLocalUserId: keepLocalNotes });
+                        // Don't block UI on guest session creation (may fail offline)
+                        void createGuestSession({ preserveLocalUserId: keepLocalNotes });
                     } else {
                         console.error('[AuthContext] Failed to load profile (keeping existing token state)', err);
                         if (storedUserId) {
@@ -209,7 +212,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                         setIsGuest(false);
                     }
                 }
-                setIsLoading(false);
             } else {
                 console.log('[AuthContext] No token, creating guest session');
                 if (keepLocalNotes && storedUserId) {
