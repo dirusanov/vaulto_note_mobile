@@ -48,6 +48,7 @@ export const NotesListScreen = () => {
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [lockBannerDismissed, setLockBannerDismissed] = useState<boolean | null>(null);
     const [hasServerNotes, setHasServerNotes] = useState(false);
+    const [dockInstanceKey, setDockInstanceKey] = useState(0);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -81,6 +82,11 @@ export const NotesListScreen = () => {
                 setShowDeleteConfirm(false);
                 setIsSelectionMode(false);
                 setSelectedNoteIds(new Set());
+                return;
+            }
+            if (nextState === 'active') {
+                // Reset dock touchables to avoid stuck pressability after resume.
+                setDockInstanceKey((prev) => prev + 1);
             }
         });
         return () => {
@@ -565,13 +571,13 @@ export const NotesListScreen = () => {
                             </View>
                         </View>
                     )}
-                    <View style={{ height: 120 }} />
+                    <View style={{ height: 120 }} pointerEvents="none" />
                 </ScrollView>
             )}
 
             {/* Floating Dock - hide in selection mode */}
             {!isSelectionMode && (
-                <View style={styles.dockContainer}>
+                <View style={styles.dockContainer} key={dockInstanceKey} pointerEvents="box-none">
                     <View style={styles.dock}>
                         <View style={styles.dockButtonRow}>
                             {/* Settings Button (Left) */}
