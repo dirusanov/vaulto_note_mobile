@@ -76,7 +76,6 @@ export const NotesListScreen = () => {
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
             if (nextState === 'background' || nextState === 'inactive') {
-                setIsVoiceRecorderVisible(false);
                 setShowUnlockSyncModal(false);
                 setShowUnlockingOverlay(false);
                 setShowDeleteConfirm(false);

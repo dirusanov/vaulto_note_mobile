@@ -279,6 +279,44 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
     }, [isRecording, isPaused]);
 
+    const promptRecordingInterruption = (message: string) => {
+        if (interruptionHandledRef.current) {
+            return;
+        }
+        interruptionHandledRef.current = true;
+        setIsRecording(false);
+        setIsPaused(false);
+        setIsStopping(false);
+        setIsStartPending(false);
+        recordingStartAtRef.current = null;
+        currentMetering.current = -160;
+        meteringSamples.current = 0;
+        voiceSamples.current = 0;
+        void AudioService.cancelRecording().catch(() => undefined);
+
+        Alert.alert(
+            'Recording interrupted',
+            message,
+            [
+                {
+                    text: 'Retry',
+                    onPress: () => {
+                        interruptionHandledRef.current = false;
+                        void handleStartRecording();
+                    },
+                },
+                {
+                    text: 'Close',
+                    style: 'cancel',
+                    onPress: () => {
+                        onCancel();
+                    },
+                },
+            ],
+            { cancelable: false }
+        );
+    };
+
     useEffect(() => {
         if (
             !visible ||
@@ -311,31 +349,16 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     const isDoneRecording = !!(status as any)?.isDoneRecording;
 
                     if (!status || isDoneRecording || !canRecord) {
-                        interruptionHandledRef.current = true;
-                        setIsRecording(false);
-                        setIsPaused(false);
-                        setIsStopping(false);
-                        Alert.alert(
-                            'Recording interrupted',
+                        promptRecordingInterruption(
                             'The recording stopped unexpectedly before it could be sent. Please try again.'
                         );
-                        onCancel();
                     }
                 } catch (error) {
                     if (disposed) {
                         return;
                     }
-
-                    interruptionHandledRef.current = true;
-                    setIsRecording(false);
-                    setIsPaused(false);
-                    setIsStopping(false);
                     console.warn('[VoiceRecorder] Failed to read recording status', error);
-                    Alert.alert(
-                        'Recording interrupted',
-                        'The recording state was lost. Please try again.'
-                    );
-                    onCancel();
+                    promptRecordingInterruption('The recording state was lost. Please try again.');
                 }
             })();
         }, 1200);

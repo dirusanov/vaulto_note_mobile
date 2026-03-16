@@ -69,6 +69,9 @@ const purgeAudioFiles = async (paths: Array<string | null | undefined>, reason: 
 
 // Native Store Implementation
 let db: SQLite.SQLiteDatabase | null = null;
+let dbInitPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let lastHealthCheckAt = 0;
+const DB_HEALTHCHECK_INTERVAL_MS = 5000;
 
 const createTables = async (database: SQLite.SQLiteDatabase) => {
     await database.runAsync(`
@@ -135,52 +138,125 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
     await database.runAsync('CREATE INDEX IF NOT EXISTS idx_voice_recordings_note_id ON voice_recordings(note_id);');
 };
 
+const openDb = async (): Promise<SQLite.SQLiteDatabase> => {
+    const database = await SQLite.openDatabaseAsync('vaulto.db');
+    await database.runAsync('PRAGMA foreign_keys = ON;');
+    await createTables(database);
+
+    // Migration for existing tables
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN dirty INTEGER DEFAULT 0;');
+    } catch (e) { /* Ignore */ }
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN deleted INTEGER DEFAULT 0;');
+    } catch (e) { /* Ignore */ }
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;');
+    } catch (e) { /* Ignore */ }
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
+    } catch (e) { /* Ignore */ }
+    try {
+        await database.runAsync("ALTER TABLE notes ADD COLUMN storage_scope TEXT DEFAULT 'sync';");
+    } catch (e) { /* Ignore */ }
+    try {
+        await database.runAsync("ALTER TABLE notes ADD COLUMN privacy TEXT DEFAULT 'normal';");
+    } catch (e) { /* Ignore */ }
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN pending_server_delete INTEGER DEFAULT 0;');
+    } catch (e) { /* Ignore */ }
+
+    // USER ID MIGRATION
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN user_id TEXT;');
+        await database.runAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
+    } catch (e) { /* Ignore */ }
+
+    try {
+        await database.runAsync('ALTER TABLE note_improvements ADD COLUMN user_id TEXT;');
+    } catch (e) { /* Ignore */ }
+
+    try {
+        await database.runAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;');
+    } catch (e) { /* Ignore */ }
+
+    return database;
+};
+
+const resetDbConnection = () => {
+    db = null;
+    dbInitPromise = null;
+    lastHealthCheckAt = 0;
+};
+
+const isRecoverableDbError = (error: unknown): boolean => {
+    const message = error instanceof Error ? error.message : String(error);
+    const lowered = message.toLowerCase();
+    return (
+        lowered.includes('nativedatabase.prepareasync') ||
+        lowered.includes('nullpointerexception') ||
+        lowered.includes('database is closed') ||
+        lowered.includes('failed to prepare')
+    );
+};
+
 const getDb = async () => {
     if (Platform.OS === 'web') return null;
     if (!db) {
-        db = await SQLite.openDatabaseAsync('vaulto.db');
-        await db.runAsync('PRAGMA foreign_keys = ON;');
-        await createTables(db);
+        if (!dbInitPromise) {
+            dbInitPromise = openDb().catch((err) => {
+                resetDbConnection();
+                throw err;
+            });
+        }
+        db = await dbInitPromise;
+    }
 
-        // Migration for existing tables
+    const now = Date.now();
+    if (now - lastHealthCheckAt > DB_HEALTHCHECK_INTERVAL_MS) {
         try {
-            await db.runAsync('ALTER TABLE notes ADD COLUMN dirty INTEGER DEFAULT 0;');
-        } catch (e) { /* Ignore */ }
-        try {
-            await db.runAsync('ALTER TABLE notes ADD COLUMN deleted INTEGER DEFAULT 0;');
-        } catch (e) { /* Ignore */ }
-        try {
-            await db.runAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;');
-        } catch (e) { /* Ignore */ }
-        try {
-            await db.runAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;');
-        } catch (e) { /* Ignore */ }
-        try {
-            await db.runAsync("ALTER TABLE notes ADD COLUMN storage_scope TEXT DEFAULT 'sync';");
-        } catch (e) { /* Ignore */ }
-        try {
-            await db.runAsync("ALTER TABLE notes ADD COLUMN privacy TEXT DEFAULT 'normal';");
-        } catch (e) { /* Ignore */ }
-        try {
-            await db.runAsync('ALTER TABLE notes ADD COLUMN pending_server_delete INTEGER DEFAULT 0;');
-        } catch (e) { /* Ignore */ }
-
-        // USER ID MIGRATION
-        try {
-            await db.runAsync('ALTER TABLE notes ADD COLUMN user_id TEXT;');
-            await db.runAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
-        } catch (e) { /* Ignore */ }
-
-        try {
-            await db.runAsync('ALTER TABLE note_improvements ADD COLUMN user_id TEXT;');
-        } catch (e) { /* Ignore */ }
-
-        try {
-            await db.runAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;');
-        } catch (e) { /* Ignore */ }
-
+            await db.getAllAsync('SELECT 1;');
+            lastHealthCheckAt = now;
+        } catch (error) {
+            if (isRecoverableDbError(error)) {
+                console.warn('[DatabaseService] DB connection lost, reopening...', error);
+                resetDbConnection();
+                dbInitPromise = openDb().catch((err) => {
+                    resetDbConnection();
+                    throw err;
+                });
+                db = await dbInitPromise;
+                lastHealthCheckAt = Date.now();
+            } else {
+                throw error;
+            }
+        }
     }
     return db;
+};
+
+const withDbRetry = async <T>(
+    label: string,
+    operation: (database: SQLite.SQLiteDatabase) => Promise<T>
+): Promise<T> => {
+    const database = await getDb();
+    if (!database) {
+        throw new Error('Database unavailable');
+    }
+    try {
+        return await operation(database);
+    } catch (error) {
+        if (!isRecoverableDbError(error)) {
+            throw error;
+        }
+        console.warn(`[DatabaseService] ${label} failed, reopening database`, error);
+        resetDbConnection();
+        const retryDb = await getDb();
+        if (!retryDb) {
+            throw error;
+        }
+        return await operation(retryDb);
+    }
 };
 
 export const initDatabase = async (): Promise<void> => {
@@ -262,9 +338,6 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
-
         const privacy = normalizePrivacy(note.privacy);
         const storageScope = normalizeStorageScope(note.storage_scope);
         const isDirty = note.dirty ? 1 : 0;
@@ -282,51 +355,53 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
             ? await encryptForPrivacy(note.transcription)
             : note.encrypted_transcription;
 
-        await database.runAsync(
-            `INSERT INTO notes (
-                id, user_id, encrypted_title, encrypted_content, created_at, updated_at, 
-                audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
-                storage_scope, privacy, pending_server_delete
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                user_id=excluded.user_id,
-                encrypted_title=excluded.encrypted_title,
-                encrypted_content=excluded.encrypted_content,
-                updated_at=excluded.updated_at,
-                audio_file_path=excluded.audio_file_path,
-                audio_duration=excluded.audio_duration,
-                encrypted_transcription=excluded.encrypted_transcription,
-                has_audio=excluded.has_audio,
-                is_pinned=excluded.is_pinned,
-                synced=excluded.synced,
-                dirty=excluded.dirty,
-                deleted=excluded.deleted,
-                is_active=excluded.is_active,
-                storage_scope=excluded.storage_scope,
-                privacy=excluded.privacy,
-                pending_server_delete=excluded.pending_server_delete
-            `,
-            [
-                note.id,
-                userId,
-                encryptedTitle || '',
-                encryptedContent,
-                note.created_at || new Date().toISOString(),
-                note.updated_at || new Date().toISOString(),
-                note.audio_file_path || null,
-                note.audio_duration || 0,
-                encryptedTranscription || null,
-                note.has_audio ? 1 : 0,
-                note.is_pinned ? 1 : 0,
-                note.synced ?? 1,
-                isDirty,
-                isDeleted,
-                isActive,
-                storageScope,
-                privacy,
-                pendingServerDelete,
-            ]
-        );
+        await withDbRetry('save note', async (database) => {
+            await database.runAsync(
+                `INSERT INTO notes (
+                    id, user_id, encrypted_title, encrypted_content, created_at, updated_at, 
+                    audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
+                    storage_scope, privacy, pending_server_delete
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    user_id=excluded.user_id,
+                    encrypted_title=excluded.encrypted_title,
+                    encrypted_content=excluded.encrypted_content,
+                    updated_at=excluded.updated_at,
+                    audio_file_path=excluded.audio_file_path,
+                    audio_duration=excluded.audio_duration,
+                    encrypted_transcription=excluded.encrypted_transcription,
+                    has_audio=excluded.has_audio,
+                    is_pinned=excluded.is_pinned,
+                    synced=excluded.synced,
+                    dirty=excluded.dirty,
+                    deleted=excluded.deleted,
+                    is_active=excluded.is_active,
+                    storage_scope=excluded.storage_scope,
+                    privacy=excluded.privacy,
+                    pending_server_delete=excluded.pending_server_delete
+                `,
+                [
+                    note.id,
+                    userId,
+                    encryptedTitle || '',
+                    encryptedContent,
+                    note.created_at || new Date().toISOString(),
+                    note.updated_at || new Date().toISOString(),
+                    note.audio_file_path || null,
+                    note.audio_duration || 0,
+                    encryptedTranscription || null,
+                    note.has_audio ? 1 : 0,
+                    note.is_pinned ? 1 : 0,
+                    note.synced ?? 1,
+                    isDirty,
+                    isDeleted,
+                    isActive,
+                    storageScope,
+                    privacy,
+                    pendingServerDelete,
+                ]
+            );
+        });
         console.log(`[DatabaseService] Note saved to native DB: ${note.id} (user=${userId})`);
     } catch (e) {
         console.error('[DatabaseService] Failed to save to native DB', e);
@@ -356,29 +431,29 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
         // Native DB does not store improvements as child notes, so we only delete the note itself.
-        let audioPathsToDelete: Array<string | null | undefined> = [];
+        const audioPathsToDelete = await withDbRetry('delete note', async (database) => {
+            const [voiceRows, noteRows] = await Promise.all([
+                database.getAllAsync<{ file_path: string | null }>(
+                    'SELECT file_path FROM voice_recordings WHERE user_id = ? AND note_id = ?',
+                    [userId, id]
+                ),
+                database.getAllAsync<{ audio_file_path: string | null }>(
+                    'SELECT audio_file_path FROM notes WHERE user_id = ? AND id = ?',
+                    [userId, id]
+                ),
+            ]);
+            const paths: Array<string | null | undefined> = [
+                ...voiceRows.map((row) => row.file_path),
+                ...noteRows.map((row) => row.audio_file_path),
+            ];
 
-        const [voiceRows, noteRows] = await Promise.all([
-            database.getAllAsync<{ file_path: string | null }>(
-                'SELECT file_path FROM voice_recordings WHERE user_id = ? AND note_id = ?',
-                [userId, id]
-            ),
-            database.getAllAsync<{ audio_file_path: string | null }>(
-                'SELECT audio_file_path FROM notes WHERE user_id = ? AND id = ?',
-                [userId, id]
-            ),
-        ]);
-        audioPathsToDelete = [
-            ...voiceRows.map((row) => row.file_path),
-            ...noteRows.map((row) => row.audio_file_path),
-        ];
+            await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ? AND user_id = ?', [id, userId]);
+            await database.runAsync('DELETE FROM note_improvements WHERE note_id = ? AND user_id = ?', [id, userId]);
+            await database.runAsync('DELETE FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
+            return paths;
+        });
 
-        await database.runAsync('DELETE FROM voice_recordings WHERE note_id = ? AND user_id = ?', [id, userId]);
-        await database.runAsync('DELETE FROM note_improvements WHERE note_id = ? AND user_id = ?', [id, userId]);
-        await database.runAsync('DELETE FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
         await purgeAudioFiles(audioPathsToDelete, `delete note ${id}`);
         await AudioService.cleanupTempFiles();
         console.log(`[DatabaseService] Note deleted from native DB: ${id}`);
@@ -390,13 +465,13 @@ export const deleteNoteLocal = async (userId: string, id: string): Promise<void>
 export const getVoiceRecordingsLocal = async (userId: string, noteId: string): Promise<VoiceRecording[]> => {
     if (Platform.OS === 'web') return [];
     try {
-        const database = await getDb();
-        if (!database) return [];
         // Filter by user_id for isolation
-        const rows = await database.getAllAsync<VoiceRecording>(
-            'SELECT * FROM voice_recordings WHERE note_id = ? AND user_id = ? ORDER BY created_at DESC',
-            [noteId, userId]
-        );
+        const rows = await withDbRetry('get voice recordings', (database) => (
+            database.getAllAsync<VoiceRecording>(
+                'SELECT * FROM voice_recordings WHERE note_id = ? AND user_id = ? ORDER BY created_at DESC',
+                [noteId, userId]
+            )
+        ));
         return rows;
     } catch (e) {
         console.error('[DatabaseService] Failed to get voice recordings', e);
@@ -407,30 +482,30 @@ export const getVoiceRecordingsLocal = async (userId: string, noteId: string): P
 export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRecording): Promise<void> => {
     if (Platform.OS === 'web') return;
     try {
-        const database = await getDb();
-        if (!database) return;
         const safeTranscription = recording.transcription || null;
-        await database.runAsync(
-            `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-             user_id=excluded.user_id,
-             file_path=excluded.file_path,
-             duration=excluded.duration,
-             transcription=excluded.transcription,
-             iso_code=excluded.iso_code
-            `,
-            [
-                recording.id,
-                recording.note_id,
-                userId,
-                recording.file_path,
-                recording.duration,
-                safeTranscription,
-                recording.created_at,
-                recording.iso_code || null
-            ]
-        );
+        await withDbRetry('save voice recording', (database) => (
+            database.runAsync(
+                `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(id) DO UPDATE SET
+                 user_id=excluded.user_id,
+                 file_path=excluded.file_path,
+                 duration=excluded.duration,
+                 transcription=excluded.transcription,
+                 iso_code=excluded.iso_code
+                `,
+                [
+                    recording.id,
+                    recording.note_id,
+                    userId,
+                    recording.file_path,
+                    recording.duration,
+                    safeTranscription,
+                    recording.created_at,
+                    recording.iso_code || null
+                ]
+            )
+        ));
         console.log(`[DatabaseService] Voice recording saved: ${recording.id}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to save voice recording', e);
@@ -440,14 +515,15 @@ export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRe
 export const deleteVoiceRecordingLocal = async (userId: string, id: string): Promise<void> => {
     if (Platform.OS === 'web') return;
     try {
-        const database = await getDb();
-        if (!database) return;
-        const rows = await database.getAllAsync<{ file_path: string | null }>(
-            'SELECT file_path FROM voice_recordings WHERE id = ? AND user_id = ?',
-            [id, userId]
-        );
-        await database.runAsync('DELETE FROM voice_recordings WHERE id = ? AND user_id = ?', [id, userId]);
-        await purgeAudioFiles(rows.map((row) => row.file_path), `delete voice recording ${id}`);
+        const filePaths = await withDbRetry('delete voice recording', async (database) => {
+            const rows = await database.getAllAsync<{ file_path: string | null }>(
+                'SELECT file_path FROM voice_recordings WHERE id = ? AND user_id = ?',
+                [id, userId]
+            );
+            await database.runAsync('DELETE FROM voice_recordings WHERE id = ? AND user_id = ?', [id, userId]);
+            return rows.map((row) => row.file_path);
+        });
+        await purgeAudioFiles(filePaths, `delete voice recording ${id}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete voice recording', e);
     }
@@ -469,13 +545,13 @@ export const markAllDirty = async (userId: string): Promise<void> => {
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
-        await database.runAsync(
-            "UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')",
-            [userId]
-        );
-        await database.runAsync('UPDATE note_improvements SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
+        await withDbRetry('mark all dirty', async (database) => {
+            await database.runAsync(
+                "UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')",
+                [userId]
+            );
+            await database.runAsync('UPDATE note_improvements SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
+        });
         console.log(`[DatabaseService] Marked all notes dirty for user ${userId}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to mark notes dirty', e);
@@ -545,22 +621,23 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
     }
 
     try {
-        const database = await getDb();
-        if (!database) return [];
-        // FILTER BY USER ID
-        const rawNotes = await database.getAllAsync<any>(
-            'SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC',
-            [userId]
-        );
-        const rawImprovements = await database.getAllAsync<any>(
-            'SELECT * FROM note_improvements WHERE user_id = ?',
-            [userId]
-        );
-        // Optimally filter voice too, though note mapping handles filtering via note_id
-        const allVoice = await database.getAllAsync<VoiceRecording>(
-            'SELECT * FROM voice_recordings WHERE user_id = ?',
-            [userId]
-        );
+        const { rawNotes, rawImprovements, allVoice } = await withDbRetry('get notes', async (database) => {
+            // FILTER BY USER ID
+            const notes = await database.getAllAsync<any>(
+                'SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC',
+                [userId]
+            );
+            const improvements = await database.getAllAsync<any>(
+                'SELECT * FROM note_improvements WHERE user_id = ?',
+                [userId]
+            );
+            // Optimally filter voice too, though note mapping handles filtering via note_id
+            const voice = await database.getAllAsync<VoiceRecording>(
+                'SELECT * FROM voice_recordings WHERE user_id = ?',
+                [userId]
+            );
+            return { rawNotes: notes, rawImprovements: improvements, allVoice: voice };
+        });
 
         const improvementsMap = await processImprovements(rawImprovements);
         const voiceMap = new Map<string, VoiceRecording[]>();
@@ -729,13 +806,17 @@ export const getNoteById = async (userId: string, id: string): Promise<Note | nu
     }
 
     try {
-        const database = await getDb();
-        if (!database) return null;
-        const rawNote = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
-        if (!rawNote) return null;
+        const { rawNote, rawImprovements, voiceRecordings } = await withDbRetry('get note by id', async (database) => {
+            const note = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
+            if (!note) {
+                return { rawNote: null as any, rawImprovements: [] as any[], voiceRecordings: [] as VoiceRecording[] };
+            }
+            const improvements = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE note_id = ?', [id]);
+            const voice = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ?', [id]);
+            return { rawNote: note, rawImprovements: improvements, voiceRecordings: voice };
+        });
 
-        const rawImprovements = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE note_id = ?', [id]);
-        const voiceRecordings = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ?', [id]);
+        if (!rawNote) return null;
 
         const improvementsMap = await processImprovements(rawImprovements);
         const voiceMap = new Map<string, VoiceRecording[]>();
@@ -766,28 +847,28 @@ export const wipeLocalDatabase = async (): Promise<void> => {
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
-
-        // Purge on-disk audio blobs before deleting DB rows.
-        const noteAudio = await database.getAllAsync<{ audio_file_path: string | null }>(
-            "SELECT audio_file_path FROM notes WHERE audio_file_path IS NOT NULL AND audio_file_path != ''",
-        );
-        const recordingAudio = await database.getAllAsync<{ file_path: string }>(
-            "SELECT file_path FROM voice_recordings WHERE file_path IS NOT NULL AND file_path != ''",
-        );
-        await purgeAudioFiles(
-            [
+        const audioPaths = await withDbRetry('wipe local database (collect audio)', async (database) => {
+            const noteAudio = await database.getAllAsync<{ audio_file_path: string | null }>(
+                "SELECT audio_file_path FROM notes WHERE audio_file_path IS NOT NULL AND audio_file_path != ''",
+            );
+            const recordingAudio = await database.getAllAsync<{ file_path: string }>(
+                "SELECT file_path FROM voice_recordings WHERE file_path IS NOT NULL AND file_path != ''",
+            );
+            return [
                 ...noteAudio.map((row) => row.audio_file_path),
                 ...recordingAudio.map((row) => row.file_path),
-            ],
-            'wipe local database',
-        );
+            ];
+        });
+
+        // Purge on-disk audio blobs before deleting DB rows.
+        await purgeAudioFiles(audioPaths, 'wipe local database');
 
         // Delete in child->parent order to be resilient even if foreign_keys is off.
-        await database.runAsync('DELETE FROM voice_recordings;');
-        await database.runAsync('DELETE FROM note_improvements;');
-        await database.runAsync('DELETE FROM notes;');
+        await withDbRetry('wipe local database (delete rows)', async (database) => {
+            await database.runAsync('DELETE FROM voice_recordings;');
+            await database.runAsync('DELETE FROM note_improvements;');
+            await database.runAsync('DELETE FROM notes;');
+        });
     } catch (e) {
         console.error('[DatabaseService] Failed to wipe native DB', e);
         throw e;
@@ -835,53 +916,53 @@ export const saveImprovementLocal = async (userId: string, improvement: NoteImpr
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
         const isDirty = improvement.dirty ? 1 : 0;
         const isDeleted = improvement.deleted ? 1 : 0;
         const isActive = improvement.is_active ? 1 : 0;
 
-        await database.runAsync(
-            `INSERT INTO note_improvements (
-                id, note_id, user_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
-                created_at, updated_at, synced, dirty, deleted, version, server_updated_at, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                note_id=excluded.note_id,
-                user_id=excluded.user_id,
-                encrypted_content=excluded.encrypted_content,
-                encrypted_title=excluded.encrypted_title,
-                content_nonce=excluded.content_nonce,
-                label=excluded.label,
-                option_id=excluded.option_id,
-                created_at=excluded.created_at,
-                updated_at=excluded.updated_at,
-                synced=excluded.synced,
-                dirty=excluded.dirty,
-                deleted=excluded.deleted,
-                version=excluded.version,
-                server_updated_at=excluded.server_updated_at,
-                is_active=excluded.is_active
-            `,
-            [
-                improvement.id,
-                improvement.note_id,
-                userId,
-                improvement.encrypted_content,
-                improvement.encrypted_title || null,
-                improvement.content_nonce || null,
-                improvement.label || null,
-                improvement.option_id || null,
-                improvement.created_at || new Date().toISOString(),
-                improvement.updated_at || new Date().toISOString(),
-                improvement.synced ?? 1,
-                isDirty,
-                isDeleted,
-                improvement.version ?? 0,
-                improvement.server_updated_at || null,
-                isActive
-            ]
-        );
+        await withDbRetry('save improvement', (database) => (
+            database.runAsync(
+                `INSERT INTO note_improvements (
+                    id, note_id, user_id, encrypted_content, encrypted_title, content_nonce, label, option_id,
+                    created_at, updated_at, synced, dirty, deleted, version, server_updated_at, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    note_id=excluded.note_id,
+                    user_id=excluded.user_id,
+                    encrypted_content=excluded.encrypted_content,
+                    encrypted_title=excluded.encrypted_title,
+                    content_nonce=excluded.content_nonce,
+                    label=excluded.label,
+                    option_id=excluded.option_id,
+                    created_at=excluded.created_at,
+                    updated_at=excluded.updated_at,
+                    synced=excluded.synced,
+                    dirty=excluded.dirty,
+                    deleted=excluded.deleted,
+                    version=excluded.version,
+                    server_updated_at=excluded.server_updated_at,
+                    is_active=excluded.is_active
+                `,
+                [
+                    improvement.id,
+                    improvement.note_id,
+                    userId,
+                    improvement.encrypted_content,
+                    improvement.encrypted_title || null,
+                    improvement.content_nonce || null,
+                    improvement.label || null,
+                    improvement.option_id || null,
+                    improvement.created_at || new Date().toISOString(),
+                    improvement.updated_at || new Date().toISOString(),
+                    improvement.synced ?? 1,
+                    isDirty,
+                    isDeleted,
+                    improvement.version ?? 0,
+                    improvement.server_updated_at || null,
+                    isActive
+                ]
+            )
+        ));
         console.log(`[DatabaseService] Improvement saved to native DB: ${improvement.id} (user=${userId})`);
     } catch (e) {
         console.error('[DatabaseService] Failed to save improvement to native DB', e);
@@ -894,9 +975,9 @@ export const deleteImprovementLocal = async (userId: string, id: string): Promis
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
-        await database.runAsync('DELETE FROM note_improvements WHERE id = ?', [id]);
+        await withDbRetry('delete improvement', (database) => (
+            database.runAsync('DELETE FROM note_improvements WHERE id = ?', [id])
+        ));
         console.log(`[DatabaseService] Improvement deleted from native DB: ${id}`);
     } catch (e) {
         console.error('[DatabaseService] Failed to delete improvement from native DB', e);
@@ -909,10 +990,10 @@ export const getAllImprovementsLocal = async (userId: string): Promise<NoteImpro
         return allNotes.filter(n => n.parent_id) as any[];
     }
     try {
-        const database = await getDb();
-        if (!database) return [];
         // FILTER BY USER ID
-        const raw = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE user_id = ?', [userId]);
+        const raw = await withDbRetry('get improvements', (database) => (
+            database.getAllAsync<any>('SELECT * FROM note_improvements WHERE user_id = ?', [userId])
+        ));
         const map = await processImprovements(raw, true);
         return Array.from(map.values()).flat();
     } catch (e) {
@@ -952,39 +1033,38 @@ export const setActiveVariant = async (userId: string, parentNoteId: string, act
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
+        await withDbRetry('set active variant', async (database) => {
+            // Transaction to update flags
+            await database.withTransactionAsync(async () => {
+                // Verify ownership first (optional, but safer)
 
-        // Transaction to update flags
-        await database.withTransactionAsync(async () => {
-            // Verify ownership first (optional, but safer)
-
-            // 1. Reset all for this note family
-            await database.runAsync('UPDATE notes SET is_active = 0, dirty = 1, updated_at = ? WHERE id = ? AND user_id = ?', [
-                new Date().toISOString(),
-                parentNoteId,
-                userId
-            ]);
-            await database.runAsync('UPDATE note_improvements SET is_active = 0, dirty = 1, updated_at = ? WHERE note_id = ? AND user_id = ?', [
-                new Date().toISOString(),
-                parentNoteId,
-                userId
-            ]);
-
-            // 2. Set new active
-            if (activeChildId) {
-                await database.runAsync('UPDATE note_improvements SET is_active = 1, dirty = 1, updated_at = ? WHERE id = ? AND user_id = ?', [
-                    new Date().toISOString(),
-                    activeChildId,
-                    userId
-                ]);
-            } else {
-                await database.runAsync('UPDATE notes SET is_active = 1, dirty = 1, updated_at = ? WHERE id = ? AND user_id = ?', [
+                // 1. Reset all for this note family
+                await database.runAsync('UPDATE notes SET is_active = 0, dirty = 1, updated_at = ? WHERE id = ? AND user_id = ?', [
                     new Date().toISOString(),
                     parentNoteId,
                     userId
                 ]);
-            }
+                await database.runAsync('UPDATE note_improvements SET is_active = 0, dirty = 1, updated_at = ? WHERE note_id = ? AND user_id = ?', [
+                    new Date().toISOString(),
+                    parentNoteId,
+                    userId
+                ]);
+
+                // 2. Set new active
+                if (activeChildId) {
+                    await database.runAsync('UPDATE note_improvements SET is_active = 1, dirty = 1, updated_at = ? WHERE id = ? AND user_id = ?', [
+                        new Date().toISOString(),
+                        activeChildId,
+                        userId
+                    ]);
+                } else {
+                    await database.runAsync('UPDATE notes SET is_active = 1, dirty = 1, updated_at = ? WHERE id = ? AND user_id = ?', [
+                        new Date().toISOString(),
+                        parentNoteId,
+                        userId
+                    ]);
+                }
+            });
         });
     } catch (e) {
         console.error('[DatabaseService] Failed to set active variant (native)', e);
@@ -1024,32 +1104,31 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
     }
 
     try {
-        const database = await getDb();
-        if (!database) return;
+        await withDbRetry('migrate guest data', async (database) => {
+            await database.withTransactionAsync(async () => {
+                // Update notes
+                await database.runAsync(
+                    "UPDATE notes SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')",
+                    [toUserId, fromUserId]
+                );
+                // Local-only notes just change owner without marking dirty for sync
+                await database.runAsync(
+                    "UPDATE notes SET user_id = ? WHERE user_id = ? AND storage_scope = 'local_only'",
+                    [toUserId, fromUserId]
+                );
 
-        await database.withTransactionAsync(async () => {
-            // Update notes
-            await database.runAsync(
-                "UPDATE notes SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')",
-                [toUserId, fromUserId]
-            );
-            // Local-only notes just change owner without marking dirty for sync
-            await database.runAsync(
-                "UPDATE notes SET user_id = ? WHERE user_id = ? AND storage_scope = 'local_only'",
-                [toUserId, fromUserId]
-            );
+                // Update improvements
+                await database.runAsync(
+                    "UPDATE note_improvements SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ?",
+                    [toUserId, fromUserId]
+                );
 
-            // Update improvements
-            await database.runAsync(
-                "UPDATE note_improvements SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ?",
-                [toUserId, fromUserId]
-            );
-
-            // Update voice recordings
-            await database.runAsync(
-                "UPDATE voice_recordings SET user_id = ? WHERE user_id = ?",
-                [toUserId, fromUserId]
-            );
+                // Update voice recordings
+                await database.runAsync(
+                    "UPDATE voice_recordings SET user_id = ? WHERE user_id = ?",
+                    [toUserId, fromUserId]
+                );
+            });
         });
         console.log('[DatabaseService] Guest data migration completed (native)');
     } catch (e) {
