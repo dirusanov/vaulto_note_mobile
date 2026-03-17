@@ -119,6 +119,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const blockSelections = useRef<Record<string, { start: number; end: number }>>({});
     const pendingStructuredChangeSkips = useRef<Record<string, number>>({});
     const pendingFocusRef = useRef<{ index: number; ratio: number } | null>(null);
+    const lastFocusedBlockId = useRef<string | null>(null);
 
     const focusBlockByIndex = (blockIndex: number, ratio: number) => {
         const targetBlock = blocks[blockIndex];
@@ -196,16 +197,24 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
     useImperativeHandle(ref, () => ({
         handleFormat: (type: MarkdownFormatType) => {
-            if (!focusedBlockId) return;
+            const targetId = focusedBlockId || lastFocusedBlockId.current;
+            if (!targetId) return;
 
-            const blockIndex = blocks.findIndex(b => b.id === focusedBlockId);
+            const blockIndex = blocks.findIndex(b => b.id === targetId);
             if (blockIndex === -1) return;
 
             const block = blocks[blockIndex];
             if (block.type === 'processing') {
                 return;
             }
-            let selection = blockSelections.current[focusedBlockId] || { start: block.content.length, end: block.content.length };
+
+            // If we are acting on a blurred block, restore its focus state
+            if (!focusedBlockId) {
+                setFocusedBlockId(targetId);
+            }
+
+            let selection = blockSelections.current[targetId] || { start: block.content.length, end: block.content.length };
+            let finalFocusId = targetId;
             let newBlocks = [...blocks];
 
             if (['h1', 'h2', 'h3', 'todo', 'list'].includes(type)) {
@@ -314,6 +323,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         start: selection.start - lineStart,
                         end: selection.end - lineStart
                     };
+                    finalFocusId = newBlockId;
                     setFocusedBlockId(newBlockId);
 
                 } else {
@@ -554,7 +564,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             onChange(serializeBlocks(newBlocks));
 
             setTimeout(() => {
-                inputRefs.current[focusedBlockId]?.focus();
+                inputRefs.current[finalFocusId]?.focus();
             }, 10);
         },
         focusBlockAt: (lineIndex: number, ratio: number = 1) => {
@@ -1352,6 +1362,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                         pendingFocusTransferId.current = null;
                                     }
                                     setFocusedBlockId(item.id);
+                                    lastFocusedBlockId.current = item.id;
                                     const selection = blockSelections.current[item.id];
                                     if (selection) {
                                         requestAnimationFrame(() => {
