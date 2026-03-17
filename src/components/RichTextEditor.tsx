@@ -639,10 +639,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
 
         // 2. Even if not marked, check if content is actually different to avoid race conditions
-        // serializeBlocks is relatively cheap compared to a full re-parse and re-mount
         const currentSerialized = serializeBlocks(blocks);
-        // On a fresh empty note we still need to create the first editable block.
-        // Skip reparse only when blocks are already initialized and content truly matches.
         if (blocks.length > 0 && initialContent === currentSerialized) {
             return;
         }
@@ -730,30 +727,46 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
         setStableChecklistScaleFactor(resolveChecklistScaleFactor(parsedBlocks.length, autoScalingEnabled));
         setBlocks(prevBlocks => {
-            const usedIndices = new Set<number>();
+            if (prevBlocks.length === 0) return parsedBlocks;
+
+            const usedIdx = new Set<number>();
             const newBlocks = parsedBlocks.map((newBlock, i) => {
-                // Optimize for exact same position
+                // Try 1: Exact index + Type + Content + Checked match (stable state)
                 if (
                     i < prevBlocks.length &&
-                    !usedIndices.has(i) &&
                     prevBlocks[i].type === newBlock.type &&
                     prevBlocks[i].content === newBlock.content &&
                     prevBlocks[i].checked === newBlock.checked
                 ) {
-                    usedIndices.add(i);
+                    usedIdx.add(i);
                     return { ...newBlock, id: prevBlocks[i].id };
                 }
-                
-                // Fallback search for shifted blocks
-                const matchIndex = prevBlocks.findIndex(
-                    (prev, idx) => !usedIndices.has(idx) && prev.type === newBlock.type && prev.content === newBlock.content && prev.checked === newBlock.checked
+
+                // Try 2: Search for this exact block anywhere else (moved blocks)
+                const matchIdx = prevBlocks.findIndex((pb, idx) => 
+                    !usedIdx.has(idx) && 
+                    pb.type === newBlock.type && 
+                    pb.content === newBlock.content && 
+                    pb.checked === newBlock.checked
                 );
-                
-                if (matchIndex !== -1) {
-                    usedIndices.add(matchIndex);
-                    return { ...newBlock, id: prevBlocks[matchIndex].id };
+                if (matchIdx !== -1) {
+                    usedIdx.add(matchIdx);
+                    return { ...newBlock, id: prevBlocks[matchIdx].id };
                 }
-                
+
+                // Try 3: If it's the same index and same type, it's likely the same block being edited.
+                // This is crucial for maintaining focus during typing!
+                if (
+                    i < prevBlocks.length &&
+                    prevBlocks[i].type === newBlock.type
+                ) {
+                    // Optimization: if it's the ONLY block that changed type-wise, 
+                    // or if it's a "near enough" match, preserve ID.
+                    // For now, index + type is a strong signal for the same logical "line".
+                    usedIdx.add(i);
+                    return { ...newBlock, id: prevBlocks[i].id };
+                }
+
                 return newBlock;
             });
             return newBlocks;
@@ -1023,15 +1036,25 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             formats: afterFormats
         };
 
-        const newBlocks = [...blocks];
-        newBlocks[index] = { ...currentBlock, content: beforeContent, formats: beforeFormats };
-        newBlocks.splice(index + 1, 0, newBlock);
-        setBlocks(newBlocks);
+        // Use a functional update to ensure we have latest state
+        setBlocks(prev => {
+            const next = [...prev];
+            const idx = next.findIndex(b => b.id === id);
+            if (idx === -1) return prev;
+            next[idx] = { ...next[idx], content: beforeContent, formats: beforeFormats };
+            next.splice(idx + 1, 0, newBlock);
+            
+            // Schedule side effects outside the state transition
+            setTimeout(() => {
+                isInternalUpdate.current = true;
+                onChange(serializeBlocks(next));
+            }, 0);
+            
+            return next;
+        });
 
         blockSelections.current[newBlockId] = { start: 0, end: 0 };
         setTimeout(() => inputRefs.current[newBlockId]?.focus(), 10);
-        isInternalUpdate.current = true;
-        onChange(serializeBlocks(newBlocks));
     };
 
     const handleKeyPress = (id: string, e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {

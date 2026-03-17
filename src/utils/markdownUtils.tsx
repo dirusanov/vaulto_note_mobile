@@ -306,7 +306,7 @@ export const renderFormattedText = (
         });
 
         segments.push(
-            <Text key={`${keyPrefix}${start}-${end}`} style={style}>
+            <Text key={`${keyPrefix}seg-${i}`} style={style}>
                 {segmentText}
             </Text>
         );

@@ -3483,7 +3483,7 @@ export const NoteEditScreen = () => {
             hour12: false
         });
 
-    const charCount = content.length;
+    const charCount = stripMarkdownSyntax(content).replace(/\r?\n/g, '').length;
     const canUseAI = content.trim().length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only';
