@@ -1,12 +1,15 @@
 import React from 'react';
 import { Text, TextStyle, StyleProp, StyleSheet } from 'react-native';
-import { colors } from '../theme/colors';
+import {
+    isHighlightColorToken,
+    normalizeHighlightColorForCss,
+} from './highlightColors';
 
 export interface BlockFormat {
     type: 'bold' | 'italic' | 'strikethrough' | 'underline' | 'code' | 'highlight';
     start: number;
     end: number;
-    data?: string; // e.g., 'red', 'blue'
+    data?: string; // e.g., 'red', '#BAE1FF', 'rgb(186, 225, 255)'
 }
 
 export interface FormattedBlockData {
@@ -70,13 +73,18 @@ export const parseMarkdownToData = (text: string, depth: number = 0): FormattedB
         } else if (chunk.startsWith('==')) {
             type = 'highlight';
             innerRaw = chunk.substring(2, chunk.length - 2);
-            // Check for color
-            const colMatch = innerRaw.match(/^([a-z]+):([\s\S]*)$/);
-            if (colMatch) {
-                data = colMatch[1];
-                innerRaw = colMatch[2];
+            const separatorIndex = innerRaw.indexOf(':');
+            if (separatorIndex > 0) {
+                const candidateColor = innerRaw.slice(0, separatorIndex).trim();
+                const candidateText = innerRaw.slice(separatorIndex + 1);
+                if (isHighlightColorToken(candidateColor)) {
+                    data = candidateColor;
+                    innerRaw = candidateText;
+                } else {
+                    data = 'yellow';
+                }
             } else {
-                data = 'yellow'; // default
+                data = 'yellow';
             }
         } else if (chunk.startsWith('<u>')) {
             type = 'underline';
@@ -298,9 +306,7 @@ export const renderFormattedText = (
             if (f.type === 'underline') style.push({ textDecorationLine: 'underline' });
             if (f.type === 'code') style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
             if (f.type === 'highlight') {
-                const colorKey = f.data || 'yellow';
-                // @ts-ignore
-                const highlightColor = (colors?.highlight as any)?.[colorKey] || 'yellow';
+                const highlightColor = normalizeHighlightColorForCss(f.data || 'yellow');
                 style.push({ backgroundColor: highlightColor });
             }
         });

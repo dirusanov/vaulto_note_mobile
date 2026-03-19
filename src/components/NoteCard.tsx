@@ -4,9 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-
-
-import { parseMarkdownText, parseMarkdownToData } from '../utils/markdownUtils';
+import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
 
 interface NoteCardProps {
     note: Note;
@@ -31,20 +29,12 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // Determine if audio is present (flag or check content)
     const hasAudio = note.has_audio || /!\[audio\]\(.*?\)/.test(content);
 
+    const plainContent = richContentToPlainText(content);
+
     const buildTitle = () => {
         if (note.title && note.title.trim().length > 0) return note.title.trim();
 
-        // Strip audio blocks for title generation
-        const contentForTitle = content.replace(/!\[audio\]\(.*?\)/g, '');
-
-        // Use the centralized parser to strip markdown
-        const contentToParse = contentForTitle.length > 1000 ? contentForTitle.substring(0, 1000) : contentForTitle;
-        let { content: plainText } = parseMarkdownToData(contentToParse);
-
-        // Remove Checkboxes and Hashes before formatting
-        plainText = plainText.replace(/\[\s*(x|X)?\s*\]/g, '').replace(/#/g, '');
-
-        const cleanedTokens = plainText
+        const cleanedTokens = plainContent
             .replace(/\s+/g, ' ')
             .trim()
             .split(' ')
@@ -63,31 +53,9 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const title = buildTitle();
 
     // Prepare preview text
-    // We replace audio markdown with a unique marker to split and render custom chips
-    const AUDIO_MARKER = '{{AUDIO}}';
-    let previewString = content.replace(/!\[audio\]\(.*?\)/g, AUDIO_MARKER);
-
-    previewString = previewString.length > 120
-        ? previewString.substring(0, 120).replace(/\n/g, ' ') + '...'
-        : previewString.replace(/\n/g, ' ');
-
-    const parts = previewString.split(AUDIO_MARKER);
-    const previewNodes: React.ReactNode[] = [];
-
-    parts.forEach((part, index) => {
-        if (part) {
-            previewNodes.push(...parseMarkdownText(part, styles.preview, `preview-part-${index}-`));
-        }
-
-        if (index < parts.length - 1) {
-            previewNodes.push(
-                <View key={`audio-chip-${index}`} style={styles.audioChip}>
-                    <MaterialIcons name="headset" size={12} color={colors.textSecondary} style={{ marginRight: 2 }} />
-                    <Text style={styles.audioChipText}>audio</Text>
-                </View>
-            );
-        }
-    });
+    const previewString = plainContent.length > 120
+        ? plainContent.substring(0, 120).replace(/\n/g, ' ') + '...'
+        : plainContent.replace(/\n/g, ' ');
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -120,7 +88,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
         }
     };
 
-    const isEmpty = !title && (!content || content.trim().length === 0);
+    const isEmpty = !title && !hasMeaningfulRichContent(content);
 
     return (
         <TouchableOpacity
@@ -143,9 +111,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     {title || (hasAudio ? 'Voice Recording' : ' ')}
                 </Text>
                 {(!isEmpty && previewString && previewString !== title) && (
-                    <Text style={styles.preview} numberOfLines={6}>
-                        {previewNodes}
-                    </Text>
+                    <Text style={styles.preview} numberOfLines={6}>{previewString}</Text>
                 )}
                 {(isEmpty && hasAudio) && (
                     <View style={{ marginTop: spacing.xs, alignSelf: 'flex-start' }}>

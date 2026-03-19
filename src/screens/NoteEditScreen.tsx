@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import {
     View,
     TextInput,
@@ -13,6 +13,7 @@ import {
     Modal,
     TouchableWithoutFeedback,
     Keyboard,
+    Dimensions,
     Share,
     Animated,
     AppState,
@@ -78,7 +79,13 @@ import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
-import { stripMarkdownSyntax } from '../utils/markdownUtils';
+import {
+    appendPlainTextSnippetToRichContent,
+    hasMeaningfulRichContent,
+    isRichHtmlContent,
+    removeAudioFromRichContent,
+    richContentToPlainText,
+} from '../utils/richContent';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -91,13 +98,7 @@ const areTextsEquivalent = (a: string, b: string): boolean =>
     normalizeTextForComparison(a) === normalizeTextForComparison(b);
 
 const appendSnippetToContent = (base: string, snippet: string): string => {
-    const normalizedBase = (base || '').replace(/\s+$/g, '');
-    const normalizedSnippet = (snippet || '').trim();
-
-    if (!normalizedSnippet) return normalizedBase;
-    if (!normalizedBase) return normalizedSnippet;
-    if (normalizedBase.endsWith('\n')) return `${normalizedBase}${normalizedSnippet}`;
-    return `${normalizedBase}\n${normalizedSnippet}`;
+    return appendPlainTextSnippetToRichContent(base, snippet);
 };
 
 const escapeRegExp = (value: string): string =>
@@ -229,6 +230,128 @@ const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'upda
     }
     return action === 'created' ? 'Created improved view' : 'Updated Improved';
 };
+
+const HeaderTitle = memo(({ title, onChange, onFocus }: { title: string; onChange: (t: string) => void; onFocus: () => void }) => (
+    <TextInput
+        style={styles.titleInput}
+        placeholder="Title"
+        placeholderTextColor={colors.textMuted}
+        value={title}
+        onChangeText={onChange}
+        onFocus={onFocus}
+        maxLength={100}
+        multiline
+    />
+));
+
+const HeaderMeta = memo(({ dateStr, charCount }: { dateStr: string; charCount: number }) => (
+    <View style={styles.metaInfo}>
+        <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
+    </View>
+));
+
+const MemoizedImprovementChips = memo(({ 
+    noteImprovements, 
+    activeVariantId, 
+    handleVariantSelect,
+    confirmDeleteImprovement
+}: { 
+    noteImprovements: any[], 
+    activeVariantId: string, 
+    handleVariantSelect: (id: string) => void,
+    confirmDeleteImprovement: (id: string) => void
+}) => {
+    if (noteImprovements.length === 0) return null;
+    return (
+        <View style={styles.variantContainer}>
+            <GestureHandlerScrollView
+                horizontal
+                nestedScrollEnabled
+                directionalLockEnabled
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.variantScrollContent}
+                keyboardShouldPersistTaps="always"
+            >
+                <TouchableOpacity
+                    style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
+                    onPress={() => handleVariantSelect('original')}
+                >
+                    <MaterialIcons
+                        name="lock"
+                        size={14}
+                        color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
+                        style={styles.variantChipIcon}
+                    />
+                    <Text
+                        style={[
+                            styles.variantChipText,
+                            activeVariantId === 'original' && styles.variantChipTextActive,
+                        ]}
+                    >
+                        Original
+                    </Text>
+                </TouchableOpacity>
+
+                {noteImprovements.map((imp: any) => (
+                    <View style={styles.variantChipWrapper} key={imp.id}>
+                        <TouchableOpacity
+                            style={[
+                                styles.variantChip,
+                                activeVariantId === imp.id && styles.variantChipActive,
+                            ]}
+                            onPress={() => handleVariantSelect(imp.id)}
+                        >
+                            <MaterialIcons
+                                name="auto-awesome"
+                                size={14}
+                                color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
+                                style={styles.variantChipIcon}
+                            />
+                            <Text
+                                numberOfLines={1}
+                                style={[
+                                    styles.variantChipText,
+                                    activeVariantId === imp.id && styles.variantChipTextActive,
+                                ]}
+                            >
+                                {imp.label || 'Improvement'}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.variantDeleteButton}
+                            onPress={() => confirmDeleteImprovement(imp.id)}
+                        >
+                            <MaterialIcons name="close" size={14} color={colors.textMuted} />
+                        </TouchableOpacity>
+                    </View>
+                ))}
+            </GestureHandlerScrollView>
+        </View>
+    );
+});
+
+const MemoizedAudioHeader = memo(({ 
+    showAudioPlayer, 
+    audioUri, 
+    audioDuration, 
+    onClose 
+}: { 
+    showAudioPlayer: boolean, 
+    audioUri: string | null, 
+    audioDuration: number, 
+    onClose: () => void 
+}) => {
+    if (!showAudioPlayer || !audioUri) return null;
+    return (
+        <View style={{ marginBottom: spacing.m }}>
+            <AudioPlayer
+                audioUri={audioUri}
+                duration={audioDuration}
+                onClose={onClose}
+            />
+        </View>
+    );
+});
 
 const buildAgentImprovementLabel = (
     primaryTitle?: string | null,
@@ -484,19 +607,20 @@ export const NoteEditScreen = () => {
 
     const handleCopyPlainText = async () => {
         setShowMenu(false);
-        const fullText = `${title}\n\n${content}`;
-        const plainText = stripMarkdownSyntax(fullText);
+        const fullText = `${title}\n\n${richContentToPlainText(content)}`;
+        const plainText = richContentToPlainText(fullText);
         await Clipboard.setStringAsync(plainText.trim());
         showToast('Text copied to clipboard');
     };
 
     const handleCopyMarkdown = async () => {
         setShowMenu(false);
-        // Strip audio tags (broken local links) but keep other markdown
-        const contentWithoutAudio = content
-            .replace(/!\[audio\]\([^)]+\)/g, '')
-            .replace(/\n{3,}/g, '\n\n') // Normalize extra newlines left by removal
-            .trim();
+        const contentWithoutAudio = isRichHtmlContent(content)
+            ? richContentToPlainText(content)
+            : content
+                .replace(/!\[audio\]\([^)]+\)/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
 
         const fullText = `${title ? '# ' + title + '\n\n' : ''}${contentWithoutAudio}`;
         await Clipboard.setStringAsync(fullText);
@@ -506,11 +630,12 @@ export const NoteEditScreen = () => {
     const handleShareText = async () => {
         setShowMenu(false);
         if (!ensurePrivateShareAllowed()) return;
-        // Also strip audio for sharing text
-        const contentWithoutAudio = content
-            .replace(/!\[audio\]\([^)]+\)/g, '')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
+        const contentWithoutAudio = isRichHtmlContent(content)
+            ? richContentToPlainText(content)
+            : content
+                .replace(/!\[audio\]\([^)]+\)/g, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
 
         const fullText = `${title}\n\n${contentWithoutAudio}`;
         try {
@@ -536,7 +661,10 @@ export const NoteEditScreen = () => {
             const filename = `${safeTitle}_${dateStr}.md`;
 
             const fileUri = `${FileSystem.documentDirectory}${filename} `;
-            const fullText = `${title ? '# ' + title + '\n\n' : ''}${content} `;
+            const exportBody = isRichHtmlContent(content)
+                ? richContentToPlainText(content)
+                : content;
+            const fullText = `${title ? '# ' + title + '\n\n' : ''}${exportBody} `;
 
             await FileSystem.writeAsStringAsync(fileUri, fullText, {
                 encoding: 'utf8',
@@ -608,7 +736,6 @@ export const NoteEditScreen = () => {
     const lastSavedTitle = useRef(existingNote?.title || '');
     const lastSavedContent = useRef(existingNote?.content || '');
     const skipAutoSaveRef = useRef(false);
-    const isColorPickerOpen = useRef(false);
     const isMounted = useRef(true);
     const hasAutoOpenedRecordings = useRef(false);
 
@@ -928,7 +1055,13 @@ export const NoteEditScreen = () => {
     const requestHistoryRef = useRef<string[]>([]);
 
     const [activeFormats, setActiveFormats] = useState<MarkdownFormatType[]>([]);
+    const [keyboardVisibleState, setKeyboardVisibleState] = useState(false);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
     const editorRef = useRef<RichTextEditorHandle>(null);
+    const keyboardVisibleRef = useRef(false);
+    const visualEditorFocusedRef = useRef(false);
+    const [visualPlainText, setVisualPlainText] = useState(() => richContentToPlainText(content));
 
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
@@ -1091,6 +1224,14 @@ export const NoteEditScreen = () => {
         currentContentRef.current = content;
     }, [content]);
 
+    useEffect(() => {
+        if (editMode === 'visual' && visualEditorFocusedRef.current) {
+            return;
+        }
+
+        setVisualPlainText(richContentToPlainText(content));
+    }, [content, editMode]);
+
     // Sync activeVariantIdRef
     useEffect(() => {
         activeVariantIdRef.current = activeVariantId;
@@ -1141,7 +1282,7 @@ export const NoteEditScreen = () => {
 
                 // Auto-load player if note is empty but has recordings (unprocessed voice note)
                 if (!hasAutoOpenedRecordings.current && recs.length > 0 && existingNote) {
-                    const isEmpty = !existingNote.title && (!existingNote.content || existingNote.content.trim().length === 0);
+                    const isEmpty = !existingNote.title && !hasMeaningfulRichContent(existingNote.content || '');
                     const hasNoTx = !existingNote.encrypted_transcription && !existingNote.transcription;
 
                     if (isEmpty && hasNoTx) {
@@ -1182,6 +1323,9 @@ export const NoteEditScreen = () => {
         if (!existingNote) {
             return;
         }
+
+        const shouldDeferExternalContentSync =
+            editMode === 'visual' && visualEditorFocusedRef.current;
 
         // Initialize history with loaded content if it was empty (fixes Undo wiping content)
         const currentOriginalHist = variantHistories.current['original'];
@@ -1235,7 +1379,7 @@ export const NoteEditScreen = () => {
                     titleSaved[imp.id] = titleValue;
                 }
 
-                if (activeVariantId === imp.id && drafts[imp.id] !== undefined) {
+                if (!shouldDeferExternalContentSync && activeVariantId === imp.id && drafts[imp.id] !== undefined) {
                     setContent(drafts[imp.id]);
                     setTitle(titleDrafts[imp.id] ?? titleValue);
                 }
@@ -1251,18 +1395,23 @@ export const NoteEditScreen = () => {
             improvementTitleSavedRef.current = {};
         }
 
-        if (activeVariantId === 'original') {
+        if (!shouldDeferExternalContentSync && activeVariantId === 'original') {
             if (lastSavedTitle.current === title) {
                 const nextTitle = existingNote.title || '';
                 // Avoid regressing non-empty in-memory title to transient empty value from stale refresh.
-                if (nextTitle.trim().length > 0 || !title.trim()) {
+                const storeIsCaughtUp = nextTitle === lastSavedTitle.current;
+                if (storeIsCaughtUp && (nextTitle.trim().length > 0 || !title.trim()) && nextTitle !== title) {
                     setTitle(nextTitle);
                 }
             }
             if (lastSavedContent.current === content) {
-                setContent(existingNote.content || '');
+                const nextContent = existingNote.content || '';
+                const storeIsCaughtUp = nextContent === lastSavedContent.current;
+                if (storeIsCaughtUp && nextContent !== content) {
+                    setContent(nextContent);
+                }
             }
-        } else {
+        } else if (!shouldDeferExternalContentSync) {
             const nextTitle = resolveImprovementVariantTitle(activeVariantId);
             if (nextTitle !== title) {
                 setTitle(nextTitle);
@@ -1279,11 +1428,12 @@ export const NoteEditScreen = () => {
 
         lastSavedTitle.current = existingNote.title || '';
         lastSavedContent.current = existingNote.content || '';
-    }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri, resolveImprovementVariantTitle]);
+    }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri, editMode, resolveImprovementVariantTitle]);
 
     // Restore active variant from is_active flags when note loads
     useEffect(() => {
         if (!existingNote) return;
+        if (editMode === 'visual' && visualEditorFocusedRef.current) return;
 
         const correctActiveVariantId = getInitialActiveVariantId();
 
@@ -1338,7 +1488,7 @@ export const NoteEditScreen = () => {
                 }
             }
         }
-    }, [existingNote?.id, existingNote?.is_active, JSON.stringify(existingNote?.improvements?.map(i => ({ id: i.id, is_active: i.is_active })))]);
+    }, [editMode, existingNote?.id, existingNote?.is_active, JSON.stringify(existingNote?.improvements?.map(i => ({ id: i.id, is_active: i.is_active })))]);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -1375,6 +1525,7 @@ export const NoteEditScreen = () => {
     }, []);
 
     useEffect(() => {
+        if (editMode === 'visual' && visualEditorFocusedRef.current) return;
         if (activeVariantId !== 'original') {
             const exists = noteImprovements.some(imp => imp.id === activeVariantId);
             const isPendingOptimistic = optimisticActiveVariant.current === activeVariantId;
@@ -1390,7 +1541,7 @@ export const NoteEditScreen = () => {
                 setContent(existingNote?.content || '');
             }
         }
-    }, [activeVariantId, noteImprovements, existingNote?.content, existingNote?.title]);
+    }, [activeVariantId, editMode, noteImprovements, existingNote?.content, existingNote?.title]);
 
     // Handle history updates for current variant
     const updateHistory = (newTitle: string, newContent: string, variantIdOverride?: string) => {
@@ -1757,6 +1908,7 @@ export const NoteEditScreen = () => {
             ...variantHistory,
             index: prevIndex
         };
+        setReparseTrigger(prev => prev + 1);
     };
 
     const handleRedo = () => {
@@ -1778,6 +1930,7 @@ export const NoteEditScreen = () => {
             ...variantHistory,
             index: nextIndex
         };
+        setReparseTrigger(prev => prev + 1);
     };
 
     const loadAudio = async (path: string) => {
@@ -2022,6 +2175,7 @@ export const NoteEditScreen = () => {
                 setContent(imp?.content || '');
             }
         }
+        setReparseTrigger(prev => prev + 1);
     }, [activeVariantId, existingNote?.content, existingNote?.title, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant]);
 
     useEffect(() => {
@@ -2031,7 +2185,7 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            const nothingToSave = !title.trim() && !content.trim();
+            const nothingToSave = !title.trim() && !hasMeaningfulRichContent(content);
             const unchanged = title === lastSavedTitle.current && content === lastSavedContent.current;
             const improvementDraft = improvementDraftsRef.current[activeVariantId] ?? '';
             const improvementSaved = improvementSavedRef.current[activeVariantId] ?? '';
@@ -2113,7 +2267,7 @@ export const NoteEditScreen = () => {
         Keyboard.dismiss();
 
         // Check if note is effectively empty
-        const isContentEmpty = !title.trim() && !content.trim();
+        const isContentEmpty = !title.trim() && !hasMeaningfulRichContent(content);
         const hasNoAudio = !existingNote?.has_audio && voiceRecordings.length === 0;
 
         if (isContentEmpty && hasNoAudio && localNoteId) {
@@ -2826,7 +2980,7 @@ export const NoteEditScreen = () => {
             const shouldUseAgentModeForThisRecording =
                 micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
-            let shouldAutoInsertAudioPlayer = false;
+            const shouldAutoInsertAudioPlayer = !transcribe;
             if (isUserTranscriptionRestricted && shouldTranscribe) {
                 // Anonymous users can't transcribe; keep audio flow intact.
                 shouldTranscribe = false;
@@ -2840,6 +2994,8 @@ export const NoteEditScreen = () => {
                     shouldTranscribe = false;
                 }
             }
+            // Only auto-insert audio when transcription is explicitly disabled for this recording.
+            shouldAutoInsertAudioPlayer = !shouldTranscribe;
 
             let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
             let isTranscriptionSuccess = false;
@@ -2875,13 +3031,13 @@ export const NoteEditScreen = () => {
                     if (insertedPlainTextEarly) {
                         registerTranscribedInsertion(transcribedText);
                     }
-                } else if (wasNewNoteCreation && targetVariantId === 'original') {
-                    insertedPlainTextEarly = await applyPlainTextToVariant('original', transcribedText);
+                } else {
+                    insertedPlainTextEarly = await applyPlainTextToVariant(targetVariantId, transcribedText);
                     if (insertedPlainTextEarly) {
                         registerTranscribedInsertion(transcribedText);
+                    } else {
+                        insertedPendingEarly = await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
                     }
-                } else {
-                    insertedPendingEarly = await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
                 }
             }
 
@@ -2890,7 +3046,8 @@ export const NoteEditScreen = () => {
                 const errorMsg = transcription.error ? getErrorMessage(transcription.error, '') : '';
                 const errorMsgLower = errorMsg.toLowerCase();
                 const rawErrorLower = (transcription.error || '').toLowerCase();
-                // Auto-insert audio player when there is no transcription (e.g., failed, disabled, or due to limits).
+                // If transcription failed, we still save audio, but we don't auto-insert audio
+                // into the note unless transcription was explicitly disabled by the toggle.
                 const isAuthOrQuotaError =
                     isUserTranscriptionRestricted ||
                     errorMsgLower.includes('sign in') ||
@@ -2905,7 +3062,6 @@ export const NoteEditScreen = () => {
                     rawErrorLower.includes('trial') ||
                     rawErrorLower === 'transcription disabled' ||
                     errorMsgLower === 'transcription disabled';
-                shouldAutoInsertAudioPlayer = true;
 
                 if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
@@ -3054,7 +3210,7 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            if (!insertedPendingEarly) {
+            if (!insertedPendingEarly && !insertedPlainTextEarly) {
                 await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
             }
 
@@ -3064,6 +3220,7 @@ export const NoteEditScreen = () => {
                 targetVariantId,
                 recordingId: voiceId,
                 micMode,
+                dictationAlreadyApplied: insertedPlainTextEarly,
             });
         } finally {
             setIsRecordingFlowActive(false);
@@ -3166,6 +3323,7 @@ export const NoteEditScreen = () => {
         const status = targetVariant === 'original' ? 'Added to Original' : 'Added to Improved';
         setRecordingOutcomeStatus(selected.id, status);
         showVoiceResultStatus(status, selected.id);
+        setReparseTrigger(prev => prev + 1);
         setShowRecordingTextModal(false);
     }, [applyPlainTextToVariant, selectedRecordingForText, setRecordingOutcomeStatus, showVoiceResultStatus]);
 
@@ -3180,12 +3338,9 @@ export const NoteEditScreen = () => {
         showVoiceResultStatus('Copied transcript', selected?.id);
     }, [selectedRecordingForText, showVoiceResultStatus]);
 
-
-
     const handleFormat = useCallback((type: MarkdownFormatType) => {
         editorRef.current?.handleFormat(type);
     }, []);
-
 
     const handleCheckPress = () => {
         Keyboard.dismiss();
@@ -3208,7 +3363,7 @@ export const NoteEditScreen = () => {
             if (!consentGranted) {
                 return;
             }
-            const sourceText = content.trim();
+            const sourceText = richContentToPlainText(content).trim();
             if (!sourceText) {
                 Alert.alert('Empty Text', 'Enter some text before requesting an improvement.');
                 return;
@@ -3325,6 +3480,7 @@ export const NoteEditScreen = () => {
                     setTitle(improvementTitle);
                     setContent(finalText);
                     currentContentRef.current = finalText;
+                    setReparseTrigger(prev => prev + 1);
                     // Persist active variant asynchronously after optimistic switch to avoid UI fallback flicker.
                     await setActiveVariant(targetNoteId, improvement.id);
                 }
@@ -3358,6 +3514,7 @@ export const NoteEditScreen = () => {
 
                 // Update history for this variant
                 updateHistoryImmediate(nextVariantTitle, finalText, variantAtRequestStart);
+                setReparseTrigger(prev => prev + 1);
             }
         } catch (error: any) {
             const prettyMessage = getErrorMessage(error, 'Failed to improve text. Check AI settings.');
@@ -3483,8 +3640,9 @@ export const NoteEditScreen = () => {
             hour12: false
         });
 
-    const charCount = stripMarkdownSyntax(content).replace(/\r?\n/g, '').length;
-    const canUseAI = content.trim().length > 0;
+    const plainContent = editMode === 'visual' ? visualPlainText : richContentToPlainText(content);
+    const charCount = plainContent.replace(/\r?\n/g, '').length;
+    const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only';
     const micHintText = 'Hold: no agent';
@@ -3503,18 +3661,28 @@ export const NoteEditScreen = () => {
         }
     }, [route.params?.initialRecording, navigation]);
 
-    // Track keyboard visibility to handle color picker interactions
-    const isKeyboardVisible = useRef(false);
-
     useEffect(() => {
-        const showSub = Keyboard.addListener('keyboardDidShow', () => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const showSub = Keyboard.addListener(showEvent, (event) => {
+            const keyboardFrame = event.endCoordinates;
+            const screenHeight = Dimensions.get('screen').height;
+            const measuredKeyboardHeight = Platform.OS === 'android' && typeof keyboardFrame?.screenY === 'number'
+                ? Math.max(0, screenHeight - keyboardFrame.screenY)
+                : (keyboardFrame?.height || 0);
+
+            keyboardVisibleRef.current = true;
+            setKeyboardVisibleState(true);
+            setKeyboardHeight(measuredKeyboardHeight);
             setIsEditing(true);
-            isKeyboardVisible.current = true;
         });
-        const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-            isKeyboardVisible.current = false;
-            editorRef.current?.blur();
-            if (!isColorPickerOpen.current) {
+        const hideSub = Keyboard.addListener(hideEvent, () => {
+            keyboardVisibleRef.current = false;
+            setKeyboardVisibleState(false);
+            setKeyboardHeight(0);
+            if (!isColorPickerVisible) {
+                editorRef.current?.blur();
                 setIsEditing(false);
             }
         });
@@ -3523,7 +3691,7 @@ export const NoteEditScreen = () => {
             showSub.remove();
             hideSub.remove();
         };
-    }, []);
+    }, [isColorPickerVisible]);
 
     const handleRetryTranscription = async (recording?: VoiceRecording) => {
         const targetRecording = recording
@@ -3690,20 +3858,7 @@ export const NoteEditScreen = () => {
         } else {
             // Fallback: Raw String Manipulation (for Raw Mode or if Ref missing)
             const currentContent = currentContentRef.current;
-            let newContent = currentContent;
-
-            const filename = path.split('/').pop();
-            if (filename) {
-                const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\([^)]*${escapedFilename}\\)\\s*`, 'g');
-                newContent = newContent.replace(audioTagRegex, '');
-                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
-            } else {
-                const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const audioTagRegex = new RegExp(`\\s*!\\[audio\\]\\(${escapedPath}\\)\\s*`, 'g');
-                newContent = newContent.replace(audioTagRegex, '');
-                newContent = newContent.replace(/\n{3,}/g, '\n\n').trim();
-            }
+            const newContent = removeAudioFromRichContent(currentContent, path);
 
             setContent(newContent);
             currentContentRef.current = newContent;
@@ -3723,7 +3878,7 @@ export const NoteEditScreen = () => {
 
             // 4. Auto-delete check (Deferred to handleBack)
             const latestContent = currentContentRef.current;
-            const isContentEmpty = !title.trim() && !latestContent.trim();
+            const isContentEmpty = !title.trim() && !hasMeaningfulRichContent(latestContent);
             if (isContentEmpty) {
                 console.log('[AutoClean] Note came empty after deleting last audio. Will be auto-deleted on exit if left empty.');
             }
@@ -3734,108 +3889,46 @@ export const NoteEditScreen = () => {
         }
     };
 
-    const renderHeader = () => (
+    const editorHeader = useMemo(() => (
         <View>
-            <TextInput
-                style={styles.titleInput}
-                placeholder="Title"
-                placeholderTextColor={colors.textMuted}
-                value={title}
-                onChangeText={handleTitleChange}
+            <HeaderTitle
+                title={title}
+                onChange={handleTitleChange}
                 onFocus={() => setIsEditing(true)}
-                maxLength={100}
-                multiline
             />
 
-            <View style={styles.metaInfo}>
-                <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
-            </View>
+            <HeaderMeta
+                dateStr={dateStr}
+                charCount={charCount}
+            />
 
-            {noteImprovements.length > 0 && (
-                <View style={styles.variantContainer}>
-                    <GestureHandlerScrollView
-                        horizontal
-                        nestedScrollEnabled
-                        directionalLockEnabled
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.variantScrollContent}
-                        keyboardShouldPersistTaps="always"
-                    >
-                        <TouchableOpacity
-                            style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
-                            onPress={() => handleVariantSelect('original')}
-                        >
-                            <MaterialIcons
-                                name="lock"
-                                size={14}
-                                color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
-                                style={styles.variantChipIcon}
-                            />
-                            <Text
-                                style={[
-                                    styles.variantChipText,
-                                    activeVariantId === 'original' && styles.variantChipTextActive,
-                                ]}
-                            >
-                                Original
-                            </Text>
-                        </TouchableOpacity>
+            <MemoizedImprovementChips
+                noteImprovements={noteImprovements}
+                activeVariantId={activeVariantId}
+                handleVariantSelect={handleVariantSelect}
+                confirmDeleteImprovement={confirmDeleteImprovement}
+            />
 
-                        {noteImprovements.map((imp: any) => (
-                            <View style={styles.variantChipWrapper} key={imp.id}>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.variantChip,
-                                        activeVariantId === imp.id && styles.variantChipActive,
-                                    ]}
-                                    onPress={() => handleVariantSelect(imp.id)}
-                                >
-                                    <MaterialIcons
-                                        name="auto-awesome"
-                                        size={14}
-                                        color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
-                                        style={styles.variantChipIcon}
-                                    />
-                                    <Text
-                                        numberOfLines={1}
-                                        style={[
-                                            styles.variantChipText,
-                                            activeVariantId === imp.id && styles.variantChipTextActive,
-                                        ]}
-                                    >
-                                        {imp.label || 'Improvement'}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.variantDeleteButton}
-                                    onPress={() => confirmDeleteImprovement(imp.id)}
-                                >
-                                    <MaterialIcons name="close" size={14} color={colors.textMuted} />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                    </GestureHandlerScrollView>
-                </View>
-            )}
-
-
-
-            {/* Inline Player for Empty Voice Notes */}
-            {voiceRecordings.length > 0 && !title && (!content || content.trim().length === 0) && !isTranscribing && !isRecordingFlowActive && transcriptionEnabled && (
-                <View style={{ marginBottom: spacing.m, marginTop: spacing.s }}>
-                    {showAudioPlayer && audioUri && (
-                        <AudioPlayer
-                            audioUri={audioUri}
-                            duration={audioDuration}
-                            onClose={() => setShowAudioPlayer(false)}
-                        />
-                    )}
-                </View>
-            )}
-
-
+            <MemoizedAudioHeader
+                showAudioPlayer={showAudioPlayer}
+                audioUri={audioUri}
+                audioDuration={audioDuration || 0}
+                onClose={() => setShowAudioPlayer(false)}
+            />
         </View>
-    );
+    ), [
+        activeVariantId,
+        audioDuration,
+        audioUri,
+        charCount,
+        confirmDeleteImprovement,
+        dateStr,
+        handleTitleChange,
+        handleVariantSelect,
+        noteImprovements,
+        showAudioPlayer,
+        title,
+    ]);
 
     return (
         <ScreenContainer>
@@ -4282,8 +4375,9 @@ export const NoteEditScreen = () => {
 
             {/* Main Content Area */}
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 36}
+                behavior={Platform.OS === 'ios' && editMode === 'raw' ? 'padding' : undefined}
+                enabled={Platform.OS === 'ios' && editMode === 'raw'} // Visual mode uses Tentap's own keyboard handling
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 72 : 0}
                 style={{ flex: 1 }}
             >
                 <View
@@ -4291,6 +4385,8 @@ export const NoteEditScreen = () => {
                     collapsable={false}
                     style={{ flex: 1, backgroundColor: colors.background }}
                 >
+                    {editorHeader}
+
                     {editMode === 'raw' ? (
                         // Raw Markdown Editor
                         <TextInput
@@ -4323,14 +4419,15 @@ export const NoteEditScreen = () => {
                             autoCapitalize="sentences"
                         />
                     ) : (
-                        // Visual Rich Editor - Handles both Viewing and Editing
                         <RichTextEditor
                             ref={editorRef}
                             initialContent={content}
                             reparseTrigger={reparseTrigger}
                             baseFontSize={fontSize}
                             autoScalingEnabled={autoScalingEnabled}
-                            onChange={(text) => {
+                            showToolbar={false}
+                            onChange={(text: string) => {
+                                // Update parent state but DO NOT trigger re-parse in editor
                                 setContent(text);
                                 if (existingNote) debouncedSave(text, title);
                                 if (activeVariantId === 'original') {
@@ -4340,30 +4437,44 @@ export const NoteEditScreen = () => {
                                     updateHistory(title, text);
                                 }
                             }}
+                            onPlainTextChange={setVisualPlainText}
                             onActiveStylesChange={setActiveFormats}
-                            onFocus={() => setIsEditing(true)}
+                            onFocus={() => {
+                                visualEditorFocusedRef.current = true;
+                                setIsEditing(true);
+                            }}
+                            onBlur={() => {
+                                visualEditorFocusedRef.current = false;
+                            }}
                             placeholder="Start typing..."
-                            ListHeaderComponent={renderHeader()}
                         />
                     )}
                 </View>
+            </KeyboardAvoidingView>
 
-                {/* Formatting Toolbar - Show only in Visual Edit Mode */}
-                {isEditing && editMode === 'visual' && (
-                    <View style={styles.toolbarContainer}>
+            {editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible) && (
+                <View
+                    pointerEvents="box-none"
+                    style={[
+                        styles.toolbarKeyboardDock,
+                        { bottom: keyboardVisibleState ? keyboardHeight : 0 },
+                    ]}
+                >
+                    <View pointerEvents="auto" style={styles.toolbarKeyboardInner}>
                         <MarkdownToolbar
                             onFormat={handleFormat}
                             activeFormats={activeFormats}
                             onColorPickerToggle={(visible) => {
-                                isColorPickerOpen.current = visible;
-                                if (!visible && !isKeyboardVisible.current) {
+                                setIsColorPickerVisible(visible);
+                                if (!visible && !keyboardVisibleRef.current) {
+                                    editorRef.current?.blur();
                                     setIsEditing(false);
                                 }
                             }}
                         />
                     </View>
-                )}
-            </KeyboardAvoidingView>
+                </View>
+            )}
 
             {/* Floating Mic Button */}
             {
@@ -5248,10 +5359,16 @@ const styles = StyleSheet.create({
         paddingTop: spacing.l,
         textAlignVertical: 'top',
     },
-    toolbarContainer: {
-        width: '100%',
+    toolbarKeyboardDock: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 80,
+        elevation: 80,
+    },
+    toolbarKeyboardInner: {
         backgroundColor: colors.surface,
-        // paddingBottom removed to bring closer to keyboard
     },
     retryTranscriptionButton: {
         marginTop: spacing.s,

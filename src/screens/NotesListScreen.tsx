@@ -21,6 +21,7 @@ import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { notesApi } from '../api/notes';
 import { getSyncLockBannerDismissed, setSyncLockBannerDismissed } from '../utils/storage';
+import { hasMeaningfulRichContent } from '../utils/richContent';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
@@ -405,7 +406,7 @@ export const NotesListScreen = () => {
     // Filter out empty notes (no title, content, or audio)
     const filteredNotes = notes.filter(n => {
         const hasTitle = n.title && n.title.trim().length > 0;
-        const hasContent = n.content && n.content.trim().length > 0;
+        const hasContent = hasMeaningfulRichContent(n.content || '');
         const hasAudio = n.has_audio;
         return hasTitle || hasContent || hasAudio;
     });

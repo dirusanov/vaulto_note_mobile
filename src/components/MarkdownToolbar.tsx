@@ -4,6 +4,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import {
+    findHighlightPaletteEntry,
+    highlightPalette,
+    normalizeHighlightColorForCss,
+} from '../utils/highlightColors';
 
 export type MarkdownFormatType = 'bold' | 'italic' | 'strikethrough' | 'underline' | 'list' | 'todo' | 'h1' | 'h2' | 'h3' | 'highlight' | string;
 
@@ -60,24 +65,32 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
     const isActive = (type: MarkdownFormatType) => activeFormats.includes(type);
 
     // Check if any highlight is active
-    const activeHighlight = activeFormats.find(f => f.startsWith('highlight:'));
-    const activeHighlightColor = activeHighlight ? activeHighlight.split(':')[1] : 'white';
-    const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
+    const highlightColors = highlightPalette.filter((color) => (
+        color.name === 'yellow'
+        || color.name === 'green'
+        || color.name === 'blue'
+        || color.name === 'red'
+        || color.name === 'white'
+    ));
 
-    const highlightColors = [
-        { name: 'yellow', hex: colors.highlight.yellow },
-        { name: 'green', hex: colors.highlight.green },
-        { name: 'blue', hex: colors.highlight.blue },
-        { name: 'red', hex: colors.highlight.red },
-        { name: 'white', hex: colors.highlight.white },
-    ];
+    const activeHighlight = activeFormats.find(f => f.startsWith('highlight:'));
+    const activeHighlightValue = activeHighlight ? activeHighlight.slice('highlight:'.length) : 'white';
+    const activeHighlightEntry = findHighlightPaletteEntry(activeHighlightValue);
+    const activeHighlightColor = activeHighlightEntry?.hex
+        || normalizeHighlightColorForCss(activeHighlightValue, colors.highlight.white);
+    const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
 
     const handleHighlightPress = () => {
         setShowColorPicker(true);
     };
 
     const applyHighlight = (colorName: string) => {
-        onFormat(`highlight:${colorName}` as MarkdownFormatType);
+        const selectedColor = highlightColors.find((color) => color.name === colorName);
+        if (!selectedColor) {
+            return;
+        }
+
+        onFormat(`highlight:${selectedColor.name === 'white' ? 'white' : selectedColor.hex}` as MarkdownFormatType);
         setShowColorPicker(false);
     };
 
@@ -153,9 +166,10 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     />
                     <View style={[
                         styles.colorDot,
-                        { backgroundColor: (colors.highlight as any)[activeHighlightColor] },
+                        { backgroundColor: activeHighlightColor },
                         // specific tweak for correct visual
-                        activeHighlightColor === 'white' && { borderWidth: 1, borderColor: '#eee' }
+                        activeHighlightColor.toLowerCase() === colors.highlight.white.toLowerCase()
+                        && { borderWidth: 1, borderColor: '#eee' }
                     ]} />
                 </TouchableOpacity>
 
@@ -178,12 +192,12 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                                         style={[
                                             styles.colorOption,
                                             { backgroundColor: color.hex },
-                                            activeHighlightColor === color.name && styles.activeColorOption
+                                            activeHighlightColor.toLowerCase() === color.hex.toLowerCase() && styles.activeColorOption
                                         ]}
                                         onPress={() => applyHighlight(color.name)}
                                         activeOpacity={0.8}
                                     >
-                                        {activeHighlightColor === color.name && (
+                                        {activeHighlightEntry?.name === color.name && (
                                             <MaterialIcons
                                                 name="check"
                                                 size={20}
@@ -222,7 +236,9 @@ const styles = StyleSheet.create({
         }),
     },
     scrollContent: {
-        paddingHorizontal: spacing.s,
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.m,
         alignItems: 'center',
         height: 44,
         gap: 4, // Material Design dense toolbar gap
