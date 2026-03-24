@@ -356,7 +356,7 @@ export const stripMarkdownSyntax = (text: string): string => {
     stripped = stripped.replace(/^\s*>\s+/gm, '');
 
     // Todos (- [ ] Todo)
-    stripped = stripped.replace(/^\s*-\s\[[ xX]\]\s+/gm, '');
+    stripped = stripped.replace(/^\s*-\s\[(?:[ xX])?\]\s+/gm, '');
 
     // Audio tags - remove entirely
     stripped = stripped.replace(/!\[audio\]\([^)]+\)/g, '');

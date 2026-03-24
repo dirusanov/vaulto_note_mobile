@@ -15,12 +15,13 @@ interface NoteCardProps {
 }
 
 export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
+    const activeChild = note.improvements?.find(imp => imp.is_active);
+    const activeChildTitle = (activeChild?.title || activeChild?.label || '').trim();
     let content = note.content || '';
     const storageScope = note.storage_scope ?? 'sync';
 
     // Check if there is an active improvement (active child note)
     if (note.improvements && note.improvements.length > 0) {
-        const activeChild = note.improvements.find(imp => imp.is_active);
         if (activeChild && activeChild.content) {
             content = activeChild.content;
         }
@@ -32,6 +33,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const plainContent = richContentToPlainText(content);
 
     const buildTitle = () => {
+        if (activeChildTitle) return activeChildTitle;
         if (note.title && note.title.trim().length > 0) return note.title.trim();
 
         const cleanedTokens = plainContent

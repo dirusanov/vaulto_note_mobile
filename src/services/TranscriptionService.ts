@@ -13,16 +13,16 @@ import {
     getTranscriptionLanguage,
 } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
+import { isRichHtmlContent, richContentToPlainText } from '../utils/richContent';
 import { generateUUID } from '../utils/uuid';
 import client from '../api/client';
 import { prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
-// Ensure we don't double up on /gateway if it's already in API_URL
-const BASE_URL = API_URL;
-const BACKEND_TRANSCRIBE_URL = `${BASE_URL}/ai/transcribe`;
-const BACKEND_PROCESS_NOTE_URL = `${BASE_URL}/ai/agent`;
+const BACKEND_TRANSCRIBE_PATH = '/ai/transcribe';
+const BACKEND_PROCESS_NOTE_PATH = '/ai/agent';
+const BACKEND_PROCESS_NOTE_URL = `${API_URL}${BACKEND_PROCESS_NOTE_PATH}`;
 
 export interface TranscriptionResult {
     text: string;
@@ -42,6 +42,19 @@ export interface VoiceNoteResult {
     success: boolean;
     error?: string;
 }
+
+const normalizeAgentContextContent = (content?: string): string | undefined => {
+    if (!content) {
+        return undefined;
+    }
+
+    const normalized = isRichHtmlContent(content)
+        ? richContentToPlainText(content)
+        : content;
+
+    const trimmed = normalized.trim();
+    return trimmed || undefined;
+};
 
 /**
  * Transcribe audio file using OpenAI Whisper API
@@ -232,7 +245,7 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
             formData.append('language', language);
         }
 
-        const response = await client.post(BACKEND_TRANSCRIBE_URL, formData, {
+        const response = await client.post(BACKEND_TRANSCRIBE_PATH, formData, {
             headers: {
                 'Idempotency-Key': idempotencyKey,
             },
@@ -374,6 +387,7 @@ export async function processVoiceNote(
     // Use Backend (Vaulto AI)
     try {
         console.log('[VoiceAgent] Request URL:', BACKEND_PROCESS_NOTE_URL);
+        const normalizedCurrentContent = normalizeAgentContextContent(currentContent);
 
         // Agent endpoint accepts only transcript text.
         // If text was not provided, transcribe first via standard transcription flow.
@@ -393,8 +407,8 @@ export async function processVoiceNote(
 
         const formData = new FormData();
         formData.append('transcript', transcriptText);
-        if (currentContent) {
-            formData.append('current_content', currentContent);
+        if (normalizedCurrentContent) {
+            formData.append('current_content', normalizedCurrentContent);
         }
 
         if (recentMessages && recentMessages.length > 0) {
@@ -405,7 +419,7 @@ export async function processVoiceNote(
 
 
 
-        const response = await client.post(BACKEND_PROCESS_NOTE_URL, formData, {
+        const response = await client.post(BACKEND_PROCESS_NOTE_PATH, formData, {
             validateStatus: (status) =>
                 (status >= 200 && status < 300) || status === 403 || status === 404,
         });

@@ -1,5 +1,6 @@
 import { stripMarkdownSyntax } from './markdownUtils';
 import { normalizeHighlightColorForCss } from './highlightColors';
+import { markdownToTiptapHtml } from './tiptapMarkdownAdapter';
 
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
 
@@ -65,19 +66,7 @@ export const richContentToEditorHtml = (content: string): string => {
         return normalizeRichHighlightColors(content);
     }
 
-    const normalized = content.replace(/\r\n/g, '\n');
-    const paragraphs = normalized.split(/\n{2,}/);
-    const html = paragraphs
-        .map((paragraph) => {
-            const lineHtml = paragraph
-                .split('\n')
-                .map((line) => escapeHtml(line))
-                .join('<br>');
-            return `<p>${lineHtml || '<br>'}</p>`;
-        })
-        .join('');
-
-    return html || '<p></p>';
+    return markdownToTiptapHtml(content);
 };
 
 export const richContentToPlainText = (content: string): string => {
@@ -139,7 +128,10 @@ export const appendPlainTextSnippetToRichContent = (base: string, snippet: strin
     }
 
     const trimmedBase = base.trim();
-    return `${trimmedBase}<p>${escapeHtml(normalizedSnippet)}</p>`;
+    const snippetHtml = isRichHtmlContent(normalizedSnippet)
+        ? normalizedSnippet.trim()
+        : markdownToTiptapHtml(normalizedSnippet);
+    return `${trimmedBase}${snippetHtml}`;
 };
 
 export const removeAudioFromRichContent = (content: string, audioPath: string): string => {

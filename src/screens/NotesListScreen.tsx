@@ -405,8 +405,11 @@ export const NotesListScreen = () => {
 
     // Filter out empty notes (no title, content, or audio)
     const filteredNotes = notes.filter(n => {
-        const hasTitle = n.title && n.title.trim().length > 0;
-        const hasContent = hasMeaningfulRichContent(n.content || '');
+        const activeChild = n.improvements?.find(imp => imp.is_active);
+        const displayTitle = (activeChild?.title || activeChild?.label || n.title || '').trim();
+        const displayContent = activeChild?.content || n.content || '';
+        const hasTitle = displayTitle.length > 0;
+        const hasContent = hasMeaningfulRichContent(displayContent);
         const hasAudio = n.has_audio;
         return hasTitle || hasContent || hasAudio;
     });

@@ -505,6 +505,25 @@ export const setAgentModeEnabled = async (enabled: boolean): Promise<void> => {
 // Text Appearance Settings
 const FONT_SIZE_KEY = 'vaulto_font_size';
 const AUTO_SCALING_KEY = 'vaulto_auto_scaling_enabled';
+const NOTE_CHECKLIST_SCALE_LOCKS_KEY = 'vaulto_note_checklist_scale_locks_v1';
+
+const sanitizeChecklistScaleLocks = (raw: unknown): Record<string, number> => {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+
+    return Object.entries(raw as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, value]) => {
+        if (!key) {
+            return acc;
+        }
+
+        const parsed = typeof value === 'number' ? value : Number(value);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            acc[key] = parsed;
+        }
+        return acc;
+    }, {});
+};
 
 export const getFontSize = async (): Promise<number> => {
     try {
@@ -539,6 +558,43 @@ export const setAutoScalingEnabled = async (enabled: boolean): Promise<void> => 
         await AsyncStorage.setItem(AUTO_SCALING_KEY, enabled.toString());
     } catch (e) {
         console.error('Failed to set auto scaling setting', e);
+    }
+};
+
+export const getChecklistScaleLocks = async (): Promise<Record<string, number>> => {
+    try {
+        const value = await AsyncStorage.getItem(NOTE_CHECKLIST_SCALE_LOCKS_KEY);
+        if (!value) {
+            return {};
+        }
+
+        return sanitizeChecklistScaleLocks(JSON.parse(value));
+    } catch (e) {
+        console.error('Failed to get checklist scale locks', e);
+        return {};
+    }
+};
+
+export const setChecklistScaleLock = async (variantId: string, scaleFactor: number): Promise<void> => {
+    if (!variantId || !Number.isFinite(scaleFactor) || scaleFactor <= 0) {
+        return;
+    }
+
+    try {
+        const current = await getChecklistScaleLocks();
+        if (current[variantId] === scaleFactor) {
+            return;
+        }
+
+        await AsyncStorage.setItem(
+            NOTE_CHECKLIST_SCALE_LOCKS_KEY,
+            JSON.stringify({
+                ...current,
+                [variantId]: scaleFactor,
+            })
+        );
+    } catch (e) {
+        console.error('Failed to set checklist scale lock', e);
     }
 };
 

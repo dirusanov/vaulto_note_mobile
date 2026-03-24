@@ -51,7 +51,7 @@ const PROCESSING_PREVIEW_SVG = encodeURIComponent(
 const AUDIO_PREVIEW_DATA_URI = `data:image/svg+xml;charset=utf-8,${AUDIO_PREVIEW_SVG}`;
 const PROCESSING_PREVIEW_DATA_URI = `data:image/svg+xml;charset=utf-8,${PROCESSING_PREVIEW_SVG}`;
 
-const TODO_REGEX = /^(\s*-\s\[([ xX])\]\s)(.*)$/;
+const TODO_REGEX = /^(\s*-\s\[(?:([ xX])?)\]\s)(.*)$/;
 const ORDERED_REGEX = /^(\s*)(\d+)\.\s+(.*)$/;
 const BULLET_REGEX = /^(\s*)[-*]\s+(.*)$/;
 const BLOCKQUOTE_REGEX = /^\s*>\s?(.*)$/;
@@ -89,6 +89,17 @@ const getMarkPriority = (type: string) => {
     const priority = MARK_ORDER.indexOf(type as (typeof MARK_ORDER)[number]);
     return priority === -1 ? MARK_ORDER.length : priority;
 };
+
+const escapeHtml = (text: string): string =>
+    text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+const escapeHtmlAttribute = (value: string): string =>
+    escapeHtml(value).replace(/`/g, '&#96;');
 
 const getMarksForRange = (formats: BlockFormat[], start: number, end: number): TiptapMark[] | undefined => {
     const activeFormats = formats
@@ -212,6 +223,105 @@ const inlineNodesToMarkdown = (nodes?: TiptapNode[]): string => {
 
         return inlineNodesToMarkdown(node.content);
     }).join('');
+};
+
+const wrapTextWithHtmlMarks = (text: string, marks?: TiptapMark[]): string => {
+    if (!marks || marks.length === 0) {
+        return escapeHtml(text);
+    }
+
+    return [...marks]
+        .sort((left, right) => getMarkPriority(left.type) - getMarkPriority(right.type))
+        .reduce((current, mark) => {
+            switch (mark.type) {
+                case 'bold':
+                    return `<strong>${current}</strong>`;
+                case 'italic':
+                    return `<em>${current}</em>`;
+                case 'strike':
+                    return `<s>${current}</s>`;
+                case 'underline':
+                    return `<u>${current}</u>`;
+                case 'code':
+                    return `<code>${current}</code>`;
+                case 'highlight': {
+                    const color = normalizeHighlightColorForCss(
+                        typeof mark.attrs?.color === 'string' ? mark.attrs.color : 'yellow'
+                    );
+                    return `<mark data-color="${escapeHtmlAttribute(color)}" style="background-color: ${escapeHtmlAttribute(color)};">${current}</mark>`;
+                }
+                case 'link': {
+                    const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : '';
+                    return href
+                        ? `<a href="${escapeHtmlAttribute(href)}">${current}</a>`
+                        : current;
+                }
+                default:
+                    return current;
+            }
+        }, escapeHtml(text));
+};
+
+const inlineNodesToHtml = (nodes?: TiptapNode[]): string => {
+    if (!nodes || nodes.length === 0) {
+        return '';
+    }
+
+    return nodes.map((node) => {
+        if (node.type === 'text') {
+            return wrapTextWithHtmlMarks(node.text || '', node.marks);
+        }
+
+        if (node.type === 'hardBreak') {
+            return '<br>';
+        }
+
+        if (node.type === 'image') {
+            const src = typeof node.attrs?.src === 'string' ? node.attrs.src : '';
+            const alt = typeof node.attrs?.alt === 'string' ? node.attrs.alt : '';
+            const title = typeof node.attrs?.title === 'string' ? node.attrs.title : '';
+            return `<img src="${escapeHtmlAttribute(src)}" alt="${escapeHtmlAttribute(alt)}" title="${escapeHtmlAttribute(title)}">`;
+        }
+
+        return serializeNodeToHtml(node);
+    }).join('');
+};
+
+const serializeNodeToHtml = (node: TiptapNode): string => {
+    switch (node.type) {
+        case 'paragraph': {
+            const html = inlineNodesToHtml(node.content);
+            return `<p>${html || '<br>'}</p>`;
+        }
+        case 'heading': {
+            const level = Math.max(1, Math.min(Number(node.attrs?.level || 1), 6));
+            const html = inlineNodesToHtml(node.content);
+            return `<h${level}>${html || '<br>'}</h${level}>`;
+        }
+        case 'bulletList':
+            return `<ul>${(node.content || []).map((child) => serializeNodeToHtml(child)).join('')}</ul>`;
+        case 'orderedList': {
+            const start = Number(node.attrs?.start || 1);
+            const startAttr = start > 1 ? ` start="${start}"` : '';
+            return `<ol${startAttr}>${(node.content || []).map((child) => serializeNodeToHtml(child)).join('')}</ol>`;
+        }
+        case 'taskList':
+            return `<ul data-type="taskList">${(node.content || []).map((child) => serializeNodeToHtml(child)).join('')}</ul>`;
+        case 'listItem':
+            return `<li>${(node.content || []).map((child) => serializeNodeToHtml(child)).join('') || '<p><br></p>'}</li>`;
+        case 'taskItem': {
+            const checked = !!node.attrs?.checked;
+            const checkedAttr = checked ? 'true' : 'false';
+            const contentHtml = (node.content || []).map((child) => serializeNodeToHtml(child)).join('') || '<p><br></p>';
+            return `<li data-type="taskItem" data-checked="${checkedAttr}">${contentHtml}</li>`;
+        }
+        case 'blockquote':
+            return `<blockquote>${(node.content || []).map((child) => serializeNodeToHtml(child)).join('')}</blockquote>`;
+        case 'image':
+            return inlineNodesToHtml([node]);
+        default:
+            return node.content ? node.content.map((child) => serializeNodeToHtml(child)).join('') : '';
+    }
 };
 
 const createParagraphNode = (markdown: string): TiptapNode => {
@@ -553,6 +663,19 @@ export const tiptapDocumentToMarkdown = (document: unknown): string => {
     const lines = doc.content.flatMap((node) => serializeBlockNode(node));
     return lines.join('\n');
 };
+
+export const tiptapDocumentToHtml = (document: unknown): string => {
+    const doc = document as TiptapDocument | null;
+    if (!doc || !Array.isArray(doc.content) || doc.content.length === 0) {
+        return '<p></p>';
+    }
+
+    const html = doc.content.map((node) => serializeNodeToHtml(node)).join('');
+    return html || '<p></p>';
+};
+
+export const markdownToTiptapHtml = (markdown: string): string =>
+    tiptapDocumentToHtml(markdownToTiptapDocument(markdown));
 
 export const removeAudioFromTiptapDocument = (document: unknown, audioPath: string): TiptapDocument => {
     const doc = document as TiptapDocument | null;

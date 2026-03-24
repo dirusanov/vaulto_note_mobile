@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, memo } from 'react';
 import {
     View,
     TextInput,
@@ -46,7 +46,7 @@ import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
 import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
-import { NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
+import { Note, NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -70,6 +70,8 @@ import {
     setLocalOnlyWarningDismissed,
     getPrivateAIAllowed,
     setPrivateAIAllowed,
+    getChecklistScaleLocks,
+    setChecklistScaleLock,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -86,16 +88,36 @@ import {
     removeAudioFromRichContent,
     richContentToPlainText,
 } from '../utils/richContent';
+import {
+    resolveChecklistScaleForContent,
+} from '../utils/checklistScale';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
 const CUSTOM_AI_UNIVERSAL_ERROR = 'Unable to connect to your Custom AI provider. Check provider API key and provider settings.';
+const NEW_NOTE_AUTO_SCALE_DRAFT_ID = '__new_note_auto_scale_draft__';
 
 const normalizeTextForComparison = (value: string): string =>
     value.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim();
 
 const areTextsEquivalent = (a: string, b: string): boolean =>
     normalizeTextForComparison(a) === normalizeTextForComparison(b);
+
+const countNormalizedOccurrences = (haystack: string, needle: string): number => {
+    if (!needle) return 0;
+
+    let count = 0;
+    let offset = 0;
+
+    while (true) {
+        const index = haystack.indexOf(needle, offset);
+        if (index === -1) break;
+        count += 1;
+        offset = index + needle.length;
+    }
+
+    return count;
+};
 
 const appendSnippetToContent = (base: string, snippet: string): string => {
     return appendPlainTextSnippetToRichContent(base, snippet);
@@ -499,9 +521,11 @@ export const NoteEditScreen = () => {
     const normalizeScope = (value?: StorageScope): StorageScope => {
         return value === 'local_only' ? 'local_only' : 'sync';
     };
+    const routeNoteId = route.params?.noteId;
 
-    const [localNoteId, setLocalNoteId] = useState(route.params?.noteId);
+    const [localNoteId, setLocalNoteId] = useState(routeNoteId);
     const localNoteIdRef = useRef(localNoteId);
+    const pendingRouteNoteSyncRef = useRef<string | null | undefined>(routeNoteId);
 
 
     useEffect(() => {
@@ -1048,6 +1072,13 @@ export const NoteEditScreen = () => {
     // Text Appearance State
     const [fontSize, setFontSizeState] = useState(16);
     const [autoScalingEnabled, setAutoScalingEnabledState] = useState(true);
+    const [appearanceReady, setAppearanceReady] = useState(false);
+    const [noteViewReady, setNoteViewReady] = useState(true);
+    const [checklistScaleLocks, setChecklistScaleLocksState] = useState<Record<string, number>>({});
+    const [draftOriginalChecklistScaleFactor, setDraftOriginalChecklistScaleFactor] = useState<number | null>(null);
+    const [pendingCreationAutoScaleNoteId, setPendingCreationAutoScaleNoteId] = useState<string | null>(
+        routeNoteId ? null : NEW_NOTE_AUTO_SCALE_DRAFT_ID
+    );
     const [showAppearanceModal, setShowAppearanceModal] = useState(false);
 
     // AI Request History (Session based)
@@ -1067,6 +1098,7 @@ export const NoteEditScreen = () => {
     const improvementSavedRef = useRef<Record<string, string>>({});
     const improvementTitleDraftsRef = useRef<Record<string, string>>({});
     const improvementTitleSavedRef = useRef<Record<string, string>>({});
+    const checklistScaleLocksRef = useRef<Record<string, number>>({});
 
     const resolveImprovementVariantTitle = useCallback((variantId: string): string => {
         const draftTitle = improvementTitleDraftsRef.current[variantId];
@@ -1108,6 +1140,217 @@ export const NoteEditScreen = () => {
     const pendingSaveAfterCreate = useRef(false);
     const currentTitleRef = useRef(title);
     const titleLockRef = useRef<boolean>(!!(existingNote?.title || '').trim());
+
+    const persistChecklistScaleLock = useCallback(async (variantId: string, scaleFactor: number) => {
+        if (!variantId || !Number.isFinite(scaleFactor) || scaleFactor <= 0) {
+            return;
+        }
+
+        const nextLocks = {
+            ...checklistScaleLocksRef.current,
+            [variantId]: scaleFactor,
+        };
+
+        checklistScaleLocksRef.current = nextLocks;
+        setChecklistScaleLocksState(nextLocks);
+        await setChecklistScaleLock(variantId, scaleFactor);
+    }, []);
+
+    const stageOriginalCreationAutoScale = useCallback((variantId: string, nextContent: string) => {
+        if (
+            !autoScalingEnabled ||
+            variantId !== 'original' ||
+            !pendingCreationAutoScaleNoteId
+        ) {
+            return;
+        }
+
+        const nextScale = resolveChecklistScaleForContent(nextContent, true);
+        setDraftOriginalChecklistScaleFactor(nextScale);
+
+        const currentNoteId = localNoteIdRef.current;
+        if (
+            currentNoteId &&
+            pendingCreationAutoScaleNoteId === currentNoteId &&
+            nextScale !== null &&
+            typeof checklistScaleLocksRef.current[currentNoteId] !== 'number'
+        ) {
+            void (async () => {
+                await persistChecklistScaleLock(currentNoteId, nextScale);
+                setPendingCreationAutoScaleNoteId(null);
+            })();
+        }
+    }, [autoScalingEnabled, pendingCreationAutoScaleNoteId, persistChecklistScaleLock]);
+
+    const handleCreatedNoteAutoScale = useCallback(async (newNoteId: string, contentForLock?: string) => {
+        if (!newNoteId || pendingCreationAutoScaleNoteId !== NEW_NOTE_AUTO_SCALE_DRAFT_ID) {
+            return;
+        }
+
+        if (!autoScalingEnabled) {
+            setPendingCreationAutoScaleNoteId(null);
+            setDraftOriginalChecklistScaleFactor(null);
+            return;
+        }
+
+        const resolvedScale = draftOriginalChecklistScaleFactor ?? resolveChecklistScaleForContent(
+            contentForLock ?? currentContentRef.current,
+            true
+        );
+
+        if (resolvedScale !== null) {
+            await persistChecklistScaleLock(newNoteId, resolvedScale);
+            setPendingCreationAutoScaleNoteId(null);
+            setDraftOriginalChecklistScaleFactor(resolvedScale);
+            return;
+        }
+
+        setPendingCreationAutoScaleNoteId(newNoteId);
+    }, [autoScalingEnabled, draftOriginalChecklistScaleFactor, pendingCreationAutoScaleNoteId, persistChecklistScaleLock]);
+
+    const syncVisibleContent = useCallback((nextContent: string, options?: { syncEditor?: boolean }) => {
+        stageOriginalCreationAutoScale(activeVariantIdRef.current, nextContent);
+        setContent(nextContent);
+        currentContentRef.current = nextContent;
+        if (options?.syncEditor !== false && editMode === 'visual') {
+            editorRef.current?.setContent(nextContent);
+        }
+    }, [editMode, stageOriginalCreationAutoScale]);
+
+    const syncVisibleTitle = useCallback((nextTitle: string) => {
+        setTitle(nextTitle);
+        currentTitleRef.current = nextTitle;
+    }, []);
+
+    const flushVisualEditorContent = useCallback(async (): Promise<string> => {
+        if (editMode !== 'visual') {
+            return currentContentRef.current;
+        }
+
+        const latestContent = await editorRef.current?.flushPendingChanges?.();
+        if (typeof latestContent !== 'string') {
+            return currentContentRef.current;
+        }
+
+        currentContentRef.current = latestContent;
+        if (activeVariantIdRef.current === 'original') {
+            setContent(latestContent);
+        } else {
+            improvementDraftsRef.current[activeVariantIdRef.current] = latestContent;
+            if (activeVariantIdRef.current === activeVariantId) {
+                setContent(latestContent);
+            }
+        }
+
+        return latestContent;
+    }, [activeVariantId, editMode]);
+
+    const resolveNoteViewState = useCallback((note?: Note | null) => {
+        if (!note) {
+            return {
+                variantId: 'original',
+                title: '',
+                content: '',
+            };
+        }
+
+        const nextVariantId = note.is_active
+            ? 'original'
+            : note.improvements?.find((imp) => imp.is_active)?.id || 'original';
+        const nextImprovement = nextVariantId === 'original'
+            ? null
+            : note.improvements?.find((imp) => imp.id === nextVariantId) || null;
+
+        return {
+            variantId: nextVariantId,
+            title: nextVariantId === 'original'
+                ? note.title || ''
+                : nextImprovement?.title || nextImprovement?.label || note.title || '',
+            content: nextVariantId === 'original'
+                ? note.content || ''
+                : nextImprovement?.content || note.content || '',
+        };
+    }, []);
+
+    useLayoutEffect(() => {
+        if (routeNoteId === localNoteIdRef.current) {
+            return;
+        }
+
+        setNoteViewReady(false);
+        const targetNote = routeNoteId
+            ? notes.find((note) => note.id === routeNoteId) || null
+            : null;
+        optimisticActiveVariant.current = null;
+        setLocalNoteId(routeNoteId);
+        localNoteIdRef.current = routeNoteId;
+        setVoiceRecordings([]);
+        setAudioUri(null);
+        setAudioDuration(0);
+        setShowAudioPlayer(false);
+        setPlayingRecordingId(null);
+        hasAutoOpenedRecordings.current = false;
+
+        if (!routeNoteId) {
+            setActiveVariantId('original');
+            activeVariantIdRef.current = 'original';
+            syncVisibleTitle('');
+            syncVisibleContent('', { syncEditor: false });
+            pendingRouteNoteSyncRef.current = undefined;
+            setPendingCreationAutoScaleNoteId(NEW_NOTE_AUTO_SCALE_DRAFT_ID);
+            setDraftOriginalChecklistScaleFactor(null);
+            setNoteViewReady(true);
+            setReparseTrigger((prev) => prev + 1);
+            return;
+        }
+
+        if (targetNote) {
+            const nextState = resolveNoteViewState(targetNote);
+            setActiveVariantId(nextState.variantId);
+            activeVariantIdRef.current = nextState.variantId;
+            syncVisibleTitle(nextState.title);
+            syncVisibleContent(nextState.content, { syncEditor: false });
+            pendingRouteNoteSyncRef.current = undefined;
+            setPendingCreationAutoScaleNoteId(null);
+            setDraftOriginalChecklistScaleFactor(null);
+            setNoteViewReady(true);
+            setReparseTrigger((prev) => prev + 1);
+            return;
+        }
+
+        pendingRouteNoteSyncRef.current = routeNoteId;
+    }, [notes, resolveNoteViewState, routeNoteId, syncVisibleContent, syncVisibleTitle]);
+
+    useLayoutEffect(() => {
+        const pendingRouteNoteId = pendingRouteNoteSyncRef.current;
+
+        if (pendingRouteNoteId === undefined) {
+            return;
+        }
+
+        if (pendingRouteNoteId !== (localNoteId ?? null)) {
+            return;
+        }
+
+        const targetNote = pendingRouteNoteId
+            ? notes.find((note) => note.id === pendingRouteNoteId) || null
+            : null;
+
+        if (pendingRouteNoteId && !targetNote) {
+            return;
+        }
+
+        const nextState = resolveNoteViewState(targetNote);
+        setActiveVariantId(nextState.variantId);
+        activeVariantIdRef.current = nextState.variantId;
+        syncVisibleTitle(nextState.title);
+        syncVisibleContent(nextState.content, { syncEditor: false });
+        pendingRouteNoteSyncRef.current = undefined;
+        setPendingCreationAutoScaleNoteId(null);
+        setDraftOriginalChecklistScaleFactor(null);
+        setNoteViewReady(true);
+        setReparseTrigger((prev) => prev + 1);
+    }, [localNoteId, notes, resolveNoteViewState, syncVisibleContent, syncVisibleTitle]);
 
     const applyTrackedProcessingState = useCallback((patch: Partial<NoteProcessingState>, noteIdOverride?: string) => {
         const noteId = noteIdOverride ?? localNoteIdRef.current;
@@ -1264,14 +1507,18 @@ export const NoteEditScreen = () => {
     }, [refreshTrackedQueueLength]);
 
     const loadSettings = async () => {
-        const [size, scaling, privateAIAllowed] = await Promise.all([
+        const [size, scaling, privateAIAllowed, storedChecklistScaleLocks] = await Promise.all([
             getFontSize(),
             getAutoScalingEnabled(),
             getPrivateAIAllowed(),
+            getChecklistScaleLocks(),
         ]);
         setFontSizeState(size);
         setAutoScalingEnabledState(scaling);
         setAllowPrivateAI(privateAIAllowed);
+        checklistScaleLocksRef.current = storedChecklistScaleLocks;
+        setChecklistScaleLocksState(storedChecklistScaleLocks);
+        setAppearanceReady(true);
     };
 
 
@@ -1303,21 +1550,50 @@ export const NoteEditScreen = () => {
         }
     }, [localNoteId, existingNote]);
 
-    const handleFontSizeChange = (size: number) => {
-        setFontSizeState(size);
-        setFontSize(size);
-    };
+    const handleFontSizeChange = useCallback((size: number) => {
+        void (async () => {
+            await flushVisualEditorContent();
+            setFontSizeState(size);
+            setFontSize(size);
+        })();
+    }, [flushVisualEditorContent]);
 
-    const handleAutoScalingChange = (enabled: boolean) => {
-        setAutoScalingEnabledState(enabled);
-        setAutoScalingEnabled(enabled);
-    };
+    const handleAutoScalingChange = useCallback((enabled: boolean) => {
+        void (async () => {
+            await flushVisualEditorContent();
+            setAutoScalingEnabledState(enabled);
+            setAutoScalingEnabled(enabled);
+        })();
+    }, [flushVisualEditorContent]);
 
     useFocusEffect(
         useCallback(() => {
             loadSettings();
         }, [])
     );
+
+    const shouldUseCreationAutoScalePreview = useMemo(() => (
+        autoScalingEnabled &&
+        activeVariantId === 'original' &&
+        !!pendingCreationAutoScaleNoteId &&
+        (
+            pendingCreationAutoScaleNoteId === NEW_NOTE_AUTO_SCALE_DRAFT_ID ||
+            pendingCreationAutoScaleNoteId === (localNoteId ?? null)
+        )
+    ), [activeVariantId, autoScalingEnabled, localNoteId, pendingCreationAutoScaleNoteId]);
+
+    const activeVariantChecklistScaleFactor = useMemo(() => {
+        const lockedScale = checklistScaleLocks[activeVariantId];
+        if (typeof lockedScale === 'number') {
+            return lockedScale;
+        }
+
+        if (shouldUseCreationAutoScalePreview) {
+            return draftOriginalChecklistScaleFactor;
+        }
+
+        return null;
+    }, [activeVariantId, checklistScaleLocks, draftOriginalChecklistScaleFactor, shouldUseCreationAutoScalePreview]);
 
     useEffect(() => {
         if (!existingNote) {
@@ -1380,8 +1656,8 @@ export const NoteEditScreen = () => {
                 }
 
                 if (!shouldDeferExternalContentSync && activeVariantId === imp.id && drafts[imp.id] !== undefined) {
-                    setContent(drafts[imp.id]);
-                    setTitle(titleDrafts[imp.id] ?? titleValue);
+                    syncVisibleContent(drafts[imp.id]);
+                    syncVisibleTitle(titleDrafts[imp.id] ?? titleValue);
                 }
             });
             improvementDraftsRef.current = drafts;
@@ -1401,34 +1677,37 @@ export const NoteEditScreen = () => {
                 // Avoid regressing non-empty in-memory title to transient empty value from stale refresh.
                 const storeIsCaughtUp = nextTitle === lastSavedTitle.current;
                 if (storeIsCaughtUp && (nextTitle.trim().length > 0 || !title.trim()) && nextTitle !== title) {
-                    setTitle(nextTitle);
+                    syncVisibleTitle(nextTitle);
                 }
             }
             if (lastSavedContent.current === content) {
                 const nextContent = existingNote.content || '';
                 const storeIsCaughtUp = nextContent === lastSavedContent.current;
                 if (storeIsCaughtUp && nextContent !== content) {
-                    setContent(nextContent);
+                    syncVisibleContent(nextContent);
                 }
             }
         } else if (!shouldDeferExternalContentSync) {
             const nextTitle = resolveImprovementVariantTitle(activeVariantId);
             if (nextTitle !== title) {
-                setTitle(nextTitle);
+                syncVisibleTitle(nextTitle);
             }
         }
 
         // Load audio if exists
         // Load audio if exists
         if (existingNote.has_audio && existingNote.audio_file_path && !audioUri) {
-            loadAudio(existingNote.audio_file_path);
-            setAudioDuration(existingNote.audio_duration || 0);
-            setShowAudioPlayer(true);
+            const hasNoTx = !existingNote.encrypted_transcription && !existingNote.transcription;
+            if (hasNoTx) {
+                loadAudio(existingNote.audio_file_path);
+                setAudioDuration(existingNote.audio_duration || 0);
+                setShowAudioPlayer(true);
+            }
         }
 
         lastSavedTitle.current = existingNote.title || '';
         lastSavedContent.current = existingNote.content || '';
-    }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri, editMode, resolveImprovementVariantTitle]);
+    }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri, editMode, resolveImprovementVariantTitle, syncVisibleContent, syncVisibleTitle]);
 
     // Restore active variant from is_active flags when note loads
     useEffect(() => {
@@ -1469,9 +1748,9 @@ export const NoteEditScreen = () => {
                 const nextTitle = existingNote.title || '';
                 // Avoid wiping a non-empty in-memory title because of transient stale refresh.
                 if (nextTitle.trim().length > 0 || !currentTitleRef.current.trim()) {
-                    setTitle(nextTitle);
+                    syncVisibleTitle(nextTitle);
                 }
-                setContent(existingNote.content || '');
+                syncVisibleContent(existingNote.content || '');
             } else {
                 const improvement = existingNote.improvements?.find(i => i.id === correctActiveVariantId);
                 if (improvement) {
@@ -1479,8 +1758,8 @@ export const NoteEditScreen = () => {
                     const improvementTitle =
                         improvementTitleDraftsRef.current[correctActiveVariantId] ??
                         (improvement.title || improvement.label || existingNote.title || '');
-                    setContent(improvementContent);
-                    setTitle(improvementTitle);
+                    syncVisibleContent(improvementContent);
+                    syncVisibleTitle(improvementTitle);
                     improvementDraftsRef.current[correctActiveVariantId] = improvementContent;
                     improvementSavedRef.current[correctActiveVariantId] = improvementContent;
                     improvementTitleDraftsRef.current[correctActiveVariantId] = improvementTitle;
@@ -1488,7 +1767,7 @@ export const NoteEditScreen = () => {
                 }
             }
         }
-    }, [editMode, existingNote?.id, existingNote?.is_active, JSON.stringify(existingNote?.improvements?.map(i => ({ id: i.id, is_active: i.is_active })))]);
+    }, [editMode, existingNote?.id, existingNote?.is_active, JSON.stringify(existingNote?.improvements?.map(i => ({ id: i.id, is_active: i.is_active }))), syncVisibleContent, syncVisibleTitle]);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -1537,11 +1816,11 @@ export const NoteEditScreen = () => {
             if (!exists && !isPendingOptimistic && !hasLocalVariantState) {
                 setActiveVariantId('original');
                 activeVariantIdRef.current = 'original';
-                setTitle(existingNote?.title || '');
-                setContent(existingNote?.content || '');
+                syncVisibleTitle(existingNote?.title || '');
+                syncVisibleContent(existingNote?.content || '');
             }
         }
-    }, [activeVariantId, editMode, noteImprovements, existingNote?.content, existingNote?.title]);
+    }, [activeVariantId, editMode, noteImprovements, existingNote?.content, existingNote?.title, syncVisibleContent, syncVisibleTitle]);
 
     // Handle history updates for current variant
     const updateHistory = (newTitle: string, newContent: string, variantIdOverride?: string) => {
@@ -1645,6 +1924,13 @@ export const NoteEditScreen = () => {
         return improvement?.content || '';
     }, [existingNote?.content, noteImprovements]);
 
+    const resolveOriginalNoteContentForPersistence = useCallback((): string => {
+        if (activeVariantIdRef.current === 'original') {
+            return currentContentRef.current;
+        }
+        return lastSavedContent.current || existingNote?.content || '';
+    }, [existingNote?.content]);
+
     const isTodoImprovementVariant = useCallback((variantId: string, baseContent: string): boolean => {
         if (variantId === 'original') return false;
         if (TODO_LIST_LINE_REGEX.test(baseContent || '')) return true;
@@ -1686,6 +1972,9 @@ export const NoteEditScreen = () => {
             if (activeVariantIdRef.current === 'original') {
                 setContent(newText);
                 currentContentRef.current = newText;
+                if (editMode === 'visual') {
+                    editorRef.current?.setContent(newText);
+                }
             }
             if (updateHistoryState) {
                 updateHistoryImmediate(currentTitleRef.current, newText, 'original');
@@ -1700,6 +1989,9 @@ export const NoteEditScreen = () => {
         if (activeVariantIdRef.current === variantId) {
             setContent(newText);
             currentContentRef.current = newText;
+            if (editMode === 'visual') {
+                editorRef.current?.setContent(newText);
+            }
         }
         improvementDraftsRef.current[variantId] = newText;
         if (updateHistoryState) {
@@ -1714,7 +2006,7 @@ export const NoteEditScreen = () => {
             }
         }
         return true;
-    }, [resolveImprovementVariantTitle, resolveVariantContent, updateHistoryImmediate, updateImprovement, updateNote]);
+    }, [editMode, resolveImprovementVariantTitle, resolveVariantContent, updateHistoryImmediate, updateImprovement, updateNote]);
 
     const resolvePendingInsertionContext = useCallback((
         variantId: string,
@@ -1833,17 +2125,6 @@ export const NoteEditScreen = () => {
         return hasAudioTagInContent(variantContent, audioPath);
     }, [resolveVariantContent]);
 
-    const handleTitleChange = (text: string) => {
-        setTitle(text);
-        if (activeVariantId === 'original' && text.trim().length > 0) {
-            titleLockRef.current = true;
-        }
-        if (activeVariantId !== 'original') {
-            improvementTitleDraftsRef.current[activeVariantId] = text;
-        }
-        updateHistory(text, content);
-    };
-
     const navigateBackToList = useCallback(() => {
         if (navigation.canGoBack()) {
             navigation.goBack();
@@ -1874,8 +2155,8 @@ export const NoteEditScreen = () => {
             if (activeVariantId === improvementId) {
                 setActiveVariantId('original');
                 activeVariantIdRef.current = 'original';
-                setTitle(existingNote?.title || '');
-                setContent(existingNote?.content || '');
+                syncVisibleTitle(existingNote?.title || '');
+                syncVisibleContent(existingNote?.content || '');
                 // Set parent as active
                 await setActiveVariant(localNoteId, null);
             }
@@ -1883,7 +2164,7 @@ export const NoteEditScreen = () => {
             console.error('Failed to delete improvement', error);
             Alert.alert('Error', 'Failed to delete improvement');
         }
-    }, [activeVariantId, deleteImprovement, existingNote?.content, existingNote?.title, localNoteId, setActiveVariant]);
+    }, [activeVariantId, deleteImprovement, existingNote?.content, existingNote?.title, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
 
     const confirmDeleteImprovement = (improvementId: string) => {
         setImprovementToDelete(improvementId);
@@ -1896,8 +2177,8 @@ export const NoteEditScreen = () => {
         const prevIndex = variantHistory.index - 1;
         const prevState = variantHistory.history[prevIndex];
 
-        setTitle(prevState.title);
-        setContent(prevState.content);
+        syncVisibleTitle(prevState.title);
+        syncVisibleContent(prevState.content);
 
         if (activeVariantId !== 'original') {
             improvementDraftsRef.current[activeVariantId] = prevState.content;
@@ -1918,8 +2199,8 @@ export const NoteEditScreen = () => {
         const nextIndex = variantHistory.index + 1;
         const nextState = variantHistory.history[nextIndex];
 
-        setTitle(nextState.title);
-        setContent(nextState.content);
+        syncVisibleTitle(nextState.title);
+        syncVisibleContent(nextState.content);
 
         if (activeVariantId !== 'original') {
             improvementDraftsRef.current[activeVariantId] = nextState.content;
@@ -1995,6 +2276,8 @@ export const NoteEditScreen = () => {
     }, [activeVariantId, localNoteId, resolveImprovementVariantTitle, updateImprovement]);
 
     const saveNote = useCallback(async () => {
+        await flushVisualEditorContent();
+
         const activeVariant = activeVariantIdRef.current;
         if (activeVariant !== 'original') {
             await saveImprovementDraft();
@@ -2074,6 +2357,8 @@ export const NoteEditScreen = () => {
                         syncTrackedProcessingToNote(newNote.id);
                     }
 
+                    await handleCreatedNoteAutoScale(newNote.id, currentContent);
+
                     // CHECK FOR PENDING UPDATES (Race condition fix)
                     // If user typed more while creation was in flight, or pending flag was set
                     const latestContent = currentContentRef.current;
@@ -2112,7 +2397,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [createNote, deleteNote, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
+    }, [createNote, deleteNote, flushVisualEditorContent, handleCreatedNoteAutoScale, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
 
     useEffect(() => {
         saveNoteRef.current = saveNote;
@@ -2124,6 +2409,44 @@ export const NoteEditScreen = () => {
             void saveNoteRef.current?.();
         }, 500); // Reduced from 2000ms to 500ms for faster auto-save
     }, []);
+
+    const handleTitleChange = useCallback((text: string) => {
+        const variantId = activeVariantIdRef.current;
+
+        setTitle(text);
+        currentTitleRef.current = text;
+
+        if (variantId === 'original' && text.trim().length > 0) {
+            titleLockRef.current = true;
+        }
+        if (variantId !== 'original') {
+            improvementTitleDraftsRef.current[variantId] = text;
+        }
+
+        updateHistory(text, currentContentRef.current, variantId);
+        if (localNoteIdRef.current) {
+            debouncedSave(currentContentRef.current, text);
+        }
+    }, [debouncedSave]);
+
+    const handleContentChange = useCallback((text: string) => {
+        const variantId = activeVariantIdRef.current;
+        const currentTitle = currentTitleRef.current;
+
+        stageOriginalCreationAutoScale(variantId, text);
+        setContent(text);
+        currentContentRef.current = text;
+
+        if (variantId !== 'original') {
+            improvementDraftsRef.current[variantId] = text;
+        }
+
+        if (localNoteIdRef.current) {
+            debouncedSave(text, currentTitle);
+        }
+
+        updateHistory(currentTitle, text, variantId);
+    }, [debouncedSave, stageOriginalCreationAutoScale]);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
         if (variantId === activeVariantId) {
@@ -2163,20 +2486,20 @@ export const NoteEditScreen = () => {
         activeVariantIdRef.current = variantId;
         optimisticActiveVariant.current = variantId;
         if (variantId === 'original') {
-            setTitle(existingNote?.title || '');
-            setContent(existingNote?.content || '');
+            syncVisibleTitle(existingNote?.title || '');
+            syncVisibleContent(existingNote?.content || '');
         } else {
-            setTitle(resolveImprovementVariantTitle(variantId));
+            syncVisibleTitle(resolveImprovementVariantTitle(variantId));
             const draft = improvementDraftsRef.current[variantId];
             if (draft !== undefined) {
-                setContent(draft);
+                syncVisibleContent(draft);
             } else {
                 const imp = noteImprovements.find(i => i.id === variantId);
-                setContent(imp?.content || '');
+                syncVisibleContent(imp?.content || '');
             }
         }
         setReparseTrigger(prev => prev + 1);
-    }, [activeVariantId, existingNote?.content, existingNote?.title, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant]);
+    }, [activeVariantId, existingNote?.content, existingNote?.title, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
 
     useEffect(() => {
         const unsubscribe = navigation.addListener('beforeRemove', (event) => {
@@ -2185,24 +2508,30 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            const nothingToSave = !title.trim() && !hasMeaningfulRichContent(content);
-            const unchanged = title === lastSavedTitle.current && content === lastSavedContent.current;
-            const improvementDraft = improvementDraftsRef.current[activeVariantId] ?? '';
-            const improvementSaved = improvementSavedRef.current[activeVariantId] ?? '';
-            const improvementTitleDraft = improvementTitleDraftsRef.current[activeVariantId] ?? title;
-            const improvementTitleSaved = improvementTitleSavedRef.current[activeVariantId] ?? resolveImprovementVariantTitle(activeVariantId);
-            const hasChanges = activeVariantId === 'original'
-                ? !(nothingToSave || unchanged)
-                : improvementDraft !== improvementSaved || improvementTitleDraft !== improvementTitleSaved;
-
-            if (!hasChanges) {
-                return;
-            }
-
             event.preventDefault();
             Keyboard.dismiss();
 
             const saveAndExit = async () => {
+                await flushVisualEditorContent();
+
+                const latestTitle = currentTitleRef.current;
+                const latestContent = currentContentRef.current;
+                const variantId = activeVariantIdRef.current;
+                const nothingToSave = !latestTitle.trim() && !hasMeaningfulRichContent(latestContent);
+                const unchanged = latestTitle === lastSavedTitle.current && latestContent === lastSavedContent.current;
+                const improvementDraft = improvementDraftsRef.current[variantId] ?? '';
+                const improvementSaved = improvementSavedRef.current[variantId] ?? '';
+                const improvementTitleDraft = improvementTitleDraftsRef.current[variantId] ?? latestTitle;
+                const improvementTitleSaved = improvementTitleSavedRef.current[variantId] ?? resolveImprovementVariantTitle(variantId);
+                const hasChanges = variantId === 'original'
+                    ? !(nothingToSave || unchanged)
+                    : improvementDraft !== improvementSaved || improvementTitleDraft !== improvementTitleSaved;
+
+                if (!hasChanges) {
+                    navigation.dispatch(event.data.action);
+                    return;
+                }
+
                 try {
                     await saveNote();
                 } catch (error) {
@@ -2226,7 +2555,7 @@ export const NoteEditScreen = () => {
         });
 
         return unsubscribe;
-    }, [clearAgentSessionState, content, navigation, resolveImprovementVariantTitle, saveNote, title]);
+    }, [clearAgentSessionState, flushVisualEditorContent, navigation, resolveImprovementVariantTitle, saveNote]);
 
     useFocusEffect(
         useCallback(() => {
@@ -2265,9 +2594,16 @@ export const NoteEditScreen = () => {
 
     const handleBack = async () => {
         Keyboard.dismiss();
+        await flushVisualEditorContent();
 
         // Check if note is effectively empty
-        const isContentEmpty = !title.trim() && !hasMeaningfulRichContent(content);
+        const isViewingOriginal = activeVariantIdRef.current === 'original';
+        const latestTitle = currentTitleRef.current;
+        const latestContent = currentContentRef.current;
+        const isContentEmpty =
+            isViewingOriginal &&
+            !latestTitle.trim() &&
+            !hasMeaningfulRichContent(latestContent);
         const hasNoAudio = !existingNote?.has_audio && voiceRecordings.length === 0;
 
         if (isContentEmpty && hasNoAudio && localNoteId) {
@@ -2469,8 +2805,14 @@ export const NoteEditScreen = () => {
                         const explicitTitle = (agentResult.titleValue || '').trim();
                         const pendingContext = resolvePendingInsertionContext(taskVariantId, representativeRecordingId);
                         const commandBaseContent = pendingContext.contentWithoutPending;
-                        const dictatedContentForUndo = pendingContext.dictationContent;
                         const hasPendingDraft = validBatch.some(t => t.recordingId && pendingContext.pending);
+                        const shouldPreserveDictationInOriginal =
+                            taskVariantId === 'original' &&
+                            hasPendingDraft &&
+                            !hasMeaningfulRichContent(commandBaseContent);
+                        const originalContentAfterCommand = shouldPreserveDictationInOriginal
+                            ? pendingContext.dictationContent
+                            : commandBaseContent;
                         const processedText = typeof agentResult.processedText === 'string'
                             ? agentResult.processedText.trim()
                             : '';
@@ -2487,7 +2829,7 @@ export const NoteEditScreen = () => {
                                 replaceCurrentHistoryState(
                                     taskVariantId,
                                     resolveImprovementVariantTitle(taskVariantId),
-                                    dictatedContentForUndo
+                                    commandBaseContent
                                 );
                             }
                             await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
@@ -2569,13 +2911,8 @@ export const NoteEditScreen = () => {
                             }
 
                             if (newText && !areTextsEquivalent(newText, commandBaseContent)) {
-                                // Original must keep only raw dictation; AI transformation is stored as improvement.
+                                // Keep raw dictation in Original when the note was empty, but store AI output as improvement.
                                 if (taskVariantId === 'original') {
-                                    const shouldPreserveDictationInOriginal = !commandBaseContent.trim();
-                                    const originalContentAfterCommand = shouldPreserveDictationInOriginal
-                                        ? dictatedContentForUndo
-                                        : commandBaseContent;
-
                                     if (hasPendingDraft) {
                                         validBatch.forEach(t => {
                                             if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
@@ -2645,7 +2982,7 @@ export const NoteEditScreen = () => {
                                         replaceCurrentHistoryState(
                                             taskVariantId,
                                             resolveImprovementVariantTitle(taskVariantId),
-                                            dictatedContentForUndo
+                                            commandBaseContent
                                         );
                                     }
                                     const nextVariantTitle = suggestedTitle || resolveImprovementVariantTitle(taskVariantId);
@@ -2674,11 +3011,7 @@ export const NoteEditScreen = () => {
                             } else {
                                 // Command was recognized but resulted in no effective content diff.
                                 // Keep command out of the note and only clear pending marker.
-                                const shouldPreserveDictationInOriginal =
-                                    taskVariantId === 'original' && !commandBaseContent.trim();
-                                const originalContentAfterCommand = shouldPreserveDictationInOriginal
-                                    ? dictatedContentForUndo
-                                    : commandBaseContent;
+                                const contentAfterCommand = originalContentAfterCommand;
                                 if (hasPendingDraft) {
                                     validBatch.forEach(t => {
                                         if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
@@ -2686,10 +3019,10 @@ export const NoteEditScreen = () => {
                                     replaceCurrentHistoryState(
                                         taskVariantId,
                                         resolveImprovementVariantTitle(taskVariantId),
-                                        originalContentAfterCommand
+                                        contentAfterCommand
                                     );
                                 }
-                                await setVariantContentWithOptions(taskVariantId, originalContentAfterCommand, {
+                                await setVariantContentWithOptions(taskVariantId, contentAfterCommand, {
                                     persist: true,
                                     updateHistory: false,
                                 });
@@ -2975,6 +3308,7 @@ export const NoteEditScreen = () => {
         try {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
+            const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
             const provider = await getAIProvider();
             const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai';
             const shouldUseAgentModeForThisRecording =
@@ -2994,8 +3328,6 @@ export const NoteEditScreen = () => {
                     shouldTranscribe = false;
                 }
             }
-            // Only auto-insert audio when transcription is explicitly disabled for this recording.
-            shouldAutoInsertAudioPlayer = !shouldTranscribe;
 
             let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
             let isTranscriptionSuccess = false;
@@ -3031,13 +3363,6 @@ export const NoteEditScreen = () => {
                     if (insertedPlainTextEarly) {
                         registerTranscribedInsertion(transcribedText);
                     }
-                } else {
-                    insertedPlainTextEarly = await applyPlainTextToVariant(targetVariantId, transcribedText);
-                    if (insertedPlainTextEarly) {
-                        registerTranscribedInsertion(transcribedText);
-                    } else {
-                        insertedPendingEarly = await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
-                    }
                 }
             }
 
@@ -3046,8 +3371,7 @@ export const NoteEditScreen = () => {
                 const errorMsg = transcription.error ? getErrorMessage(transcription.error, '') : '';
                 const errorMsgLower = errorMsg.toLowerCase();
                 const rawErrorLower = (transcription.error || '').toLowerCase();
-                // If transcription failed, we still save audio, but we don't auto-insert audio
-                // into the note unless transcription was explicitly disabled by the toggle.
+                // Auto-insert audio player when there is no transcription (e.g., failed, disabled, or due to limits).
                 const isAuthOrQuotaError =
                     isUserTranscriptionRestricted ||
                     errorMsgLower.includes('sign in') ||
@@ -3105,8 +3429,9 @@ export const NoteEditScreen = () => {
                     localNoteIdRef.current = newNote.id;
                     syncTrackedProcessingToNote(newNote.id);
                     currentNoteId = newNote.id;
-                    lastSavedTitle.current = title;
-                    lastSavedContent.current = content;
+                    lastSavedTitle.current = currentTitleRef.current;
+                    lastSavedContent.current = currentContentRef.current;
+                    await handleCreatedNoteAutoScale(newNote.id, currentContentRef.current);
                 } catch (e) {
                     console.error('Failed to create note for voice:', e);
                     // Critical: avoid orphan ciphertext files when note creation fails.
@@ -3140,6 +3465,7 @@ export const NoteEditScreen = () => {
             // ALWAYS update the parent note to indicate it has audio
             // This ensures the microphone icon appears in the list view
             await updateNote(currentNoteId, {
+                content: resolveOriginalNoteContentForPersistence(),
                 has_audio: true,
                 audio_file_path: savedPath, // Update "primary" audio path to latest
                 audio_duration: recording.duration,
@@ -3149,8 +3475,8 @@ export const NoteEditScreen = () => {
             const playbackUri = await AudioService.readAudioFile(savedPath);
             setAudioUri(playbackUri);
             setAudioDuration(recording.duration);
-            setShowAudioPlayer(true);
-            setPlayingRecordingId(voiceId);
+            setShowAudioPlayer(!isTranscriptionSuccess);
+            setPlayingRecordingId(!isTranscriptionSuccess ? voiceId : null);
 
             if (targetVariantId === 'original' && shouldAutoInsertAudioPlayer) {
                 await applyAudioPlayerToVariant('original', savedPath);
@@ -3162,6 +3488,50 @@ export const NoteEditScreen = () => {
                 setRecordingOutcomeStatus(voiceId, status);
                 showVoiceResultStatus(status, voiceId);
                 return;
+            }
+
+            if (wasNewNoteCreation && targetVariantId === 'original' && !shouldBypassAgentForThisRecording && shouldUseAgentModeForThisRecording) {
+                const inserted = insertedPlainTextEarly
+                    ? true
+                    : await applyPlainTextToVariant('original', transcribedText);
+
+                if (inserted && !insertedPlainTextEarly) {
+                    registerTranscribedInsertion(transcribedText);
+                }
+
+                const status = inserted ? 'Added to Original' : 'Saved recording';
+                setRecordingOutcomeStatus(voiceId, status);
+                showVoiceResultStatus(status, voiceId);
+
+                setRecordingOutcomeStatus(voiceId, 'Processing...');
+                await executeAgentFlow(transcribedText, {
+                    isBackground: true,
+                    targetVariantId: 'original',
+                    recordingId: voiceId,
+                    micMode,
+                    dictationAlreadyApplied: inserted,
+                });
+                return;
+            }
+
+            const normalizedTranscript = normalizeTextForComparison(transcribedText);
+            if (normalizedTranscript && (shouldBypassAgentForThisRecording || !shouldUseAgentModeForThisRecording)) {
+                const initialPlainText = normalizeTextForComparison(
+                    richContentToPlainText(targetVariantContentAtStart)
+                );
+                const currentPlainText = normalizeTextForComparison(
+                    richContentToPlainText(resolveVariantContent(targetVariantId))
+                );
+                const initialOccurrences = countNormalizedOccurrences(initialPlainText, normalizedTranscript);
+                const currentOccurrences = countNormalizedOccurrences(currentPlainText, normalizedTranscript);
+
+                if (currentOccurrences <= initialOccurrences) {
+                    const insertedAfterSave = await applyPlainTextToVariant(targetVariantId, transcribedText);
+                    if (insertedAfterSave) {
+                        insertedPlainTextEarly = true;
+                        registerTranscribedInsertion(transcribedText);
+                    }
+                }
             }
 
             if (shouldBypassAgentForThisRecording || !shouldUseAgentModeForThisRecording) {
@@ -3183,35 +3553,8 @@ export const NoteEditScreen = () => {
                 return;
             }
 
-            // For the very first dictation that creates the note:
-            // keep plain transcription in Original, skip processing marker,
-            // then run Agent in background to create improvement when applicable.
-            if (wasNewNoteCreation && targetVariantId === 'original') {
-                const inserted = insertedPlainTextEarly
-                    ? true
-                    : await applyPlainTextToVariant('original', transcribedText);
-                const status = inserted ? 'Added to Original' : 'Saved recording';
-                setRecordingOutcomeStatus(voiceId, status);
-                showVoiceResultStatus(status, voiceId);
-                if (inserted) {
-                    if (!insertedPlainTextEarly) {
-                        registerTranscribedInsertion(transcribedText);
-                    }
-                }
-
-                setRecordingOutcomeStatus(voiceId, 'Processing...');
-                await executeAgentFlow(transcribedText, {
-                    isBackground: true,
-                    targetVariantId: 'original',
-                    recordingId: voiceId,
-                    micMode,
-                    dictationAlreadyApplied: true,
-                });
-                return;
-            }
-
             if (!insertedPendingEarly && !insertedPlainTextEarly) {
-                await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
+                insertedPendingEarly = await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
             }
 
             setRecordingOutcomeStatus(voiceId, 'Processing...');
@@ -3220,7 +3563,7 @@ export const NoteEditScreen = () => {
                 targetVariantId,
                 recordingId: voiceId,
                 micMode,
-                dictationAlreadyApplied: insertedPlainTextEarly,
+                dictationAlreadyApplied: false,
             });
         } finally {
             setIsRecordingFlowActive(false);
@@ -3436,6 +3779,7 @@ export const NoteEditScreen = () => {
                 syncTrackedProcessingToNote(newNote.id);
                 lastSavedTitle.current = title;
                 lastSavedContent.current = content;
+                await handleCreatedNoteAutoScale(newNote.id, content);
             } else if (variantAtRequestStart === 'original') {
                 await saveNote();
             } else {
@@ -3857,16 +4201,13 @@ export const NoteEditScreen = () => {
             // NOTE: Editor will trigger onChange -> handleContentChange -> setContent & debouncedSave
         } else {
             // Fallback: Raw String Manipulation (for Raw Mode or if Ref missing)
+            const targetVariantId = activeVariantIdRef.current;
             const currentContent = currentContentRef.current;
             const newContent = removeAudioFromRichContent(currentContent, path);
-
-            setContent(newContent);
-            currentContentRef.current = newContent;
-
-            // Save immediately for Raw mode
-            if (localNoteId) {
-                await updateNote(localNoteId, { content: newContent });
-            }
+            await setVariantContentWithOptions(targetVariantId, newContent, {
+                persist: true,
+                updateHistory: false,
+            });
 
             // Trigger reparse just in case if we switch back to visual
             setReparseTrigger(prev => prev + 1);
@@ -4387,7 +4728,11 @@ export const NoteEditScreen = () => {
                 >
                     {editorHeader}
 
-                    {editMode === 'raw' ? (
+                    {!appearanceReady || !noteViewReady || routeNoteId !== localNoteId ? (
+                        <View style={styles.editorLoading}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        </View>
+                    ) : editMode === 'raw' ? (
                         // Raw Markdown Editor
                         <TextInput
                             style={[
@@ -4404,14 +4749,7 @@ export const NoteEditScreen = () => {
                             value={content}
                             onChangeText={(text) => {
                                 // Direct update for raw mode, bypassing auto-list logic
-                                setContent(text);
-                                if (existingNote) debouncedSave(text, title);
-                                if (activeVariantId === 'original') {
-                                    updateHistory(title, text);
-                                } else {
-                                    improvementDraftsRef.current[activeVariantId] = text;
-                                    updateHistory(title, text);
-                                }
+                                handleContentChange(text);
                             }}
                             placeholder="Start typing markdown..."
                             placeholderTextColor={colors.textMuted}
@@ -4420,22 +4758,16 @@ export const NoteEditScreen = () => {
                         />
                     ) : (
                         <RichTextEditor
+                            key={`note-editor:${localNoteId ?? 'new'}`}
                             ref={editorRef}
                             initialContent={content}
                             reparseTrigger={reparseTrigger}
                             baseFontSize={fontSize}
-                            autoScalingEnabled={autoScalingEnabled}
+                            autoScalingEnabled={shouldUseCreationAutoScalePreview}
+                            lockedChecklistScaleFactor={activeVariantChecklistScaleFactor}
                             showToolbar={false}
                             onChange={(text: string) => {
-                                // Update parent state but DO NOT trigger re-parse in editor
-                                setContent(text);
-                                if (existingNote) debouncedSave(text, title);
-                                if (activeVariantId === 'original') {
-                                    updateHistory(title, text);
-                                } else {
-                                    improvementDraftsRef.current[activeVariantId] = text;
-                                    updateHistory(title, text);
-                                }
+                                handleContentChange(text);
                             }}
                             onPlainTextChange={setVisualPlainText}
                             onActiveStylesChange={setActiveFormats}
@@ -5358,6 +5690,12 @@ const styles = StyleSheet.create({
         padding: spacing.m,
         paddingTop: spacing.l,
         textAlignVertical: 'top',
+    },
+    editorLoading: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background,
     },
     toolbarKeyboardDock: {
         position: 'absolute',

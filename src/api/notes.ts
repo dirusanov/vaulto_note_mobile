@@ -9,6 +9,7 @@ export interface NoteImprovement {
     note_id: string;
     encrypted_content: string;
     encrypted_title?: string | null;
+    title?: string;
     content_nonce?: string | null;
     label?: string | null;
     option_id?: string | null;

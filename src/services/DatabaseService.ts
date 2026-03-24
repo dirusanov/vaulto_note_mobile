@@ -666,9 +666,11 @@ const processImprovements = async (
 
             const privacy = normalizePrivacy(imp.privacy);
             const content = await decryptByPrivacy(imp.encrypted_content);
+            const title = imp.encrypted_title ? await decryptByPrivacy(imp.encrypted_title) : '';
             const improvement: NoteImprovement = {
                 ...imp,
                 note_id: noteId,
+                title,
                 label: imp.label,
                 option_id: imp.option_id,
                 encrypted_title: imp.encrypted_title,
@@ -887,6 +889,7 @@ export const saveImprovementLocal = async (userId: string, improvement: NoteImpr
             parent_id: improvement.note_id,
             encrypted_content: improvement.encrypted_content,
             encrypted_title: improvement.encrypted_title || undefined,
+            title: improvement.title || undefined,
             content_nonce: improvement.content_nonce,
             label: improvement.label || undefined,
             option_id: improvement.option_id || undefined,

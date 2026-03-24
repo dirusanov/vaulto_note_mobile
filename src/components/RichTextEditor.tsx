@@ -10,6 +10,9 @@ import React, {
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import {
     RichText,
+    TaskListBridge,
+    TenTapStartKit,
+    editorHtml as tentapEditorHtml,
     useBridgeState,
     useEditorBridge,
     useEditorContent,
@@ -21,6 +24,10 @@ import {
     removeAudioFromRichContent,
     richContentToEditorHtml,
 } from '../utils/richContent';
+import {
+    countChecklistItems,
+    resolveChecklistScaleFactor,
+} from '../utils/checklistScale';
 
 interface RichTextEditorProps {
     initialContent: string;
@@ -35,6 +42,7 @@ interface RichTextEditorProps {
     ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
     baseFontSize?: number;
     autoScalingEnabled?: boolean;
+    lockedChecklistScaleFactor?: number | null;
     showToolbar?: boolean;
 }
 
@@ -42,6 +50,8 @@ export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
     focusBlockAt: (lineIndex: number, ratio?: number) => void;
     removeAudioBlock: (audioPath: string) => void;
+    setContent: (content: string) => void;
+    flushPendingChanges: () => Promise<string>;
     blur: () => void;
 }
 
@@ -66,7 +76,118 @@ const mapEditorStateToFormats = (state: Record<string, any>): MarkdownFormatType
     return styles;
 };
 
-const getMinimalEditorCss = (baseFontSize: number) => `
+const injectEditorCssIntoSource = (sourceHtml: string, css: string): string => {
+    const inlineStyleTag = `<style data-tag="vaulto-editor-inline-css">${css}</style>`;
+
+    if (sourceHtml.includes('</head>')) {
+        return sourceHtml.replace('</head>', `${inlineStyleTag}</head>`);
+    }
+
+    return `${inlineStyleTag}${sourceHtml}`;
+};
+
+const getChecklistCss = (baseFontSize: number, checklistScaleFactor: number) => {
+    const checklistFontSize = Math.round(baseFontSize * checklistScaleFactor);
+    const checklistLineHeight = Math.round(checklistFontSize * 1.55);
+    const checkboxSize = Math.max(18, Math.round(baseFontSize * 1.28 * checklistScaleFactor));
+    const checkboxRadius = Math.max(5, Math.round(checkboxSize * 0.24));
+    const checkboxBorderWidth = Math.max(1.5, Number((checkboxSize * 0.08).toFixed(2)));
+    const checkmarkWidth = Math.max(2, Math.round(checkboxSize * 0.14));
+    const checkmarkHeight = Math.max(6, Math.round(checkboxSize * 0.32));
+    const checkboxTopOffset = Math.max(1, Math.round((checklistLineHeight - checkboxSize) / 2) + 1);
+    const checkboxSpacing = Math.max(8, Math.round(baseFontSize * 0.55 * checklistScaleFactor));
+    const checklistItemSpacing = Math.max(4, Math.round(baseFontSize * 0.2 * checklistScaleFactor));
+
+    return `
+  .ProseMirror ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0.25rem;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    font-size: ${checklistFontSize}px;
+    line-height: ${checklistLineHeight}px;
+    gap: ${checkboxSpacing}px;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li:not(:last-child) {
+    margin-bottom: ${checklistItemSpacing}px;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > label {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: flex-start;
+    justify-content: center;
+    margin-top: ${checkboxTopOffset}px;
+    user-select: none;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > label > input {
+    appearance: none;
+    -webkit-appearance: none;
+    position: absolute;
+    inset: 0;
+    width: ${checkboxSize}px;
+    height: ${checkboxSize}px;
+    margin: 0;
+    accent-color: ${colors.primary};
+    background: transparent;
+    border: none;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > label > span {
+    display: inline-flex;
+    width: ${checkboxSize}px;
+    min-width: ${checkboxSize}px;
+    height: ${checkboxSize}px;
+    min-height: ${checkboxSize}px;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+    background: ${colors.activeWordHighlight};
+    border: ${checkboxBorderWidth}px solid ${colors.primary};
+    border-radius: ${checkboxRadius}px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > label > input:checked + span {
+    background: ${colors.primary};
+    border-color: ${colors.primary};
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > label > input:checked + span::after {
+    content: "";
+    width: ${checkmarkWidth}px;
+    height: ${checkmarkHeight}px;
+    margin-top: -${Math.max(1, Math.round(checkboxSize * 0.06))}px;
+    border: solid ${colors.surface};
+    border-width: 0 ${checkmarkWidth}px ${checkmarkWidth}px 0;
+    transform: rotate(45deg);
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > div {
+    flex: 1 1 auto;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > div > p {
+    line-height: inherit;
+    min-height: ${checklistLineHeight}px;
+  }
+`;
+};
+
+const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
+    const baseLineHeight = Math.round(baseFontSize * 1.55);
+
+    return `
   html, body {
     margin: 0;
     padding: 0;
@@ -75,6 +196,7 @@ const getMinimalEditorCss = (baseFontSize: number) => `
 
   body {
     font-size: ${baseFontSize}px;
+    line-height: ${baseLineHeight}px;
     color: ${colors.text};
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
@@ -86,7 +208,15 @@ const getMinimalEditorCss = (baseFontSize: number) => `
     white-space: pre-wrap;
     word-break: break-word;
   }
+
+  .ProseMirror p {
+    margin: 0;
+    min-height: ${baseLineHeight}px;
+  }
+
+  ${getChecklistCss(baseFontSize, checklistScaleFactor)}
 `;
+};
 
 const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorProps>((props, ref) => {
     const {
@@ -100,10 +230,36 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         reparseTrigger,
         placeholder,
         baseFontSize = 16,
+        autoScalingEnabled = true,
+        lockedChecklistScaleFactor = null,
         showToolbar = false,
     } = props;
 
     const initialEditorHtml = useMemo(() => richContentToEditorHtml(initialContent), []);
+    const bridgeInitialContent = useMemo(() => richContentToEditorHtml(initialContent), [initialContent]);
+    const contentChecklistScaleFactor = useMemo(() => (
+        lockedChecklistScaleFactor
+            ?? (autoScalingEnabled
+                ? resolveChecklistScaleFactor(countChecklistItems(bridgeInitialContent), true)
+                : 1)
+    ), [autoScalingEnabled, bridgeInitialContent, lockedChecklistScaleFactor]);
+    const initialEditorCssRef = useRef<string | null>(null);
+    if (initialEditorCssRef.current === null) {
+        initialEditorCssRef.current = getEditorCss(baseFontSize, contentChecklistScaleFactor);
+    }
+    const initialTaskListCssRef = useRef<string | null>(null);
+    if (initialTaskListCssRef.current === null) {
+        initialTaskListCssRef.current = getChecklistCss(baseFontSize, contentChecklistScaleFactor);
+    }
+    const editorSourceHtml = useMemo(() => (
+        injectEditorCssIntoSource(tentapEditorHtml, initialEditorCssRef.current || '')
+    ), []);
+    const editorBridgeExtensions = useMemo(() => (
+        [
+            ...TenTapStartKit.filter((extension) => extension.name !== TaskListBridge.name),
+            TaskListBridge.configureCSS(initialTaskListCssRef.current || ''),
+        ]
+    ), []);
     const editorTheme = useMemo(() => ({
         webview: {
             backgroundColor: colors.background,
@@ -116,7 +272,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const editor = useEditorBridge({
         autofocus: false,
         avoidIosKeyboard: true,
-        initialContent: initialEditorHtml,
+        bridgeExtensions: editorBridgeExtensions,
+        customSource: editorSourceHtml,
+        initialContent: bridgeInitialContent,
         theme: editorTheme,
     });
 
@@ -136,12 +294,67 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const pendingProgrammaticHtmlRef = useRef<string | null>(null);
     const pendingFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFocusedRef = useRef(false);
-    const mountedRef = useRef(false);
     const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
+    const checklistSourceHtml = typeof editorHtml === 'string'
+        ? normalizeRichHighlightColors(editorHtml)
+        : bridgeInitialContent;
+    const checklistScaleFactor = useMemo(() => (
+        lockedChecklistScaleFactor
+            ?? (autoScalingEnabled
+                ? resolveChecklistScaleFactor(countChecklistItems(checklistSourceHtml), true)
+                : 1)
+    ), [autoScalingEnabled, checklistSourceHtml, lockedChecklistScaleFactor]);
 
     const editorApi = editor as typeof editor & {
         setPlaceholder?: (value: string) => void;
         injectCSS?: (css: string, tag?: string) => void;
+    };
+
+    const applyProgrammaticContent = (content: string) => {
+        const nextHtml = richContentToEditorHtml(content);
+
+        if (nextHtml === lastHtmlRef.current) {
+            lastExternalContentRef.current = content;
+            return;
+        }
+
+        if (pendingFlushTimeoutRef.current) {
+            clearTimeout(pendingFlushTimeoutRef.current);
+            pendingFlushTimeoutRef.current = null;
+        }
+
+        pendingProgrammaticHtmlRef.current = nextHtml;
+        latestHtmlRef.current = nextHtml;
+        lastHtmlRef.current = nextHtml;
+        lastExternalContentRef.current = content;
+        editor.setContent(nextHtml);
+    };
+
+    const flushPendingContent = async (): Promise<string> => {
+        const nextHtml = normalizeRichHighlightColors(await editor.getHTML());
+        latestHtmlRef.current = nextHtml;
+
+        if (pendingFlushTimeoutRef.current) {
+            clearTimeout(pendingFlushTimeoutRef.current);
+            pendingFlushTimeoutRef.current = null;
+        }
+
+        if (pendingProgrammaticHtmlRef.current !== null) {
+            if (pendingProgrammaticHtmlRef.current === nextHtml) {
+                pendingProgrammaticHtmlRef.current = null;
+            }
+            lastHtmlRef.current = nextHtml;
+            lastExternalContentRef.current = nextHtml;
+            return nextHtml;
+        }
+
+        if (nextHtml !== lastHtmlRef.current) {
+            lastHtmlRef.current = nextHtml;
+            lastExternalContentRef.current = nextHtml;
+            onChange(nextHtml);
+        }
+
+        return nextHtml;
     };
 
     useEffect(() => {
@@ -150,10 +363,17 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         }
 
         editorApi.setPlaceholder?.(placeholder || '');
-        editorApi.injectCSS?.(getMinimalEditorCss(baseFontSize), 'vaulto-editor-minimal-css');
-    }, [baseFontSize, editorApi, editorState.isReady, placeholder]);
+        editorApi.injectCSS?.(
+            getEditorCss(baseFontSize, checklistScaleFactor),
+            'vaulto-editor-minimal-css'
+        );
+    }, [baseFontSize, checklistScaleFactor, editorApi, editorState.isReady, placeholder]);
 
     useEffect(() => {
+        if (!editorState.isReady) {
+            return;
+        }
+
         const flushPendingHtml = async (forceRead: boolean = false) => {
             let nextHtml = latestHtmlRef.current;
 
@@ -182,12 +402,11 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
 
         const normalizedEditorHtml = normalizeRichHighlightColors(editorHtml);
         latestHtmlRef.current = normalizedEditorHtml;
-        if (
-            pendingProgrammaticHtmlRef.current !== null &&
-            pendingProgrammaticHtmlRef.current === normalizedEditorHtml
-        ) {
-            pendingProgrammaticHtmlRef.current = null;
-            lastHtmlRef.current = normalizedEditorHtml;
+        if (pendingProgrammaticHtmlRef.current !== null) {
+            if (pendingProgrammaticHtmlRef.current === normalizedEditorHtml) {
+                pendingProgrammaticHtmlRef.current = null;
+                lastHtmlRef.current = normalizedEditorHtml;
+            }
             return;
         }
 
@@ -213,11 +432,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     }, [editor, editorHtml, editorState.isReady, onChange]);
 
     useEffect(() => {
-        if (!mountedRef.current) {
-            mountedRef.current = true;
-            return;
-        }
-
         if (!editorState.isReady) {
             return;
         }
@@ -226,23 +440,8 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             return;
         }
 
-        const nextHtml = richContentToEditorHtml(initialContent);
-        if (nextHtml === lastHtmlRef.current) {
-            lastExternalContentRef.current = initialContent;
-            return;
-        }
-
-        if (pendingFlushTimeoutRef.current) {
-            clearTimeout(pendingFlushTimeoutRef.current);
-            pendingFlushTimeoutRef.current = null;
-        }
-
-        pendingProgrammaticHtmlRef.current = nextHtml;
-        latestHtmlRef.current = nextHtml;
-        lastHtmlRef.current = nextHtml;
-        lastExternalContentRef.current = initialContent;
-        editor.setContent(nextHtml);
-    }, [editor, editorState.isReady, initialContent, reparseTrigger]);
+        applyProgrammaticContent(initialContent);
+    }, [editorState.isReady, initialContent, reparseTrigger]);
 
     useEffect(() => {
         if (!onActiveStylesChange) {
@@ -272,35 +471,17 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     }, [editorText, onPlainTextChange]);
 
     useEffect(() => {
-        const flushOnBlur = async () => {
-            const nextHtml = normalizeRichHighlightColors(await editor.getHTML());
-            latestHtmlRef.current = nextHtml;
-
-            if (nextHtml === lastHtmlRef.current) {
-                return;
-            }
-
-            if (pendingFlushTimeoutRef.current) {
-                clearTimeout(pendingFlushTimeoutRef.current);
-                pendingFlushTimeoutRef.current = null;
-            }
-
-            lastHtmlRef.current = nextHtml;
-            lastExternalContentRef.current = nextHtml;
-            onChange(nextHtml);
-        };
-
         if (editorState.isFocused && !lastFocusedRef.current) {
             onFocus?.();
         }
 
         if (!editorState.isFocused && lastFocusedRef.current) {
             onBlur?.();
-            void flushOnBlur();
+            void flushPendingContent();
         }
 
         lastFocusedRef.current = !!editorState.isFocused;
-    }, [editor, editorState.isFocused, onBlur, onFocus, onChange]);
+    }, [editorState.isFocused, onBlur, onFocus]);
 
     const applyFormat = (type: MarkdownFormatType) => {
         if (type === 'bold') {
@@ -371,19 +552,13 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         removeAudioBlock: async (audioPath: string) => {
             const currentHtml = await editor.getHTML();
             const nextHtml = removeAudioFromRichContent(currentHtml, audioPath);
-
-            if (pendingFlushTimeoutRef.current) {
-                clearTimeout(pendingFlushTimeoutRef.current);
-                pendingFlushTimeoutRef.current = null;
-            }
-
-            pendingProgrammaticHtmlRef.current = nextHtml;
-            latestHtmlRef.current = nextHtml;
-            lastHtmlRef.current = nextHtml;
-            lastExternalContentRef.current = nextHtml;
-            editor.setContent(nextHtml);
+            applyProgrammaticContent(nextHtml);
             onChange(nextHtml);
         },
+        setContent: (content: string) => {
+            applyProgrammaticContent(content);
+        },
+        flushPendingChanges: () => flushPendingContent(),
         blur: () => {
             editor.blur();
         },
@@ -433,6 +608,7 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.reparseTrigger === next.reparseTrigger &&
     prev.baseFontSize === next.baseFontSize &&
     prev.autoScalingEnabled === next.autoScalingEnabled &&
+    prev.lockedChecklistScaleFactor === next.lockedChecklistScaleFactor &&
     prev.placeholder === next.placeholder &&
     prev.initialContent === next.initialContent
 ));

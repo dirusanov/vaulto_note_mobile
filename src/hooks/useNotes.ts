@@ -280,6 +280,7 @@ export const useNotes = () => {
                 note_id: noteId,
                 encrypted_content: encryptedContent,
                 encrypted_title: encryptedTitle,
+                title,
                 label,
                 option_id: optionId,
                 content,
@@ -823,6 +824,7 @@ export const useNotes = () => {
                 note_id: noteId, // Ensure parent ID is preserved
                 encrypted_content: encryptedContent,
                 encrypted_title: encryptedTitle,
+                title: typeof updates.title === 'string' ? updates.title : improvement.title,
                 content: plainContent,
                 label: ensureUniqueImprovementLabel(
                     updates.label ?? improvement.label,
