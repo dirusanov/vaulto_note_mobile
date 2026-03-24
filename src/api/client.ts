@@ -11,6 +11,21 @@ const client = axios.create({
     },
 });
 
+const resolveFinalUrl = (request?: { url?: string; baseURL?: string }) => {
+    if (!request?.url) {
+        return request?.baseURL;
+    }
+
+    try {
+        return client.getUri({
+            baseURL: request.baseURL,
+            url: request.url,
+        });
+    } catch {
+        return request.baseURL ? `${request.baseURL}${request.url}` : request.url;
+    }
+};
+
 let refreshPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
 let unauthorizedEmitted = false;
 let lastRefreshFailureWasInvalid = false;
@@ -159,7 +174,7 @@ client.interceptors.response.use(
                 code: error.code,
                 url: originalRequest?.url,
                 baseURL: originalRequest?.baseURL,
-                finalUrl: originalRequest?.baseURL ? `${originalRequest.baseURL}${originalRequest.url}` : originalRequest?.url,
+                finalUrl: resolveFinalUrl(originalRequest),
                 method: originalRequest?.method,
                 status,
             });
