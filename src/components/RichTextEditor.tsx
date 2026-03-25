@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import {
+    BridgeExtension,
     RichText,
     TaskListBridge,
     TenTapStartKit,
@@ -21,17 +22,21 @@ import { colors } from '../theme/colors';
 import { MarkdownFormatType, MarkdownToolbar } from './MarkdownToolbar';
 import {
     normalizeRichHighlightColors,
-    removeAudioFromRichContent,
     richContentToEditorHtml,
 } from '../utils/richContent';
 import {
     countChecklistItems,
     resolveChecklistScaleFactor,
 } from '../utils/checklistScale';
+import {
+    removeAudioFromTiptapDocument,
+    tiptapDocumentToHtml,
+} from '../utils/tiptapMarkdownAdapter';
 
 interface RichTextEditorProps {
     initialContent: string;
     onChange: (text: string) => void;
+    onRemoveAudioBlock?: (audioPath: string) => void;
     onPlainTextChange?: (text: string) => void;
     onSelectionChange?: (selection: { start: number; end: number }) => void;
     onActiveStylesChange?: (styles: MarkdownFormatType[]) => void;
@@ -214,14 +219,208 @@ const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
     min-height: ${baseLineHeight}px;
   }
 
+  .ProseMirror ul[data-type="taskList"] p.is-editor-empty:first-child::before {
+    content: none !important;
+  }
+
   ${getChecklistCss(baseFontSize, checklistScaleFactor)}
 `;
 };
+
+const AUDIO_PREVIEW_TITLE_PREFIX = 'vaulto-audio:';
+const AUDIO_PREVIEW_REMOVE_MESSAGE_TYPE = 'vaulto-audio-preview-remove';
+
+const getAudioPreviewEnhancementJs = () => `
+(() => {
+  const MESSAGE_TYPE = ${JSON.stringify(AUDIO_PREVIEW_REMOVE_MESSAGE_TYPE)};
+  const TITLE_PREFIX = ${JSON.stringify(AUDIO_PREVIEW_TITLE_PREFIX)};
+  const OVERLAY_ID = 'vaulto-audio-preview-overlay';
+
+  const decodeAudioPath = (title) => {
+    if (!title || !title.startsWith(TITLE_PREFIX)) {
+      return '';
+    }
+
+    const encoded = title.slice(TITLE_PREFIX.length);
+    try {
+      return decodeURIComponent(encoded);
+    } catch (_error) {
+      return encoded;
+    }
+  };
+
+  const getOverlay = () => {
+    let overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) {
+      return overlay;
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = OVERLAY_ID;
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.zIndex = '2147483646';
+    document.body.appendChild(overlay);
+    return overlay;
+  };
+
+  const ensureButton = (overlay, audioKey, audioPath) => {
+    let button = overlay.querySelector('button[data-audio-key="' + audioKey + '"]');
+    if (button instanceof HTMLButtonElement) {
+      button.dataset.audioPath = audioPath;
+      return button;
+    }
+
+    button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '×';
+    button.dataset.audioKey = audioKey;
+    button.dataset.audioPath = audioPath;
+    button.setAttribute('aria-label', 'Remove audio attachment');
+    button.setAttribute('contenteditable', 'false');
+    button.style.position = 'fixed';
+    button.style.width = '28px';
+    button.style.height = '28px';
+    button.style.display = 'none';
+    button.style.alignItems = 'center';
+    button.style.justifyContent = 'center';
+    button.style.border = 'none';
+    button.style.borderRadius = '999px';
+    button.style.background = '#ffffff';
+    button.style.color = '#203047';
+    button.style.boxShadow = '0 8px 24px rgba(15, 23, 42, 0.18)';
+    button.style.fontSize = '20px';
+    button.style.fontWeight = '700';
+    button.style.lineHeight = '1';
+    button.style.cursor = 'pointer';
+    button.style.pointerEvents = 'auto';
+    button.style.padding = '0';
+    overlay.appendChild(button);
+    return button;
+  };
+
+  const syncButtons = () => {
+    const overlay = getOverlay();
+    const activeKeys = new Set();
+    const previews = document.querySelectorAll('.ProseMirror img[alt="audio-preview"]');
+
+    previews.forEach((preview) => {
+      if (!(preview instanceof HTMLImageElement)) {
+        return;
+      }
+
+      const audioPath = decodeAudioPath(preview.getAttribute('title') || '');
+      if (!audioPath) {
+        return;
+      }
+
+      const audioKey = encodeURIComponent(audioPath);
+      activeKeys.add(audioKey);
+      const button = ensureButton(overlay, audioKey, audioPath);
+      const rect = preview.getBoundingClientRect();
+      const isVisible =
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.top < window.innerHeight &&
+        rect.left < window.innerWidth;
+
+      if (!isVisible) {
+        button.style.display = 'none';
+        return;
+      }
+
+      button.style.display = 'flex';
+      button.style.left = Math.max(8, Math.min(window.innerWidth - 36, rect.right - 34)) + 'px';
+      button.style.top = Math.max(8, rect.top + 10) + 'px';
+    });
+
+    Array.from(overlay.querySelectorAll('button[data-audio-key]')).forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      if (!activeKeys.has(button.dataset.audioKey || '')) {
+        button.remove();
+      }
+    });
+  };
+
+  const scheduleSync = () => {
+    const previousFrame = window.__vaultoAudioPreviewSyncFrame;
+    if (typeof previousFrame === 'number') {
+      window.cancelAnimationFrame(previousFrame);
+    }
+
+    window.__vaultoAudioPreviewSyncFrame = window.requestAnimationFrame(() => {
+      syncButtons();
+    });
+  };
+
+  if (!window.__vaultoAudioPreviewEnhancerInstalled) {
+    window.__vaultoAudioPreviewEnhancerInstalled = true;
+
+    document.addEventListener('mousedown', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest('#' + OVERLAY_ID + ' button[data-audio-key]')) {
+        event.preventDefault();
+      }
+    }, true);
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const button = target.closest('#' + OVERLAY_ID + ' button[data-audio-key]');
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const audioPath = button.dataset.audioPath || '';
+      if (!audioPath) {
+        return;
+      }
+
+      window.ReactNativeWebView?.postMessage(JSON.stringify({
+        type: MESSAGE_TYPE,
+        payload: { audioPath },
+      }));
+    }, true);
+
+    document.addEventListener('scroll', scheduleSync, true);
+    window.addEventListener('resize', scheduleSync);
+
+    const observer = new MutationObserver(() => {
+      scheduleSync();
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'title', 'style', 'class'],
+    });
+  }
+
+  window.__vaultoAudioPreviewSync = scheduleSync;
+  scheduleSync();
+})();
+true;
+`;
 
 const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorProps>((props, ref) => {
     const {
         initialContent,
         onChange,
+        onRemoveAudioBlock,
         onPlainTextChange,
         onSelectionChange,
         onActiveStylesChange,
@@ -234,6 +433,23 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         lockedChecklistScaleFactor = null,
         showToolbar = false,
     } = props;
+
+    const audioPreviewBridge = useMemo(() => (
+        new BridgeExtension({
+            forceName: 'vaultoAudioPreviewBridge',
+            onEditorMessage: (message: { type?: string; payload?: { audioPath?: string } }) => {
+                if (message.type !== AUDIO_PREVIEW_REMOVE_MESSAGE_TYPE) {
+                    return false;
+                }
+
+                const audioPath = message.payload?.audioPath;
+                if (typeof audioPath === 'string' && audioPath.trim()) {
+                    onRemoveAudioBlock?.(audioPath);
+                }
+                return true;
+            },
+        })
+    ), [onRemoveAudioBlock]);
 
     const initialEditorHtml = useMemo(() => richContentToEditorHtml(initialContent), []);
     const bridgeInitialContent = useMemo(() => richContentToEditorHtml(initialContent), [initialContent]);
@@ -258,8 +474,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         [
             ...TenTapStartKit.filter((extension) => extension.name !== TaskListBridge.name),
             TaskListBridge.configureCSS(initialTaskListCssRef.current || ''),
+            audioPreviewBridge,
         ]
-    ), []);
+    ), [audioPreviewBridge]);
     const editorTheme = useMemo(() => ({
         webview: {
             backgroundColor: colors.background,
@@ -308,6 +525,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const editorApi = editor as typeof editor & {
         setPlaceholder?: (value: string) => void;
         injectCSS?: (css: string, tag?: string) => void;
+        injectJS?: (js: string) => void;
     };
 
     const applyProgrammaticContent = (content: string) => {
@@ -367,6 +585,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             getEditorCss(baseFontSize, checklistScaleFactor),
             'vaulto-editor-minimal-css'
         );
+        editorApi.injectJS?.(getAudioPreviewEnhancementJs());
     }, [baseFontSize, checklistScaleFactor, editorApi, editorState.isReady, placeholder]);
 
     useEffect(() => {
@@ -550,8 +769,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             editor.focus('end');
         },
         removeAudioBlock: async (audioPath: string) => {
-            const currentHtml = await editor.getHTML();
-            const nextHtml = removeAudioFromRichContent(currentHtml, audioPath);
+            const currentDocument = await editor.getJSON();
+            const nextDocument = removeAudioFromTiptapDocument(currentDocument, audioPath);
+            const nextHtml = normalizeRichHighlightColors(tiptapDocumentToHtml(nextDocument));
             applyProgrammaticContent(nextHtml);
             onChange(nextHtml);
         },

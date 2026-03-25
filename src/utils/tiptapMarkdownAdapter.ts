@@ -34,8 +34,14 @@ const AUDIO_PREVIEW_SVG = encodeURIComponent(
 <rect x="2" y="2" width="676" height="120" rx="24" fill="#F4F6FA" stroke="#D9E0EA" stroke-width="4"/>
 <circle cx="74" cy="62" r="22" fill="#4A6FA5"/>
 <path d="M63 51h8l10-9v40l-10-9h-8z" fill="#ffffff"/>
-<text x="126" y="54" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#203047">Audio attachment</text>
-<text x="126" y="84" font-family="Arial, sans-serif" font-size="18" fill="#5A6B7D">Tap in note menu to play or remove</text>
+<rect x="130" y="50" width="12" height="24" rx="6" fill="#9EB2C8"/>
+<rect x="150" y="42" width="12" height="40" rx="6" fill="#7F97B2"/>
+<rect x="170" y="54" width="12" height="16" rx="6" fill="#B8C7D8"/>
+<rect x="190" y="38" width="12" height="48" rx="6" fill="#5E7EA2"/>
+<rect x="210" y="46" width="12" height="32" rx="6" fill="#8EA5BF"/>
+<rect x="230" y="57" width="12" height="10" rx="5" fill="#C3CFDC"/>
+<rect x="262" y="52" width="320" height="20" rx="10" fill="#DDE6F0"/>
+<circle cx="610" cy="62" r="6" fill="#A4B5C8"/>
 </svg>`
 );
 const PROCESSING_PREVIEW_SVG = encodeURIComponent(

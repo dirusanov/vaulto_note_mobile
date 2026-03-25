@@ -1092,6 +1092,7 @@ export const NoteEditScreen = () => {
     const editorRef = useRef<RichTextEditorHandle>(null);
     const keyboardVisibleRef = useRef(false);
     const visualEditorFocusedRef = useRef(false);
+    const visualKeyboardHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [visualPlainText, setVisualPlainText] = useState(() => richContentToPlainText(content));
 
     const improvementDraftsRef = useRef<Record<string, string>>({});
@@ -2095,6 +2096,28 @@ export const NoteEditScreen = () => {
             updateHistory: true,
         });
     }, [resolveVariantContent, setVariantContentWithOptions]);
+
+    const handleRemoveEmbeddedAudioBlock = useCallback(async (audioPath: string) => {
+        const normalizedPath = (audioPath || '').trim();
+        if (!normalizedPath) {
+            return;
+        }
+
+        if (editMode === 'visual' && editorRef.current) {
+            editorRef.current.removeAudioBlock(normalizedPath);
+            return;
+        }
+
+        const targetVariantId = activeVariantIdRef.current;
+        const currentVariantContent = resolveVariantContent(targetVariantId);
+        const nextContent = removeAudioFromRichContent(currentVariantContent, normalizedPath);
+
+        await setVariantContentWithOptions(targetVariantId, nextContent, {
+            persist: true,
+            updateHistory: true,
+        });
+        setReparseTrigger(prev => prev + 1);
+    }, [editMode, resolveVariantContent, setVariantContentWithOptions]);
 
     const finalizePendingInsertionAsDictation = useCallback(async (
         variantId: string,
@@ -4010,6 +4033,11 @@ export const NoteEditScreen = () => {
         const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
         const showSub = Keyboard.addListener(showEvent, (event) => {
+            if (visualKeyboardHideTimeoutRef.current) {
+                clearTimeout(visualKeyboardHideTimeoutRef.current);
+                visualKeyboardHideTimeoutRef.current = null;
+            }
+
             const keyboardFrame = event.endCoordinates;
             const screenHeight = Dimensions.get('screen').height;
             const measuredKeyboardHeight = Platform.OS === 'android' && typeof keyboardFrame?.screenY === 'number'
@@ -4025,17 +4053,35 @@ export const NoteEditScreen = () => {
             keyboardVisibleRef.current = false;
             setKeyboardVisibleState(false);
             setKeyboardHeight(0);
+
+            if (visualKeyboardHideTimeoutRef.current) {
+                clearTimeout(visualKeyboardHideTimeoutRef.current);
+            }
+
+            if (editMode === 'visual') {
+                visualKeyboardHideTimeoutRef.current = setTimeout(() => {
+                    visualKeyboardHideTimeoutRef.current = null;
+                    if (!keyboardVisibleRef.current && !isColorPickerVisible && !visualEditorFocusedRef.current) {
+                        setIsEditing(false);
+                    }
+                }, 120);
+                return;
+            }
+
             if (!isColorPickerVisible) {
-                editorRef.current?.blur();
                 setIsEditing(false);
             }
         });
 
         return () => {
+            if (visualKeyboardHideTimeoutRef.current) {
+                clearTimeout(visualKeyboardHideTimeoutRef.current);
+                visualKeyboardHideTimeoutRef.current = null;
+            }
             showSub.remove();
             hideSub.remove();
         };
-    }, [isColorPickerVisible]);
+    }, [editMode, isColorPickerVisible]);
 
     const handleRetryTranscription = async (recording?: VoiceRecording) => {
         const targetRecording = recording
@@ -4769,6 +4815,7 @@ export const NoteEditScreen = () => {
                             onChange={(text: string) => {
                                 handleContentChange(text);
                             }}
+                            onRemoveAudioBlock={handleRemoveEmbeddedAudioBlock}
                             onPlainTextChange={setVisualPlainText}
                             onActiveStylesChange={setActiveFormats}
                             onFocus={() => {
