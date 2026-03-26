@@ -22,7 +22,7 @@ interface AudioPlayerProps {
 
 import { AudioService } from '../services/AudioService';
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onDelete }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, onDelete }) => {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
@@ -209,6 +209,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     };
 
     const progress = audioDuration > 0 ? (position / audioDuration) * 100 : 0;
+    const handleClose = onClose || onDelete;
 
     if (isMissing) return null;
 
@@ -254,8 +255,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                     <Text style={styles.speedText}>{playbackSpeed}x</Text>
                 </TouchableOpacity>
 
-                {onDelete && (
-                    <TouchableOpacity onPress={onDelete} style={styles.closeButton}>
+                {handleClose && (
+                    <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
                         <MaterialIcons name="close" size={18} color={colors.textMuted} />
                     </TouchableOpacity>
                 )}

@@ -3,6 +3,8 @@ import { normalizeHighlightColorForCss } from './highlightColors';
 import { markdownToTiptapHtml } from './tiptapMarkdownAdapter';
 
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
+const AUDIO_MARKDOWN_TAG_REGEX = /\s*!\[audio\]\([^)]+\)\s*/gi;
+const AUDIO_PREVIEW_IMAGE_REGEX = /<img\b[^>]*(?:alt=(["'])audio-preview\1|title=(["'])vaulto-audio:[^"']*\2)[^>]*>/gi;
 
 const escapeHtml = (text: string): string =>
     text
@@ -39,6 +41,25 @@ const stripAudioMarkdownTag = (content: string, audioPath: string): string => {
     return next;
 };
 
+export const stripAudioEmbedsFromRichContent = (content: string): string => {
+    if (!content) {
+        return '';
+    }
+
+    let next = content.replace(AUDIO_MARKDOWN_TAG_REGEX, ' ');
+
+    if (isRichHtmlContent(next)) {
+        next = next
+            .replace(AUDIO_PREVIEW_IMAGE_REGEX, '')
+            .replace(/<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '')
+            .replace(/<div>(\s|&nbsp;|<br\s*\/?>)*<\/div>/gi, '')
+            .trim();
+        return next || '<p></p>';
+    }
+
+    return next.replace(/\n{3,}/g, '\n\n').trim();
+};
+
 export const isRichHtmlContent = (content: string): boolean =>
     HTML_TAG_REGEX.test(content || '');
 
@@ -58,15 +79,17 @@ export const normalizeRichHighlightColors = (content: string): string =>
     });
 
 export const richContentToEditorHtml = (content: string): string => {
-    if (!content) {
+    const sanitizedContent = stripAudioEmbedsFromRichContent(content);
+
+    if (!sanitizedContent || sanitizedContent === '<p></p>') {
         return '<p></p>';
     }
 
-    if (isRichHtmlContent(content)) {
-        return normalizeRichHighlightColors(content);
+    if (isRichHtmlContent(sanitizedContent)) {
+        return normalizeRichHighlightColors(sanitizedContent);
     }
 
-    return markdownToTiptapHtml(content);
+    return markdownToTiptapHtml(sanitizedContent);
 };
 
 export const richContentToPlainText = (content: string): string => {
@@ -95,15 +118,17 @@ export const richContentToPlainText = (content: string): string => {
 };
 
 export const hasMeaningfulRichContent = (content: string): boolean => {
-    if (!content) {
+    const sanitizedContent = stripAudioEmbedsFromRichContent(content);
+
+    if (!sanitizedContent || sanitizedContent === '<p></p>') {
         return false;
     }
 
-    if (richContentToPlainText(content).trim().length > 0) {
+    if (richContentToPlainText(sanitizedContent).trim().length > 0) {
         return true;
     }
 
-    return /!\[audio\]\([^)]+\)/.test(content) || /<img\b/i.test(content);
+    return /<img\b/i.test(sanitizedContent);
 };
 
 export const appendPlainTextSnippetToRichContent = (base: string, snippet: string): string => {

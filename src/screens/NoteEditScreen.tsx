@@ -87,6 +87,7 @@ import {
     isRichHtmlContent,
     removeAudioFromRichContent,
     richContentToPlainText,
+    stripAudioEmbedsFromRichContent,
 } from '../utils/richContent';
 import {
     resolveChecklistScaleForContent,
@@ -121,29 +122,6 @@ const countNormalizedOccurrences = (haystack: string, needle: string): number =>
 
 const appendSnippetToContent = (base: string, snippet: string): string => {
     return appendPlainTextSnippetToRichContent(base, snippet);
-};
-
-const escapeRegExp = (value: string): string =>
-    value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const buildAudioMarkdownTag = (audioPath: string): string =>
-    `![audio](${audioPath})`;
-
-const hasAudioTagInContent = (content: string, audioPath: string): boolean => {
-    const normalizedPath = (audioPath || '').trim();
-    if (!normalizedPath) return false;
-
-    const normalizedContent = content || '';
-    const exactPathRegex = new RegExp(`!\\[audio\\]\\(${escapeRegExp(normalizedPath)}\\)`);
-    if (exactPathRegex.test(normalizedContent)) {
-        return true;
-    }
-
-    const filename = normalizedPath.split('/').pop();
-    if (!filename) return false;
-
-    const filenameRegex = new RegExp(`!\\[audio\\]\\([^)]*${escapeRegExp(filename)}\\)`);
-    return filenameRegex.test(normalizedContent);
 };
 
 const deriveTitleFromText = (text: string): string => {
@@ -370,6 +348,7 @@ const MemoizedAudioHeader = memo(({
                 audioUri={audioUri}
                 duration={audioDuration}
                 onClose={onClose}
+                onDelete={onClose}
             />
         </View>
     );
@@ -576,9 +555,9 @@ export const NoteEditScreen = () => {
     const [recordingToDelete, setRecordingToDelete] = useState<{ id: string, path: string } | null>(null);
     const [content, setContent] = useState(() => {
         const initialId = getInitialActiveVariantId();
-        if (initialId === 'original') return existingNote?.content || '';
+        if (initialId === 'original') return stripAudioEmbedsFromRichContent(existingNote?.content || '');
         const imp = existingNote?.improvements?.find(i => i.id === initialId);
-        return imp?.content || existingNote?.content || '';
+        return stripAudioEmbedsFromRichContent(imp?.content || existingNote?.content || '');
     });
     const [showMenu, setShowMenu] = useState(false);
     const [, setIsSaving] = useState(false);
@@ -744,7 +723,7 @@ export const NoteEditScreen = () => {
     // Initialize history for original variant
     if (!variantHistories.current['original']) {
         variantHistories.current['original'] = {
-            history: [{ title: existingNote?.title || '', content: existingNote?.content || '' }],
+            history: [{ title: existingNote?.title || '', content: stripAudioEmbedsFromRichContent(existingNote?.content || '') }],
             index: 0
         };
     }
@@ -754,14 +733,16 @@ export const NoteEditScreen = () => {
     const [showPrivacyWarning, setShowPrivacyWarning] = useState(false);
     const [audioUri, setAudioUri] = useState<string | null>(null);
     const [audioDuration, setAudioDuration] = useState<number>(0);
+    const [attachedAudioPath, setAttachedAudioPath] = useState<string | null>(null);
+    const [recordingsPreviewUri, setRecordingsPreviewUri] = useState<string | null>(null);
+    const [recordingsPreviewDuration, setRecordingsPreviewDuration] = useState<number>(0);
     const [isTranscribing, setIsTranscribingState] = useState(false);
     const [isRecordingFlowActive, setIsRecordingFlowActive] = useState(false);
 
     const lastSavedTitle = useRef(existingNote?.title || '');
-    const lastSavedContent = useRef(existingNote?.content || '');
+    const lastSavedContent = useRef(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
     const skipAutoSaveRef = useRef(false);
     const isMounted = useRef(true);
-    const hasAutoOpenedRecordings = useRef(false);
 
     const [showAudioPlayer, setShowAudioPlayer] = useState(false);
 
@@ -866,22 +847,8 @@ export const NoteEditScreen = () => {
     // Refresh recordings when list modal opens
     useEffect(() => {
         if (showRecordingsList && localNoteId && userId) {
-            getVoiceRecordingsLocal(userId, localNoteId).then(async (recs) => {
+            getVoiceRecordingsLocal(userId, localNoteId).then((recs) => {
                 setVoiceRecordings(recs);
-
-                // Auto-select the latest recording (first in list)
-                if (recs.length > 0) {
-                    const latest = recs[0];
-                    setPlayingRecordingId(latest.id);
-                    try {
-                        const uri = await AudioService.readAudioFile(latest.file_path);
-                        setAudioUri(uri);
-                        setAudioDuration(latest.duration);
-                        setShowAudioPlayer(true);
-                    } catch (e) {
-                        console.error('[NoteEditScreen] Failed to auto-load recording', e);
-                    }
-                }
             });
         }
     }, [showRecordingsList, localNoteId]);
@@ -1267,9 +1234,9 @@ export const NoteEditScreen = () => {
             title: nextVariantId === 'original'
                 ? note.title || ''
                 : nextImprovement?.title || nextImprovement?.label || note.title || '',
-            content: nextVariantId === 'original'
+            content: stripAudioEmbedsFromRichContent(nextVariantId === 'original'
                 ? note.content || ''
-                : nextImprovement?.content || note.content || '',
+                : nextImprovement?.content || note.content || ''),
         };
     }, []);
 
@@ -1288,9 +1255,11 @@ export const NoteEditScreen = () => {
         setVoiceRecordings([]);
         setAudioUri(null);
         setAudioDuration(0);
+        setAttachedAudioPath(null);
         setShowAudioPlayer(false);
+        setRecordingsPreviewUri(null);
+        setRecordingsPreviewDuration(0);
         setPlayingRecordingId(null);
-        hasAutoOpenedRecordings.current = false;
 
         if (!routeNoteId) {
             setActiveVariantId('original');
@@ -1522,34 +1491,13 @@ export const NoteEditScreen = () => {
         setAppearanceReady(true);
     };
 
-
     useEffect(() => {
         if (localNoteId && userId) {
-            getVoiceRecordingsLocal(userId, localNoteId).then(async (recs) => {
+            getVoiceRecordingsLocal(userId, localNoteId).then((recs) => {
                 setVoiceRecordings(recs);
-
-                // Auto-load player if note is empty but has recordings (unprocessed voice note)
-                if (!hasAutoOpenedRecordings.current && recs.length > 0 && existingNote) {
-                    const isEmpty = !existingNote.title && !hasMeaningfulRichContent(existingNote.content || '');
-                    const hasNoTx = !existingNote.encrypted_transcription && !existingNote.transcription;
-
-                    if (isEmpty && hasNoTx) {
-                        // Load the latest recording
-                        const latest = recs[0];
-                        try {
-                            const uri = await AudioService.readAudioFile(latest.file_path);
-                            setAudioUri(uri);
-                            setAudioDuration(latest.duration);
-                            setShowAudioPlayer(true);
-                            hasAutoOpenedRecordings.current = true;
-                        } catch (e) {
-                            console.error('Failed to auto-load empty note audio', e);
-                        }
-                    }
-                }
             });
         }
-    }, [localNoteId, existingNote]);
+    }, [localNoteId, userId]);
 
     const handleFontSizeChange = useCallback((size: number) => {
         void (async () => {
@@ -1612,7 +1560,7 @@ export const NoteEditScreen = () => {
                 variantHistories.current['original'] = {
                     history: [{
                         title: existingNote.title || '',
-                        content: existingNote.content || ''
+                        content: stripAudioEmbedsFromRichContent(existingNote.content || '')
                     }],
                     index: 0
                 };
@@ -1637,7 +1585,7 @@ export const NoteEditScreen = () => {
             });
 
             noteImprovements.forEach(imp => {
-                const contentValue = imp.content ?? '';
+                const contentValue = stripAudioEmbedsFromRichContent(imp.content ?? '');
                 const titleValue = (imp.title || imp.label || '').trim();
 
                 if (saved[imp.id] === undefined) {
@@ -1682,7 +1630,7 @@ export const NoteEditScreen = () => {
                 }
             }
             if (lastSavedContent.current === content) {
-                const nextContent = existingNote.content || '';
+                const nextContent = stripAudioEmbedsFromRichContent(existingNote.content || '');
                 const storeIsCaughtUp = nextContent === lastSavedContent.current;
                 if (storeIsCaughtUp && nextContent !== content) {
                     syncVisibleContent(nextContent);
@@ -1695,20 +1643,9 @@ export const NoteEditScreen = () => {
             }
         }
 
-        // Load audio if exists
-        // Load audio if exists
-        if (existingNote.has_audio && existingNote.audio_file_path && !audioUri) {
-            const hasNoTx = !existingNote.encrypted_transcription && !existingNote.transcription;
-            if (hasNoTx) {
-                loadAudio(existingNote.audio_file_path);
-                setAudioDuration(existingNote.audio_duration || 0);
-                setShowAudioPlayer(true);
-            }
-        }
-
         lastSavedTitle.current = existingNote.title || '';
-        lastSavedContent.current = existingNote.content || '';
-    }, [existingNote, noteImprovements, activeVariantId, title, content, audioUri, editMode, resolveImprovementVariantTitle, syncVisibleContent, syncVisibleTitle]);
+        lastSavedContent.current = stripAudioEmbedsFromRichContent(existingNote.content || '');
+    }, [existingNote, noteImprovements, activeVariantId, title, content, editMode, resolveImprovementVariantTitle, syncVisibleContent, syncVisibleTitle]);
 
     // Restore active variant from is_active flags when note loads
     useEffect(() => {
@@ -1751,11 +1688,11 @@ export const NoteEditScreen = () => {
                 if (nextTitle.trim().length > 0 || !currentTitleRef.current.trim()) {
                     syncVisibleTitle(nextTitle);
                 }
-                syncVisibleContent(existingNote.content || '');
+                syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote.content || ''));
             } else {
                 const improvement = existingNote.improvements?.find(i => i.id === correctActiveVariantId);
                 if (improvement) {
-                    const improvementContent = improvement.content || '';
+                    const improvementContent = stripAudioEmbedsFromRichContent(improvement.content || '');
                     const improvementTitle =
                         improvementTitleDraftsRef.current[correctActiveVariantId] ??
                         (improvement.title || improvement.label || existingNote.title || '');
@@ -1818,7 +1755,7 @@ export const NoteEditScreen = () => {
                 setActiveVariantId('original');
                 activeVariantIdRef.current = 'original';
                 syncVisibleTitle(existingNote?.title || '');
-                syncVisibleContent(existingNote?.content || '');
+                syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
             }
         }
     }, [activeVariantId, editMode, noteImprovements, existingNote?.content, existingNote?.title, syncVisibleContent, syncVisibleTitle]);
@@ -1913,23 +1850,23 @@ export const NoteEditScreen = () => {
     const resolveVariantContent = useCallback((variantId: string): string => {
         if (variantId === 'original') {
             if (activeVariantIdRef.current === 'original') {
-                return currentContentRef.current;
+                return stripAudioEmbedsFromRichContent(currentContentRef.current);
             }
-            return existingNote?.content || '';
+            return stripAudioEmbedsFromRichContent(existingNote?.content || '');
         }
         const draft = improvementDraftsRef.current[variantId];
         if (typeof draft === 'string') {
-            return draft;
+            return stripAudioEmbedsFromRichContent(draft);
         }
         const improvement = noteImprovements.find((imp) => imp.id === variantId);
-        return improvement?.content || '';
+        return stripAudioEmbedsFromRichContent(improvement?.content || '');
     }, [existingNote?.content, noteImprovements]);
 
     const resolveOriginalNoteContentForPersistence = useCallback((): string => {
         if (activeVariantIdRef.current === 'original') {
-            return currentContentRef.current;
+            return stripAudioEmbedsFromRichContent(currentContentRef.current);
         }
-        return lastSavedContent.current || existingNote?.content || '';
+        return stripAudioEmbedsFromRichContent(lastSavedContent.current || existingNote?.content || '');
     }, [existingNote?.content]);
 
     const isTodoImprovementVariant = useCallback((variantId: string, baseContent: string): boolean => {
@@ -1961,47 +1898,48 @@ export const NoteEditScreen = () => {
             updateHistory?: boolean;
         }
     ): Promise<boolean> => {
+        const sanitizedText = stripAudioEmbedsFromRichContent(newText);
         const persist = options?.persist ?? true;
         const updateHistoryState = options?.updateHistory ?? true;
         const currentVariantContent = resolveVariantContent(variantId);
 
-        if (areTextsEquivalent(newText, currentVariantContent)) {
+        if (areTextsEquivalent(sanitizedText, currentVariantContent)) {
             return false;
         }
 
         if (variantId === 'original') {
             if (activeVariantIdRef.current === 'original') {
-                setContent(newText);
-                currentContentRef.current = newText;
+                setContent(sanitizedText);
+                currentContentRef.current = sanitizedText;
                 if (editMode === 'visual') {
-                    editorRef.current?.setContent(newText);
+                    editorRef.current?.setContent(sanitizedText);
                 }
             }
             if (updateHistoryState) {
-                updateHistoryImmediate(currentTitleRef.current, newText, 'original');
+                updateHistoryImmediate(currentTitleRef.current, sanitizedText, 'original');
             }
             if (persist && localNoteIdRef.current) {
-                await updateNote(localNoteIdRef.current, { content: newText });
-                lastSavedContent.current = newText;
+                await updateNote(localNoteIdRef.current, { content: sanitizedText });
+                lastSavedContent.current = sanitizedText;
             }
             return true;
         }
 
         if (activeVariantIdRef.current === variantId) {
-            setContent(newText);
-            currentContentRef.current = newText;
+            setContent(sanitizedText);
+            currentContentRef.current = sanitizedText;
             if (editMode === 'visual') {
-                editorRef.current?.setContent(newText);
+                editorRef.current?.setContent(sanitizedText);
             }
         }
-        improvementDraftsRef.current[variantId] = newText;
+        improvementDraftsRef.current[variantId] = sanitizedText;
         if (updateHistoryState) {
-            updateHistoryImmediate(resolveImprovementVariantTitle(variantId), newText, variantId);
+            updateHistoryImmediate(resolveImprovementVariantTitle(variantId), sanitizedText, variantId);
         }
         if (persist && localNoteIdRef.current) {
             try {
-                await updateImprovement(localNoteIdRef.current, variantId, { content: newText });
-                improvementSavedRef.current[variantId] = newText;
+                await updateImprovement(localNoteIdRef.current, variantId, { content: sanitizedText });
+                improvementSavedRef.current[variantId] = sanitizedText;
             } catch (error) {
                 console.error('Failed to save variant content update:', error);
             }
@@ -2078,47 +2016,6 @@ export const NoteEditScreen = () => {
         });
     }, [buildInsertedTextForVariant, resolveVariantContent, setVariantContentWithOptions]);
 
-    const applyAudioPlayerToVariant = useCallback(async (
-        variantId: string,
-        audioPath: string
-    ): Promise<boolean> => {
-        const normalizedPath = (audioPath || '').trim();
-        if (!normalizedPath) return false;
-
-        const baseContent = resolveVariantContent(variantId);
-        if (hasAudioTagInContent(baseContent, normalizedPath)) {
-            return false;
-        }
-
-        const newText = appendSnippetToContent(baseContent, buildAudioMarkdownTag(normalizedPath));
-        return await setVariantContentWithOptions(variantId, newText, {
-            persist: true,
-            updateHistory: true,
-        });
-    }, [resolveVariantContent, setVariantContentWithOptions]);
-
-    const handleRemoveEmbeddedAudioBlock = useCallback(async (audioPath: string) => {
-        const normalizedPath = (audioPath || '').trim();
-        if (!normalizedPath) {
-            return;
-        }
-
-        if (editMode === 'visual' && editorRef.current) {
-            editorRef.current.removeAudioBlock(normalizedPath);
-            return;
-        }
-
-        const targetVariantId = activeVariantIdRef.current;
-        const currentVariantContent = resolveVariantContent(targetVariantId);
-        const nextContent = removeAudioFromRichContent(currentVariantContent, normalizedPath);
-
-        await setVariantContentWithOptions(targetVariantId, nextContent, {
-            persist: true,
-            updateHistory: true,
-        });
-        setReparseTrigger(prev => prev + 1);
-    }, [editMode, resolveVariantContent, setVariantContentWithOptions]);
-
     const finalizePendingInsertionAsDictation = useCallback(async (
         variantId: string,
         recordingId?: string,
@@ -2141,12 +2038,6 @@ export const NoteEditScreen = () => {
             updateHistory: true,
         });
     }, [buildInsertedTextForVariant, resolvePendingInsertionContext, setVariantContentWithOptions]);
-
-    const isAudioAlreadyInsertedInCurrentVariant = useCallback((audioPath: string): boolean => {
-        const targetVariantId = activeVariantIdRef.current;
-        const variantContent = resolveVariantContent(targetVariantId);
-        return hasAudioTagInContent(variantContent, audioPath);
-    }, [resolveVariantContent]);
 
     const navigateBackToList = useCallback(() => {
         if (navigation.canGoBack()) {
@@ -2179,7 +2070,7 @@ export const NoteEditScreen = () => {
                 setActiveVariantId('original');
                 activeVariantIdRef.current = 'original';
                 syncVisibleTitle(existingNote?.title || '');
-                syncVisibleContent(existingNote?.content || '');
+                syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
                 // Set parent as active
                 await setActiveVariant(localNoteId, null);
             }
@@ -2237,20 +2128,125 @@ export const NoteEditScreen = () => {
         setReparseTrigger(prev => prev + 1);
     };
 
-    const loadAudio = async (path: string) => {
+    const resolveAudioUri = useCallback(async (path: string): Promise<string | null> => {
         try {
-            const uri = await AudioService.readAudioFile(path);
-            setAudioUri(uri);
+            return await AudioService.readAudioFile(path);
         } catch (error: any) {
-            // Check for file not found error (ENOENT or specific message)
             if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
                 console.log('[Audio] File not found (deleted?):', path);
-                showToast && showToast('Audio file not found');
+                showToast('Audio file not found');
             } else {
                 console.error('Failed to load audio:', error);
             }
+            return null;
         }
-    };
+    }, []);
+
+    const clearRecordingsPreview = useCallback(() => {
+        setRecordingsPreviewUri(null);
+        setRecordingsPreviewDuration(0);
+        setPlayingRecordingId(null);
+    }, []);
+
+    const closeRecordingsList = useCallback(() => {
+        clearRecordingsPreview();
+        setShowRecordingsList(false);
+    }, [clearRecordingsPreview]);
+
+    const handlePreviewRecording = useCallback(async (recording: VoiceRecording) => {
+        if (playingRecordingId === recording.id && recordingsPreviewUri) {
+            clearRecordingsPreview();
+            return;
+        }
+
+        setPlayingRecordingId(recording.id);
+        const uri = await resolveAudioUri(recording.file_path);
+        if (!uri) {
+            setPlayingRecordingId(null);
+            return;
+        }
+
+        setRecordingsPreviewUri(uri);
+        setRecordingsPreviewDuration(recording.duration);
+    }, [clearRecordingsPreview, playingRecordingId, recordingsPreviewUri, resolveAudioUri]);
+
+    const handleAttachRecordingToNote = useCallback(async (recording: VoiceRecording) => {
+        const noteId = localNoteIdRef.current;
+        if (!noteId) {
+            return;
+        }
+
+        const uri = await resolveAudioUri(recording.file_path);
+        if (!uri) {
+            return;
+        }
+
+        setAttachedAudioPath(recording.file_path);
+        setAudioUri(uri);
+        setAudioDuration(recording.duration);
+        setShowAudioPlayer(true);
+
+        await updateNote(noteId, {
+            audio_file_path: recording.file_path,
+            audio_duration: recording.duration,
+            has_audio: true,
+        });
+        showToast('Player added to note');
+    }, [resolveAudioUri, showToast, updateNote]);
+
+    const handleRemoveNoteAudioPlayer = useCallback(async () => {
+        const noteId = localNoteIdRef.current;
+
+        setAttachedAudioPath(null);
+        setAudioUri(null);
+        setAudioDuration(0);
+        setShowAudioPlayer(false);
+
+        if (!noteId) {
+            return;
+        }
+
+        await updateNote(noteId, {
+            audio_file_path: '',
+            audio_duration: 0,
+            has_audio: voiceRecordingsRef.current.length > 0,
+        });
+        showToast('Player removed from note');
+    }, [showToast, updateNote]);
+
+    useEffect(() => {
+        const attachedPath = (existingNote?.audio_file_path || '').trim();
+
+        if (!attachedPath) {
+            setAttachedAudioPath(null);
+            setAudioUri(null);
+            setAudioDuration(0);
+            setShowAudioPlayer(false);
+            return;
+        }
+
+        if (attachedAudioPath === attachedPath && audioUri) {
+            setAudioDuration(existingNote?.audio_duration || 0);
+            setShowAudioPlayer(true);
+            return;
+        }
+
+        let cancelled = false;
+        void (async () => {
+            const uri = await resolveAudioUri(attachedPath);
+            if (!uri || cancelled) {
+                return;
+            }
+            setAttachedAudioPath(attachedPath);
+            setAudioUri(uri);
+            setAudioDuration(existingNote?.audio_duration || 0);
+            setShowAudioPlayer(true);
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [attachedAudioPath, audioUri, existingNote?.audio_duration, existingNote?.audio_file_path, resolveAudioUri]);
 
     const saveImprovementDraft = useCallback(async () => {
         if (activeVariantId === 'original' || !localNoteId) {
@@ -2403,7 +2399,7 @@ export const NoteEditScreen = () => {
                         });
                         // Update "last saved" to the LATEST values we just pushed
                         lastSavedTitle.current = latestTitle;
-                        lastSavedContent.current = latestContent;
+                        lastSavedContent.current = stripAudioEmbedsFromRichContent(latestContent);
                         // Return here so we don't overwrite lastSaved with stale closure values below
                         return;
                     }
@@ -2412,7 +2408,7 @@ export const NoteEditScreen = () => {
                 }
             }
             lastSavedTitle.current = currentTitle;
-            lastSavedContent.current = currentContent;
+            lastSavedContent.current = stripAudioEmbedsFromRichContent(currentContent);
         } catch (error) {
             console.error('Failed to save note:', error);
         } finally {
@@ -2453,22 +2449,23 @@ export const NoteEditScreen = () => {
     }, [debouncedSave]);
 
     const handleContentChange = useCallback((text: string) => {
+        const sanitizedText = stripAudioEmbedsFromRichContent(text);
         const variantId = activeVariantIdRef.current;
         const currentTitle = currentTitleRef.current;
 
-        stageOriginalCreationAutoScale(variantId, text);
-        setContent(text);
-        currentContentRef.current = text;
+        stageOriginalCreationAutoScale(variantId, sanitizedText);
+        setContent(sanitizedText);
+        currentContentRef.current = sanitizedText;
 
         if (variantId !== 'original') {
-            improvementDraftsRef.current[variantId] = text;
+            improvementDraftsRef.current[variantId] = sanitizedText;
         }
 
         if (localNoteIdRef.current) {
-            debouncedSave(text, currentTitle);
+            debouncedSave(sanitizedText, currentTitle);
         }
 
-        updateHistory(currentTitle, text, variantId);
+        updateHistory(currentTitle, sanitizedText, variantId);
     }, [debouncedSave, stageOriginalCreationAutoScale]);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
@@ -2493,8 +2490,10 @@ export const NoteEditScreen = () => {
         // Initialize history for new variant if needed
         if (!variantHistories.current[variantId]) {
             const content = variantId === 'original'
-                ? existingNote?.content || ''
-                : improvementDraftsRef.current[variantId] || noteImprovements.find(i => i.id === variantId)?.content || '';
+                ? stripAudioEmbedsFromRichContent(existingNote?.content || '')
+                : stripAudioEmbedsFromRichContent(
+                    improvementDraftsRef.current[variantId] || noteImprovements.find(i => i.id === variantId)?.content || ''
+                );
             const variantTitle = variantId === 'original'
                 ? existingNote?.title || ''
                 : resolveImprovementVariantTitle(variantId);
@@ -2510,15 +2509,15 @@ export const NoteEditScreen = () => {
         optimisticActiveVariant.current = variantId;
         if (variantId === 'original') {
             syncVisibleTitle(existingNote?.title || '');
-            syncVisibleContent(existingNote?.content || '');
+            syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
         } else {
             syncVisibleTitle(resolveImprovementVariantTitle(variantId));
             const draft = improvementDraftsRef.current[variantId];
             if (draft !== undefined) {
-                syncVisibleContent(draft);
+                syncVisibleContent(stripAudioEmbedsFromRichContent(draft));
             } else {
                 const imp = noteImprovements.find(i => i.id === variantId);
-                syncVisibleContent(imp?.content || '');
+                syncVisibleContent(stripAudioEmbedsFromRichContent(imp?.content || ''));
             }
         }
         setReparseTrigger(prev => prev + 1);
@@ -3337,7 +3336,6 @@ export const NoteEditScreen = () => {
             const shouldUseAgentModeForThisRecording =
                 micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
-            const shouldAutoInsertAudioPlayer = !transcribe;
             if (isUserTranscriptionRestricted && shouldTranscribe) {
                 // Anonymous users can't transcribe; keep audio flow intact.
                 shouldTranscribe = false;
@@ -3442,18 +3440,13 @@ export const NoteEditScreen = () => {
                         content: currentContentRef.current,
                         storage_scope: storageScope,
                         privacy,
-                        audio: {
-                            filePath: savedPath,
-                            duration: recording.duration,
-                            transcription: transcribedText
-                        }
                     });
                     setLocalNoteId(newNote.id);
                     localNoteIdRef.current = newNote.id;
                     syncTrackedProcessingToNote(newNote.id);
                     currentNoteId = newNote.id;
                     lastSavedTitle.current = currentTitleRef.current;
-                    lastSavedContent.current = currentContentRef.current;
+                    lastSavedContent.current = stripAudioEmbedsFromRichContent(currentContentRef.current);
                     await handleCreatedNoteAutoScale(newNote.id, currentContentRef.current);
                 } catch (e) {
                     console.error('Failed to create note for voice:', e);
@@ -3490,20 +3483,9 @@ export const NoteEditScreen = () => {
             await updateNote(currentNoteId, {
                 content: resolveOriginalNoteContentForPersistence(),
                 has_audio: true,
-                audio_file_path: savedPath, // Update "primary" audio path to latest
-                audio_duration: recording.duration,
                 ...(transcribedText ? { encrypted_transcription: transcribedText } : {})
             });
-
-            const playbackUri = await AudioService.readAudioFile(savedPath);
-            setAudioUri(playbackUri);
-            setAudioDuration(recording.duration);
-            setShowAudioPlayer(!isTranscriptionSuccess);
-            setPlayingRecordingId(!isTranscriptionSuccess ? voiceId : null);
-
-            if (targetVariantId === 'original' && shouldAutoInsertAudioPlayer) {
-                await applyAudioPlayerToVariant('original', savedPath);
-            }
+            setPlayingRecordingId(null);
 
             // 4. STOP IF NO TEXT
             if (!isTranscriptionSuccess) {
@@ -3663,16 +3645,6 @@ export const NoteEditScreen = () => {
         setShowRecordingTextModal(true);
     };
 
-    const handleInsertRecordingAudioPlayer = useCallback(async (recording: VoiceRecording) => {
-        const targetVariant = activeVariantIdRef.current;
-        const inserted = await applyAudioPlayerToVariant(targetVariant, recording.file_path);
-        if (!inserted) {
-            return;
-        }
-
-        setRecordingOutcomeStatus(recording.id, 'Inserted audio player');
-    }, [applyAudioPlayerToVariant, setRecordingOutcomeStatus]);
-
     const handleInsertSelectedRecordingText = useCallback(async () => {
         const selected = selectedRecordingForText;
         const recognizedText = selected?.transcription?.trim() || '';
@@ -3801,7 +3773,7 @@ export const NoteEditScreen = () => {
                 localNoteIdRef.current = newNote.id;
                 syncTrackedProcessingToNote(newNote.id);
                 lastSavedTitle.current = title;
-                lastSavedContent.current = content;
+                lastSavedContent.current = stripAudioEmbedsFromRichContent(content);
                 await handleCreatedNoteAutoScale(newNote.id, content);
             } else if (variantAtRequestStart === 'original') {
                 await saveNote();
@@ -4222,46 +4194,42 @@ export const NoteEditScreen = () => {
             setShowRecordingTextModal(false);
         }
 
-        // 1. Close player if playing deleted file OR if no recordings left
+        const notePlayerMatchesDeletedPath = attachedAudioPath === path;
+
+        // 1. Close attached note player / recordings preview if they point to the deleted file
         if (remaining.length === 0) {
+            setAttachedAudioPath(null);
             setShowAudioPlayer(false);
             setAudioUri(null);
-            setPlayingRecordingId(null);
+            setAudioDuration(0);
+            clearRecordingsPreview();
+        } else if (notePlayerMatchesDeletedPath) {
+            setAttachedAudioPath(null);
+            setShowAudioPlayer(false);
+            setAudioUri(null);
+            setAudioDuration(0);
         } else if (playingRecordingId === id) {
-            // Precise match via ID
-            setShowAudioPlayer(false);
-            setAudioUri(null);
-            setPlayingRecordingId(null);
-        } else if (audioUri && (audioUri.includes(path) || path.includes(audioUri))) {
-            // Fallback fuzzy match
-            setShowAudioPlayer(false);
-            setAudioUri(null);
-            setPlayingRecordingId(null);
+            clearRecordingsPreview();
+        } else if (recordingsPreviewUri && (recordingsPreviewUri.includes(path) || path.includes(recordingsPreviewUri))) {
+            clearRecordingsPreview();
         }
 
-        // 2. Remove the specific audio markdown tag from content
-        // Check if we can use the Editor's native block removal (Proper Solution)
-        if (editMode === 'visual' && editorRef.current) {
-            console.log('[NoteEditScreen] Removing audio block via Editor API');
-            editorRef.current.removeAudioBlock(path);
-            // NOTE: Editor will trigger onChange -> handleContentChange -> setContent & debouncedSave
-        } else {
-            // Fallback: Raw String Manipulation (for Raw Mode or if Ref missing)
-            const targetVariantId = activeVariantIdRef.current;
-            const currentContent = currentContentRef.current;
-            const newContent = removeAudioFromRichContent(currentContent, path);
-            await setVariantContentWithOptions(targetVariantId, newContent, {
-                persist: true,
-                updateHistory: false,
-            });
-
-            // Trigger reparse just in case if we switch back to visual
-            setReparseTrigger(prev => prev + 1);
-        }
+        const targetVariantId = activeVariantIdRef.current;
+        const currentContent = resolveVariantContent(targetVariantId);
+        const newContent = removeAudioFromRichContent(currentContent, path);
+        await setVariantContentWithOptions(targetVariantId, newContent, {
+            persist: true,
+            updateHistory: false,
+        });
+        setReparseTrigger(prev => prev + 1);
 
         // 3. Update DB state if no recordings left
         if (remaining.length === 0 && localNoteId) {
-            await updateNote(localNoteId, { has_audio: false });
+            await updateNote(localNoteId, {
+                has_audio: false,
+                audio_file_path: '',
+                audio_duration: 0,
+            });
 
             // 4. Auto-delete check (Deferred to handleBack)
             const latestContent = currentContentRef.current;
@@ -4270,6 +4238,13 @@ export const NoteEditScreen = () => {
                 console.log('[AutoClean] Note came empty after deleting last audio. Will be auto-deleted on exit if left empty.');
             }
         } else {
+            if (localNoteId && notePlayerMatchesDeletedPath) {
+                await updateNote(localNoteId, {
+                    audio_file_path: '',
+                    audio_duration: 0,
+                    has_audio: true,
+                });
+            }
             const latestContent = currentContentRef.current;
             updateHistory(title, latestContent);
             debouncedSave(latestContent, title);
@@ -4300,7 +4275,9 @@ export const NoteEditScreen = () => {
                 showAudioPlayer={showAudioPlayer}
                 audioUri={audioUri}
                 audioDuration={audioDuration || 0}
-                onClose={() => setShowAudioPlayer(false)}
+                onClose={() => {
+                    void handleRemoveNoteAudioPlayer();
+                }}
             />
         </View>
     ), [
@@ -4310,6 +4287,7 @@ export const NoteEditScreen = () => {
         charCount,
         confirmDeleteImprovement,
         dateStr,
+        handleRemoveNoteAudioPlayer,
         handleTitleChange,
         handleVariantSelect,
         noteImprovements,
@@ -4815,7 +4793,6 @@ export const NoteEditScreen = () => {
                             onChange={(text: string) => {
                                 handleContentChange(text);
                             }}
-                            onRemoveAudioBlock={handleRemoveEmbeddedAudioBlock}
                             onPlainTextChange={setVisualPlainText}
                             onActiveStylesChange={setActiveFormats}
                             onFocus={() => {
@@ -5003,23 +4980,20 @@ export const NoteEditScreen = () => {
                 visible={showRecordingsList}
                 transparent
                 animationType="slide"
-                onRequestClose={() => setShowRecordingsList(false)}
+                onRequestClose={closeRecordingsList}
             >
-                <TouchableWithoutFeedback onPress={() => setShowRecordingsList(false)}>
+                <TouchableWithoutFeedback onPress={closeRecordingsList}>
                     <GestureHandlerRootView style={styles.modalOverlay}>
                         <TouchableWithoutFeedback>
                             <View style={styles.aiModalContent}>
                                 <Text style={styles.aiModalTitle}>Voice Recordings</Text>
 
-                                {showAudioPlayer && !!audioUri && (
+                                {!!recordingsPreviewUri && (
                                     <View style={{ marginBottom: spacing.m }}>
                                         <AudioPlayer
-                                            audioUri={audioUri as string}
-                                            duration={audioDuration}
-                                            onClose={() => {
-                                                setShowAudioPlayer(false);
-                                                setPlayingRecordingId(null);
-                                            }}
+                                            audioUri={recordingsPreviewUri}
+                                            duration={recordingsPreviewDuration}
+                                            onClose={clearRecordingsPreview}
                                         />
                                     </View>
                                 )}
@@ -5032,8 +5006,10 @@ export const NoteEditScreen = () => {
                                     ) : (
                                         voiceRecordings.map((rec) => {
                                             const isPlaying = playingRecordingId === rec.id;
+                                            const isAttachedToNote =
+                                                attachedAudioPath === rec.file_path
+                                                || existingNote?.audio_file_path === rec.file_path;
                                             const hasRecognizedText = !!rec.transcription?.trim();
-                                            const hasAudioPlayerInCurrentVariant = isAudioAlreadyInsertedInCurrentVariant(rec.file_path);
                                             // Decoupled from transcriptionEnabled per user request
                                             const canTranscribeThisRecording = true;
                                             const isAnyTranscribing = !!transcribingRecordingId;
@@ -5050,18 +5026,8 @@ export const NoteEditScreen = () => {
                                                             borderWidth: 1
                                                         }
                                                     ]}
-                                                    onPress={async () => {
-                                                        setPlayingRecordingId(rec.id);
-
-                                                        try {
-                                                            const uri = await AudioService.readAudioFile(rec.file_path);
-                                                            setAudioUri(uri);
-                                                            setAudioDuration(rec.duration);
-                                                            setShowAudioPlayer(true);
-                                                        } catch (e) {
-                                                            console.error('Failed to play audio:', e);
-                                                            setPlayingRecordingId(null);
-                                                        }
+                                                    onPress={() => {
+                                                        void handlePreviewRecording(rec);
                                                     }}
                                                 >
                                                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
@@ -5087,14 +5053,16 @@ export const NoteEditScreen = () => {
 
                                                         <View style={styles.recordingCompactActions}>
                                                             <TouchableOpacity
-                                                                style={[styles.recordingActionChip, hasAudioPlayerInCurrentVariant && styles.recordingActionDisabled]}
-                                                                disabled={hasAudioPlayerInCurrentVariant}
+                                                                style={[styles.recordingActionChip, isAttachedToNote && styles.recordingActionDisabled]}
+                                                                disabled={isAttachedToNote}
                                                                 onPress={() => {
-                                                                    void handleInsertRecordingAudioPlayer(rec);
+                                                                    void handleAttachRecordingToNote(rec);
                                                                 }}
                                                             >
-                                                                <MaterialIcons name="headset" size={14} color={hasAudioPlayerInCurrentVariant ? colors.textMuted : colors.primary} />
-                                                                <Text style={[styles.recordingActionChipText, hasAudioPlayerInCurrentVariant && { color: colors.textMuted }]}>Insert</Text>
+                                                                <MaterialIcons name="add" size={14} color={isAttachedToNote ? colors.textMuted : colors.primary} />
+                                                                <Text style={[styles.recordingActionChipText, isAttachedToNote && { color: colors.textMuted }]}>
+                                                                    {isAttachedToNote ? 'In note' : 'Add'}
+                                                                </Text>
                                                             </TouchableOpacity>
 
                                                             {canTranscribeThisRecording && !hasRecognizedText && (

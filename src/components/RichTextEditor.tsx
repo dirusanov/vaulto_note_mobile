@@ -28,15 +28,10 @@ import {
     countChecklistItems,
     resolveChecklistScaleFactor,
 } from '../utils/checklistScale';
-import {
-    removeAudioFromTiptapDocument,
-    tiptapDocumentToHtml,
-} from '../utils/tiptapMarkdownAdapter';
 
 interface RichTextEditorProps {
     initialContent: string;
     onChange: (text: string) => void;
-    onRemoveAudioBlock?: (audioPath: string) => void;
     onPlainTextChange?: (text: string) => void;
     onSelectionChange?: (selection: { start: number; end: number }) => void;
     onActiveStylesChange?: (styles: MarkdownFormatType[]) => void;
@@ -54,7 +49,6 @@ interface RichTextEditorProps {
 export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
     focusBlockAt: (lineIndex: number, ratio?: number) => void;
-    removeAudioBlock: (audioPath: string) => void;
     setContent: (content: string) => void;
     flushPendingChanges: () => Promise<string>;
     blur: () => void;
@@ -89,6 +83,19 @@ const injectEditorCssIntoSource = (sourceHtml: string, css: string): string => {
     }
 
     return `${inlineStyleTag}${sourceHtml}`;
+};
+
+const resolveEditorPlaceholder = (sourceHtml: string, placeholder?: string): string => {
+    if (!placeholder) {
+        return '';
+    }
+
+    const normalizedHtml = (sourceHtml || '')
+        .replace(/<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '')
+        .replace(/<div>(?:\s|&nbsp;|<br\s*\/?>)*<\/div>/gi, '')
+        .trim();
+
+    return normalizedHtml.length === 0 ? placeholder : '';
 };
 
 const getChecklistCss = (baseFontSize: number, checklistScaleFactor: number) => {
@@ -219,199 +226,137 @@ const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
     min-height: ${baseLineHeight}px;
   }
 
-  .ProseMirror ul[data-type="taskList"] p.is-editor-empty:first-child::before {
+  /* Hide placeholder on empty checklist items */
+  .ProseMirror ul[data-type="taskList"] *::before,
+  .ProseMirror ul[data-type="taskList"]::before,
+  .ProseMirror ul[data-type="taskList"].is-editor-empty::before,
+  .ProseMirror ul[data-type="taskList"].is-empty::before,
+  .ProseMirror ul[data-type="taskList"] .is-editor-empty::before,
+  .ProseMirror ul[data-type="taskList"] .is-empty::before,
+  .ProseMirror ul[data-type="taskList"] [data-placeholder]::before {
     content: none !important;
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
   }
 
   ${getChecklistCss(baseFontSize, checklistScaleFactor)}
 `;
 };
 
-const AUDIO_PREVIEW_TITLE_PREFIX = 'vaulto-audio:';
-const AUDIO_PREVIEW_REMOVE_MESSAGE_TYPE = 'vaulto-audio-preview-remove';
+const TASK_ITEM_REFOCUS_MESSAGE_TYPE = 'vaulto-task-item-refocus';
 
-const getAudioPreviewEnhancementJs = () => `
+const getTaskItemRefocusJs = () => `
 (() => {
-  const MESSAGE_TYPE = ${JSON.stringify(AUDIO_PREVIEW_REMOVE_MESSAGE_TYPE)};
-  const TITLE_PREFIX = ${JSON.stringify(AUDIO_PREVIEW_TITLE_PREFIX)};
-  const OVERLAY_ID = 'vaulto-audio-preview-overlay';
+  const MESSAGE_TYPE = ${JSON.stringify(TASK_ITEM_REFOCUS_MESSAGE_TYPE)};
+  const INSTALL_FLAG = '__vaultoTaskItemRefocusInstalled';
+  const TASK_ITEM_SELECTOR = 'li[data-type="taskItem"]';
 
-  const decodeAudioPath = (title) => {
-    if (!title || !title.startsWith(TITLE_PREFIX)) {
-      return '';
-    }
-
-    const encoded = title.slice(TITLE_PREFIX.length);
-    try {
-      return decodeURIComponent(encoded);
-    } catch (_error) {
-      return encoded;
-    }
-  };
-
-  const getOverlay = () => {
-    let overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) {
-      return overlay;
-    }
-
-    overlay = document.createElement('div');
-    overlay.id = OVERLAY_ID;
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.pointerEvents = 'none';
-    overlay.style.zIndex = '2147483646';
-    document.body.appendChild(overlay);
-    return overlay;
-  };
-
-  const ensureButton = (overlay, audioKey, audioPath) => {
-    let button = overlay.querySelector('button[data-audio-key="' + audioKey + '"]');
-    if (button instanceof HTMLButtonElement) {
-      button.dataset.audioPath = audioPath;
-      return button;
-    }
-
-    button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = '×';
-    button.dataset.audioKey = audioKey;
-    button.dataset.audioPath = audioPath;
-    button.setAttribute('aria-label', 'Remove audio attachment');
-    button.setAttribute('contenteditable', 'false');
-    button.style.position = 'fixed';
-    button.style.width = '28px';
-    button.style.height = '28px';
-    button.style.display = 'none';
-    button.style.alignItems = 'center';
-    button.style.justifyContent = 'center';
-    button.style.border = 'none';
-    button.style.borderRadius = '999px';
-    button.style.background = '#ffffff';
-    button.style.color = '#203047';
-    button.style.boxShadow = '0 8px 24px rgba(15, 23, 42, 0.18)';
-    button.style.fontSize = '20px';
-    button.style.fontWeight = '700';
-    button.style.lineHeight = '1';
-    button.style.cursor = 'pointer';
-    button.style.pointerEvents = 'auto';
-    button.style.padding = '0';
-    overlay.appendChild(button);
-    return button;
-  };
-
-  const syncButtons = () => {
-    const overlay = getOverlay();
-    const activeKeys = new Set();
-    const previews = document.querySelectorAll('.ProseMirror img[alt="audio-preview"]');
-
-    previews.forEach((preview) => {
-      if (!(preview instanceof HTMLImageElement)) {
-        return;
-      }
-
-      const audioPath = decodeAudioPath(preview.getAttribute('title') || '');
-      if (!audioPath) {
-        return;
-      }
-
-      const audioKey = encodeURIComponent(audioPath);
-      activeKeys.add(audioKey);
-      const button = ensureButton(overlay, audioKey, audioPath);
-      const rect = preview.getBoundingClientRect();
-      const isVisible =
-        rect.width > 0 &&
-        rect.height > 0 &&
-        rect.bottom > 0 &&
-        rect.right > 0 &&
-        rect.top < window.innerHeight &&
-        rect.left < window.innerWidth;
-
-      if (!isVisible) {
-        button.style.display = 'none';
-        return;
-      }
-
-      button.style.display = 'flex';
-      button.style.left = Math.max(8, Math.min(window.innerWidth - 36, rect.right - 34)) + 'px';
-      button.style.top = Math.max(8, rect.top + 10) + 'px';
-    });
-
-    Array.from(overlay.querySelectorAll('button[data-audio-key]')).forEach((button) => {
-      if (!(button instanceof HTMLButtonElement)) {
-        return;
-      }
-      if (!activeKeys.has(button.dataset.audioKey || '')) {
-        button.remove();
-      }
-    });
-  };
-
-  const scheduleSync = () => {
-    const previousFrame = window.__vaultoAudioPreviewSyncFrame;
-    if (typeof previousFrame === 'number') {
-      window.cancelAnimationFrame(previousFrame);
-    }
-
-    window.__vaultoAudioPreviewSyncFrame = window.requestAnimationFrame(() => {
-      syncButtons();
-    });
-  };
-
-  if (!window.__vaultoAudioPreviewEnhancerInstalled) {
-    window.__vaultoAudioPreviewEnhancerInstalled = true;
-
-    document.addEventListener('mousedown', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      if (target.closest('#' + OVERLAY_ID + ' button[data-audio-key]')) {
-        event.preventDefault();
-      }
-    }, true);
-
-    document.addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-
-      const button = target.closest('#' + OVERLAY_ID + ' button[data-audio-key]');
-      if (!(button instanceof HTMLButtonElement)) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const audioPath = button.dataset.audioPath || '';
-      if (!audioPath) {
-        return;
-      }
-
-      window.ReactNativeWebView?.postMessage(JSON.stringify({
-        type: MESSAGE_TYPE,
-        payload: { audioPath },
-      }));
-    }, true);
-
-    document.addEventListener('scroll', scheduleSync, true);
-    window.addEventListener('resize', scheduleSync);
-
-    const observer = new MutationObserver(() => {
-      scheduleSync();
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['src', 'title', 'style', 'class'],
-    });
+  if (window[INSTALL_FLAG]) {
+    return true;
   }
 
-  window.__vaultoAudioPreviewSync = scheduleSync;
-  scheduleSync();
+  window[INSTALL_FLAG] = true;
+
+  const postRefocusMessage = () => {
+    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: MESSAGE_TYPE }));
+  };
+
+  const resolveSelectionContext = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0);
+    const anchorNode = range.startContainer;
+    const anchorElement = anchorNode instanceof Element ? anchorNode : anchorNode.parentElement;
+
+    if (!(anchorElement instanceof Element)) {
+      return null;
+    }
+
+    const taskItem = anchorElement.closest(TASK_ITEM_SELECTOR);
+    if (!(taskItem instanceof HTMLElement)) {
+      return null;
+    }
+
+    const contentRoot = Array.from(taskItem.children).find(
+      (child) => child instanceof HTMLDivElement
+    ) || taskItem.querySelector('div');
+    if (!(contentRoot instanceof HTMLElement)) {
+      return null;
+    }
+
+    if (!contentRoot.contains(anchorNode) && !contentRoot.contains(anchorElement)) {
+      return null;
+    }
+
+    return { range, contentRoot };
+  };
+
+  const isAtStartOfTaskItem = () => {
+    const context = resolveSelectionContext();
+    if (!context) {
+      return false;
+    }
+
+    const prefixRange = context.range.cloneRange();
+    prefixRange.selectNodeContents(context.contentRoot);
+    prefixRange.setEnd(context.range.startContainer, context.range.startOffset);
+
+    const prefixText = prefixRange.toString()
+      .replace(/\\u200B/g, '')
+      .replace(/\\n/g, '')
+      .replace(/\\r/g, '');
+
+    return prefixText.length === 0;
+  };
+
+  let refocusTimer = null;
+
+  const scheduleRefocus = () => {
+    if (refocusTimer) {
+      window.clearTimeout(refocusTimer);
+    }
+
+    refocusTimer = window.setTimeout(() => {
+      refocusTimer = null;
+      postRefocusMessage();
+    }, 24);
+  };
+
+  const maybeScheduleRefocus = () => {
+    if (!isAtStartOfTaskItem()) {
+      return;
+    }
+
+    scheduleRefocus();
+  };
+
+  document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented || event.key !== 'Backspace') {
+      return;
+    }
+
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    maybeScheduleRefocus();
+  }, true);
+
+  document.addEventListener('beforeinput', (event) => {
+    if (typeof InputEvent === 'undefined' || !(event instanceof InputEvent)) {
+      return;
+    }
+
+    if (event.defaultPrevented || event.inputType !== 'deleteContentBackward') {
+      return;
+    }
+
+    maybeScheduleRefocus();
+  }, true);
 })();
 true;
 `;
@@ -420,7 +365,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const {
         initialContent,
         onChange,
-        onRemoveAudioBlock,
         onPlainTextChange,
         onSelectionChange,
         onActiveStylesChange,
@@ -434,22 +378,22 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         showToolbar = false,
     } = props;
 
-    const audioPreviewBridge = useMemo(() => (
+    const taskItemRefocusBridge = useMemo(() => (
         new BridgeExtension({
-            forceName: 'vaultoAudioPreviewBridge',
-            onEditorMessage: (message: { type?: string; payload?: { audioPath?: string } }) => {
-                if (message.type !== AUDIO_PREVIEW_REMOVE_MESSAGE_TYPE) {
+            forceName: 'vaultoTaskItemRefocusBridge',
+            onEditorMessage: (message: { type?: string }, editorBridge) => {
+                if (message.type !== TASK_ITEM_REFOCUS_MESSAGE_TYPE) {
                     return false;
                 }
 
-                const audioPath = message.payload?.audioPath;
-                if (typeof audioPath === 'string' && audioPath.trim()) {
-                    onRemoveAudioBlock?.(audioPath);
-                }
+                setTimeout(() => {
+                    editorBridge.focus(undefined);
+                }, 30);
+
                 return true;
             },
         })
-    ), [onRemoveAudioBlock]);
+    ), []);
 
     const initialEditorHtml = useMemo(() => richContentToEditorHtml(initialContent), []);
     const bridgeInitialContent = useMemo(() => richContentToEditorHtml(initialContent), [initialContent]);
@@ -474,9 +418,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         [
             ...TenTapStartKit.filter((extension) => extension.name !== TaskListBridge.name),
             TaskListBridge.configureCSS(initialTaskListCssRef.current || ''),
-            audioPreviewBridge,
+            taskItemRefocusBridge,
         ]
-    ), [audioPreviewBridge]);
+    ), [taskItemRefocusBridge]);
     const editorTheme = useMemo(() => ({
         webview: {
             backgroundColor: colors.background,
@@ -521,7 +465,10 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 ? resolveChecklistScaleFactor(countChecklistItems(checklistSourceHtml), true)
                 : 1)
     ), [autoScalingEnabled, checklistSourceHtml, lockedChecklistScaleFactor]);
-
+    const resolvedPlaceholder = useMemo(
+        () => resolveEditorPlaceholder(checklistSourceHtml, placeholder),
+        [checklistSourceHtml, placeholder]
+    );
     const editorApi = editor as typeof editor & {
         setPlaceholder?: (value: string) => void;
         injectCSS?: (css: string, tag?: string) => void;
@@ -580,13 +527,13 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             return;
         }
 
-        editorApi.setPlaceholder?.(placeholder || '');
+        editorApi.setPlaceholder?.(resolvedPlaceholder);
         editorApi.injectCSS?.(
             getEditorCss(baseFontSize, checklistScaleFactor),
             'vaulto-editor-minimal-css'
         );
-        editorApi.injectJS?.(getAudioPreviewEnhancementJs());
-    }, [baseFontSize, checklistScaleFactor, editorApi, editorState.isReady, placeholder]);
+        editorApi.injectJS?.(getTaskItemRefocusJs());
+    }, [baseFontSize, checklistScaleFactor, editorApi, editorState.isReady, resolvedPlaceholder]);
 
     useEffect(() => {
         if (!editorState.isReady) {
@@ -767,13 +714,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             }
 
             editor.focus('end');
-        },
-        removeAudioBlock: async (audioPath: string) => {
-            const currentDocument = await editor.getJSON();
-            const nextDocument = removeAudioFromTiptapDocument(currentDocument, audioPath);
-            const nextHtml = normalizeRichHighlightColors(tiptapDocumentToHtml(nextDocument));
-            applyProgrammaticContent(nextHtml);
-            onChange(nextHtml);
         },
         setContent: (content: string) => {
             applyProgrammaticContent(content);

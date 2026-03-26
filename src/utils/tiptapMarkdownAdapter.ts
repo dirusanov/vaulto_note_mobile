@@ -216,7 +216,7 @@ const inlineNodesToMarkdown = (nodes?: TiptapNode[]): string => {
         if (node.type === 'image') {
             const audioPath = getImageTitleValue(node, AUDIO_TITLE_PREFIX);
             if (audioPath) {
-                return `![audio](${audioPath})`;
+                return '';
             }
 
             const processingText = getImageTitleValue(node, PROCESSING_TITLE_PREFIX);
@@ -399,7 +399,7 @@ const serializeBlockNode = (node: TiptapNode, orderedStart = 1): string[] => {
         case 'image': {
             const audioPath = getImageTitleValue(node, AUDIO_TITLE_PREFIX);
             if (audioPath) {
-                return [`![audio](${audioPath})`];
+                return [];
             }
 
             const processingText = getImageTitleValue(node, PROCESSING_TITLE_PREFIX);
@@ -549,7 +549,6 @@ export const markdownToTiptapDocument = (markdown: string): TiptapDocument => {
         const header1Match = line.match(/^#\s+(.*)$/);
 
         if (audioMatch) {
-            content.push(buildPreviewImageNode(AUDIO_PREVIEW_DATA_URI, AUDIO_TITLE_PREFIX, audioMatch[1], 'audio-preview'));
             index += 1;
             continue;
         }
