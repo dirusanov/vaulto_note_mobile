@@ -214,6 +214,7 @@ const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
   }
 
   .ProseMirror {
+    box-sizing: border-box;
     min-height: 100%;
     padding: 0 0 72px;
     outline: none;

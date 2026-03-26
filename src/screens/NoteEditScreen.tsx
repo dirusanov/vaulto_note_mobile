@@ -124,6 +124,11 @@ const appendSnippetToContent = (base: string, snippet: string): string => {
     return appendPlainTextSnippetToRichContent(base, snippet);
 };
 
+const normalizeAttachedAudioPath = (value?: string | null): string | null => {
+    const normalized = (value || '').trim();
+    return normalized.length > 0 ? normalized : null;
+};
+
 const deriveTitleFromText = (text: string): string => {
     const cleaned = (text || '')
         .replace(/!\[audio\]\([^)]+\)/g, ' ')
@@ -734,6 +739,7 @@ export const NoteEditScreen = () => {
     const [audioUri, setAudioUri] = useState<string | null>(null);
     const [audioDuration, setAudioDuration] = useState<number>(0);
     const [attachedAudioPath, setAttachedAudioPath] = useState<string | null>(null);
+    const [pendingAttachedAudioPath, setPendingAttachedAudioPath] = useState<string | null | undefined>(undefined);
     const [recordingsPreviewUri, setRecordingsPreviewUri] = useState<string | null>(null);
     const [recordingsPreviewDuration, setRecordingsPreviewDuration] = useState<number>(0);
     const [isTranscribing, setIsTranscribingState] = useState(false);
@@ -1256,6 +1262,7 @@ export const NoteEditScreen = () => {
         setAudioUri(null);
         setAudioDuration(0);
         setAttachedAudioPath(null);
+        setPendingAttachedAudioPath(undefined);
         setShowAudioPlayer(false);
         setRecordingsPreviewUri(null);
         setRecordingsPreviewDuration(0);
@@ -2176,27 +2183,46 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        const uri = await resolveAudioUri(recording.file_path);
+        const nextAttachedPath = normalizeAttachedAudioPath(recording.file_path);
+        if (!nextAttachedPath) {
+            return;
+        }
+
+        const uri = await resolveAudioUri(nextAttachedPath);
         if (!uri) {
             return;
         }
 
-        setAttachedAudioPath(recording.file_path);
+        setPendingAttachedAudioPath(nextAttachedPath);
+        setAttachedAudioPath(nextAttachedPath);
         setAudioUri(uri);
         setAudioDuration(recording.duration);
         setShowAudioPlayer(true);
 
-        await updateNote(noteId, {
-            audio_file_path: recording.file_path,
-            audio_duration: recording.duration,
-            has_audio: true,
-        });
-        showToast('Player added to note');
-    }, [resolveAudioUri, showToast, updateNote]);
+        try {
+            await updateNote(noteId, {
+                audio_file_path: nextAttachedPath,
+                audio_duration: recording.duration,
+                has_audio: true,
+            });
+            showToast('Player added to note');
+        } catch (error) {
+            console.error('Failed to attach recording to note:', error);
+            setPendingAttachedAudioPath(undefined);
+            setAttachedAudioPath(normalizeAttachedAudioPath(existingNote?.audio_file_path));
+            setAudioUri(null);
+            setAudioDuration(0);
+            setShowAudioPlayer(false);
+        }
+    }, [existingNote?.audio_file_path, resolveAudioUri, showToast, updateNote]);
 
     const handleRemoveNoteAudioPlayer = useCallback(async () => {
         const noteId = localNoteIdRef.current;
+        const previousAttachedPath = attachedAudioPath;
+        const previousDuration = audioDuration;
+        const previousUri = audioUri;
 
+        setPendingAttachedAudioPath(null);
         setAttachedAudioPath(null);
         setAudioUri(null);
         setAudioDuration(0);
@@ -2206,16 +2232,27 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        await updateNote(noteId, {
-            audio_file_path: '',
-            audio_duration: 0,
-            has_audio: voiceRecordingsRef.current.length > 0,
-        });
-        showToast('Player removed from note');
-    }, [showToast, updateNote]);
+        try {
+            await updateNote(noteId, {
+                audio_file_path: '',
+                audio_duration: 0,
+                has_audio: voiceRecordingsRef.current.length > 0,
+            });
+            showToast('Player removed from note');
+        } catch (error) {
+            console.error('Failed to remove note audio player:', error);
+            setPendingAttachedAudioPath(undefined);
+            setAttachedAudioPath(previousAttachedPath);
+            setAudioUri(previousUri);
+            setAudioDuration(previousDuration);
+            setShowAudioPlayer(!!previousAttachedPath && !!previousUri);
+        }
+    }, [attachedAudioPath, audioDuration, audioUri, showToast, updateNote]);
 
     useEffect(() => {
-        const attachedPath = (existingNote?.audio_file_path || '').trim();
+        const attachedPath = pendingAttachedAudioPath !== undefined
+            ? pendingAttachedAudioPath
+            : normalizeAttachedAudioPath(existingNote?.audio_file_path);
 
         if (!attachedPath) {
             setAttachedAudioPath(null);
@@ -2246,7 +2283,18 @@ export const NoteEditScreen = () => {
         return () => {
             cancelled = true;
         };
-    }, [attachedAudioPath, audioUri, existingNote?.audio_duration, existingNote?.audio_file_path, resolveAudioUri]);
+    }, [attachedAudioPath, audioUri, existingNote?.audio_duration, existingNote?.audio_file_path, pendingAttachedAudioPath, resolveAudioUri]);
+
+    useEffect(() => {
+        if (pendingAttachedAudioPath === undefined) {
+            return;
+        }
+
+        const persistedAttachedPath = normalizeAttachedAudioPath(existingNote?.audio_file_path);
+        if (persistedAttachedPath === pendingAttachedAudioPath) {
+            setPendingAttachedAudioPath(undefined);
+        }
+    }, [existingNote?.audio_file_path, pendingAttachedAudioPath]);
 
     const saveImprovementDraft = useCallback(async () => {
         if (activeVariantId === 'original' || !localNoteId) {
@@ -4198,12 +4246,14 @@ export const NoteEditScreen = () => {
 
         // 1. Close attached note player / recordings preview if they point to the deleted file
         if (remaining.length === 0) {
+            setPendingAttachedAudioPath(null);
             setAttachedAudioPath(null);
             setShowAudioPlayer(false);
             setAudioUri(null);
             setAudioDuration(0);
             clearRecordingsPreview();
         } else if (notePlayerMatchesDeletedPath) {
+            setPendingAttachedAudioPath(null);
             setAttachedAudioPath(null);
             setShowAudioPlayer(false);
             setAudioUri(null);

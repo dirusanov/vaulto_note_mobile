@@ -51,8 +51,6 @@ export const stripAudioEmbedsFromRichContent = (content: string): string => {
     if (isRichHtmlContent(next)) {
         next = next
             .replace(AUDIO_PREVIEW_IMAGE_REGEX, '')
-            .replace(/<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '')
-            .replace(/<div>(\s|&nbsp;|<br\s*\/?>)*<\/div>/gi, '')
             .trim();
         return next || '<p></p>';
     }
@@ -168,8 +166,6 @@ export const removeAudioFromRichContent = (content: string, audioPath: string): 
 
     if (isRichHtmlContent(next)) {
         next = next
-            .replace(/<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '')
-            .replace(/<div>(\s|&nbsp;|<br\s*\/?>)*<\/div>/gi, '')
             .trim();
         return next || '<p></p>';
     }
