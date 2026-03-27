@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.50] - 2026-03-27
+
+### Added
+- **Inline Voice Players**: Voice recordings can now be inserted directly into note content as embedded audio blocks in both visual and raw editing flows.
+
+### Fixed
+- **Done Button Editing UX**: Tapping the top-right checkmark now properly ends editing by removing focus, hiding the keyboard, and clearing the cursor state.
+- **Audio Embed Cleanup**: Deleting a voice recording now removes its embedded references from note variants and local editor history.
+
 ## [1.0.49] - 2026-03-25
 
 ### Changed
