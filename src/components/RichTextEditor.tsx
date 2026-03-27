@@ -20,6 +20,7 @@ import {
 } from '@10play/tentap-editor';
 import { colors } from '../theme/colors';
 import { MarkdownFormatType, MarkdownToolbar } from './MarkdownToolbar';
+import { InsertAudioEmbedPayload, AudioEmbedBridge } from './richTextAudioBridge';
 import {
     normalizeRichHighlightColors,
     richContentToEditorHtml,
@@ -44,12 +45,14 @@ interface RichTextEditorProps {
     autoScalingEnabled?: boolean;
     lockedChecklistScaleFactor?: number | null;
     showToolbar?: boolean;
+    audioSourceMap?: Record<string, string | null | undefined>;
 }
 
 export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
     focusBlockAt: (lineIndex: number, ratio?: number) => void;
     setContent: (content: string) => void;
+    insertAudioEmbed: (payload: InsertAudioEmbedPayload) => void;
     flushPendingChanges: () => Promise<string>;
     blur: () => void;
 }
@@ -377,6 +380,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         autoScalingEnabled = true,
         lockedChecklistScaleFactor = null,
         showToolbar = false,
+        audioSourceMap,
     } = props;
 
     const taskItemRefocusBridge = useMemo(() => (
@@ -396,8 +400,12 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         })
     ), []);
 
-    const initialEditorHtml = useMemo(() => richContentToEditorHtml(initialContent), []);
-    const bridgeInitialContent = useMemo(() => richContentToEditorHtml(initialContent), [initialContent]);
+    const renderedExternalHtml = useMemo(
+        () => richContentToEditorHtml(initialContent, audioSourceMap),
+        [audioSourceMap, initialContent]
+    );
+    const initialEditorHtmlRef = useRef(renderedExternalHtml);
+    const bridgeInitialContent = renderedExternalHtml;
     const contentChecklistScaleFactor = useMemo(() => (
         lockedChecklistScaleFactor
             ?? (autoScalingEnabled
@@ -420,6 +428,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             ...TenTapStartKit.filter((extension) => extension.name !== TaskListBridge.name),
             TaskListBridge.configureCSS(initialTaskListCssRef.current || ''),
             taskItemRefocusBridge,
+            AudioEmbedBridge,
         ]
     ), [taskItemRefocusBridge]);
     const editorTheme = useMemo(() => ({
@@ -451,8 +460,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     });
 
     const lastExternalContentRef = useRef(initialContent);
-    const lastHtmlRef = useRef(initialEditorHtml);
-    const latestHtmlRef = useRef(initialEditorHtml);
+    const lastHtmlRef = useRef(initialEditorHtmlRef.current);
+    const latestHtmlRef = useRef(initialEditorHtmlRef.current);
+    const lastReparseTriggerRef = useRef(reparseTrigger);
     const pendingProgrammaticHtmlRef = useRef<string | null>(null);
     const pendingFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFocusedRef = useRef(false);
@@ -474,10 +484,11 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         setPlaceholder?: (value: string) => void;
         injectCSS?: (css: string, tag?: string) => void;
         injectJS?: (js: string) => void;
+        insertAudioEmbed?: (payload: InsertAudioEmbedPayload) => void;
     };
 
-    const applyProgrammaticContent = (content: string) => {
-        const nextHtml = richContentToEditorHtml(content);
+    const applyProgrammaticContent = (content: string, nextHtmlOverride?: string) => {
+        const nextHtml = nextHtmlOverride ?? richContentToEditorHtml(content, audioSourceMap);
 
         if (nextHtml === lastHtmlRef.current) {
             lastExternalContentRef.current = content;
@@ -510,13 +521,11 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 pendingProgrammaticHtmlRef.current = null;
             }
             lastHtmlRef.current = nextHtml;
-            lastExternalContentRef.current = nextHtml;
             return nextHtml;
         }
 
         if (nextHtml !== lastHtmlRef.current) {
             lastHtmlRef.current = nextHtml;
-            lastExternalContentRef.current = nextHtml;
             onChange(nextHtml);
         }
 
@@ -559,7 +568,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             }
 
             lastHtmlRef.current = nextHtml;
-            lastExternalContentRef.current = nextHtml;
             onChange(nextHtml);
         };
 
@@ -603,12 +611,17 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             return;
         }
 
-        if (initialContent === lastExternalContentRef.current) {
+        const reparseChanged = reparseTrigger !== lastReparseTriggerRef.current;
+        const contentChanged = initialContent !== lastExternalContentRef.current;
+        const renderedHtmlChanged = renderedExternalHtml !== lastHtmlRef.current;
+
+        if (!reparseChanged && !contentChanged && !renderedHtmlChanged) {
             return;
         }
 
-        applyProgrammaticContent(initialContent);
-    }, [editorState.isReady, initialContent, reparseTrigger]);
+        lastReparseTriggerRef.current = reparseTrigger;
+        applyProgrammaticContent(initialContent, renderedExternalHtml);
+    }, [audioSourceMap, editorState.isReady, initialContent, renderedExternalHtml, reparseTrigger]);
 
     useEffect(() => {
         if (!onActiveStylesChange) {
@@ -719,11 +732,14 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         setContent: (content: string) => {
             applyProgrammaticContent(content);
         },
+        insertAudioEmbed: (payload: InsertAudioEmbedPayload) => {
+            editorApi.insertAudioEmbed?.(payload);
+        },
         flushPendingChanges: () => flushPendingContent(),
         blur: () => {
             editor.blur();
         },
-    }), [applyFormat, editor, onChange]);
+    }), [applyFormat, editor, editorApi]);
 
     return (
         <View style={styles.editorShell}>
@@ -771,7 +787,8 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.autoScalingEnabled === next.autoScalingEnabled &&
     prev.lockedChecklistScaleFactor === next.lockedChecklistScaleFactor &&
     prev.placeholder === next.placeholder &&
-    prev.initialContent === next.initialContent
+    prev.initialContent === next.initialContent &&
+    prev.audioSourceMap === next.audioSourceMap
 ));
 
 const styles = StyleSheet.create({

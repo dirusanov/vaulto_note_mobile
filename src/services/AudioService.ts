@@ -296,7 +296,7 @@ class AudioServiceClass {
     /**
      * Read and decrypt audio file
      */
-    async readAudioFile(uri: string): Promise<string> {
+    async readAudioFile(uri: string, tempPrefix: string = 'temp'): Promise<string> {
         if (Platform.OS === 'web') return uri;
         try {
             // Read encrypted data
@@ -313,7 +313,8 @@ class AudioServiceClass {
             if (!cacheDir) {
                 throw new Error('No cache directory available for audio playback');
             }
-            const tempUri = `${cacheDir}temp_${Date.now()}.m4a`;
+            const sanitizedPrefix = (tempPrefix || 'temp').replace(/[^a-z0-9_-]/gi, '') || 'temp';
+            const tempUri = `${cacheDir}${sanitizedPrefix}_${Date.now()}.m4a`;
             await FileSystem.writeAsStringAsync(tempUri, decryptedData, {
                 encoding: 'base64',
             });
@@ -375,7 +376,7 @@ class AudioServiceClass {
     /**
      * Clean up old temporary files
      */
-    async cleanupTempFiles(): Promise<void> {
+    async cleanupTempFiles(prefixes: string[] = ['temp']): Promise<void> {
         if (Platform.OS === 'web') return;
         try {
             // @ts-ignore
@@ -383,7 +384,13 @@ class AudioServiceClass {
             if (!cacheDir) return;
 
             const files = await FileSystem.readDirectoryAsync(cacheDir);
-            const tempAudioFiles = files.filter(f => f.startsWith('temp_') && f.endsWith('.m4a'));
+            const normalizedPrefixes = prefixes
+                .map((prefix) => (prefix || '').replace(/[^a-z0-9_-]/gi, ''))
+                .filter(Boolean);
+            const tempAudioFiles = files.filter((file) => (
+                file.endsWith('.m4a')
+                && normalizedPrefixes.some((prefix) => file.startsWith(`${prefix}_`))
+            ));
 
             for (const file of tempAudioFiles) {
                 const uri = `${cacheDir}${file}`;

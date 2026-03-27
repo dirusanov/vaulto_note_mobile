@@ -1,10 +1,15 @@
 import { stripMarkdownSyntax } from './markdownUtils';
 import { normalizeHighlightColorForCss } from './highlightColors';
 import { markdownToTiptapHtml } from './tiptapMarkdownAdapter';
+import {
+    applyAudioSourceMapToHtml,
+    extractAudioEmbedPaths,
+    hasAudioEmbeds,
+    removeAudioEmbedFromContent,
+    stripTransientAudioEmbedState,
+} from './audioEmbeds';
 
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
-const AUDIO_MARKDOWN_TAG_REGEX = /\s*!\[audio\]\([^)]+\)\s*/gi;
-const AUDIO_PREVIEW_IMAGE_REGEX = /<img\b[^>]*(?:alt=(["'])audio-preview\1|title=(["'])vaulto-audio:[^"']*\2)[^>]*>/gi;
 
 const escapeHtml = (text: string): string =>
     text
@@ -23,36 +28,15 @@ const decodeHtmlEntities = (text: string): string =>
         .replace(/&quot;/gi, '"')
         .replace(/&#39;/gi, "'");
 
-const stripAudioMarkdownTag = (content: string, audioPath: string): string => {
-    const filename = audioPath.split('/').pop();
-    const escapedPath = audioPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escapedFilename = filename
-        ? filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        : null;
-
-    const exactPathRegex = new RegExp(`\\s*!\\[audio\\]\\(${escapedPath}\\)\\s*`, 'g');
-    let next = content.replace(exactPathRegex, ' ');
-
-    if (escapedFilename) {
-        const filenameRegex = new RegExp(`\\s*!\\[audio\\]\\([^)]*${escapedFilename}\\)\\s*`, 'g');
-        next = next.replace(filenameRegex, ' ');
-    }
-
-    return next;
-};
-
 export const stripAudioEmbedsFromRichContent = (content: string): string => {
     if (!content) {
         return '';
     }
 
-    let next = content.replace(AUDIO_MARKDOWN_TAG_REGEX, ' ');
+    const next = stripTransientAudioEmbedState(content);
 
     if (isRichHtmlContent(next)) {
-        next = next
-            .replace(AUDIO_PREVIEW_IMAGE_REGEX, '')
-            .trim();
-        return next || '<p></p>';
+        return next.trim() || '<p></p>';
     }
 
     return next.replace(/\n{3,}/g, '\n\n').trim();
@@ -76,7 +60,10 @@ export const normalizeRichHighlightColors = (content: string): string =>
         return nextTag;
     });
 
-export const richContentToEditorHtml = (content: string): string => {
+export const richContentToEditorHtml = (
+    content: string,
+    audioSourceMap?: Record<string, string | null | undefined>
+): string => {
     const sanitizedContent = stripAudioEmbedsFromRichContent(content);
 
     if (!sanitizedContent || sanitizedContent === '<p></p>') {
@@ -84,10 +71,10 @@ export const richContentToEditorHtml = (content: string): string => {
     }
 
     if (isRichHtmlContent(sanitizedContent)) {
-        return normalizeRichHighlightColors(sanitizedContent);
+        return normalizeRichHighlightColors(applyAudioSourceMapToHtml(sanitizedContent, audioSourceMap));
     }
 
-    return markdownToTiptapHtml(sanitizedContent);
+    return applyAudioSourceMapToHtml(markdownToTiptapHtml(sanitizedContent), audioSourceMap);
 };
 
 export const richContentToPlainText = (content: string): string => {
@@ -99,6 +86,7 @@ export const richContentToPlainText = (content: string): string => {
 
     if (isRichHtmlContent(normalized)) {
         normalized = normalized
+            .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, '\n')
             .replace(/<style[\s\S]*?<\/style>/gi, '')
             .replace(/<script[\s\S]*?<\/script>/gi, '')
             .replace(/<br\s*\/?>/gi, '\n')
@@ -109,7 +97,7 @@ export const richContentToPlainText = (content: string): string => {
         normalized = decodeHtmlEntities(normalized);
     }
 
-    return stripMarkdownSyntax(normalized)
+    return stripMarkdownSyntax(normalized.replace(/!\[audio\]\([^)]+\)/gi, ' '))
         .replace(/\u00a0/g, ' ')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
@@ -126,7 +114,7 @@ export const hasMeaningfulRichContent = (content: string): boolean => {
         return true;
     }
 
-    return /<img\b/i.test(sanitizedContent);
+    return /<img\b/i.test(sanitizedContent) || hasAudioEmbeds(sanitizedContent);
 };
 
 export const appendPlainTextSnippetToRichContent = (base: string, snippet: string): string => {
@@ -158,17 +146,8 @@ export const appendPlainTextSnippetToRichContent = (base: string, snippet: strin
 };
 
 export const removeAudioFromRichContent = (content: string, audioPath: string): string => {
-    if (!content) {
-        return '';
-    }
-
-    let next = stripAudioMarkdownTag(content, audioPath);
-
-    if (isRichHtmlContent(next)) {
-        next = next
-            .trim();
-        return next || '<p></p>';
-    }
-
-    return next.replace(/\n{3,}/g, '\n\n').trim();
+    return removeAudioEmbedFromContent(content, audioPath);
 };
+
+export const extractEmbeddedAudioPaths = (content: string): string[] =>
+    extractAudioEmbedPaths(stripAudioEmbedsFromRichContent(content));
