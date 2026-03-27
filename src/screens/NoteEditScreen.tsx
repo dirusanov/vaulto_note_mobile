@@ -236,8 +236,19 @@ const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'upda
     return action === 'created' ? 'Created improved view' : 'Updated Improved';
 };
 
-const HeaderTitle = memo(({ title, onChange, onFocus }: { title: string; onChange: (t: string) => void; onFocus: () => void }) => (
+const HeaderTitle = memo(({
+    title,
+    onChange,
+    onFocus,
+    inputRef,
+}: {
+    title: string;
+    onChange: (t: string) => void;
+    onFocus: () => void;
+    inputRef?: React.RefObject<TextInput | null>;
+}) => (
     <TextInput
+        ref={inputRef}
         style={styles.titleInput}
         placeholder="Title"
         placeholderTextColor={colors.textMuted}
@@ -1063,6 +1074,8 @@ export const NoteEditScreen = () => {
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
     const editorRef = useRef<RichTextEditorHandle>(null);
+    const titleInputRef = useRef<TextInput>(null);
+    const rawEditorRef = useRef<TextInput>(null);
     const keyboardVisibleRef = useRef(false);
     const visualEditorFocusedRef = useRef(false);
     const visualKeyboardHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3729,10 +3742,15 @@ export const NoteEditScreen = () => {
     }, []);
 
     const handleCheckPress = () => {
+        titleInputRef.current?.blur();
+        rawEditorRef.current?.blur();
+        editorRef.current?.blur();
+        visualEditorFocusedRef.current = false;
+        setIsColorPickerVisible(false);
         Keyboard.dismiss();
-        setIsEditing(false); // Go to Preview Mode
+        setIsEditing(false);
         setReparseTrigger(prev => prev + 1);
-        saveNote();
+        void saveNote();
     };
 
     const handleAIImprovement = async (option: AIImprovementOption) => {
@@ -4307,6 +4325,7 @@ export const NoteEditScreen = () => {
                 title={title}
                 onChange={handleTitleChange}
                 onFocus={() => setIsEditing(true)}
+                inputRef={titleInputRef}
             />
 
             <HeaderMeta
@@ -4809,6 +4828,7 @@ export const NoteEditScreen = () => {
                     ) : editMode === 'raw' ? (
                         // Raw Markdown Editor
                         <TextInput
+                            ref={rawEditorRef}
                             style={[
                                 styles.rawInput,
                                 {
