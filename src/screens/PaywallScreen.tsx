@@ -17,6 +17,16 @@ export const PaywallScreen = () => {
         return planMinutes > maxMinutes ? planMinutes : maxMinutes;
     }, 500);
 
+    const monthlyPack = packages.find(p => p.identifier.toLowerCase().includes('monthly'));
+    const yearlyPack = packages.find(p => p.identifier.toLowerCase().includes('annual') || p.identifier.toLowerCase().includes('yearly'));
+    let savingsPercentage = 0;
+    if (monthlyPack && yearlyPack && monthlyPack.product.price > 0 && yearlyPack.product.price > 0) {
+        const monthlyCostForYear = monthlyPack.product.price * 12;
+        if (yearlyPack.product.price < monthlyCostForYear) {
+            savingsPercentage = Math.round((1 - (yearlyPack.product.price / monthlyCostForYear)) * 100);
+        }
+    }
+
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
             Alert.alert('Sign in required', 'Create an account to purchase Pro.');
@@ -70,11 +80,11 @@ export const PaywallScreen = () => {
                                             ? 'Monthly Plan'
                                             : pack.identifier
                                 );
+                                
                                 const price = product.priceString;
-                                const isBestValue = pack.identifier.toLowerCase().includes('annual');
-                                const minutesLabel = backendPlan?.transcription_minutes
-                                    ? `${backendPlan.transcription_minutes} Vaulto AI minutes / month`
-                                    : null;
+                                const isBestValue = pack.identifier.toLowerCase().includes('annual') || pack.identifier.toLowerCase().includes('yearly');
+                                const minutesToDisplay = backendPlan?.transcription_minutes || transcriptionMinutes;
+                                const minutesLabel = minutesToDisplay ? `${minutesToDisplay} Vaulto AI minutes / month` : null;
 
                                 return (
                                     <TouchableOpacity
@@ -86,7 +96,18 @@ export const PaywallScreen = () => {
                                     >
                                         <View style={styles.planHeader}>
                                             <Text style={[styles.planTitle, isBestValue && styles.planTitleBest]}>{title}</Text>
-                                            {isBestValue && <View style={styles.badge}><Text style={styles.badgeText}>BEST VALUE</Text></View>}
+                                            <View style={styles.badgesContainer}>
+                                                {isBestValue && savingsPercentage > 0 && (
+                                                    <View style={[styles.badge, styles.savingsBadge]}>
+                                                        <Text style={styles.badgeText}>SAVE {savingsPercentage}%</Text>
+                                                    </View>
+                                                )}
+                                                {isBestValue && (
+                                                    <View style={styles.badge}>
+                                                        <Text style={styles.badgeText}>BEST VALUE</Text>
+                                                    </View>
+                                                )}
+                                            </View>
                                         </View>
                                         <Text style={[styles.planPrice, isBestValue && styles.planPriceBest]}>{price}</Text>
                                         {minutesLabel ? (
@@ -247,11 +268,19 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontWeight: '700',
     },
+    badgesContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
     badge: {
         backgroundColor: colors.primary,
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 6,
+    },
+    savingsBadge: {
+        backgroundColor: '#10B981',
     },
     badgeText: {
         color: '#fff',
