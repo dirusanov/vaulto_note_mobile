@@ -10,6 +10,8 @@ import {
 } from './audioEmbeds';
 
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
+const TASK_ITEM_HTML_REGEX = /<li\b[^>]*data-type=(["'])taskItem\1/i;
+const EMPTY_CHECKLIST_MARKDOWN_REGEX = /(?:^|\n)\s*-\s\[(?: |x|X)\]\s*(?=\n|$)/;
 
 const escapeHtml = (text: string): string =>
     text
@@ -111,6 +113,10 @@ export const hasMeaningfulRichContent = (content: string): boolean => {
     }
 
     if (richContentToPlainText(sanitizedContent).trim().length > 0) {
+        return true;
+    }
+
+    if (TASK_ITEM_HTML_REGEX.test(sanitizedContent) || EMPTY_CHECKLIST_MARKDOWN_REGEX.test(sanitizedContent)) {
         return true;
     }
 

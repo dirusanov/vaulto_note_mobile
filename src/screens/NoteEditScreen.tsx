@@ -522,11 +522,17 @@ export const NoteEditScreen = () => {
     const [localNoteId, setLocalNoteId] = useState(routeNoteId);
     const localNoteIdRef = useRef(localNoteId);
     const pendingRouteNoteSyncRef = useRef<string | null | undefined>(routeNoteId);
+    const createdDraftNoteIdRef = useRef<string | null>(null);
 
 
     useEffect(() => {
         localNoteIdRef.current = localNoteId;
     }, [localNoteId]);
+
+    const bindCreatedDraftToRoute = useCallback((noteId: string) => {
+        createdDraftNoteIdRef.current = noteId;
+        navigation.setParams({ noteId });
+    }, [navigation]);
 
     // Voice Recordings
     const [voiceRecordings, setVoiceRecordings] = useState<VoiceRecording[]>([]);
@@ -1237,6 +1243,18 @@ export const NoteEditScreen = () => {
         return latestContent;
     }, [activeVariantId, editMode]);
 
+    const prepareEditorSnapshotForExit = useCallback(async () => {
+        titleInputRef.current?.blur();
+        rawEditorRef.current?.blur();
+        editorRef.current?.blur();
+        visualEditorFocusedRef.current = false;
+        Keyboard.dismiss();
+        await new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 32);
+        });
+        await flushVisualEditorContent();
+    }, [flushVisualEditorContent]);
+
     const resolveNoteViewState = useCallback((note?: Note | null) => {
         if (!note) {
             return {
@@ -1265,6 +1283,14 @@ export const NoteEditScreen = () => {
     }, []);
 
     useLayoutEffect(() => {
+        if (
+            !routeNoteId &&
+            createdDraftNoteIdRef.current &&
+            localNoteIdRef.current === createdDraftNoteIdRef.current
+        ) {
+            return;
+        }
+
         if (routeNoteId === localNoteIdRef.current) {
             return;
         }
@@ -2406,9 +2432,9 @@ export const NoteEditScreen = () => {
         // Correct source of truth for audio presence is the current list of recordings
         const hasAudio = voiceRecordingsRef.current.length > 0;
         const hasImprovements = noteImprovements.length > 0;
-        const emptyText = !currentTitle.trim() && !currentContent.trim();
+        const isContentEmpty = !currentTitle.trim() && !hasMeaningfulRichContent(currentContent);
 
-        if (emptyText && !hasAudio && !hasImprovements) {
+        if (isContentEmpty && !hasAudio && !hasImprovements) {
             if (noteId) {
                 try {
                     await deleteNote(noteId);
@@ -2463,6 +2489,7 @@ export const NoteEditScreen = () => {
                         setLocalNoteId(newNote.id);
                         localNoteIdRef.current = newNote.id; // Immediate ref update for other async flows
                         syncTrackedProcessingToNote(newNote.id);
+                        bindCreatedDraftToRoute(newNote.id);
                     }
 
                     await handleCreatedNoteAutoScale(newNote.id, currentContent);
@@ -2500,12 +2527,13 @@ export const NoteEditScreen = () => {
             lastSavedContent.current = stripAudioEmbedsFromRichContent(currentContent);
         } catch (error) {
             console.error('Failed to save note:', error);
+            throw error;
         } finally {
             if (isMounted.current) {
                 setIsSaving(false);
             }
         }
-    }, [createNote, deleteNote, flushVisualEditorContent, handleCreatedNoteAutoScale, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
+    }, [bindCreatedDraftToRoute, createNote, deleteNote, flushVisualEditorContent, handleCreatedNoteAutoScale, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
 
     useEffect(() => {
         saveNoteRef.current = saveNote;
@@ -2514,7 +2542,9 @@ export const NoteEditScreen = () => {
     const debouncedSave = useCallback((_newContent: string, _newTitle: string) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
-            void saveNoteRef.current?.();
+            saveNoteRef.current?.().catch(error => {
+                console.error('Failed during debounced auto-save:', error);
+            });
         }, 500); // Reduced from 2000ms to 500ms for faster auto-save
     }, []);
 
@@ -2620,10 +2650,9 @@ export const NoteEditScreen = () => {
             }
 
             event.preventDefault();
-            Keyboard.dismiss();
 
             const saveAndExit = async () => {
-                await flushVisualEditorContent();
+                await prepareEditorSnapshotForExit();
 
                 const latestTitle = currentTitleRef.current;
                 const latestContent = currentContentRef.current;
@@ -2666,7 +2695,7 @@ export const NoteEditScreen = () => {
         });
 
         return unsubscribe;
-    }, [clearAgentSessionState, flushVisualEditorContent, navigation, resolveImprovementVariantTitle, saveNote]);
+    }, [clearAgentSessionState, navigation, prepareEditorSnapshotForExit, resolveImprovementVariantTitle, saveNote]);
 
     useFocusEffect(
         useCallback(() => {
@@ -2704,8 +2733,7 @@ export const NoteEditScreen = () => {
     }, [clearAgentSessionState, saveNote]);
 
     const handleBack = async () => {
-        Keyboard.dismiss();
-        await flushVisualEditorContent();
+        await prepareEditorSnapshotForExit();
 
         // Check if note is effectively empty
         const isViewingOriginal = activeVariantIdRef.current === 'original';
@@ -3533,6 +3561,7 @@ export const NoteEditScreen = () => {
                     setLocalNoteId(newNote.id);
                     localNoteIdRef.current = newNote.id;
                     syncTrackedProcessingToNote(newNote.id);
+                    bindCreatedDraftToRoute(newNote.id);
                     currentNoteId = newNote.id;
                     lastSavedTitle.current = currentTitleRef.current;
                     lastSavedContent.current = stripAudioEmbedsFromRichContent(currentContentRef.current);
@@ -3769,17 +3798,16 @@ export const NoteEditScreen = () => {
         editorRef.current?.handleFormat(type);
     }, []);
 
-    const handleCheckPress = () => {
-        titleInputRef.current?.blur();
-        rawEditorRef.current?.blur();
-        editorRef.current?.blur();
-        visualEditorFocusedRef.current = false;
+    const handleCheckPress = useCallback(() => {
         setIsColorPickerVisible(false);
-        Keyboard.dismiss();
         setIsEditing(false);
-        setReparseTrigger(prev => prev + 1);
-        void saveNote();
-    };
+
+        prepareEditorSnapshotForExit()
+            .then(() => saveNote())
+            .catch(error => {
+                console.error('Error during manual save:', error);
+            });
+    }, [prepareEditorSnapshotForExit, saveNote]);
 
     const handleAIImprovement = async (option: AIImprovementOption) => {
         setShowAIModal(false);
@@ -3866,6 +3894,7 @@ export const NoteEditScreen = () => {
                 setLocalNoteId(newNote.id);
                 localNoteIdRef.current = newNote.id;
                 syncTrackedProcessingToNote(newNote.id);
+                bindCreatedDraftToRoute(newNote.id);
                 lastSavedTitle.current = title;
                 lastSavedContent.current = stripAudioEmbedsFromRichContent(content);
                 await handleCreatedNoteAutoScale(newNote.id, content);
@@ -4837,7 +4866,7 @@ export const NoteEditScreen = () => {
                 >
                     {editorHeader}
 
-                    {!appearanceReady || !noteViewReady || routeNoteId !== localNoteId ? (
+                    {!appearanceReady || !noteViewReady || (routeNoteId !== undefined && routeNoteId !== localNoteId) ? (
                         <View style={styles.editorLoading}>
                             <ActivityIndicator size="small" color={colors.primary} />
                         </View>
@@ -4871,7 +4900,6 @@ export const NoteEditScreen = () => {
                         />
                     ) : (
                         <RichTextEditor
-                            key={`note-editor:${localNoteId ?? 'new'}`}
                             ref={editorRef}
                             initialContent={content}
                             reparseTrigger={reparseTrigger}

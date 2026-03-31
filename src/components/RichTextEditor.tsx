@@ -1,6 +1,7 @@
 import React, {
     forwardRef,
     memo,
+    useCallback,
     useEffect,
     useImperativeHandle,
     useMemo,
@@ -25,6 +26,7 @@ import {
     normalizeRichHighlightColors,
     richContentToEditorHtml,
 } from '../utils/richContent';
+import { tiptapDocumentToHtml } from '../utils/tiptapMarkdownAdapter';
 import {
     countChecklistItems,
     resolveChecklistScaleFactor,
@@ -116,7 +118,9 @@ const getChecklistCss = (baseFontSize: number, checklistScaleFactor: number) => 
     return `
   .ProseMirror ul[data-type="taskList"] {
     list-style: none;
+    margin: 0;
     padding-left: 0.25rem;
+    max-width: 100%;
   }
 
   .ProseMirror ul[data-type="taskList"] li {
@@ -188,6 +192,7 @@ const getChecklistCss = (baseFontSize: number, checklistScaleFactor: number) => 
 
   .ProseMirror ul[data-type="taskList"] li > div {
     flex: 1 1 auto;
+    min-width: 0;
     font-size: inherit;
     line-height: inherit;
   }
@@ -207,6 +212,9 @@ const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
     margin: 0;
     padding: 0;
     background: ${colors.background};
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   body {
@@ -219,15 +227,34 @@ const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
   .ProseMirror {
     box-sizing: border-box;
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
     padding: 0 0 72px;
     outline: none;
     white-space: pre-wrap;
     word-break: break-word;
+    overflow-x: hidden;
   }
 
   .ProseMirror p {
     margin: 0;
     min-height: ${baseLineHeight}px;
+  }
+
+  .ProseMirror ul,
+  .ProseMirror ol {
+    margin: 0;
+    padding-left: 1.35rem;
+    max-width: 100%;
+  }
+
+  .ProseMirror li {
+    margin: 0;
+  }
+
+  .ProseMirror li > p {
+    margin: 0;
+    min-width: 0;
   }
 
   /* Hide placeholder on empty checklist items */
@@ -450,8 +477,8 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     });
 
     const editorState = useBridgeState(editor) as Record<string, any>;
-    const editorHtml = useEditorContent(editor, {
-        type: 'html',
+    const editorDocument = useEditorContent(editor, {
+        type: 'json',
         debounceInterval: 150,
     });
     const editorText = useEditorContent(editor, {
@@ -467,8 +494,24 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const pendingFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFocusedRef = useRef(false);
     const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
-    const checklistSourceHtml = typeof editorHtml === 'string'
-        ? normalizeRichHighlightColors(editorHtml)
+    const editorApi = editor as typeof editor & {
+        setPlaceholder?: (value: string) => void;
+        injectCSS?: (css: string, tag?: string) => void;
+        injectJS?: (js: string) => void;
+        insertAudioEmbed?: (payload: InsertAudioEmbedPayload) => void;
+    };
+    const buildCanonicalEditorHtml = useCallback((document: unknown): string => {
+        try {
+            return normalizeRichHighlightColors(tiptapDocumentToHtml(document));
+        } catch {
+            return '<p></p>';
+        }
+    }, []);
+    const currentEditorHtml = useMemo(() => (
+        editorDocument ? buildCanonicalEditorHtml(editorDocument) : bridgeInitialContent
+    ), [bridgeInitialContent, buildCanonicalEditorHtml, editorDocument]);
+    const checklistSourceHtml = typeof currentEditorHtml === 'string'
+        ? currentEditorHtml
         : bridgeInitialContent;
     const checklistScaleFactor = useMemo(() => (
         lockedChecklistScaleFactor
@@ -480,12 +523,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         () => resolveEditorPlaceholder(checklistSourceHtml, placeholder),
         [checklistSourceHtml, placeholder]
     );
-    const editorApi = editor as typeof editor & {
-        setPlaceholder?: (value: string) => void;
-        injectCSS?: (css: string, tag?: string) => void;
-        injectJS?: (js: string) => void;
-        insertAudioEmbed?: (payload: InsertAudioEmbedPayload) => void;
-    };
 
     const applyProgrammaticContent = (content: string, nextHtmlOverride?: string) => {
         const nextHtml = nextHtmlOverride ?? richContentToEditorHtml(content, audioSourceMap);
@@ -508,7 +545,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     };
 
     const flushPendingContent = async (): Promise<string> => {
-        const nextHtml = normalizeRichHighlightColors(await editor.getHTML());
+        const nextHtml = buildCanonicalEditorHtml(await editor.getJSON());
         latestHtmlRef.current = nextHtml;
 
         if (pendingFlushTimeoutRef.current) {
@@ -554,7 +591,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             let nextHtml = latestHtmlRef.current;
 
             if (forceRead) {
-                nextHtml = normalizeRichHighlightColors(await editor.getHTML());
+                nextHtml = buildCanonicalEditorHtml(await editor.getJSON());
                 latestHtmlRef.current = nextHtml;
             }
 
@@ -571,11 +608,11 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             onChange(nextHtml);
         };
 
-        if (!editorState.isReady || typeof editorHtml !== 'string') {
+        if (!editorState.isReady || typeof currentEditorHtml !== 'string') {
             return;
         }
 
-        const normalizedEditorHtml = normalizeRichHighlightColors(editorHtml);
+        const normalizedEditorHtml = currentEditorHtml;
         latestHtmlRef.current = normalizedEditorHtml;
         if (pendingProgrammaticHtmlRef.current !== null) {
             if (pendingProgrammaticHtmlRef.current === normalizedEditorHtml) {
@@ -604,7 +641,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 pendingFlushTimeoutRef.current = null;
             }
         };
-    }, [editor, editorHtml, editorState.isReady, onChange]);
+    }, [buildCanonicalEditorHtml, currentEditorHtml, editor, editorState.isReady, onChange]);
 
     useEffect(() => {
         if (!editorState.isReady) {

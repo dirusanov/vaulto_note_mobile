@@ -19,6 +19,7 @@ import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
 import { AudioService } from '../services/AudioService';
+import { hasMeaningfulRichContent } from '../utils/richContent';
 
 export interface NoteAudio {
     filePath: string;
@@ -150,10 +151,10 @@ export const useNotes = () => {
     const isEmptyNote = useCallback(
         (note: Partial<Note>) => {
             const plainTitle = (note.title || '').trim();
-            const plainContent = (note.content || '').trim();
+            const hasContent = hasMeaningfulRichContent(note.content || '');
             const hasAudio = !!note.has_audio || !!note.audio_file_path;
             const hasImprovements = note.improvements && note.improvements.length > 0;
-            return !plainTitle && !plainContent && !hasAudio && !hasImprovements;
+            return !plainTitle && !hasContent && !hasAudio && !hasImprovements;
         },
         [],
     );
@@ -476,7 +477,7 @@ export const useNotes = () => {
         const { title, content, audio, storage_scope, privacy } = data;
         const titleToUse = buildTitle(title);
         const contentToUse = content || '';
-        const isEmpty = !titleToUse.trim() && !contentToUse.trim() && !audio;
+        const isEmpty = !titleToUse.trim() && !hasMeaningfulRichContent(contentToUse) && !audio;
         if (isEmpty) {
             console.warn('[useNotes] Skipping creation of empty note');
             return Promise.reject(new Error('Cannot create empty note'));
@@ -565,7 +566,7 @@ export const useNotes = () => {
             }
 
             const hasImprovements = (existing.improvements?.length ?? 0) > 0;
-            const willBeEmpty = !titleToUse.trim() && !contentToUse.trim() && !hasAudio;
+            const willBeEmpty = !titleToUse.trim() && !hasMeaningfulRichContent(contentToUse) && !hasAudio;
             if (willBeEmpty && !hasImprovements) {
                 await deleteNote(id);
                 return existing;
