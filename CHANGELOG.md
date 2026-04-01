@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.51] - 2026-04-01
+
+### Changed
+- **Annual Plan Savings**: Added savings percentage calculation and display for the yearly paywall plan.
+
+### Fixed
+- **Visual Editor Checklist Persistence**: Fixed checklist notes not persisting reliably after edits in the visual editor.
+
 ## [1.0.50] - 2026-03-27
 
 ### Added
