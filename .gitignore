@@ -80,3 +80,7 @@ credentials.json
 
 # Kotlin
 .kotlin/
+
+# Codex
+.codex
+.codex/
