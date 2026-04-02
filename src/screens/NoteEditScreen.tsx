@@ -22,11 +22,13 @@ import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Audio } from 'expo-av';
 import { captureRef } from 'react-native-view-shot';
 import { GestureHandlerRootView, ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
+import { AudioEmbedControlPayload } from '../components/richTextAudioBridge';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -150,9 +152,20 @@ const insertBlockAtSelection = (
 };
 
 const normalizeAttachedAudioPath = (value?: string | null): string | null => {
-    const normalized = (value || '').trim();
-    return normalized.length > 0 ? normalized : null;
+    if (!value) return null;
+    let normalized = value.trim();
+    // Strip file:// prefix for matching only
+    normalized = normalized.replace(/^file:\/\/\/?/, '');
+    // Normalize slashes
+    normalized = normalized.replace(/\/+/g, '/');
+    // Ensure leading slash for absolute paths
+    if (!normalized.startsWith('/')) {
+        normalized = '/' + normalized;
+    }
+    return normalized;
 };
+
+
 
 const deriveTitleFromText = (text: string): string => {
     const cleaned = (text || '')
@@ -756,7 +769,6 @@ export const NoteEditScreen = () => {
     const [showPrivacyWarning, setShowPrivacyWarning] = useState(false);
     const [recordingsPreviewUri, setRecordingsPreviewUri] = useState<string | null>(null);
     const [recordingsPreviewDuration, setRecordingsPreviewDuration] = useState<number>(0);
-    const [audioEmbedSourceMap, setAudioEmbedSourceMap] = useState<Record<string, string>>({});
     const [isTranscribing, setIsTranscribingState] = useState(false);
     const [isRecordingFlowActive, setIsRecordingFlowActive] = useState(false);
 
@@ -764,6 +776,23 @@ export const NoteEditScreen = () => {
     const lastSavedContent = useRef(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
     const skipAutoSaveRef = useRef(false);
     const isMounted = useRef(true);
+    const inlineEditorAudioRef = useRef<{
+        path: string | null;
+        sound: Audio.Sound | null;
+        duration: number;
+        position: number;
+        isPlaying: boolean;
+        playbackSpeed: number;
+        isLoading: boolean;
+    }>({
+        path: null,
+        sound: null,
+        duration: 0,
+        position: 0,
+        isPlaying: false,
+        playbackSpeed: 1,
+        isLoading: false,
+    });
 
     const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
     const [transcribingRecordingId, setTranscribingRecordingId] = useState<string | null>(null);
@@ -876,6 +905,10 @@ export const NoteEditScreen = () => {
 
     useEffect(() => {
         return () => {
+            const activeSound = inlineEditorAudioRef.current.sound;
+            if (activeSound) {
+                void activeSound.unloadAsync();
+            }
             void AudioService.cleanupTempFiles(['embed']);
         };
     }, []);
@@ -1225,22 +1258,36 @@ export const NoteEditScreen = () => {
             return currentContentRef.current;
         }
 
-        const latestContent = await editorRef.current?.flushPendingChanges?.();
+        let latestContent: string | undefined;
+
+        try {
+            latestContent = await Promise.race([
+                Promise.resolve(editorRef.current?.flushPendingChanges?.()),
+                new Promise<string | undefined>((resolve) => {
+                    setTimeout(() => resolve(undefined), 900);
+                }),
+            ]);
+        } catch (error) {
+            console.error('Failed to flush visual editor content:', error);
+            return currentContentRef.current;
+        }
+
         if (typeof latestContent !== 'string') {
             return currentContentRef.current;
         }
 
-        currentContentRef.current = latestContent;
+        const sanitizedLatestContent = stripAudioEmbedsFromRichContent(latestContent);
+        currentContentRef.current = sanitizedLatestContent;
         if (activeVariantIdRef.current === 'original') {
-            setContent(latestContent);
+            setContent(sanitizedLatestContent);
         } else {
-            improvementDraftsRef.current[activeVariantIdRef.current] = latestContent;
+            improvementDraftsRef.current[activeVariantIdRef.current] = sanitizedLatestContent;
             if (activeVariantIdRef.current === activeVariantId) {
-                setContent(latestContent);
+                setContent(sanitizedLatestContent);
             }
         }
 
-        return latestContent;
+        return sanitizedLatestContent;
     }, [activeVariantId, editMode]);
 
     const prepareEditorSnapshotForExit = useCallback(async () => {
@@ -1303,7 +1350,6 @@ export const NoteEditScreen = () => {
         setLocalNoteId(routeNoteId);
         localNoteIdRef.current = routeNoteId;
         setVoiceRecordings([]);
-        setAudioEmbedSourceMap({});
         setRecordingsPreviewUri(null);
         setRecordingsPreviewDuration(0);
         setPlayingRecordingId(null);
@@ -2190,9 +2236,12 @@ export const NoteEditScreen = () => {
         setReparseTrigger(prev => prev + 1);
     };
 
-    const resolveAudioUri = useCallback(async (path: string): Promise<string | null> => {
+    const resolveAudioUri = useCallback(async (
+        path: string,
+        tempPrefix: string = 'temp'
+    ): Promise<string | null> => {
         try {
-            return await AudioService.readAudioFile(path);
+            return await AudioService.readAudioFile(path, tempPrefix);
         } catch (error: any) {
             if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
                 console.log('[Audio] File not found (deleted?):', path);
@@ -2204,24 +2253,98 @@ export const NoteEditScreen = () => {
         }
     }, []);
 
-    const resolveInlineAudioUri = useCallback(async (path: string): Promise<string | null> => {
-        try {
-            return await AudioService.readAudioFile(path, 'embed');
-        } catch (error: any) {
-            if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
-                console.log('[Audio] Inline file not found:', path);
-            } else {
-                console.error('Failed to load inline audio:', error);
-            }
-            return null;
-        }
-    }, []);
-
     const clearRecordingsPreview = useCallback(() => {
         setRecordingsPreviewUri(null);
         setRecordingsPreviewDuration(0);
         setPlayingRecordingId(null);
     }, []);
+
+    const renderInlineEditorAudioState = useCallback((payload: {
+        path: string;
+        duration?: number;
+        position?: number;
+        isPlaying?: boolean;
+        playbackSpeed?: number;
+        isLoading?: boolean;
+    }) => {
+        editorRef.current?.setAudioEmbedState({
+            path: payload.path,
+            duration: payload.duration ?? 0,
+            position: payload.position ?? 0,
+            isPlaying: payload.isPlaying ?? false,
+            playbackSpeed: payload.playbackSpeed ?? 1,
+            isLoading: payload.isLoading ?? false,
+        });
+    }, []);
+
+    const pushInlineEditorAudioState = useCallback(() => {
+        const controller = inlineEditorAudioRef.current;
+        if (!controller.path) {
+            return;
+        }
+
+        renderInlineEditorAudioState({
+            path: controller.path,
+            duration: controller.duration,
+            position: controller.position,
+            isPlaying: controller.isPlaying,
+            playbackSpeed: controller.playbackSpeed,
+            isLoading: controller.isLoading,
+        });
+    }, [renderInlineEditorAudioState]);
+
+    const resetInlineEditorAudioState = useCallback((path: string, duration: number = 0) => {
+        renderInlineEditorAudioState({
+            path,
+            duration,
+            position: 0,
+            isPlaying: false,
+            playbackSpeed: 1,
+            isLoading: false,
+        });
+    }, [renderInlineEditorAudioState]);
+
+    const clearInlineEditorAudio = useCallback(async () => {
+        const controller = inlineEditorAudioRef.current;
+        const previousPath = controller.path;
+        const previousDuration = controller.duration;
+        const previousSound = controller.sound;
+
+        controller.path = null;
+        controller.sound = null;
+        controller.duration = 0;
+        controller.position = 0;
+        controller.isPlaying = false;
+        controller.playbackSpeed = 1;
+        controller.isLoading = false;
+
+        if (previousSound) {
+            try {
+                await previousSound.unloadAsync();
+            } catch (error) {
+                console.warn('Failed to unload inline editor audio:', error);
+            }
+        }
+
+        if (previousPath) {
+            resetInlineEditorAudioState(previousPath, previousDuration);
+        }
+
+        void AudioService.cleanupTempFiles(['embed']);
+    }, [resetInlineEditorAudioState]);
+
+    const settleInlineEditorAudioForExit = useCallback(async () => {
+        try {
+            await Promise.race([
+                clearInlineEditorAudio(),
+                new Promise<void>((resolve) => {
+                    setTimeout(resolve, 500);
+                }),
+            ]);
+        } catch (error) {
+            console.warn('Failed to settle inline editor audio before exit:', error);
+        }
+    }, [clearInlineEditorAudio]);
 
     const closeRecordingsList = useCallback(() => {
         clearRecordingsPreview();
@@ -2229,6 +2352,8 @@ export const NoteEditScreen = () => {
     }, [clearRecordingsPreview]);
 
     const handlePreviewRecording = useCallback(async (recording: VoiceRecording) => {
+        await clearInlineEditorAudio();
+
         if (playingRecordingId === recording.id && recordingsPreviewUri) {
             clearRecordingsPreview();
             return;
@@ -2243,68 +2368,205 @@ export const NoteEditScreen = () => {
 
         setRecordingsPreviewUri(uri);
         setRecordingsPreviewDuration(recording.duration);
-    }, [clearRecordingsPreview, playingRecordingId, recordingsPreviewUri, resolveAudioUri]);
+    }, [clearInlineEditorAudio, clearRecordingsPreview, playingRecordingId, recordingsPreviewUri, resolveAudioUri]);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        setAudioEmbedSourceMap((prev) => {
-            const next: Record<string, string> = {};
-            embeddedAudioPaths.forEach((path) => {
-                if (prev[path]) {
-                    next[path] = prev[path];
-                }
-            });
-            const prevKeys = Object.keys(prev);
-            const nextKeys = Object.keys(next);
-            const isSame = prevKeys.length === nextKeys.length
-                && nextKeys.every((key) => prev[key] === next[key]);
-            return isSame ? prev : next;
-        });
-
-        const unresolvedPaths = embeddedAudioPaths.filter((path) => !audioEmbedSourceMap[path]);
-        if (unresolvedPaths.length === 0) {
-            return () => {
-                cancelled = true;
-            };
+    const handleInlineEditorPlaybackStatus = useCallback((status: any) => {
+        if (!status?.isLoaded) {
+            return;
         }
 
-        void (async () => {
-            const resolvedEntries = await Promise.all(
-                unresolvedPaths.map(async (path) => [path, await resolveInlineAudioUri(path)] as const)
+        const controller = inlineEditorAudioRef.current;
+        controller.position = (status.positionMillis ?? 0) / 1000;
+        controller.duration = status.durationMillis
+            ? status.durationMillis / 1000
+            : controller.duration;
+        controller.isPlaying = !!status.isPlaying;
+        controller.isLoading = false;
+
+        if (status.didJustFinish) {
+            controller.isPlaying = false;
+            controller.position = controller.duration;
+        }
+
+        pushInlineEditorAudioState();
+    }, [pushInlineEditorAudioState]);
+
+    const ensureInlineEditorAudioSound = useCallback(async (path: string, duration: number = 0) => {
+        const normalizedPath = normalizeAttachedAudioPath(path);
+        if (!normalizedPath) {
+            return null;
+        }
+
+        const controller = inlineEditorAudioRef.current;
+        if (controller.path === normalizedPath && controller.sound) {
+            return controller.sound;
+        }
+
+        const isSamePath = controller.path === normalizedPath;
+        if (controller.path && !isSamePath) {
+            await clearInlineEditorAudio();
+        }
+
+        controller.path = normalizedPath;
+        controller.duration = duration > 0 ? duration : controller.duration;
+        controller.position = 0;
+        controller.isPlaying = false;
+        if (!isSamePath) {
+            controller.playbackSpeed = 1;
+        }
+        controller.isLoading = true;
+        pushInlineEditorAudioState();
+
+        const uri = await resolveAudioUri(normalizedPath, 'embed');
+        if (!uri) {
+            controller.isLoading = false;
+            await clearInlineEditorAudio();
+            return null;
+        }
+
+        try {
+            const { sound, status } = await Audio.Sound.createAsync(
+                { uri },
+                {
+                    shouldPlay: false,
+                    progressUpdateIntervalMillis: 250,
+                    rate: controller.playbackSpeed,
+                },
+                handleInlineEditorPlaybackStatus
             );
 
-            if (cancelled) {
-                return;
+            controller.sound = sound;
+            controller.isLoading = false;
+            controller.position = status.isLoaded ? (status.positionMillis ?? 0) / 1000 : 0;
+            controller.duration = status.isLoaded && status.durationMillis
+                ? status.durationMillis / 1000
+                : controller.duration;
+            controller.isPlaying = status.isLoaded ? !!status.isPlaying : false;
+            pushInlineEditorAudioState();
+            return sound;
+        } catch (error) {
+            console.error('Failed to create inline editor audio:', error);
+            await clearInlineEditorAudio();
+            return null;
+        }
+    }, [clearInlineEditorAudio, handleInlineEditorPlaybackStatus, pushInlineEditorAudioState, resolveAudioUri]);
+
+    const handleAudioActionFromEditor = useCallback(async (payload: AudioEmbedControlPayload) => {
+        const targetPath = normalizeAttachedAudioPath(payload.path);
+        if (!targetPath) {
+            return;
+        }
+
+        const embedDuration = typeof payload.duration === 'number' && Number.isFinite(payload.duration)
+            ? Math.max(0, payload.duration)
+            : 0;
+
+        Keyboard.dismiss();
+        editorRef.current?.blur();
+        visualEditorFocusedRef.current = false;
+        closeRecordingsList();
+
+        const controller = inlineEditorAudioRef.current;
+
+        if (payload.action === 'speed') {
+            if (controller.path !== targetPath) {
+                await clearInlineEditorAudio();
+                controller.path = targetPath;
+                controller.duration = embedDuration;
+                controller.position = 0;
+                controller.isPlaying = false;
+                controller.isLoading = false;
+                controller.playbackSpeed = 1;
             }
 
-            setAudioEmbedSourceMap((prev) => {
-                const next: Record<string, string> = {};
+            const speeds = [1, 1.5, 2];
+            const currentIndex = speeds.indexOf(controller.playbackSpeed);
+            controller.playbackSpeed = speeds[(currentIndex + 1) % speeds.length];
+            if (controller.sound) {
+                await controller.sound.setRateAsync(controller.playbackSpeed, true);
+            }
+            pushInlineEditorAudioState();
+            return;
+        }
 
-                embeddedAudioPaths.forEach((path) => {
-                    if (prev[path]) {
-                        next[path] = prev[path];
-                    }
-                });
+        const sound = await ensureInlineEditorAudioSound(targetPath, embedDuration);
+        if (!sound) {
+            return;
+        }
 
-                resolvedEntries.forEach(([path, uri]) => {
-                    if (uri) {
-                        next[path] = uri;
-                    }
-                });
+        if (payload.action === 'seek') {
+            const seekRatio = typeof payload.seekRatio === 'number'
+                ? Math.max(0, Math.min(1, payload.seekRatio))
+                : 0;
+            const activeDuration = inlineEditorAudioRef.current.duration || embedDuration;
+            const nextPosition = activeDuration > 0 ? activeDuration * seekRatio : 0;
+            inlineEditorAudioRef.current.position = nextPosition;
+            inlineEditorAudioRef.current.isLoading = false;
+            pushInlineEditorAudioState();
+            await sound.setPositionAsync(nextPosition * 1000);
+            return;
+        }
 
-                const prevKeys = Object.keys(prev);
-                const nextKeys = Object.keys(next);
-                const isSame = prevKeys.length === nextKeys.length
-                    && nextKeys.every((key) => prev[key] === next[key]);
-                return isSame ? prev : next;
-            });
-        })();
+        if (inlineEditorAudioRef.current.isPlaying) {
+            await sound.pauseAsync();
+            inlineEditorAudioRef.current.isPlaying = false;
+        } else {
+            const activeDuration = inlineEditorAudioRef.current.duration || embedDuration;
+            if (activeDuration > 0 && inlineEditorAudioRef.current.position >= Math.max(0, activeDuration - 0.25)) {
+                inlineEditorAudioRef.current.position = 0;
+                await sound.setPositionAsync(0);
+            }
+            await sound.playAsync();
+            inlineEditorAudioRef.current.isPlaying = true;
+            inlineEditorAudioRef.current.isLoading = false;
+        }
 
-        return () => {
-            cancelled = true;
-        };
-    }, [audioEmbedSourceMap, embeddedAudioPaths, resolveInlineAudioUri]);
+        pushInlineEditorAudioState();
+    }, [clearInlineEditorAudio, closeRecordingsList, ensureInlineEditorAudioSound, pushInlineEditorAudioState]);
+
+    useEffect(() => {
+        const activePath = normalizeAttachedAudioPath(inlineEditorAudioRef.current.path);
+        if (!activePath) {
+            return;
+        }
+
+        if (!embeddedAudioPaths.some((path) => normalizeAttachedAudioPath(path) === activePath)) {
+            void clearInlineEditorAudio();
+        }
+    }, [clearInlineEditorAudio, embeddedAudioPaths]);
+
+
+    const appendAudioEmbedToVariant = useCallback(async (
+        variantId: string,
+        filePath: string,
+        duration: number
+    ): Promise<boolean> => {
+        const targetPath = normalizeAttachedAudioPath(filePath);
+        if (!targetPath) {
+            return false;
+        }
+
+        const currentVariantContent = resolveVariantContent(variantId);
+        if (extractEmbeddedAudioPaths(currentVariantContent).includes(targetPath)) {
+            return false;
+        }
+
+        const nextContent = insertBlockAtSelection(
+            currentVariantContent,
+            isRichHtmlContent(currentVariantContent)
+                ? buildAudioEmbedHtml({ path: targetPath, duration })
+                : `![audio](${targetPath})`,
+            {
+                start: currentVariantContent.length,
+                end: currentVariantContent.length,
+            }
+        );
+
+        return await setVariantContentWithOptions(variantId, nextContent, {
+            persist: true,
+            updateHistory: true,
+        });
+    }, [resolveVariantContent, setVariantContentWithOptions]);
 
     const handleInsertRecordingIntoNote = useCallback(async (recording: VoiceRecording) => {
         const targetPath = normalizeAttachedAudioPath(recording.file_path);
@@ -2312,20 +2574,17 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        const resolvedUri = await resolveInlineAudioUri(targetPath);
-        if (resolvedUri) {
-            setAudioEmbedSourceMap((prev) => (
-                prev[targetPath] === resolvedUri
-                    ? prev
-                    : { ...prev, [targetPath]: resolvedUri }
-            ));
+        const currentVariantContent = resolveVariantContent(activeVariantIdRef.current);
+        if (extractEmbeddedAudioPaths(currentVariantContent).includes(targetPath)) {
+            closeRecordingsList();
+            showToast('Player already inserted');
+            return;
         }
 
         if (editMode === 'visual' && editorRef.current) {
             editorRef.current.insertAudioEmbed({
                 path: targetPath,
                 duration: recording.duration,
-                src: resolvedUri,
                 selection: visualSelectionRef.current,
             });
             setIsEditing(true);
@@ -2334,30 +2593,36 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        const variantId = activeVariantIdRef.current;
-        const currentVariantContent = resolveVariantContent(variantId);
-        const nextContent = insertBlockAtSelection(
-            currentVariantContent,
-            isRichHtmlContent(currentVariantContent)
-                ? buildAudioEmbedHtml({ path: targetPath, duration: recording.duration })
-                : `![audio](${targetPath})`,
-            rawSelection
-        );
+        let changed = false;
 
-        const changed = await setVariantContentWithOptions(variantId, nextContent, {
-            persist: true,
-            updateHistory: true,
-        });
+        if (editMode !== 'visual') {
+            const variantId = activeVariantIdRef.current;
+            const nextContent = insertBlockAtSelection(
+                currentVariantContent,
+                isRichHtmlContent(currentVariantContent)
+                    ? buildAudioEmbedHtml({ path: targetPath, duration: recording.duration })
+                    : `![audio](${targetPath})`,
+                rawSelection
+            );
+
+            changed = await setVariantContentWithOptions(variantId, nextContent, {
+                persist: true,
+                updateHistory: true,
+            });
+        }
 
         if (changed) {
+            setIsEditing(true);
             closeRecordingsList();
             showToast('Player inserted');
+            return;
         }
+
+        Alert.alert('Error', 'Could not insert the audio player into the note.');
     }, [
         closeRecordingsList,
         editMode,
         rawSelection,
-        resolveInlineAudioUri,
         resolveVariantContent,
         setVariantContentWithOptions,
         showToast,
@@ -2420,7 +2685,13 @@ export const NoteEditScreen = () => {
 
         const noteId = localNoteIdRef.current;
         const currentTitle = currentTitleRef.current;
-        const currentContent = currentContentRef.current;
+        const currentContent = stripAudioEmbedsFromRichContent(currentContentRef.current);
+        currentContentRef.current = currentContent;
+        if (activeVariantIdRef.current === 'original') {
+            setContent(currentContent);
+        } else {
+            improvementDraftsRef.current[activeVariantIdRef.current] = currentContent;
+        }
 
         // CREATION LOCK: Prevent double-creation if already in progress
         if (isCreatingNote.current) {
@@ -2652,7 +2923,31 @@ export const NoteEditScreen = () => {
             event.preventDefault();
 
             const saveAndExit = async () => {
-                await prepareEditorSnapshotForExit();
+                const finishNavigation = () => {
+                    skipAutoSaveRef.current = true;
+
+                    const isGoBack = event.data.action?.type === 'GO_BACK';
+                    const canGoBack = navigation.canGoBack();
+                    if (isGoBack && !canGoBack) {
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'NotesList' as never }],
+                        });
+                        return;
+                    }
+
+                    navigation.dispatch(event.data.action);
+                };
+
+                await settleInlineEditorAudioForExit();
+
+                try {
+                    await prepareEditorSnapshotForExit();
+                } catch (error) {
+                    console.error('Error during navigation snapshot:', error);
+                    finishNavigation();
+                    return;
+                }
 
                 const latestTitle = currentTitleRef.current;
                 const latestContent = currentContentRef.current;
@@ -2668,7 +2963,7 @@ export const NoteEditScreen = () => {
                     : improvementDraft !== improvementSaved || improvementTitleDraft !== improvementTitleSaved;
 
                 if (!hasChanges) {
-                    navigation.dispatch(event.data.action);
+                    finishNavigation();
                     return;
                 }
 
@@ -2676,26 +2971,18 @@ export const NoteEditScreen = () => {
                     await saveNote();
                 } catch (error) {
                     console.error('Error during navigation auto-save:', error);
+                    finishNavigation();
                     return;
                 }
 
-                const isGoBack = event.data.action?.type === 'GO_BACK';
-                const canGoBack = navigation.canGoBack();
-                if (isGoBack && !canGoBack) {
-                    navigation.reset({
-                        index: 0,
-                        routes: [{ name: 'NotesList' as never }],
-                    });
-                    return;
-                }
-                navigation.dispatch(event.data.action);
+                finishNavigation();
             };
 
             saveAndExit();
         });
 
         return unsubscribe;
-    }, [clearAgentSessionState, navigation, prepareEditorSnapshotForExit, resolveImprovementVariantTitle, saveNote]);
+    }, [clearAgentSessionState, navigation, prepareEditorSnapshotForExit, resolveImprovementVariantTitle, saveNote, settleInlineEditorAudioForExit]);
 
     useFocusEffect(
         useCallback(() => {
@@ -2733,7 +3020,13 @@ export const NoteEditScreen = () => {
     }, [clearAgentSessionState, saveNote]);
 
     const handleBack = async () => {
-        await prepareEditorSnapshotForExit();
+        await settleInlineEditorAudioForExit();
+
+        try {
+            await prepareEditorSnapshotForExit();
+        } catch (error) {
+            console.error('Error during back snapshot:', error);
+        }
 
         // Check if note is effectively empty
         const isViewingOriginal = activeVariantIdRef.current === 'original';
@@ -2756,11 +3049,12 @@ export const NoteEditScreen = () => {
         } else {
             try {
                 await saveNote();
-                skipAutoSaveRef.current = true;
-                navigateBackToList();
             } catch (error) {
                 console.error('Error during back navigation save:', error);
             }
+
+            skipAutoSaveRef.current = true;
+            navigateBackToList();
         }
     };
 
@@ -3551,10 +3845,15 @@ export const NoteEditScreen = () => {
             // Ensure Note Exists (Create if not)
             if (!currentNoteId) {
                 try {
-                    const titleToUse = title.trim();
+                    const titleToUse = currentTitleRef.current.trim();
                     const newNote = await createNote({
                         title: titleToUse,
                         content: currentContentRef.current,
+                        audio: {
+                            filePath: savedPath,
+                            duration: recording.duration,
+                            transcription: recordingTranscription,
+                        },
                         storage_scope: storageScope,
                         privacy,
                     });
@@ -3607,6 +3906,7 @@ export const NoteEditScreen = () => {
 
             // 4. STOP IF NO TEXT
             if (!isTranscriptionSuccess) {
+                await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
                 const status = 'Saved recording (no text)';
                 setRecordingOutcomeStatus(voiceId, status);
                 showVoiceResultStatus(status, voiceId);
@@ -3626,6 +3926,7 @@ export const NoteEditScreen = () => {
                 setRecordingOutcomeStatus(voiceId, status);
                 showVoiceResultStatus(status, voiceId);
 
+                await appendAudioEmbedToVariant('original', savedPath, recording.duration);
                 setRecordingOutcomeStatus(voiceId, 'Processing...');
                 await executeAgentFlow(transcribedText, {
                     isBackground: true,
@@ -3673,6 +3974,7 @@ export const NoteEditScreen = () => {
                     setRecordingOutcomeStatus(voiceId, status);
                     showVoiceResultStatus(status, voiceId);
                 }
+                await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
                 return;
             }
 
@@ -3680,6 +3982,7 @@ export const NoteEditScreen = () => {
                 insertedPendingEarly = await insertPendingTranscriptionToVariant(targetVariantId, voiceId, transcribedText);
             }
 
+            await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
             setRecordingOutcomeStatus(voiceId, 'Processing...');
             await executeAgentFlow(transcribedText, {
                 isBackground: true,
@@ -4317,21 +4620,16 @@ export const NoteEditScreen = () => {
             setShowRecordingTextModal(false);
         }
 
-        setAudioEmbedSourceMap((prev) => {
-            if (!prev[path]) {
-                return prev;
-            }
-            const next = { ...prev };
-            delete next[path];
-            return next;
-        });
-
         if (remaining.length === 0) {
             clearRecordingsPreview();
         } else if (playingRecordingId === id) {
             clearRecordingsPreview();
         } else if (recordingsPreviewUri && (recordingsPreviewUri.includes(path) || path.includes(recordingsPreviewUri))) {
             clearRecordingsPreview();
+        }
+
+        if (normalizeAttachedAudioPath(inlineEditorAudioRef.current.path) === normalizeAttachedAudioPath(path)) {
+            await clearInlineEditorAudio();
         }
 
         const variantIds = ['original', ...noteImprovements.map((improvement) => improvement.id)];
@@ -4443,7 +4741,10 @@ export const NoteEditScreen = () => {
                     {/* Voice Recordings List Button - Only show if recordings exist */}
                     {voiceRecordings.length > 0 && (
                         <TouchableOpacity
-                            onPress={() => setShowRecordingsList(true)}
+                            onPress={() => {
+                                void clearInlineEditorAudio();
+                                setShowRecordingsList(true);
+                            }}
                             style={styles.iconButton}
                         >
                             <MaterialIcons name="mic" size={24} color={colors.text} />
@@ -4907,7 +5208,6 @@ export const NoteEditScreen = () => {
                             autoScalingEnabled={shouldUseCreationAutoScalePreview}
                             lockedChecklistScaleFactor={activeVariantChecklistScaleFactor}
                             showToolbar={false}
-                            audioSourceMap={audioEmbedSourceMap}
                             onChange={(text: string) => {
                                 handleContentChange(text);
                             }}
@@ -4924,6 +5224,7 @@ export const NoteEditScreen = () => {
                                 visualEditorFocusedRef.current = false;
                             }}
                             placeholder="Start typing..."
+                            onAudioAction={handleAudioActionFromEditor}
                         />
                     )}
                 </View>
@@ -5110,16 +5411,20 @@ export const NoteEditScreen = () => {
                                 <Text style={styles.aiModalTitle}>Voice Recordings</Text>
 
                                 {!!recordingsPreviewUri && (
-                                    <View style={{ marginBottom: spacing.m }}>
+                                    <View style={{ marginBottom: spacing.m, width: '100%', alignSelf: 'stretch' }}>
                                         <AudioPlayer
+                                            key={recordingsPreviewUri}
                                             audioUri={recordingsPreviewUri}
                                             duration={recordingsPreviewDuration}
                                             onClose={clearRecordingsPreview}
+                                            onDelete={clearRecordingsPreview}
                                         />
                                     </View>
                                 )}
 
                                 <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={{ paddingBottom: spacing.l }}>
+
+
                                     {voiceRecordings.length === 0 ? (
                                         <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: spacing.m }}>
                                             No recordings yet.

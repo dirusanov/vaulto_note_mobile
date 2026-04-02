@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -9,8 +9,17 @@ import {
 import { Audio } from 'expo-av';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
+import {
+    AUDIO_PREVIEW_ACCENT_SOFT,
+    AUDIO_PREVIEW_VIEWBOX_HEIGHT,
+    AUDIO_PREVIEW_VIEWBOX_WIDTH,
+    AUDIO_PREVIEW_SPEED_BACKGROUND,
+    AUDIO_PREVIEW_SPEED_BORDER,
+    AUDIO_PREVIEW_TRACK,
+    AUDIO_PREVIEW_WAVE_HEIGHTS,
+    AUDIO_PREVIEW_WAVE_IDLE,
+    AUDIO_PREVIEW_WAVE_LOADING,
+} from '../utils/audioEmbeds';
 
 interface AudioPlayerProps {
     audioUri: string;
@@ -18,11 +27,12 @@ interface AudioPlayerProps {
     onClose?: () => void;
     hasTranscription?: boolean; // Whether this recording has transcription
     onDelete?: () => void;
+    autoPlay?: boolean;
 }
 
 import { AudioService } from '../services/AudioService';
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, onDelete }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, onDelete, autoPlay = false }) => {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
@@ -31,10 +41,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     const [isLoading, setIsLoading] = useState(false);
     const [playableUri, setPlayableUri] = useState<string | null>(null);
     const soundRef = useRef<Audio.Sound | null>(null);
+    const autoPlayAttemptedRef = useRef<string | null>(null);
 
     useEffect(() => {
         soundRef.current = sound;
     }, [sound]);
+
+    useEffect(() => {
+        autoPlayAttemptedRef.current = null;
+    }, [playableUri]);
 
     useEffect(() => {
         return () => {
@@ -115,7 +130,25 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
 
     const [isMissing, setIsMissing] = useState(false);
 
-    const loadAndPlaySound = async () => {
+    const onPlaybackStatusUpdate = useCallback((status: any) => {
+        if (status.isLoaded) {
+            setPosition(status.positionMillis / 1000);
+
+            // Update duration if we didn't know it initially
+            if (status.durationMillis && audioDuration === 0) {
+                setAudioDuration(status.durationMillis / 1000);
+            }
+
+            if (status.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(status.durationMillis ? status.durationMillis / 1000 : 0);
+                // Critical: playback completion should clear temporary decrypted files.
+                void AudioService.cleanupTempFiles();
+            }
+        }
+    }, [audioDuration]);
+
+    const loadAndPlaySound = useCallback(async () => {
         if (!playableUri) return;
         setIsLoading(true);
         setIsMissing(false);
@@ -143,26 +176,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [onDelete, onPlaybackStatusUpdate, playableUri, playbackSpeed]);
 
-    const onPlaybackStatusUpdate = (status: any) => {
-        if (status.isLoaded) {
-            setPosition(status.positionMillis / 1000);
-
-            // Update duration if we didn't know it initially
-            if (status.durationMillis && audioDuration === 0) {
-                setAudioDuration(status.durationMillis / 1000);
-            }
-
-            if (status.didJustFinish) {
-                setIsPlaying(false);
-                setPosition(0);
-                sound?.setPositionAsync(0); // Reset position for replay
-                // Critical: playback completion should clear temporary decrypted files.
-                void AudioService.cleanupTempFiles();
-            }
+    useEffect(() => {
+        if (!autoPlay || !playableUri || sound || isLoading) {
+            return;
         }
-    };
+
+        if (autoPlayAttemptedRef.current === playableUri) {
+            return;
+        }
+
+        autoPlayAttemptedRef.current = playableUri;
+        void loadAndPlaySound();
+    }, [autoPlay, isLoading, loadAndPlaySound, playableUri, sound]);
 
     const handlePlayPause = async () => {
         if (!sound) {
@@ -172,6 +199,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                 await sound.pauseAsync();
                 setIsPlaying(false);
             } else {
+                if (audioDuration > 0 && position >= Math.max(0, audioDuration - 0.25)) {
+                    setPosition(0);
+                    await sound.setPositionAsync(0);
+                }
                 await sound.playAsync();
                 setIsPlaying(true);
             }
@@ -196,6 +227,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     };
 
     const [progressBarWidth, setProgressBarWidth] = useState(0);
+    const [playerWidth, setPlayerWidth] = useState(0);
 
     const handleSeek = async (event: any) => {
         if (!sound || audioDuration <= 0 || progressBarWidth <= 0) return;
@@ -208,58 +240,195 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
         await sound.setPositionAsync(seekPosition * 1000);
     };
 
-    const progress = audioDuration > 0 ? (position / audioDuration) * 100 : 0;
+    const progressRatio = audioDuration > 0 ? Math.max(0, Math.min(1, position / audioDuration)) : 0;
+    const progress = progressRatio * 100;
+    const remaining = Math.max(0, audioDuration - position);
+    const playedWaveCount = Math.max(
+        0,
+        Math.min(AUDIO_PREVIEW_WAVE_HEIGHTS.length, Math.round(AUDIO_PREVIEW_WAVE_HEIGHTS.length * progressRatio))
+    );
     const handleClose = onClose || onDelete;
+    const effectiveWidth = playerWidth > 0 ? playerWidth : 320;
+    const scale = effectiveWidth / AUDIO_PREVIEW_VIEWBOX_WIDTH;
+    const scaled = (value: number, min: number) => Math.max(min, Math.round(value * scale));
+    const cardPaddingHorizontal = scaled(18, 8);
+    const cardPaddingVertical = scaled(18, 8);
+    const playButtonOuterSize = scaled(104, 48);
+    const playButtonInnerSize = scaled(88, 40);
+    const playIconSize = scaled(46, 22);
+    const waveformHeight = scaled(44, 18);
+    const waveBarWidth = scaled(10, 4);
+    const waveBarGap = scaled(6, 2);
+    const progressKnobSize = scaled(18, 10);
+    const progressHeight = scaled(8, 4);
+    const progressTouchAreaHeight = scaled(28, 16);
+    const speedButtonHeight = scaled(42, 24);
+    const speedButtonMinWidth = scaled(104, 60);
+    const speedButtonRadius = Math.round(speedButtonHeight / 2);
+    const timeFontSize = scaled(15, 10);
+    const speedFontSize = scaled(18, 11);
+    const closeButtonSize = scaled(32, 20);
+    const closeIconSize = scaled(18, 12);
+    const contentRightPadding = handleClose ? scaled(44, 24) : 0;
+    const horizontalGap = scaled(16, 8);
+    const progressToSpeedGap = scaled(8, 4);
+    const rowSpacing = scaled(10, 4);
+    const progressKnobOffset = progressBarWidth > 0
+        ? Math.max(
+            0,
+            Math.min(
+                progressBarWidth - progressKnobSize,
+                progressBarWidth * progressRatio - progressKnobSize / 2
+            )
+        )
+        : 0;
 
     if (isMissing) return null;
 
     return (
-        <View style={styles.container}>
-            <View style={styles.row}>
+        <View
+            style={[
+                styles.container,
+                {
+                    aspectRatio: AUDIO_PREVIEW_VIEWBOX_WIDTH / AUDIO_PREVIEW_VIEWBOX_HEIGHT,
+                    borderRadius: scaled(28, 14),
+                    paddingVertical: cardPaddingVertical,
+                    paddingHorizontal: cardPaddingHorizontal,
+                },
+            ]}
+            onLayout={(event) => {
+                const nextWidth = event.nativeEvent.layout.width;
+                if (nextWidth > 0 && Math.abs(nextWidth - playerWidth) > 1) {
+                    setPlayerWidth(nextWidth);
+                }
+            }}
+        >
+            {handleClose && (
                 <TouchableOpacity
-                    style={styles.playButton}
+                    onPress={handleClose}
+                    style={[
+                        styles.closeButton,
+                        {
+                            top: scaled(12, 6),
+                            right: scaled(12, 6),
+                            width: closeButtonSize,
+                            height: closeButtonSize,
+                            borderRadius: Math.round(closeButtonSize / 2),
+                        },
+                    ]}
+                >
+                    <MaterialIcons name="close" size={closeIconSize} color={colors.textSecondary} />
+                </TouchableOpacity>
+            )}
+
+            <View style={styles.body}>
+                <TouchableOpacity
+                    style={[
+                        styles.playButtonOuter,
+                        {
+                            width: playButtonOuterSize,
+                            height: playButtonOuterSize,
+                            borderRadius: Math.round(playButtonOuterSize / 2),
+                            marginRight: horizontalGap,
+                        },
+                    ]}
                     onPress={handlePlayPause}
                     disabled={isLoading}
+                    activeOpacity={0.88}
                 >
-                    {isLoading ? (
-                        <ActivityIndicator size="small" color={colors.background} />
-                    ) : (
-                        <MaterialIcons
-                            name={isPlaying ? "pause" : "play-arrow"}
-                            size={20} // Smaller size
-                            color={colors.background}
-                        />
-                    )}
-                </TouchableOpacity>
-
-                <View style={styles.progressContainer}>
-                    <TouchableOpacity
-                        activeOpacity={1}
-                        onPress={handleSeek}
-                        onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
-                        style={{ height: 30, justifyContent: 'center' }} // Taller touch area
+                    <View
+                        style={[
+                            styles.playButtonInner,
+                            {
+                                width: playButtonInnerSize,
+                                height: playButtonInnerSize,
+                                borderRadius: Math.round(playButtonInnerSize / 2),
+                            },
+                        ]}
                     >
-                        <View style={styles.progressBarBackground}>
-                            <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
-                        </View>
-                    </TouchableOpacity>
-                    <Text style={styles.timeText}>
-                        {formatTime(position)} / {formatTime(audioDuration)}
-                    </Text>
-                </View>
-
-                <TouchableOpacity
-                    style={styles.speedButton}
-                    onPress={cyclePlaybackSpeed}
-                >
-                    <Text style={styles.speedText}>{playbackSpeed}x</Text>
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color={colors.surface} />
+                        ) : (
+                            <MaterialIcons
+                                name={isPlaying ? "pause" : "play-arrow"}
+                                size={playIconSize}
+                                color={colors.surface}
+                            />
+                        )}
+                    </View>
                 </TouchableOpacity>
 
-                {handleClose && (
-                    <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                        <MaterialIcons name="close" size={18} color={colors.textMuted} />
-                    </TouchableOpacity>
-                )}
+                <View style={[styles.content, { paddingRight: contentRightPadding }]}>
+                    <View style={styles.contentBody}>
+                        <View style={styles.mainColumn}>
+                            <View style={[styles.waveformRow, { height: waveformHeight, marginBottom: rowSpacing }]}>
+                                {AUDIO_PREVIEW_WAVE_HEIGHTS.map((height, index) => (
+                                    <View
+                                        key={`${height}-${index}`}
+                                        style={[
+                                            styles.waveBar,
+                                            {
+                                                width: waveBarWidth,
+                                                height: scaled(height, 6),
+                                                borderRadius: Math.round(waveBarWidth / 2),
+                                                marginRight: index === AUDIO_PREVIEW_WAVE_HEIGHTS.length - 1 ? 0 : waveBarGap,
+                                                backgroundColor: isLoading
+                                                    ? AUDIO_PREVIEW_WAVE_LOADING
+                                                    : (index < playedWaveCount ? colors.primary : AUDIO_PREVIEW_WAVE_IDLE),
+                                            },
+                                        ]}
+                                    />
+                                ))}
+                            </View>
+
+                            <TouchableOpacity
+                                activeOpacity={1}
+                                onPress={handleSeek}
+                                onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+                                style={[styles.progressTouchArea, { height: progressTouchAreaHeight, marginBottom: rowSpacing }]}
+                            >
+                                <View style={[styles.progressBarBackground, { height: progressHeight, borderRadius: Math.round(progressHeight / 2) }]}>
+                                    <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
+                                    <View
+                                        style={[
+                                            styles.progressKnob,
+                                            {
+                                                left: progressKnobOffset,
+                                                top: -(progressKnobSize - progressHeight) / 2,
+                                                width: progressKnobSize,
+                                                height: progressKnobSize,
+                                                borderRadius: Math.round(progressKnobSize / 2),
+                                                borderWidth: Math.max(2, scaled(4, 2)),
+                                            },
+                                        ]}
+                                    />
+                                </View>
+                            </TouchableOpacity>
+
+                            <View style={styles.timeRow}>
+                                <Text style={[styles.timeText, { fontSize: timeFontSize }]}>{formatTime(position)}</Text>
+                                <Text style={[styles.timeText, { fontSize: timeFontSize }]}>{formatTime(remaining)}</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.speedButton,
+                                {
+                                    minWidth: speedButtonMinWidth,
+                                    height: speedButtonHeight,
+                                    borderRadius: speedButtonRadius,
+                                    marginLeft: progressToSpeedGap,
+                                    paddingHorizontal: scaled(18, 8),
+                                },
+                            ]}
+                            onPress={cyclePlaybackSpeed}
+                            activeOpacity={0.88}
+                        >
+                            <Text style={[styles.speedText, { fontSize: speedFontSize }]}>{playbackSpeed}x</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </View>
         </View>
     );
@@ -267,65 +436,103 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
 
 const styles = StyleSheet.create({
     container: {
+        width: '100%',
+        alignSelf: 'stretch',
         backgroundColor: colors.surface,
-        borderRadius: 12, // Reduced radius
-        padding: spacing.xs, // Reduced padding
-        marginVertical: 4, // Reduced margin
+        borderRadius: 28,
+        paddingVertical: 18,
+        paddingHorizontal: 18,
+        marginVertical: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.06,
+        shadowRadius: 18,
+        elevation: 3,
         borderWidth: 1,
         borderColor: colors.border,
     },
-    row: {
+    body: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.xs, // Reduced gap
     },
-    playButton: {
-        width: 32, // Smaller button
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: colors.text,
+    content: {
+        flex: 1,
+    },
+    contentBody: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    mainColumn: {
+        flex: 1,
+        minWidth: 0,
+    },
+    playButtonOuter: {
+        backgroundColor: AUDIO_PREVIEW_ACCENT_SOFT,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    playButtonInner: {
+        backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    progressContainer: {
-        flex: 1,
+    waveformRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 44,
+        marginBottom: 10,
+        overflow: 'hidden',
+    },
+    waveBar: {
+        alignSelf: 'center',
+    },
+    progressTouchArea: {
         justifyContent: 'center',
     },
     progressBarBackground: {
-        height: 4,
-        backgroundColor: colors.border,
-        borderRadius: 2,
-        overflow: 'hidden',
-        marginBottom: 2, // Reduced margin
+        backgroundColor: AUDIO_PREVIEW_TRACK,
+        position: 'relative',
     },
     progressBarFill: {
         height: '100%',
         backgroundColor: colors.primary,
+        borderRadius: 999,
+    },
+    progressKnob: {
+        position: 'absolute',
+        backgroundColor: colors.surface,
+        borderColor: colors.primary,
+    },
+    timeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     timeText: {
-        ...typography.caption,
-        fontSize: 9, // Smaller font
-        color: colors.textMuted,
+        fontWeight: '600',
+        color: colors.textSecondary,
+        letterSpacing: -0.1,
     },
     speedButton: {
-        paddingHorizontal: 6, // Reduced padding
-        paddingVertical: 2,
-        backgroundColor: colors.background,
-        borderRadius: 8,
+        backgroundColor: AUDIO_PREVIEW_SPEED_BACKGROUND,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: AUDIO_PREVIEW_SPEED_BORDER,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     speedText: {
-        fontSize: 10, // Smaller font
-        fontWeight: '600',
+        fontWeight: '700',
         color: colors.text,
+        letterSpacing: -0.2,
     },
     closeButton: {
-        padding: 4,
+        position: 'absolute',
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1,
     },
 });

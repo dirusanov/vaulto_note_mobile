@@ -4,6 +4,7 @@ import { markdownToTiptapHtml } from './tiptapMarkdownAdapter';
 import {
     applyAudioSourceMapToHtml,
     extractAudioEmbedPaths,
+    getAudioEmbedAttributesFromHtml,
     hasAudioEmbeds,
     removeAudioEmbedFromContent,
     stripTransientAudioEmbedState,
@@ -12,6 +13,7 @@ import {
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
 const TASK_ITEM_HTML_REGEX = /<li\b[^>]*data-type=(["'])taskItem\1/i;
 const EMPTY_CHECKLIST_MARKDOWN_REGEX = /(?:^|\n)\s*-\s\[(?: |x|X)\]\s*(?=\n|$)/;
+const TRAILING_IMG_TAG_REGEX = /<img\b[^>]*>\s*$/i;
 
 const escapeHtml = (text: string): string =>
     text
@@ -62,9 +64,23 @@ export const normalizeRichHighlightColors = (content: string): string =>
         return nextTag;
     });
 
+const ensureTrailingEditorParagraph = (html: string): string => {
+    const trimmed = (html || '').trim();
+    const trailingImageMatch = trimmed.match(TRAILING_IMG_TAG_REGEX);
+    if (!trailingImageMatch) {
+        return trimmed;
+    }
+
+    const trailingImageHtml = trailingImageMatch[0].trim();
+    if (!getAudioEmbedAttributesFromHtml(trailingImageHtml)) {
+        return trimmed;
+    }
+
+    return `${trimmed}<p></p>`;
+};
+
 export const richContentToEditorHtml = (
-    content: string,
-    audioSourceMap?: Record<string, string | null | undefined>
+    content: string
 ): string => {
     const sanitizedContent = stripAudioEmbedsFromRichContent(content);
 
@@ -73,10 +89,14 @@ export const richContentToEditorHtml = (
     }
 
     if (isRichHtmlContent(sanitizedContent)) {
-        return normalizeRichHighlightColors(applyAudioSourceMapToHtml(sanitizedContent, audioSourceMap));
+        return ensureTrailingEditorParagraph(
+            normalizeRichHighlightColors(applyAudioSourceMapToHtml(sanitizedContent))
+        );
     }
 
-    return applyAudioSourceMapToHtml(markdownToTiptapHtml(sanitizedContent), audioSourceMap);
+    return ensureTrailingEditorParagraph(
+        applyAudioSourceMapToHtml(markdownToTiptapHtml(sanitizedContent))
+    );
 };
 
 export const richContentToPlainText = (content: string): string => {
@@ -88,6 +108,7 @@ export const richContentToPlainText = (content: string): string => {
 
     if (isRichHtmlContent(normalized)) {
         normalized = normalized
+            .replace(/<img\b[^>]*>/gi, (match) => (getAudioEmbedAttributesFromHtml(match) ? '\n' : match))
             .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, '\n')
             .replace(/<style[\s\S]*?<\/style>/gi, '')
             .replace(/<script[\s\S]*?<\/script>/gi, '')

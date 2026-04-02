@@ -299,8 +299,14 @@ class AudioServiceClass {
     async readAudioFile(uri: string, tempPrefix: string = 'temp'): Promise<string> {
         if (Platform.OS === 'web') return uri;
         try {
+            // Robust path handling for Android absolute paths
+            let sourceUri = uri;
+            if (Platform.OS === 'android' && sourceUri.startsWith('/') && !sourceUri.startsWith('file://')) {
+                sourceUri = `file://${sourceUri}`;
+            }
+
             // Read encrypted data
-            const encryptedData = await FileSystem.readAsStringAsync(uri, {
+            const encryptedData = await FileSystem.readAsStringAsync(sourceUri, {
                 encoding: 'utf8',
             });
 
@@ -318,6 +324,7 @@ class AudioServiceClass {
             await FileSystem.writeAsStringAsync(tempUri, decryptedData, {
                 encoding: 'base64',
             });
+
 
             return tempUri;
         } catch (error: any) {

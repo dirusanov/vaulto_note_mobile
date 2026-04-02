@@ -1,13 +1,44 @@
+import { colors } from '../theme/colors';
+
 export const AUDIO_EMBED_NODE_NAME = 'vaultoAudioEmbed';
 export const AUDIO_EMBED_ATTR = 'data-audio-player';
 export const AUDIO_EMBED_PATH_ATTR = 'data-audio-path';
 export const AUDIO_EMBED_DURATION_ATTR = 'data-audio-duration';
 export const AUDIO_EMBED_SRC_ATTR = 'data-audio-src';
 export const LEGACY_AUDIO_TITLE_PREFIX = 'vaulto-audio:';
+export const AUDIO_PREVIEW_MARKER = '#vaulto-audio=';
+export const AUDIO_PREVIEW_ALT = 'audio-preview';
+export const AUDIO_PREVIEW_VIEWBOX_WIDTH = 680;
+export const AUDIO_PREVIEW_VIEWBOX_HEIGHT = 176;
+export const AUDIO_PREVIEW_PLAY_END = 184;
+export const AUDIO_PREVIEW_PROGRESS_START = 196;
+export const AUDIO_PREVIEW_PROGRESS_END = 524;
+export const AUDIO_PREVIEW_PROGRESS_TOP = 98;
+export const AUDIO_PREVIEW_PROGRESS_BOTTOM = 122;
+export const AUDIO_PREVIEW_SPEED_START = 544;
+export const AUDIO_PREVIEW_SPEED_END = 648;
+export const AUDIO_PREVIEW_SPEED_TOP = 66;
+export const AUDIO_PREVIEW_SPEED_BOTTOM = 110;
+export const AUDIO_PREVIEW_CARD_BACKGROUND = colors.surface;
+export const AUDIO_PREVIEW_CARD_BORDER = colors.border;
+export const AUDIO_PREVIEW_ACCENT = colors.primary;
+export const AUDIO_PREVIEW_ACCENT_SOFT = '#DCE8FF';
+export const AUDIO_PREVIEW_TRACK = '#E8F0FF';
+export const AUDIO_PREVIEW_TEXT = colors.text;
+export const AUDIO_PREVIEW_SUBTEXT = colors.textSecondary;
+export const AUDIO_PREVIEW_SPEED_BACKGROUND = '#F2F5F8';
+export const AUDIO_PREVIEW_SPEED_BORDER = '#DCE3EC';
+export const AUDIO_PREVIEW_WAVE_IDLE = '#DCE3EC';
+export const AUDIO_PREVIEW_WAVE_LOADING = '#D7DFEA';
+export const AUDIO_PREVIEW_WAVE_HEIGHTS = [16, 30, 22, 36, 18, 28, 14, 32, 24, 38, 18, 30, 16, 36, 20, 28, 14, 22];
 
-const AUDIO_EMBED_BLOCK_REGEX = /<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi;
+export const AUDIO_EMBED_BLOCK_REGEX = /<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi;
+export const AUDIO_IMG_EMBED_REGEX = /<img\b[^>]*>/gi;
+export const LEGACY_AUDIO_EMBED_BLOCK_REGEX = /<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi;
+export const LEGACY_CODEBLOCK_AUDIO_REGEX = /<pre>\s*<code\b[^>]*class=(["'])language-vaulto-audio\1[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi;
+
 const AUDIO_MARKDOWN_REGEX = /!\[audio\]\((.*?)\)/gi;
-const LEGACY_AUDIO_PREVIEW_IMAGE_REGEX = /<img\b[^>]*(?:alt=(["'])audio-preview\1|title=(["'])vaulto-audio:[^"']*\2)[^>]*>/gi;
+const LEGACY_AUDIO_PREVIEW_IMAGE_REGEX = /<img\b[^>]*(?:alt=(["'])audio-preview\1|title=(["'])vaulto-audio:(?!\/\/)[^"']*\2)[^>]*>/gi;
 const EMPTY_HTML_BLOCK_REGEX = /<(p|div)>(\s|&nbsp;|<br\s*\/?>)*<\/\1>/gi;
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
 
@@ -15,6 +46,16 @@ export type AudioEmbedAttributes = {
     path: string;
     duration?: number | null;
     src?: string | null;
+};
+
+type AudioPreviewPayload = {
+    kind: 'vaulto-audio';
+    path: string;
+    duration?: number;
+    position?: number;
+    isPlaying?: boolean;
+    playbackSpeed?: number;
+    isLoading?: boolean;
 };
 
 const escapeHtml = (text: string): string =>
@@ -46,8 +87,43 @@ const getHtmlAttributeValue = (html: string, attr: string): string | null => {
     return decodeHtmlAttribute(match[2]);
 };
 
+const formatDuration = (value?: number | null): string => {
+    const safeValue = typeof value === 'number' && Number.isFinite(value)
+        ? Math.max(0, value)
+        : 0;
+    const minutes = Math.floor(safeValue / 60);
+    const seconds = Math.floor(safeValue % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
 const normalizeAudioPath = (value?: string | null): string | null => {
-    const normalized = (value || '').trim();
+    if (!value) {
+        return null;
+    }
+
+    let normalized = value.trim();
+
+    while (normalized.includes('vaulto-audio:')) {
+        const index = normalized.indexOf('vaulto-audio:');
+        normalized = normalized.slice(index + 'vaulto-audio:'.length);
+
+        if (normalized.startsWith('//')) {
+            normalized = normalized.slice(2);
+        }
+
+        try {
+            const decoded = decodeURIComponent(normalized);
+            if (decoded !== normalized) {
+                normalized = decoded;
+            } else {
+                break;
+            }
+        } catch {
+            break;
+        }
+    }
+
+    normalized = normalized.replace(/^\/+(file:\/\/\/)/i, '$1');
     return normalized.length > 0 ? normalized : null;
 };
 
@@ -81,61 +157,237 @@ const decodeLegacyAudioPath = (titleValue: string): string | null => {
     }
 };
 
-const normalizeLegacyAudioEmbeds = (content: string): string => (
-    content.replace(LEGACY_AUDIO_PREVIEW_IMAGE_REGEX, (match) => {
-        const title = getHtmlAttributeValue(match, 'title');
-        const path = title ? decodeLegacyAudioPath(title) : null;
-        if (!path) {
-            return '';
+const buildAudioPreviewSvg = (payload: AudioPreviewPayload): string => {
+    const duration = typeof payload.duration === 'number' && Number.isFinite(payload.duration)
+        ? Math.max(0, payload.duration)
+        : 0;
+    const position = typeof payload.position === 'number' && Number.isFinite(payload.position)
+        ? Math.max(0, Math.min(duration || 0, payload.position))
+        : 0;
+    const progressRatio = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+    const playbackSpeed = typeof payload.playbackSpeed === 'number' && Number.isFinite(payload.playbackSpeed)
+        ? payload.playbackSpeed
+        : 1;
+    const isPlaying = !!payload.isPlaying;
+    const isLoading = !!payload.isLoading;
+    const progressTrackWidth = AUDIO_PREVIEW_PROGRESS_END - AUDIO_PREVIEW_PROGRESS_START;
+    const progressWidth = Math.round(progressTrackWidth * progressRatio);
+    const progressKnobX = AUDIO_PREVIEW_PROGRESS_START + progressWidth;
+    const remaining = Math.max(0, duration - position);
+    const iconText = isLoading ? '...' : (isPlaying ? '||' : '>');
+    const speedText = `${String(playbackSpeed).replace(/\.0$/, '')}x`;
+    const waveStartX = 198;
+    const waveBaseY = 58;
+    const waveBarWidth = 10;
+    const waveGap = 9;
+    const playedWaveCount = Math.max(0, Math.min(
+        AUDIO_PREVIEW_WAVE_HEIGHTS.length,
+        Math.round(AUDIO_PREVIEW_WAVE_HEIGHTS.length * progressRatio)
+    ));
+    const waveBars = AUDIO_PREVIEW_WAVE_HEIGHTS.map((height, index) => {
+        const x = waveStartX + index * (waveBarWidth + waveGap);
+        const y = waveBaseY - Math.round(height / 2);
+        const fill = isLoading
+            ? AUDIO_PREVIEW_WAVE_LOADING
+            : (index < playedWaveCount ? AUDIO_PREVIEW_ACCENT : AUDIO_PREVIEW_WAVE_IDLE);
+        return `<rect x="${x}" y="${y}" width="${waveBarWidth}" height="${height}" rx="5" fill="${fill}"/>`;
+    }).join('');
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${AUDIO_PREVIEW_VIEWBOX_WIDTH}" height="${AUDIO_PREVIEW_VIEWBOX_HEIGHT}" viewBox="0 0 ${AUDIO_PREVIEW_VIEWBOX_WIDTH} ${AUDIO_PREVIEW_VIEWBOX_HEIGHT}">
+<rect x="8" y="10" width="664" height="156" rx="32" fill="${AUDIO_PREVIEW_CARD_BACKGROUND}" stroke="${AUDIO_PREVIEW_CARD_BORDER}" stroke-width="2"/>
+<circle cx="94" cy="88" r="52" fill="${AUDIO_PREVIEW_ACCENT_SOFT}"/>
+<circle cx="94" cy="88" r="45" fill="${AUDIO_PREVIEW_ACCENT}"/>
+<text x="94" y="99" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#FFFFFF">${escapeHtml(iconText)}</text>
+${waveBars}
+<rect x="${AUDIO_PREVIEW_SPEED_START}" y="${AUDIO_PREVIEW_SPEED_TOP}" width="${AUDIO_PREVIEW_SPEED_END - AUDIO_PREVIEW_SPEED_START}" height="${AUDIO_PREVIEW_SPEED_BOTTOM - AUDIO_PREVIEW_SPEED_TOP}" rx="19" fill="${AUDIO_PREVIEW_SPEED_BACKGROUND}" stroke="${AUDIO_PREVIEW_SPEED_BORDER}" stroke-width="2"/>
+<text x="${Math.round((AUDIO_PREVIEW_SPEED_START + AUDIO_PREVIEW_SPEED_END) / 2)}" y="94" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="${AUDIO_PREVIEW_TEXT}">${escapeHtml(speedText)}</text>
+<rect x="${AUDIO_PREVIEW_PROGRESS_START}" y="106" width="${progressTrackWidth}" height="8" rx="4" fill="${AUDIO_PREVIEW_TRACK}"/>
+<rect x="${AUDIO_PREVIEW_PROGRESS_START}" y="106" width="${progressWidth}" height="8" rx="4" fill="${AUDIO_PREVIEW_ACCENT}"/>
+<circle cx="${progressKnobX}" cy="110" r="8" fill="#FFFFFF" stroke="${AUDIO_PREVIEW_ACCENT}" stroke-width="4"/>
+<text x="${AUDIO_PREVIEW_PROGRESS_START}" y="144" text-anchor="start" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">${escapeHtml(formatDuration(position))}</text>
+<text x="${AUDIO_PREVIEW_SPEED_END}" y="144" text-anchor="end" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">${escapeHtml(formatDuration(remaining))}</text>
+</svg>`;
+};
+
+const parseAudioPreviewPayload = (encodedPayload: string): AudioPreviewPayload | null => {
+    try {
+        const decoded = decodeURIComponent(encodedPayload);
+        const parsed = JSON.parse(decoded) as Partial<AudioPreviewPayload>;
+        const normalizedPath = normalizeAudioPath(parsed.path);
+        if (!normalizedPath) {
+            return null;
         }
 
-        return buildAudioEmbedHtml({ path });
-    })
-);
+        return {
+            kind: 'vaulto-audio',
+            path: normalizedPath,
+            duration: typeof parsed.duration === 'number' && Number.isFinite(parsed.duration)
+                ? Math.max(0, parsed.duration)
+                : undefined,
+            position: typeof parsed.position === 'number' && Number.isFinite(parsed.position)
+                ? Math.max(0, parsed.position)
+                : undefined,
+            isPlaying: !!parsed.isPlaying,
+            playbackSpeed: typeof parsed.playbackSpeed === 'number' && Number.isFinite(parsed.playbackSpeed)
+                ? parsed.playbackSpeed
+                : undefined,
+            isLoading: !!parsed.isLoading,
+        };
+    } catch {
+        return null;
+    }
+};
 
-export const buildAudioEmbedHtml = ({ path, duration, src }: AudioEmbedAttributes): string => {
+const buildAudioPreviewPayload = (
+    payload: AudioEmbedAttributes & {
+        position?: number;
+        isPlaying?: boolean;
+        playbackSpeed?: number;
+        isLoading?: boolean;
+    }
+): AudioPreviewPayload | null => {
+    const normalizedPath = normalizeAudioPath(payload.path);
+    if (!normalizedPath) {
+        return null;
+    }
+
+    return {
+        kind: 'vaulto-audio',
+        path: normalizedPath,
+        duration: typeof payload.duration === 'number' && Number.isFinite(payload.duration)
+            ? Math.max(0, payload.duration)
+            : undefined,
+        position: typeof payload.position === 'number' && Number.isFinite(payload.position)
+            ? Math.max(0, payload.position)
+            : undefined,
+        isPlaying: !!payload.isPlaying,
+        playbackSpeed: typeof payload.playbackSpeed === 'number' && Number.isFinite(payload.playbackSpeed)
+            ? payload.playbackSpeed
+            : undefined,
+        isLoading: !!payload.isLoading,
+    };
+};
+
+export const isAudioEmbedImageSrc = (src?: string | null): boolean =>
+    typeof src === 'string' && src.includes(AUDIO_PREVIEW_MARKER);
+
+export const getAudioEmbedAttributesFromImageSrc = (src?: string | null): AudioEmbedAttributes | null => {
+    if (!isAudioEmbedImageSrc(src)) {
+        return null;
+    }
+
+    const markerIndex = (src || '').indexOf(AUDIO_PREVIEW_MARKER);
+    if (markerIndex === -1) {
+        return null;
+    }
+
+    const payload = parseAudioPreviewPayload((src || '').slice(markerIndex + AUDIO_PREVIEW_MARKER.length));
+    if (!payload?.path) {
+        return null;
+    }
+
+    return {
+        path: payload.path,
+        duration: typeof payload.duration === 'number' ? payload.duration : null,
+        src: null,
+    };
+};
+
+export const buildAudioEmbedPreviewSrc = (
+    payload: AudioEmbedAttributes & {
+        position?: number;
+        isPlaying?: boolean;
+        playbackSpeed?: number;
+        isLoading?: boolean;
+    }
+): string => {
+    const normalizedPayload = buildAudioPreviewPayload(payload);
+    if (!normalizedPayload) {
+        return '';
+    }
+
+    const svg = buildAudioPreviewSvg(normalizedPayload);
+    const metadata = encodeURIComponent(JSON.stringify(normalizedPayload));
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}${AUDIO_PREVIEW_MARKER}${metadata}`;
+};
+
+const normalizeLegacyAudioEmbeds = (content: string): string => {
+    let nextContent = content.replace(LEGACY_AUDIO_PREVIEW_IMAGE_REGEX, (match) => {
+        const attrs = getAudioEmbedAttributesFromHtml(match);
+        return attrs ? buildAudioEmbedHtml(attrs) : '';
+    });
+
+    nextContent = nextContent.replace(LEGACY_AUDIO_EMBED_BLOCK_REGEX, (match) => {
+        const attrs = getAudioEmbedAttributesFromHtml(match);
+        return attrs ? buildAudioEmbedHtml(attrs) : '';
+    });
+
+    nextContent = nextContent.replace(LEGACY_CODEBLOCK_AUDIO_REGEX, (match, _quote, json) => {
+        try {
+            const payload = JSON.parse(decodeHtmlAttribute(json));
+            return buildAudioEmbedHtml({
+                path: payload.path,
+                duration: payload.duration,
+            });
+        } catch {
+            return match;
+        }
+    });
+
+    nextContent = nextContent.replace(AUDIO_IMG_EMBED_REGEX, (match) => {
+        const attrs = getAudioEmbedAttributesFromHtml(match);
+        return attrs ? buildAudioEmbedHtml(attrs) : match;
+    });
+
+    return nextContent;
+};
+
+export const buildAudioEmbedHtml = ({ path, duration }: AudioEmbedAttributes): string => {
     const normalizedPath = normalizeAudioPath(path);
     if (!normalizedPath) {
         return '';
     }
 
-    const normalizedDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0
-        ? Math.max(0, Math.round(duration))
-        : null;
-    const normalizedSrc = normalizeAudioPath(src);
-
-    const attrs = [
-        `${AUDIO_EMBED_ATTR}="true"`,
-        `${AUDIO_EMBED_PATH_ATTR}="${escapeHtmlAttribute(normalizedPath)}"`,
-    ];
-
-    if (normalizedDuration !== null) {
-        attrs.push(`${AUDIO_EMBED_DURATION_ATTR}="${normalizedDuration}"`);
+    const previewSrc = buildAudioEmbedPreviewSrc({
+        path: normalizedPath,
+        duration,
+    });
+    if (!previewSrc) {
+        return '';
     }
 
-    if (normalizedSrc) {
-        attrs.push(`${AUDIO_EMBED_SRC_ATTR}="${escapeHtmlAttribute(normalizedSrc)}"`);
-    }
-
-    return `<div ${attrs.join(' ')}></div>`;
+    return `<img src="${escapeHtmlAttribute(previewSrc)}" alt="${AUDIO_PREVIEW_ALT}" title="${LEGACY_AUDIO_TITLE_PREFIX}${encodeURIComponent(normalizedPath)}">`;
 };
 
 export const getAudioEmbedAttributesFromHtml = (html: string): AudioEmbedAttributes | null => {
-    const path = normalizeAudioPath(getHtmlAttributeValue(html, AUDIO_EMBED_PATH_ATTR));
-    if (!path) {
-        return null;
+    const imageSrc = getHtmlAttributeValue(html, 'src');
+    const imageAttrs = getAudioEmbedAttributesFromImageSrc(imageSrc);
+    if (imageAttrs) {
+        return imageAttrs;
     }
 
-    const durationValue = getHtmlAttributeValue(html, AUDIO_EMBED_DURATION_ATTR);
-    const parsedDuration = durationValue !== null ? Number(durationValue) : null;
-    const duration = Number.isFinite(parsedDuration) ? parsedDuration : null;
-    const src = normalizeAudioPath(getHtmlAttributeValue(html, AUDIO_EMBED_SRC_ATTR));
+    const legacyPath = normalizeAudioPath(getHtmlAttributeValue(html, AUDIO_EMBED_PATH_ATTR));
+    if (legacyPath) {
+        const durationValue = getHtmlAttributeValue(html, AUDIO_EMBED_DURATION_ATTR);
+        const parsedDuration = durationValue !== null ? Number(durationValue) : null;
+        return {
+            path: legacyPath,
+            duration: Number.isFinite(parsedDuration) ? parsedDuration : null,
+            src: null,
+        };
+    }
 
-    return {
-        path,
-        duration,
-        src,
-    };
+    const title = getHtmlAttributeValue(html, 'title');
+    const decodedLegacyPath = title ? decodeLegacyAudioPath(title) : null;
+    if (decodedLegacyPath) {
+        return {
+            path: decodedLegacyPath,
+            duration: null,
+            src: null,
+        };
+    }
+
+    return null;
 };
 
 export const stripTransientAudioEmbedState = (content: string): string => {
@@ -143,43 +395,13 @@ export const stripTransientAudioEmbedState = (content: string): string => {
         return '';
     }
 
-    const normalizedContent = normalizeLegacyAudioEmbeds(content);
-
-    return normalizedContent.replace(AUDIO_EMBED_BLOCK_REGEX, (match) => {
-        const attrs = getAudioEmbedAttributesFromHtml(match);
-        return attrs
-            ? buildAudioEmbedHtml({
-                path: attrs.path,
-                duration: attrs.duration,
-            })
-            : '';
-    });
+    return normalizeLegacyAudioEmbeds(content);
 };
 
 export const applyAudioSourceMapToHtml = (
     content: string,
-    audioSourceMap?: Record<string, string | null | undefined>
-): string => {
-    if (!content) {
-        return '';
-    }
-
-    const normalizedContent = normalizeLegacyAudioEmbeds(content);
-
-    return normalizedContent.replace(AUDIO_EMBED_BLOCK_REGEX, (match) => {
-        const attrs = getAudioEmbedAttributesFromHtml(match);
-        if (!attrs) {
-            return '';
-        }
-
-        const resolvedSrc = audioSourceMap?.[attrs.path] ?? attrs.src;
-        return buildAudioEmbedHtml({
-            path: attrs.path,
-            duration: attrs.duration,
-            src: resolvedSrc,
-        });
-    });
-};
+    _audioSourceMap?: Record<string, string | null | undefined>
+): string => stripTransientAudioEmbedState(content);
 
 export const extractAudioEmbedPaths = (content: string): string[] => {
     if (!content) {
@@ -190,7 +412,7 @@ export const extractAudioEmbedPaths = (content: string): string[] => {
     const orderedPaths: string[] = [];
     const seenPaths = new Set<string>();
 
-    normalizedContent.replace(AUDIO_EMBED_BLOCK_REGEX, (match) => {
+    normalizedContent.replace(AUDIO_IMG_EMBED_REGEX, (match) => {
         const attrs = getAudioEmbedAttributesFromHtml(match);
         if (attrs?.path && !seenPaths.has(attrs.path)) {
             seenPaths.add(attrs.path);
@@ -219,7 +441,7 @@ export const removeAudioEmbedFromContent = (content: string, targetPath: string)
     let next = normalizeLegacyAudioEmbeds(content);
     const isHtmlContent = HTML_TAG_REGEX.test(next);
 
-    next = next.replace(AUDIO_EMBED_BLOCK_REGEX, (match) => {
+    next = next.replace(AUDIO_IMG_EMBED_REGEX, (match) => {
         const attrs = getAudioEmbedAttributesFromHtml(match);
         if (!attrs || !audioPathMatches(attrs.path, targetPath)) {
             return match;

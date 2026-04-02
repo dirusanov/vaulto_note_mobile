@@ -11,6 +11,8 @@ import {
 import {
     AUDIO_EMBED_NODE_NAME,
     buildAudioEmbedHtml,
+    buildAudioEmbedPreviewSrc,
+    getAudioEmbedAttributesFromImageSrc,
 } from './audioEmbeds';
 
 type TiptapMark = {
@@ -33,6 +35,7 @@ type TiptapDocument = {
 
 const AUDIO_TITLE_PREFIX = 'vaulto-audio:';
 const PROCESSING_TITLE_PREFIX = 'vaulto-processing:';
+
 const PROCESSING_PREVIEW_SVG = encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="680" height="124" viewBox="0 0 680 124">
 <rect x="2" y="2" width="676" height="120" rx="24" fill="#FFF7E8" stroke="#E8D5A8" stroke-width="4"/>
@@ -201,6 +204,13 @@ const inlineNodesToMarkdown = (nodes?: TiptapNode[]): string => {
         }
 
         if (node.type === 'image') {
+            const audioAttrs = getAudioEmbedAttributesFromImageSrc(
+                typeof node.attrs?.src === 'string' ? node.attrs.src : ''
+            );
+            if (audioAttrs?.path) {
+                return `![audio](${audioAttrs.path})`;
+            }
+
             const audioPath = getImageTitleValue(node, AUDIO_TITLE_PREFIX);
             if (audioPath) {
                 return `![audio](${audioPath})`;
@@ -347,9 +357,12 @@ const createTaskItemNode = (markdown: string, checked: boolean): TiptapNode => (
 });
 
 const createAudioEmbedNode = (path: string): TiptapNode => ({
-    type: AUDIO_EMBED_NODE_NAME,
-    attrs: { path },
+    type: 'image',
+    attrs: {
+        src: buildAudioEmbedPreviewSrc({ path }),
+    },
 });
+
 
 const paragraphContentToMarkdown = (node?: TiptapNode) => {
     if (!node) {
@@ -399,6 +412,13 @@ const serializeBlockNode = (node: TiptapNode, orderedStart = 1): string[] => {
             return path ? [`![audio](${path})`] : [];
         }
         case 'image': {
+            const audioAttrs = getAudioEmbedAttributesFromImageSrc(
+                typeof node.attrs?.src === 'string' ? node.attrs.src : ''
+            );
+            if (audioAttrs?.path) {
+                return [`![audio](${audioAttrs.path})`];
+            }
+
             const audioPath = getImageTitleValue(node, AUDIO_TITLE_PREFIX);
             if (audioPath) {
                 return [`![audio](${audioPath})`];
@@ -705,13 +725,17 @@ export const removeAudioFromTiptapDocument = (document: unknown, audioPath: stri
             }
 
             const candidatePath = getImageTitleValue(candidate, AUDIO_TITLE_PREFIX);
-            if (!candidatePath) {
+            const imageAudioAttrs = getAudioEmbedAttributesFromImageSrc(
+                typeof candidate.attrs?.src === 'string' ? candidate.attrs.src : ''
+            );
+            const resolvedCandidatePath = imageAudioAttrs?.path || candidatePath;
+            if (!resolvedCandidatePath) {
                 return false;
             }
-            if (candidatePath === audioPath) {
+            if (resolvedCandidatePath === audioPath) {
                 return true;
             }
-            return !!filename && candidatePath.includes(filename);
+            return !!filename && resolvedCandidatePath.includes(filename);
         }))
         .filter((node): node is TiptapNode => !!node);
 
