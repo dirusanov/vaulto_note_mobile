@@ -89,6 +89,7 @@ import {
     hasMeaningfulRichContent,
     isRichHtmlContent,
     removeAudioFromRichContent,
+    richContentToAgentMarkdown,
     richContentToPlainText,
     stripAudioEmbedsFromRichContent,
 } from '../utils/richContent';
@@ -196,6 +197,7 @@ const deriveTitleFromText = (text: string): string => {
 type MicInputMode = 'agent' | 'force_text';
 
 const TODO_LIST_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/m;
+const CHECKLIST_ITEM_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+(.*)$/;
 const TODO_LABEL_REGEX = /(todo|task|checklist|to-do|список|дела|чеклист)/i;
 const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:[-*]\s*\[(?:[ xX])?\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
 
@@ -248,6 +250,36 @@ const contentAlreadyContainsStructuredListBlock = (base: string, block: string):
         .map((line) => normalizeStructuredListLine(line.trimEnd()));
 
     return hasContiguousLineBlock(baseLines, blockLines);
+};
+
+const normalizeChecklistCommandText = (value: string): string =>
+    value
+        .toLocaleLowerCase()
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const extractChecklistItemTexts = (content: string): string[] => {
+    const comparableContent = isRichHtmlContent(content)
+        ? richContentToAgentMarkdown(content)
+        : content;
+
+    return (comparableContent || '')
+        .split(/\r?\n/)
+        .map((line) => {
+            const match = line.match(CHECKLIST_ITEM_LINE_REGEX);
+            return match ? normalizeChecklistCommandText(match[1] || '') : '';
+        })
+        .filter(Boolean);
+};
+
+const transcriptDirectlyMentionsChecklistItem = (content: string, transcript: string): boolean => {
+    const normalizedTranscript = normalizeChecklistCommandText(transcript);
+    if (!normalizedTranscript) return false;
+
+    return extractChecklistItemTexts(content).some((itemText) => (
+        itemText.length >= 2 && normalizedTranscript.includes(itemText)
+    ));
 };
 
 const extractListLikeItems = (text: string): string[] => {
@@ -3327,13 +3359,17 @@ export const NoteEditScreen = () => {
                     !pendingContextAtStart.pending &&
                     typeof task.agentContextContent === 'string';
                 const contextContent = shouldUseTaskProvidedContext
-                    ? task.agentContextContent
+                    ? (task.agentContextContent || '')
                     : pendingContextAtStart.contentWithoutPending;
+                const checklistMentionWithoutPendingFallback = transcriptDirectlyMentionsChecklistItem(
+                    contextContent,
+                    normalizedTaskText
+                );
                 const allRecordingIds = validBatch.flatMap(t => getTaskRecordingIds(t));
                 // If every task in the batch already had dictation applied, we can skip dictation
                 const shouldSkipDictationApply = validBatch.every(t => !!t.dictationAlreadyApplied) && !pendingContextAtStart.pending;
                 let dictationFinalized = false;
-                let shouldFallbackToDictationOnError = true;
+                let shouldFallbackToDictationOnError = !checklistMentionWithoutPendingFallback;
 
                 console.log(`[NoteEditScreen] Processing agent batch of ${validBatch.length} tasks (queue=${getPendingTaskCount(agentQueue.current)})`);
 
@@ -3434,6 +3470,10 @@ export const NoteEditScreen = () => {
                             agentResult.hasInstruction &&
                             hasProcessedPayload &&
                             !areTextsEquivalent(processedText, originalText);
+                        const checklistMentionFallback = transcriptDirectlyMentionsChecklistItem(
+                            commandBaseContent,
+                            originalText || normalizedTaskText
+                        );
                         const needsConfirmation = !!agentResult.needsConfirmation;
                         const confirmationMessage = (agentResult.confirmationMessage || '').trim();
                         const hasConfirmableAction =
@@ -3710,7 +3750,30 @@ export const NoteEditScreen = () => {
                                 });
                             }
                         } else {
-                            await finalizeAsDictation(originalText || normalizedTaskText);
+                            if (checklistMentionFallback) {
+                                if (hasPendingDraft) {
+                                    validBatch.forEach(t => {
+                                        if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
+                                    });
+                                    replaceCurrentHistoryState(
+                                        taskVariantId,
+                                        resolveImprovementVariantTitle(taskVariantId),
+                                        commandBaseContent
+                                    );
+                                }
+                                await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
+                                    persist: true,
+                                    updateHistory: false,
+                                });
+                                dictationFinalized = true;
+                                shouldFallbackToDictationOnError = false;
+                                allRecordingIds.forEach(id => {
+                                    setRecordingOutcomeStatus(id, 'No changes');
+                                    showVoiceResultStatus('No changes', id);
+                                });
+                            } else {
+                                await finalizeAsDictation(originalText || normalizedTaskText);
+                            }
                         }
                     } else {
                         // LOGIC FAIL (e.g. backend error)
