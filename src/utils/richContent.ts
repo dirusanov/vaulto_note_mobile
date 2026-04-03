@@ -186,7 +186,7 @@ export const richContentToAgentMarkdown = (content: string): string => {
         if (!text) {
             return '\n';
         }
-        return `\n- [${checked ? 'x' : ' '}] ${text}\n`;
+        return `- [${checked ? 'x' : ' '}] ${text}\n`;
     });
 
     normalized = normalized.replace(RICH_LIST_ITEM_BLOCK_REGEX, (block) => {
@@ -195,7 +195,7 @@ export const richContentToAgentMarkdown = (content: string): string => {
         if (!text) {
             return '\n';
         }
-        return `\n- ${text}\n`;
+        return `- ${text}\n`;
     });
 
     normalized = decodeHtmlEntities(
