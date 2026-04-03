@@ -1111,6 +1111,10 @@ export const NoteEditScreen = () => {
         };
     }, []);
 
+    const clearTranscribedInsertionExpectation = useCallback(() => {
+        lastTranscribedExpectationRef.current = null;
+    }, []);
+
     useEffect(() => {
         pendingMicInputModeRef.current = pendingMicInputMode;
     }, [pendingMicInputMode]);
@@ -2365,7 +2369,6 @@ export const NoteEditScreen = () => {
 
         // Register pending so we know where to append when finished
         pendingVoiceInsertionsRef.current.set(recordingId, pending);
-        registerTranscribedInsertion(normalizedText);
         return true;
     }, [buildInsertedTextForVariant, resolveVariantContent, setVariantContentWithOptions]);
 
@@ -3620,6 +3623,7 @@ export const NoteEditScreen = () => {
                         if (needsConfirmation && hasConfirmableAction) {
                             const approved = await requestAgentConfirmation(confirmationMessage);
                             if (!approved) {
+                                clearTranscribedInsertionExpectation();
                                 if (hasPendingDraft) {
                                     validBatch.forEach(t => {
                                         if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
@@ -3644,6 +3648,7 @@ export const NoteEditScreen = () => {
                         }
 
                         if (agentResult.titleAction === 'set' && explicitTitle && localNoteIdRef.current) {
+                            clearTranscribedInsertionExpectation();
                             if (hasPendingDraft) {
                                 validBatch.forEach(t => {
                                     if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
@@ -3738,6 +3743,7 @@ export const NoteEditScreen = () => {
                             }
 
                             if (newText !== null && !areTextsEquivalent(newText, commandBaseContent)) {
+                                clearTranscribedInsertionExpectation();
                                 // Keep raw dictation in Original when the note was empty, but store AI output as improvement.
                                 if (taskVariantId === 'original' && applyTarget === 'current_variant') {
                                     if (hasPendingDraft) {
@@ -3865,6 +3871,7 @@ export const NoteEditScreen = () => {
                             } else {
                                 // Command was recognized but resulted in no effective content diff.
                                 // Keep command out of the note and only clear pending marker.
+                                clearTranscribedInsertionExpectation();
                                 const contentAfterCommand = originalContentAfterCommand;
                                 if (hasPendingDraft) {
                                     validBatch.forEach(t => {
@@ -3894,6 +3901,7 @@ export const NoteEditScreen = () => {
                                 )
                                 : null;
                             if (localChecklistFallbackText && !areTextsEquivalent(localChecklistFallbackText, commandBaseContent)) {
+                                clearTranscribedInsertionExpectation();
                                 if (hasPendingDraft) {
                                     validBatch.forEach(t => {
                                         if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
@@ -4376,10 +4384,6 @@ export const NoteEditScreen = () => {
                 const inserted = insertedPlainTextEarly
                     ? true
                     : await applyPlainTextToVariant('original', transcribedText);
-
-                if (inserted && !insertedPlainTextEarly) {
-                    registerTranscribedInsertion(transcribedText);
-                }
 
                 const status = inserted ? 'Added to Original' : 'Saved recording';
                 setRecordingOutcomeStatus(voiceId, status);
