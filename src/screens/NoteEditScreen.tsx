@@ -195,9 +195,9 @@ const deriveTitleFromText = (text: string): string => {
 
 type MicInputMode = 'agent' | 'force_text';
 
-const TODO_LIST_LINE_REGEX = /^\s*-\s+\[[ xX]\]\s+/m;
+const TODO_LIST_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/m;
 const TODO_LABEL_REGEX = /(todo|task|checklist|to-do|список|дела|чеклист)/i;
-const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:-\s+\[[ xX]\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
+const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:[-*]\s*\[(?:[ xX])?\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
 
 const stripListMarker = (value: string): string =>
     value
@@ -207,7 +207,7 @@ const stripListMarker = (value: string): string =>
 
 const normalizeStructuredListLine = (value: string): string =>
     value
-        .replace(/^\s*-\s+\[[ xX]\]\s+/, '')
+        .replace(/^\s*[-*]\s*\[(?:[ xX])?\]\s+/, '')
         .replace(/^\s*[-*]\s+/, '')
         .replace(/^\s*\d+[\.\)]\s+/, '')
         .replace(/\s+/g, ' ')

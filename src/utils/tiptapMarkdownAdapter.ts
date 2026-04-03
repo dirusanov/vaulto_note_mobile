@@ -47,7 +47,7 @@ const PROCESSING_PREVIEW_SVG = encodeURIComponent(
 );
 const PROCESSING_PREVIEW_DATA_URI = `data:image/svg+xml;charset=utf-8,${PROCESSING_PREVIEW_SVG}`;
 
-const TODO_REGEX = /^(\s*-\s\[(?:([ xX])?)\]\s)(.*)$/;
+const TODO_REGEX = /^(\s*[-*]\s*\[(?:([ xX]))?\]\s)(.*)$/;
 const ORDERED_REGEX = /^(\s*)(\d+)\.\s+(.*)$/;
 const BULLET_REGEX = /^(\s*)[-*]\s+(.*)$/;
 const BLOCKQUOTE_REGEX = /^\s*>\s?(.*)$/;
