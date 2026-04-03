@@ -116,7 +116,15 @@ const emitUnauthorizedOnce = async () => {
 client.interceptors.request.use(
     async (config) => {
         if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
-            config.headers.setContentType('multipart/form-data');
+            // Let the native adapter set multipart boundaries automatically.
+            if (typeof config.headers?.setContentType === 'function') {
+                config.headers.setContentType(false);
+            }
+            if (typeof config.headers?.delete === 'function') {
+                config.headers.delete('Content-Type');
+            } else if (config.headers) {
+                delete (config.headers as Record<string, unknown>)['Content-Type'];
+            }
         }
         const token = await storage.getToken();
         if (token) {

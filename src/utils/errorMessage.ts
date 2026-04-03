@@ -79,5 +79,13 @@ const parseStringError = (msg: string): string => {
         return 'Server connection limit exceeded. Please try again later.';
     }
 
+    if (msg.trim().toLowerCase() === 'network error') {
+        return 'Cannot reach the server. Check internet connection and try again.';
+    }
+
+    if (msg.toLowerCase().includes('timeout') && msg.toLowerCase().includes('exceeded')) {
+        return 'Request timed out. Please try again.';
+    }
+
     return msg;
 };

@@ -1,9 +1,10 @@
 /**
  * Transcription service for sending audio to OpenAI Whisper API.
  */
+import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
-import { API_URL } from '../utils/env';
+import { API_URL, AUTH_API_URL } from '../utils/env';
 import {
     storage,
     getAgentModeEnabled,
@@ -15,14 +16,20 @@ import {
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 import { isRichHtmlContent, richContentToPlainText } from '../utils/richContent';
 import { generateUUID } from '../utils/uuid';
+import { onUnauthorized } from '../utils/authEvents';
 import client from '../api/client';
 import { prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
 const BACKEND_TRANSCRIBE_PATH = '/ai/transcribe';
+const BACKEND_TRANSCRIBE_URL = `${API_URL}${BACKEND_TRANSCRIBE_PATH}`;
+const BACKEND_TRANSCRIBE_TIMEOUT_MS = 90000;
 const BACKEND_PROCESS_NOTE_PATH = '/ai/agent';
 const BACKEND_PROCESS_NOTE_URL = `${API_URL}${BACKEND_PROCESS_NOTE_PATH}`;
+const BACKEND_AGENT_TIMEOUT_MS = 90000;
+const BACKEND_AGENT_MAX_ATTEMPTS = 2;
+const BACKEND_AGENT_RETRY_DELAY_MS = 1500;
 
 export interface TranscriptionResult {
     text: string;
@@ -54,6 +61,340 @@ const normalizeAgentContextContent = (content?: string): string | undefined => {
 
     const trimmed = normalized.trim();
     return trimmed || undefined;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let transcriptionRefreshPromise: Promise<string | null> | null = null;
+let transcriptionUnauthorizedEmitted = false;
+
+const extractErrorText = (payload: unknown): string | undefined => {
+    if (!payload || typeof payload !== 'object') {
+        return undefined;
+    }
+
+    const data = payload as Record<string, unknown>;
+    const candidates = [data.detail, data.message, data.error];
+    for (const candidate of candidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+        }
+    }
+
+    return undefined;
+};
+
+const isInvalidRefreshStatus = (status?: number): boolean => {
+    return status === 400 || status === 401 || status === 403;
+};
+
+const emitTranscriptionUnauthorizedOnce = async () => {
+    if (transcriptionUnauthorizedEmitted) {
+        return;
+    }
+    transcriptionUnauthorizedEmitted = true;
+    await storage.removeToken();
+    await storage.removeRefreshToken();
+    onUnauthorized.emit();
+};
+
+const refreshTranscriptionAccessToken = async (): Promise<string | null> => {
+    if (transcriptionRefreshPromise) {
+        return transcriptionRefreshPromise;
+    }
+
+    transcriptionRefreshPromise = (async () => {
+        const refreshToken = await storage.getRefreshToken();
+        if (!refreshToken) {
+            await emitTranscriptionUnauthorizedOnce();
+            return null;
+        }
+
+        try {
+            const refreshResponse = await axios.post(`${AUTH_API_URL}/auth/refresh`, {
+                refresh_token: refreshToken,
+            });
+
+            const { access_token, refresh_token } = refreshResponse.data ?? {};
+            if (!access_token || !refresh_token) {
+                throw new Error('Refresh response did not include tokens');
+            }
+
+            await storage.setToken(access_token);
+            await storage.setRefreshToken(refresh_token);
+            transcriptionUnauthorizedEmitted = false;
+            return access_token;
+        } catch (refreshError) {
+            if (axios.isAxiosError(refreshError) && isInvalidRefreshStatus(refreshError.response?.status)) {
+                await emitTranscriptionUnauthorizedOnce();
+            }
+            console.warn(
+                '[Transcription] Token refresh failed:',
+                refreshError instanceof Error ? refreshError.message : refreshError,
+            );
+            return null;
+        } finally {
+            transcriptionRefreshPromise = null;
+        }
+    })();
+
+    return transcriptionRefreshPromise;
+};
+
+const isAbortError = (error: unknown): boolean => {
+    return error instanceof Error && error.name === 'AbortError';
+};
+
+const isNetworkRequestError = (error: unknown): boolean => {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    if (isAbortError(error)) {
+        return true;
+    }
+
+    if (error instanceof TypeError) {
+        return true;
+    }
+
+    const normalizedMessage = error.message.trim().toLowerCase();
+    return normalizedMessage === 'network error' || normalizedMessage === 'network request failed';
+};
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await fetch(url, {
+            ...init,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+const buildBackendTranscriptionFormData = (audioUri: string, language?: string): FormData => {
+    const formData = new FormData();
+    formData.append('file', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: 'audio.m4a',
+    } as any);
+    if (language) {
+        formData.append('language', language);
+    }
+    return formData;
+};
+
+async function performBackendTranscriptionRequest(
+    audioUri: string,
+    idempotencyKey: string,
+    accessToken: string,
+    language?: string,
+): Promise<Response> {
+    // Use fetch for native multipart audio uploads to avoid Axios adapter issues and the shared 30s client timeout.
+    return fetchWithTimeout(
+        BACKEND_TRANSCRIBE_URL,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Idempotency-Key': idempotencyKey,
+            },
+            body: buildBackendTranscriptionFormData(audioUri, language),
+        },
+        BACKEND_TRANSCRIBE_TIMEOUT_MS,
+    );
+}
+
+async function fetchBackendTranscriptionWithAuth(
+    audioUri: string,
+    idempotencyKey: string,
+    language?: string,
+): Promise<Response> {
+    const accessToken = await storage.getToken();
+    if (!accessToken) {
+        await emitTranscriptionUnauthorizedOnce();
+        throw new Error('Sign in required to use Vaulto AI.');
+    }
+
+    transcriptionUnauthorizedEmitted = false;
+    const initialResponse = await performBackendTranscriptionRequest(
+        audioUri,
+        idempotencyKey,
+        accessToken,
+        language,
+    );
+
+    if (initialResponse.status !== 401) {
+        return initialResponse;
+    }
+
+    const refreshedAccessToken = await refreshTranscriptionAccessToken();
+    if (!refreshedAccessToken) {
+        return initialResponse;
+    }
+
+    return performBackendTranscriptionRequest(
+        audioUri,
+        idempotencyKey,
+        refreshedAccessToken,
+        language,
+    );
+}
+
+async function extractResponseMessage(response: Response): Promise<string | undefined> {
+    const contentType = response.headers.get('content-type') ?? '';
+
+    try {
+        if (contentType.includes('application/json')) {
+            const json = await response.json();
+            const detail = extractErrorText(json);
+            if (detail) {
+                return detail;
+            }
+        } else {
+            const text = (await response.text()).trim();
+            if (text) {
+                return text;
+            }
+        }
+    } catch {
+        return undefined;
+    }
+
+    return undefined;
+}
+
+const buildBackendAgentFormData = (
+    transcript: string,
+    currentContent?: string,
+    recentMessages: string[] = [],
+): FormData => {
+    const formData = new FormData();
+    formData.append('transcript', transcript);
+    if (currentContent) {
+        formData.append('current_content', currentContent);
+    }
+
+    if (recentMessages.length > 0) {
+        formData.append('recent_messages', JSON.stringify(recentMessages.slice(-5)));
+    }
+
+    return formData;
+};
+
+async function performBackendAgentRequest(
+    transcript: string,
+    accessToken: string,
+    currentContent?: string,
+    recentMessages: string[] = [],
+): Promise<Response> {
+    return fetchWithTimeout(
+        BACKEND_PROCESS_NOTE_URL,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+            body: buildBackendAgentFormData(transcript, currentContent, recentMessages),
+        },
+        BACKEND_AGENT_TIMEOUT_MS,
+    );
+}
+
+async function fetchBackendAgentWithAuth(
+    transcript: string,
+    currentContent?: string,
+    recentMessages: string[] = [],
+): Promise<Response> {
+    const accessToken = await storage.getToken();
+    if (!accessToken) {
+        await emitTranscriptionUnauthorizedOnce();
+        throw new Error('Sign in required to use Vaulto AI.');
+    }
+
+    transcriptionUnauthorizedEmitted = false;
+    const initialResponse = await performBackendAgentRequest(
+        transcript,
+        accessToken,
+        currentContent,
+        recentMessages,
+    );
+
+    if (initialResponse.status !== 401) {
+        return initialResponse;
+    }
+
+    const refreshedAccessToken = await refreshTranscriptionAccessToken();
+    if (!refreshedAccessToken) {
+        return initialResponse;
+    }
+
+    return performBackendAgentRequest(
+        transcript,
+        refreshedAccessToken,
+        currentContent,
+        recentMessages,
+    );
+}
+
+const isRetryableAgentStatus = (status?: number): boolean => {
+    return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+};
+
+const isRetryableAgentError = (error: unknown): boolean => {
+    if (isNetworkRequestError(error)) {
+        return true;
+    }
+
+    if (!axios.isAxiosError(error)) {
+        return false;
+    }
+
+    if (!error.response) {
+        return true;
+    }
+
+    return isRetryableAgentStatus(error.response.status);
+};
+
+const formatAgentRequestError = (error: unknown): string => {
+    if (isAbortError(error)) {
+        return 'Agent request timed out. Please try again.';
+    }
+
+    if (axios.isAxiosError(error)) {
+        const detail = extractErrorText(error.response?.data);
+        if (detail) {
+            return detail;
+        }
+
+        if (error.code === 'ECONNABORTED') {
+            return 'Agent request timed out. Please try again.';
+        }
+
+        if (!error.response) {
+            return 'Cannot reach the agent service. Check internet connection and try again.';
+        }
+
+        if (error.response.status >= 500) {
+            return `Agent service error (${error.response.status}). Please try again.`;
+        }
+    }
+
+    if (isNetworkRequestError(error)) {
+        return 'Cannot reach the agent service. Check internet connection and try again.';
+    }
+
+    if (error instanceof Error && error.message.trim()) {
+        return error.message;
+    }
+
+    return 'Failed to process agent request';
 };
 
 /**
@@ -235,22 +576,7 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
             }
         }
 
-        const formData = new FormData();
-        formData.append('file', {
-            uri: audioUri,
-            type: 'audio/m4a',
-            name: 'audio.m4a',
-        } as any);
-        if (language) {
-            formData.append('language', language);
-        }
-
-        const response = await client.post(BACKEND_TRANSCRIBE_PATH, formData, {
-            headers: {
-                'Idempotency-Key': idempotencyKey,
-            },
-            validateStatus: (status) => (status >= 200 && status < 300) || status === 403,
-        });
+        const response = await fetchBackendTranscriptionWithAuth(audioUri, idempotencyKey, language);
 
         if (response.status === 403) {
             const { onLimitReached } = await import('../utils/limitEvents');
@@ -262,14 +588,31 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
             };
         }
 
-        const result = response.data;
+        if (!response.ok) {
+            const detail = await extractResponseMessage(response);
+            const error =
+                response.status === 401
+                    ? 'Session expired. Please sign in again.'
+                    : detail || `Transcription request failed (${response.status})`;
+            return {
+                text: '',
+                success: false,
+                error,
+            };
+        }
+
+        const result = await response.json();
         return {
             text: result.text || '',
             success: true,
         };
     } catch (error) {
         console.error('[Transcription] Backend call failed', error);
-        const message = error instanceof Error ? error.message : 'Failed to get transcription from server';
+        const message = isAbortError(error)
+            ? 'Transcription request timed out. Please try again.'
+            : error instanceof Error
+                ? error.message
+                : 'Failed to get transcription from server';
         return { text: '', success: false, error: message };
     }
 }
@@ -384,93 +727,114 @@ export async function processVoiceNote(
         };
     }
 
-    // Use Backend (Vaulto AI)
-    try {
-        console.log('[VoiceAgent] Request URL:', BACKEND_PROCESS_NOTE_URL);
-        const normalizedCurrentContent = normalizeAgentContextContent(currentContent);
+    console.log('[VoiceAgent] Request URL:', BACKEND_PROCESS_NOTE_URL);
+    const normalizedCurrentContent = normalizeAgentContextContent(currentContent);
 
-        // Agent endpoint accepts only transcript text.
-        // If text was not provided, transcribe first via standard transcription flow.
-        let transcriptText = preTranscribedText || '';
-        if (!transcriptText) {
-            const transResult = await transcribeAudio(audioUri, language);
-            if (!transResult.success || !transResult.text) {
+    // Agent endpoint accepts only transcript text.
+    // If text was not provided, transcribe first via standard transcription flow.
+    let transcriptText = preTranscribedText || '';
+    if (!transcriptText) {
+        const transResult = await transcribeAudio(audioUri, language);
+        if (!transResult.success || !transResult.text) {
+            return {
+                originalText: '',
+                success: false,
+                error: transResult.error || 'Failed to transcribe audio before agent processing',
+                hasInstruction: false
+            };
+        }
+        transcriptText = transResult.text;
+    }
+
+    for (let attempt = 1; attempt <= BACKEND_AGENT_MAX_ATTEMPTS; attempt += 1) {
+        try {
+            const response = await fetchBackendAgentWithAuth(
+                transcriptText,
+                normalizedCurrentContent,
+                recentMessages,
+            );
+
+            if (response.status === 403) {
+                const { onLimitReached } = await import('../utils/limitEvents');
+                onLimitReached.emit();
                 return {
-                    originalText: '',
+                    originalText: transcriptText,
+                    processedText: null,
+                    hasInstruction: false,
                     success: false,
-                    error: transResult.error || 'Failed to transcribe audio before agent processing',
+                    error: 'Usage limit reached'
+                };
+            }
+
+            // Fallback checks
+            if (response.status === 404) {
+                return {
+                    originalText: transcriptText,
+                    processedText: null,
+                    hasInstruction: false,
+                    success: true,
+                    error: 'Backend endpoint not found, using local transcript'
+                };
+            }
+
+            if (!response.ok) {
+                if (attempt < BACKEND_AGENT_MAX_ATTEMPTS && isRetryableAgentStatus(response.status)) {
+                    await sleep(BACKEND_AGENT_RETRY_DELAY_MS * attempt);
+                    continue;
+                }
+
+                const detail = await extractResponseMessage(response);
+                return {
+                    originalText: transcriptText || preTranscribedText || '',
+                    success: false,
+                    error: response.status === 401
+                        ? 'Session expired. Please sign in again.'
+                        : detail || `Agent request failed (${response.status})`,
                     hasInstruction: false
                 };
             }
-            transcriptText = transResult.text;
-        }
 
-        const formData = new FormData();
-        formData.append('transcript', transcriptText);
-        if (normalizedCurrentContent) {
-            formData.append('current_content', normalizedCurrentContent);
-        }
+            const result = await response.json();
+            // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool }
 
-        if (recentMessages && recentMessages.length > 0) {
-            // Take only the last 5 messages for active note session context
-            const limitedMessages = recentMessages.slice(-5);
-            formData.append('recent_messages', JSON.stringify(limitedMessages));
-        }
-
-
-
-        const response = await client.post(BACKEND_PROCESS_NOTE_PATH, formData, {
-            validateStatus: (status) =>
-                (status >= 200 && status < 300) || status === 403 || status === 404,
-        });
-
-        if (response.status === 403) {
-            const { onLimitReached } = await import('../utils/limitEvents');
-            onLimitReached.emit();
             return {
-                originalText: transcriptText,
-                processedText: null,
-                hasInstruction: false,
+                originalText: result.raw_note || transcriptText || '',
+                processedText: result.improved_markdown,
+                hasInstruction: typeof result.has_instruction === 'boolean' ? result.has_instruction : (result.mode !== "none"),
+                instruction: null,
+                mode: result.mode,
+                titleAction: result.title_action === 'set' ? 'set' : 'none',
+                titleValue: typeof result.title_value === 'string' ? result.title_value : null,
+                suggestedTitle: typeof result.suggested_title === 'string' ? result.suggested_title : null,
+                success: true
+            };
+        } catch (error) {
+            const formattedError = formatAgentRequestError(error);
+            const shouldRetry = attempt < BACKEND_AGENT_MAX_ATTEMPTS && isRetryableAgentError(error);
+
+            console.warn(
+                `[VoiceAgent] Processing attempt ${attempt} failed:`,
+                error instanceof Error ? error.message : error,
+            );
+
+            if (shouldRetry) {
+                await sleep(BACKEND_AGENT_RETRY_DELAY_MS * attempt);
+                continue;
+            }
+
+            return {
+                originalText: transcriptText || preTranscribedText || '',
                 success: false,
-                error: 'Usage limit reached'
+                error: formattedError,
+                hasInstruction: false
             };
         }
-
-        // Fallback checks
-        if (response.status === 404) {
-            return {
-                originalText: transcriptText,
-                processedText: null,
-                hasInstruction: false,
-                success: true,
-                error: 'Backend endpoint not found, using local transcript'
-            };
-        }
-
-        const result = response.data;
-        // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool }
-
-        return {
-            originalText: result.raw_note || transcriptText || '',
-            processedText: result.improved_markdown,
-            hasInstruction: typeof result.has_instruction === 'boolean' ? result.has_instruction : (result.mode !== "none"),
-            instruction: null,
-            mode: result.mode,
-            titleAction: result.title_action === 'set' ? 'set' : 'none',
-            titleValue: typeof result.title_value === 'string' ? result.title_value : null,
-            suggestedTitle: typeof result.suggested_title === 'string' ? result.suggested_title : null,
-            success: true
-        };
-
-    } catch (error) {
-        // Use warn instead of error to prevent RedBox overlays in development for network issues
-        console.warn('[VoiceAgent] Processing failed:', error instanceof Error ? error.message : error);
-
-        return {
-            originalText: preTranscribedText || '',
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            hasInstruction: false
-        };
     }
+
+    return {
+        originalText: transcriptText || preTranscribedText || '',
+        success: false,
+        error: 'Failed to process agent request',
+        hasInstruction: false
+    };
 }
