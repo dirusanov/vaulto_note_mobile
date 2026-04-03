@@ -4096,10 +4096,6 @@ export const NoteEditScreen = () => {
 
     const shouldUseAgentModeGlobally = useCallback(
         async (agentModeOverride?: boolean): Promise<boolean> => {
-            const provider = await getAIProvider();
-            if (provider !== 'vaulto_ai') {
-                return false;
-            }
             if (typeof agentModeOverride === 'boolean') {
                 return agentModeOverride;
             }

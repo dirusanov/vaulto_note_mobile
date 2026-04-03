@@ -704,44 +704,6 @@ export async function processVoiceNote(
         };
     }
 
-    // Fallback for non-backend providers (e.g. direct OpenAI on client or Local options)
-    // If not using the gateway, we can't use the agent logic easily without re-implementing it here.
-    if (provider !== 'vaulto_ai') {
-        console.log(`[VoiceAgent] Provider is ${provider}. Falling back to simple transcription (no agents).`);
-        if (preTranscribedText) {
-            return {
-                originalText: preTranscribedText,
-                processedText: null,
-                hasInstruction: false,
-                instruction: null,
-                mode: null,
-                applyTarget: null,
-                needsConfirmation: false,
-                confirmationMessage: null,
-                titleAction: 'none',
-                titleValue: null,
-                suggestedTitle: null,
-                success: true
-            };
-        }
-        const transResult = await transcribeAudio(audioUri, language);
-        return {
-            originalText: transResult.text,
-            processedText: null,
-            hasInstruction: false,
-            instruction: null,
-            mode: null,
-            applyTarget: null,
-            needsConfirmation: false,
-            confirmationMessage: null,
-            titleAction: 'none',
-            titleValue: null,
-            suggestedTitle: null,
-            success: transResult.success,
-            error: transResult.error
-        };
-    }
-
     console.log('[VoiceAgent] Request URL:', BACKEND_PROCESS_NOTE_URL);
     const normalizedCurrentContent = normalizeAgentContextContent(currentContent);
 
