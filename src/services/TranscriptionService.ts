@@ -43,6 +43,9 @@ export interface VoiceNoteResult {
     hasInstruction: boolean;
     instruction?: string | null;
     mode?: string | null;
+    applyTarget?: 'current_variant' | 'new_improvement' | null;
+    needsConfirmation?: boolean;
+    confirmationMessage?: string | null;
     titleAction?: 'set' | 'none';
     titleValue?: string | null;
     suggestedTitle?: string | null;
@@ -674,6 +677,9 @@ export async function processVoiceNote(
                 hasInstruction: false,
                 instruction: null,
                 mode: 'none',
+                applyTarget: null,
+                needsConfirmation: false,
+                confirmationMessage: null,
                 titleAction: 'none',
                 titleValue: null,
                 suggestedTitle: null,
@@ -687,6 +693,9 @@ export async function processVoiceNote(
             hasInstruction: false,
             instruction: null,
             mode: 'none',
+            applyTarget: null,
+            needsConfirmation: false,
+            confirmationMessage: null,
             titleAction: 'none',
             titleValue: null,
             suggestedTitle: null,
@@ -706,6 +715,9 @@ export async function processVoiceNote(
                 hasInstruction: false,
                 instruction: null,
                 mode: null,
+                applyTarget: null,
+                needsConfirmation: false,
+                confirmationMessage: null,
                 titleAction: 'none',
                 titleValue: null,
                 suggestedTitle: null,
@@ -719,6 +731,9 @@ export async function processVoiceNote(
             hasInstruction: false,
             instruction: null,
             mode: null,
+            applyTarget: null,
+            needsConfirmation: false,
+            confirmationMessage: null,
             titleAction: 'none',
             titleValue: null,
             suggestedTitle: null,
@@ -795,7 +810,7 @@ export async function processVoiceNote(
             }
 
             const result = await response.json();
-            // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool }
+            // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool, "apply_target": "current_variant|new_improvement" }
 
             return {
                 originalText: result.raw_note || transcriptText || '',
@@ -803,6 +818,9 @@ export async function processVoiceNote(
                 hasInstruction: typeof result.has_instruction === 'boolean' ? result.has_instruction : (result.mode !== "none"),
                 instruction: null,
                 mode: result.mode,
+                applyTarget: result.apply_target === 'current_variant' ? 'current_variant' : 'new_improvement',
+                needsConfirmation: typeof result.needs_confirmation === 'boolean' ? result.needs_confirmation : false,
+                confirmationMessage: typeof result.confirmation_message === 'string' ? result.confirmation_message : null,
                 titleAction: result.title_action === 'set' ? 'set' : 'none',
                 titleValue: typeof result.title_value === 'string' ? result.title_value : null,
                 suggestedTitle: typeof result.suggested_title === 'string' ? result.suggested_title : null,

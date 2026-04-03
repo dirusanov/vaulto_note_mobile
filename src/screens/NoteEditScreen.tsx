@@ -272,9 +272,9 @@ const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'upda
         return action === 'created' ? 'Created improved view' : 'Updated formatting';
     }
     if (normalizedMode === 'edit_content') {
-        return action === 'created' ? 'Created improved view' : 'Updated Improved';
+        return action === 'created' ? 'Created improved view' : 'Updated note';
     }
-    return action === 'created' ? 'Created improved view' : 'Updated Improved';
+    return action === 'created' ? 'Created improved view' : 'Updated note';
 };
 
 const HeaderTitle = memo(({
@@ -855,6 +855,31 @@ export const NoteEditScreen = () => {
 
     const setRecordingOutcomeStatus = useCallback((_recordingId: string | undefined, _status: string) => {
         // Intentionally disabled per UX request: no per-recording status badges.
+    }, []);
+
+    const requestAgentConfirmation = useCallback((message: string): Promise<boolean> => {
+        const normalizedMessage = message.trim() || 'Confirm this change?';
+        return new Promise((resolve) => {
+            Alert.alert(
+                'Confirm change',
+                normalizedMessage,
+                [
+                    {
+                        text: 'Cancel',
+                        style: 'cancel',
+                        onPress: () => resolve(false),
+                    },
+                    {
+                        text: 'Apply',
+                        onPress: () => resolve(true),
+                    },
+                ],
+                {
+                    cancelable: true,
+                    onDismiss: () => resolve(false),
+                }
+            );
+        });
     }, []);
 
     const registerTranscribedInsertion = useCallback((rawText: string) => {
@@ -3353,10 +3378,47 @@ export const NoteEditScreen = () => {
                         const processedText = typeof agentResult.processedText === 'string'
                             ? agentResult.processedText.trim()
                             : '';
+                        const applyTarget = agentResult.applyTarget === 'current_variant'
+                            ? 'current_variant'
+                            : 'new_improvement';
+                        const hasProcessedPayload =
+                            typeof agentResult.processedText === 'string' &&
+                            (agentResult.mode === 'edit_content' || processedText.length > 0);
                         const hasApplicableInstruction =
                             agentResult.hasInstruction &&
-                            !!processedText &&
+                            hasProcessedPayload &&
                             !areTextsEquivalent(processedText, originalText);
+                        const needsConfirmation = !!agentResult.needsConfirmation;
+                        const confirmationMessage = (agentResult.confirmationMessage || '').trim();
+                        const hasConfirmableAction =
+                            (agentResult.titleAction === 'set' && !!explicitTitle) ||
+                            hasApplicableInstruction;
+
+                        if (needsConfirmation && hasConfirmableAction) {
+                            const approved = await requestAgentConfirmation(confirmationMessage);
+                            if (!approved) {
+                                if (hasPendingDraft) {
+                                    validBatch.forEach(t => {
+                                        if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
+                                    });
+                                    replaceCurrentHistoryState(
+                                        taskVariantId,
+                                        resolveImprovementVariantTitle(taskVariantId),
+                                        commandBaseContent
+                                    );
+                                }
+                                await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
+                                    persist: true,
+                                    updateHistory: false,
+                                });
+                                dictationFinalized = true;
+                                allRecordingIds.forEach(id => {
+                                    setRecordingOutcomeStatus(id, 'Cancelled');
+                                    showVoiceResultStatus('Cancelled', id);
+                                });
+                                continue;
+                            }
+                        }
 
                         if (agentResult.titleAction === 'set' && explicitTitle && localNoteIdRef.current) {
                             if (hasPendingDraft) {
@@ -3447,9 +3509,35 @@ export const NoteEditScreen = () => {
                                 newText = appendSnippetToContent(commandBaseContent, processedText);
                             }
 
-                            if (newText && !areTextsEquivalent(newText, commandBaseContent)) {
+                            if (newText !== null && !areTextsEquivalent(newText, commandBaseContent)) {
                                 // Keep raw dictation in Original when the note was empty, but store AI output as improvement.
-                                if (taskVariantId === 'original') {
+                                if (taskVariantId === 'original' && applyTarget === 'current_variant') {
+                                    if (hasPendingDraft) {
+                                        validBatch.forEach(t => {
+                                            if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
+                                        });
+                                        replaceCurrentHistoryState(
+                                            taskVariantId,
+                                            resolveImprovementVariantTitle(taskVariantId),
+                                            commandBaseContent
+                                        );
+                                    }
+
+                                    await setVariantContentWithOptions(taskVariantId, newText, {
+                                        persist: true,
+                                        updateHistory: true,
+                                    });
+                                    dictationFinalized = true;
+                                    shouldFallbackToDictationOnError = false;
+
+                                    const status = TODO_LIST_LINE_REGEX.test(newText)
+                                        ? 'Updated checklist'
+                                        : 'Updated note';
+                                    allRecordingIds.forEach(id => {
+                                        setRecordingOutcomeStatus(id, status);
+                                        showVoiceResultStatus(status, id);
+                                    });
+                                } else if (taskVariantId === 'original') {
                                     if (hasPendingDraft) {
                                         validBatch.forEach(t => {
                                             if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
