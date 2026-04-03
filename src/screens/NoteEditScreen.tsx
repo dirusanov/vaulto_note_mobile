@@ -282,6 +282,78 @@ const transcriptDirectlyMentionsChecklistItem = (content: string, transcript: st
     ));
 };
 
+type ParsedChecklistItem = {
+    checked: boolean;
+    lineIndex: number;
+    text: string;
+};
+
+const parseChecklistItemsForCommandFallback = (content: string): { items: ParsedChecklistItem[]; markdown: string } => {
+    const markdown = isRichHtmlContent(content)
+        ? richContentToAgentMarkdown(content)
+        : content;
+
+    const items = (markdown || '')
+        .split(/\r?\n/)
+        .map((line, lineIndex) => {
+            const match = line.match(/^\s*([-*]\s*)\[(?:([ xX]))?\]\s+(.*)$/);
+            if (!match) return null;
+            return {
+                checked: typeof match[2] === 'string' && match[2].toLowerCase() === 'x',
+                lineIndex,
+                text: normalizeChecklistCommandText(match[3] || ''),
+            } satisfies ParsedChecklistItem;
+        })
+        .filter((item): item is ParsedChecklistItem => !!item && !!item.text);
+
+    return { items, markdown };
+};
+
+const resolveDirectChecklistCheckFallback = (content: string, transcript: string): string | null => {
+    const normalizedTranscript = normalizeChecklistCommandText(transcript);
+    if (!normalizedTranscript) return null;
+
+    const { items, markdown } = parseChecklistItemsForCommandFallback(content);
+    if (items.length === 0) return null;
+
+    const directlyMentionedUncheckedItems = items.filter((item) => (
+        !item.checked &&
+        item.text.length >= 2 &&
+        normalizedTranscript.includes(item.text)
+    ));
+    if (directlyMentionedUncheckedItems.length === 0) return null;
+
+    let residualIntent = normalizedTranscript;
+    directlyMentionedUncheckedItems
+        .slice()
+        .sort((left, right) => right.text.length - left.text.length)
+        .forEach((item) => {
+            residualIntent = residualIntent.replace(item.text, ' ');
+        });
+    residualIntent = residualIntent
+        .replace(/[.,!?;:()[\]{}"'`/\\+-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!residualIntent) {
+        return null;
+    }
+
+    const lineIndexesToCheck = new Set(directlyMentionedUncheckedItems.map((item) => item.lineIndex));
+    let changed = false;
+    const nextLines = markdown.split(/\r?\n/).map((line, lineIndex) => {
+        if (!lineIndexesToCheck.has(lineIndex)) {
+            return line;
+        }
+
+        const nextLine = line.replace(/^(\s*[-*]\s*)\[(?:[ xX])?\]/, '$1[x]');
+        changed = changed || nextLine !== line;
+        return nextLine;
+    });
+
+    return changed ? nextLines.join('\n') : null;
+};
+
 const extractListLikeItems = (text: string): string[] => {
     const trimmed = (text || '').trim();
     if (!trimmed) return [];
@@ -3361,15 +3433,11 @@ export const NoteEditScreen = () => {
                 const contextContent = shouldUseTaskProvidedContext
                     ? (task.agentContextContent || '')
                     : pendingContextAtStart.contentWithoutPending;
-                const checklistMentionWithoutPendingFallback = transcriptDirectlyMentionsChecklistItem(
-                    contextContent,
-                    normalizedTaskText
-                );
                 const allRecordingIds = validBatch.flatMap(t => getTaskRecordingIds(t));
                 // If every task in the batch already had dictation applied, we can skip dictation
                 const shouldSkipDictationApply = validBatch.every(t => !!t.dictationAlreadyApplied) && !pendingContextAtStart.pending;
                 let dictationFinalized = false;
-                let shouldFallbackToDictationOnError = !checklistMentionWithoutPendingFallback;
+                let shouldFallbackToDictationOnError = true;
 
                 console.log(`[NoteEditScreen] Processing agent batch of ${validBatch.length} tasks (queue=${getPendingTaskCount(agentQueue.current)})`);
 
@@ -3750,7 +3818,13 @@ export const NoteEditScreen = () => {
                                 });
                             }
                         } else {
-                            if (checklistMentionFallback) {
+                            const localChecklistFallbackText = checklistMentionFallback
+                                ? resolveDirectChecklistCheckFallback(
+                                    commandBaseContent,
+                                    originalText || normalizedTaskText
+                                )
+                                : null;
+                            if (localChecklistFallbackText && !areTextsEquivalent(localChecklistFallbackText, commandBaseContent)) {
                                 if (hasPendingDraft) {
                                     validBatch.forEach(t => {
                                         if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
@@ -3761,15 +3835,15 @@ export const NoteEditScreen = () => {
                                         commandBaseContent
                                     );
                                 }
-                                await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
+                                await setVariantContentWithOptions(taskVariantId, localChecklistFallbackText, {
                                     persist: true,
-                                    updateHistory: false,
+                                    updateHistory: true,
                                 });
                                 dictationFinalized = true;
                                 shouldFallbackToDictationOnError = false;
                                 allRecordingIds.forEach(id => {
-                                    setRecordingOutcomeStatus(id, 'No changes');
-                                    showVoiceResultStatus('No changes', id);
+                                    setRecordingOutcomeStatus(id, 'Updated checklist');
+                                    showVoiceResultStatus('Updated checklist', id);
                                 });
                             } else {
                                 await finalizeAsDictation(originalText || normalizedTaskText);
