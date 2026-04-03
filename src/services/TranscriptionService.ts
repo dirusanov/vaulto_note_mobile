@@ -14,7 +14,7 @@ import {
     getTranscriptionLanguage,
 } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
-import { isRichHtmlContent, richContentToPlainText } from '../utils/richContent';
+import { isRichHtmlContent, richContentToAgentMarkdown } from '../utils/richContent';
 import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
 import client from '../api/client';
@@ -59,7 +59,7 @@ const normalizeAgentContextContent = (content?: string): string | undefined => {
     }
 
     const normalized = isRichHtmlContent(content)
-        ? richContentToPlainText(content)
+        ? richContentToAgentMarkdown(content)
         : content;
 
     const trimmed = normalized.trim();

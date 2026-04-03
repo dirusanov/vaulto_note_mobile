@@ -14,6 +14,8 @@ const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
 const TASK_ITEM_HTML_REGEX = /<li\b[^>]*data-type=(["'])taskItem\1/i;
 const EMPTY_CHECKLIST_MARKDOWN_REGEX = /(?:^|\n)\s*-\s\[(?: |x|X)\]\s*(?=\n|$)/;
 const TRAILING_IMG_TAG_REGEX = /<img\b[^>]*>\s*$/i;
+const RICH_TASK_ITEM_BLOCK_REGEX = /<li\b(?=[^>]*data-type=(["'])taskItem\1)[^>]*>[\s\S]*?<\/li>/gi;
+const RICH_LIST_ITEM_BLOCK_REGEX = /<li\b[^>]*>[\s\S]*?<\/li>/gi;
 
 const escapeHtml = (text: string): string =>
     text
@@ -31,6 +33,41 @@ const decodeHtmlEntities = (text: string): string =>
         .replace(/&gt;/gi, '>')
         .replace(/&quot;/gi, '"')
         .replace(/&#39;/gi, "'");
+
+const normalizeAgentTextWhitespace = (text: string): string =>
+    text
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+const richHtmlFragmentToInlineText = (html: string): string => {
+    if (!html) {
+        return '';
+    }
+
+    const normalized = decodeHtmlEntities(
+        html
+            .replace(/<img\b[^>]*>/gi, (match) => (getAudioEmbedAttributesFromHtml(match) ? ' ' : match))
+            .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/(p|div|blockquote|h[1-6]|li)>/gi, '\n')
+            .replace(/<li\b[^>]*>/gi, ' ')
+            .replace(/<label\b[^>]*>/gi, '')
+            .replace(/<\/label>/gi, ' ')
+            .replace(/<input\b[^>]*>/gi, '')
+            .replace(/<[^>]+>/g, '')
+    );
+
+    return normalized
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
 
 export const stripAudioEmbedsFromRichContent = (content: string): string => {
     if (!content) {
@@ -124,6 +161,52 @@ export const richContentToPlainText = (content: string): string => {
         .replace(/\u00a0/g, ' ')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
+};
+
+export const richContentToAgentMarkdown = (content: string): string => {
+    if (!content) {
+        return '';
+    }
+
+    const sanitizedContent = stripAudioEmbedsFromRichContent(content);
+    if (!isRichHtmlContent(sanitizedContent)) {
+        return sanitizedContent.trim();
+    }
+
+    let normalized = sanitizedContent
+        .replace(/<img\b[^>]*>/gi, (match) => (getAudioEmbedAttributesFromHtml(match) ? '\n' : match))
+        .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, '\n')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '');
+
+    normalized = normalized.replace(RICH_TASK_ITEM_BLOCK_REGEX, (block) => {
+        const checked = /data-checked=(["'])true\1/i.test(block);
+        const innerHtml = block.replace(/^<li\b[^>]*>/i, '').replace(/<\/li>\s*$/i, '');
+        const text = richHtmlFragmentToInlineText(innerHtml);
+        if (!text) {
+            return '\n';
+        }
+        return `\n- [${checked ? 'x' : ' '}] ${text}\n`;
+    });
+
+    normalized = normalized.replace(RICH_LIST_ITEM_BLOCK_REGEX, (block) => {
+        const innerHtml = block.replace(/^<li\b[^>]*>/i, '').replace(/<\/li>\s*$/i, '');
+        const text = richHtmlFragmentToInlineText(innerHtml);
+        if (!text) {
+            return '\n';
+        }
+        return `\n- ${text}\n`;
+    });
+
+    normalized = decodeHtmlEntities(
+        normalized
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/(p|div|blockquote|h[1-6])>/gi, '\n')
+            .replace(/<\/(ul|ol)>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+    );
+
+    return normalizeAgentTextWhitespace(normalized);
 };
 
 export const hasMeaningfulRichContent = (content: string): boolean => {
