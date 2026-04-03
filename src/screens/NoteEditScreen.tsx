@@ -197,12 +197,58 @@ type MicInputMode = 'agent' | 'force_text';
 
 const TODO_LIST_LINE_REGEX = /^\s*-\s+\[[ xX]\]\s+/m;
 const TODO_LABEL_REGEX = /(todo|task|checklist|to-do|список|дела|чеклист)/i;
+const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:-\s+\[[ xX]\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
 
 const stripListMarker = (value: string): string =>
     value
         .replace(/^\s*[-*]\s+/, '')
         .replace(/^\s*\d+[\.\)]\s+/, '')
         .trim();
+
+const normalizeStructuredListLine = (value: string): string =>
+    value
+        .replace(/^\s*-\s+\[[ xX]\]\s+/, '')
+        .replace(/^\s*[-*]\s+/, '')
+        .replace(/^\s*\d+[\.\)]\s+/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const extractStructuredListLines = (value: string): string[] =>
+    (value || '')
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => STRUCTURED_LIST_LINE_REGEX.test(line))
+        .map(normalizeStructuredListLine)
+        .filter(Boolean);
+
+const hasContiguousLineBlock = (haystack: string[], needle: string[]): boolean => {
+    if (needle.length === 0 || haystack.length < needle.length) return false;
+
+    for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+        let matched = true;
+        for (let offset = 0; offset < needle.length; offset += 1) {
+            if (haystack[start + offset] !== needle[offset]) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) return true;
+    }
+
+    return false;
+};
+
+const contentAlreadyContainsStructuredListBlock = (base: string, block: string): boolean => {
+    const blockLines = extractStructuredListLines(block);
+    if (blockLines.length < 2) return false;
+
+    const comparableBase = isRichHtmlContent(base) ? richContentToPlainText(base) : base;
+    const baseLines = (comparableBase || '')
+        .split(/\r?\n/)
+        .map((line) => normalizeStructuredListLine(line.trimEnd()));
+
+    return hasContiguousLineBlock(baseLines, blockLines);
+};
 
 const extractListLikeItems = (text: string): string[] => {
     const trimmed = (text || '').trim();
@@ -3502,9 +3548,14 @@ export const NoteEditScreen = () => {
                                 const looksLikeFullDocument =
                                     processedText.includes('\n') &&
                                     processedText.length >= Math.max(40, Math.floor(commandBaseContent.length * 0.5));
+                                const duplicatesExistingStructuredBlock =
+                                    (agentResult.mode === 'todo' || agentResult.mode === 'list') &&
+                                    contentAlreadyContainsStructuredListBlock(commandBaseContent, processedText);
                                 newText = looksLikeFullDocument
                                     ? processedText
-                                    : appendSnippetToContent(commandBaseContent, processedText);
+                                    : duplicatesExistingStructuredBlock
+                                        ? commandBaseContent
+                                        : appendSnippetToContent(commandBaseContent, processedText);
                             } else {
                                 newText = appendSnippetToContent(commandBaseContent, processedText);
                             }
