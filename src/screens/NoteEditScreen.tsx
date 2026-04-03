@@ -197,7 +197,12 @@ const deriveTitleFromText = (text: string): string => {
 type MicInputMode = 'agent' | 'force_text';
 
 const TODO_LIST_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/m;
-const CHECKLIST_ITEM_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+(.*)$/;
+const CHECKLIST_ITEM_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s*(.*)$/;
+const CHECKLIST_MUTABLE_LINE_REGEX = /^(\s*[-*]\s*)\[(?:([ xX]))?\](\s*)(.*)$/;
+const RICH_TASK_ITEM_BLOCK_REGEX = /<li\b(?=[^>]*data-type=(["'])taskItem\1)[^>]*>[\s\S]*?<\/li>/gi;
+const RICH_CHECKBOX_INPUT_TAG_REGEX = /<input\b(?=[^>]*type=(["'])checkbox\1)[^>]*>/i;
+const RICH_DATA_CHECKED_ATTR_REGEX = /data-checked=(["'])(true|false)\1/i;
+const RICH_BOOLEAN_CHECKED_ATTR_REGEX = /\schecked(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/i;
 const TODO_LABEL_REGEX = /(todo|task|checklist|to-do|список|дела|чеклист)/i;
 const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:[-*]\s*\[(?:[ xX])?\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
 
@@ -284,36 +289,109 @@ const transcriptDirectlyMentionsChecklistItem = (content: string, transcript: st
 
 type ParsedChecklistItem = {
     checked: boolean;
-    lineIndex: number;
     text: string;
 };
 
-const parseChecklistItemsForCommandFallback = (content: string): { items: ParsedChecklistItem[]; markdown: string } => {
-    const markdown = isRichHtmlContent(content)
-        ? richContentToAgentMarkdown(content)
-        : content;
+const parseChecklistLineForCommandFallback = (line: string): ParsedChecklistItem | null => {
+    const match = line.match(CHECKLIST_MUTABLE_LINE_REGEX);
+    if (!match) return null;
 
-    const items = (markdown || '')
-        .split(/\r?\n/)
-        .map((line, lineIndex) => {
-            const match = line.match(/^\s*([-*]\s*)\[(?:([ xX]))?\]\s+(.*)$/);
-            if (!match) return null;
-            return {
-                checked: typeof match[2] === 'string' && match[2].toLowerCase() === 'x',
-                lineIndex,
-                text: normalizeChecklistCommandText(match[3] || ''),
-            } satisfies ParsedChecklistItem;
-        })
-        .filter((item): item is ParsedChecklistItem => !!item && !!item.text);
+    const text = normalizeChecklistCommandText(match[4] || '');
+    if (!text) return null;
 
-    return { items, markdown };
+    return {
+        checked: typeof match[2] === 'string' && match[2].toLowerCase() === 'x',
+        text,
+    };
+};
+
+const parseChecklistItemsForCommandFallback = (content: string): ParsedChecklistItem[] => {
+    if (!content) return [];
+
+    if (!isRichHtmlContent(content)) {
+        return (content || '')
+            .split(/\r?\n/)
+            .map(parseChecklistLineForCommandFallback)
+            .filter((item): item is ParsedChecklistItem => !!item);
+    }
+
+    return Array.from(content.matchAll(RICH_TASK_ITEM_BLOCK_REGEX))
+        .map((match) => parseChecklistLineForCommandFallback(richContentToAgentMarkdown(match[0])))
+        .filter((item): item is ParsedChecklistItem => !!item);
+};
+
+const updateMarkdownChecklistItemsCheckedPreservingFormat = (
+    content: string,
+    itemTextsToCheck: Set<string>,
+): string | null => {
+    if (!content || itemTextsToCheck.size === 0) return null;
+
+    let changed = false;
+    const nextContent = content.replace(/^(\s*[-*]\s*)\[(?:([ xX]))?\](\s*)(.*)$/gm, (line, prefix, marker, spacing, text) => {
+        const normalizedItemText = normalizeChecklistCommandText(text || '');
+        const isChecked = typeof marker === 'string' && marker.toLowerCase() === 'x';
+        if (!normalizedItemText || isChecked || !itemTextsToCheck.has(normalizedItemText)) {
+            return line;
+        }
+
+        changed = true;
+        return `${prefix}[x]${spacing}${text}`;
+    });
+
+    return changed ? nextContent : null;
+};
+
+const setRichTaskItemCheckedState = (block: string, checked: boolean): string => {
+    let nextBlock = block;
+
+    if (RICH_DATA_CHECKED_ATTR_REGEX.test(nextBlock)) {
+        nextBlock = nextBlock.replace(
+            RICH_DATA_CHECKED_ATTR_REGEX,
+            (_match, quote: string) => `data-checked=${quote}${checked ? 'true' : 'false'}${quote}`
+        );
+    } else {
+        nextBlock = nextBlock.replace(/^<li\b/i, `<li data-checked="${checked ? 'true' : 'false'}"`);
+    }
+
+    nextBlock = nextBlock.replace(RICH_CHECKBOX_INPUT_TAG_REGEX, (inputTag) => {
+        const hasCheckedAttr = RICH_BOOLEAN_CHECKED_ATTR_REGEX.test(inputTag);
+        if (checked) {
+            if (hasCheckedAttr) return inputTag;
+            return inputTag.replace(/\/?>$/, (closing) => ` checked${closing}`);
+        }
+
+        return inputTag.replace(RICH_BOOLEAN_CHECKED_ATTR_REGEX, '');
+    });
+
+    return nextBlock;
+};
+
+const updateRichChecklistItemsCheckedPreservingFormat = (
+    content: string,
+    itemTextsToCheck: Set<string>,
+): string | null => {
+    if (!content || itemTextsToCheck.size === 0) return null;
+
+    let changed = false;
+    const nextContent = content.replace(RICH_TASK_ITEM_BLOCK_REGEX, (block) => {
+        const parsedItem = parseChecklistLineForCommandFallback(richContentToAgentMarkdown(block));
+        if (!parsedItem || parsedItem.checked || !itemTextsToCheck.has(parsedItem.text)) {
+            return block;
+        }
+
+        const updatedBlock = setRichTaskItemCheckedState(block, true);
+        changed = changed || updatedBlock !== block;
+        return updatedBlock;
+    });
+
+    return changed ? nextContent : null;
 };
 
 const resolveDirectChecklistCheckFallback = (content: string, transcript: string): string | null => {
     const normalizedTranscript = normalizeChecklistCommandText(transcript);
     if (!normalizedTranscript) return null;
 
-    const { items, markdown } = parseChecklistItemsForCommandFallback(content);
+    const items = parseChecklistItemsForCommandFallback(content);
     if (items.length === 0) return null;
 
     const directlyMentionedUncheckedItems = items.filter((item) => (
@@ -339,19 +417,10 @@ const resolveDirectChecklistCheckFallback = (content: string, transcript: string
         return null;
     }
 
-    const lineIndexesToCheck = new Set(directlyMentionedUncheckedItems.map((item) => item.lineIndex));
-    let changed = false;
-    const nextLines = markdown.split(/\r?\n/).map((line, lineIndex) => {
-        if (!lineIndexesToCheck.has(lineIndex)) {
-            return line;
-        }
-
-        const nextLine = line.replace(/^(\s*[-*]\s*)\[(?:[ xX])?\]/, '$1[x]');
-        changed = changed || nextLine !== line;
-        return nextLine;
-    });
-
-    return changed ? nextLines.join('\n') : null;
+    const itemTextsToCheck = new Set(directlyMentionedUncheckedItems.map((item) => item.text));
+    return isRichHtmlContent(content)
+        ? updateRichChecklistItemsCheckedPreservingFormat(content, itemTextsToCheck)
+        : updateMarkdownChecklistItemsCheckedPreservingFormat(content, itemTextsToCheck);
 };
 
 const extractListLikeItems = (text: string): string[] => {
