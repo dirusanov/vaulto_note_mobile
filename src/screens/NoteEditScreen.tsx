@@ -1076,30 +1076,6 @@ export const NoteEditScreen = () => {
         // Intentionally disabled per UX request: no per-recording status badges.
     }, []);
 
-    const requestAgentConfirmation = useCallback((message: string): Promise<boolean> => {
-        const normalizedMessage = message.trim() || 'Confirm this change?';
-        return new Promise((resolve) => {
-            Alert.alert(
-                'Confirm change',
-                normalizedMessage,
-                [
-                    {
-                        text: 'Cancel',
-                        style: 'cancel',
-                        onPress: () => resolve(false),
-                    },
-                    {
-                        text: 'Apply',
-                        onPress: () => resolve(true),
-                    },
-                ],
-                {
-                    cancelable: true,
-                    onDismiss: () => resolve(false),
-                }
-            );
-        });
-    }, []);
 
     const registerTranscribedInsertion = useCallback((rawText: string) => {
         const normalized = normalizeTextForComparison(rawText);
@@ -3620,32 +3596,6 @@ export const NoteEditScreen = () => {
                             (agentResult.titleAction === 'set' && !!explicitTitle) ||
                             hasApplicableInstruction;
 
-                        if (needsConfirmation && hasConfirmableAction) {
-                            const approved = await requestAgentConfirmation(confirmationMessage);
-                            if (!approved) {
-                                clearTranscribedInsertionExpectation();
-                                if (hasPendingDraft) {
-                                    validBatch.forEach(t => {
-                                        if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
-                                    });
-                                    replaceCurrentHistoryState(
-                                        taskVariantId,
-                                        resolveImprovementVariantTitle(taskVariantId),
-                                        commandBaseContent
-                                    );
-                                }
-                                await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
-                                    persist: true,
-                                    updateHistory: false,
-                                });
-                                dictationFinalized = true;
-                                allRecordingIds.forEach(id => {
-                                    setRecordingOutcomeStatus(id, 'Cancelled');
-                                    showVoiceResultStatus('Cancelled', id);
-                                });
-                                continue;
-                            }
-                        }
 
                         if (agentResult.titleAction === 'set' && explicitTitle && localNoteIdRef.current) {
                             clearTranscribedInsertionExpectation();
