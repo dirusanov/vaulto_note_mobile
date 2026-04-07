@@ -3576,9 +3576,9 @@ export const NoteEditScreen = () => {
                         const processedText = typeof agentResult.processedText === 'string'
                             ? agentResult.processedText.trim()
                             : '';
-                        const applyTarget = agentResult.applyTarget === 'current_variant'
-                            ? 'current_variant'
-                            : 'new_improvement';
+                        // applyTarget (agentResult.applyTarget) is intentionally not used to
+                        // route 'original' variant writes — the original note is always protected.
+                        // See the hasApplicableInstruction branch below for details.
                         const hasProcessedPayload =
                             typeof agentResult.processedText === 'string' &&
                             (agentResult.mode === 'edit_content' || processedText.length > 0);
@@ -3694,34 +3694,9 @@ export const NoteEditScreen = () => {
 
                             if (newText !== null && !areTextsEquivalent(newText, commandBaseContent)) {
                                 clearTranscribedInsertionExpectation();
-                                // Keep raw dictation in Original when the note was empty, but store AI output as improvement.
-                                if (taskVariantId === 'original' && applyTarget === 'current_variant') {
-                                    if (hasPendingDraft) {
-                                        validBatch.forEach(t => {
-                                            if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
-                                        });
-                                        replaceCurrentHistoryState(
-                                            taskVariantId,
-                                            resolveImprovementVariantTitle(taskVariantId),
-                                            commandBaseContent
-                                        );
-                                    }
-
-                                    await setVariantContentWithOptions(taskVariantId, newText, {
-                                        persist: true,
-                                        updateHistory: true,
-                                    });
-                                    dictationFinalized = true;
-                                    shouldFallbackToDictationOnError = false;
-
-                                    const status = TODO_LIST_LINE_REGEX.test(newText)
-                                        ? 'Updated checklist'
-                                        : 'Updated note';
-                                    allRecordingIds.forEach(id => {
-                                        setRecordingOutcomeStatus(id, status);
-                                        showVoiceResultStatus(status, id);
-                                    });
-                                } else if (taskVariantId === 'original') {
+                                // Original note must never be overwritten by agent instructions.
+                                // applyTarget === 'current_variant' is only honoured for improvement variants.
+                                if (taskVariantId === 'original') {
                                     if (hasPendingDraft) {
                                         validBatch.forEach(t => {
                                             if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
