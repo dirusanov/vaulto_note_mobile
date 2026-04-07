@@ -52,7 +52,6 @@ export const NotesListScreen = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const lastFetchAtRef = useRef(0);
     const initialFetchDoneRef = useRef(false);
-    const columnAssignmentsRef = useRef<Map<string, 0 | 1>>(new Map());
     const initialOrderRef = useRef<string[] | null>(null);
     const sortFreezeUntilRef = useRef<number | null>(null);
 
@@ -87,7 +86,6 @@ export const NotesListScreen = () => {
     useEffect(() => {
         initialFetchDoneRef.current = false;
         lastFetchAtRef.current = 0;
-        columnAssignmentsRef.current.clear();
         initialOrderRef.current = null;
         sortFreezeUntilRef.current = null;
     }, [userId]);
@@ -428,14 +426,6 @@ export const NotesListScreen = () => {
         return dateB - dateA;
     });
 
-    useEffect(() => {
-        const existing = new Set(sortedNotes.map(note => note.id));
-        for (const key of columnAssignmentsRef.current.keys()) {
-            if (!existing.has(key)) {
-                columnAssignmentsRef.current.delete(key);
-            }
-        }
-    }, [sortedNotes]);
 
     let orderedNotes = sortedNotes;
     const nowMs = Date.now();
@@ -460,13 +450,8 @@ export const NotesListScreen = () => {
 
     const leftColumnNotes: typeof sortedNotes = [];
     const rightColumnNotes: typeof sortedNotes = [];
-    orderedNotes.forEach(note => {
-        let assigned = columnAssignmentsRef.current.get(note.id);
-        if (assigned === undefined) {
-            assigned = leftColumnNotes.length <= rightColumnNotes.length ? 0 : 1;
-            columnAssignmentsRef.current.set(note.id, assigned);
-        }
-        if (assigned === 0) {
+    orderedNotes.forEach((note, index) => {
+        if (index % 2 === 0) {
             leftColumnNotes.push(note);
         } else {
             rightColumnNotes.push(note);
