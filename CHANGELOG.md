@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.56] - 2026-04-07
+## [1.0.57] - 2026-04-08
 
 ### Added
 - **Note Protection**: Added protection for the original note variant in Agent Mode to prevent overwrites from voice commands.
