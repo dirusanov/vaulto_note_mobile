@@ -744,7 +744,7 @@ export const NoteEditScreen = () => {
         setActiveVariant,
         updateNoteStorageScope,
     } = useNotesContext();
-    const { isAuthenticated, isGuest, userId, user } = useAuth();
+    const { isAuthenticated, isGuest, userId, user, refreshProfile } = useAuth();
     const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
     const normalizePrivacy = (value?: NotePrivacy): NotePrivacy => {
@@ -3553,6 +3553,9 @@ export const NoteEditScreen = () => {
                         });
                         // We still shift below
                     } else if (agentResult.success) {
+                        // Refresh profile to update balance in UI after deduction
+                        refreshProfile?.().catch(() => {});
+
                         // SUCCESS HANDLER
                         if (normalizedTaskText) {
                             setRequestHistory(prev => {
@@ -4180,6 +4183,11 @@ export const NoteEditScreen = () => {
             isTranscriptionSuccess = transcription.success && !!transcription.text;
             transcribedText = isTranscriptionSuccess ? transcription.text : '';
 
+            // Refresh profile to update balance in UI after deduction
+            if (isTranscriptionSuccess) {
+                refreshProfile?.().catch(() => {});
+            }
+
             const shouldBypassAgentForThisRecording = micMode === 'force_text';
             if (isTranscriptionSuccess) {
                 if (shouldBypassAgentForThisRecording || !shouldUseAgentModeForThisRecording) {
@@ -4666,6 +4674,9 @@ export const NoteEditScreen = () => {
                 updateHistoryImmediate(nextVariantTitle, finalText, variantAtRequestStart);
                 setReparseTrigger(prev => prev + 1);
             }
+
+            // Refresh profile to update balance in UI after deduction
+            refreshProfile?.().catch(() => {});
         } catch (error: any) {
             const prettyMessage = getErrorMessage(error, 'Failed to improve text. Check AI settings.');
             showPrettyQuotaNotification(error, prettyMessage);
