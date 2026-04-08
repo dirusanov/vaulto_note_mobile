@@ -2,7 +2,7 @@ import authClient from './authClient';
 import client from './client';
 import { AUTH_AUDIENCE } from '../utils/env';
 import axios from 'axios';
-import { AUTH_API_URL } from '../utils/env';
+import { API_URL, AUTH_API_URL } from '../utils/env';
 
 export interface AuthTokens {
     access_token: string;
@@ -91,7 +91,7 @@ export const authApi = {
 
     getProfile: async (accessToken?: string): Promise<UserProfile> => {
         if (accessToken) {
-            const response = await axios.get(`${AUTH_API_URL}/auth/me`, {
+            const response = await axios.get(`${API_URL}/usage/me`, {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                 },
@@ -99,7 +99,7 @@ export const authApi = {
             return response.data;
         }
 
-        const response = await authClient.get('/auth/me');
+        const response = await client.get('/usage/me');
         return response.data;
     },
 

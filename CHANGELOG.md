@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.58] - 2026-04-08
+
+### Fixed
+- **Android Autolinking Cache Recovery**: Clear stale generated Android build/autolinking artifacts after moving the project directory.
+- **Profile & Usage Refresh**: Load authenticated profile data and current-period usage from the gateway usage endpoints.
+- **Note Editor Navigation Safety**: Prevent route param updates from firing against an already-unmounted note editor screen.
+
 ## [1.0.57] - 2026-04-08
 
 ### Added

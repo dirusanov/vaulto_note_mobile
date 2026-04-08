@@ -29,7 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
 import { AudioEmbedControlPayload } from '../components/richTextAudioBridge';
-import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { CommonActions, useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
@@ -766,10 +766,32 @@ export const NoteEditScreen = () => {
         localNoteIdRef.current = localNoteId;
     }, [localNoteId]);
 
+    const updateRouteParamsIfCurrent = useCallback((params: Partial<RootStackParamList['NoteEdit']>) => {
+        if (!isMounted.current) {
+            return false;
+        }
+
+        const routeStillMounted = navigation
+            .getState()
+            .routes
+            .some((stateRoute) => stateRoute.key === route.key);
+
+        if (!routeStillMounted) {
+            return false;
+        }
+
+        navigation.dispatch({
+            ...CommonActions.setParams(params),
+            source: route.key,
+        });
+
+        return true;
+    }, [navigation, route.key]);
+
     const bindCreatedDraftToRoute = useCallback((noteId: string) => {
         createdDraftNoteIdRef.current = noteId;
-        navigation.setParams({ noteId });
-    }, [navigation]);
+        updateRouteParamsIfCurrent({ noteId });
+    }, [updateRouteParamsIfCurrent]);
 
     // Voice Recordings
     const [voiceRecordings, setVoiceRecordings] = useState<VoiceRecording[]>([]);
@@ -4821,9 +4843,9 @@ export const NoteEditScreen = () => {
         if (route.params?.initialRecording) {
             handleRecordingFinish(route.params.initialRecording, route.params.initialTranscribe ?? true);
             // Clear the params to prevent double execution (e.g. from StrictMode or navigation updates)
-            navigation.setParams({ initialRecording: undefined, initialTranscribe: undefined });
+            updateRouteParamsIfCurrent({ initialRecording: undefined, initialTranscribe: undefined });
         }
-    }, [route.params?.initialRecording, navigation]);
+    }, [handleRecordingFinish, route.params?.initialRecording, route.params?.initialTranscribe, updateRouteParamsIfCurrent]);
 
     useEffect(() => {
         const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';

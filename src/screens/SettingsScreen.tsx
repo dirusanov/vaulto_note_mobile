@@ -487,46 +487,38 @@ export const SettingsScreen = () => {
         }, [refreshLocalWhisperStatus, refreshLocalLLMStatus])
     );
 
-    const PROFILE_REFRESH_INTERVAL_MS = 60000;
-    const lastProfileRefreshAt = useRef(0);
+    const refreshCurrentPeriodUsage = useCallback(async () => {
+        if (!isAuthenticated || isGuest) {
+            setCurrentPeriodUsage(null);
+            setIsUsageLoading(false);
+            return;
+        }
+
+        setIsUsageLoading(true);
+        try {
+            const usage = await subscriptionApi.getCurrentPeriodUsage();
+            setCurrentPeriodUsage(usage);
+        } catch (error: any) {
+            console.warn('[SettingsScreen] Failed to load current period usage', error?.message ?? error);
+        } finally {
+            setIsUsageLoading(false);
+        }
+    }, [isAuthenticated, isGuest]);
+
     useFocusEffect(
         useCallback(() => {
             if (!isAuthenticated || isGuest) {
                 return;
             }
-            const now = Date.now();
-            if (now - lastProfileRefreshAt.current < PROFILE_REFRESH_INTERVAL_MS) {
-                return;
-            }
-            lastProfileRefreshAt.current = now;
             console.log('[SettingsScreen] Refreshing profile data...');
-            refreshProfile();
+            void refreshProfile();
         }, [isAuthenticated, isGuest, refreshProfile])
     );
 
-    const USAGE_REFRESH_INTERVAL_MS = 30000;
-    const lastUsageRefreshAt = useRef(0);
     useFocusEffect(
         useCallback(() => {
-            if (!isAuthenticated || isGuest) {
-                setCurrentPeriodUsage(null);
-                return;
-            }
-            const now = Date.now();
-            if (now - lastUsageRefreshAt.current < USAGE_REFRESH_INTERVAL_MS) {
-                return;
-            }
-            lastUsageRefreshAt.current = now;
-            setIsUsageLoading(true);
-            subscriptionApi.getCurrentPeriodUsage()
-                .then((usage) => setCurrentPeriodUsage(usage))
-                .catch((error) => {
-                    console.warn('[SettingsScreen] Failed to load current period usage', error.message);
-                })
-                .finally(() => {
-                    setIsUsageLoading(false);
-                });
-        }, [isAuthenticated, isGuest])
+            void refreshCurrentPeriodUsage();
+        }, [refreshCurrentPeriodUsage])
     );
 
     const loadPreferences = async () => {
@@ -897,13 +889,24 @@ export const SettingsScreen = () => {
         setShowSignOutDialog(true);
     };
 
-    const subscriptionTotalSeconds = user?.transcription_subscription_max_seconds ?? 0;
-    const subscriptionUsedSeconds = user?.transcription_subscription_used_seconds ?? 0;
-    const subscriptionRemainingSeconds = user?.transcription_subscription_remaining_seconds
+    const subscriptionTotalSeconds = currentPeriodUsage?.limits.transcription_subscription_max_seconds
+        ?? user?.transcription_subscription_max_seconds
+        ?? 0;
+    const subscriptionUsedSeconds = currentPeriodUsage?.limits.transcription_subscription_used_seconds
+        ?? user?.transcription_subscription_used_seconds
+        ?? 0;
+    const subscriptionRemainingSeconds = currentPeriodUsage?.limits.transcription_subscription_remaining_seconds
+        ?? user?.transcription_subscription_remaining_seconds
         ?? Math.max(0, subscriptionTotalSeconds - subscriptionUsedSeconds);
-    const trialTotalSeconds = user?.transcription_trial_total_seconds ?? 0;
-    const trialRemainingSeconds = user?.transcription_trial_remaining_seconds
-        ?? Math.max(0, trialTotalSeconds - (user?.transcription_trial_used_seconds ?? 0));
+    const trialUsedSeconds = currentPeriodUsage?.limits.transcription_trial_used_seconds
+        ?? user?.transcription_trial_used_seconds
+        ?? 0;
+    const trialRemainingSeconds = currentPeriodUsage?.limits.transcription_trial_remaining_seconds
+        ?? user?.transcription_trial_remaining_seconds
+        ?? Math.max(0, (user?.transcription_trial_total_seconds ?? 0) - trialUsedSeconds);
+    const trialTotalSeconds = currentPeriodUsage?.limits.transcription_trial_total_seconds
+        ?? user?.transcription_trial_total_seconds
+        ?? (trialUsedSeconds + trialRemainingSeconds);
     const progress = subscriptionTotalSeconds > 0
         ? Math.min(1, subscriptionUsedSeconds / subscriptionTotalSeconds)
         : 0;
@@ -919,8 +922,16 @@ export const SettingsScreen = () => {
         if (isLowBalance) return colors.warning;
         return colors.primary;
     };
-    const refillAtLabel = formatSubscriptionDate(user?.subscription_next_refill_at ?? null);
-    const refillInDays = getDaysUntilDate(user?.subscription_next_refill_at ?? null);
+    const refillAtLabel = formatSubscriptionDate(
+        currentPeriodUsage?.subscription_next_refill_at
+        ?? user?.subscription_next_refill_at
+        ?? null
+    );
+    const refillInDays = getDaysUntilDate(
+        currentPeriodUsage?.subscription_next_refill_at
+        ?? user?.subscription_next_refill_at
+        ?? null
+    );
     const usagePeriodStartLabel = formatSubscriptionDate(
         currentPeriodUsage?.period_start_at
         ?? user?.current_usage_period_start_at

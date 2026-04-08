@@ -22,6 +22,38 @@ plugins {
   id("expo-autolinking-settings")
 }
 
+import groovy.json.JsonSlurper
+
+def projectRootPath = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def autolinkingCacheDir = new File(rootDir, "build/generated/autolinking")
+def autolinkingCacheFile = new File(autolinkingCacheDir, "autolinking.json")
+
+def deleteIfExists = { String relativePath ->
+  def dir = new File(rootDir, relativePath)
+  if (dir.exists()) {
+    dir.deleteDir()
+  }
+}
+
+if (autolinkingCacheFile.exists()) {
+  try {
+    def cachedAutolinking = new JsonSlurper().parse(autolinkingCacheFile)
+    def cachedRootPath = cachedAutolinking?.root?.toString()
+
+    if (cachedRootPath && cachedRootPath != projectRootPath) {
+      println("[Vaulto] Removing stale Android autolinking cache for moved project: ${cachedRootPath} -> ${projectRootPath}")
+      deleteIfExists("build/generated/autolinking")
+      deleteIfExists("app/build/generated/autolinking")
+      deleteIfExists(".cxx")
+      deleteIfExists("app/.cxx")
+      deleteIfExists("app/build")
+      deleteIfExists("build")
+    }
+  } catch (Exception error) {
+    println("[Vaulto] Failed to inspect Android autolinking cache: ${error.message}")
+  }
+}
+
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
     ex.autolinkLibrariesFromCommand()
