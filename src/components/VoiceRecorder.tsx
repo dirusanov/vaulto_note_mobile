@@ -524,6 +524,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         <TouchableOpacity
                             style={[
                                 styles.badgeToggle,
+                                isMainScreen && styles.badgeToggleLarge,
                                 { backgroundColor: transcribe ? colors.primary : colors.surface },
                             ]}
                             onPress={() => handleTranscriptionToggle(!transcribe)}
@@ -531,11 +532,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         >
                             <MaterialIcons
                                 name="mic"
-                                size={14}
+                                size={isMainScreen ? 18 : 14}
                                 color={transcribe ? 'white' : colors.textSecondary}
                             />
                             <Text style={[
                                 styles.badgeLabel,
+                                isMainScreen && styles.badgeLabelLarge,
                                 { color: transcribe ? 'white' : colors.textSecondary }
                             ]}>
                                 Transcribe {transcribe ? 'ON' : 'OFF'}
@@ -545,6 +547,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         <TouchableOpacity
                             style={[
                                 styles.badgeToggle,
+                                isMainScreen && styles.badgeToggleLarge,
                                 { backgroundColor: effectiveAgentEnabled ? colors.primary : colors.surface },
                             ]}
                             onPress={() => handleAgentModeToggle(!agentModeEnabled)}
@@ -552,11 +555,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         >
                             <MaterialIcons
                                 name="smart-toy"
-                                size={14}
+                                size={isMainScreen ? 18 : 14}
                                 color={effectiveAgentEnabled ? 'white' : colors.textSecondary}
                             />
                             <Text style={[
                                 styles.badgeLabel,
+                                isMainScreen && styles.badgeLabelLarge,
                                 { color: effectiveAgentEnabled ? 'white' : colors.textSecondary }
                             ]}>
                                 {effectiveAgentEnabled ? 'AI Agent ON' : 'AI Agent OFF'}
@@ -581,7 +585,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             onPress={handleCancel}
                             disabled={isStopping}
                         >
-                            <MaterialIcons name="delete-outline" size={isMainScreen ? 32 : 26} color={colors.textTertiary} />
+                            <MaterialIcons name="delete-outline" size={isMainScreen ? 36 : 26} color={colors.textTertiary} />
                         </TouchableOpacity>
 
                         <View style={styles.centerSection}>
@@ -610,7 +614,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             onPress={handlePauseResume}
                             disabled={!isRecording || isStopping}
                         >
-                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={isMainScreen ? 32 : 26} color={colors.textSecondary} />
+                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={isMainScreen ? 36 : 26} color={colors.textSecondary} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -622,7 +626,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             onPress={handleStopRecording}
                             disabled={isStopping || !isRecording}
                         >
-                            <MaterialIcons name="send" size={isMainScreen ? 24 : 20} color="white" />
+                            <MaterialIcons name="send" size={isMainScreen ? 30 : 20} color="white" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -686,9 +690,18 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
     },
+    badgeToggleLarge: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 24,
+        gap: 8,
+    },
     badgeLabel: {
         ...typography.captionBold,
         fontSize: 12,
+    },
+    badgeLabelLarge: {
+        fontSize: 14,
     },
     mainBar: {
         flexDirection: 'row',
@@ -705,9 +718,9 @@ const styles = StyleSheet.create({
         elevation: 10,
     },
     mainBarLarge: {
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.m,
-        borderRadius: 40,
+        paddingHorizontal: spacing.l,
+        paddingVertical: spacing.m * 1.2,
+        borderRadius: 44,
     },
     cancelButtonCompact: {
         padding: spacing.s,
@@ -728,7 +741,7 @@ const styles = StyleSheet.create({
         fontVariant: ['tabular-nums'],
     },
     timerCompactLarge: {
-        fontSize: 24,
+        fontSize: 28,
     },
     waveformContainerCompact: {
         flex: 1,
@@ -741,8 +754,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     waveformContainerCompactLarge: {
-        height: 48,
-        gap: 4,
+        height: 56,
+        gap: 5,
     },
     barCompact: {
         width: 3,
@@ -751,8 +764,8 @@ const styles = StyleSheet.create({
         borderRadius: 1.5,
     },
     barCompactLarge: {
-        width: 4,
-        borderRadius: 2,
+        width: 5,
+        borderRadius: 2.5,
     },
     pauseButtonCompact: {
         padding: spacing.s,
@@ -769,9 +782,9 @@ const styles = StyleSheet.create({
         marginLeft: spacing.xs,
     },
     finishButtonCompactLarge: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
     },
     buttonDisabled: {
         opacity: 0.45,
