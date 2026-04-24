@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import './src/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

@@ -62,7 +62,8 @@
       "@react-native-google-signin/google-signin",
       "expo-secure-store",
       "expo-sqlite",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-localization"
     ],
     "extra": {
       "eas": {
