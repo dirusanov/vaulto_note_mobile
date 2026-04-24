@@ -46,6 +46,38 @@
     "account": {
       "signOut": "登出",
       "signIn": "登录"
+    },
+    "ui": {
+      "account": "账户",
+      "signInTitle": "登录",
+      "signInDesc": "同步笔记和访问AI功能",
+      "signInBtn": "登录 / 注册",
+      "security": "安全",
+      "sync": "同步",
+      "unlock": "解锁",
+      "enable": "启用",
+      "passphrase": "密码",
+      "localBackup": "本地备份",
+      "cloudKey": "云密钥",
+      "aiConfig": "AI 配置",
+      "primaryModel": "主要 AI 模型",
+      "whisperModel": "Whisper 模型",
+      "voiceSettings": "语音设置",
+      "transcriptionLang": "转录语言",
+      "support": "支持",
+      "feedback": "反馈与支持",
+      "privacy": "隐私政策",
+      "deleteAccount": "删除账户",
+      "aiModel": "AI 模型",
+      "intelligentAssist": "智能助手",
+      "autoTranscribe": "自动转录音频",
+      "autoTranscribeDesc": "自动语音转录",
+      "advAISettings": "高级 AI 设置",
+      "customAIConfig": "自定义 AI 配置",
+      "customAIConfigDesc": "OpenAI 或兼容 API",
+      "baseUrl": "基础 URL",
+      "apiKey": "API 密钥",
+      "testConnection": "测试连接"
     }
   },
   "languages": {

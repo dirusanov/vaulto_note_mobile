@@ -46,6 +46,38 @@
     "account": {
       "signOut": "Abmelden",
       "signIn": "Anmelden"
+    },
+    "ui": {
+      "account": "Konto",
+      "signInTitle": "Anmelden",
+      "signInDesc": "Notizen syncen & KI nutzen",
+      "signInBtn": "Anmelden / Erstellen",
+      "security": "Sicherheit",
+      "sync": "Synchronisieren",
+      "unlock": "Entsperren",
+      "enable": "Aktivieren",
+      "passphrase": "Passwort",
+      "localBackup": "Lokales Backup",
+      "cloudKey": "Cloud-Schlüssel",
+      "aiConfig": "KI-Konfiguration",
+      "primaryModel": "Haupt-KI-Modell",
+      "whisperModel": "Whisper-Modell",
+      "voiceSettings": "Spracheinstellungen",
+      "transcriptionLang": "Transkriptionssprache",
+      "support": "Support",
+      "feedback": "Feedback & Support",
+      "privacy": "Datenschutz",
+      "deleteAccount": "Konto löschen",
+      "aiModel": "KI-Modell",
+      "intelligentAssist": "Intelligente Assistenz",
+      "autoTranscribe": "Audio automatisch transkribieren",
+      "autoTranscribeDesc": "Automatische Sprachtranskription",
+      "advAISettings": "Erweiterte KI-Einstellungen",
+      "customAIConfig": "Benutzerdefinierte KI-Konfiguration",
+      "customAIConfigDesc": "OpenAI oder kompatible API",
+      "baseUrl": "Basis-URL",
+      "apiKey": "API-Schlüssel",
+      "testConnection": "Verbindung testen"
     }
   },
   "languages": {

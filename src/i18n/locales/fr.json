@@ -46,6 +46,38 @@
     "account": {
       "signOut": "Se déconnecter",
       "signIn": "Se connecter"
+    },
+    "ui": {
+      "account": "Compte",
+      "signInTitle": "Se connecter",
+      "signInDesc": "Synchronisez et utilisez l'IA",
+      "signInBtn": "Connexion / Créer",
+      "security": "Sécurité",
+      "sync": "Synchronisation",
+      "unlock": "Déverrouiller",
+      "enable": "Activer",
+      "passphrase": "Mot de passe",
+      "localBackup": "Sauvegarde locale",
+      "cloudKey": "Clé cloud",
+      "aiConfig": "Configuration IA",
+      "primaryModel": "Modèle IA principal",
+      "whisperModel": "Modèle Whisper",
+      "voiceSettings": "Paramètres vocaux",
+      "transcriptionLang": "Langue de transcription",
+      "support": "Support",
+      "feedback": "Commentaires et support",
+      "privacy": "Politique de confidentialité",
+      "deleteAccount": "Supprimer le compte",
+      "aiModel": "Modèle IA",
+      "intelligentAssist": "Assistance intelligente",
+      "autoTranscribe": "Transcrire l'audio automatiquement",
+      "autoTranscribeDesc": "Transcription vocale automatique",
+      "advAISettings": "Paramètres IA avancés",
+      "customAIConfig": "Configuration IA personnalisée",
+      "customAIConfigDesc": "OpenAI ou API compatible",
+      "baseUrl": "URL de base",
+      "apiKey": "Clé API",
+      "testConnection": "Tester la connexion"
     }
   },
   "languages": {

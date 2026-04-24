@@ -46,6 +46,38 @@
     "account": {
       "signOut": "Sign Out",
       "signIn": "Sign In"
+    },
+    "ui": {
+      "account": "Account",
+      "signInTitle": "Sign in",
+      "signInDesc": "Sync notes & access AI features",
+      "signInBtn": "Sign In / Create Account",
+      "security": "Security",
+      "sync": "Sync",
+      "unlock": "Unlock",
+      "enable": "Enable",
+      "passphrase": "Passphrase",
+      "localBackup": "Local Backup",
+      "cloudKey": "Cloud Key",
+      "aiConfig": "AI Configuration",
+      "primaryModel": "Primary AI Model",
+      "whisperModel": "Whisper Model",
+      "voiceSettings": "Voice Settings",
+      "transcriptionLang": "Transcription Language",
+      "support": "Support",
+      "feedback": "Feedback & Support",
+      "privacy": "Privacy Policy",
+      "deleteAccount": "Delete Account",
+      "aiModel": "AI Model",
+      "intelligentAssist": "Intelligent assistance",
+      "autoTranscribe": "Auto-Transcribe Audio",
+      "autoTranscribeDesc": "Automatic voice transcription",
+      "advAISettings": "Advanced AI Settings",
+      "customAIConfig": "Custom AI Configuration",
+      "customAIConfigDesc": "OpenAI or compatible API",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "testConnection": "Test Connection"
     }
   },
   "languages": {

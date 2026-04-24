@@ -1018,12 +1018,12 @@ export const SettingsScreen = () => {
                                     <MaterialIcons name="account-circle" size={24} color={colors.textSecondary} />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.preferenceTitle}>Sign in</Text>
-                                    <Text style={styles.preferenceDescription}>Sync notes & access AI features</Text>
+                                    <Text style={styles.preferenceTitle}>{t("settings.ui.signInTitle", "Sign in")}</Text>
+                                    <Text style={styles.preferenceDescription}>{t("settings.ui.signInDesc", "Sync notes & access AI features")}</Text>
                                 </View>
                             </View>
                             <Button
-                                title="Sign In / Create Account"
+                                title={t("settings.ui.signInBtn", "Sign In / Create Account")}
                                 onPress={() => navigation.navigate('SignIn')}
                                 style={{ width: '100%' }}
                             />
@@ -1077,7 +1077,7 @@ export const SettingsScreen = () => {
                     <View style={styles.cardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <MaterialIcons name="security" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>Security</Text>
+                            <Text style={styles.sectionTitle}>{t("settings.ui.security", "Security")}</Text>
                         </View>
                         <TouchableOpacity
                             onPress={() => setShowSecurityInfoModal(true)}
@@ -1096,7 +1096,7 @@ export const SettingsScreen = () => {
                                     color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
                                 />
                             </View>
-                            <Text style={styles.securityLabelMinimal}>Sync</Text>
+                            <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <Text style={[styles.securityValueMinimal, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
@@ -1106,7 +1106,7 @@ export const SettingsScreen = () => {
                                 <>
                                     {isSyncLocked && !syncToggleDisabled && (
                                         <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
-                                            <Text style={styles.smallButtonText}>Unlock</Text>
+                                            <Text style={styles.smallButtonText}>{t("settings.ui.unlock", "Unlock")}</Text>
                                         </TouchableOpacity>
                                     )}
                                     {!isSyncLocked && !syncToggleDisabled && hasConfiguredKey ? (
@@ -1132,7 +1132,7 @@ export const SettingsScreen = () => {
                                                 setShowEnableSyncModal(true);
                                             }}
                                         >
-                                            <Text style={styles.smallButtonText}>Enable</Text>
+                                            <Text style={styles.smallButtonText}>{t("settings.ui.enable", "Enable")}</Text>
                                         </TouchableOpacity>
                                     ) : null)}
                                 </>
@@ -1147,7 +1147,7 @@ export const SettingsScreen = () => {
                             <View style={[styles.iconContainer, { backgroundColor: passphraseStatusColor + '20' }]}>
                                 <MaterialIcons name="vpn-key" size={16} color={passphraseStatusColor} />
                             </View>
-                            <Text style={styles.securityLabelMinimal}>Passphrase</Text>
+                            <Text style={styles.securityLabelMinimal}>{t("settings.ui.passphrase", "Passphrase")}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             {!!passphraseStatusLabel && (
@@ -1176,7 +1176,7 @@ export const SettingsScreen = () => {
                     <View style={styles.cardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <MaterialIcons name="psychology" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>AI Model</Text>
+                            <Text style={styles.sectionTitle}>{t("settings.ui.aiModel", "AI Model")}</Text>
                         </View>
                     </View>
 
@@ -1197,8 +1197,8 @@ export const SettingsScreen = () => {
                                 <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled && !isGuestOrAnonymous ? colors.primary : colors.textSecondary} />
                             </Animated.View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>Agent Mode</Text>
-                                <Text style={styles.preferenceDescription}>Intelligent assistance</Text>
+                                <Text style={styles.preferenceTitle}>{t("settings.ai.agentMode", "Agent Mode")}</Text>
+                                <Text style={styles.preferenceDescription}>{t("settings.ui.intelligentAssist", "Intelligent assistance")}</Text>
                             </View>
                         </View>
                         <Switch
@@ -1233,8 +1233,8 @@ export const SettingsScreen = () => {
                                 color={transcriptionEnabled && !transcriptionAuthRequired ? colors.primary : colors.textSecondary}
                             />
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>Auto-Transcribe Audio</Text>
-                                <Text style={styles.preferenceDescription}>Automatic voice transcription</Text>
+                                <Text style={styles.preferenceTitle}>{t("settings.ui.autoTranscribe", "Auto-Transcribe Audio")}</Text>
+                                <Text style={styles.preferenceDescription}>{t("settings.ui.autoTranscribeDesc", "Automatic voice transcription")}</Text>
                             </View>
                         </View>
                         <Switch
@@ -1267,7 +1267,7 @@ export const SettingsScreen = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
                             <MaterialIcons name="tune" size={24} color={showAdvancedAI ? colors.primary : colors.textSecondary} />
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>Advanced AI Settings</Text>
+                                <Text style={styles.preferenceTitle}>{t("settings.ui.advAISettings", "Advanced AI Settings")}</Text>
                                 <Text style={styles.preferenceDescription}>
                                     {LOCAL_MODELS_ENABLED
                                         ? 'Local and Custom AI configurations'
@@ -1348,14 +1348,14 @@ export const SettingsScreen = () => {
                                             <MaterialIcons name="dns" size={20} color={colors.primary} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={styles.openAIConfigTitle}>Custom AI Configuration</Text>
-                                            <Text style={styles.openAIConfigSubtitle}>OpenAI or compatible API</Text>
+                                            <Text style={styles.openAIConfigTitle}>{t("settings.ui.customAIConfig", "Custom AI Configuration")}</Text>
+                                            <Text style={styles.openAIConfigSubtitle}>{t("settings.ui.customAIConfigDesc", "OpenAI or compatible API")}</Text>
                                         </View>
                                     </View>
 
                                     {/* Base URL */}
                                     <View style={styles.openAIInputGroup}>
-                                        <Text style={styles.openAILabel}>Base URL</Text>
+                                        <Text style={styles.openAILabel}>{t("settings.ui.baseUrl", "Base URL")}</Text>
                                         <TextInput
                                             value={openAIBaseUrl}
                                             onChangeText={setOpenAIBaseUrlState}
@@ -1368,7 +1368,7 @@ export const SettingsScreen = () => {
 
                                     {/* API Key */}
                                     <View style={styles.openAIInputGroup}>
-                                        <Text style={styles.openAILabel}>API Key</Text>
+                                        <Text style={styles.openAILabel}>{t("settings.ui.apiKey", "API Key")}</Text>
                                         <View style={styles.openAISecretRow}>
                                             <TextInput
                                                 value={apiKey}
@@ -1420,7 +1420,7 @@ export const SettingsScreen = () => {
                                         ) : (
                                             <>
                                                 <MaterialIcons name="wifi-tethering" size={16} color={colors.surface} />
-                                                <Text style={styles.openAITestButtonText}>Test Connection</Text>
+                                                <Text style={styles.openAITestButtonText}>{t("settings.ui.testConnection", "Test Connection")}</Text>
                                             </>
                                         )}
                                     </TouchableOpacity>
@@ -1749,14 +1749,14 @@ export const SettingsScreen = () => {
                             onPress={handleSignOut}
                         >
                             <MaterialIcons name="logout" size={18} color={colors.error} />
-                            <Text style={styles.signOutText}>Sign Out</Text>
+                            <Text style={styles.signOutText}>{t("settings.account.signOut", "Sign Out")}</Text>
                         </TouchableOpacity>
                     )}
 
                     <View style={{ alignItems: 'center', gap: spacing.s, opacity: 0.7 }}>
                         <View style={{ flexDirection: 'row', gap: spacing.l }}>
                             <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>
-                                <Text style={styles.legalLink}>Privacy Policy</Text>
+                                <Text style={styles.legalLink}>{t("settings.ui.privacy", "Privacy Policy")}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')}>
                                 <Text style={styles.legalLink}>Terms of Service</Text>

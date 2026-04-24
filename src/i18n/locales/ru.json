@@ -46,6 +46,38 @@
     "account": {
       "signOut": "Выйти",
       "signIn": "Войти"
+    },
+    "ui": {
+      "account": "Аккаунт",
+      "signInTitle": "Войти",
+      "signInDesc": "Синхронизация и ИИ функции",
+      "signInBtn": "Войти / Создать",
+      "security": "Безопасность",
+      "sync": "Синхронизация",
+      "unlock": "Разблокировать",
+      "enable": "Включить",
+      "passphrase": "Пароль",
+      "localBackup": "Локальный бекап",
+      "cloudKey": "Облачный ключ",
+      "aiConfig": "Настройки ИИ",
+      "primaryModel": "Основная модель ИИ",
+      "whisperModel": "Модель Whisper",
+      "voiceSettings": "Настройки голоса",
+      "transcriptionLang": "Язык распознавания",
+      "support": "Поддержка",
+      "feedback": "Обратная связь",
+      "privacy": "Политика конфиденциальности",
+      "deleteAccount": "Удалить аккаунт",
+      "aiModel": "Модель ИИ",
+      "intelligentAssist": "Умный помощник",
+      "autoTranscribe": "Автораспознавание аудио",
+      "autoTranscribeDesc": "Автоматическое распознавание голоса",
+      "advAISettings": "Расширенные настройки ИИ",
+      "customAIConfig": "Своя конфигурация ИИ",
+      "customAIConfigDesc": "OpenAI или совместимое API",
+      "baseUrl": "Базовый URL",
+      "apiKey": "API Ключ",
+      "testConnection": "Проверить соединение"
     }
   },
   "languages": {

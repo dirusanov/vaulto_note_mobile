@@ -46,6 +46,38 @@
     "account": {
       "signOut": "تسجيل الخروج",
       "signIn": "تسجيل الدخول"
+    },
+    "ui": {
+      "account": "الحساب",
+      "signInTitle": "تسجيل الدخول",
+      "signInDesc": "مزامنة الملاحظات وميزات الذكاء",
+      "signInBtn": "دخول / إنشاء حساب",
+      "security": "الأمان",
+      "sync": "مزامنة",
+      "unlock": "إلغاء القفل",
+      "enable": "تفعيل",
+      "passphrase": "كلمة المرور",
+      "localBackup": "نسخ محلي",
+      "cloudKey": "مفتاح سحابي",
+      "aiConfig": "إعدادات الذكاء",
+      "primaryModel": "نموذج الذكاء الأساسي",
+      "whisperModel": "نموذج Whisper",
+      "voiceSettings": "إعدادات الصوت",
+      "transcriptionLang": "لغة النسخ",
+      "support": "الدعم",
+      "feedback": "الملاحظات والدعم",
+      "privacy": "سياسة الخصوصية",
+      "deleteAccount": "حذف الحساب",
+      "aiModel": "نموذج الذكاء",
+      "intelligentAssist": "مساعدة ذكية",
+      "autoTranscribe": "نسخ الصوت تلقائيًا",
+      "autoTranscribeDesc": "نسخ صوتي تلقائي",
+      "advAISettings": "إعدادات الذكاء المتقدمة",
+      "customAIConfig": "تكوين الذكاء المخصص",
+      "customAIConfigDesc": "OpenAI أو API متوافق",
+      "baseUrl": "عنوان URL الأساسي",
+      "apiKey": "مفتاح API",
+      "testConnection": "اختبار الاتصال"
     }
   },
   "languages": {

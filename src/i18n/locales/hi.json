@@ -46,6 +46,38 @@
     "account": {
       "signOut": "साइन आउट",
       "signIn": "साइन इन"
+    },
+    "ui": {
+      "account": "खाता",
+      "signInTitle": "साइन इन",
+      "signInDesc": "नोट्स सिंक करें और AI एक्सेस करें",
+      "signInBtn": "साइन इन / खाता बनाएं",
+      "security": "सुरक्षा",
+      "sync": "सिंक",
+      "unlock": "अनलॉक",
+      "enable": "सक्षम करें",
+      "passphrase": "पासफ़्रेज़",
+      "localBackup": "स्थानीय बैकअप",
+      "cloudKey": "क्लाउड कुंजी",
+      "aiConfig": "AI कॉन्फ़िगरेशन",
+      "primaryModel": "प्राथमिक AI मॉडल",
+      "whisperModel": "विस्पर मॉडल",
+      "voiceSettings": "आवाज़ सेटिंग्स",
+      "transcriptionLang": "प्रतिलेखन भाषा",
+      "support": "समर्थन",
+      "feedback": "प्रतिक्रिया और समर्थन",
+      "privacy": "गोपनीयता नीति",
+      "deleteAccount": "खाता हटाएं",
+      "aiModel": "AI मॉडल",
+      "intelligentAssist": "बुद्धिमान सहायता",
+      "autoTranscribe": "ऑडियो ऑटो-ट्रांसक्राइब करें",
+      "autoTranscribeDesc": "स्वचालित वॉयस ट्रांसक्रिप्शन",
+      "advAISettings": "उन्नत AI सेटिंग्स",
+      "customAIConfig": "कस्टम AI कॉन्फ़िगरेशन",
+      "customAIConfigDesc": "OpenAI या संगत API",
+      "baseUrl": "बेस URL",
+      "apiKey": "API कुंजी",
+      "testConnection": "कनेक्शन का परीक्षण करें"
     }
   },
   "languages": {

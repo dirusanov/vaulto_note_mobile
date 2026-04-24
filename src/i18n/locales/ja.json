@@ -46,6 +46,38 @@
     "account": {
       "signOut": "サインアウト",
       "signIn": "サインイン"
+    },
+    "ui": {
+      "account": "アカウント",
+      "signInTitle": "サインイン",
+      "signInDesc": "メモの同期とAI機能の利用",
+      "signInBtn": "サインイン / 作成",
+      "security": "セキュリティ",
+      "sync": "同期",
+      "unlock": "ロック解除",
+      "enable": "有効にする",
+      "passphrase": "パスフレーズ",
+      "localBackup": "ローカルバックアップ",
+      "cloudKey": "クラウドキー",
+      "aiConfig": "AI設定",
+      "primaryModel": "メインAIモデル",
+      "whisperModel": "Whisperモデル",
+      "voiceSettings": "音声設定",
+      "transcriptionLang": "文字起こし言語",
+      "support": "サポート",
+      "feedback": "フィードバック",
+      "privacy": "プライバシーポリシー",
+      "deleteAccount": "アカウント削除",
+      "aiModel": "AIモデル",
+      "intelligentAssist": "インテリジェントアシスタント",
+      "autoTranscribe": "自動文字起こし",
+      "autoTranscribeDesc": "自動音声文字起こし",
+      "advAISettings": "高度なAI設定",
+      "customAIConfig": "カスタムAI設定",
+      "customAIConfigDesc": "OpenAIまたは互換API",
+      "baseUrl": "ベースURL",
+      "apiKey": "APIキー",
+      "testConnection": "接続テスト"
     }
   },
   "languages": {
