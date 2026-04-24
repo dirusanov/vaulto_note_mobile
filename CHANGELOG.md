@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.58] - 2026-04-08
+## [1.0.60] - 2026-04-08
 
 ### Fixed
 - **Android Autolinking Cache Recovery**: Clear stale generated Android build/autolinking artifacts after moving the project directory.
