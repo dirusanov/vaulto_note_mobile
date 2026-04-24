@@ -2003,20 +2003,22 @@ export const SettingsScreen = () => {
                 >
                     <View style={styles.languageModalContent}>
                         <Text style={styles.languageModalTitle}>{t('settings.languageSelection', 'App Language')}</Text>
-                        {appLanguages.map((lang) => (
-                            <TouchableOpacity
-                                key={lang.key}
-                                style={[styles.languageModalItem, i18n.language === lang.key && styles.languageModalItemActive]}
-                                onPress={() => changeAppLanguage(lang.key)}
-                            >
-                                <Text style={[styles.languageModalItemText, i18n.language === lang.key && styles.languageModalItemTextActive]}>
-                                    {lang.label}
-                                </Text>
-                                {i18n.language === lang.key && (
-                                    <MaterialIcons name="check" size={20} color={colors.primary} />
-                                )}
-                            </TouchableOpacity>
-                        ))}
+                        <ScrollView showsVerticalScrollIndicator={false} bounces={false} style={{ maxHeight: 400 }}>
+                            {appLanguages.map((lang) => (
+                                <TouchableOpacity
+                                    key={lang.key}
+                                    style={[styles.languageModalItem, i18n.language === lang.key && styles.languageModalItemActive]}
+                                    onPress={() => changeAppLanguage(lang.key)}
+                                >
+                                    <Text style={[styles.languageModalItemText, i18n.language === lang.key && styles.languageModalItemTextActive]}>
+                                        {lang.label}
+                                    </Text>
+                                    {i18n.language === lang.key && (
+                                        <MaterialIcons name="check" size={20} color={colors.primary} />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -2027,23 +2029,24 @@ export const SettingsScreen = () => {
 const styles = StyleSheet.create({
     languageModalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
         justifyContent: 'center',
     },
     languageModalContent: {
         backgroundColor: colors.surface,
         marginHorizontal: spacing.xl,
-        borderRadius: 16,
-        padding: spacing.m,
+        borderRadius: 24,
+        padding: spacing.l,
+        maxHeight: '80%',
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.1,
-                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.15,
+                shadowRadius: 24,
             },
             android: {
-                elevation: 8,
+                elevation: 12,
             },
         }),
     },
@@ -2051,28 +2054,28 @@ const styles = StyleSheet.create({
         ...typography.h3,
         marginBottom: spacing.m,
         textAlign: 'center',
+        color: colors.text,
     },
     languageModalItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingVertical: spacing.m,
-        paddingHorizontal: spacing.s,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: colors.border,
+        paddingHorizontal: spacing.m,
+        borderRadius: 12,
+        marginBottom: spacing.xs,
     },
     languageModalItemActive: {
-        backgroundColor: colors.primary + '10',
-        borderRadius: 8,
-        borderBottomWidth: 0,
+        backgroundColor: colors.primary + '15',
     },
     languageModalItemText: {
         ...typography.body,
         color: colors.text,
+        fontSize: 16,
     },
     languageModalItemTextActive: {
         color: colors.primary,
-        fontWeight: 'bold',
+        fontWeight: '700',
     },
     trialInfoText: {
         ...typography.caption,
