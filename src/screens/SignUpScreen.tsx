@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -22,6 +23,7 @@ import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
 
 export const SignUpScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -88,8 +90,8 @@ export const SignUpScreen = () => {
                     </TouchableOpacity>
 
                     <View style={styles.header}>
-                        <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Sign up to get started</Text>
+                        <Text style={styles.title}>{t("auth.createAccount", "Create Account")}</Text>
+                        <Text style={styles.subtitle}>{t("auth.signUpToGetStarted", "Sign up to get started")}</Text>
                     </View>
 
                     <View style={styles.form}>
@@ -200,9 +202,9 @@ export const SignUpScreen = () => {
                     </View>
 
                     <View style={styles.footer}>
-                        <Text style={styles.footerText}>Already have an account? </Text>
+                        <Text style={styles.footerText}>{t("auth.alreadyHaveAccount", "Already have an account?")} </Text>
                         <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
-                            <Text style={styles.footerLink}>Sign In</Text>
+                            <Text style={styles.footerLink}>{t("auth.signIn", "Sign In")}</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

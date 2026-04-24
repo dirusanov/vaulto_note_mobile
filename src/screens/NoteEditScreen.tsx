@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, memo } from 'react';
 import {
     View,
@@ -728,6 +729,7 @@ const subscribeNoteProcessingState = (
 };
 
 export const NoteEditScreen = () => {
+    const { t } = useTranslation();
     const AGENT_HISTORY_LIMIT = 5;
     const AGENT_TASK_TIMEOUT_MS = 60000;
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
@@ -5231,14 +5233,14 @@ export const NoteEditScreen = () => {
                             <TouchableWithoutFeedback onPress={() => { }}>
                                 <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 16 }]}>
                                     <View style={styles.aiModalHeader}>
-                                        <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>Improve Text with AI</Text>
+                                        <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>{t("edit.improveText", "Improve Text with AI")}</Text>
                                         <View style={styles.aiActions}>
                                             <TouchableOpacity
                                                 style={styles.aiActionButton}
                                                 onPress={() => setShowPromptBuilder(true)}
                                             >
                                                 <MaterialIcons name="add" size={18} color={colors.primary} />
-                                                <Text style={styles.aiActionText}>Create</Text>
+                                                <Text style={styles.aiActionText}>{t("edit.create", "Create")}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -5255,7 +5257,7 @@ export const NoteEditScreen = () => {
                                                     size={24}
                                                     color={colors.text}
                                                 />
-                                                <Text style={styles.customBoxLabel}>Custom Instruction</Text>
+                                                <Text style={styles.customBoxLabel}>{t("edit.customInstruction", "Custom Instruction")}</Text>
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
@@ -5287,7 +5289,7 @@ export const NoteEditScreen = () => {
                                                     onPress={handleApplyCustomInstruction}
                                                     disabled={!customInstruction.trim() || isAIProcessing}
                                                 >
-                                                    <Text style={styles.runCustomButtonText}>Apply Instruction</Text>
+                                                    <Text style={styles.runCustomButtonText}>{t("edit.applyInstruction", "Apply Instruction")}</Text>
                                                     <MaterialIcons name="arrow-forward" size={16} color="white" />
                                                 </TouchableOpacity>
                                             </View>
@@ -5380,7 +5382,7 @@ export const NoteEditScreen = () => {
                                 style={styles.promptBuilderWrapper}
                             >
                                 <View style={[styles.promptBuilderContent, { paddingBottom: insets.bottom + spacing.m }]}>
-                                    <Text style={styles.aiModalTitle}>New Prompt</Text>
+                                    <Text style={styles.aiModalTitle}>{t("edit.newPrompt", "New Prompt")}</Text>
                                     <Text style={styles.promptHelper}>
                                         Use {'{text}'} to indicate where to insert note text.
                                     </Text>
@@ -5429,7 +5431,7 @@ export const NoteEditScreen = () => {
                                         textAlignVertical="top"
                                     />
                                     <View style={styles.promptPreviewBox}>
-                                        <Text style={styles.promptPreviewLabel}>Preview</Text>
+                                        <Text style={styles.promptPreviewLabel}>{t("edit.preview", "Preview")}</Text>
                                         {renderPromptPreview()}
                                     </View>
 
@@ -5469,31 +5471,31 @@ export const NoteEditScreen = () => {
                     <View style={styles.menuOverlay}>
                         <View style={styles.menuContainer}>
                             <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>EDITOR MODE</Text>
+                                <Text style={styles.menuSectionTitle}>{t("edit.editorMode", "EDITOR MODE")}</Text>
                             </View>
                             <TouchableOpacity onPress={() => { setEditMode('visual'); setShowMenu(false); setIsEditing(true); }} style={styles.menuItem}>
                                 <MaterialIcons name="view-quilt" size={20} color={editMode === 'visual' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
-                                <Text style={[styles.menuItemText, editMode === 'visual' && { color: colors.primary, fontWeight: 'bold' }]}>Visual Editor</Text>
+                                <Text style={[styles.menuItemText, editMode === 'visual' && { color: colors.primary, fontWeight: 'bold' }]}>{t("edit.visualEditor", "Visual Editor")}</Text>
                                 {editMode === 'visual' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => { setEditMode('raw'); setShowMenu(false); setIsEditing(false); }} style={styles.menuItem}>
                                 <MaterialIcons name="code" size={20} color={editMode === 'raw' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
-                                <Text style={[styles.menuItemText, editMode === 'raw' && { color: colors.primary, fontWeight: 'bold' }]}>Raw Markdown</Text>
+                                <Text style={[styles.menuItemText, editMode === 'raw' && { color: colors.primary, fontWeight: 'bold' }]}>{t("edit.rawMarkdown", "Raw Markdown")}</Text>
                                 {editMode === 'raw' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
                             </TouchableOpacity>
 
                             <View style={styles.menuDivider} />
 
                             <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>COPY</Text>
+                                <Text style={styles.menuSectionTitle}>{t("edit.copy", "COPY")}</Text>
                             </View>
                             <TouchableOpacity onPress={handleCopyPlainText} style={styles.menuItem}>
                                 <MaterialIcons name="content-copy" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                <Text style={styles.menuItemText}>Copy Plain Text</Text>
+                                <Text style={styles.menuItemText}>{t("edit.copyPlainText", "Copy Plain Text")}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleCopyMarkdown} style={styles.menuItem}>
                                 <MaterialIcons name="code" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                <Text style={styles.menuItemText}>Copy Markdown</Text>
+                                <Text style={styles.menuItemText}>{t("edit.copyMarkdown", "Copy Markdown")}</Text>
                             </TouchableOpacity>
 
                             {canShareOrExport ? (
@@ -5501,19 +5503,19 @@ export const NoteEditScreen = () => {
                                     <View style={styles.menuDivider} />
 
                                     <View style={styles.menuSectionHeader}>
-                                        <Text style={styles.menuSectionTitle}>SHARE & EXPORT</Text>
+                                        <Text style={styles.menuSectionTitle}>{t("edit.shareExport", "SHARE & EXPORT")}</Text>
                                     </View>
                                     <TouchableOpacity onPress={handleShareText} style={styles.menuItem}>
                                         <MaterialIcons name="share" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                        <Text style={styles.menuItemText}>Share Text</Text>
+                                        <Text style={styles.menuItemText}>{t("edit.shareText", "Share Text")}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={handleExportMarkdownFile} style={styles.menuItem}>
                                         <MaterialIcons name="file-present" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                        <Text style={styles.menuItemText}>Export Markdown File</Text>
+                                        <Text style={styles.menuItemText}>{t("edit.exportMarkdown", "Export Markdown File")}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={handleExportImage} style={styles.menuItem}>
                                         <MaterialIcons name="image" size={20} color={colors.text} style={{ marginRight: 12 }} />
-                                        <Text style={styles.menuItemText}>Export as Image</Text>
+                                        <Text style={styles.menuItemText}>{t("edit.exportImage", "Export as Image")}</Text>
                                     </TouchableOpacity>
                                 </>
                             ) : (
@@ -5521,7 +5523,7 @@ export const NoteEditScreen = () => {
                                     <View style={styles.menuDivider} />
 
                                     <View style={styles.menuSectionHeader}>
-                                        <Text style={styles.menuSectionTitle}>SHARE & EXPORT</Text>
+                                        <Text style={styles.menuSectionTitle}>{t("edit.shareExport", "SHARE & EXPORT")}</Text>
                                     </View>
                                     <View style={styles.menuItem}>
                                         <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={{ marginRight: 12 }} />
@@ -5535,7 +5537,7 @@ export const NoteEditScreen = () => {
                             <View style={styles.menuDivider} />
 
                             <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>SECURITY</Text>
+                                <Text style={styles.menuSectionTitle}>{t("edit.security", "SECURITY")}</Text>
                             </View>
                             <TouchableOpacity
                                 onPress={() => {
@@ -5560,7 +5562,7 @@ export const NoteEditScreen = () => {
 
                             <TouchableOpacity onPress={handleDelete} style={styles.menuItem}>
                                 <MaterialIcons name="delete-outline" size={20} color={colors.error} style={{ marginRight: 12 }} />
-                                <Text style={[styles.menuItemText, { color: colors.error }]}>Delete Note</Text>
+                                <Text style={[styles.menuItemText, { color: colors.error }]}>{t("edit.deleteNote", "Delete Note")}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -5831,7 +5833,7 @@ export const NoteEditScreen = () => {
                     <GestureHandlerRootView style={styles.modalOverlay}>
                         <TouchableWithoutFeedback>
                             <View style={styles.aiModalContent}>
-                                <Text style={styles.aiModalTitle}>Voice Recordings</Text>
+                                <Text style={styles.aiModalTitle}>{t("edit.voiceRecordings", "Voice Recordings")}</Text>
 
                                 {!!recordingsPreviewUri && (
                                     <View style={{ marginBottom: spacing.m, width: '100%', alignSelf: 'stretch' }}>
@@ -5981,7 +5983,7 @@ export const NoteEditScreen = () => {
                                     { paddingBottom: (Platform.OS === 'android' ? spacing.xxl : spacing.l) + insets.bottom },
                                 ]}
                             >
-                                <Text style={styles.aiModalTitle}>Recognized text</Text>
+                                <Text style={styles.aiModalTitle}>{t("edit.recognizedText", "Recognized text")}</Text>
                                 <ScrollView style={styles.recordingTextBody}>
                                     <Text style={styles.recordingTextValue}>
                                         {selectedRecordingText || 'No recognized text for this recording yet.'}
@@ -5995,7 +5997,7 @@ export const NoteEditScreen = () => {
                                         void handleInsertSelectedRecordingText();
                                     }}
                                 >
-                                    <Text style={styles.recordingActionText}>Insert</Text>
+                                    <Text style={styles.recordingActionText}>{t("edit.insert", "Insert")}</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -6012,7 +6014,7 @@ export const NoteEditScreen = () => {
                                     style={styles.recordingCloseAction}
                                     onPress={() => setShowRecordingTextModal(false)}
                                 >
-                                    <Text style={styles.recordingCloseText}>Close</Text>
+                                    <Text style={styles.recordingCloseText}>{t("common.close", "Close")}</Text>
                                 </TouchableOpacity>
                             </View>
                         </TouchableWithoutFeedback>

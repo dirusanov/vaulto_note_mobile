@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -24,6 +25,7 @@ import { authApi, LoginResult } from '../api/auth';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 
 export const SignInScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const { signIn } = useAuth();
     const { signInWithGoogle, loading: googleLoading } = useGoogleOAuth();
@@ -93,8 +95,8 @@ export const SignInScreen = () => {
                 </TouchableOpacity>
 
                 <View style={styles.content}>
-                    <Text style={styles.title}>Welcome Back</Text>
-                    <Text style={styles.subtitle}>Sign in to continue</Text>
+                    <Text style={styles.title}>{t("auth.welcomeBack", "Welcome Back")}</Text>
+                    <Text style={styles.subtitle}>{t("auth.signInToContinue", "Sign in to continue")}</Text>
 
                     <View style={styles.buttonContainer}>
                         <View style={styles.inputGroup}>
@@ -139,7 +141,7 @@ export const SignInScreen = () => {
                             onPress={() => navigation.navigate('ForgotPassword')}
                             style={styles.forgotPasswordButton}
                         >
-                            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                            <Text style={styles.forgotPasswordText}>{t("auth.forgotPassword", "Forgot Password?")}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -154,7 +156,7 @@ export const SignInScreen = () => {
 
                         <View style={styles.separator}>
                             <View style={styles.separatorLine} />
-                            <Text style={styles.separatorText}>or continue with</Text>
+                            <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
                             <View style={styles.separatorLine} />
                         </View>
 
@@ -170,7 +172,7 @@ export const SignInScreen = () => {
                             onPress={() => navigation.navigate('SignUp')}
                         >
                             <Text style={styles.signUpText}>
-                                Don't have an account? <Text style={styles.signUpLink}>Sign Up</Text>
+                                Don't have an account? <Text style={styles.signUpLink}>{t("auth.signUp", "Sign Up")}</Text>
                             </Text>
                         </TouchableOpacity>
                     </View>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +28,7 @@ const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
 
 export const NotesListScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
     const { userId, isAuthenticated, isGuest } = useAuth();
@@ -543,7 +545,7 @@ export const NotesListScreen = () => {
                             <View style={styles.lockBannerIcon}>
                                 <MaterialIcons name="lock" size={16} color={colors.primary} />
                             </View>
-                            <Text style={styles.lockBannerTitle}>Encrypted Sync Is Locked</Text>
+                            <Text style={styles.lockBannerTitle}>{t("notes.syncLocked", "Encrypted Sync Is Locked")}</Text>
                         </View>
                         <TouchableOpacity
                             onPress={dismissLockBanner}
@@ -564,7 +566,7 @@ export const NotesListScreen = () => {
                             onPress={() => setShowUnlockSyncModal(true)}
                             activeOpacity={0.85}
                         >
-                            <Text style={styles.lockActionPrimaryText}>Unlock Sync</Text>
+                            <Text style={styles.lockActionPrimaryText}>{t("notes.unlockSync", "Unlock Sync")}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -575,7 +577,7 @@ export const NotesListScreen = () => {
                         <MaterialIcons name="search" size={20} color={colors.textTertiary} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search notes..."
+                            placeholder={t("common.search", "Search notes...")}
                             placeholderTextColor={colors.textTertiary}
                             value={searchQuery}
                             onChangeText={handleSearch}
@@ -658,7 +660,7 @@ export const NotesListScreen = () => {
                             {/* Right Secondary Button */}
                             <SecondaryButton />
                         </View>
-                        <Text style={styles.hintText}>Hold to switch</Text>
+                        <Text style={styles.hintText}>{t("common.holdToSwitch", "Hold to switch")}</Text>
                     </View>
                 </View>
             )}
