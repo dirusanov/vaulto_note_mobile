@@ -1045,15 +1045,8 @@ export const SettingsScreen = () => {
                     />
                 </View>
 
-                {/* General / Preferences */}
+                {/* Language / Preferences */}
                 <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <MaterialIcons name="settings" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>{t('settings.ui.general', 'General')}</Text>
-                        </View>
-                    </View>
-
                     <TouchableOpacity
                         style={styles.preferenceRow}
                         activeOpacity={0.85}
