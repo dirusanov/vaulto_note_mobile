@@ -1050,7 +1050,7 @@ export const SettingsScreen = () => {
                     <View style={styles.cardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                             <MaterialIcons name="settings" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>{t('settings.title', 'General')}</Text>
+                            <Text style={styles.sectionTitle}>{t('settings.ui.general', 'General')}</Text>
                         </View>
                     </View>
 

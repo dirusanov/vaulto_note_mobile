@@ -77,7 +77,8 @@
       "customAIConfigDesc": "OpenAI أو API متوافق",
       "baseUrl": "عنوان URL الأساسي",
       "apiKey": "مفتاح API",
-      "testConnection": "اختبار الاتصال"
+      "testConnection": "اختبار الاتصال",
+      "general": "عام"
     }
   },
   "languages": {

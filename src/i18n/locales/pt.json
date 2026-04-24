@@ -77,7 +77,8 @@
       "customAIConfigDesc": "OpenAI ou API compatível",
       "baseUrl": "URL Base",
       "apiKey": "Chave da API",
-      "testConnection": "Testar Conexão"
+      "testConnection": "Testar Conexão",
+      "general": "Geral"
     }
   },
   "languages": {

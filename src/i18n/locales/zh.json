@@ -77,7 +77,8 @@
       "customAIConfigDesc": "OpenAI 或兼容 API",
       "baseUrl": "基础 URL",
       "apiKey": "API 密钥",
-      "testConnection": "测试连接"
+      "testConnection": "测试连接",
+      "general": "常规"
     }
   },
   "languages": {

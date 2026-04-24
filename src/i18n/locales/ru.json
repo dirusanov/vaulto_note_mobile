@@ -77,7 +77,8 @@
       "customAIConfigDesc": "OpenAI или совместимое API",
       "baseUrl": "Базовый URL",
       "apiKey": "API Ключ",
-      "testConnection": "Проверить соединение"
+      "testConnection": "Проверить соединение",
+      "general": "Общее"
     }
   },
   "languages": {

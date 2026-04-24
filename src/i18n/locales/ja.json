@@ -77,7 +77,8 @@
       "customAIConfigDesc": "OpenAIまたは互換API",
       "baseUrl": "ベースURL",
       "apiKey": "APIキー",
-      "testConnection": "接続テスト"
+      "testConnection": "接続テスト",
+      "general": "一般"
     }
   },
   "languages": {

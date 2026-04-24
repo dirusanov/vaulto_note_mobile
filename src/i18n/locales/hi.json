@@ -77,7 +77,8 @@
       "customAIConfigDesc": "OpenAI या संगत API",
       "baseUrl": "बेस URL",
       "apiKey": "API कुंजी",
-      "testConnection": "कनेक्शन का परीक्षण करें"
+      "testConnection": "कनेक्शन का परीक्षण करें",
+      "general": "सामान्य"
     }
   },
   "languages": {
