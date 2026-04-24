@@ -1,0 +1,63 @@
+{
+  "common": {
+    "settings": "设置",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "confirm": "确认",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "close": "关闭",
+    "search": "搜索笔记...",
+    "holdToSwitch": "长按切换"
+  },
+  "notes": {
+    "emptyStateMic": "点击麦克风录音",
+    "emptyStateEdit": "点击铅笔写字",
+    "syncLocked": "同步已锁定",
+    "syncLockedDescription": "在服务器上检测到加密的同步数据。使用您的密码解锁以访问。",
+    "unlockSync": "解锁同步"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "languageSelection": "应用语言",
+    "systemDefault": "系统默认",
+    "pro": {
+      "upgrade": "升级至 Pro",
+      "active": "激活",
+      "details": "订阅详情",
+      "manage": "在 Google Play 中管理",
+      "subtitle": "高级转录及高级功能"
+    },
+    "ai": {
+      "provider": "AI 提供商",
+      "agentMode": "代理模式",
+      "transcription": "转录",
+      "transcriptionLanguage": "转录语言",
+      "advancedSettings": "高级 AI 设置"
+    },
+    "sync": {
+      "title": "云同步",
+      "status": "同步状态",
+      "passphrase": "密码"
+    },
+    "account": {
+      "signOut": "登出",
+      "signIn": "登录"
+    }
+  },
+  "languages": {
+    "en": "英语",
+    "ru": "俄语",
+    "es": "西班牙语",
+    "fr": "法语",
+    "de": "德语",
+    "zh": "中文",
+    "ja": "日语",
+    "pt": "葡萄牙语",
+    "ar": "阿拉伯语",
+    "hi": "印地语"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "common": {
+    "settings": "Configurações",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "confirm": "Confirmar",
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "close": "Fechar",
+    "search": "Pesquisar notas...",
+    "holdToSwitch": "Segure para alternar"
+  },
+  "notes": {
+    "emptyStateMic": "Toque no microfone para gravar",
+    "emptyStateEdit": "Toque no lápis para escrever",
+    "syncLocked": "Sincronização Bloqueada",
+    "syncLockedDescription": "Dados sincronizados criptografados detectados. Desbloqueie com sua senha para acessar.",
+    "unlockSync": "Desbloquear Sincronização"
+  },
+  "settings": {
+    "title": "Configurações",
+    "language": "Idioma",
+    "languageSelection": "Idioma do Aplicativo",
+    "systemDefault": "Padrão do Sistema",
+    "pro": {
+      "upgrade": "Atualizar para Pro",
+      "active": "ATIVO",
+      "details": "Detalhes da assinatura",
+      "manage": "Gerenciar no Google Play",
+      "subtitle": "Transcrição estendida e recursos premium"
+    },
+    "ai": {
+      "provider": "Provedor de IA",
+      "agentMode": "Modo Agente",
+      "transcription": "Transcrição",
+      "transcriptionLanguage": "Idioma de Transcrição",
+      "advancedSettings": "Configurações Avançadas de IA"
+    },
+    "sync": {
+      "title": "Sincronização em Nuvem",
+      "status": "Status de Sincronização",
+      "passphrase": "Senha"
+    },
+    "account": {
+      "signOut": "Sair",
+      "signIn": "Entrar"
+    }
+  },
+  "languages": {
+    "en": "Inglês",
+    "ru": "Russo",
+    "es": "Espanhol",
+    "fr": "Francês",
+    "de": "Alemão",
+    "zh": "Chinês",
+    "ja": "Japonês",
+    "pt": "Português",
+    "ar": "Árabe",
+    "hi": "Hindi"
+  }
+}

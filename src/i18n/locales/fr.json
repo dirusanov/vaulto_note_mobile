@@ -1,0 +1,63 @@
+{
+  "common": {
+    "settings": "Paramètres",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "close": "Fermer",
+    "search": "Rechercher des notes...",
+    "holdToSwitch": "Maintenir pour changer"
+  },
+  "notes": {
+    "emptyStateMic": "Appuyez sur le micro pour enregistrer",
+    "emptyStateEdit": "Appuyez sur le crayon pour écrire",
+    "syncLocked": "Synchronisation verrouillée",
+    "syncLockedDescription": "Données cryptées détectées sur le serveur. Déverrouillez avec votre phrase secrète pour accéder.",
+    "unlockSync": "Déverrouiller"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "languageSelection": "Langue de l'application",
+    "systemDefault": "Par défaut du système",
+    "pro": {
+      "upgrade": "Passer à Pro",
+      "active": "ACTIF",
+      "details": "Détails de l'abonnement",
+      "manage": "Gérer dans Google Play",
+      "subtitle": "Transcription étendue et fonctions premium"
+    },
+    "ai": {
+      "provider": "Fournisseur d'IA",
+      "agentMode": "Mode agent",
+      "transcription": "Transcription",
+      "transcriptionLanguage": "Langue de transcription",
+      "advancedSettings": "Paramètres IA avancés"
+    },
+    "sync": {
+      "title": "Synchronisation cloud",
+      "status": "Statut de synchronisation",
+      "passphrase": "Phrase secrète"
+    },
+    "account": {
+      "signOut": "Se déconnecter",
+      "signIn": "Se connecter"
+    }
+  },
+  "languages": {
+    "en": "Anglais",
+    "ru": "Russe",
+    "es": "Espagnol",
+    "fr": "Français",
+    "de": "Allemand",
+    "zh": "Chinois",
+    "ja": "Japonais",
+    "pt": "Portugais",
+    "ar": "Arabe",
+    "hi": "Hindi"
+  }
+}

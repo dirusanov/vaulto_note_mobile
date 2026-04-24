@@ -1,0 +1,63 @@
+{
+  "common": {
+    "settings": "Ajustes",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "confirm": "Confirmar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "close": "Cerrar",
+    "search": "Buscar notas...",
+    "holdToSwitch": "Mantener para cambiar"
+  },
+  "notes": {
+    "emptyStateMic": "Toca el micrófono para grabar",
+    "emptyStateEdit": "Toca el lápiz para escribir",
+    "syncLocked": "Sincronización bloqueada",
+    "syncLockedDescription": "Datos cifrados detectados en el servidor. Desbloquea con tu frase de contraseña para acceder.",
+    "unlockSync": "Desbloquear sincronización"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "language": "Idioma",
+    "languageSelection": "Idioma de la aplicación",
+    "systemDefault": "Por defecto del sistema",
+    "pro": {
+      "upgrade": "Actualizar a Pro",
+      "active": "ACTIVO",
+      "details": "Detalles de la suscripción",
+      "manage": "Administrar en Google Play",
+      "subtitle": "Transcripción extendida y funciones premium"
+    },
+    "ai": {
+      "provider": "Proveedor de IA",
+      "agentMode": "Modo agente",
+      "transcription": "Transcripción",
+      "transcriptionLanguage": "Idioma de transcripción",
+      "advancedSettings": "Ajustes avanzados de IA"
+    },
+    "sync": {
+      "title": "Sincronización en la nube",
+      "status": "Estado de sincronización",
+      "passphrase": "Frase de contraseña"
+    },
+    "account": {
+      "signOut": "Cerrar sesión",
+      "signIn": "Iniciar sesión"
+    }
+  },
+  "languages": {
+    "en": "Inglés",
+    "ru": "Ruso",
+    "es": "Español",
+    "fr": "Francés",
+    "de": "Alemán",
+    "zh": "Chino",
+    "ja": "Japonés",
+    "pt": "Portugués",
+    "ar": "Árabe",
+    "hi": "Hindi"
+  }
+}

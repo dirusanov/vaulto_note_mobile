@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -224,6 +226,26 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
+    const { t, i18n } = useTranslation();
+    const [showAppLanguageModal, setShowAppLanguageModal] = useState(false);
+    const appLanguages = [
+        { key: 'en', label: 'English' },
+        { key: 'ru', label: 'Русский' },
+        { key: 'es', label: 'Español' },
+        { key: 'fr', label: 'Français' },
+        { key: 'de', label: 'Deutsch' },
+        { key: 'zh', label: '中文' },
+        { key: 'ja', label: '日本語' },
+        { key: 'pt', label: 'Português' },
+        { key: 'ar', label: 'العربية' },
+        { key: 'hi', label: 'हिन्दी' }
+    ];
+
+    const changeAppLanguage = async (lang: string) => {
+        await i18n.changeLanguage(lang);
+        await AsyncStorage.setItem('user_language', lang);
+        setShowAppLanguageModal(false);
+    };
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
     const {
         isPro,
@@ -1021,6 +1043,33 @@ export const SettingsScreen = () => {
                         canManageSubscription={isSubscriptionActive}
                         onManageSubscription={openManageSubscription}
                     />
+                </View>
+
+                {/* General / Preferences */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                            <MaterialIcons name="settings" size={18} color={colors.primary} />
+                            <Text style={styles.sectionTitle}>{t('settings.title', 'General')}</Text>
+                        </View>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.preferenceRow}
+                        activeOpacity={0.85}
+                        onPress={() => setShowAppLanguageModal(true)}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons name="language" size={24} color={colors.textSecondary} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>{t('settings.languageSelection', 'App Language')}</Text>
+                                <Text style={styles.preferenceDescription}>
+                                    {appLanguages.find(l => l.key === i18n.language)?.label || 'English'}
+                                </Text>
+                            </View>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Security */}
@@ -1940,11 +1989,91 @@ export const SettingsScreen = () => {
                 visible={showSecurityInfoModal}
                 onClose={() => setShowSecurityInfoModal(false)}
             />
+
+            <Modal
+                visible={showAppLanguageModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowAppLanguageModal(false)}
+            >
+                <TouchableOpacity
+                    style={styles.languageModalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowAppLanguageModal(false)}
+                >
+                    <View style={styles.languageModalContent}>
+                        <Text style={styles.languageModalTitle}>{t('settings.languageSelection', 'App Language')}</Text>
+                        {appLanguages.map((lang) => (
+                            <TouchableOpacity
+                                key={lang.key}
+                                style={[styles.languageModalItem, i18n.language === lang.key && styles.languageModalItemActive]}
+                                onPress={() => changeAppLanguage(lang.key)}
+                            >
+                                <Text style={[styles.languageModalItemText, i18n.language === lang.key && styles.languageModalItemTextActive]}>
+                                    {lang.label}
+                                </Text>
+                                {i18n.language === lang.key && (
+                                    <MaterialIcons name="check" size={20} color={colors.primary} />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </ScreenContainer >
     );
 };
 
 const styles = StyleSheet.create({
+    languageModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+    },
+    languageModalContent: {
+        backgroundColor: colors.surface,
+        marginHorizontal: spacing.xl,
+        borderRadius: 16,
+        padding: spacing.m,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 12,
+            },
+            android: {
+                elevation: 8,
+            },
+        }),
+    },
+    languageModalTitle: {
+        ...typography.h3,
+        marginBottom: spacing.m,
+        textAlign: 'center',
+    },
+    languageModalItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: spacing.m,
+        paddingHorizontal: spacing.s,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.border,
+    },
+    languageModalItemActive: {
+        backgroundColor: colors.primary + '10',
+        borderRadius: 8,
+        borderBottomWidth: 0,
+    },
+    languageModalItemText: {
+        ...typography.body,
+        color: colors.text,
+    },
+    languageModalItemTextActive: {
+        color: colors.primary,
+        fontWeight: 'bold',
+    },
     trialInfoText: {
         ...typography.caption,
         color: colors.textSecondary,

@@ -1,0 +1,63 @@
+{
+  "common": {
+    "settings": "Einstellungen",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "confirm": "Bestätigen",
+    "loading": "Wird geladen...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "close": "Schließen",
+    "search": "Notizen suchen...",
+    "holdToSwitch": "Halten zum Wechseln"
+  },
+  "notes": {
+    "emptyStateMic": "Tippen Sie auf das Mikrofon zum Aufnehmen",
+    "emptyStateEdit": "Tippen Sie auf den Stift zum Schreiben",
+    "syncLocked": "Synchronisierung gesperrt",
+    "syncLockedDescription": "Verschlüsselte Daten auf dem Server erkannt. Entsperren Sie mit Ihrer Passphrase.",
+    "unlockSync": "Sync entsperren"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "languageSelection": "App-Sprache",
+    "systemDefault": "Systemstandard",
+    "pro": {
+      "upgrade": "Auf Pro upgraden",
+      "active": "AKTIV",
+      "details": "Abo-Details",
+      "manage": "In Google Play verwalten",
+      "subtitle": "Erweiterte Transkription & Premium-Funktionen"
+    },
+    "ai": {
+      "provider": "KI-Anbieter",
+      "agentMode": "Agenten-Modus",
+      "transcription": "Transkription",
+      "transcriptionLanguage": "Transkriptionssprache",
+      "advancedSettings": "Erweiterte KI-Einstellungen"
+    },
+    "sync": {
+      "title": "Cloud-Synchronisierung",
+      "status": "Sync-Status",
+      "passphrase": "Passphrase"
+    },
+    "account": {
+      "signOut": "Abmelden",
+      "signIn": "Anmelden"
+    }
+  },
+  "languages": {
+    "en": "Englisch",
+    "ru": "Russisch",
+    "es": "Spanisch",
+    "fr": "Französisch",
+    "de": "Deutsch",
+    "zh": "Chinesisch",
+    "ja": "Japanisch",
+    "pt": "Portugiesisch",
+    "ar": "Arabisch",
+    "hi": "Hindi"
+  }
+}

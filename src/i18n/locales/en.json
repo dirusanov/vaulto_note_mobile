@@ -1,0 +1,63 @@
+{
+  "common": {
+    "settings": "Settings",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "close": "Close",
+    "search": "Search notes...",
+    "holdToSwitch": "Hold to switch"
+  },
+  "notes": {
+    "emptyStateMic": "Tap the microphone to record",
+    "emptyStateEdit": "Tap the pencil to write",
+    "syncLocked": "Encrypted Sync Is Locked",
+    "syncLockedDescription": "Encrypted sync data detected on server. Unlock using your passphrase to access notes on this device.",
+    "unlockSync": "Unlock Sync"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageSelection": "App Language",
+    "systemDefault": "System Default",
+    "pro": {
+      "upgrade": "Upgrade to Pro",
+      "active": "ACTIVE",
+      "details": "Subscription details",
+      "manage": "Manage in Google Play",
+      "subtitle": "Extended transcription & premium features"
+    },
+    "ai": {
+      "provider": "AI Provider",
+      "agentMode": "Agent Mode",
+      "transcription": "Transcription",
+      "transcriptionLanguage": "Transcription Language",
+      "advancedSettings": "Advanced AI Settings"
+    },
+    "sync": {
+      "title": "Cloud Sync",
+      "status": "Sync Status",
+      "passphrase": "Passphrase"
+    },
+    "account": {
+      "signOut": "Sign Out",
+      "signIn": "Sign In"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "ru": "Russian",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "pt": "Portuguese",
+    "ar": "Arabic",
+    "hi": "Hindi"
+  }
+}
