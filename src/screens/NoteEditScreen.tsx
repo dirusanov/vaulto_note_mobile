@@ -884,7 +884,7 @@ export const NoteEditScreen = () => {
         }
         Alert.alert(
             'Sharing disabled for private notes',
-            'To prevent leaks, share and export are blocked for local-only notes.'
+            t('settings.ui.shareBlockedLocal', 'To prevent leaks, share and export are blocked for local-only notes.')
         );
         return false;
     };
@@ -1293,7 +1293,7 @@ export const NoteEditScreen = () => {
 
         return await new Promise<boolean>((resolve) => {
             Alert.alert(
-                'Local-only note',
+                t('settings.ui.localOnlyNote', 'Local-only note'),
                 'This note will not sync, and it cannot be recovered after app reinstall or device loss.',
                 [
                     { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
@@ -1319,7 +1319,7 @@ export const NoteEditScreen = () => {
             if (existingNote && normalizeScope(existingNote.storage_scope) === 'sync') {
                 const confirmed = await new Promise<boolean>((resolve) => {
                     Alert.alert(
-                        'Move to Local-Only',
+                        t('settings.ui.makeLocalOnly', 'Move to Local-Only'),
                         'Server copy will be deleted from sync.',
                         [
                             { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
@@ -5555,7 +5555,7 @@ export const NoteEditScreen = () => {
                                     style={{ marginRight: 12 }}
                                 />
                                 <Text style={styles.menuItemText}>
-                                    {effectiveStorageScope === 'local_only' ? 'Make Sync' : 'Make Local-Only'}
+                                    {effectiveStorageScope === 'local_only' ? t('settings.ui.makeSync', 'Make Sync') : t('settings.ui.makeLocalOnly', 'Make Local-Only')}
                                 </Text>
                             </TouchableOpacity>
                             <View style={styles.menuDivider} />

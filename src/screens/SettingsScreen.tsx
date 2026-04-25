@@ -102,6 +102,8 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     canManageSubscription,
     onManageSubscription,
 }) => {
+    const { t } = useTranslation();
+    
     if (!isAuthenticated || isGuest) return null;
 
     if (isLoading) {
@@ -166,7 +168,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     <View style={{ flex: 1 }} />
 
                     <View style={styles.proStatusPill}>
-                        <Text style={styles.proStatusPillText}>ACTIVE</Text>
+                        <Text style={styles.proStatusPillText}>{t('settings.ui.activeCaps', 'ACTIVE')}</Text>
                     </View>
                 </View>
                 <TouchableOpacity
@@ -176,7 +178,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                 >
                     <View style={styles.proStatusActionLeft}>
                         <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
-                        <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>Subscription details</Text>
+                        <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>{t('settings.ui.subscriptionDetails', 'Subscription details')}</Text>
                     </View>
                     <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
@@ -189,7 +191,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                         <View style={styles.proStatusActionLeft}>
                             <MaterialIcons name="manage-accounts" size={16} color={colors.primary} />
                             <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>
-                                Manage in Google Play
+                                {t('settings.ui.manageGooglePlay', 'Manage in Google Play')}
                             </Text>
                         </View>
                         <MaterialIcons name="open-in-new" size={16} color={colors.textSecondary} />
@@ -211,7 +213,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     />
                 </View>
                 <View style={styles.premiumUpgradeCopy}>
-                    <Text style={styles.premiumUpgradeTitle}>Upgrade to Pro</Text>
+                    <Text style={styles.premiumUpgradeTitle}>{t('settings.pro.upgrade', 'Upgrade to Pro')}</Text>
                     <Text style={styles.premiumUpgradeSubtitle}>
                         Extended transcription & premium features
                     </Text>
@@ -360,13 +362,13 @@ export const SettingsScreen = () => {
     const usingLocalLLM = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local');
     const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
     const usingLocal = usingLocalWhisper || usingLocalLLM;
-    const trialInfoText = 'Create an account and get 30 minutes of trial transcription.';
+    const trialInfoText = t('settings.ui.trialInfo', 'Create an account and get 30 minutes of trial transcription.');
     const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
     const isSyncLocked = syncLocked || encryptionStatus === 'locked';
-    const syncStatusLabel = encryptionStatus === 'loading' ? 'Checking...' : (isSyncLocked ? 'Locked' : !syncEnabled ? 'Off' : 'On');
+    const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking', 'Checking...') : (isSyncLocked ? t('settings.ui.locked', 'Locked') : !syncEnabled ? t('settings.ui.off', 'Off') : t('settings.ui.on', 'On'));
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     // When configured, we show the Change button only (no extra "Configured" label).
-    const passphraseStatusLabel = !hasConfiguredKey ? 'Not set' : encryptionStatus === 'locked' ? 'Locked' : '';
+    const passphraseStatusLabel = !hasConfiguredKey ? t('settings.ui.notSet', 'Not set') : encryptionStatus === 'locked' ? t('settings.ui.locked', 'Locked') : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
@@ -979,7 +981,7 @@ export const SettingsScreen = () => {
                 >
                     <MaterialIcons name="arrow-back" size={22} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.title}>Settings</Text>
+                <Text style={styles.title}>{t('settings.ui.settingsHeader', 'Settings')}</Text>
             </View>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
@@ -1091,8 +1093,8 @@ export const SettingsScreen = () => {
                             </View>
                             <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <Text style={[styles.securityValueMinimal, { color: syncStatusColor }]}>{syncStatusLabel}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flexShrink: 1, justifyContent: 'flex-end' }}>
+                            <Text style={[styles.securityValueMinimal, { color: syncStatusColor, flexShrink: 1 }]} numberOfLines={1}>{syncStatusLabel}</Text>
                             {encryptionStatus === 'loading' ? (
                                 <ActivityIndicator size="small" color={colors.primary} />
                             ) : (
@@ -1150,7 +1152,7 @@ export const SettingsScreen = () => {
                             )}
                             {hasConfiguredKey && encryptionStatus !== 'locked' && (
                                 <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangeSecretModal(true)}>
-                                    <Text style={styles.smallButtonTextOutlined}>Change</Text>
+                                    <Text style={styles.smallButtonTextOutlined}>{t('settings.ui.changeBtn', 'Change')}</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -1526,14 +1528,14 @@ export const SettingsScreen = () => {
                                             {isDownloadingLocalWhisper ? (
                                                 <>
                                                     <MaterialIcons name="close" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>Cancel</Text>
+                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.cancelBtn', 'Cancel')}</Text>
                                                 </>
                                             ) : localWhisperBusy ? (
                                                 <ActivityIndicator size="small" color={colors.surface} />
                                             ) : (
                                                 <>
                                                     <MaterialIcons name="download" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>Download</Text>
+                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.downloadBtn', 'Download')}</Text>
                                                 </>
                                             )}
                                         </View>
@@ -1551,7 +1553,7 @@ export const SettingsScreen = () => {
                                         ) : (
                                             <>
                                                 <MaterialIcons name="delete-outline" size={16} color={colors.error} />
-                                                <Text style={[styles.localWhisperDeleteText, { fontSize: 12 }]}>Delete</Text>
+                                                <Text style={[styles.localWhisperDeleteText, { fontSize: 12 }]}>{t('settings.ui.deleteBtn', 'Delete')}</Text>
                                             </>
                                         )}
                                     </TouchableOpacity>
@@ -1686,14 +1688,14 @@ export const SettingsScreen = () => {
                                             {isDownloadingLocalLLM ? (
                                                 <>
                                                     <MaterialIcons name="close" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>Cancel</Text>
+                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.cancelBtn', 'Cancel')}</Text>
                                                 </>
                                             ) : localLLMBusy ? (
                                                 <ActivityIndicator size="small" color={colors.surface} />
                                             ) : (
                                                 <>
                                                     <MaterialIcons name="download" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>Download</Text>
+                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.downloadBtn', 'Download')}</Text>
                                                 </>
                                             )}
                                         </View>
@@ -1711,7 +1713,7 @@ export const SettingsScreen = () => {
                                         ) : (
                                             <>
                                                 <MaterialIcons name="delete-outline" size={16} color={colors.error} />
-                                                <Text style={[styles.localWhisperDeleteText, { fontSize: 12 }]}>Delete</Text>
+                                                <Text style={[styles.localWhisperDeleteText, { fontSize: 12 }]}>{t('settings.ui.deleteBtn', 'Delete')}</Text>
                                             </>
                                         )}
                                     </TouchableOpacity>
@@ -1752,11 +1754,11 @@ export const SettingsScreen = () => {
                                 <Text style={styles.legalLink}>{t("settings.ui.privacy", "Privacy Policy")}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')}>
-                                <Text style={styles.legalLink}>Terms of Service</Text>
+                                <Text style={styles.legalLink}>{t('settings.ui.termsOfService', 'Terms of Service')}</Text>
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com')}>
-                            <Text style={styles.versionText}>Vaulto v1.0.51</Text>
+                            <Text style={styles.versionText}>{t('settings.ui.vaultoVersion', 'Vaulto v1.0.61')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1775,7 +1777,7 @@ export const SettingsScreen = () => {
                         <View style={styles.sheetHandle} />
                         <View style={styles.minutesSheetHeader}>
                             <View>
-                                <Text style={styles.minutesSheetTitle}>Remaining Minutes</Text>
+                                <Text style={styles.minutesSheetTitle}>{t('settings.ui.remainingMinutes', 'Remaining Minutes')}</Text>
                                 <Text style={styles.minutesSheetSubtitle}>
                                     {refillInDays === null
                                         ? 'Monthly Pro balance'
@@ -1799,8 +1801,8 @@ export const SettingsScreen = () => {
                                         />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.minutesUsageTitle}>Transcription Balance</Text>
-                                        <Text style={styles.minutesUsageSubtitle}>Monthly Pro minutes</Text>
+                                        <Text style={styles.minutesUsageTitle}>{t('settings.ui.transcriptionBalance', 'Transcription Balance')}</Text>
+                                        <Text style={styles.minutesUsageSubtitle}>{t('settings.ui.monthlyProMinutes', 'Monthly Pro minutes')}</Text>
                                     </View>
                                 </View>
                                 <View style={styles.minutesUsageProBadge}>
@@ -1828,14 +1830,14 @@ export const SettingsScreen = () => {
                             </View>
 
                             <View style={styles.minutesUsageStatsRow}>
-                                <Text style={styles.minutesUsageStatsLabel}>Used</Text>
+                                <Text style={styles.minutesUsageStatsLabel}>{t('settings.ui.used', 'Used')}</Text>
                                 <Text style={styles.minutesUsageStatsValue}>
                                     {formatTimeMMSS(subscriptionUsedSeconds)} / {formatTimeMMSS(subscriptionTotalSeconds)}
                                 </Text>
                             </View>
 
                             <View style={styles.minutesReserveRow}>
-                                <Text style={styles.minutesReserveLabel}>Trial reserve</Text>
+                                <Text style={styles.minutesReserveLabel}>{t('settings.ui.trialReserve', 'Trial reserve')}</Text>
                                 <Text style={styles.minutesReserveValue}>
                                     {formatTimeMMSS(trialRemainingSeconds)}
                                 </Text>
@@ -1845,7 +1847,7 @@ export const SettingsScreen = () => {
                                 <View style={styles.minutesWarningBox}>
                                     <MaterialIcons name="info-outline" size={18} color={colors.error} />
                                     <Text style={styles.minutesWarningText}>
-                                        You've used all monthly minutes. Trial reserve will be used next.
+                                        {t('settings.ui.minutesWarningText', 'You\'ve used all monthly minutes. Trial reserve will be used next.')}
                                     </Text>
                                 </View>
                             )}
@@ -1854,13 +1856,13 @@ export const SettingsScreen = () => {
                                 <View style={styles.minutesWarningBoxLow}>
                                     <MaterialIcons name="warning-amber" size={18} color={colors.warning} />
                                     <Text style={styles.minutesWarningTextLow}>
-                                        Running low on monthly transcription minutes
+                                        {t('settings.ui.minutesWarningTextLow', 'Running low on monthly transcription minutes')}
                                     </Text>
                                 </View>
                             )}
 
                             {refillAtLabel && (
-                                <Text style={styles.minutesRefillText}>Next refill: {refillAtLabel}</Text>
+                                <Text style={styles.minutesRefillText}>{t('settings.ui.nextRefill', 'Next refill:')} {refillAtLabel}</Text>
                             )}
                         </View>
                     </Pressable>
