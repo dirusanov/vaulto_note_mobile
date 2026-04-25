@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { View, Text, StyleSheet, Image, Switch } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,6 +19,8 @@ interface UsageCardProps {
 }
 
 export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false }) => {
+    const { t } = useTranslation();
+
     // Only show for Vaulto AI provider
     if (aiProvider !== 'vaulto_ai') return null;
     if (!user) return null;
@@ -79,7 +82,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                             backgroundColor={colors.primary + '12'}
                             borderColor={colors.primary + '30'}
                         />
-                        <Text style={styles.title}>Vaulto AI Plan</Text>
+                        <Text style={styles.title}>{t("aux.vaultoAIPlan", "Vaulto AI Plan")}</Text>
                     </View>
                     {/* Unified Badge */}
                     <View style={styles.proBadge}>
@@ -93,12 +96,12 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                             }}
                             resizeMode="contain"
                         />
-                        <Text style={styles.proBadgeText}>PRO</Text>
+                        <Text style={styles.proBadgeText}>{t("aux.pro", "PRO")}</Text>
                     </View>
                 </View>
                 <View style={styles.unlimitedContainer}>
                     <MaterialIcons name="all-inclusive" size={24} color={colors.primary} />
-                    <Text style={styles.unlimitedText}>Unlimited Access</Text>
+                    <Text style={styles.unlimitedText}>{t("aux.unlimitedAccess", "Unlimited Access")}</Text>
                 </View>
             </View>
         );
@@ -148,7 +151,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             </View>
 
             <View style={styles.statsRow}>
-                <Text style={styles.statsLabel}>Used</Text>
+                <Text style={styles.statsLabel}>{t("settings.ui.used", "Used")}</Text>
                 <Text style={styles.statsValue}>
                     {formatTimeMMSS(usedSeconds)} / {formatTimeMMSS(totalSeconds)}
                 </Text>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
@@ -8,6 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 
 export const PaywallScreen = () => {
+    const { t } = useTranslation();
     const { packages, purchasePackage, restorePurchases, isLoading, isPro } = useSubscription();
     const navigation = useNavigation();
     const { isAuthenticated, isGuest } = useAuth();
@@ -55,7 +57,7 @@ export const PaywallScreen = () => {
                                 resizeMode="contain"
                             />
                         </View>
-                        <Text style={styles.heroTitle}>PRO ACCESS</Text>
+                        <Text style={styles.heroTitle}>{t("aux.proAccess", "PRO ACCESS")}</Text>
                         <Text style={styles.heroSubtitle}>
                             Unlock the full potential.
                         </Text>
@@ -104,7 +106,7 @@ export const PaywallScreen = () => {
                                                 )}
                                                 {isBestValue && (
                                                     <View style={styles.badge}>
-                                                        <Text style={styles.badgeText}>BEST VALUE</Text>
+                                                        <Text style={styles.badgeText}>{t("aux.bestValue", "BEST VALUE")}</Text>
                                                     </View>
                                                 )}
                                             </View>
@@ -138,7 +140,7 @@ export const PaywallScreen = () => {
                         style={styles.restoreButton}
                         disabled={!canPurchase}
                     >
-                        <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+                        <Text style={styles.restoreButtonText}>{t("aux.restorePurchases", "Restore Purchases")}</Text>
                     </TouchableOpacity>
 
                     <Text style={styles.termsText}>

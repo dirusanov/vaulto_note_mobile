@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
 import {
     Modal,
@@ -17,6 +18,8 @@ import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
 import { onLimitReached } from '../utils/limitEvents';
 
 export const LimitModal: React.FC = () => {
+    const { t } = useTranslation();
+
     const navigation = useNavigation();
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -119,7 +122,7 @@ export const LimitModal: React.FC = () => {
 
                                 {isTrial && (
                                     <TouchableOpacity onPress={handleUpgrade} activeOpacity={0.85} style={styles.primaryButton}>
-                                        <Text style={styles.primaryText}>Upgrade</Text>
+                                        <Text style={styles.primaryText}>{t("aux.upgrade", "Upgrade")}</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { useEncryption } from '../context/EncryptionContext';
@@ -16,6 +17,8 @@ interface ResetEncryptionModalProps {
 const REQUIRED_CONFIRM = 'DELETE';
 
 export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncryptionModalProps) => {
+    const { t } = useTranslation();
+
     const { resetEncryption } = useEncryption();
     const [confirmText, setConfirmText] = useState('');
     const [loading, setLoading] = useState(false);
@@ -59,17 +62,17 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
                 <View style={styles.backdrop}>
                     <TouchableWithoutFeedback>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Reset Encryption</Text>
+                            <Text style={styles.title}>{t("aux.resetEncryptionTitle", "Reset Encryption")}</Text>
                             <Text style={styles.subtitle}>
                                 This will permanently delete all notes stored on this device and all encrypted sync data.
                                 It cannot be undone.
                             </Text>
 
                             <View style={styles.warningBox}>
-                                <Text style={styles.warningTitle}>You will lose:</Text>
-                                <Text style={styles.warningText}>Local notes in the database</Text>
-                                <Text style={styles.warningText}>Encrypted synced notes on the server</Text>
-                                <Text style={styles.warningText}>The current encryption key</Text>
+                                <Text style={styles.warningTitle}>{t("aux.resetEncryptionWarn2", "You will lose:")}</Text>
+                                <Text style={styles.warningText}>{t("aux.resetEncryptionWarn3", "Local notes in the database")}</Text>
+                                <Text style={styles.warningText}>{t("aux.resetEncryptionWarn4", "Encrypted synced notes on the server")}</Text>
+                                <Text style={styles.warningText}>{t("aux.resetEncryptionWarn5", "The current encryption key")}</Text>
                             </View>
 
                             <TextInput

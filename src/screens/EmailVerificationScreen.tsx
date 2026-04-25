@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -11,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 
 export const EmailVerificationScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { signIn } = useAuth();
@@ -112,7 +114,7 @@ export const EmailVerificationScreen = () => {
                     <View style={[styles.iconContainer, { borderColor: colors.success }]}>
                         <MaterialIcons name="check-circle" size={64} color={colors.success} />
                     </View>
-                    <Text style={styles.title}>Email Verified!</Text>
+                    <Text style={styles.title}>{t("aux.emailVerified", "Email Verified!")}</Text>
                     <Text style={styles.subtitle}>
                         Your account has been successfully verified.
                     </Text>
@@ -132,7 +134,7 @@ export const EmailVerificationScreen = () => {
                     <MaterialIcons name="mark-email-unread" size={64} color={colors.primary} />
                 </View>
 
-                <Text style={styles.title}>Check your inbox</Text>
+                <Text style={styles.title}>{t("aux.checkInbox", "Check your inbox")}</Text>
 
                 <Text style={styles.subtitle}>
                     We sent a verification link to{'\n'}
@@ -141,7 +143,7 @@ export const EmailVerificationScreen = () => {
 
                 <View style={styles.statusContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.statusText}>Waiting for verification...</Text>
+                    <Text style={styles.statusText}>{t("aux.waitingVerification", "Waiting for verification...")}</Text>
                 </View>
 
                 <View style={styles.infoBox}>
@@ -156,7 +158,7 @@ export const EmailVerificationScreen = () => {
                     style={styles.backButton}
                     activeOpacity={0.8}
                 >
-                    <Text style={styles.backButtonText}>Back to sign in</Text>
+                    <Text style={styles.backButtonText}>{t("aux.backToSignIn", "Back to sign in")}</Text>
                 </TouchableOpacity>
             </View>
         </ScreenContainer>

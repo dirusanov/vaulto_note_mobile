@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useMemo, useState } from 'react';
 import {
     Alert,
@@ -25,6 +26,7 @@ type LegalParams = {
 };
 
 export const LegalAcceptanceScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const route = useRoute();
     const { signIn } = useAuth();
@@ -97,7 +99,7 @@ export const LegalAcceptanceScreen = () => {
                 </TouchableOpacity>
 
                 <View style={styles.content}>
-                    <Text style={styles.title}>One Last Step</Text>
+                    <Text style={styles.title}>{t("aux.oneLastStep", "One Last Step")}</Text>
                     <Text style={styles.subtitle}>
                         You signed in with {providerLabel}. Please accept our legal terms to continue.
                     </Text>

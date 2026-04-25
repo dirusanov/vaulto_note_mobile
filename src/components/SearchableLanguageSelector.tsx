@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -122,6 +123,8 @@ interface SearchableLanguageSelectorProps {
 }
 
 export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProps> = ({ value, onChange }) => {
+    const { t } = useTranslation();
+
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -165,7 +168,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                         <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
                             <MaterialIcons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
-                        <Text style={styles.modalTitle}>Select Language</Text>
+                        <Text style={styles.modalTitle}>{t("aux.selectLanguage", "Select Language")}</Text>
                         <View style={{ width: 44 }} />
                     </View>
 

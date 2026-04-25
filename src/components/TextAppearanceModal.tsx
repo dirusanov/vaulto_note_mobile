@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import {
     View,
@@ -30,6 +31,8 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
     autoScalingEnabled,
     onAutoScalingChange,
 }) => {
+    const { t } = useTranslation();
+
     // Font size range
     const MIN_FONT_SIZE = 12;
     const MAX_FONT_SIZE = 32;
@@ -59,7 +62,7 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                     <TouchableWithoutFeedback>
                         <View style={styles.contentContainer}>
                             <View style={styles.header}>
-                                <Text style={styles.title}>Text Appearance</Text>
+                                <Text style={styles.title}>{t("aux.textAppearance", "Text Appearance")}</Text>
                                 <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                     <MaterialIcons name="close" size={24} color={colors.textSecondary} />
                                 </TouchableOpacity>
@@ -69,7 +72,7 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                             <View style={styles.section}>
                                 <View style={styles.sectionHeader}>
                                     <MaterialIcons name="format-size" size={24} color={colors.text} />
-                                    <Text style={styles.sectionTitle}>Font Size</Text>
+                                    <Text style={styles.sectionTitle}>{t("aux.fontSize", "Font Size")}</Text>
                                 </View>
 
                                 <View style={styles.fontSizeControl}>
@@ -100,7 +103,7 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                 <View style={styles.sectionInfo}>
                                     <View style={styles.sectionHeader}>
                                         <MaterialIcons name="aspect-ratio" size={24} color={colors.text} />
-                                        <Text style={styles.sectionTitle}>Auto-scale Checklists</Text>
+                                        <Text style={styles.sectionTitle}>{t("aux.autoScaleChecklists", "Auto-scale Checklists")}</Text>
                                     </View>
                                     <Text style={styles.sectionDescription}>
                                         Automatically increase size of short checklists for better readability.

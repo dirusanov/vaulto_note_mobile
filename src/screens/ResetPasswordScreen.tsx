@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -27,6 +28,7 @@ type RouteParams = {
 };
 
 export const ResetPasswordScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const route = useRoute<RouteProp<RouteParams, 'ResetPassword'>>();
 
@@ -88,8 +90,8 @@ export const ResetPasswordScreen = () => {
                     </TouchableOpacity>
 
                     <View style={styles.header}>
-                        <Text style={styles.title}>Reset Password</Text>
-                        <Text style={styles.subtitle}>Enter your new password</Text>
+                        <Text style={styles.title}>{t("aux.resetPassword", "Reset Password")}</Text>
+                        <Text style={styles.subtitle}>{t("aux.enterNewPassword", "Enter your new password")}</Text>
                     </View>
 
                     <View style={styles.form}>
@@ -102,7 +104,7 @@ export const ResetPasswordScreen = () => {
 
                         {!route.params?.token && (
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Reset Token</Text>
+                                <Text style={styles.label}>{t("aux.resetToken", "Reset Token")}</Text>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Enter reset token from email"
@@ -115,7 +117,7 @@ export const ResetPasswordScreen = () => {
                         )}
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>New Password</Text>
+                            <Text style={styles.label}>{t("aux.newPassword", "New Password")}</Text>
                             <TextInput
                                 style={styles.input}
                                 placeholder="At least 8 characters"
@@ -127,7 +129,7 @@ export const ResetPasswordScreen = () => {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Confirm Password</Text>
+                            <Text style={styles.label}>{t("aux.confirmPassword", "Confirm Password")}</Text>
                             <TextInput
                                 style={styles.input}
                                 placeholder="Re-enter your password"

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Dimensions, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -24,6 +25,8 @@ export const DeleteConfirmationDialog = ({
     onConfirm,
     onCancel,
 }: DeleteConfirmationDialogProps) => {
+    const { t } = useTranslation();
+
     const scaleAnim = useRef(new Animated.Value(0.85)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -94,7 +97,7 @@ export const DeleteConfirmationDialog = ({
                                 onPress={onCancel}
                                 activeOpacity={0.7}
                             >
-                                <Text style={styles.btnCancelText}>Keep it</Text>
+                                <Text style={styles.btnCancelText}>{t("aux.keepIt", "Keep it")}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -102,7 +105,7 @@ export const DeleteConfirmationDialog = ({
                                 onPress={onConfirm}
                                 activeOpacity={0.9}
                             >
-                                <Text style={styles.btnDeleteText}>Delete</Text>
+                                <Text style={styles.btnDeleteText}>{t("aux.deleteBtn", "Delete")}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

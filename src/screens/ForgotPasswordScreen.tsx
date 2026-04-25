@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -21,6 +22,7 @@ import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
 
 export const ForgotPasswordScreen = () => {
+    const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export const ForgotPasswordScreen = () => {
                     </TouchableOpacity>
 
                     <View style={styles.header}>
-                        <Text style={styles.title}>Forgot Password?</Text>
+                        <Text style={styles.title}>{t("aux.forgotPassword", "Forgot Password?")}</Text>
                         <Text style={styles.subtitle}>
                             {submitted
                                 ? 'Check your email'
@@ -77,7 +79,7 @@ export const ForgotPasswordScreen = () => {
                                 style={styles.button}
                                 onPress={() => navigation.navigate('SignIn')}
                             >
-                                <Text style={styles.buttonText}>Back to Sign In</Text>
+                                <Text style={styles.buttonText}>{t("aux.backToSignIn", "Back to Sign In")}</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
@@ -90,7 +92,7 @@ export const ForgotPasswordScreen = () => {
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Email</Text>
+                                <Text style={styles.label}>{t("aux.emailLabel", "Email")}</Text>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="name@example.com"

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,6 +21,8 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
     onDelete,
     onCancel,
 }) => {
+    const { t } = useTranslation();
+
     const hasUnsynced = unsyncedCount > 0;
 
     return (
@@ -35,7 +38,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                         <MaterialIcons name="logout" size={40} color={colors.error} />
                     </View>
 
-                    <Text style={styles.title}>Sign Out</Text>
+                    <Text style={styles.title}>{t("settings.account.signOut", "Sign Out")}</Text>
                     <Text style={styles.message}>
                         Choose what happens to your local notes on this device.
                     </Text>
@@ -45,7 +48,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                             <View style={styles.alertRow}>
                                 <MaterialIcons name="warning-amber" size={20} color={colors.error} />
                                 <View style={styles.alertTextWrap}>
-                                    <Text style={styles.dangerTitle}>Unsynced changes</Text>
+                                    <Text style={styles.dangerTitle}>{t("aux.unsyncedChanges", "Unsynced changes")}</Text>
                                     <Text style={styles.dangerText}>
                                         {unsyncedCount} change{unsyncedCount === 1 ? '' : 's'} not uploaded.
                                         Deleting will permanently lose them.
@@ -59,7 +62,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                         <View style={styles.alertRow}>
                             <MaterialIcons name="visibility" size={20} color={colors.warning} />
                             <View style={styles.alertTextWrap}>
-                                <Text style={styles.warningTitle}>Privacy warning</Text>
+                                <Text style={styles.warningTitle}>{t("aux.signOutPrivacyWarn", "Privacy warning")}</Text>
                                 <Text style={styles.warningText}>
                                     If you keep notes on this device, anyone with access to this phone can read them
                                     while you are signed out.
@@ -74,7 +77,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                             onPress={onKeep}
                             activeOpacity={0.8}
                         >
-                            <Text style={styles.keepButtonText}>Keep on Device</Text>
+                            <Text style={styles.keepButtonText}>{t("aux.keepOnDevice", "Keep on Device")}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -82,7 +85,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                             onPress={onDelete}
                             activeOpacity={0.8}
                         >
-                            <Text style={styles.deleteButtonText}>DELETE FROM DEVICE</Text>
+                            <Text style={styles.deleteButtonText}>{t("aux.deleteFromDevice", "DELETE FROM DEVICE")}</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -91,7 +94,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                         onPress={onCancel}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.cancelText}>Cancel</Text>
+                        <Text style={styles.cancelText}>{t("settings.ui.cancelBtn", "Cancel")}</Text>
                     </TouchableOpacity>
                 </View>
             </View>

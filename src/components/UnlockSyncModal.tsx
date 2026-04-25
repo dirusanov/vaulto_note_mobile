@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { useEncryption } from '../context/EncryptionContext';
@@ -26,6 +27,8 @@ export const UnlockSyncModal = ({
     onError,
     errorMessage = null,
 }: UnlockSyncModalProps) => {
+    const { t } = useTranslation();
+
     const { unlock, bundle } = useEncryption();
     const isLegacyNumericPassphrase = bundle?.secret_mode === 'pin';
     const [secret, setSecret] = useState('');
@@ -103,7 +106,7 @@ export const UnlockSyncModal = ({
                 <View style={styles.backdrop}>
                     <TouchableWithoutFeedback>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Unlock Sync</Text>
+                            <Text style={styles.title}>{t("notes.unlockSync", "Unlock Sync")}</Text>
                             <Text style={styles.subtitle}>
                                 Enter your passphrase to unlock sync. This does not affect local access.
                             </Text>
@@ -135,7 +138,7 @@ export const UnlockSyncModal = ({
                                 style={styles.resetRow}
                                 disabled={loading}
                             >
-                                <Text style={styles.resetText}>Forgot passphrase? Reset encryption</Text>
+                                <Text style={styles.resetText}>{t("aux.forgotPassReset", "Forgot passphrase? Reset encryption")}</Text>
                             </Pressable>
 
                             <View style={styles.actions}>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import {
     Modal,
@@ -29,6 +30,8 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
     iconColor = colors.success,
     onClose,
 }) => {
+    const { t } = useTranslation();
+
     return (
         <Modal
             visible={visible}
@@ -59,7 +62,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
                                 onPress={onClose}
                                 activeOpacity={0.8}
                             >
-                                <Text style={styles.buttonText}>Okay</Text>
+                                <Text style={styles.buttonText}>{t("aux.okay", "Okay")}</Text>
                             </TouchableOpacity>
                         </View>
                     </TouchableWithoutFeedback>

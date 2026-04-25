@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,6 +12,8 @@ interface SecurityInfoModalProps {
 }
 
 export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, onClose }) => {
+    const { t } = useTranslation();
+
     return (
         <Modal
             visible={visible}
@@ -29,8 +32,8 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                             <MaterialIcons name="security" size={24} color={colors.primary} />
                         </View>
                         <View>
-                            <Text style={styles.title}>Security & Privacy</Text>
-                            <Text style={styles.subtitle}>How we protect your data</Text>
+                            <Text style={styles.title}>{t("aux.securityPrivacy", "Security & Privacy")}</Text>
+                            <Text style={styles.subtitle}>{t("aux.howWeProtect", "How we protect your data")}</Text>
                         </View>
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                             <MaterialIcons name="close" size={24} color={colors.textSecondary} />
@@ -44,7 +47,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                                 <MaterialIcons name="lock" size={20} color={colors.accentGreen} />
                             </View>
                             <View style={styles.sectionText}>
-                                <Text style={styles.sectionTitle}>End-to-End Encryption</Text>
+                                <Text style={styles.sectionTitle}>{t("aux.e2eEncryption", "End-to-End Encryption")}</Text>
                                 <Text style={styles.sectionDescription}>
                                     Your notes are encrypted on your device using a key only you have. We cannot see your data.
                                 </Text>
@@ -58,7 +61,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                                 <MaterialIcons name="cloud-sync" size={20} color={colors.primary} />
                             </View>
                             <View style={styles.sectionText}>
-                                <Text style={styles.sectionTitle}>Secure Sync</Text>
+                                <Text style={styles.sectionTitle}>{t("aux.secureSync", "Secure Sync")}</Text>
                                 <Text style={styles.sectionDescription}>
                                     Encrypted data is safely stored in the cloud so you can access it across devices.
                                 </Text>
@@ -72,7 +75,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                                 <MaterialIcons name="vpn-key" size={20} color={colors.accentPurple} />
                             </View>
                             <View style={styles.sectionText}>
-                                <Text style={styles.sectionTitle}>Your Key, Your Data</Text>
+                                <Text style={styles.sectionTitle}>{t("aux.yourKeyYourData", "Your Key, Your Data")}</Text>
                                 <Text style={styles.sectionDescription}>
                                     If you lose your access key, we cannot recover your data. Keep it safe.
                                 </Text>
@@ -90,7 +93,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
 
                     <View style={styles.footer}>
                         <TouchableOpacity style={styles.button} onPress={onClose}>
-                            <Text style={styles.buttonText}>Got it</Text>
+                            <Text style={styles.buttonText}>{t("aux.gotIt", "Got it")}</Text>
                         </TouchableOpacity>
                     </View>
 

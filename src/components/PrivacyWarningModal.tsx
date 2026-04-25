@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Modal,
@@ -22,6 +23,8 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
     onAccept,
     onCancel,
 }) => {
+    const { t } = useTranslation();
+
     const [dontShowAgain, setDontShowAgain] = useState(false);
 
     const handleAccept = async () => {
@@ -72,14 +75,14 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
                             style={[styles.button, styles.cancelButton]}
                             onPress={onCancel}
                         >
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                            <Text style={styles.cancelButtonText}>{t("settings.ui.cancelBtn", "Cancel")}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.button, styles.acceptButton]}
                             onPress={handleAccept}
                         >
-                            <Text style={styles.acceptButtonText}>Got it</Text>
+                            <Text style={styles.acceptButtonText}>{t("aux.gotIt", "Got it")}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     KeyboardAvoidingView,
@@ -36,6 +37,8 @@ interface EnableSyncModalProps {
 }
 
 const waitForUiFrame = () => new Promise<void>((resolve) => {
+    const { t } = useTranslation();
+
     requestAnimationFrame(() => resolve());
 });
 
