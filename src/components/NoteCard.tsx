@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
@@ -17,6 +18,7 @@ interface NoteCardProps {
 }
 
 export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
+    const { t } = useTranslation();
     const { bundle, mode } = useEncryption();
     const activeChild = note.improvements?.find(imp => imp.is_active);
     const activeChildTitle = (activeChild?.title || activeChild?.label || '').trim();
@@ -81,18 +83,18 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
         const isThisYear = date.getFullYear() === now.getFullYear();
 
         if (isToday) {
-            return date.toLocaleTimeString('en-US', {
+            return date.toLocaleTimeString(undefined, {
                 hour: '2-digit',
                 minute: '2-digit',
                 hour12: false
             });
         } else if (isThisYear) {
-            return date.toLocaleDateString('en-GB', {
+            return date.toLocaleDateString(undefined, {
                 day: 'numeric',
                 month: 'short'
             });
         } else {
-            return date.toLocaleDateString('en-GB', {
+            return date.toLocaleDateString(undefined, {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric'
@@ -120,7 +122,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
             )}
             <View style={styles.content}>
                 <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle]} numberOfLines={1}>
-                    {title || (hasAudio ? 'Voice Recording' : ' ')}
+                    {title || (hasAudio ? t("notes.voiceRecording") : ' ')}
                 </Text>
                 {(!isEmpty && previewString && previewString !== title) && (
                     <Text style={styles.preview} numberOfLines={6}>{previewString}</Text>
@@ -129,7 +131,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     <View style={{ marginTop: spacing.xs, alignSelf: 'flex-start' }}>
                         <View style={[styles.audioChip, { transform: [] }]}>
                             <MaterialIcons name="headset" size={12} color={colors.textSecondary} style={{ marginRight: 2 }} />
-                            <Text style={styles.audioChipText}>audio</Text>
+                            <Text style={styles.audioChipText}>{t("notes.audioChip")}</Text>
                         </View>
                     </View>
                 )}

@@ -30,7 +30,7 @@ export const ForgotPasswordScreen = () => {
 
     const handleSubmit = async () => {
         if (!email) {
-            Alert.alert('Error', 'Please enter your email address');
+            Alert.alert(t("common.errorTitle"), t("common.emailAddressRequired"));
             return;
         }
 
@@ -39,8 +39,8 @@ export const ForgotPasswordScreen = () => {
             await authApi.requestPasswordReset(email);
             setSubmitted(true);
         } catch (err) {
-            const message = getErrorMessage(err, 'Failed to send reset email');
-            Alert.alert('Error', message);
+            const message = getErrorMessage(err, t("auth.sendResetEmailFailed"));
+            Alert.alert(t("common.errorTitle"), message);
         } finally {
             setLoading(false);
         }
@@ -65,15 +65,15 @@ export const ForgotPasswordScreen = () => {
                         <Text style={styles.title}>{t("aux.forgotPassword", "Forgot Password?")}</Text>
                         <Text style={styles.subtitle}>
                             {submitted
-                                ? 'Check your email'
-                                : 'Enter your email to reset your password'}
+                                ? t("auth.checkEmail")
+                                : t("auth.enterEmailToReset")}
                         </Text>
                     </View>
 
                     {submitted ? (
                         <View style={styles.successContainer}>
                             <Text style={styles.successText}>
-                                If an account exists with the email {email}, you will receive a password reset link shortly.
+                                {t("auth.resetEmailSuccess", { email })}
                             </Text>
                             <TouchableOpacity
                                 style={styles.button}
@@ -87,7 +87,7 @@ export const ForgotPasswordScreen = () => {
                             <View style={styles.warningBox}>
                                 <MaterialIcons name="warning" size={20} color="#FF9800" />
                                 <Text style={styles.warningText}>
-                                    Note: Resetting your password will not affect your locally stored notes.
+                                    {t("aux.noteResetWontAffect", "Note: Resetting your password will not affect your locally stored notes.")}
                                 </Text>
                             </View>
 
@@ -95,7 +95,7 @@ export const ForgotPasswordScreen = () => {
                                 <Text style={styles.label}>{t("aux.emailLabel", "Email")}</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="name@example.com"
+                                    placeholder={t("auth.emailPlaceholder", "name@example.com")}
                                     placeholderTextColor={colors.textSecondary}
                                     autoCapitalize="none"
                                     keyboardType="email-address"
@@ -110,7 +110,7 @@ export const ForgotPasswordScreen = () => {
                                 disabled={loading}
                             >
                                 <Text style={styles.buttonText}>
-                                    {loading ? 'Sending...' : 'Send Reset Link'}
+                                    {loading ? t("auth.sending") : t("auth.sendResetLink")}
                                 </Text>
                             </TouchableOpacity>
                         </View>

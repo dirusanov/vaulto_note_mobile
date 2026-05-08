@@ -33,7 +33,11 @@
     "keepIt": "Оставить",
     "deleteBtn": "Удалить",
     "reset": "Сбросить",
-    "transcribe": "Транскрипция"
+    "transcribe": "Транскрипция",
+    "unavailable": "Недоступно",
+    "failed": "Ошибка",
+    "ok": "ОК",
+    "pro": "PRO"
   },
   "notes": {
     "emptyStateMic": "Нажмите на микрофон, чтобы записать",
@@ -252,7 +256,11 @@
     "agreementRequired": "Требуется согласие",
     "registrationFailed": "Ошибка регистрации",
     "signInFailed": "Ошибка входа",
-    "googleSignInFailed": "Ошибка входа Google"
+    "googleSignInFailed": "Ошибка входа Google",
+    "resetPasswordFailed": "Не удалось сбросить пароль",
+    "sendResetEmailFailed": "Не удалось отправить письмо для сброса",
+    "iAcceptThe": "Я принимаю",
+    "andThe": "и"
   },
   "edit": {
     "visualEditor": "Визуальный редактор",
@@ -400,6 +408,23 @@
     "pro": "PRO",
     "unlimitedAccess": "Безлимитный доступ",
     "createAccountTranscribe": "Создайте аккаунт для распознавания речи.",
-    "forgotPassResetEncryption": "Забыли пароль? Сбросить шифрование"
+    "forgotPassResetEncryption": "Забыли пароль? Сбросить шифрование",
+    "unableOpenSubscription": "Не удалось открыть управление подпиской.",
+    "unableEnableSync": "Не удалось включить синхронизацию.",
+    "selectOpenAICompatible": "Выберите OpenAI Compatible для проверки соединения.",
+    "enterApiKey": "Введите API ключ.",
+    "connectionWorking": "Соединение работает.",
+    "connectionFailed": "Ошибка соединения. Проверьте URL и ключ.",
+    "downloadFailed": "Ошибка загрузки",
+    "unableDownloadWhisper": "Не удалось загрузить модель Whisper.",
+    "purchaseProRequired": "Создайте аккаунт для покупки Pro.",
+    "unlimitedCloudSync": "Безлимитная облачная синхронизация",
+    "minsMonthTranscription": "{{minutes}} мин/мес транскрипции с Vaulto AI",
+    "customApiKeyServer": "Свой API ключ и сервер",
+    "signInRestorePurchases": "Войдите, чтобы восстановить покупки.",
+    "yearlyPlan": "Годовой план",
+    "monthlyPlan": "Месячный план",
+    "savePercentage": "ЭКОНОМИЯ {{percentage}}%",
+    "vaultoAiMinsMonth": "{{minutes}} минут Vaulto AI / месяц"
   }
 }

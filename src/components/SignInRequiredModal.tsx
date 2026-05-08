@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Modal,
     View,
@@ -24,13 +25,17 @@ interface SignInRequiredModalProps {
 
 export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
     visible,
-    title = 'Sign in required',
+    title,
     message,
     onClose,
     onSignIn,
-    signInLabel = 'Sign In',
-    cancelLabel = 'Not now',
+    signInLabel,
+    cancelLabel,
 }) => {
+    const { t } = useTranslation();
+    const displayTitle = title || t("voice.signInRequired", "Sign in required");
+    const displaySignInLabel = signInLabel || t("auth.signIn", "Sign In");
+    const displayCancelLabel = cancelLabel || t("common.notNow", "Not now");
     return (
         <Modal
             visible={visible}
@@ -50,15 +55,15 @@ export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
                                 />
                             </View>
 
-                            <Text style={styles.title}>{title}</Text>
+                            <Text style={styles.title}>{displayTitle}</Text>
                             <Text style={styles.message}>{message}</Text>
 
                             <View style={styles.actionsRow}>
                                 <TouchableOpacity onPress={onClose} activeOpacity={0.8} style={styles.cancelButton}>
-                                    <Text style={styles.cancelText}>{cancelLabel}</Text>
+                                    <Text style={styles.cancelText}>{displayCancelLabel}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={onSignIn} activeOpacity={0.85} style={styles.primaryButton}>
-                                    <Text style={styles.primaryText}>{signInLabel}</Text>
+                                    <Text style={styles.primaryText}>{displaySignInLabel}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -148,4 +153,3 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
 });
-

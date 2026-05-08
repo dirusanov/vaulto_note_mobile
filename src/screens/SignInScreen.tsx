@@ -58,7 +58,7 @@ export const SignInScreen = () => {
 
     const handleEmailSignIn = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill in all fields');
+            Alert.alert(t("common.errorTitle"), t("common.fillFields"));
             return;
         }
 
@@ -67,8 +67,8 @@ export const SignInScreen = () => {
             const result = await authApi.login(email, password);
             await handlePostLogin(result, 'email');
         } catch (err) {
-            const message = getErrorMessage(err, 'Sign-in failed');
-            Alert.alert('Sign-In Failed', message);
+            const message = getErrorMessage(err, t("auth.signInFailed"));
+            Alert.alert(t("auth.signInFailed"), message);
         } finally {
             setLoading(false);
         }
@@ -81,8 +81,8 @@ export const SignInScreen = () => {
                 await handlePostLogin(result, 'google');
             }
         } catch (err) {
-            const message = getErrorMessage(err, 'Google sign-in failed.');
-            Alert.alert('Google Sign-In', message);
+            const message = getErrorMessage(err, t("auth.googleSignInFailed"));
+            Alert.alert(t("auth.googleSignInFailed"), message);
         }
     };
 
@@ -107,10 +107,10 @@ export const SignInScreen = () => {
 
                         <View style={styles.buttonContainer}>
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Email</Text>
+                                <Text style={styles.label}>{t("auth.email")}</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="name@example.com"
+                                    placeholder={t("auth.emailPlaceholder", "name@example.com")}
                                     placeholderTextColor={colors.textSecondary}
                                     autoCapitalize="none"
                                     keyboardType="email-address"
@@ -120,11 +120,11 @@ export const SignInScreen = () => {
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Password</Text>
+                                <Text style={styles.label}>{t("auth.password")}</Text>
                                 <View style={styles.passwordInputWrapper}>
                                     <TextInput
                                         style={[styles.input, styles.passwordInput]}
-                                        placeholder="Enter your password"
+                                        placeholder={t("auth.passwordPlaceholder", "Enter your password")}
                                         placeholderTextColor={colors.textSecondary}
                                         secureTextEntry={!showPassword}
                                         value={password}
@@ -157,7 +157,7 @@ export const SignInScreen = () => {
                                 disabled={loading}
                             >
                                 <Text style={styles.buttonText}>
-                                    {loading ? 'Signing in...' : 'Sign In'}
+                                    {loading ? t("auth.signingIn", "Signing in...") : t("auth.signIn", "Sign In")}
                                 </Text>
                             </TouchableOpacity>
 
@@ -179,7 +179,7 @@ export const SignInScreen = () => {
                                 onPress={() => navigation.navigate('SignUp')}
                             >
                                 <Text style={styles.signUpText}>
-                                    Don't have an account? <Text style={styles.signUpLink}>{t("auth.signUp", "Sign Up")}</Text>
+                                    {t("auth.dontHaveAccount", "Don't have an account?")} <Text style={styles.signUpLink}>{t("auth.signUp", "Sign Up")}</Text>
                                 </Text>
                             </TouchableOpacity>
                         </View>

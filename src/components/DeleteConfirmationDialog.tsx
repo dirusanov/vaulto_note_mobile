@@ -82,12 +82,12 @@ export const DeleteConfirmationDialog = ({
 
                         {/* Title */}
                         <Text style={styles.title}>
-                            {title || (noteCount === 1 ? 'Delete Note?' : `Delete ${noteCount} Notes?`)}
+                            {title || (noteCount === 1 ? t("aux.deleteNoteTitle") : t("aux.deleteNotesTitle", { count: noteCount }))}
                         </Text>
 
                         {/* Message */}
                         <Text style={styles.message}>
-                            {message || `This action is permanent and cannot be undone.`}
+                            {message || t("aux.permanentActionDesc")}
                         </Text>
 
                         {/* Actions */}

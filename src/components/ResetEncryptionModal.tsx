@@ -59,7 +59,7 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
             onReset?.(result);
             onClose();
         } catch (e: any) {
-            setError(e?.message || 'Failed to reset encryption.');
+            setError(e?.message || t("aux.resetFailed"));
         } finally {
             setLoading(false);
         }
@@ -96,7 +96,7 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
                                 </View>
 
                                 <TextInput
-                                    label={`Type "${REQUIRED_CONFIRM}" to confirm`}
+                                    label={t("aux.typeConfirm", { confirm: REQUIRED_CONFIRM })}
                                     value={confirmText}
                                     onChangeText={setConfirmText}
                                     autoCapitalize="characters"
@@ -108,14 +108,14 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
 
                                 <View style={styles.actions}>
                                     <Button
-                                        title="Cancel"
+                                        title={t("common.cancel")}
                                         variant="outline"
                                         onPress={handleClose}
                                         disabled={loading}
                                         style={styles.actionButton}
                                     />
                                     <Button
-                                        title="Reset"
+                                        title={t("common.reset")}
                                         onPress={handleReset}
                                         loading={loading}
                                         disabled={loading || !canConfirm}

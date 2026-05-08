@@ -39,22 +39,22 @@ export const ResetPasswordScreen = () => {
 
     const handleSubmit = async () => {
         if (!token) {
-            Alert.alert('Error', 'Reset token is required');
+            Alert.alert(t("common.errorTitle"), t("auth.resetTokenPlaceholder"));
             return;
         }
 
         if (!newPassword || !confirmPassword) {
-            Alert.alert('Error', 'Please fill in all fields');
+            Alert.alert(t("common.errorTitle"), t("common.fillFields"));
             return;
         }
 
         if (newPassword.length < 8) {
-            Alert.alert('Error', 'Password must be at least 8 characters');
+            Alert.alert(t("common.errorTitle"), t("common.passwordLengthError"));
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            Alert.alert(t("common.errorTitle"), t("common.passwordsMatchError"));
             return;
         }
 
@@ -62,13 +62,13 @@ export const ResetPasswordScreen = () => {
         try {
             await authApi.confirmPasswordReset(token, newPassword);
             Alert.alert(
-                'Success',
-                'Password successfully reset. You can now sign in with your new password.',
-                [{ text: 'OK', onPress: () => navigation.navigate('SignIn') }]
+                t("common.successTitle"),
+                t("auth.passwordResetSuccess"),
+                [{ text: t("common.ok"), onPress: () => navigation.navigate('SignIn') }]
             );
         } catch (err) {
-            const message = getErrorMessage(err, 'Failed to reset password');
-            Alert.alert('Error', message);
+            const message = getErrorMessage(err, t("auth.resetPasswordFailed"));
+            Alert.alert(t("common.errorTitle"), message);
         } finally {
             setLoading(false);
         }
@@ -98,7 +98,7 @@ export const ResetPasswordScreen = () => {
                         <View style={styles.warningBox}>
                             <MaterialIcons name="info" size={20} color="#2196F3" />
                             <Text style={styles.warningText}>
-                                Your locally stored notes remain unaffected and fully accessible.
+                                {t("auth.locallyStoredUnaffected", "Your locally stored notes remain unaffected and fully accessible.")}
                             </Text>
                         </View>
 
@@ -107,7 +107,7 @@ export const ResetPasswordScreen = () => {
                                 <Text style={styles.label}>{t("aux.resetToken", "Reset Token")}</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Enter reset token from email"
+                                    placeholder={t("auth.resetTokenPlaceholder")}
                                     placeholderTextColor={colors.textSecondary}
                                     autoCapitalize="none"
                                     value={token}
@@ -120,7 +120,7 @@ export const ResetPasswordScreen = () => {
                             <Text style={styles.label}>{t("aux.newPassword", "New Password")}</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="At least 8 characters"
+                                placeholder={t("auth.passwordAtLeast8")}
                                 placeholderTextColor={colors.textSecondary}
                                 secureTextEntry
                                 value={newPassword}
@@ -132,7 +132,7 @@ export const ResetPasswordScreen = () => {
                             <Text style={styles.label}>{t("aux.confirmPassword", "Confirm Password")}</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Re-enter your password"
+                                placeholder={t("auth.confirmPasswordPlaceholder")}
                                 placeholderTextColor={colors.textSecondary}
                                 secureTextEntry
                                 value={confirmPassword}
@@ -146,7 +146,7 @@ export const ResetPasswordScreen = () => {
                             disabled={loading}
                         >
                             <Text style={styles.buttonText}>
-                                {loading ? 'Resetting...' : 'Reset Password'}
+                                {loading ? t("auth.resetting") : t("aux.resetPassword")}
                             </Text>
                         </TouchableOpacity>
                     </View>

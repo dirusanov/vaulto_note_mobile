@@ -98,7 +98,7 @@ export const EmailVerificationScreen = () => {
             } catch (e) {
                 // Fallback if auto-login fails
                 console.log('Auto-login failed:', e);
-                const message = getErrorMessage(e, 'Please sign in again.');
+                const message = getErrorMessage(e, t("common.pleaseSignInAgain"));
                 console.warn('[EmailVerification] Auto-login failed:', message);
                 navigation.navigate('SignIn', { email });
             }
@@ -114,13 +114,13 @@ export const EmailVerificationScreen = () => {
                     <View style={[styles.iconContainer, { borderColor: colors.success }]}>
                         <MaterialIcons name="check-circle" size={64} color={colors.success} />
                     </View>
-                    <Text style={styles.title}>{t("aux.emailVerified", "Email Verified!")}</Text>
+                    <Text style={styles.title}>{t("aux.emailVerified")}</Text>
                     <Text style={styles.subtitle}>
-                        Your account has been successfully verified.
+                        {t("aux.accountVerified")}
                     </Text>
                     <ActivityIndicator size="small" color={colors.primary} />
                     <Text style={[styles.statusText, { marginTop: spacing.m }]}>
-                        Logging you in...
+                        {t("aux.loggingIn")}
                     </Text>
                 </View>
             </ScreenContainer>
@@ -134,7 +134,7 @@ export const EmailVerificationScreen = () => {
                     <MaterialIcons name="mark-email-unread" size={64} color={colors.primary} />
                 </View>
 
-                <Text style={styles.title}>{t("aux.checkInbox", "Check your inbox")}</Text>
+                <Text style={styles.title}>{t("aux.checkInbox")}</Text>
 
                 <Text style={styles.subtitle}>
                     We sent a verification link to{'\n'}
@@ -143,13 +143,12 @@ export const EmailVerificationScreen = () => {
 
                 <View style={styles.statusContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.statusText}>{t("aux.waitingVerification", "Waiting for verification...")}</Text>
+                    <Text style={styles.statusText}>{t("aux.waitingVerification")}</Text>
                 </View>
 
                 <View style={styles.infoBox}>
                     <Text style={styles.infoText}>
-                        Tap the link in the email to verify your account.
-                        Once verified, this screen will automatically update.
+                        {t("aux.tapLinkVerify")}
                     </Text>
                 </View>
 
@@ -158,7 +157,7 @@ export const EmailVerificationScreen = () => {
                     style={styles.backButton}
                     activeOpacity={0.8}
                 >
-                    <Text style={styles.backButtonText}>{t("aux.backToSignIn", "Back to sign in")}</Text>
+                    <Text style={styles.backButtonText}>{t("aux.backToSignIn")}</Text>
                 </TouchableOpacity>
             </View>
         </ScreenContainer>

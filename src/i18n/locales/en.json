@@ -29,7 +29,11 @@
     "reset": "Reset",
     "copy": "Copy",
     "done": "Done",
-    "transcribe": "Transcribe"
+    "transcribe": "Transcribe",
+    "unavailable": "Unavailable",
+    "failed": "Failed",
+    "ok": "OK",
+    "pro": "PRO"
   },
   "notes": {
     "emptyStateMic": "Tap the microphone to record",
@@ -248,7 +252,11 @@
     "agreementRequired": "Agreement required",
     "registrationFailed": "Registration Failed",
     "signInFailed": "Sign-In Failed",
-    "googleSignInFailed": "Google Sign-In Failed"
+    "googleSignInFailed": "Google Sign-In Failed",
+    "resetPasswordFailed": "Failed to reset password",
+    "sendResetEmailFailed": "Failed to send reset email",
+    "iAcceptThe": "I accept the",
+    "andThe": "and"
   },
   "edit": {
     "visualEditor": "Visual Editor",
@@ -393,6 +401,23 @@
     "pro": "PRO",
     "unlimitedAccess": "Unlimited Access",
     "createAccountTranscribe": "Create an account to enable transcription.",
-    "forgotPassResetEncryption": "Forgot passphrase? Reset encryption"
+    "forgotPassResetEncryption": "Forgot passphrase? Reset encryption",
+    "unableOpenSubscription": "Unable to open subscription management right now.",
+    "unableEnableSync": "Unable to enable sync.",
+    "selectOpenAICompatible": "Select OpenAI Compatible to test connection.",
+    "enterApiKey": "Enter API Key.",
+    "connectionWorking": "Connection working.",
+    "connectionFailed": "Connection failed. Check API URL and Key.",
+    "downloadFailed": "Download failed",
+    "unableDownloadWhisper": "Unable to download the Whisper model.",
+    "purchaseProRequired": "Create an account to purchase Pro.",
+    "unlimitedCloudSync": "Unlimited Cloud Sync",
+    "minsMonthTranscription": "{{minutes}} mins/month transcription with Vaulto AI",
+    "customApiKeyServer": "Custom API Key & Server",
+    "signInRestorePurchases": "Sign in to restore purchases.",
+    "yearlyPlan": "Yearly Plan",
+    "monthlyPlan": "Monthly Plan",
+    "savePercentage": "SAVE {{percentage}}%",
+    "vaultoAiMinsMonth": "{{minutes}} Vaulto AI minutes / month"
   }
 }

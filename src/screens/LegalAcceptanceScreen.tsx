@@ -41,8 +41,8 @@ export const LegalAcceptanceScreen = () => {
     const providerLabel = useMemo(() => {
         if (provider === 'google') return 'Google';
         if (provider === 'email') return 'Email';
-        return 'this method';
-    }, [provider]);
+        return t("common.thisMethod", "this method");
+    }, [provider, t]);
 
     const openLink = async (url: string) => {
         try {
@@ -51,19 +51,19 @@ export const LegalAcceptanceScreen = () => {
                 await Linking.openURL(url);
                 return;
             }
-            Alert.alert('Error', `Cannot open URL: ${url}`);
+            Alert.alert(t("common.errorTitle"), `Cannot open URL: ${url}`);
         } catch (_) {
-            Alert.alert('Error', 'Failed to open link.');
+            Alert.alert(t("common.errorTitle"), t("common.failedOpenLink", "Failed to open link."));
         }
     };
 
     const handleContinue = async () => {
         if (!accepted) {
-            Alert.alert('Agreement required', 'Please accept Terms of Service and Privacy Policy to continue.');
+            Alert.alert(t("auth.agreementRequired"), t("common.agreeToTerms"));
             return;
         }
         if (!legalToken) {
-            Alert.alert('Session expired', 'Please sign in again.');
+            Alert.alert(t("common.sessionExpired"), t("common.pleaseSignInAgain"));
             navigation.navigate('SignIn');
             return;
         }
@@ -80,7 +80,7 @@ export const LegalAcceptanceScreen = () => {
                 routes: [{ name: 'NotesList' }],
             });
         } catch (error) {
-            Alert.alert('Unable to continue', getErrorMessage(error, 'Please sign in again.'));
+            Alert.alert(t("common.failedTitle"), getErrorMessage(error, t("common.pleaseSignInAgain")));
             navigation.navigate('SignIn');
         } finally {
             setLoading(false);
@@ -101,7 +101,7 @@ export const LegalAcceptanceScreen = () => {
                 <View style={styles.content}>
                     <Text style={styles.title}>{t("aux.oneLastStep", "One Last Step")}</Text>
                     <Text style={styles.subtitle}>
-                        You signed in with {providerLabel}. Please accept our legal terms to continue.
+                        {t("auth.legalAcceptanceSubtitle", { provider: providerLabel })}
                     </Text>
 
                     <View style={styles.card}>
@@ -116,13 +116,13 @@ export const LegalAcceptanceScreen = () => {
                                 color={accepted ? colors.primary : colors.textSecondary}
                             />
                             <Text style={styles.termsText}>
-                                I accept the{' '}
+                                {t("auth.iAcceptThe")}{' '}
                                 <Text style={styles.linkText} onPress={() => void openLink('https://vaultonote.com/terms')}>
-                                    Terms of Service
+                                    {t("auth.termsOfService")}
                                 </Text>
-                                {' '}and{' '}
+                                {' '}{t("auth.andThe")}{' '}
                                 <Text style={styles.linkText} onPress={() => void openLink('https://vaultonote.com/privacy')}>
-                                    Privacy Policy
+                                    {t("auth.privacyPolicy")}
                                 </Text>
                             </Text>
                         </TouchableOpacity>
@@ -135,7 +135,7 @@ export const LegalAcceptanceScreen = () => {
                             void handleContinue();
                         }}
                     >
-                        <Text style={styles.buttonText}>{loading ? 'Please wait...' : 'Continue'}</Text>
+                        <Text style={styles.buttonText}>{loading ? t("auth.pleaseWait") : t("auth.continue")}</Text>
                     </TouchableOpacity>
                 </View>
             </View>

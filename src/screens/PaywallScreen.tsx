@@ -31,7 +31,7 @@ export const PaywallScreen = () => {
 
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
-            Alert.alert('Sign in required', 'Create an account to purchase Pro.');
+            Alert.alert(t("voice.signInRequired"), t("aux.purchaseProRequired"));
             (navigation as any).navigate('SignIn');
             return;
         }
@@ -57,16 +57,16 @@ export const PaywallScreen = () => {
                                 resizeMode="contain"
                             />
                         </View>
-                        <Text style={styles.heroTitle}>{t("aux.proAccess", "PRO ACCESS")}</Text>
+                        <Text style={styles.heroTitle}>{t("aux.proAccess")}</Text>
                         <Text style={styles.heroSubtitle}>
-                            Unlock the full potential.
+                            {t("aux.unlockFullPotential")}
                         </Text>
                     </View>
 
                     <View style={styles.featuresList}>
-                        <FeatureItem text="Unlimited Cloud Sync" />
-                        <FeatureItem text={`${transcriptionMinutes} mins/month transcription with Vaulto AI`} />
-                        <FeatureItem text="Custom API Key & Server" />
+                        <FeatureItem text={t("aux.unlimitedCloudSync")} />
+                        <FeatureItem text={t("aux.minsMonthTranscription", { minutes: transcriptionMinutes })} />
+                        <FeatureItem text={t("aux.customApiKeyServer")} />
                     </View>
 
                     {isLoading ? (
@@ -77,9 +77,9 @@ export const PaywallScreen = () => {
                                 const { backendPlan, product } = pack;
                                 const title = backendPlan?.display_name || (
                                     pack.identifier.toLowerCase().includes('annual') || pack.identifier.toLowerCase().includes('yearly')
-                                        ? 'Yearly Plan'
+                                        ? t("aux.yearlyPlan")
                                         : pack.identifier.toLowerCase().includes('monthly')
-                                            ? 'Monthly Plan'
+                                            ? t("aux.monthlyPlan")
                                             : pack.identifier
                                 );
                                 
@@ -101,12 +101,12 @@ export const PaywallScreen = () => {
                                             <View style={styles.badgesContainer}>
                                                 {isBestValue && savingsPercentage > 0 && (
                                                     <View style={[styles.badge, styles.savingsBadge]}>
-                                                        <Text style={styles.badgeText}>SAVE {savingsPercentage}%</Text>
+                                                        <Text style={styles.badgeText}>{t("aux.savePercentage", { percentage: savingsPercentage })}</Text>
                                                     </View>
                                                 )}
                                                 {isBestValue && (
                                                     <View style={styles.badge}>
-                                                        <Text style={styles.badgeText}>{t("aux.bestValue", "BEST VALUE")}</Text>
+                                                        <Text style={styles.badgeText}>{t("aux.bestValue")}</Text>
                                                     </View>
                                                 )}
                                             </View>
@@ -114,7 +114,7 @@ export const PaywallScreen = () => {
                                         <Text style={[styles.planPrice, isBestValue && styles.planPriceBest]}>{price}</Text>
                                         {minutesLabel ? (
                                             <Text style={[styles.planMinutes, isBestValue && styles.planMinutesBest]}>
-                                                {minutesLabel}
+                                                {t("aux.vaultoAiMinsMonth", { minutes: minutesToDisplay })}
                                             </Text>
                                         ) : null}
                                         <Text style={[styles.planSubtext, isBestValue && styles.planSubtextBest]}>
@@ -131,7 +131,7 @@ export const PaywallScreen = () => {
                     <TouchableOpacity
                         onPress={() => {
                             if (!canPurchase) {
-                                Alert.alert('Sign in required', 'Sign in to restore purchases.');
+                                Alert.alert(t("voice.signInRequired"), t("aux.signInRestorePurchases"));
                                 (navigation as any).navigate('SignIn');
                                 return;
                             }
@@ -140,11 +140,11 @@ export const PaywallScreen = () => {
                         style={styles.restoreButton}
                         disabled={!canPurchase}
                     >
-                        <Text style={styles.restoreButtonText}>{t("aux.restorePurchases", "Restore Purchases")}</Text>
+                        <Text style={styles.restoreButtonText}>{t("aux.restorePurchases")}</Text>
                     </TouchableOpacity>
 
                     <Text style={styles.termsText}>
-                        Auto-renewable. Cancel anytime.
+                        {t("aux.autoRenewable")}
                     </Text>
                 </View>
             </View>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     View,
     Text,
@@ -51,6 +52,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     micMode = 'agent',
     isMainScreen = false,
 }) => {
+    const { t } = useTranslation();
     const navigation = useNavigation<any>();
     const { isAuthenticated, isGuest } = useAuth();
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
@@ -299,14 +301,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             message,
             [
                 {
-                    text: 'Retry',
+                    text: t("voice.retry"),
                     onPress: () => {
                         interruptionHandledRef.current = false;
                         void handleStartRecording();
                     },
                 },
                 {
-                    text: 'Close',
+                    text: t("common.close"),
                     style: 'cancel',
                     onPress: () => {
                         onCancel();
@@ -383,8 +385,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
         maxDurationHandledRef.current = true;
         Alert.alert(
-            'Recording limit reached',
-            'A single recording is limited to 5 minutes. Sending the current recording now.'
+            t("voice.recordingLimitReached"),
+            t("voice.recordingLimitReachedDesc")
         );
         void handleStopRecording();
     }, [visible, duration, isRecording, isPaused, isStopping]);
@@ -418,7 +420,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setDuration(0);
             recordingStartAtRef.current = Date.now();
         } catch (error) {
-            Alert.alert('Error', 'Could not start recording');
+            Alert.alert(t("common.errorTitle"), t("voice.startError", "Could not start recording"));
             console.error(error);
         } finally {
             setIsStartPending(false);
@@ -453,8 +455,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             if (!recording) {
                 interruptionHandledRef.current = true;
                 Alert.alert(
-                    'Recording unavailable',
-                    'The recording stopped before it could be saved or transcribed. Please try again.'
+                    t("voice.recordingUnavailable"),
+                    t("voice.recordingUnavailableDesc")
                 );
                 onCancel();
                 return;
@@ -465,8 +467,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             if (!hasVoiceSignal) {
                 await AudioService.deleteAudioFile(recording.uri);
                 Alert.alert(
-                    'No audio captured',
-                    'It looks like the microphone is being used by another app (e.g. WhatsApp call) or the input is muted. Please stop the other recording/call and try again.'
+                    t("voice.noAudioCaptured"),
+                    t("voice.noAudioCapturedDesc")
                 );
                 onCancel();
                 return;
@@ -483,7 +485,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             interruptionHandledRef.current = true;
             setIsRecording(false);
             setIsPaused(false);
-            Alert.alert('Error', 'Could not finish recording. Please try again.');
+            Alert.alert(t("common.errorTitle"), t("voice.finishError"));
             onCancel();
             console.error(error);
         } finally {
@@ -540,7 +542,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 isMainScreen && styles.badgeLabelLarge,
                                 { color: transcribe ? 'white' : colors.textSecondary }
                             ]}>
-                                Transcribe {transcribe ? 'ON' : 'OFF'}
+                                {t("common.transcribe", "Transcribe")} {transcribe ? 'ON' : 'OFF'}
                             </Text>
                         </TouchableOpacity>
 
@@ -563,7 +565,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 isMainScreen && styles.badgeLabelLarge,
                                 { color: effectiveAgentEnabled ? 'white' : colors.textSecondary }
                             ]}>
-                                {effectiveAgentEnabled ? 'AI Agent ON' : 'AI Agent OFF'}
+                                {effectiveAgentEnabled ? t("voice.aiAgentOn") : t("voice.aiAgentOff")}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -573,7 +575,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         <Animated.View style={[styles.inlineWarningContainer, { opacity: warningOpacity }]}>
                             <MaterialIcons name="error-outline" size={16} color={colors.warning} />
                             <Text style={styles.inlineWarningText}>
-                                Model not downloaded. Check Settings.
+                                {t("voice.modelNotDownloaded")}
                             </Text>
                         </Animated.View>
                     )}
@@ -634,8 +636,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
-                title="Sign in required"
-                message="Transcription is available after you create an account."
+                title={t("voice.signInRequired")}
+                message={t("voice.transcriptionAuthMessage")}
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
                     setShowTranscriptionAuthModal(false);

@@ -539,6 +539,8 @@ const MemoizedImprovementChips = memo(({
     handleVariantSelect: (id: string) => void,
     confirmDeleteImprovement: (id: string) => void
 }) => {
+    const { t } = useTranslation();
+
     if (noteImprovements.length === 0) return null;
     return (
         <View style={styles.variantContainer}>
@@ -566,7 +568,7 @@ const MemoizedImprovementChips = memo(({
                             activeVariantId === 'original' && styles.variantChipTextActive,
                         ]}
                     >
-                        Original
+                        {t("edit.original")}
                     </Text>
                 </TouchableOpacity>
 
@@ -592,7 +594,7 @@ const MemoizedImprovementChips = memo(({
                                     activeVariantId === imp.id && styles.variantChipTextActive,
                                 ]}
                             >
-                                {imp.label || 'Improvement'}
+                                {imp.label || t("edit.improvement")}
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -885,8 +887,8 @@ export const NoteEditScreen = () => {
             return true;
         }
         Alert.alert(
-            'Sharing disabled for private notes',
-            t('settings.ui.shareBlockedLocal', 'To prevent leaks, share and export are blocked for local-only notes.')
+            t("edit.shareBlockedTitle", "Sharing disabled for private notes"),
+            t("settings.ui.shareBlockedLocal", "To prevent leaks, share and export are blocked for local-only notes.")
         );
         return false;
     };
@@ -899,7 +901,7 @@ export const NoteEditScreen = () => {
         const fullText = `${title}\n\n${richContentToPlainText(content)}`;
         const plainText = richContentToPlainText(fullText);
         await Clipboard.setStringAsync(plainText.trim());
-        showToast('Text copied to clipboard');
+        showToast(t("edit.textCopied"));
     };
 
     const handleCopyMarkdown = async () => {
@@ -913,7 +915,7 @@ export const NoteEditScreen = () => {
 
         const fullText = `${title ? '# ' + title + '\n\n' : ''}${contentWithoutAudio}`;
         await Clipboard.setStringAsync(fullText);
-        showToast('Markdown copied to clipboard');
+        showToast(t("edit.markdownCopied"));
     };
 
     const handleShareText = async () => {
@@ -930,7 +932,7 @@ export const NoteEditScreen = () => {
         try {
             await Share.share({
                 message: fullText,
-                title: title || 'Note',
+                title: title || t("notes.note", "Note"),
             });
         } catch (error) {
             console.error('Error sharing note:', error);
@@ -970,7 +972,7 @@ export const NoteEditScreen = () => {
             }
         } catch (error) {
             console.error('Error exporting markdown:', error);
-            Alert.alert('Error', 'Failed to export markdown file');
+            Alert.alert(t("common.errorTitle"), t("edit.exportMarkdownFailed", "Failed to export markdown file"));
         }
     };
 
@@ -998,7 +1000,7 @@ export const NoteEditScreen = () => {
             }
         } catch (error) {
             console.error('Error exporting image:', error);
-            Alert.alert('Error', 'Failed to export image');
+            Alert.alert(t("common.errorTitle"), t("edit.exportImageFailed", "Failed to export image"));
         }
     };
 
@@ -1208,7 +1210,7 @@ export const NoteEditScreen = () => {
         }
 
         setErrorTitle(undefined);
-        setErrorMessage(originalErrorMsg || fallback || 'An error occurred');
+        setErrorMessage(originalErrorMsg || fallback || t("common.errorOccurred", "An error occurred"));
         setErrorShowSettingsAction(false);
         setErrorModalVisible(true);
         return false;
@@ -1228,13 +1230,13 @@ export const NoteEditScreen = () => {
 
         return await new Promise<boolean>((resolve) => {
             Alert.alert(
-                'Private note protection',
-                'AI processing can send note text to an external service. Allow for this private note?',
+                t("edit.privateProtectionTitle"),
+                t("edit.privateProtectionDesc"),
                 [
-                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                    { text: 'Allow Once', onPress: () => resolve(true) },
+                    { text: t("common.cancel"), style: 'cancel', onPress: () => resolve(false) },
+                    { text: t("edit.allowOnce"), onPress: () => resolve(true) },
                     {
-                        text: 'Always Allow for Private Notes',
+                        text: t("edit.alwaysAllowPrivate"),
                         onPress: async () => {
                             await setPrivateAIAllowed(true);
                             await setAllowPrivateAI(true);
@@ -1295,18 +1297,18 @@ export const NoteEditScreen = () => {
 
         return await new Promise<boolean>((resolve) => {
             Alert.alert(
-                t('settings.ui.localOnlyNote', 'Local-only note'),
-                'This note will not sync, and it cannot be recovered after app reinstall or device loss.',
+                t('edit.localOnlyWarningTitle'),
+                t('edit.localOnlyWarningDesc'),
                 [
-                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                    { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
                     {
-                        text: 'Do not show again',
+                        text: t('edit.doNotShowAgain'),
                         onPress: async () => {
                             await setLocalOnlyWarningDismissed(true);
                             resolve(true);
                         },
                     },
-                    { text: 'I Understand', onPress: () => resolve(true) },
+                    { text: t('edit.iUnderstand'), onPress: () => resolve(true) },
                 ]
             );
         });
@@ -1321,11 +1323,11 @@ export const NoteEditScreen = () => {
             if (existingNote && normalizeScope(existingNote.storage_scope) === 'sync') {
                 const confirmed = await new Promise<boolean>((resolve) => {
                     Alert.alert(
-                        t('settings.ui.makeLocalOnly', 'Move to Local-Only'),
-                        'Server copy will be deleted from sync.',
+                        t('edit.moveLocalOnlyTitle'),
+                        t('edit.moveLocalOnlyDesc'),
                         [
-                            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                            { text: 'Move', style: 'destructive', onPress: () => resolve(true) },
+                            { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                            { text: t('edit.moveBtn'), style: 'destructive', onPress: () => resolve(true) },
                         ]
                     );
                 });
@@ -1334,11 +1336,11 @@ export const NoteEditScreen = () => {
         } else if (normalizeScope(storageScope) === 'local_only') {
             const confirmed = await new Promise<boolean>((resolve) => {
                 Alert.alert(
-                    'Enable sync for note',
-                    'This note content will be sent to server (encrypted).',
+                    t('edit.enableSyncNoteTitle'),
+                    t('edit.enableSyncNoteDesc'),
                     [
-                        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                        { text: 'Enable Sync', onPress: () => resolve(true) },
+                        { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                        { text: t('edit.enableSyncBtn'), onPress: () => resolve(true) },
                     ]
                 );
             });

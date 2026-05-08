@@ -164,7 +164,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                                 fontWeight: '800', // Extra bold
                                 fontSize: 11,
                                 letterSpacing: 0.5,
-                            }}>PRO</Text>
+                            }}>{t('common.pro')}</Text>
                         </View>
                     </View>
 
@@ -172,7 +172,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     <View style={{ flex: 1 }} />
 
                     <View style={styles.proStatusPill}>
-                        <Text style={styles.proStatusPillText}>{t('settings.ui.activeCaps', 'ACTIVE')}</Text>
+                        <Text style={styles.proStatusPillText}>{t('settings.ui.activeCaps')}</Text>
                     </View>
                 </View>
                 <TouchableOpacity
@@ -182,7 +182,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                 >
                     <View style={styles.proStatusActionLeft}>
                         <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
-                        <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>{t('settings.ui.subscriptionDetails', 'Subscription details')}</Text>
+                        <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>{t('settings.ui.subscriptionDetails')}</Text>
                     </View>
                     <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
@@ -195,7 +195,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                         <View style={styles.proStatusActionLeft}>
                             <MaterialIcons name="manage-accounts" size={16} color={colors.primary} />
                             <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>
-                                {t('settings.ui.manageGooglePlay', 'Manage in Google Play')}
+                                {t('settings.ui.manageGooglePlay')}
                             </Text>
                         </View>
                         <MaterialIcons name="open-in-new" size={16} color={colors.textSecondary} />
@@ -217,9 +217,9 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     />
                 </View>
                 <View style={styles.premiumUpgradeCopy}>
-                    <Text style={styles.premiumUpgradeTitle}>{t('settings.pro.upgrade', 'Upgrade to Pro')}</Text>
+                    <Text style={styles.premiumUpgradeTitle}>{t('settings.pro.upgrade')}</Text>
                     <Text style={styles.premiumUpgradeSubtitle}>
-                        {t('settings.pro.subtitle', 'Extended transcription & premium features')}
+                        {t('settings.pro.subtitle')}
                     </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
@@ -373,13 +373,13 @@ export const SettingsScreen = () => {
     const usingLocalLLM = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local');
     const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
     const usingLocal = usingLocalWhisper || usingLocalLLM;
-    const trialInfoText = t('settings.ui.trialInfo', 'Create an account and get 30 minutes of trial transcription.');
+    const trialInfoText = t('settings.ui.trialInfo');
     const hasConfiguredKey = encryptionMode === 'e2ee';
     const isSyncLocked = syncLocked || encryptionStatus === 'locked';
-    const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking', 'Checking...') : (isSyncLocked ? t('settings.ui.locked', 'Secure') : !syncEnabled ? t('settings.ui.off', 'Off') : t('settings.ui.on', 'On'));
+    const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking') : (isSyncLocked ? t('settings.ui.locked') : !syncEnabled ? t('settings.ui.off') : t('settings.ui.on'));
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     // When configured, we show the Change button only (no extra "Configured" label).
-    const passphraseStatusLabel = !hasConfiguredKey ? t('settings.ui.notSet', 'Not set') : encryptionStatus === 'locked' ? t('settings.ui.locked', 'Protected') : '';
+    const passphraseStatusLabel = !hasConfiguredKey ? t('settings.ui.notSet') : encryptionStatus === 'locked' ? t('settings.ui.locked') : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
@@ -402,13 +402,13 @@ export const SettingsScreen = () => {
         try {
             const supported = await Linking.canOpenURL(targetUrl);
             if (!supported) {
-                Alert.alert(t("settings.ui.unavailable", "Unavailable"), t("settings.ui.unableOpenSubscription", "Unable to open subscription management right now."));
+                Alert.alert(t("common.unavailable"), t("aux.unableOpenSubscription"));
                 return;
             }
             await Linking.openURL(targetUrl);
         } catch (error) {
             console.error('Failed to open subscription management URL:', error);
-            Alert.alert(t("settings.ui.unavailable", "Unavailable"), t("settings.ui.unableOpenSubscription", "Unable to open subscription management right now."));
+            Alert.alert(t("common.unavailable"), t("aux.unableOpenSubscription"));
         }
     }, [subscriptionStatus?.managementURL]);
 
@@ -429,7 +429,7 @@ export const SettingsScreen = () => {
                     void syncService.syncNow('manual');
                 }, 0);
             } catch (error: any) {
-                Alert.alert('Failed', error?.message || 'Unable to enable sync.');
+                Alert.alert(t("common.failed"), error?.message || t("aux.unableEnableSync"));
             }
             return;
         }
@@ -723,12 +723,12 @@ export const SettingsScreen = () => {
 
     const handleTestConnection = async () => {
         if (!usingOpenAI) {
-            setOpenAITestStatus({ type: 'error', message: 'Select OpenAI Compatible to test connection.' });
+            setOpenAITestStatus({ type: 'error', message: t("aux.selectOpenAICompatible") });
             return;
         }
 
         if (!apiKey) {
-            setOpenAITestStatus({ type: 'error', message: 'Enter API Key.' });
+            setOpenAITestStatus({ type: 'error', message: t("aux.enterApiKey") });
             return;
         }
 
@@ -743,9 +743,9 @@ export const SettingsScreen = () => {
         setTestingConnection(false);
 
         if (isConnected) {
-            setOpenAITestStatus({ type: 'success', message: 'Connection working.' });
+            setOpenAITestStatus({ type: 'success', message: t("aux.connectionWorking") });
         } else {
-            setOpenAITestStatus({ type: 'error', message: 'Connection failed. Check API URL and Key.' });
+            setOpenAITestStatus({ type: 'error', message: t("aux.connectionFailed") });
         }
     };
 
@@ -789,7 +789,7 @@ export const SettingsScreen = () => {
             if (error?.message && error.message.toLowerCase().includes('cancel')) {
                 // Ignore cancel errors
             } else {
-                Alert.alert('Download failed', error?.message || 'Unable to download the Whisper model.');
+                Alert.alert(t("aux.downloadFailed"), error?.message || t("aux.unableDownloadWhisper"));
             }
         } finally {
             setLocalWhisperBusy(false);

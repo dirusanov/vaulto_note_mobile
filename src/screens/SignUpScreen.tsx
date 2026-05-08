@@ -35,17 +35,17 @@ export const SignUpScreen = () => {
 
     const handleSignUp = async () => {
         if (!email || !password || !confirmPassword) {
-            Alert.alert('Error', 'Please fill in all fields');
+            Alert.alert(t("common.errorTitle"), t("common.fillFields"));
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            Alert.alert(t("common.errorTitle"), t("common.passwordsMatchError"));
             return;
         }
 
         if (!termsAccepted) {
-            Alert.alert('Error', 'Please agree to the Terms of Service and Privacy Policy to continue.');
+            Alert.alert(t("common.errorTitle"), t("common.agreeToTerms"));
             return;
         }
 
@@ -55,7 +55,7 @@ export const SignUpScreen = () => {
             navigation.navigate('EmailVerification', { email, password });
         } catch (err: any) {
             const message = getErrorMessage(err, 'Registration failed');
-            Alert.alert('Registration Failed', message);
+            Alert.alert(t("auth.registrationFailed", "Registration Failed"), message);
         } finally {
             setLoading(false);
         }
@@ -67,10 +67,10 @@ export const SignUpScreen = () => {
             if (supported) {
                 await Linking.openURL(url);
             } else {
-                Alert.alert('Error', `Don't know how to open this URL: ${url}`);
+                Alert.alert(t("common.errorTitle"), `Don't know how to open this URL: ${url}`);
             }
         } catch (error) {
-            Alert.alert('Error', 'An error occurred while trying to open the link.');
+            Alert.alert(t("common.errorTitle"), t("common.failedOpenLink", "An error occurred while trying to open the link."));
         }
     };
 
@@ -96,10 +96,10 @@ export const SignUpScreen = () => {
 
                     <View style={styles.form}>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Email</Text>
+                            <Text style={styles.label}>{t("auth.email")}</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="name@example.com"
+                                placeholder={t("auth.emailPlaceholder", "name@example.com")}
                                 placeholderTextColor={colors.textSecondary}
                                 autoCapitalize="none"
                                 keyboardType="email-address"
@@ -109,11 +109,11 @@ export const SignUpScreen = () => {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Password</Text>
+                            <Text style={styles.label}>{t("auth.password")}</Text>
                             <View style={styles.passwordInputWrapper}>
                                 <TextInput
                                     style={[styles.input, styles.passwordInput]}
-                                    placeholder="Create a password"
+                                    placeholder={t("auth.createPasswordPlaceholder", "Create a password")}
                                     placeholderTextColor={colors.textSecondary}
                                     secureTextEntry={!showPassword}
                                     value={password}
@@ -134,11 +134,11 @@ export const SignUpScreen = () => {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Confirm Password</Text>
+                            <Text style={styles.label}>{t("auth.confirmPassword", "Confirm Password")}</Text>
                             <View style={styles.passwordInputWrapper}>
                                 <TextInput
                                     style={[styles.input, styles.passwordInput]}
-                                    placeholder="Repeat your password"
+                                    placeholder={t("auth.repeatPasswordPlaceholder", "Repeat your password")}
                                     placeholderTextColor={colors.textSecondary}
                                     secureTextEntry={!showConfirmPassword}
                                     value={confirmPassword}
@@ -172,19 +172,19 @@ export const SignUpScreen = () => {
                             </TouchableOpacity>
                             <View style={styles.termsTextContainer}>
                                 <Text style={styles.termsText}>
-                                    I agree to the{' '}
+                                    {t("auth.iAgreeToThe", "I agree to the")}{' '}
                                     <Text
                                         style={styles.linkText}
                                         onPress={() => openLink('https://vaultonote.com/terms')}
                                     >
-                                        Terms of Service
+                                        {t("auth.termsOfService", "Terms of Service")}
                                     </Text>
-                                    {' '}and{' '}
+                                    {' '}{t("auth.and", "and")}{' '}
                                     <Text
                                         style={styles.linkText}
                                         onPress={() => openLink('https://vaultonote.com/privacy')}
                                     >
-                                        Privacy Policy
+                                        {t("auth.privacyPolicy", "Privacy Policy")}
                                     </Text>
                                 </Text>
                             </View>
@@ -196,7 +196,7 @@ export const SignUpScreen = () => {
                             disabled={loading}
                         >
                             <Text style={styles.buttonText}>
-                                {loading ? 'Creating account...' : 'Sign Up'}
+                                {loading ? t("auth.creatingAccount", "Creating account...") : t("auth.signUp", "Sign Up")}
                             </Text>
                         </TouchableOpacity>
                     </View>

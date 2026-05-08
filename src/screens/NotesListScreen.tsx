@@ -554,10 +554,10 @@ export const NotesListScreen = () => {
                         </View>
                         <View style={styles.lockBannerTextWrap}>
                             <Text style={styles.lockBannerTitle}>
-                                {t("notes.syncLocked", "Encrypted notes on server")}
+                                {t("notes.syncLocked")}
                             </Text>
                             <Text style={styles.lockBannerText}>
-                                {t("notes.unlockToRestore", "Enter your passphrase to show them on this device.")}
+                                {t("notes.unlockToRestore")}
                             </Text>
                         </View>
                     </View>
@@ -568,7 +568,7 @@ export const NotesListScreen = () => {
                             activeOpacity={0.85}
                         >
                             <MaterialIcons name="vpn-key" size={16} color={colors.surface} />
-                            <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock", "Unlock")}</Text>
+                            <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.lockActionSecondary}
@@ -576,7 +576,7 @@ export const NotesListScreen = () => {
                             activeOpacity={0.7}
                         >
                             <Text style={styles.lockActionSecondaryText}>
-                                {t("settings.ui.resetAccess", "Reset access")}
+                                {t("settings.ui.resetAccess")}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -588,7 +588,7 @@ export const NotesListScreen = () => {
                         <MaterialIcons name="search" size={20} color={colors.textTertiary} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder={t("common.search", "Search notes...")}
+                            placeholder={t("common.search")}
                             placeholderTextColor={colors.textTertiary}
                             value={searchQuery}
                             onChangeText={handleSearch}
@@ -671,7 +671,7 @@ export const NotesListScreen = () => {
                             {/* Right Secondary Button */}
                             <SecondaryButton />
                         </View>
-                        <Text style={styles.hintText}>{t("common.holdToSwitch", "Hold to switch")}</Text>
+                        <Text style={styles.hintText}>{t("common.holdToSwitch")}</Text>
                     </View>
                 </View>
             )}
@@ -730,10 +730,10 @@ export const NotesListScreen = () => {
             />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title={t("settings.ui.unlockingNotesTitle", "Unlocking notes")}
-                subtitle={t("settings.ui.unlockingNotesSubtitle", "Checking your passphrase on this device.")}
+                title={t("settings.ui.unlockingNotesTitle")}
+                subtitle={t("settings.ui.unlockingNotesSubtitle")}
                 progress={unlockProgress ?? undefined}
-                progressLabel={t("common.progress", "Progress")}
+                progressLabel={t("common.progress")}
             />
         </ScreenContainer>
     );
