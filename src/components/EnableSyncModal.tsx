@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useMemo, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Modal,
@@ -8,21 +8,19 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TouchableWithoutFeedback,
     View,
 } from 'react-native';
 import { useEncryption } from '../context/EncryptionContext';
 import {
     getSecretValidationError,
     normalizeSecretInput,
-    PASSPHRASE_MIN_LENGTH,
-    PASSPHRASE_MIN_WORDS,
 } from '../crypto/e2ee';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { Button } from './Button';
 import { TextInput } from './TextInput';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { syncService } from '../services/SyncService';
 import { UnlockingOverlay } from './UnlockingOverlay';
 
@@ -37,8 +35,6 @@ interface EnableSyncModalProps {
 }
 
 const waitForUiFrame = () => new Promise<void>((resolve) => {
-    const { t } = useTranslation();
-
     requestAnimationFrame(() => resolve());
 });
 
@@ -51,6 +47,7 @@ export const EnableSyncModal = ({
     onChanging,
     onError,
 }: EnableSyncModalProps) => {
+    const { t } = useTranslation();
     const { enableE2EE, changePin } = useEncryption();
     const isChangeFlow = flow === 'change';
 
@@ -80,17 +77,16 @@ export const EnableSyncModal = ({
 
     const handleEnable = async () => {
         setError(null);
-
-        const validationError = getSecretValidationError(secret, 'passphrase');
-        if (validationError) {
-            setError(validationError);
+        if (secret !== confirmSecret) {
+            setError(t('settings.ui.passphraseMismatch', 'Passphrases do not match.'));
             return;
         }
 
         const normalizedSecret = normalizeSecretInput(secret, 'passphrase');
-        const normalizedConfirm = normalizeSecretInput(confirmSecret, 'passphrase');
-        if (normalizedSecret !== normalizedConfirm) {
-            setError('Passphrases do not match.');
+        const validationError = getSecretValidationError(secret, 'passphrase');
+
+        if (validationError) {
+            setError(validationError);
             return;
         }
 
@@ -127,209 +123,206 @@ export const EnableSyncModal = ({
     };
 
     const loadingCopy = useMemo(() => {
-        const actionVerb = isChangeFlow ? 'Updating' : 'Enabling';
+        const actionVerb = isChangeFlow ? t("settings.ui.updatingVerb", "Updating") : t("settings.ui.enablingVerb", "Enabling");
+        const object = isChangeFlow ? t("settings.ui.passphraseObject", "Passphrase") : t("settings.ui.encryptedSyncObject", "Encrypted Sync");
         return {
-            title: `${actionVerb} ${isChangeFlow ? 'Passphrase' : 'Encrypted Sync'}`,
-            subtitle: 'Deriving encryption keys from your passphrase. Please wait a few seconds.',
+            title: `${actionVerb} ${object}`,
+            subtitle: t("settings.ui.derivingKeysSubtitle", "Deriving encryption keys and securing your notes. This may take a minute depending on your device. Please wait..."),
         };
-    }, [isChangeFlow]);
+    }, [isChangeFlow, t]);
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="fade"
-            onRequestClose={handleClose}
-        >
-            <TouchableWithoutFeedback onPress={handleClose}>
+        <>
+            <Modal
+                visible={visible}
+                transparent
+                animationType="fade"
+                onRequestClose={handleClose}
+            >
                 <View style={styles.backdrop}>
-                    <TouchableWithoutFeedback>
-                        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.avoider}>
-                            <View style={styles.card}>
-                                <View style={styles.headerBlock}>
-                                    <Text style={styles.title}>
-                                        {isChangeFlow ? 'Change Passphrase' : 'Enable Encrypted Sync'}
-                                    </Text>
-                                    <Text style={styles.subtitle}>
-                                        Choose a strong passphrase. If you forget it, we cannot recover your encrypted notes.
-                                    </Text>
-                                </View>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+                    <KeyboardAvoidingView
+                        behavior="padding"
+                        style={styles.avoider}
+                        pointerEvents="box-none"
+                    >
+                        <ScrollView
+                            style={styles.scrollView}
+                            contentContainerStyle={styles.scrollContent}
+                            bounces={false}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            pointerEvents="box-none"
+                        >
+                            <Pressable style={styles.cardPressable} pointerEvents="auto">
+                                <View style={styles.card}>
+                                    <View style={styles.header}>
+                                        <Text style={styles.title}>
+                                            {isChangeFlow ? t('settings.ui.changePassphrase', 'Change Passphrase') : t('settings.ui.enableSyncTitle', 'Enable Encrypted Sync')}
+                                        </Text>
+                                    </View>
 
-                                <ScrollView
-                                    style={styles.scrollArea}
-                                    contentContainerStyle={styles.scrollContent}
-                                    showsVerticalScrollIndicator={false}
-                                    keyboardShouldPersistTaps="handled"
-                                    keyboardDismissMode="on-drag"
-                                >
+                                    <View style={styles.warningBanner}>
+                                        <MaterialCommunityIcons name="shield-check-outline" size={16} color={colors.primary} style={styles.warningIcon} />
+                                        <Text style={styles.warningBannerText}>
+                                            {t("settings.ui.encryptionWarning", "We do not store your passphrase. If you forget it, your notes cannot be recovered.")}
+                                        </Text>
+                                    </View>
+
                                     <TextInput
-                                        label="Passphrase"
+                                        label={t("settings.ui.passphraseLabel", "Passphrase")}
                                         value={secret}
                                         onChangeText={setSecret}
                                         secureTextEntry={!showSecret}
                                         autoCapitalize="none"
                                         autoCorrect={false}
-                                        placeholder="e.g. orbit drift amber sunrise"
+                                        placeholder={t("settings.ui.passphrasePlaceholder", "e.g. orbit drift amber sunrise")}
                                     />
                                     <TextInput
-                                        label="Confirm passphrase"
+                                        label={t("settings.ui.confirmPassphraseLabel", "Confirm passphrase")}
                                         value={confirmSecret}
                                         onChangeText={setConfirmSecret}
                                         secureTextEntry={!showSecret}
                                         autoCapitalize="none"
                                         autoCorrect={false}
-                                        placeholder="Repeat your passphrase"
+                                        placeholder={t("settings.ui.confirmPassphrasePlaceholder", "Repeat your passphrase")}
                                     />
+                                    
                                     <Pressable
                                         onPress={() => setShowSecret((prev) => !prev)}
                                         style={styles.toggleRow}
                                     >
                                         <Text style={styles.toggleText}>
-                                            {showSecret ? 'Hide passphrase' : 'Show passphrase'}
+                                            {showSecret ? t("settings.ui.hidePassphrase", "Hide passphrase") : t("settings.ui.showPassphrase", "Show passphrase")}
                                         </Text>
                                     </Pressable>
-                                    <Text style={styles.hint}>
-                                        Use {PASSPHRASE_MIN_WORDS}+ words or {PASSPHRASE_MIN_LENGTH}+ characters.
-                                    </Text>
+
+                                    {error && <Text style={styles.error}>{error}</Text>}
 
                                     <View style={styles.actions}>
                                         <Button
-                                            title="Cancel"
+                                            title={t("settings.ui.cancelBtn", "Cancel")}
                                             variant="outline"
                                             onPress={handleClose}
                                             disabled={loading}
                                             style={styles.actionButton}
                                         />
                                         <Button
-                                            title={isChangeFlow ? 'Update Passphrase' : 'Enable Sync'}
-                                            onPress={() => {
-                                                void handleEnable();
-                                            }}
+                                            title={isChangeFlow ? t("settings.ui.updateBtn", "Update") : t("settings.ui.enableBtn", "Enable")}
+                                            onPress={handleEnable}
                                             loading={loading}
-                                            disabled={loading}
+                                            disabled={loading || !secret || !confirmSecret}
                                             style={styles.actionButton}
                                         />
                                     </View>
-
-                                    {error && <Text style={styles.error}>{error}</Text>}
-                                </ScrollView>
-                            </View>
-                        </KeyboardAvoidingView>
-                    </TouchableWithoutFeedback>
+                                </View>
+                            </Pressable>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
                 </View>
-            </TouchableWithoutFeedback>
+            </Modal>
 
             <UnlockingOverlay
                 visible={loading}
                 title={loadingCopy.title}
                 subtitle={loadingCopy.subtitle}
             />
-        </Modal>
+        </>
     );
 };
 
 const styles = StyleSheet.create({
     avoider: {
         flex: 1,
-        width: '100%',
-        justifyContent: 'center',
     },
     backdrop: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.35)',
+        backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.l,
+        paddingVertical: spacing.xl,
+    },
+    cardPressable: {
+        width: '100%',
+        alignItems: 'center',
     },
     card: {
         width: '100%',
+        maxWidth: 400,
         backgroundColor: colors.surface,
-        borderRadius: 22,
+        borderRadius: 20,
         padding: spacing.l,
-        maxHeight: '96%',
         borderWidth: 1,
         borderColor: colors.border,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 12,
-        elevation: 3,
+        elevation: 5,
+        alignItems: 'stretch',
     },
-    headerBlock: {
-        marginBottom: spacing.s,
+    header: {
+        alignItems: 'center',
+        marginBottom: spacing.m,
     },
     title: {
-        ...typography.h3,
-        marginBottom: spacing.s,
+        ...typography.h4,
+        textAlign: 'center',
+        marginBottom: 4,
+        color: colors.text,
     },
     subtitle: {
-        ...typography.bodySmall,
+        ...typography.caption,
+        textAlign: 'center',
         color: colors.textSecondary,
-        marginBottom: spacing.s,
+        paddingHorizontal: spacing.m,
     },
-    scrollArea: {
-        flexGrow: 0,
-    },
-    scrollContent: {
-        paddingBottom: spacing.l,
-    },
-    choiceCard: {
+    warningBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 14,
+        backgroundColor: colors.primary + '08',
+        borderRadius: 12,
         padding: spacing.m,
-        marginBottom: spacing.s,
-        backgroundColor: colors.surface,
+        marginBottom: spacing.l,
+        gap: spacing.s,
     },
-    choiceIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
-        backgroundColor: colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
+    warningIcon: {
+        marginTop: 1,
     },
-    choiceCopy: {
-        flex: 1,
-    },
-    choiceTitle: {
-        ...typography.body,
-        fontWeight: '700',
-    },
-    choiceDescription: {
+    warningBannerText: {
         ...typography.caption,
         color: colors.textSecondary,
-        marginTop: 2,
+        flex: 1,
+        lineHeight: 16,
     },
     toggleRow: {
+        alignItems: 'flex-end',
+        marginBottom: spacing.l,
         marginTop: -spacing.s,
-        marginBottom: spacing.s,
+        width: '100%',
     },
     toggleText: {
         ...typography.captionBold,
         color: colors.primary,
     },
-    hint: {
-        ...typography.caption,
-        color: colors.textMuted,
-        marginBottom: spacing.m,
-    },
     error: {
         ...typography.captionBold,
         color: colors.error,
-        marginTop: spacing.s,
+        textAlign: 'center',
+        marginBottom: spacing.m,
     },
     actions: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.s,
-        marginTop: spacing.xs,
+        gap: spacing.m,
+        width: '100%',
     },
     actionButton: {
-        flexGrow: 1,
-        minWidth: 120,
+        flex: 1,
     },
 });

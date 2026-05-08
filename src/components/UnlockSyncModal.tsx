@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View, TouchableOpacity } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEncryption } from '../context/EncryptionContext';
 import { getSecretValidationError } from '../crypto/e2ee';
 import { Button } from './Button';
@@ -9,6 +10,7 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { TextInput } from './TextInput';
 import { ResetEncryptionModal } from './ResetEncryptionModal';
+import { UseRecoveryCodeModal } from './UseRecoveryCodeModal';
 
 interface UnlockSyncModalProps {
     visible: boolean;
@@ -33,13 +35,16 @@ export const UnlockSyncModal = ({
     const isLegacyNumericPassphrase = bundle?.secret_mode === 'pin';
     const [secret, setSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
+    const [showPassphraseInput, setShowPassphraseInput] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showReset, setShowReset] = useState(false);
+    const [showUseRecoveryCode, setShowUseRecoveryCode] = useState(false);
 
     const reset = () => {
         setSecret('');
         setShowSecret(false);
+        setShowPassphraseInput(false);
         setError(null);
         setShowReset(false);
     };
@@ -102,71 +107,107 @@ export const UnlockSyncModal = ({
 
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-            <TouchableWithoutFeedback onPress={handleClose}>
-                <View style={styles.backdrop}>
-                    <TouchableWithoutFeedback>
-                        <View style={styles.card}>
-                            <Text style={styles.title}>{t("notes.unlockSync", "Unlock Sync")}</Text>
-                            <Text style={styles.subtitle}>
-                                Enter your passphrase to unlock sync. This does not affect local access.
-                            </Text>
+            <View style={styles.backdrop}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+                <KeyboardAvoidingView
+                    behavior="padding"
+                    style={styles.avoider}
+                    pointerEvents="box-none"
+                >
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        bounces={false}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        pointerEvents="box-none"
+                    >
+                        <Pressable style={styles.cardPressable} pointerEvents="auto">
+                            <View style={styles.card}>
+                                <Text style={styles.title}>{t("notes.unlockSync", "Unlock Sync")}</Text>
+                                <Text style={styles.subtitle}>Enter your passphrase to unlock sync.</Text>
 
-                            <TextInput
-                                label="Passphrase"
-                                value={secret}
-                                onChangeText={setSecret}
-                                secureTextEntry={!showSecret}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                placeholder="Enter your passphrase"
-                            />
-                            <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
-                                <Text style={styles.revealText}>
-                                    {showSecret ? 'Hide passphrase' : 'Show passphrase'}
+                                <TextInput
+                                    label="Passphrase"
+                                    value={secret}
+                                    onChangeText={setSecret}
+                                    secureTextEntry={!showSecret}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    placeholder="Enter your passphrase"
+                                />
+                                <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
+                                    <Text style={styles.revealText}>
+                                        {showSecret ? 'Hide passphrase' : 'Show passphrase'}
+                                    </Text>
+                                </Pressable>
+
+                                <Text style={styles.hint}>
+                                    {isLegacyNumericPassphrase
+                                        ? 'Legacy mode detected: your passphrase is an 8-digit numeric code.'
+                                        : 'Use your exact passphrase. Unlock happens locally.'}
                                 </Text>
-                            </Pressable>
 
-                            <Text style={styles.hint}>
-                                {isLegacyNumericPassphrase
-                                    ? 'Legacy mode detected: your passphrase is an 8-digit numeric code.'
-                                    : 'Use your exact passphrase. Unlock happens locally.'}
-                            </Text>
-                            {error && <Text style={styles.error}>{error}</Text>}
+                                {error && <Text style={styles.error}>{error}</Text>}
 
-                            <Pressable
-                                onPress={() => setShowReset(true)}
-                                style={styles.resetRow}
-                                disabled={loading}
-                            >
-                                <Text style={styles.resetText}>{t("aux.forgotPassReset", "Forgot passphrase? Reset encryption")}</Text>
-                            </Pressable>
+                                <View style={styles.recoveryOptions}>
+                                    <TouchableOpacity
+                                        onPress={() => setShowUseRecoveryCode(true)}
+                                        style={styles.recoveryButton}
+                                        disabled={loading}
+                                    >
+                                        <MaterialCommunityIcons name="key-chain" size={16} color={colors.primary} />
+                                        <Text style={styles.recoveryButtonText}>{t("settings.recovery.useBtn", "Use Recovery Code")}</Text>
+                                    </TouchableOpacity>
 
-                            <View style={styles.actions}>
-                                <Button
-                                    title="Cancel"
-                                    variant="outline"
-                                    onPress={handleClose}
-                                    disabled={loading}
-                                    style={styles.actionButton}
-                                />
-                                <Button
-                                    title="Unlock"
-                                    onPress={handleUnlock}
-                                    loading={loading}
-                                    disabled={loading}
-                                    style={styles.actionButton}
-                                />
+                                    <TouchableOpacity
+                                        onPress={() => setShowReset(true)}
+                                        style={styles.resetButton}
+                                        disabled={loading}
+                                    >
+                                        <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
+                                        <Text style={styles.resetButtonText}>{t("aux.forgotPassReset", "Reset encryption")}</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.actions}>
+                                    <Button
+                                        title="Cancel"
+                                        variant="outline"
+                                        onPress={handleClose}
+                                        disabled={loading}
+                                        style={styles.actionButton}
+                                    />
+                                    {showPassphraseInput && (
+                                        <Button
+                                            title="Unlock"
+                                            onPress={handleUnlock}
+                                            loading={loading}
+                                            disabled={loading}
+                                            style={styles.actionButton}
+                                        />
+                                    )}
+                                </View>
                             </View>
-                        </View>
-                    </TouchableWithoutFeedback>
-                </View>
-            </TouchableWithoutFeedback>
+                        </Pressable>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </View>
             <ResetEncryptionModal
                 visible={showReset}
                 onClose={() => setShowReset(false)}
                 onReset={() => {
                     setShowReset(false);
                     handleClose();
+                }}
+            />
+            <UseRecoveryCodeModal
+                visible={showUseRecoveryCode}
+                onClose={() => setShowUseRecoveryCode(false)}
+                onSuccess={() => {
+                    setShowUseRecoveryCode(false);
+                    handleClose();
+                    onUnlocked?.();
                 }}
             />
         </Modal>
@@ -177,10 +218,25 @@ const styles = StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.35)',
+    },
+    avoider: {
+        flex: 1,
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
         padding: spacing.l,
     },
+    cardPressable: {
+        width: '100%',
+        alignItems: 'center',
+    },
     card: {
+        width: '100%',
+        maxWidth: 400,
         backgroundColor: colors.surface,
         borderRadius: 20,
         padding: spacing.l,
@@ -191,13 +247,16 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 12,
         elevation: 3,
+        alignItems: 'stretch',
     },
     title: {
         ...typography.h2,
+        textAlign: 'center',
         marginBottom: spacing.s,
     },
     subtitle: {
         ...typography.body,
+        textAlign: 'center',
         color: colors.textSecondary,
         marginBottom: spacing.m,
     },
@@ -224,16 +283,58 @@ const styles = StyleSheet.create({
         gap: spacing.s,
         marginTop: spacing.s,
     },
-    resetRow: {
-        marginTop: spacing.xs,
-        marginBottom: spacing.s,
-        alignSelf: 'flex-start',
+    resetButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        width: '100%',
+        paddingVertical: spacing.s,
+        backgroundColor: colors.error + '10',
+        borderRadius: 8,
     },
-    resetText: {
+    resetButtonText: {
         ...typography.captionBold,
         color: colors.error,
     },
+    recoveryOptions: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: spacing.s,
+        marginTop: spacing.s,
+        marginBottom: spacing.s,
+    },
+    recoveryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        width: '100%',
+        paddingVertical: spacing.s,
+        backgroundColor: colors.primary + '10',
+        borderRadius: 8,
+    },
+    recoveryButtonText: {
+        ...typography.captionBold,
+        color: colors.primary,
+    },
     actionButton: {
         flex: 1,
+    },
+    biometricButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.s,
+        paddingVertical: spacing.m,
+        backgroundColor: colors.primary + '10',
+        borderRadius: 12,
+        marginBottom: spacing.m,
+        borderWidth: 1,
+        borderColor: colors.primary + '30',
+    },
+    biometricText: {
+        ...typography.bodyBold,
+        color: colors.primary,
     },
 });

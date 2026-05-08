@@ -38,11 +38,14 @@ import { useEncryption } from '../context/EncryptionContext';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
+import { DisableSyncModal } from '../components/DisableSyncModal';
+import { DisableEncryptionModal } from '../components/DisableEncryptionModal';
 import { syncService } from '../services/SyncService';
 import { useSubscription } from '../context/SubscriptionContext';
 import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
+import * as Clipboard from 'expo-clipboard';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
 import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
 import {
@@ -65,6 +68,7 @@ import {
     setSelectedLocalLLMModel,
 } from '../services/LocalLLMService';
 import { SearchableLanguageSelector } from '../components/SearchableLanguageSelector';
+import { RecoveryCodeModal } from '../components/RecoveryCodeModal';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -256,10 +260,12 @@ export const SettingsScreen = () => {
     } = useSubscription();
     const {
         status: encryptionStatus,
+        mode: encryptionMode,
         syncEnabled,
         syncLocked,
         hasRemoteKeyBundle,
         bundle,
+        recoveryCode,
         setSyncEnabledPreference,
     } = useEncryption();
 
@@ -276,6 +282,7 @@ export const SettingsScreen = () => {
     const [showChangeSecretModal, setShowChangeSecretModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
+    const [showRecoveryCodeModal, setShowRecoveryCodeModal] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
 
@@ -285,6 +292,9 @@ export const SettingsScreen = () => {
         message: '',
     });
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
+    const [showSecurityAuthModal, setShowSecurityAuthModal] = useState(false);
+    const [showDisableSyncModal, setShowDisableSyncModal] = useState(false);
+    const [showDisableEncryptionModal, setShowDisableEncryptionModal] = useState(false);
     const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
     const [showLocalWhisperDeleteConfirm, setShowLocalWhisperDeleteConfirm] = useState(false);
     const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
@@ -363,12 +373,12 @@ export const SettingsScreen = () => {
     const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
     const usingLocal = usingLocalWhisper || usingLocalLLM;
     const trialInfoText = t('settings.ui.trialInfo', 'Create an account and get 30 minutes of trial transcription.');
-    const hasConfiguredKey = !!bundle || hasRemoteKeyBundle;
+    const hasConfiguredKey = encryptionMode === 'e2ee';
     const isSyncLocked = syncLocked || encryptionStatus === 'locked';
-    const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking', 'Checking...') : (isSyncLocked ? t('settings.ui.locked', 'Locked') : !syncEnabled ? t('settings.ui.off', 'Off') : t('settings.ui.on', 'On'));
+    const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking', 'Checking...') : (isSyncLocked ? t('settings.ui.locked', 'Secure') : !syncEnabled ? t('settings.ui.off', 'Off') : t('settings.ui.on', 'On'));
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     // When configured, we show the Change button only (no extra "Configured" label).
-    const passphraseStatusLabel = !hasConfiguredKey ? t('settings.ui.notSet', 'Not set') : encryptionStatus === 'locked' ? t('settings.ui.locked', 'Locked') : '';
+    const passphraseStatusLabel = !hasConfiguredKey ? t('settings.ui.notSet', 'Not set') : encryptionStatus === 'locked' ? t('settings.ui.locked', 'Protected') : '';
     const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
@@ -403,15 +413,11 @@ export const SettingsScreen = () => {
 
     const handleToggleSync = useCallback(async (enabled: boolean) => {
         if (syncToggleDisabled) {
-            Alert.alert('Sign in required', 'Sign in required to enable or disable sync.');
+            setShowSecurityAuthModal(true);
             return;
         }
 
         if (enabled) {
-            if (!hasConfiguredKey) {
-                setShowEnableSyncModal(true);
-                return;
-            }
             try {
                 await setSyncEnabledPreference(true);
                 if (encryptionStatus === 'locked') {
@@ -427,12 +433,8 @@ export const SettingsScreen = () => {
             return;
         }
 
-        try {
-            await setSyncEnabledPreference(false);
-        } catch (error: any) {
-            Alert.alert('Failed', error?.message || 'Unable to disable sync.');
-        }
-    }, [encryptionStatus, hasConfiguredKey, setSyncEnabledPreference, syncToggleDisabled]);
+        setShowDisableSyncModal(true);
+    }, [encryptionStatus, setSyncEnabledPreference, syncToggleDisabled, t]);
 
     type ProviderOption = {
         key: AIProvider;
@@ -910,6 +912,7 @@ export const SettingsScreen = () => {
     );
 
     const handleSignOut = async () => {
+        await checkSyncStatus();
         setShowSignOutDialog(true);
     };
 
@@ -1067,12 +1070,12 @@ export const SettingsScreen = () => {
                     </TouchableOpacity>
                 </View>
 
-                {/* Security */}
+                {/* Cloud Sync */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <MaterialIcons name="security" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>{t("settings.ui.security", "Security")}</Text>
+                            <MaterialIcons name="cloud-sync" size={18} color={colors.primary} />
+                            <Text style={styles.sectionTitle}>{t("settings.ui.cloudSync", "Cloud Sync")}</Text>
                         </View>
                         <TouchableOpacity
                             onPress={() => setShowSecurityInfoModal(true)}
@@ -1082,81 +1085,181 @@ export const SettingsScreen = () => {
                         </TouchableOpacity>
                     </View>
 
-                    <View style={styles.securityRowMinimal}>
-                        <View style={styles.securityRowLeft}>
-                            <View style={[styles.iconContainer, { backgroundColor: isSyncLocked ? colors.warning + '20' : !syncEnabled ? colors.backgroundSecondary : colors.accentGreen + '20' }]}>
-                                <MaterialIcons
-                                    name={isSyncLocked ? "lock" : !syncEnabled ? "cloud-off" : "cloud-done"}
-                                    size={16}
-                                    color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
-                                />
+                    {(!hasConfiguredKey) ? (
+                        <>
+                            <View style={styles.securityRowMinimal}>
+                                <View style={styles.securityRowLeft}>
+                                    <View style={[styles.iconContainer, { backgroundColor: colors.accentGreen + '20' }]}>
+                                        <MaterialIcons name={!syncEnabled ? "cloud-off" : "cloud-done"} size={16} color={!syncEnabled ? colors.textSecondary : colors.accentGreen} />
+                                    </View>
+                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync (Normal Mode)")}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                    <Switch
+                                        value={syncEnabled}
+                                        onValueChange={(value) => {
+                                            void handleToggleSync(value);
+                                        }}
+                                        disabled={showUnlockingOverlay}
+                                        trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                        thumbColor={colors.surface}
+                                        style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                    />
+                                </View>
                             </View>
-                            <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flexShrink: 1, justifyContent: 'flex-end' }}>
-                            <Text style={[styles.securityValueMinimal, { color: syncStatusColor, flexShrink: 1 }]} numberOfLines={1}>{syncStatusLabel}</Text>
-                            {encryptionStatus === 'loading' ? (
-                                <ActivityIndicator size="small" color={colors.primary} />
-                            ) : (
-                                <>
-                                    {isSyncLocked && !syncToggleDisabled && (
-                                        <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
-                                            <Text style={styles.smallButtonText}>{t("settings.ui.unlock", "Unlock")}</Text>
-                                        </TouchableOpacity>
+
+                            <View style={styles.separator} />
+
+                            <View style={styles.securityRowMinimal}>
+                                <View style={styles.securityRowLeft}>
+                                    <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+                                        <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
+                                    </View>
+                                    <Text style={[styles.securityLabelMinimal, { flex: 1 }]}>
+                                        {t("settings.ui.setupSync", "Upgrade to Encrypted Mode")}
+                                    </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                    <TouchableOpacity
+                                        style={[styles.smallButton, { backgroundColor: colors.primary }]}
+                                        onPress={async () => {
+                                            if (isGuestOrAnonymous) {
+                                                setShowSecurityAuthModal(true);
+                                                return;
+                                            }
+                                            setShowEnableSyncModal(true);
+                                        }}
+                                    >
+                                        <Text style={styles.smallButtonText}>
+                                            {t("settings.ui.enable", "Setup Passphrase")}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </>
+                    ) : encryptionStatus === 'locked' ? (
+                        <View style={styles.securityRowMinimal}>
+                            <View style={styles.securityRowLeft}>
+                                <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+                                    <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.securityLabelMinimal}>
+                                        {t("settings.ui.unlockSync", "Unlock Vault")}
+                                    </Text>
+                                    {hasRemoteKeyBundle && (
+                                        <Text style={{ fontSize: 11, color: colors.warning, marginTop: 2 }}>
+                                            {t("settings.ui.unlockToRestore", "Unlock to receive notes")}
+                                        </Text>
                                     )}
-                                    {!isSyncLocked && !syncToggleDisabled && hasConfiguredKey ? (
-                                        <Switch
-                                            value={syncEnabled}
-                                            onValueChange={(value) => {
-                                                void handleToggleSync(value);
-                                            }}
-                                            disabled={showUnlockingOverlay}
-                                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                            thumbColor={colors.surface}
-                                            style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                <TouchableOpacity
+                                    style={[styles.smallButton, { backgroundColor: colors.primary }]}
+                                    onPress={async () => {
+                                        if (isGuestOrAnonymous) {
+                                            setShowSecurityAuthModal(true);
+                                            return;
+                                        }
+                                        setShowUnlockSyncModal(true);
+                                    }}
+                                >
+                                    <Text style={styles.smallButtonText}>
+                                        {t("settings.ui.unlock", "Unlock")}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
+                        <>
+                            <View style={styles.securityRowMinimal}>
+                                <View style={styles.securityRowLeft}>
+                                    <View style={[styles.iconContainer, { backgroundColor: isSyncLocked ? colors.warning + '20' : !syncEnabled ? colors.backgroundSecondary : colors.accentGreen + '20' }]}>
+                                        <MaterialIcons
+                                            name={isSyncLocked ? "lock" : !syncEnabled ? "cloud-off" : "cloud-done"}
+                                            size={16}
+                                            color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
                                         />
-                                    ) : (!syncToggleDisabled && !hasConfiguredKey ? (
+                                    </View>
+                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flexShrink: 1, justifyContent: 'flex-end' }}>
+                                    <Text style={[styles.securityValueMinimal, { color: syncStatusColor, flexShrink: 1 }]} numberOfLines={1}>{syncStatusLabel}</Text>
+                                    {encryptionStatus === 'loading' ? (
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                    ) : (
+                                        <>
+                                            {isSyncLocked && !syncToggleDisabled && (
+                                                <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
+                                                    <Text style={styles.smallButtonText}>{t("settings.ui.unlock", "Unlock")}</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                            {!isSyncLocked && !syncToggleDisabled && (
+                                                <Switch
+                                                    value={syncEnabled}
+                                                    onValueChange={(value) => {
+                                                        void handleToggleSync(value);
+                                                    }}
+                                                    disabled={showUnlockingOverlay}
+                                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                                    thumbColor={colors.surface}
+                                                    style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                </View>
+                            </View>
+
+                            <View style={styles.separator} />
+
+                            <View style={styles.securityRowMinimal}>
+                                <View style={styles.securityRowLeft}>
+                                    <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+                                        <MaterialCommunityIcons name="shield-key" size={16} color={colors.primary} />
+                                    </View>
+                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.exportRecoveryCode", "Export Recovery Code")}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                    {!!recoveryCode && (
                                         <TouchableOpacity
-                                            style={[
-                                                styles.smallButton,
-                                                {
-                                                    backgroundColor: colors.primary,
-                                                },
-                                            ]}
-                                            onPress={() => {
-                                                setShowEnableSyncModal(true);
+                                            style={styles.smallButtonOutlined}
+                                            onPress={async () => {
+                                                if (recoveryCode) {
+                                                    await Clipboard.setStringAsync(recoveryCode);
+                                                    Alert.alert('Copied', 'Recovery code copied to clipboard. Keep it safe!');
+                                                } else {
+                                                    Alert.alert('Error', 'No recovery code found. Try unlocking again.');
+                                                }
                                             }}
                                         >
-                                            <Text style={styles.smallButtonText}>{t("settings.ui.enable", "Enable")}</Text>
+                                            <Text style={styles.smallButtonTextOutlined}>{t('settings.ui.copyBtn', 'Copy')}</Text>
                                         </TouchableOpacity>
-                                    ) : null)}
-                                </>
-                            )}
-                        </View>
-                    </View>
-
-                    <View style={styles.separator} />
-
-                    <View style={styles.securityRowMinimal}>
-                        <View style={styles.securityRowLeft}>
-                            <View style={[styles.iconContainer, { backgroundColor: passphraseStatusColor + '20' }]}>
-                                <MaterialIcons name="vpn-key" size={16} color={passphraseStatusColor} />
+                                    )}
+                                </View>
                             </View>
-                            <Text style={styles.securityLabelMinimal}>{t("settings.ui.passphrase", "Passphrase")}</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            {!!passphraseStatusLabel && (
-                                <Text style={[styles.securityValueMinimal, { color: passphraseStatusColor }]}>
-                                    {passphraseStatusLabel}
-                                </Text>
-                            )}
-                            {hasConfiguredKey && encryptionStatus !== 'locked' && (
-                                <TouchableOpacity style={styles.smallButtonOutlined} onPress={() => setShowChangeSecretModal(true)}>
-                                    <Text style={styles.smallButtonTextOutlined}>{t('settings.ui.changeBtn', 'Change')}</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
+
+                            <View style={styles.separator} />
+
+                            <View style={styles.securityRowMinimal}>
+                                <View style={styles.securityRowLeft}>
+                                    <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
+                                        <MaterialCommunityIcons name="shield-off-outline" size={16} color={colors.warning} />
+                                    </View>
+                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.disableEncryptionTitle", "Disable Encryption")}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                    <TouchableOpacity
+                                        style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
+                                        onPress={() => setShowDisableEncryptionModal(true)}
+                                    >
+                                        <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>{t('settings.ui.disableBtn', 'Disable')}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </>
+                    )}
 
                 </View>
 
@@ -1881,6 +1984,17 @@ export const SettingsScreen = () => {
             />
 
             <SignInRequiredModal
+                visible={showSecurityAuthModal}
+                title="Sign in required"
+                message="Sync and encryption are available after you create an account."
+                onClose={() => setShowSecurityAuthModal(false)}
+                onSignIn={() => {
+                    setShowSecurityAuthModal(false);
+                    navigation.navigate('SignIn');
+                }}
+            />
+
+            <SignInRequiredModal
                 visible={!!providerGate}
                 title={providerGate?.kind === 'upgrade' ? 'Upgrade to Pro' : 'Sign in required'}
                 message={providerGate
@@ -1957,8 +2071,9 @@ export const SettingsScreen = () => {
                     setShowUnlockingOverlay(false);
                     setUnlockErrorMessage(null);
                     setTimeout(() => {
+                        void setSyncEnabledPreference(true);
                         void syncService.syncNow('manual');
-                    }, 0);
+                    }, 100);
                 }}
             />
             <UnlockingOverlay
@@ -1967,9 +2082,37 @@ export const SettingsScreen = () => {
                 subtitle="Checking your passphrase and decrypting sync. This may take up to a minute on some devices."
             />
 
+            <DisableSyncModal
+                visible={showDisableSyncModal}
+                onClose={() => setShowDisableSyncModal(false)}
+                onConfirm={async () => {
+                    try {
+                        await setSyncEnabledPreference(false);
+                    } catch (error: any) {
+                        Alert.alert(t("settings.ui.failed", "Failed"), error?.message || t("settings.ui.unableDisableSync", "Unable to disable sync."));
+                    }
+                }}
+            />
+
+            <DisableEncryptionModal
+                visible={showDisableEncryptionModal}
+                onClose={() => setShowDisableEncryptionModal(false)}
+                onDisable={async () => {
+                    // Turn sync back on after encryption is reset
+                    // so notes get re-uploaded in plain text.
+                    try {
+                        await setSyncEnabledPreference(true);
+                    } catch (e) {
+                        // ignore
+                    }
+                }}
+            />
+
             <SignOutChoiceDialog
                 visible={showSignOutDialog}
                 unsyncedCount={unsyncedCount}
+                hasE2EE={hasConfiguredKey}
+                recoveryCode={recoveryCode}
                 onKeep={() => {
                     setShowSignOutDialog(false);
                     signOut({ keepLocalNotes: true, wipeLocal: false });
@@ -1983,6 +2126,12 @@ export const SettingsScreen = () => {
             <SecurityInfoModal
                 visible={showSecurityInfoModal}
                 onClose={() => setShowSecurityInfoModal(false)}
+            />
+
+            <RecoveryCodeModal
+                visible={showRecoveryCodeModal}
+                onClose={() => setShowRecoveryCodeModal(false)}
+                recoveryCode={recoveryCode}
             />
 
             <Modal
@@ -3081,6 +3230,7 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.textSecondary,
         fontWeight: '500',
+        flex: 1,
     },
     securityValueMinimal: {
         ...typography.bodySmall,

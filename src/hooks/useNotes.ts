@@ -174,10 +174,8 @@ export const useNotes = () => {
                 };
 
                 if (isEmptyNote(note)) {
-                    if (userId) {
-                        await deleteNoteLocal(userId, note.id);
-                    }
-                    continue;
+                    // Do not automatically delete empty notes here as it can lead to data loss during sync/encryption transitions.
+                    // Just skip them in the main list if desired, but for now we keep them to be safe.
                 }
 
                 // Hidden mode is reserved; keep it out of default list.

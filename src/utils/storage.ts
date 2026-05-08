@@ -168,34 +168,46 @@ export const storage = {
             console.error('Failed to set keep local notes flag', e);
         }
     },
-    getCryptoMode: async (): Promise<CryptoMode> => {
+    getCryptoMode: async (userId?: string | null): Promise<CryptoMode> => {
         try {
-            const value = await AsyncStorage.getItem(CRYPTO_MODE_KEY);
+            if (!userId) {
+                const value = await AsyncStorage.getItem(CRYPTO_MODE_KEY);
+                return value === 'e2ee' ? 'e2ee' : 'local';
+            }
+            const key = `${CRYPTO_MODE_KEY}_${userId}`;
+            const value = await AsyncStorage.getItem(key);
             return value === 'e2ee' ? 'e2ee' : 'local';
         } catch (e) {
             console.error('Failed to get crypto mode', e);
             return 'local';
         }
     },
-    setCryptoMode: async (mode: CryptoMode): Promise<void> => {
+    setCryptoMode: async (mode: CryptoMode, userId?: string | null): Promise<void> => {
         try {
-            await AsyncStorage.setItem(CRYPTO_MODE_KEY, mode);
+            const key = userId ? `${CRYPTO_MODE_KEY}_${userId}` : CRYPTO_MODE_KEY;
+            await AsyncStorage.setItem(key, mode);
         } catch (e) {
             console.error('Failed to set crypto mode', e);
         }
     },
-    getSyncEnabled: async (): Promise<boolean> => {
+    getSyncEnabled: async (userId?: string | null): Promise<boolean | null> => {
         try {
-            const value = await AsyncStorage.getItem(SYNC_ENABLED_KEY);
-            return value === 'true';
+            if (!userId) {
+                const value = await AsyncStorage.getItem(SYNC_ENABLED_KEY);
+                return value !== null ? value === 'true' : null;
+            }
+            const key = `${SYNC_ENABLED_KEY}_${userId}`;
+            const value = await AsyncStorage.getItem(key);
+            return value !== null ? value === 'true' : null;
         } catch (e) {
             console.error('Failed to get sync enabled flag', e);
-            return false;
+            return null;
         }
     },
-    setSyncEnabled: async (enabled: boolean): Promise<void> => {
+    setSyncEnabled: async (enabled: boolean, userId?: string | null): Promise<void> => {
         try {
-            await AsyncStorage.setItem(SYNC_ENABLED_KEY, enabled.toString());
+            const key = userId ? `${SYNC_ENABLED_KEY}_${userId}` : SYNC_ENABLED_KEY;
+            await AsyncStorage.setItem(key, enabled ? 'true' : 'false');
         } catch (e) {
             console.error('Failed to set sync enabled flag', e);
         }
@@ -290,6 +302,38 @@ export const storage = {
             await secureDelete(`${SYNC_RESET_BLOCK_PREFIX}_${userId}`);
         } catch (e) {
             console.error('Failed to clear sync reset block flag', e);
+        }
+    },
+    getBiometricsEnabled: async (userId: string): Promise<boolean> => {
+        if (!userId) return false;
+        try {
+            const value = await secureGet(`vaulto_biometrics_enabled_${userId}`);
+            return value === 'true';
+        } catch (e) {
+            return false;
+        }
+    },
+    setBiometricsEnabled: async (userId: string, enabled: boolean): Promise<void> => {
+        if (!userId) return;
+        try {
+            await secureSet(`vaulto_biometrics_enabled_${userId}`, enabled ? 'true' : 'false');
+        } catch (e) {
+            console.error('Failed to set biometrics flag', e);
+        }
+    },
+    getEncryptionWarningAccepted: async (): Promise<boolean> => {
+        try {
+            const value = await AsyncStorage.getItem('encryption_warning_accepted');
+            return value === 'true';
+        } catch (e) {
+            return false;
+        }
+    },
+    setEncryptionWarningAccepted: async (accepted: boolean): Promise<void> => {
+        try {
+            await AsyncStorage.setItem('encryption_warning_accepted', accepted ? 'true' : 'false');
+        } catch (e) {
+            console.error('Failed to set encryption warning accepted flag', e);
         }
     },
 };
@@ -703,5 +747,40 @@ export const clearSyncLockBannerDismissed = async (userId: string): Promise<void
         await AsyncStorage.removeItem(`${SYNC_LOCK_BANNER_DISMISS_PREFIX}_${userId}`);
     } catch (e) {
         console.error('Failed to clear sync lock banner dismissed state', e);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Pending Decrypt Sync — tracks whether a DISABLE E2EE migration sync is
+// still pending (e.g. failed due to no network). On next network restore the
+// SyncService will automatically complete the push.
+// ---------------------------------------------------------------------------
+const PENDING_DECRYPT_SYNC_PREFIX = 'vaulto_pending_decrypt_sync_v1';
+
+export const setPendingDecryptSync = async (userId: string): Promise<void> => {
+    if (!userId) return;
+    try {
+        await AsyncStorage.setItem(`${PENDING_DECRYPT_SYNC_PREFIX}_${userId}`, '1');
+    } catch (e) {
+        console.error('Failed to set pending decrypt sync flag', e);
+    }
+};
+
+export const clearPendingDecryptSync = async (userId: string): Promise<void> => {
+    if (!userId) return;
+    try {
+        await AsyncStorage.removeItem(`${PENDING_DECRYPT_SYNC_PREFIX}_${userId}`);
+    } catch (e) {
+        console.error('Failed to clear pending decrypt sync flag', e);
+    }
+};
+
+export const hasPendingDecryptSync = async (userId: string): Promise<boolean> => {
+    if (!userId) return false;
+    try {
+        const val = await AsyncStorage.getItem(`${PENDING_DECRYPT_SYNC_PREFIX}_${userId}`);
+        return val === '1';
+    } catch (e) {
+        return false;
     }
 };

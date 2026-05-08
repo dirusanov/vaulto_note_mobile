@@ -6,12 +6,17 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
+import * as Clipboard from 'expo-clipboard';
+import { Alert } from 'react-native';
+
 interface SignOutChoiceDialogProps {
     visible: boolean;
     unsyncedCount: number;
     onKeep: () => void;
     onDelete: () => void;
     onCancel: () => void;
+    hasE2EE?: boolean;
+    recoveryCode?: string | null;
 }
 
 export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
@@ -20,10 +25,24 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
     onKeep,
     onDelete,
     onCancel,
+    hasE2EE,
+    recoveryCode,
 }) => {
     const { t } = useTranslation();
+    const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
 
     const hasUnsynced = unsyncedCount > 0;
+
+    const resetAndCancel = () => {
+        setIsConfirmingDelete(false);
+        onCancel();
+    };
+
+    React.useEffect(() => {
+        if (!visible) {
+            setIsConfirmingDelete(false);
+        }
+    }, [visible]);
 
     return (
         <Modal
@@ -35,63 +54,96 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
             <View style={styles.overlay}>
                 <View style={styles.dialog}>
                     <View style={styles.iconContainer}>
-                        <MaterialIcons name="logout" size={40} color={colors.error} />
+                        <MaterialIcons 
+                            name={isConfirmingDelete ? "warning" : "logout"} 
+                            size={32} 
+                            color={isConfirmingDelete ? colors.warning : colors.error} 
+                        />
                     </View>
 
-                    <Text style={styles.title}>{t("settings.account.signOut", "Sign Out")}</Text>
-                    <Text style={styles.message}>
-                        Choose what happens to your local notes on this device.
+                    <Text style={styles.title}>
+                        {isConfirmingDelete ? t("aux.confirmDeletion", "Confirm Deletion") : t("settings.account.signOut", "Sign Out")}
                     </Text>
+                    
+                    {!isConfirmingDelete ? (
+                        <>
+                            <Text style={styles.message}>
+                                {t("settings.ui.signOutMessage", "What should we do with your notes on this device?")}
+                            </Text>
 
-                    {hasUnsynced && (
-                        <View style={styles.dangerBox}>
-                            <View style={styles.alertRow}>
-                                <MaterialIcons name="warning-amber" size={20} color={colors.error} />
-                                <View style={styles.alertTextWrap}>
-                                    <Text style={styles.dangerTitle}>{t("aux.unsyncedChanges", "Unsynced changes")}</Text>
-                                    <Text style={styles.dangerText}>
-                                        {unsyncedCount} change{unsyncedCount === 1 ? '' : 's'} not uploaded.
-                                        Deleting will permanently lose them.
-                                    </Text>
-                                </View>
+                            <View style={styles.actions}>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.keepButton]}
+                                    onPress={onKeep}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.buttonRow}>
+                                        <MaterialIcons name="storage" size={18} color={colors.text} />
+                                        <Text style={styles.keepButtonText}>{t("aux.keepOnDevice", "Keep on Device")}</Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.button, styles.deleteButtonOutline]}
+                                    onPress={() => setIsConfirmingDelete(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.buttonRow}>
+                                        <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                                        <Text style={styles.deleteOutlineText}>{t("aux.deleteFromDevice", "Delete from Device")}</Text>
+                                    </View>
+                                </TouchableOpacity>
                             </View>
-                        </View>
+                        </>
+                    ) : (
+                        <>
+                            <Text style={styles.message}>
+                                {t("settings.ui.confirmDeleteFull", "This will permanently remove all local data for this account.")}
+                            </Text>
+
+                            <View style={styles.warningStack}>
+                                {hasUnsynced && (
+                                    <View style={styles.dangerBoxSmall}>
+                                        <MaterialIcons name="sync-problem" size={18} color={colors.error} />
+                                        <Text style={styles.dangerTextSmall}>
+                                            {unsyncedCount} {t("aux.unsyncedNotesWarn", "unsynced notes will be lost forever.")}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {hasE2EE && (
+                                    <View style={styles.infoBoxSmall}>
+                                        <MaterialIcons name="security" size={18} color={colors.primary} />
+                                        <Text style={styles.infoTextSmall}>
+                                            {t("settings.ui.saveRecoveryFirst", "Ensure you have saved your Recovery Code to access notes on other devices.")}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            <View style={styles.actions}>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.deleteButton]}
+                                    onPress={onDelete}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.deleteButtonText}>{t("aux.confirmAndDelete", "Yes, Delete Everything")}</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.button, styles.backButton]}
+                                    onPress={() => setIsConfirmingDelete(false)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.backButtonText}>{t("aux.goBack", "Go Back")}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </>
                     )}
-
-                    <View style={styles.warningBox}>
-                        <View style={styles.alertRow}>
-                            <MaterialIcons name="visibility" size={20} color={colors.warning} />
-                            <View style={styles.alertTextWrap}>
-                                <Text style={styles.warningTitle}>{t("aux.signOutPrivacyWarn", "Privacy warning")}</Text>
-                                <Text style={styles.warningText}>
-                                    If you keep notes on this device, anyone with access to this phone can read them
-                                    while you are signed out.
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    <View style={styles.actions}>
-                        <TouchableOpacity
-                            style={[styles.button, styles.keepButton]}
-                            onPress={onKeep}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.keepButtonText}>{t("aux.keepOnDevice", "Keep on Device")}</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.button, styles.deleteButton]}
-                            onPress={onDelete}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.deleteButtonText}>{t("aux.deleteFromDevice", "DELETE FROM DEVICE")}</Text>
-                        </TouchableOpacity>
-                    </View>
 
                     <TouchableOpacity
                         style={styles.cancelLink}
-                        onPress={onCancel}
+                        onPress={resetAndCancel}
                         activeOpacity={0.7}
                     >
                         <Text style={styles.cancelText}>{t("settings.ui.cancelBtn", "Cancel")}</Text>
@@ -124,90 +176,91 @@ const styles = StyleSheet.create({
         elevation: 10,
     },
     iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: `${colors.error}15`,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: colors.background,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: spacing.m,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     title: {
-        ...typography.h2,
+        ...typography.h3,
         textAlign: 'center',
-        marginBottom: spacing.s,
+        marginBottom: spacing.xs,
+        color: colors.text,
     },
     message: {
-        ...typography.bodySmall,
+        ...typography.caption,
         textAlign: 'center',
         color: colors.textSecondary,
         marginBottom: spacing.l,
+        paddingHorizontal: spacing.m,
     },
-    dangerBox: {
+    warningStack: {
         width: '100%',
-        backgroundColor: `${colors.error}12`,
-        borderColor: `${colors.error}55`,
-        borderWidth: 1,
-        borderRadius: 14,
-        padding: spacing.m,
-        marginBottom: spacing.m,
-    },
-    warningBox: {
-        width: '100%',
-        backgroundColor: `${colors.warning}12`,
-        borderColor: `${colors.warning}55`,
-        borderWidth: 1,
-        borderRadius: 14,
-        padding: spacing.m,
+        gap: spacing.s,
         marginBottom: spacing.l,
     },
-    alertRow: {
+    dangerBoxSmall: {
         flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.error + '08',
+        borderRadius: 12,
+        padding: spacing.m,
         gap: spacing.s,
-        alignItems: 'flex-start',
     },
-    alertTextWrap: {
-        flex: 1,
-    },
-    dangerTitle: {
+    dangerTextSmall: {
         ...typography.captionBold,
         color: colors.error,
-        marginBottom: spacing.xs,
+        flex: 1,
     },
-    dangerText: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-        lineHeight: 20,
+    infoBoxSmall: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primary + '08',
+        borderRadius: 12,
+        padding: spacing.m,
+        gap: spacing.s,
     },
-    warningTitle: {
+    infoTextSmall: {
         ...typography.captionBold,
-        color: colors.warning,
-        marginBottom: spacing.xs,
-    },
-    warningText: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-        lineHeight: 20,
+        color: colors.primary,
+        flex: 1,
     },
     actions: {
         width: '100%',
-        gap: spacing.s,
+        gap: spacing.m,
     },
     button: {
         width: '100%',
         paddingVertical: spacing.m,
-        borderRadius: 12,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
     },
+    buttonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
     keepButton: {
-        backgroundColor: colors.background,
-        borderWidth: 1,
-        borderColor: colors.border,
+        backgroundColor: colors.primary,
     },
     keepButtonText: {
         ...typography.buttonSmall,
-        color: colors.text,
+        color: '#FFFFFF',
+    },
+    deleteButtonOutline: {
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        borderColor: colors.error + '40',
+    },
+    deleteOutlineText: {
+        ...typography.buttonSmall,
+        color: colors.error,
     },
     deleteButton: {
         backgroundColor: colors.error,
@@ -215,7 +268,15 @@ const styles = StyleSheet.create({
     deleteButtonText: {
         ...typography.buttonSmall,
         color: '#FFFFFF',
-        letterSpacing: 0.3,
+    },
+    backButton: {
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    backButtonText: {
+        ...typography.buttonSmall,
+        color: colors.textSecondary,
     },
     cancelLink: {
         marginTop: spacing.m,

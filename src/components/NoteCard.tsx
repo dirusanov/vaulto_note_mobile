@@ -5,6 +5,8 @@ import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
+import { useEncryption } from '../context/EncryptionContext';
+import { isMasterCiphertext } from '../crypto/encryption';
 
 interface NoteCardProps {
     note: Note;
@@ -15,10 +17,18 @@ interface NoteCardProps {
 }
 
 export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
+    const { bundle, mode } = useEncryption();
     const activeChild = note.improvements?.find(imp => imp.is_active);
     const activeChildTitle = (activeChild?.title || activeChild?.label || '').trim();
     let content = note.content || '';
     const storageScope = note.storage_scope ?? 'sync';
+    
+    // Logic for showing the lock icon:
+    // 1. If we are in E2EE mode, all synced notes are protected.
+    // 2. If we are in Local mode, we only show it as a warning if the content itself is still encrypted with a Master Key.
+    const isEncrypted = (mode === 'e2ee' && storageScope === 'sync') || 
+                       (typeof content === 'string' && isMasterCiphertext(content)) ||
+                       (typeof note.title === 'string' && isMasterCiphertext(note.title));
 
     // Check if there is an active improvement (active child note)
     if (note.improvements && note.improvements.length > 0) {
@@ -129,13 +139,16 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     {formatDate(note.updated_at || note.created_at || '')}
                 </Text>
                 <View style={styles.iconsRow}>
-                    {hasAudio && (
+                    {!!hasAudio && (
                         <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
+                    )}
+                    {!!isEncrypted && (
+                        <MaterialIcons name="lock" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
                     )}
                     {storageScope === 'local_only' && (
                         <MaterialIcons name="smartphone" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
                     )}
-                    {note.is_pinned && (
+                    {!!note.is_pinned && (
                         <MaterialIcons name="push-pin" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
                     )}
                 </View>

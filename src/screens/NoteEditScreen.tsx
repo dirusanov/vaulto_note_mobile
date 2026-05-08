@@ -38,6 +38,7 @@ import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors } from '../theme/colors';
+import { useEncryption } from '../context/EncryptionContext';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { VoiceRecorder } from '../components/VoiceRecorder';
@@ -746,6 +747,7 @@ export const NoteEditScreen = () => {
         setActiveVariant,
         updateNoteStorageScope,
     } = useNotesContext();
+    const { bundle } = useEncryption();
     const { isAuthenticated, isGuest, userId, user, refreshProfile } = useAuth();
     const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
@@ -5134,6 +5136,7 @@ export const NoteEditScreen = () => {
 
     return (
         <ScreenContainer>
+
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
                     <MaterialIcons name="arrow-back" size={28} color={colors.text} />
@@ -6144,6 +6147,7 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
     },
+
     titleInput: {
         fontSize: 24,
         fontWeight: '400',

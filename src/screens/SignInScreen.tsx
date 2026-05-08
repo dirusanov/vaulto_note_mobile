@@ -7,6 +7,9 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
 } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
@@ -85,99 +88,104 @@ export const SignInScreen = () => {
 
     return (
         <ScreenContainer>
-            <View style={styles.container}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => navigation.goBack()}
-                    activeOpacity={0.8}
-                >
-                    <MaterialIcons name="arrow-back" size={22} color={colors.text} />
-                </TouchableOpacity>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={styles.container}
+            >
+                <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => navigation.goBack()}
+                        activeOpacity={0.8}
+                    >
+                        <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+                    </TouchableOpacity>
 
-                <View style={styles.content}>
-                    <Text style={styles.title}>{t("auth.welcomeBack", "Welcome Back")}</Text>
-                    <Text style={styles.subtitle}>{t("auth.signInToContinue", "Sign in to continue")}</Text>
+                    <View style={styles.content}>
+                        <Text style={styles.title}>{t("auth.welcomeBack", "Welcome Back")}</Text>
+                        <Text style={styles.subtitle}>{t("auth.signInToContinue", "Sign in to continue")}</Text>
 
-                    <View style={styles.buttonContainer}>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Email</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="name@example.com"
-                                placeholderTextColor={colors.textSecondary}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
-                                value={email}
-                                onChangeText={setEmail}
-                            />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Password</Text>
-                            <View style={styles.passwordInputWrapper}>
+                        <View style={styles.buttonContainer}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Email</Text>
                                 <TextInput
-                                    style={[styles.input, styles.passwordInput]}
-                                    placeholder="Enter your password"
+                                    style={styles.input}
+                                    placeholder="name@example.com"
                                     placeholderTextColor={colors.textSecondary}
-                                    secureTextEntry={!showPassword}
-                                    value={password}
-                                    onChangeText={setPassword}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                    value={email}
+                                    onChangeText={setEmail}
                                 />
-                                <TouchableOpacity
-                                    style={styles.eyeButton}
-                                    onPress={() => setShowPassword(prev => !prev)}
-                                    activeOpacity={0.8}
-                                >
-                                    <MaterialIcons
-                                        name={showPassword ? 'visibility-off' : 'visibility'}
-                                        size={20}
-                                        color={colors.textSecondary}
-                                    />
-                                </TouchableOpacity>
                             </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Password</Text>
+                                <View style={styles.passwordInputWrapper}>
+                                    <TextInput
+                                        style={[styles.input, styles.passwordInput]}
+                                        placeholder="Enter your password"
+                                        placeholderTextColor={colors.textSecondary}
+                                        secureTextEntry={!showPassword}
+                                        value={password}
+                                        onChangeText={setPassword}
+                                    />
+                                    <TouchableOpacity
+                                        style={styles.eyeButton}
+                                        onPress={() => setShowPassword(prev => !prev)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <MaterialIcons
+                                            name={showPassword ? 'visibility-off' : 'visibility'}
+                                            size={20}
+                                            color={colors.textSecondary}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('ForgotPassword')}
+                                style={styles.forgotPasswordButton}
+                            >
+                                <Text style={styles.forgotPasswordText}>{t("auth.forgotPassword", "Forgot Password?")}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.button, loading && styles.buttonDisabled]}
+                                onPress={handleEmailSignIn}
+                                disabled={loading}
+                            >
+                                <Text style={styles.buttonText}>
+                                    {loading ? 'Signing in...' : 'Sign In'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.separator}>
+                                <View style={styles.separatorLine} />
+                                <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
+                                <View style={styles.separatorLine} />
+                            </View>
+
+                            <AuthProviderButton
+                                title="Google"
+                                icon={<MaterialCommunityIcons name="google" size={20} color={colors.text} />}
+                                onPress={handleGoogleSignIn}
+                                loading={googleLoading}
+                            />
+
+                            <TouchableOpacity
+                                style={styles.signUpButton}
+                                onPress={() => navigation.navigate('SignUp')}
+                            >
+                                <Text style={styles.signUpText}>
+                                    Don't have an account? <Text style={styles.signUpLink}>{t("auth.signUp", "Sign Up")}</Text>
+                                </Text>
+                            </TouchableOpacity>
                         </View>
-
-                        <TouchableOpacity
-                            onPress={() => navigation.navigate('ForgotPassword')}
-                            style={styles.forgotPasswordButton}
-                        >
-                            <Text style={styles.forgotPasswordText}>{t("auth.forgotPassword", "Forgot Password?")}</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.button, loading && styles.buttonDisabled]}
-                            onPress={handleEmailSignIn}
-                            disabled={loading}
-                        >
-                            <Text style={styles.buttonText}>
-                                {loading ? 'Signing in...' : 'Sign In'}
-                            </Text>
-                        </TouchableOpacity>
-
-                        <View style={styles.separator}>
-                            <View style={styles.separatorLine} />
-                            <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
-                            <View style={styles.separatorLine} />
-                        </View>
-
-                        <AuthProviderButton
-                            title="Google"
-                            icon={<MaterialCommunityIcons name="google" size={20} color={colors.text} />}
-                            onPress={handleGoogleSignIn}
-                            loading={googleLoading}
-                        />
-
-                        <TouchableOpacity
-                            style={styles.signUpButton}
-                            onPress={() => navigation.navigate('SignUp')}
-                        >
-                            <Text style={styles.signUpText}>
-                                Don't have an account? <Text style={styles.signUpLink}>{t("auth.signUp", "Sign Up")}</Text>
-                            </Text>
-                        </TouchableOpacity>
                     </View>
-                </View>
-            </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </ScreenContainer>
     );
 };
@@ -201,9 +209,12 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        justifyContent: 'center',
         paddingHorizontal: spacing.m,
-        paddingBottom: spacing.l,
+        paddingTop: spacing.m,
+        paddingBottom: spacing.xxl,
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
     title: {
         ...typography.h1,

@@ -19,6 +19,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
+import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { notesApi } from '../api/notes';
 import { getSyncLockBannerDismissed, setSyncLockBannerDismissed } from '../utils/storage';
@@ -46,6 +47,7 @@ export const NotesListScreen = () => {
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
+    const [showResetSyncModal, setShowResetSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [lockBannerDismissed, setLockBannerDismissed] = useState<boolean | null>(null);
@@ -211,13 +213,10 @@ export const NotesListScreen = () => {
                     improvement_changes: [],
                     since_updated_at: '1970-01-01T00:00:00+00:00',
                 });
-                const hasRemoteData =
-                    (response.server_changes?.length ?? 0) > 0 ||
-                    (response.improvement_changes?.length ?? 0) > 0 ||
-                    (response.updated?.length ?? 0) > 0 ||
-                    (response.improvement_updates?.length ?? 0) > 0 ||
-                    (response.conflicts?.length ?? 0) > 0 ||
-                    (response.improvement_conflicts?.length ?? 0) > 0;
+                const activeChanges = response.server_changes?.filter(n => !n.deleted) ?? [];
+                const activeUpdated = response.updated?.filter(n => !n.deleted) ?? [];
+
+                const hasRemoteData = activeChanges.length > 0 || activeUpdated.length > 0;
 
                 if (!cancelled) {
                     setHasServerNotes(hasRemoteData);
@@ -540,33 +539,38 @@ export const NotesListScreen = () => {
             )}
             {shouldShowLockBanner && (
                 <View style={styles.lockBanner}>
-                    <View style={styles.lockBannerHeader}>
-                        <View style={styles.lockBannerTitleRow}>
-                            <View style={styles.lockBannerIcon}>
-                                <MaterialIcons name="lock" size={16} color={colors.primary} />
-                            </View>
-                            <Text style={styles.lockBannerTitle}>{t("notes.syncLocked", "Encrypted Sync Is Locked")}</Text>
+                    <View style={styles.lockBannerRow}>
+                        <View style={styles.lockBannerIcon}>
+                            <MaterialIcons name="lock" size={18} color={colors.warning} />
+                        </View>
+                        <View style={styles.lockBannerTextWrap}>
+                            <Text style={styles.lockBannerTitle} numberOfLines={1}>{t("notes.syncLocked", "Encrypted notes found")}</Text>
+                            <Text style={styles.lockBannerText} numberOfLines={1}>
+                                {t("notes.unlockToRestore", "Unlock to access your data")}
+                            </Text>
+                        </View>
+                        <View style={styles.lockActionsRow}>
+                            <TouchableOpacity
+                                style={styles.lockActionPrimary}
+                                onPress={() => setShowUnlockSyncModal(true)}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock", "Unlock")}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.lockActionSecondary}
+                                onPress={() => setShowResetSyncModal(true)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.lockActionSecondaryText}>{t("settings.ui.resetBtn", "Reset")}</Text>
+                            </TouchableOpacity>
                         </View>
                         <TouchableOpacity
                             onPress={dismissLockBanner}
                             style={styles.lockBannerClose}
                             activeOpacity={0.75}
-                            accessibilityRole="button"
-                            accessibilityLabel="Hide lock warning"
                         >
-                            <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-                    <Text style={styles.lockBannerText}>
-                        Encrypted sync data detected on server. Unlock using your passphrase to access notes on this device.
-                    </Text>
-                    <View style={styles.lockBannerActions}>
-                        <TouchableOpacity
-                            style={[styles.lockActionButton, styles.lockActionPrimary]}
-                            onPress={() => setShowUnlockSyncModal(true)}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={styles.lockActionPrimaryText}>{t("notes.unlockSync", "Unlock Sync")}</Text>
+                            <MaterialIcons name="close" size={18} color={colors.textTertiary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -704,6 +708,14 @@ export const NotesListScreen = () => {
                     }, 0);
                 }}
             />
+            <ResetEncryptionModal
+                visible={showResetSyncModal}
+                onClose={() => setShowResetSyncModal(false)}
+                onReset={() => {
+                    setShowResetSyncModal(false);
+                    void onRefresh();
+                }}
+            />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
                 title="Verifying Passphrase"
@@ -734,82 +746,74 @@ const styles = StyleSheet.create({
     lockBanner: {
         marginHorizontal: spacing.m,
         marginBottom: spacing.s,
-        padding: spacing.m,
-        borderRadius: 18,
+        padding: spacing.s,
+        paddingLeft: spacing.s + 4,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: colors.warning + '40',
         backgroundColor: colors.surface,
-        shadowColor: colors.cardShadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowColor: colors.warning,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
         elevation: 2,
     },
-    lockBannerHeader: {
+    lockBannerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: spacing.xs,
-    },
-    lockBannerTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        flex: 1,
+        gap: spacing.s,
     },
     lockBannerIcon: {
-        width: 26,
-        height: 26,
-        borderRadius: 8,
+        width: 32,
+        height: 32,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.backgroundSecondary,
+        backgroundColor: colors.warning + '15',
+    },
+    lockBannerTextWrap: {
+        flex: 1,
+        justifyContent: 'center',
     },
     lockBannerTitle: {
-        ...typography.body,
+        ...typography.captionBold,
         color: colors.text,
-        fontWeight: '700',
-    },
-    lockBannerClose: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
+        fontSize: 13,
     },
     lockBannerText: {
         ...typography.caption,
         color: colors.textSecondary,
-        lineHeight: 18,
+        fontSize: 11,
+        marginTop: 2,
     },
-    lockBannerActions: {
-        marginTop: spacing.s,
-        flexDirection: 'row',
-        gap: spacing.s,
-    },
-    lockActionButton: {
-        flex: 1,
-        minHeight: 40,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: spacing.s,
+    lockBannerClose: {
+        padding: spacing.xs,
     },
     lockActionPrimary: {
         backgroundColor: colors.primary,
-    },
-    lockActionSecondary: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.backgroundSecondary,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 8,
+        borderRadius: 10,
     },
     lockActionPrimaryText: {
         ...typography.captionBold,
         color: colors.surface,
+        fontSize: 12,
+    },
+    lockActionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    lockActionSecondary: {
+        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.xs,
     },
     lockActionSecondaryText: {
         ...typography.captionBold,
-        color: colors.text,
+        color: colors.textTertiary,
+        textDecorationLine: 'underline',
+        fontSize: 12,
     },
     syncButton: {
         flexDirection: 'row',
