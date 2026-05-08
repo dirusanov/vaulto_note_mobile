@@ -81,6 +81,11 @@ let deletionGuardEnabled = false;
 let resyncCallback: (() => void) | null = null;
 export const registerResyncCallback = (cb: () => void) => { resyncCallback = cb; };
 
+export type LocalMigrationProgress = {
+    completed: number;
+    total: number;
+};
+
 export const setDeletionGuard = (enabled: boolean) => {
     deletionGuardEnabled = enabled;
     console.log(`[DatabaseService] Deletion guard ${enabled ? 'ENABLED' : 'DISABLED'}`);
@@ -363,7 +368,10 @@ export const decryptAndRescueAllNotes = async (userId: string): Promise<number> 
     }
 };
 
-export const forceReencryptionLocal = async (userId: string): Promise<number> => {
+export const forceReencryptionLocal = async (
+    userId: string,
+    onProgress?: (progress: LocalMigrationProgress) => void,
+): Promise<number> => {
     if (!userId) return 0;
     try {
         const { rawNotes, rawImprovements } = await withDbRetry('get raw notes for re-encryption', async (database) => {
@@ -372,13 +380,21 @@ export const forceReencryptionLocal = async (userId: string): Promise<number> =>
             return { rawNotes: notes, rawImprovements: imps };
         });
 
+        const notesToProcess = rawNotes.filter((n: any) => !!n.id);
+        const improvementsToProcess = rawImprovements.filter((imp: any) => !!imp.id);
+        const total = notesToProcess.length + improvementsToProcess.length;
+        let completed = 0;
         let count = 0;
+        const reportProgress = () => {
+            onProgress?.({ completed, total });
+        };
+
+        reportProgress();
 
         // Each note is updated atomically and independently.
         // If the app crashes mid-loop, only already-processed notes are changed.
         // On restart, unprocessed notes still have the old prefix and will be retried.
-        for (const n of rawNotes) {
-            if (!n.id) continue;
+        for (const n of notesToProcess) {
             try {
                 const title = n.encrypted_title ? await decrypt(n.encrypted_title) : '';
                 const content = await decrypt(n.encrypted_content);
@@ -397,11 +413,13 @@ export const forceReencryptionLocal = async (userId: string): Promise<number> =>
                 count++;
             } catch (err) {
                 console.warn(`[DatabaseService] Failed to re-encrypt note ${n.id}, skipping`, err);
+            } finally {
+                completed++;
+                reportProgress();
             }
         }
 
-        for (const imp of rawImprovements) {
-            if (!imp.id) continue;
+        for (const imp of improvementsToProcess) {
             try {
                 const title = imp.encrypted_title ? await decrypt(imp.encrypted_title) : '';
                 const content = await decrypt(imp.encrypted_content);
@@ -417,6 +435,9 @@ export const forceReencryptionLocal = async (userId: string): Promise<number> =>
                 );
             } catch (err) {
                 console.warn(`[DatabaseService] Failed to re-encrypt improvement ${imp.id}, skipping`, err);
+            } finally {
+                completed++;
+                reportProgress();
             }
         }
 

@@ -9,6 +9,7 @@ import { isLocalAIProvider, LOCAL_MODELS_ENABLED } from './featureFlags';
 // NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
 export type AIProvider = 'vaulto_ai' | 'openai' | 'local_whisper' | 'local_llm' | 'local';
 export type CryptoMode = 'local' | 'e2ee';
+export type EncryptionMigrationState = 'local' | 'sync';
 export type TranscriptionLanguage = string;
 const TOKEN_KEY = 'vaulto_auth_token';
 const REFRESH_TOKEN_KEY = 'vaulto_refresh_token';
@@ -26,6 +27,7 @@ const KEY_BUNDLE_PREFIX = 'vaulto_key_bundle_v1';
 const MASTER_KEY_PREFIX = 'vaulto_master_key_v1';
 const SYNC_RESET_BLOCK_PREFIX = 'vaulto_sync_reset_block_v1';
 const SYNC_LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
+const ENCRYPTION_MIGRATION_PREFIX = 'vaulto_encryption_migration_v1';
 
 // OpenAI-compatible settings (legacy self-hosted keys are read for migration).
 const OPENAI_BASE_URL_KEY = 'vaulto_openai_base_url_v1';
@@ -302,6 +304,32 @@ export const storage = {
             await secureDelete(`${SYNC_RESET_BLOCK_PREFIX}_${userId}`);
         } catch (e) {
             console.error('Failed to clear sync reset block flag', e);
+        }
+    },
+    getEncryptionMigrationState: async (userId: string): Promise<EncryptionMigrationState | null> => {
+        if (!userId) return null;
+        try {
+            const value = await AsyncStorage.getItem(`${ENCRYPTION_MIGRATION_PREFIX}_${userId}`);
+            return value === 'local' || value === 'sync' ? value : null;
+        } catch (e) {
+            console.error('Failed to get encryption migration state', e);
+            return null;
+        }
+    },
+    setEncryptionMigrationState: async (userId: string, state: EncryptionMigrationState): Promise<void> => {
+        if (!userId) return;
+        try {
+            await AsyncStorage.setItem(`${ENCRYPTION_MIGRATION_PREFIX}_${userId}`, state);
+        } catch (e) {
+            console.error('Failed to set encryption migration state', e);
+        }
+    },
+    clearEncryptionMigrationState: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        try {
+            await AsyncStorage.removeItem(`${ENCRYPTION_MIGRATION_PREFIX}_${userId}`);
+        } catch (e) {
+            console.error('Failed to clear encryption migration state', e);
         }
     },
     getBiometricsEnabled: async (userId: string): Promise<boolean> => {

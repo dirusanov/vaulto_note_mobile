@@ -1,6 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View, TouchableOpacity } from 'react-native';
+import {
+    KeyboardAvoidingView,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEncryption } from '../context/EncryptionContext';
 import { getSecretValidationError } from '../crypto/e2ee';
@@ -17,15 +26,21 @@ interface UnlockSyncModalProps {
     onClose: () => void;
     onUnlocked?: () => void;
     onUnlocking?: () => void;
+    onProgress?: (progress: number) => void;
     onError?: (message: string) => void;
     errorMessage?: string | null;
 }
+
+const waitForCompletionFrame = () => new Promise<void>((resolve) => {
+    setTimeout(resolve, 350);
+});
 
 export const UnlockSyncModal = ({
     visible,
     onClose,
     onUnlocked,
     onUnlocking,
+    onProgress,
     onError,
     errorMessage = null,
 }: UnlockSyncModalProps) => {
@@ -35,7 +50,6 @@ export const UnlockSyncModal = ({
     const isLegacyNumericPassphrase = bundle?.secret_mode === 'pin';
     const [secret, setSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
-    const [showPassphraseInput, setShowPassphraseInput] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showReset, setShowReset] = useState(false);
@@ -44,9 +58,9 @@ export const UnlockSyncModal = ({
     const reset = () => {
         setSecret('');
         setShowSecret(false);
-        setShowPassphraseInput(false);
         setError(null);
         setShowReset(false);
+        setShowUseRecoveryCode(false);
     };
 
     useEffect(() => {
@@ -73,7 +87,7 @@ export const UnlockSyncModal = ({
 
         if (isLegacyNumericPassphrase) {
             if (!/^\d{8}$/.test(rawSecret.trim())) {
-                setError('Legacy numeric passphrase must be exactly 8 digits.');
+                setError(t("aux.legacyPinError"));
                 return;
             }
         } else {
@@ -87,15 +101,18 @@ export const UnlockSyncModal = ({
         setLoading(true);
         const secretValue = rawSecret;
         onUnlocking?.();
+        onProgress?.(8);
         onClose();
         setTimeout(() => {
             void (async () => {
                 try {
-                    await unlock(secretValue);
+                    await unlock(secretValue, onProgress);
+                    onProgress?.(100);
+                    await waitForCompletionFrame();
                     reset();
                     onUnlocked?.();
                 } catch (e: any) {
-                    const message = e?.message || 'Failed to unlock sync.';
+                    const message = e?.message || t("aux.unlockFailed");
                     setError(message);
                     onError?.(message);
                 } finally {
@@ -124,31 +141,64 @@ export const UnlockSyncModal = ({
                     >
                         <Pressable style={styles.cardPressable} pointerEvents="auto">
                             <View style={styles.card}>
-                                <Text style={styles.title}>{t("notes.unlockSync", "Unlock Sync")}</Text>
-                                <Text style={styles.subtitle}>Enter your passphrase to unlock sync.</Text>
+                                <View style={styles.headerIcon}>
+                                    <MaterialCommunityIcons name="lock-open-variant-outline" size={26} color={colors.primary} />
+                                </View>
+                                <Text style={styles.title}>
+                                    {t("notes.unlockSync", "Unlock encrypted notes")}
+                                </Text>
+                                <Text style={styles.subtitle}>
+                                    {t(
+                                        "notes.syncLockedDescription",
+                                        "Encrypted notes are on the server. Enter your passphrase to show them on this device."
+                                    )}
+                                </Text>
 
                                 <TextInput
-                                    label="Passphrase"
+                                    label={t("settings.ui.passphraseLabel", "Passphrase")}
                                     value={secret}
                                     onChangeText={setSecret}
                                     secureTextEntry={!showSecret}
                                     autoCapitalize="none"
                                     autoCorrect={false}
-                                    placeholder="Enter your passphrase"
+                                    placeholder={t("settings.ui.enterPassphrasePlaceholder", "Enter your passphrase")}
+                                    containerStyle={styles.secretInput}
                                 />
                                 <Pressable onPress={() => setShowSecret((prev) => !prev)} style={styles.revealRow}>
                                     <Text style={styles.revealText}>
-                                        {showSecret ? 'Hide passphrase' : 'Show passphrase'}
+                                        {showSecret
+                                            ? t("settings.ui.hidePassphrase", "Hide passphrase")
+                                            : t("settings.ui.showPassphrase", "Show passphrase")}
                                     </Text>
                                 </Pressable>
 
-                                <Text style={styles.hint}>
-                                    {isLegacyNumericPassphrase
-                                        ? 'Legacy mode detected: your passphrase is an 8-digit numeric code.'
-                                        : 'Use your exact passphrase. Unlock happens locally.'}
-                                </Text>
+                                <View style={styles.hintBox}>
+                                    <MaterialCommunityIcons name="shield-check-outline" size={16} color={colors.accentGreen} />
+                                    <Text style={styles.hint}>
+                                        {isLegacyNumericPassphrase
+                                            ? t("settings.ui.legacyPassphraseHint", "Legacy mode: enter your 8-digit code.")
+                                            : t("settings.ui.unlockLocalHint", "Your passphrase is checked on this device.")}
+                                    </Text>
+                                </View>
 
                                 {error && <Text style={styles.error}>{error}</Text>}
+
+                                <View style={styles.actions}>
+                                    <Button
+                                        title={t("common.cancel", "Cancel")}
+                                        variant="outline"
+                                        onPress={handleClose}
+                                        disabled={loading}
+                                        style={styles.actionButton}
+                                    />
+                                    <Button
+                                        title={t("settings.ui.unlock", "Unlock")}
+                                        onPress={handleUnlock}
+                                        loading={loading}
+                                        disabled={loading || !secret.trim()}
+                                        style={styles.actionButton}
+                                    />
+                                </View>
 
                                 <View style={styles.recoveryOptions}>
                                     <TouchableOpacity
@@ -166,27 +216,8 @@ export const UnlockSyncModal = ({
                                         disabled={loading}
                                     >
                                         <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
-                                        <Text style={styles.resetButtonText}>{t("aux.forgotPassReset", "Reset encryption")}</Text>
+                                        <Text style={styles.resetButtonText}>{t("aux.forgotPassReset", "Forgot passphrase? Reset encryption")}</Text>
                                     </TouchableOpacity>
-                                </View>
-
-                                <View style={styles.actions}>
-                                    <Button
-                                        title="Cancel"
-                                        variant="outline"
-                                        onPress={handleClose}
-                                        disabled={loading}
-                                        style={styles.actionButton}
-                                    />
-                                    {showPassphraseInput && (
-                                        <Button
-                                            title="Unlock"
-                                            onPress={handleUnlock}
-                                            loading={loading}
-                                            disabled={loading}
-                                            style={styles.actionButton}
-                                        />
-                                    )}
                                 </View>
                             </View>
                         </Pressable>
@@ -238,50 +269,78 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 400,
         backgroundColor: colors.surface,
-        borderRadius: 20,
+        borderRadius: 28,
         padding: spacing.l,
         borderWidth: 1,
         borderColor: colors.border,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.12,
+        shadowRadius: 22,
+        elevation: 6,
         alignItems: 'stretch',
     },
-    title: {
-        ...typography.h2,
-        textAlign: 'center',
-        marginBottom: spacing.s,
-    },
-    subtitle: {
-        ...typography.body,
-        textAlign: 'center',
-        color: colors.textSecondary,
+    headerIcon: {
+        width: 58,
+        height: 58,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+        backgroundColor: colors.primary + '10',
+        borderWidth: 1,
+        borderColor: colors.primary + '18',
         marginBottom: spacing.m,
     },
-    revealRow: {
-        marginTop: -spacing.s,
+    title: {
+        ...typography.h3,
+        textAlign: 'center',
+        marginBottom: spacing.xs,
+    },
+    subtitle: {
+        ...typography.bodySmall,
+        textAlign: 'center',
+        color: colors.textSecondary,
+        marginBottom: spacing.l,
+    },
+    secretInput: {
         marginBottom: spacing.s,
     },
+    revealRow: {
+        alignSelf: 'flex-end',
+        paddingVertical: spacing.xs,
+        marginBottom: spacing.m,
+    },
     revealText: {
-        ...typography.caption,
+        ...typography.captionBold,
         color: colors.primary,
+    },
+    hintBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        backgroundColor: colors.accentGreen + '0F',
+        borderRadius: 12,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
+        marginBottom: spacing.s,
     },
     hint: {
         ...typography.caption,
-        color: colors.textMuted,
-        marginBottom: spacing.s,
+        color: colors.textSecondary,
+        flex: 1,
     },
     error: {
-        ...typography.caption,
+        ...typography.captionBold,
         color: colors.error,
+        marginTop: spacing.xs,
         marginBottom: spacing.s,
+        textAlign: 'center',
     },
     actions: {
         flexDirection: 'row',
         gap: spacing.s,
-        marginTop: spacing.s,
+        marginTop: spacing.m,
     },
     resetButton: {
         flexDirection: 'row',
@@ -290,8 +349,10 @@ const styles = StyleSheet.create({
         gap: spacing.xs,
         width: '100%',
         paddingVertical: spacing.s,
-        backgroundColor: colors.error + '10',
-        borderRadius: 8,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.error + '18',
     },
     resetButtonText: {
         ...typography.captionBold,
@@ -301,8 +362,10 @@ const styles = StyleSheet.create({
         flexDirection: 'column',
         alignItems: 'center',
         gap: spacing.s,
-        marginTop: spacing.s,
-        marginBottom: spacing.s,
+        marginTop: spacing.m,
+        paddingTop: spacing.m,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
     },
     recoveryButton: {
         flexDirection: 'row',
@@ -311,8 +374,10 @@ const styles = StyleSheet.create({
         gap: spacing.xs,
         width: '100%',
         paddingVertical: spacing.s,
-        backgroundColor: colors.primary + '10',
-        borderRadius: 8,
+        backgroundColor: colors.primary + '08',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.primary + '14',
     },
     recoveryButtonText: {
         ...typography.captionBold,
@@ -320,21 +385,5 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         flex: 1,
-    },
-    biometricButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-        paddingVertical: spacing.m,
-        backgroundColor: colors.primary + '10',
-        borderRadius: 12,
-        marginBottom: spacing.m,
-        borderWidth: 1,
-        borderColor: colors.primary + '30',
-    },
-    biometricText: {
-        ...typography.bodyBold,
-        color: colors.primary,
     },
 });

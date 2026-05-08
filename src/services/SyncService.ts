@@ -27,14 +27,14 @@ import {
 
 import { decrypt, encrypt, encryptForSync, decryptFromSync, getCryptoMode, isMasterCiphertext, isDeviceCiphertext } from '../crypto/encryption';
 import { hasMasterKey } from '../crypto/e2ee';
-import { hasPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
+import { storage, hasPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
 
 
 const SYNC_SINCE_KEY = 'vaulto_last_sync_time';
 const SYNC_DEBOUNCE_MS = 5000;
 const RESUME_SYNC_THRESHOLD_MS = 30000; // 30 seconds
 
-type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch';
+type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch' | 'e2ee_migration';
 type SyncListener = () => void;
 
 const shouldSyncNote = (note: Note): boolean => {
@@ -318,6 +318,14 @@ class SyncService {
             console.log('[SyncService] Encryption locked. Skipping sync.');
             return;
         }
+        const pendingEncryptionMigration = await storage.getEncryptionMigrationState(this.currentUserId);
+        const migrationNeedsOwner =
+            pendingEncryptionMigration === 'local' ||
+            (pendingEncryptionMigration === 'sync' && (getCryptoMode() !== 'e2ee' || !hasMasterKey()));
+        if (migrationNeedsOwner && reason !== 'e2ee_migration') {
+            console.log('[SyncService] E2EE migration is pending. Skipping regular sync until encryption is ready.');
+            return;
+        }
 
         console.log(`[SyncService] Starting sync for user ${this.currentUserId}. Reason: ${reason}`);
         this.isSyncing = true;
@@ -541,6 +549,13 @@ class SyncService {
             
             const finalCursor = nextMs > 0 ? new Date(nextMs).toISOString() : this.lastSyncCursor;
             await this.notifySuccess(finalCursor);
+            const pendingEncryptionMigration = await storage.getEncryptionMigrationState(this.currentUserId);
+            if (pendingEncryptionMigration === 'sync') {
+                const { unsyncedCount } = await this.getSyncStatus(this.currentUserId);
+                if (unsyncedCount === 0) {
+                    await storage.clearEncryptionMigrationState(this.currentUserId);
+                }
+            }
 
         } catch (e) {
             console.error('[SyncService] Sync failed', e);

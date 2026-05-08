@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
-import { InteractionManager, Alert } from 'react-native';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { AppState, InteractionManager } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { BiometricService } from '../services/BiometricService';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { useAuth } from '../hooks/useAuth';
@@ -17,7 +18,7 @@ import {
     recoveryCodeFromMasterKey,
     masterKeyFromRecoveryCode,
     setMasterKey,
-    unwrapMasterKey,
+    unwrapMasterKeyAsync,
     wrapMasterKey,
 } from '../crypto/e2ee';
 import { decrypt, encrypt, setCryptoMode, isMasterCiphertext } from '../crypto/encryption';
@@ -36,6 +37,7 @@ import { syncService } from '../services/SyncService';
 
 export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
 export type ResetEncryptionResult = { purged: boolean; syncSucceeded: boolean };
+export type EncryptionProgressCallback = (progress: number) => void;
 
 interface EncryptionContextType {
     status: EncryptionStatus;
@@ -45,10 +47,10 @@ interface EncryptionContextType {
     hasRemoteKeyBundle: boolean;
     bundle: KeyBundle | null;
     recoveryCode: string | null;
-    enableE2EE: (secret: string, mode?: SecretMode) => Promise<void>;
+    enableE2EE: (secret: string, mode?: SecretMode, onProgress?: EncryptionProgressCallback) => Promise<void>;
     setupWithRecoveryCode: (code: string) => Promise<void>;
-    unlock: (secret: string) => Promise<void>;
-    changePin: (secret: string) => Promise<void>;
+    unlock: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
+    changePin: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
     setSyncEnabledPreference: (enabled: boolean) => Promise<void>;
     resetSync: () => Promise<ResetEncryptionResult>;
     resetEncryption: () => Promise<ResetEncryptionResult>;
@@ -56,6 +58,15 @@ interface EncryptionContextType {
 }
 
 const EncryptionContext = createContext<EncryptionContextType | undefined>(undefined);
+const clampProgress = (value: number): number => Math.max(0, Math.min(100, value));
+const createProgressReporter = (onProgress?: EncryptionProgressCallback): EncryptionProgressCallback => {
+    let lastProgress = 0;
+    return (value: number) => {
+        const nextProgress = Math.max(lastProgress, clampProgress(value));
+        lastProgress = nextProgress;
+        onProgress?.(nextProgress);
+    };
+};
 
 export const EncryptionProvider = ({ children }: { children: React.ReactNode }) => {
     const { userId, isGuest, isAuthenticated } = useAuth();
@@ -66,6 +77,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const [syncUnlocked, setSyncUnlocked] = useState(false);
     const [hasRemoteKeyBundle, setHasRemoteKeyBundle] = useState(false);
     const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+    const encryptionMigrationInFlightRef = useRef(false);
     const persistMasterKey = useCallback(async (currentUserId: string, key: Uint8Array) => {
         const hex = bytesToHex(key);
         await storage.setStoredMasterKey(currentUserId, hex);
@@ -101,6 +113,137 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         });
     }, [runDatabaseInit]);
 
+    const completeEncryptionMigration = useCallback(async (
+        currentUserId: string,
+        onProgress?: EncryptionProgressCallback,
+    ): Promise<boolean> => {
+        if (!currentUserId) return false;
+
+        const initialState = await storage.getEncryptionMigrationState(currentUserId);
+        if (!initialState) return true;
+
+        if (encryptionMigrationInFlightRef.current) {
+            return false;
+        }
+
+        if (!hasMasterKey()) {
+            console.warn('[Encryption] Pending E2EE migration found, but master key is locked.');
+            return false;
+        }
+
+        const reportProgress = createProgressReporter(onProgress);
+
+        encryptionMigrationInFlightRef.current = true;
+        setDeletionGuard(true);
+
+        try {
+            await storage.clearSyncResetBlocked(currentUserId);
+            await storage.setSyncEnabled(true, currentUserId);
+            await storage.setCryptoMode('e2ee', currentUserId);
+            setCryptoMode('e2ee');
+            setMode('e2ee');
+            setSyncEnabled(true);
+            syncService.setSyncEnabled(true);
+            setSyncUnlocked(true);
+            setStatus('ready');
+
+            let state = initialState;
+            let bundlePublished = false;
+
+            if (state === 'local') {
+                console.log('[Encryption] Resuming local E2EE migration...');
+                reportProgress(86);
+                await forceReencryptionLocal(currentUserId, ({ completed, total }) => {
+                    if (total <= 0) {
+                        reportProgress(94);
+                        return;
+                    }
+                    reportProgress(86 + (completed / total) * 8);
+                });
+                reportProgress(95);
+                console.log('[Encryption] Local E2EE migration finished.');
+            }
+
+            if (state === 'local') {
+                reportProgress(96);
+
+                const storedBundle = await storage.getKeyBundle(currentUserId);
+                if (!storedBundle || !isKeyBundle(storedBundle)) {
+                    console.warn('[Encryption] Cannot complete E2EE migration: key bundle missing.');
+                    await storage.setEncryptionMigrationState(currentUserId, 'local');
+                    return false;
+                }
+
+                try {
+                    await e2eeApi.setConfig('standard');
+                    await e2eeApi.storeKeyBundle(storedBundle);
+                    setHasRemoteKeyBundle(true);
+                    await storage.setEncryptionMigrationState(currentUserId, 'sync');
+                    state = 'sync';
+                    bundlePublished = true;
+                } catch (error) {
+                    console.warn('[Encryption] Failed to publish E2EE key bundle. Migration remains pending:', error);
+                    await storage.setEncryptionMigrationState(currentUserId, 'local');
+                    return false;
+                }
+            }
+
+            if (state === 'sync') {
+                reportProgress(96);
+
+                if (!bundlePublished) {
+                    const storedBundle = await storage.getKeyBundle(currentUserId);
+                    if (!storedBundle || !isKeyBundle(storedBundle)) {
+                        console.warn('[Encryption] Cannot complete E2EE migration: key bundle missing.');
+                        await storage.setEncryptionMigrationState(currentUserId, 'sync');
+                        return false;
+                    }
+
+                    try {
+                        await e2eeApi.setConfig('standard');
+                        await e2eeApi.storeKeyBundle(storedBundle);
+                        setHasRemoteKeyBundle(true);
+                    } catch (error) {
+                        console.warn('[Encryption] Failed to publish E2EE key bundle. Migration sync remains pending:', error);
+                        await storage.setEncryptionMigrationState(currentUserId, 'sync');
+                        return false;
+                    }
+                }
+
+                try {
+                    const hasPendingChanges = await syncService.hasUnsyncedChanges(currentUserId);
+                    if (hasPendingChanges) {
+                        await syncService.resetSyncState(currentUserId);
+                    }
+
+                    reportProgress(97);
+                    await syncService.syncNowAndWait('e2ee_migration');
+
+                    const stillPending = await syncService.hasUnsyncedChanges(currentUserId);
+                    if (stillPending) {
+                        console.warn('[Encryption] E2EE migration sync is still pending.');
+                        await storage.setEncryptionMigrationState(currentUserId, 'sync');
+                        return false;
+                    }
+
+                    await storage.clearEncryptionMigrationState(currentUserId);
+                    reportProgress(100);
+                    console.log('[Encryption] E2EE migration completed.');
+                    return true;
+                } catch (error) {
+                    console.warn('[Encryption] Failed to complete E2EE migration sync:', error);
+                    await storage.setEncryptionMigrationState(currentUserId, 'sync');
+                    return false;
+                }
+            }
+
+            return true;
+        } finally {
+            setDeletionGuard(false);
+            encryptionMigrationInFlightRef.current = false;
+        }
+    }, []);
+
     const loadState = useCallback(async () => {
         setStatus('loading');
         clearMasterKey();
@@ -111,7 +254,10 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         const storedSyncEnabled = await storage.getSyncEnabled(userId);
         const storedCryptoMode = await storage.getCryptoMode(userId);
         const isAuthReady = !!userId && isAuthenticated && !isGuest;
-        const shouldEnableSync = isAuthReady && storedSyncEnabled !== false;
+        const pendingMigrationState = isAuthReady
+            ? await storage.getEncryptionMigrationState(userId)
+            : null;
+        const shouldEnableSync = isAuthReady && (pendingMigrationState ? true : storedSyncEnabled !== false);
 
         setMode(storedCryptoMode);
         setCryptoMode(storedCryptoMode);
@@ -200,11 +346,18 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 setSyncUnlocked(true);
                 if (userId) {
                     scheduleDatabaseInit(userId);
+                    if (pendingMigrationState) {
+                        void completeEncryptionMigration(userId)
+                            .then(() => scheduleDatabaseInit(userId))
+                            .catch((error) => {
+                                console.warn('[Encryption] Failed to resume E2EE migration:', error);
+                            });
+                    }
                 }
             } else {
                 // If the user has explicitly set their preference to standard (local) sync,
                 // we should NOT enter the locked state, as they've chosen to ignore E2EE for now.
-                if (storedCryptoMode === 'local') {
+                if (storedCryptoMode === 'local' && !pendingMigrationState) {
                     console.log('[Encryption] Server has active bundle, but user preferred standard mode. Skipping lock.');
                     setStatus('ready');
                     setSyncUnlocked(true);
@@ -215,19 +368,70 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 }
             }
         } else {
+            if (pendingMigrationState && userId) {
+                await storage.clearEncryptionMigrationState(userId);
+            }
             setStatus('ready');
             setSyncUnlocked(true);
         }
 
         setSyncEnabled(shouldEnableSync);
         syncService.setSyncEnabled(shouldEnableSync);
-    }, [userId, isAuthenticated, isGuest, restoreMasterKey, scheduleDatabaseInit]);
+    }, [userId, isAuthenticated, isGuest, restoreMasterKey, scheduleDatabaseInit, completeEncryptionMigration]);
 
     useEffect(() => {
         void loadState();
     }, [loadState]);
 
-    const enableE2EE = useCallback(async (secret: string, mode: SecretMode = 'passphrase') => {
+    const resumePendingEncryptionMigration = useCallback(async () => {
+        if (!userId || !isAuthenticated || isGuest || !hasMasterKey()) return;
+
+        const pendingMigrationState = await storage.getEncryptionMigrationState(userId);
+        if (!pendingMigrationState) return;
+
+        try {
+            const completed = await completeEncryptionMigration(userId);
+            if (completed) {
+                scheduleDatabaseInit(userId);
+            }
+        } catch (error) {
+            console.warn('[Encryption] Failed to resume pending E2EE migration:', error);
+        }
+    }, [userId, isAuthenticated, isGuest, completeEncryptionMigration, scheduleDatabaseInit]);
+
+    useEffect(() => {
+        if (!userId || !isAuthenticated || isGuest) return;
+
+        void resumePendingEncryptionMigration();
+
+        const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') {
+                void resumePendingEncryptionMigration();
+            }
+        });
+
+        let unsubscribeNetInfo: (() => void) | undefined;
+        try {
+            unsubscribeNetInfo = NetInfo.addEventListener((state) => {
+                if (state.isConnected) {
+                    void resumePendingEncryptionMigration();
+                }
+            });
+        } catch (error) {
+            console.warn('[Encryption] NetInfo native module not found. Pending E2EE migration will resume on app foreground.', error);
+        }
+
+        return () => {
+            appStateSubscription.remove();
+            unsubscribeNetInfo?.();
+        };
+    }, [userId, isAuthenticated, isGuest, resumePendingEncryptionMigration]);
+
+    const enableE2EE = useCallback(async (
+        secret: string,
+        mode: SecretMode = 'passphrase',
+        onProgress?: EncryptionProgressCallback,
+    ) => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to enable sync');
         }
@@ -241,69 +445,50 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
 
         const normalizedSecret = normalizeSecretInput(secret, mode);
+        const reportProgress = createProgressReporter(onProgress);
         
         // PROTECTION: Enable deletion guard during encryption setup.
         setDeletionGuard(true);
         
         try {
+            reportProgress(5);
             // STEP 1: Create the master key FIRST so all subsequent operations use it
-            const { bundle: newBundle, masterKey } = await createKeyBundle(normalizedSecret, mode);
+            const { bundle: newBundle, masterKey } = await createKeyBundle(
+                normalizedSecret,
+                mode,
+                (kdfProgress) => reportProgress(5 + kdfProgress * 75),
+            );
             setMasterKey(masterKey);  // Set in memory immediately
+            reportProgress(80);
 
-            // STEP 2: Switch crypto mode to e2ee NOW that master key is available
+            // STEP 2: Persist the key material before switching mode. If the app
+            // is killed after this point, the pending migration can be resumed.
             await storage.clearSyncResetBlocked(userId);
+            setRecoveryCode(recoveryCodeFromMasterKey(masterKey));
+            setSyncUnlocked(true);
+            await persistMasterKey(userId, masterKey);
+            await storage.setKeyBundle(userId, newBundle);
+            await storage.setEncryptionMigrationState(userId, 'local');
+
+            // STEP 3: Switch crypto mode to E2EE now that the resume state exists.
             await storage.setSyncEnabled(true, userId);
             await storage.setCryptoMode('e2ee', userId);
             setCryptoMode('e2ee');
             setMode('e2ee');
             setSyncEnabled(true);
             syncService.setSyncEnabled(true);
-
-            // STEP 3: Persist key material
-            setRecoveryCode(recoveryCodeFromMasterKey(masterKey));
-            setSyncUnlocked(true);
-            await persistMasterKey(userId, masterKey);
-            await storage.setKeyBundle(userId, newBundle);
             setBundle(newBundle);
-            setHasRemoteKeyBundle(true);
             setStatus('ready');
+            reportProgress(84);
 
-            // STEP 4: Push key bundle to server
-            try {
-                await e2eeApi.setConfig('standard');
-            } catch (error) {
-                console.warn('[Encryption] Failed to set standard mode on server:', error);
-            }
-            try {
-                await e2eeApi.storeKeyBundle(newBundle);
-            } catch (error) {
-                console.warn('[Encryption] Failed to store key bundle on server:', error);
-            }
-
-            // STEP 5: Re-encrypt ALL local notes with the master key.
-            // forceReencryptionLocal reads raw DB rows, decrypts with device key,
-            // and re-encrypts with master key (because cryptoMode is now 'e2ee').
-            console.log('[Encryption] Starting local re-encryption with master key...');
-            await forceReencryptionLocal(userId);
-            console.log('[Encryption] Local re-encryption finished.');
-
-            // STEP 6: Push the re-encrypted snapshot as in-place updates for the same note ids.
-            // Enabling E2EE should update existing server notes, not recreate or delete them.
-            try {
-                await syncService.resetSyncState(userId);
-                console.log('[Encryption] Pushing re-encrypted notes to server...');
-                await syncService.syncNowAndWait('manual');
-                console.log('[Encryption] Server now has E2EE-encrypted notes.');
-            } catch (err) {
-                console.warn('[Encryption] Failed to push E2EE notes to server:', err);
-            }
+            await completeEncryptionMigration(userId, reportProgress);
 
             scheduleDatabaseInit(userId);
         } finally {
             // ALWAYS disable the guard after setup.
             setDeletionGuard(false);
         }
-    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey]);
+    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey, completeEncryptionMigration]);
 
     const setupWithRecoveryCode = useCallback(async (code: string) => {
         if (!isAuthenticated || isGuest || !userId) {
@@ -327,33 +512,45 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         // or we might want to create one using a dummy passphrase or similar.
         // But the roadmap says: "Вводит Код восстановления -> Новое устройство расшифровывает данные".
         
-        await storage.setSyncEnabled(true);
+        await storage.setSyncEnabled(true, userId);
         setSyncEnabled(true);
         syncService.setSyncEnabled(true);
         setStatus('ready');
         scheduleDatabaseInit(userId);
-        
-        // Ensure local data is re-encrypted with the restored key
-        await forceReencryptionLocal(userId);
-        try {
-            await syncService.resetSyncState(userId);
-            await syncService.syncNowAndWait('manual');
-        } catch (error) {
-            console.warn('[Encryption] Failed to refresh sync after recovery code setup:', error);
-        }
-    }, [isAuthenticated, isGuest, userId, persistMasterKey, scheduleDatabaseInit]);
 
-    const unlock = useCallback(async (secret: string) => {
+        const pendingMigrationState = await storage.getEncryptionMigrationState(userId);
+        if (pendingMigrationState) {
+            await completeEncryptionMigration(userId);
+        } else {
+            // Ensure local data is re-encrypted with the restored key
+            await forceReencryptionLocal(userId);
+            try {
+                await syncService.resetSyncState(userId);
+                await syncService.syncNowAndWait('manual');
+            } catch (error) {
+                console.warn('[Encryption] Failed to refresh sync after recovery code setup:', error);
+            }
+        }
+    }, [isAuthenticated, isGuest, userId, persistMasterKey, scheduleDatabaseInit, completeEncryptionMigration]);
+
+    const unlock = useCallback(async (secret: string, onProgress?: EncryptionProgressCallback) => {
         if (!secret.trim()) {
             throw new Error('Access key is required.');
         }
         if (!bundle) {
             throw new Error('Key bundle missing');
         }
+        const reportProgress = createProgressReporter(onProgress);
 
         let resolvedMasterKey: Uint8Array;
         try {
-            resolvedMasterKey = unwrapMasterKey(bundle, secret);
+            reportProgress(10);
+            resolvedMasterKey = await unwrapMasterKeyAsync(
+                bundle,
+                secret,
+                (kdfProgress) => reportProgress(8 + kdfProgress * 80),
+            );
+            reportProgress(88);
         } catch (error: any) {
             const message = String(error?.message || '').toLowerCase();
             if (message.includes('invalid access key') || message.includes('invalid tag')) {
@@ -368,6 +565,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (userId) {
             await persistMasterKey(userId, resolvedMasterKey);
         }
+        reportProgress(92);
         setStatus('ready');
 
         if (!hasMasterKey()) {
@@ -376,16 +574,26 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         if (userId) {
             scheduleDatabaseInit(userId);
-            try {
-                await syncService.resetSyncState(userId);
-                await syncService.syncNowAndWait('manual');
-            } catch (error) {
-                console.warn('[Encryption] Failed to refresh sync after unlock:', error);
+            const pendingMigrationState = await storage.getEncryptionMigrationState(userId);
+            if (pendingMigrationState) {
+                await completeEncryptionMigration(userId, (migrationProgress) => {
+                    const normalizedMigrationProgress = Math.max(86, migrationProgress);
+                    reportProgress(92 + ((normalizedMigrationProgress - 86) / 14) * 8);
+                });
+            } else {
+                try {
+                    reportProgress(96);
+                    await syncService.resetSyncState(userId);
+                    await syncService.syncNowAndWait('manual');
+                } catch (error) {
+                    console.warn('[Encryption] Failed to refresh sync after unlock:', error);
+                }
             }
         }
-    }, [bundle, userId, scheduleDatabaseInit, persistMasterKey]);
+        reportProgress(100);
+    }, [bundle, userId, scheduleDatabaseInit, persistMasterKey, completeEncryptionMigration]);
 
-    const changePin = useCallback(async (secret: string) => {
+    const changePin = useCallback(async (secret: string, onProgress?: EncryptionProgressCallback) => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to change access key');
         }
@@ -405,14 +613,23 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (!currentMasterKey) {
             throw new Error('Master key missing');
         }
+        const reportProgress = createProgressReporter(onProgress);
 
         const normalizedSecret = normalizeSecretInput(secret, 'passphrase');
         await storage.clearSyncResetBlocked(userId);
+        reportProgress(20);
 
-        const newBundle = await wrapMasterKey(currentMasterKey, normalizedSecret, 'passphrase');
+        const newBundle = await wrapMasterKey(
+            currentMasterKey,
+            normalizedSecret,
+            'passphrase',
+            (kdfProgress) => reportProgress(8 + kdfProgress * 80),
+        );
+        reportProgress(88);
         await storage.setKeyBundle(userId, newBundle);
         setBundle(newBundle);
         setHasRemoteKeyBundle(true);
+        reportProgress(94);
 
         try {
             await e2eeApi.setConfig('standard');
@@ -424,6 +641,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         } catch (error) {
             console.warn('[Encryption] Failed to update key bundle on server:', error);
         }
+        reportProgress(100);
     }, [isAuthenticated, isGuest, userId]);
 
     const setSyncEnabledPreference = useCallback(async (enabled: boolean) => {
@@ -445,6 +663,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (!userId) {
             throw new Error('User not available');
         }
+
+        await storage.clearEncryptionMigrationState(userId);
 
         // --- STEP 1: Decrypt all local notes while master key is still in memory ---
         // Switch crypto mode to 'local' FIRST so encrypt() uses device key.

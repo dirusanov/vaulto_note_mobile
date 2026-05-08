@@ -49,6 +49,7 @@ export const NotesListScreen = () => {
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showResetSyncModal, setShowResetSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
+    const [unlockProgress, setUnlockProgress] = useState<number | null>(null);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [lockBannerDismissed, setLockBannerDismissed] = useState<boolean | null>(null);
     const [hasServerNotes, setHasServerNotes] = useState(false);
@@ -100,6 +101,7 @@ export const NotesListScreen = () => {
             if (nextState === 'background' || nextState === 'inactive') {
                 setShowUnlockSyncModal(false);
                 setShowUnlockingOverlay(false);
+                setUnlockProgress(null);
                 setShowDeleteConfirm(false);
                 setIsSelectionMode(false);
                 setSelectedNoteIds(new Set());
@@ -539,38 +541,43 @@ export const NotesListScreen = () => {
             )}
             {shouldShowLockBanner && (
                 <View style={styles.lockBanner}>
-                    <View style={styles.lockBannerRow}>
+                    <TouchableOpacity
+                        onPress={dismissLockBanner}
+                        style={styles.lockBannerClose}
+                        activeOpacity={0.75}
+                    >
+                        <MaterialIcons name="close" size={18} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                    <View style={styles.lockBannerHeader}>
                         <View style={styles.lockBannerIcon}>
-                            <MaterialIcons name="lock" size={18} color={colors.warning} />
+                            <MaterialIcons name="lock-open" size={20} color={colors.primary} />
                         </View>
                         <View style={styles.lockBannerTextWrap}>
-                            <Text style={styles.lockBannerTitle} numberOfLines={1}>{t("notes.syncLocked", "Encrypted notes found")}</Text>
-                            <Text style={styles.lockBannerText} numberOfLines={1}>
-                                {t("notes.unlockToRestore", "Unlock to access your data")}
+                            <Text style={styles.lockBannerTitle}>
+                                {t("notes.syncLocked", "Encrypted notes on server")}
+                            </Text>
+                            <Text style={styles.lockBannerText}>
+                                {t("notes.unlockToRestore", "Enter your passphrase to show them on this device.")}
                             </Text>
                         </View>
-                        <View style={styles.lockActionsRow}>
-                            <TouchableOpacity
-                                style={styles.lockActionPrimary}
-                                onPress={() => setShowUnlockSyncModal(true)}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock", "Unlock")}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.lockActionSecondary}
-                                onPress={() => setShowResetSyncModal(true)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.lockActionSecondaryText}>{t("settings.ui.resetBtn", "Reset")}</Text>
-                            </TouchableOpacity>
-                        </View>
+                    </View>
+                    <View style={styles.lockActionsRow}>
                         <TouchableOpacity
-                            onPress={dismissLockBanner}
-                            style={styles.lockBannerClose}
-                            activeOpacity={0.75}
+                            style={styles.lockActionPrimary}
+                            onPress={() => setShowUnlockSyncModal(true)}
+                            activeOpacity={0.85}
                         >
-                            <MaterialIcons name="close" size={18} color={colors.textTertiary} />
+                            <MaterialIcons name="vpn-key" size={16} color={colors.surface} />
+                            <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock", "Unlock")}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.lockActionSecondary}
+                            onPress={() => setShowResetSyncModal(true)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.lockActionSecondaryText}>
+                                {t("settings.ui.resetAccess", "Reset access")}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -611,7 +618,7 @@ export const NotesListScreen = () => {
             >
                 {canShowEmptyState ? (
                     <View style={styles.emptyContainer}>
-                        <EmptyState message={isMicPrimary ? "Tap the microphone to record" : "Tap the pencil to write"} />
+                        <EmptyState message={isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")} />
                     </View>
                 ) : (
                     <View style={styles.masonryContainer}>
@@ -691,17 +698,22 @@ export const NotesListScreen = () => {
                     setUnlockErrorMessage(null);
                 }}
                 onUnlocking={() => {
+                    setUnlockProgress(8);
                     setShowUnlockingOverlay(true);
                     setUnlockErrorMessage(null);
                 }}
+                onProgress={setUnlockProgress}
                 onError={(message) => {
                     setShowUnlockingOverlay(false);
+                    setUnlockProgress(null);
                     setUnlockErrorMessage(message);
                     setShowUnlockSyncModal(true);
                 }}
                 onUnlocked={() => {
+                    setUnlockProgress(100);
                     setShowUnlockSyncModal(false);
                     setShowUnlockingOverlay(false);
+                    setUnlockProgress(null);
                     setUnlockErrorMessage(null);
                     setTimeout(() => {
                         void syncNotes();
@@ -718,8 +730,10 @@ export const NotesListScreen = () => {
             />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title="Verifying Passphrase"
-                subtitle="Checking your passphrase and decrypting sync. This may take up to a minute on some devices."
+                title={t("settings.ui.unlockingNotesTitle", "Unlocking notes")}
+                subtitle={t("settings.ui.unlockingNotesSubtitle", "Checking your passphrase on this device.")}
+                progress={unlockProgress ?? undefined}
+                progressLabel={t("common.progress", "Progress")}
             />
         </ScreenContainer>
     );
@@ -745,75 +759,88 @@ const styles = StyleSheet.create({
     },
     lockBanner: {
         marginHorizontal: spacing.m,
-        marginBottom: spacing.s,
-        padding: spacing.s,
-        paddingLeft: spacing.s + 4,
-        borderRadius: 16,
+        marginBottom: spacing.m,
+        padding: spacing.m,
+        borderRadius: 22,
         borderWidth: 1,
-        borderColor: colors.warning + '40',
+        borderColor: colors.primary + '18',
         backgroundColor: colors.surface,
-        shadowColor: colors.warning,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 6,
-        elevation: 2,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        elevation: 4,
     },
-    lockBannerRow: {
+    lockBannerHeader: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
+        alignItems: 'flex-start',
+        gap: spacing.m,
+        paddingRight: spacing.xl,
     },
     lockBannerIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
+        width: 42,
+        height: 42,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.warning + '15',
+        backgroundColor: colors.primary + '10',
+        borderWidth: 1,
+        borderColor: colors.primary + '14',
     },
     lockBannerTextWrap: {
         flex: 1,
-        justifyContent: 'center',
     },
     lockBannerTitle: {
-        ...typography.captionBold,
+        ...typography.noteTitle,
         color: colors.text,
-        fontSize: 13,
     },
     lockBannerText: {
         ...typography.caption,
         color: colors.textSecondary,
-        fontSize: 11,
-        marginTop: 2,
+        fontSize: 13,
+        lineHeight: 18,
+        marginTop: spacing.xs,
     },
     lockBannerClose: {
+        position: 'absolute',
+        top: spacing.s,
+        right: spacing.s,
         padding: spacing.xs,
+        zIndex: 2,
     },
     lockActionPrimary: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
         backgroundColor: colors.primary,
         paddingHorizontal: spacing.m,
-        paddingVertical: 8,
-        borderRadius: 10,
+        paddingVertical: spacing.s + 2,
+        borderRadius: 12,
     },
     lockActionPrimaryText: {
         ...typography.captionBold,
         color: colors.surface,
-        fontSize: 12,
+        fontSize: 13,
     },
     lockActionsRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
+        marginTop: spacing.m,
     },
     lockActionSecondary: {
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s + 2,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     lockActionSecondaryText: {
         ...typography.captionBold,
-        color: colors.textTertiary,
-        textDecorationLine: 'underline',
-        fontSize: 12,
+        color: colors.textSecondary,
+        fontSize: 13,
     },
     syncButton: {
         flexDirection: 'row',

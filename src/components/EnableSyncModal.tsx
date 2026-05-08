@@ -38,6 +38,10 @@ const waitForUiFrame = () => new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
 });
 
+const waitForCompletionFrame = () => new Promise<void>((resolve) => {
+    setTimeout(resolve, 350);
+});
+
 export const EnableSyncModal = ({
     visible,
     onClose,
@@ -55,12 +59,14 @@ export const EnableSyncModal = ({
     const [confirmSecret, setConfirmSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const reset = () => {
         setSecret('');
         setConfirmSecret('');
         setShowSecret(false);
+        setProgress(null);
         setError(null);
     };
 
@@ -91,6 +97,7 @@ export const EnableSyncModal = ({
         }
 
         setLoading(true);
+        setProgress(5);
         if (isChangeFlow) {
             onChanging?.();
         }
@@ -98,10 +105,12 @@ export const EnableSyncModal = ({
         try {
             await waitForUiFrame();
             if (isChangeFlow) {
-                await changePin(normalizedSecret);
+                await changePin(normalizedSecret, setProgress);
             } else {
-                await enableE2EE(normalizedSecret);
+                await enableE2EE(normalizedSecret, 'passphrase', setProgress);
             }
+            setProgress(100);
+            await waitForCompletionFrame();
 
             setTimeout(() => {
                 void syncService.syncNow('manual');
@@ -119,6 +128,7 @@ export const EnableSyncModal = ({
             onError?.(message);
         } finally {
             setLoading(false);
+            setProgress(null);
         }
     };
 
@@ -127,7 +137,7 @@ export const EnableSyncModal = ({
         const object = isChangeFlow ? t("settings.ui.passphraseObject", "Passphrase") : t("settings.ui.encryptedSyncObject", "Encrypted Sync");
         return {
             title: `${actionVerb} ${object}`,
-            subtitle: t("settings.ui.derivingKeysSubtitle", "Deriving encryption keys and securing your notes. This may take a minute depending on your device. Please wait..."),
+            subtitle: t("settings.ui.derivingKeysSubtitle", "Creating the key and encrypting your notes."),
         };
     }, [isChangeFlow, t]);
 
@@ -226,6 +236,8 @@ export const EnableSyncModal = ({
                 visible={loading}
                 title={loadingCopy.title}
                 subtitle={loadingCopy.subtitle}
+                progress={progress ?? undefined}
+                progressLabel={t("common.progress", "Progress")}
             />
         </>
     );

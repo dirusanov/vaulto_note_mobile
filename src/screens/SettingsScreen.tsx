@@ -219,7 +219,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                 <View style={styles.premiumUpgradeCopy}>
                     <Text style={styles.premiumUpgradeTitle}>{t('settings.pro.upgrade', 'Upgrade to Pro')}</Text>
                     <Text style={styles.premiumUpgradeSubtitle}>
-                        Extended transcription & premium features
+                        {t('settings.pro.subtitle', 'Extended transcription & premium features')}
                     </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
@@ -282,6 +282,7 @@ export const SettingsScreen = () => {
     const [showChangeSecretModal, setShowChangeSecretModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
+    const [unlockProgress, setUnlockProgress] = useState<number | null>(null);
     const [showRecoveryCodeModal, setShowRecoveryCodeModal] = useState(false);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
@@ -401,13 +402,13 @@ export const SettingsScreen = () => {
         try {
             const supported = await Linking.canOpenURL(targetUrl);
             if (!supported) {
-                Alert.alert('Unavailable', 'Unable to open subscription management right now.');
+                Alert.alert(t("settings.ui.unavailable", "Unavailable"), t("settings.ui.unableOpenSubscription", "Unable to open subscription management right now."));
                 return;
             }
             await Linking.openURL(targetUrl);
         } catch (error) {
             console.error('Failed to open subscription management URL:', error);
-            Alert.alert('Unavailable', 'Unable to open subscription management right now.');
+            Alert.alert(t("settings.ui.unavailable", "Unavailable"), t("settings.ui.unableOpenSubscription", "Unable to open subscription management right now."));
         }
     }, [subscriptionStatus?.managementURL]);
 
@@ -1002,7 +1003,7 @@ export const SettingsScreen = () => {
                                         <Text style={styles.userName}>{user.full_name}</Text>
                                     )}
                                     <Text style={user.full_name ? styles.userEmail : styles.userEmailPrimary}>
-                                        {user.email || 'Signed in'}
+                                        {user.email || t('settings.account.signIn', 'Signed in')}
                                     </Text>
                                 </View>
                             </View>
@@ -1131,7 +1132,7 @@ export const SettingsScreen = () => {
                                         }}
                                     >
                                         <Text style={styles.smallButtonText}>
-                                            {t("settings.ui.enable", "Setup Passphrase")}
+                                        {t("settings.ui.setupPassphrase", "Setup Passphrase")}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -1148,8 +1149,8 @@ export const SettingsScreen = () => {
                                         {t("settings.ui.unlockSync", "Unlock Vault")}
                                     </Text>
                                     {hasRemoteKeyBundle && (
-                                        <Text style={{ fontSize: 11, color: colors.warning, marginTop: 2 }}>
-                                            {t("settings.ui.unlockToRestore", "Unlock to receive notes")}
+                                        <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                                            {t("settings.ui.unlockToRestore", "Encrypted notes on server")}
                                         </Text>
                                     )}
                                 </View>
@@ -1228,9 +1229,9 @@ export const SettingsScreen = () => {
                                             onPress={async () => {
                                                 if (recoveryCode) {
                                                     await Clipboard.setStringAsync(recoveryCode);
-                                                    Alert.alert('Copied', 'Recovery code copied to clipboard. Keep it safe!');
+                                                    Alert.alert(t("common.copied"), t("settings.recovery.copiedMsg"));
                                                 } else {
-                                                    Alert.alert('Error', 'No recovery code found. Try unlocking again.');
+                                                    Alert.alert(t("common.errorTitle"), t("settings.recovery.noRecoveryCode", "No recovery code found. Try unlocking again."));
                                                 }
                                             }}
                                         >
@@ -2058,17 +2059,22 @@ export const SettingsScreen = () => {
                     setUnlockErrorMessage(null);
                 }}
                 onUnlocking={() => {
+                    setUnlockProgress(8);
                     setShowUnlockingOverlay(true);
                     setUnlockErrorMessage(null);
                 }}
+                onProgress={setUnlockProgress}
                 onError={(message) => {
                     setShowUnlockingOverlay(false);
+                    setUnlockProgress(null);
                     setUnlockErrorMessage(message);
                     setShowUnlockSyncModal(true);
                 }}
                 onUnlocked={() => {
+                    setUnlockProgress(100);
                     setShowUnlockSyncModal(false);
                     setShowUnlockingOverlay(false);
+                    setUnlockProgress(null);
                     setUnlockErrorMessage(null);
                     setTimeout(() => {
                         void setSyncEnabledPreference(true);
@@ -2078,8 +2084,10 @@ export const SettingsScreen = () => {
             />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title="Verifying Passphrase"
-                subtitle="Checking your passphrase and decrypting sync. This may take up to a minute on some devices."
+                title={t("settings.ui.unlockingNotesTitle", "Unlocking notes")}
+                subtitle={t("settings.ui.unlockingNotesSubtitle", "Checking your passphrase on this device.")}
+                progress={unlockProgress ?? undefined}
+                progressLabel={t("common.progress", "Progress")}
             />
 
             <DisableSyncModal
