@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.63] - 2026-05-08
+
+### Added
+- **Full Localization**: Completed the internationalization for all core screens including Authentication, Security, and Subscriptions in English and Russian.
+
 ## [1.0.62] - 2026-04-08
 
 ### Fixed

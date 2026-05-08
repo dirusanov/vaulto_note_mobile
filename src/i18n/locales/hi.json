@@ -127,7 +127,7 @@
       "passphraseObject": "पासफ़्रेज़",
       "encryptedSyncObject": "एन्क्रिप्टेड सिंक",
       "derivingKeysSubtitle": "एन्क्रिप्शन कुंजियाँ उत्पन्न कर रहा है और आपके नोट्स सुरक्षित कर रहा है। इसमें एक मिनट लग सकता है। कृपया प्रतीक्षा करें...",
-      "vaultoVersion": "Vaulto v1.0.62",
+      "vaultoVersion": "Vaulto v1.0.63",
       "exportRecoveryCode": "पुनर्प्राप्ति कोड निर्यात करें",
       "copyBtn": "कॉपी करें",
       "disableBtn": "अक्षम करें",

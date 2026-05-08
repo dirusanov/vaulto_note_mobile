@@ -127,7 +127,7 @@
       "passphraseObject": "Contraseña",
       "encryptedSyncObject": "Sincronización Cifrada",
       "derivingKeysSubtitle": "Generando claves de cifrado y protegiendo tus notas. Esto puede tomar un minuto dependiendo de tu dispositivo. Por favor espera...",
-      "vaultoVersion": "Vaulto v1.0.62",
+      "vaultoVersion": "Vaulto v1.0.63",
       "exportRecoveryCode": "Exportar clave de recuperación",
       "copyBtn": "Copiar",
       "disableBtn": "Desactivar",

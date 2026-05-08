@@ -127,7 +127,7 @@
       "passphraseObject": "Passphrase",
       "encryptedSyncObject": "Verschlüsselte Sync",
       "derivingKeysSubtitle": "Schlüssel werden generiert und Notizen gesichert. Dies kann je nach Gerät eine Minute dauern. Bitte warten...",
-      "vaultoVersion": "Vaulto v1.0.62",
+      "vaultoVersion": "Vaulto v1.0.63",
       "exportRecoveryCode": "Wiederherstellungscode exportieren",
       "copyBtn": "Kopieren",
       "disableBtn": "Deaktivieren",

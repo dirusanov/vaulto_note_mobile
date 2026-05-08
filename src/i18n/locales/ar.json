@@ -127,7 +127,7 @@
       "passphraseObject": "عبارة المرور",
       "encryptedSyncObject": "المزامنة المشفرة",
       "derivingKeysSubtitle": "جاري إنشاء مفاتيح التشفير وحماية ملاحظاتك. قد يستغرق هذا دقيقة. يرجى الانتظار...",
-      "vaultoVersion": "Vaulto v1.0.62",
+      "vaultoVersion": "Vaulto v1.0.63",
       "exportRecoveryCode": "تصدير رمز الاسترداد",
       "copyBtn": "نسخ",
       "disableBtn": "تعطيل",
