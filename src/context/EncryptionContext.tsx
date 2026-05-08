@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, Alert } from 'react-native';
+import { BiometricService } from '../services/BiometricService';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { useAuth } from '../hooks/useAuth';
-import { storage, CryptoMode } from '../utils/storage';
+import { storage, CryptoMode, setPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
 import {
     KeyBundle,
+    SecretMode,
     clearMasterKey,
     createKeyBundle,
     getMasterKey,
@@ -12,16 +14,28 @@ import {
     hasMasterKey,
     isKeyBundle,
     normalizeSecretInput,
+    recoveryCodeFromMasterKey,
+    masterKeyFromRecoveryCode,
     setMasterKey,
     unwrapMasterKey,
     wrapMasterKey,
 } from '../crypto/e2ee';
-import { decrypt, encrypt, setCryptoMode } from '../crypto/encryption';
+import { decrypt, encrypt, setCryptoMode, isMasterCiphertext } from '../crypto/encryption';
 import { e2eeApi } from '../api/e2ee';
-import { initDatabase, wipeLocalDatabase } from '../services/DatabaseService';
+import { notesApi } from '../api/notes';
+import { 
+    initDatabase, 
+    wipeLocalDatabase, 
+    setDeletionGuard, 
+    rescueAllNotes, 
+    decryptAndRescueAllNotes,
+    forceReencryptionLocal,
+    getNotesLocal
+} from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 
 export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
+export type ResetEncryptionResult = { purged: boolean; syncSucceeded: boolean };
 
 interface EncryptionContextType {
     status: EncryptionStatus;
@@ -30,12 +44,14 @@ interface EncryptionContextType {
     syncLocked: boolean;
     hasRemoteKeyBundle: boolean;
     bundle: KeyBundle | null;
-    enableE2EE: (secret: string) => Promise<void>;
+    recoveryCode: string | null;
+    enableE2EE: (secret: string, mode?: SecretMode) => Promise<void>;
+    setupWithRecoveryCode: (code: string) => Promise<void>;
     unlock: (secret: string) => Promise<void>;
     changePin: (secret: string) => Promise<void>;
     setSyncEnabledPreference: (enabled: boolean) => Promise<void>;
-    resetSync: () => Promise<'purged' | 'partial'>;
-    resetEncryption: () => Promise<'purged' | 'partial'>;
+    resetSync: () => Promise<ResetEncryptionResult>;
+    resetEncryption: () => Promise<ResetEncryptionResult>;
     lock: () => void;
 }
 
@@ -49,19 +65,20 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const [bundle, setBundle] = useState<KeyBundle | null>(null);
     const [syncUnlocked, setSyncUnlocked] = useState(false);
     const [hasRemoteKeyBundle, setHasRemoteKeyBundle] = useState(false);
-
+    const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
     const persistMasterKey = useCallback(async (currentUserId: string, key: Uint8Array) => {
         const hex = bytesToHex(key);
-        const wrapped = await encrypt(hex);
-        await storage.setStoredMasterKey(currentUserId, wrapped);
+        await storage.setStoredMasterKey(currentUserId, hex);
     }, []);
 
     const restoreMasterKey = useCallback(async (currentUserId: string): Promise<boolean> => {
         try {
             const wrapped = await storage.getStoredMasterKey(currentUserId);
             if (!wrapped) return false;
-            const hex = await decrypt(wrapped);
-            setMasterKey(hexToBytes(hex));
+            
+            const keyBytes = hexToBytes(wrapped);
+            setMasterKey(keyBytes);
+            setRecoveryCode(recoveryCodeFromMasterKey(keyBytes));
             setSyncUnlocked(true);
             return true;
         } catch (error) {
@@ -91,12 +108,13 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setBundle(null);
         setHasRemoteKeyBundle(false);
 
-        const storedSyncEnabled = await storage.getSyncEnabled();
+        const storedSyncEnabled = await storage.getSyncEnabled(userId);
+        const storedCryptoMode = await storage.getCryptoMode(userId);
         const isAuthReady = !!userId && isAuthenticated && !isGuest;
-        const shouldEnableSync = isAuthReady && storedSyncEnabled;
+        const shouldEnableSync = isAuthReady && storedSyncEnabled !== false;
 
-        setMode('local');
-        setCryptoMode('local');
+        setMode(storedCryptoMode);
+        setCryptoMode(storedCryptoMode);
         setSyncEnabled(shouldEnableSync);
         syncService.setSyncEnabled(shouldEnableSync);
 
@@ -135,11 +153,38 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             try {
                 const serverBundle = await e2eeApi.fetchKeyBundle();
                 if (serverBundle && isKeyBundle(serverBundle)) {
-                    setHasRemoteKeyBundle(true);
-                    const chosen = chooseNewestBundle(activeBundle, serverBundle);
-                    activeBundle = chosen;
-                    if (chosen === serverBundle) {
-                        await storage.setKeyBundle(userId, serverBundle);
+                    let hasEncryptedRemoteNotes = false;
+                    try {
+                        const notesResponse = await notesApi.sync({ 
+                            changes: [], 
+                            improvement_changes: [],
+                            since_updated_at: '1970-01-01T00:00:00+00:00' 
+                        });
+                        
+                        const isEnc = (n: any) => n.content_type === 'encrypted' || (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext));
+                        
+                        const hasEncNotes = (notesResponse.server_changes || []).some(n => !n.deleted && isEnc(n)) || 
+                                           (notesResponse.updated || []).some(n => !n.deleted && isEnc(n));
+                        const hasEncImps = (notesResponse.improvement_changes || []).some(n => !n.deleted && (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext))) || 
+                                           (notesResponse.improvement_updates || []).some(n => !n.deleted && (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext)));
+                        
+                        hasEncryptedRemoteNotes = hasEncNotes || hasEncImps;
+                    } catch (e) {
+                        hasEncryptedRemoteNotes = false;
+                    }
+
+                    if (hasEncryptedRemoteNotes) {
+                        setHasRemoteKeyBundle(true);
+                        const chosen = chooseNewestBundle(activeBundle, serverBundle);
+                        activeBundle = chosen;
+                        if (chosen === serverBundle) {
+                            await storage.setKeyBundle(userId, serverBundle);
+                        }
+                    } else {
+                        // If there are no encrypted notes, we don't need to force a lock,
+                        // even if a bundle exists (it might be a legacy bundle).
+                        setHasRemoteKeyBundle(false);
+                        activeBundle = activeBundle || null;
                     }
                 }
             } catch (error) {
@@ -149,24 +194,40 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         if (activeBundle) {
             setBundle(activeBundle);
-            const restored = await restoreMasterKey(userId);
-            setStatus(restored ? 'ready' : 'locked');
-            // Keep existing key bundle but respect user preference for toggling sync.
-            setSyncEnabled(shouldEnableSync);
-            syncService.setSyncEnabled(shouldEnableSync);
-            return;
+            const keyExists = await restoreMasterKey(userId);
+            if (keyExists) {
+                setStatus('ready');
+                setSyncUnlocked(true);
+                if (userId) {
+                    scheduleDatabaseInit(userId);
+                }
+            } else {
+                // If the user has explicitly set their preference to standard (local) sync,
+                // we should NOT enter the locked state, as they've chosen to ignore E2EE for now.
+                if (storedCryptoMode === 'local') {
+                    console.log('[Encryption] Server has active bundle, but user preferred standard mode. Skipping lock.');
+                    setStatus('ready');
+                    setSyncUnlocked(true);
+                } else {
+                    console.log('[Encryption] Server has active bundle. Entering locked state.');
+                    setStatus('locked');
+                    setSyncUnlocked(false);
+                }
+            }
+        } else {
+            setStatus('ready');
+            setSyncUnlocked(true);
         }
 
-        setSyncEnabled(false);
-        syncService.setSyncEnabled(false);
-        setStatus('uninitialized');
+        setSyncEnabled(shouldEnableSync);
+        syncService.setSyncEnabled(shouldEnableSync);
     }, [userId, isAuthenticated, isGuest, restoreMasterKey, scheduleDatabaseInit]);
 
     useEffect(() => {
         void loadState();
     }, [loadState]);
 
-    const enableE2EE = useCallback(async (secret: string) => {
+    const enableE2EE = useCallback(async (secret: string, mode: SecretMode = 'passphrase') => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to enable sync');
         }
@@ -174,42 +235,113 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('User not available');
         }
 
-        const validationError = getSecretValidationError(secret, 'passphrase');
+        const validationError = getSecretValidationError(secret, mode);
         if (validationError) {
             throw new Error(validationError);
         }
 
-        const normalizedSecret = normalizeSecretInput(secret, 'passphrase');
-        await storage.clearSyncResetBlocked(userId);
+        const normalizedSecret = normalizeSecretInput(secret, mode);
+        
+        // PROTECTION: Enable deletion guard during encryption setup.
+        setDeletionGuard(true);
+        
+        try {
+            // STEP 1: Create the master key FIRST so all subsequent operations use it
+            const { bundle: newBundle, masterKey } = await createKeyBundle(normalizedSecret, mode);
+            setMasterKey(masterKey);  // Set in memory immediately
+
+            // STEP 2: Switch crypto mode to e2ee NOW that master key is available
+            await storage.clearSyncResetBlocked(userId);
+            await storage.setSyncEnabled(true, userId);
+            await storage.setCryptoMode('e2ee', userId);
+            setCryptoMode('e2ee');
+            setMode('e2ee');
+            setSyncEnabled(true);
+            syncService.setSyncEnabled(true);
+
+            // STEP 3: Persist key material
+            setRecoveryCode(recoveryCodeFromMasterKey(masterKey));
+            setSyncUnlocked(true);
+            await persistMasterKey(userId, masterKey);
+            await storage.setKeyBundle(userId, newBundle);
+            setBundle(newBundle);
+            setHasRemoteKeyBundle(true);
+            setStatus('ready');
+
+            // STEP 4: Push key bundle to server
+            try {
+                await e2eeApi.setConfig('standard');
+            } catch (error) {
+                console.warn('[Encryption] Failed to set standard mode on server:', error);
+            }
+            try {
+                await e2eeApi.storeKeyBundle(newBundle);
+            } catch (error) {
+                console.warn('[Encryption] Failed to store key bundle on server:', error);
+            }
+
+            // STEP 5: Re-encrypt ALL local notes with the master key.
+            // forceReencryptionLocal reads raw DB rows, decrypts with device key,
+            // and re-encrypts with master key (because cryptoMode is now 'e2ee').
+            console.log('[Encryption] Starting local re-encryption with master key...');
+            await forceReencryptionLocal(userId);
+            console.log('[Encryption] Local re-encryption finished.');
+
+            // STEP 6: Push the re-encrypted snapshot as in-place updates for the same note ids.
+            // Enabling E2EE should update existing server notes, not recreate or delete them.
+            try {
+                await syncService.resetSyncState(userId);
+                console.log('[Encryption] Pushing re-encrypted notes to server...');
+                await syncService.syncNowAndWait('manual');
+                console.log('[Encryption] Server now has E2EE-encrypted notes.');
+            } catch (err) {
+                console.warn('[Encryption] Failed to push E2EE notes to server:', err);
+            }
+
+            scheduleDatabaseInit(userId);
+        } finally {
+            // ALWAYS disable the guard after setup.
+            setDeletionGuard(false);
+        }
+    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey]);
+
+    const setupWithRecoveryCode = useCallback(async (code: string) => {
+        if (!isAuthenticated || isGuest || !userId) {
+            throw new Error('Authentication required');
+        }
+
+        const normalized = normalizeSecretInput(code, 'recovery_code');
+        const mk = masterKeyFromRecoveryCode(normalized);
+
+        // To protect the Master Key even when using a Recovery Code for entry,
+        // we should ideally ask for a local Passphrase to wrap it for storage.
+        // For now, we'll use the roadmap's "Lock with Biometrics" approach (Phase 2).
+        // For Phase 1, we'll store it wrapped with the device key.
+        
+        setMasterKey(mk);
+        setRecoveryCode(recoveryCodeFromMasterKey(mk));
+        setSyncUnlocked(true);
+        await persistMasterKey(userId, mk);
+        
+        // When using recovery code, we don't necessarily have a server bundle yet,
+        // or we might want to create one using a dummy passphrase or similar.
+        // But the roadmap says: "Вводит Код восстановления -> Новое устройство расшифровывает данные".
+        
         await storage.setSyncEnabled(true);
-        await storage.setCryptoMode('local');
-        setCryptoMode('local');
-        setMode('local');
         setSyncEnabled(true);
         syncService.setSyncEnabled(true);
-
-        const { bundle: newBundle, masterKey } = await createKeyBundle(normalizedSecret, 'passphrase');
-        setMasterKey(masterKey);
-        setSyncUnlocked(true);
-        await persistMasterKey(userId, masterKey);
-        await storage.setKeyBundle(userId, newBundle);
-        setBundle(newBundle);
-        setHasRemoteKeyBundle(true);
         setStatus('ready');
-
-        try {
-            await e2eeApi.setConfig('standard');
-        } catch (error) {
-            console.warn('[Encryption] Failed to set standard mode on server:', error);
-        }
-        try {
-            await e2eeApi.storeKeyBundle(newBundle);
-        } catch (error) {
-            console.warn('[Encryption] Failed to store key bundle on server:', error);
-        }
-
         scheduleDatabaseInit(userId);
-    }, [isAuthenticated, isGuest, userId, scheduleDatabaseInit, persistMasterKey]);
+        
+        // Ensure local data is re-encrypted with the restored key
+        await forceReencryptionLocal(userId);
+        try {
+            await syncService.resetSyncState(userId);
+            await syncService.syncNowAndWait('manual');
+        } catch (error) {
+            console.warn('[Encryption] Failed to refresh sync after recovery code setup:', error);
+        }
+    }, [isAuthenticated, isGuest, userId, persistMasterKey, scheduleDatabaseInit]);
 
     const unlock = useCallback(async (secret: string) => {
         if (!secret.trim()) {
@@ -231,6 +363,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
 
         setMasterKey(resolvedMasterKey);
+        setRecoveryCode(recoveryCodeFromMasterKey(resolvedMasterKey));
         setSyncUnlocked(true);
         if (userId) {
             await persistMasterKey(userId, resolvedMasterKey);
@@ -243,6 +376,12 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         if (userId) {
             scheduleDatabaseInit(userId);
+            try {
+                await syncService.resetSyncState(userId);
+                await syncService.syncNowAndWait('manual');
+            } catch (error) {
+                console.warn('[Encryption] Failed to refresh sync after unlock:', error);
+            }
         }
     }, [bundle, userId, scheduleDatabaseInit, persistMasterKey]);
 
@@ -294,12 +433,12 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (!userId) {
             throw new Error('User not available');
         }
-        await storage.setSyncEnabled(enabled);
+        await storage.setSyncEnabled(enabled, userId);
         setSyncEnabled(enabled);
         syncService.setSyncEnabled(enabled);
     }, [isAuthenticated, isGuest, userId]);
 
-    const resetSync = useCallback(async (): Promise<'purged' | 'partial'> => {
+    const resetSync = useCallback(async (): Promise<{ purged: boolean; syncSucceeded: boolean }> => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to reset sync');
         }
@@ -307,16 +446,49 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('User not available');
         }
 
-        let remoteNotesPurged = false;
-        let keyDeleted = false;
-
-        await storage.setSyncResetBlocked(userId);
+        // --- STEP 1: Decrypt all local notes while master key is still in memory ---
+        // Switch crypto mode to 'local' FIRST so encrypt() uses device key.
+        setDeletionGuard(true);
         try {
-            await e2eeApi.resetSyncData();
-            remoteNotesPurged = true;
-            keyDeleted = true;
-        } catch (error) {
-            console.warn('[Encryption] Failed to reset remote sync data:', error);
+            setCryptoMode('local');
+            setMode('local');
+            await decryptAndRescueAllNotes(userId);
+            console.log('[Encryption] decryptAndRescueAllNotes completed');
+        } catch (err) {
+            console.warn('[Encryption] Decrypt and rescue failed during resetSync, proceeding anyway...', err);
+        }
+
+        // --- STEP 2: Push the newly decrypted notes to the server ---
+        let syncSucceeded = false;
+        try {
+            syncService.setSyncEnabled(true);
+            await syncService.resetSyncState(userId);
+            console.log('[Encryption] Starting forced sync to push decrypted notes...');
+            
+            // Mark as pending before we start
+            await setPendingDecryptSync(userId);
+            
+            await syncService.syncNowAndWait('manual');
+            
+            // Success! Clear the flag.
+            await clearPendingDecryptSync(userId);
+            syncSucceeded = true;
+            console.log('[Encryption] Forced sync completed — server should now have plaintext notes');
+        } catch (err) {
+            console.warn('[Encryption] Failed to push decrypted notes to server (will retry later):', err);
+            // Flag remains set for SyncService retry on network restore
+            syncSucceeded = false;
+        }
+
+        // --- STEP 3: Clean up keys and remote E2EE config ---
+        let keyDeleted = false;
+        try {
+            const deleteResult = await e2eeApi.deleteKeyBundle();
+            if (deleteResult === 'deleted') {
+                keyDeleted = true;
+            }
+        } catch (err) {
+            console.warn('[Encryption] Failed to delete key bundle during reset:', err);
         }
 
         try {
@@ -325,47 +497,34 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             console.warn('[Encryption] Failed to reset server sync mode:', error);
         }
 
+        // --- STEP 4: Clear local key material and update state ---
         await storage.removeKeyBundle(userId);
         await storage.removeStoredMasterKey(userId);
-        await storage.setSyncEnabled(false);
-        clearMasterKey();
+        clearMasterKey();           
         setBundle(null);
-        setSyncUnlocked(false);
+        setSyncUnlocked(true);
         setHasRemoteKeyBundle(false);
-        setSyncEnabled(false);
         setStatus('uninitialized');
-        setMode('local');
-        setCryptoMode('local');
-        syncService.setSyncEnabled(false);
-        await syncService.resetSyncState(userId);
-        return remoteNotesPurged && keyDeleted ? 'purged' : 'partial';
+        await storage.setCryptoMode('local', userId);
+
+        await storage.setSyncEnabled(true, userId);
+        setSyncEnabled(true);
+        syncService.setSyncEnabled(true);
+
+        setDeletionGuard(false);
+
+        return { purged: keyDeleted, syncSucceeded };
     }, [isAuthenticated, isGuest, userId]);
 
-    const resetEncryption = useCallback(async (): Promise<'purged' | 'partial'> => {
+    const resetEncryption = useCallback(async (): Promise<{ purged: boolean; syncSucceeded: boolean }> => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to reset encryption');
         }
 
         const result = await resetSync();
-
-        // Wipe local notes so the user doesn't end up with unreadable ciphertext after key reset.
-        try {
-            await initDatabase();
-        } catch (_) {
-            // best-effort
-        }
-        try {
-            await wipeLocalDatabase();
-        } catch (error) {
-            console.error('[Encryption] Failed to wipe local notes after encryption reset:', error);
-            throw new Error('Encryption reset completed, but failed to delete local notes.');
-        }
-
-        // Ensure UI refreshes even if the wipe happened after resetSync notifications.
-        await syncService.resetSyncState(userId ?? null);
-
+        // resetSync already ran resetSyncState + syncNowAndWait — no extra call needed.
         return result;
-    }, [isAuthenticated, isGuest, resetSync, userId]);
+    }, [isAuthenticated, isGuest, resetSync]);
 
     const lock = useCallback(() => {
         clearMasterKey();
@@ -384,14 +543,16 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         syncLocked: syncEnabled && !syncUnlocked,
         hasRemoteKeyBundle,
         bundle,
+        recoveryCode,
         enableE2EE,
+        setupWithRecoveryCode,
         unlock,
         changePin,
         setSyncEnabledPreference,
         resetSync,
         resetEncryption,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, enableE2EE, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

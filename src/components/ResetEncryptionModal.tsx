@@ -1,7 +1,16 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
-import { useEncryption } from '../context/EncryptionContext';
+import {
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+import { ResetEncryptionResult, useEncryption } from '../context/EncryptionContext';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -11,7 +20,7 @@ import { TextInput } from './TextInput';
 interface ResetEncryptionModalProps {
     visible: boolean;
     onClose: () => void;
-    onReset?: (result: 'purged' | 'partial') => void;
+    onReset?: (result: ResetEncryptionResult) => void;
 }
 
 const REQUIRED_CONFIRM = 'DELETE';
@@ -58,54 +67,66 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
 
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-            <TouchableWithoutFeedback onPress={handleClose}>
-                <View style={styles.backdrop}>
-                    <TouchableWithoutFeedback>
-                        <View style={styles.card}>
-                            <Text style={styles.title}>{t("aux.resetEncryptionTitle", "Reset Encryption")}</Text>
-                            <Text style={styles.subtitle}>
-                                This will permanently delete all notes stored on this device and all encrypted sync data.
-                                It cannot be undone.
-                            </Text>
+            <View style={styles.backdrop}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+                <KeyboardAvoidingView
+                    behavior="padding"
+                    style={styles.avoider}
+                    pointerEvents="box-none"
+                >
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        bounces={false}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        pointerEvents="box-none"
+                    >
+                        <Pressable style={styles.cardPressable} pointerEvents="auto">
+                            <View style={styles.card}>
+                                <Text style={styles.title}>{t("aux.resetEncryptionTitle", "Reset Encryption")}</Text>
+                                <Text style={styles.subtitle}>
+                                    {t("settings.ui.resetSubtitle", "This will permanently delete all notes stored on this device and all encrypted sync data. It cannot be undone. After resetting, you can continue using the application: new notes will be synced without encryption.")}
+                                </Text>
 
-                            <View style={styles.warningBox}>
-                                <Text style={styles.warningTitle}>{t("aux.resetEncryptionWarn2", "You will lose:")}</Text>
-                                <Text style={styles.warningText}>{t("aux.resetEncryptionWarn3", "Local notes in the database")}</Text>
-                                <Text style={styles.warningText}>{t("aux.resetEncryptionWarn4", "Encrypted synced notes on the server")}</Text>
-                                <Text style={styles.warningText}>{t("aux.resetEncryptionWarn5", "The current encryption key")}</Text>
-                            </View>
+                                <View style={styles.warningBox}>
+                                    <Text style={styles.warningTitle}>{t("aux.resetEncryptionWarn2", "You will lose:")}</Text>
+                                    <Text style={styles.warningText}>{t("aux.resetEncryptionWarn4", "Encrypted synced notes on the server")}</Text>
+                                    <Text style={styles.warningText}>{t("aux.resetEncryptionWarn5", "The current encryption key")}</Text>
+                                </View>
 
-                            <TextInput
-                                label={`Type "${REQUIRED_CONFIRM}" to confirm`}
-                                value={confirmText}
-                                onChangeText={setConfirmText}
-                                autoCapitalize="characters"
-                                autoCorrect={false}
-                                placeholder={REQUIRED_CONFIRM}
-                            />
-
-                            {error && <Text style={styles.error}>{error}</Text>}
-
-                            <View style={styles.actions}>
-                                <Button
-                                    title="Cancel"
-                                    variant="outline"
-                                    onPress={handleClose}
-                                    disabled={loading}
-                                    style={styles.actionButton}
+                                <TextInput
+                                    label={`Type "${REQUIRED_CONFIRM}" to confirm`}
+                                    value={confirmText}
+                                    onChangeText={setConfirmText}
+                                    autoCapitalize="characters"
+                                    autoCorrect={false}
+                                    placeholder={REQUIRED_CONFIRM}
                                 />
-                                <Button
-                                    title="Reset"
-                                    onPress={handleReset}
-                                    loading={loading}
-                                    disabled={loading || !canConfirm}
-                                    style={[styles.actionButton, styles.dangerButton]}
-                                />
+
+                                {error && <Text style={styles.error}>{error}</Text>}
+
+                                <View style={styles.actions}>
+                                    <Button
+                                        title="Cancel"
+                                        variant="outline"
+                                        onPress={handleClose}
+                                        disabled={loading}
+                                        style={styles.actionButton}
+                                    />
+                                    <Button
+                                        title="Reset"
+                                        onPress={handleReset}
+                                        loading={loading}
+                                        disabled={loading || !canConfirm}
+                                        style={[styles.actionButton, styles.dangerButton]}
+                                    />
+                                </View>
                             </View>
-                        </View>
-                    </TouchableWithoutFeedback>
-                </View>
-            </TouchableWithoutFeedback>
+                        </Pressable>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </View>
         </Modal>
     );
 };
@@ -114,10 +135,25 @@ const styles = StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    avoider: {
+        flex: 1,
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
         padding: spacing.l,
     },
+    cardPressable: {
+        width: '100%',
+        alignItems: 'center',
+    },
     card: {
+        width: '100%',
+        maxWidth: 400,
         backgroundColor: colors.surface,
         borderRadius: 22,
         padding: spacing.l,
@@ -128,13 +164,16 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.12,
         shadowRadius: 12,
         elevation: 3,
+        alignItems: 'stretch',
     },
     title: {
         ...typography.h2,
+        textAlign: 'center',
         marginBottom: spacing.s,
     },
     subtitle: {
         ...typography.body,
+        textAlign: 'center',
         color: colors.textSecondary,
         marginBottom: spacing.m,
     },
@@ -175,4 +214,3 @@ const styles = StyleSheet.create({
         borderColor: colors.error,
     },
 });
-
