@@ -127,7 +127,7 @@
       "passphraseObject": "パスフレーズ",
       "encryptedSyncObject": "暗号化同期",
       "derivingKeysSubtitle": "暗号化キーを生成し、ノートを保護しています。これには最大1分かかる場合があります。お待ちください...",
-      "vaultoVersion": "Vaulto v1.0.63",
+      "vaultoVersion": "Vaulto v1.1.0",
       "exportRecoveryCode": "復元コードをエクスポート",
       "copyBtn": "コピー",
       "disableBtn": "無効にする",

@@ -164,7 +164,7 @@
       "passphraseObject": "Passphrase",
       "encryptedSyncObject": "Encrypted Sync",
       "derivingKeysSubtitle": "Creating the key and encrypting your notes.",
-      "vaultoVersion": "Vaulto v1.0.63",
+      "vaultoVersion": "Vaulto v1.1.0",
       "exportRecoveryCode": "Export Recovery Code",
       "copyBtn": "Copy",
       "disableBtn": "Disable",

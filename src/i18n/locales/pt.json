@@ -127,7 +127,7 @@
       "passphraseObject": "Senha",
       "encryptedSyncObject": "Sincronização Criptografada",
       "derivingKeysSubtitle": "Gerando chaves de criptografia e protegendo suas notas. Isso pode levar um minuto. Por favor, aguarde...",
-      "vaultoVersion": "Vaulto v1.0.63",
+      "vaultoVersion": "Vaulto v1.1.0",
       "exportRecoveryCode": "Exportar código de recuperação",
       "copyBtn": "Copiar",
       "disableBtn": "Desativar",

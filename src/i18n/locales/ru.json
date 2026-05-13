@@ -168,7 +168,7 @@
       "passphraseObject": "пароля",
       "encryptedSyncObject": "шифрования",
       "derivingKeysSubtitle": "Создаем ключ и шифруем заметки.",
-      "vaultoVersion": "Vaulto v1.0.63",
+      "vaultoVersion": "Vaulto v1.1.0",
       "exportRecoveryCode": "Экспортировать ключ восстановления",
       "copyBtn": "Копировать",
       "disableBtn": "Отключить",

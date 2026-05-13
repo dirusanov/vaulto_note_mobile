@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-05-13
+
+### Changed
+- **Unified Release Update**: Synchronized versions across the entire Vaulto ecosystem (Cards, Notes, Auth, and Sync services).
+- **Google Sign-In Configuration**: Fixed misconfigured Google Client IDs and synchronized `google-services.json` across products.
+
 ## [1.0.63] - 2026-05-08
 
 ### Added

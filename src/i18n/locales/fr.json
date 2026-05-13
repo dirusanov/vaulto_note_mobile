@@ -127,7 +127,7 @@
       "passphraseObject": "Phrase secrète",
       "encryptedSyncObject": "Synchro Chiffrée",
       "derivingKeysSubtitle": "Génération des clés de chiffrement et sécurisation de vos notes. Cela peut prendre une minute. Veuillez patienter...",
-      "vaultoVersion": "Vaulto v1.0.63",
+      "vaultoVersion": "Vaulto v1.1.0",
       "exportRecoveryCode": "Exporter le code de récupération",
       "copyBtn": "Copier",
       "disableBtn": "Désactiver",

@@ -127,7 +127,7 @@
       "passphraseObject": "密码",
       "encryptedSyncObject": "加密同步",
       "derivingKeysSubtitle": "正在生成加密密钥并保护您的笔记。这可能需要一分钟，具体取决于您的设备。请稍候...",
-      "vaultoVersion": "Vaulto v1.0.63",
+      "vaultoVersion": "Vaulto v1.1.0",
       "exportRecoveryCode": "导出恢复密钥",
       "copyBtn": "复制",
       "disableBtn": "禁用",
