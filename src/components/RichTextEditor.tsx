@@ -56,6 +56,11 @@ interface RichTextEditorProps {
     autoScalingEnabled?: boolean;
     lockedChecklistScaleFactor?: number | null;
     showToolbar?: boolean;
+    /**
+     * Extra space (px) reserved below the last line so it can scroll clear of the
+     * docked formatting toolbar / keyboard and the Android navigation bar.
+     */
+    contentBottomPadding?: number;
     onAudioAction?: (payload: AudioEmbedControlPayload) => void;
 }
 
@@ -214,8 +219,13 @@ const getChecklistCss = (baseFontSize: number, checklistScaleFactor: number) => 
 `;
 };
 
-const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
+const getEditorCss = (
+    baseFontSize: number,
+    checklistScaleFactor: number,
+    bottomPadding: number = 72,
+) => {
     const baseLineHeight = Math.round(baseFontSize * 1.55);
+    const safeBottomPadding = Math.max(0, Math.round(bottomPadding));
 
     return `
   html, body {
@@ -239,7 +249,7 @@ const getEditorCss = (baseFontSize: number, checklistScaleFactor: number) => {
     min-height: 100%;
     width: 100%;
     max-width: 100%;
-    padding: 0 0 72px;
+    padding: 0 0 ${safeBottomPadding}px;
     outline: none;
     white-space: pre-wrap;
     word-break: break-word;
@@ -418,6 +428,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         autoScalingEnabled = true,
         lockedChecklistScaleFactor = null,
         showToolbar = false,
+        contentBottomPadding = 72,
         onAudioAction,
     } = props;
 
@@ -452,7 +463,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     ), [autoScalingEnabled, bridgeInitialContent, lockedChecklistScaleFactor]);
     const initialEditorCssRef = useRef<string | null>(null);
     if (initialEditorCssRef.current === null) {
-        initialEditorCssRef.current = getEditorCss(baseFontSize, contentChecklistScaleFactor);
+        initialEditorCssRef.current = getEditorCss(baseFontSize, contentChecklistScaleFactor, contentBottomPadding);
     }
     const initialTaskListCssRef = useRef<string | null>(null);
     if (initialTaskListCssRef.current === null) {
@@ -592,12 +603,12 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
 
         editorApi.setPlaceholder?.(resolvedPlaceholder);
         editorApi.injectCSS?.(
-            getEditorCss(baseFontSize, checklistScaleFactor),
+            getEditorCss(baseFontSize, checklistScaleFactor, contentBottomPadding),
             'vaulto-editor-minimal-css'
         );
         editorApi.injectJS?.(getTaskItemRefocusJs());
         editorApi.injectJS?.(getAudioEmbedRuntimeJs());
-    }, [baseFontSize, checklistScaleFactor, editorApi, editorState.isReady, resolvedPlaceholder]);
+    }, [baseFontSize, checklistScaleFactor, contentBottomPadding, editorApi, editorState.isReady, resolvedPlaceholder]);
 
 
     useEffect(() => {
@@ -885,6 +896,7 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.lockedChecklistScaleFactor === next.lockedChecklistScaleFactor &&
     prev.placeholder === next.placeholder &&
     prev.initialContent === next.initialContent &&
+    prev.contentBottomPadding === next.contentBottomPadding &&
     prev.onAudioAction === next.onAudioAction
 ));
 

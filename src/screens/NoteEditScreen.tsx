@@ -107,6 +107,9 @@ const NEW_NOTE_AUTO_SCALE_DRAFT_ID = '__new_note_auto_scale_draft__';
 const FLOATING_MIC_BASE_BOTTOM_OFFSET = spacing.xxl + 20;
 const FLOATING_MIC_KEYBOARD_GAP = 28;
 const FLOATING_MIC_TOOLBAR_HEIGHT = 44;
+// Breathing room below the last editor line so it clears the docked toolbar
+// (keyboard open) and the Android navigation bar (keyboard closed).
+const EDITOR_CONTENT_BOTTOM_GAP = 24;
 
 const normalizeTextForComparison = (value: string): string =>
     value.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim();
@@ -4838,6 +4841,20 @@ export const NoteEditScreen = () => {
     const floatingMicBottomOffset = editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible)
         ? (keyboardVisibleState ? keyboardHeight : 0) + FLOATING_MIC_TOOLBAR_HEIGHT + FLOATING_MIC_KEYBOARD_GAP
         : FLOATING_MIC_BASE_BOTTOM_OFFSET;
+    // Reserve scroll room below the content so the last line can always be
+    // scrolled into view. The editor WebView/TextInput stays full-height while the
+    // keyboard overlays it (edge-to-edge + adjustResize is a no-op on Android 15),
+    // so when the keyboard is open we must add its height plus the docked toolbar
+    // height; when it's closed we only need to clear the Android nav bar.
+    // iOS visual mode lets Tentap lift the content above the keyboard itself, so
+    // there we only reserve the toolbar clearance.
+    const editorContentBottomPadding = Math.round(
+        keyboardVisibleState
+            ? (Platform.OS === 'android' ? keyboardHeight : 0)
+                + FLOATING_MIC_TOOLBAR_HEIGHT
+                + EDITOR_CONTENT_BOTTOM_GAP
+            : insets.bottom + EDITOR_CONTENT_BOTTOM_GAP
+    );
     const selectedRecordingText = selectedRecordingForText?.transcription?.trim() || '';
     const agentProcessingActive =
         agentModeIndicatorEnabled && (isAIProcessing || queueLength > 0);
@@ -5611,7 +5628,8 @@ export const NoteEditScreen = () => {
                                     fontSize: fontSize,
                                     lineHeight: fontSize * 1.5,
                                     color: colors.text,
-                                    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace'
+                                    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+                                    paddingBottom: editorContentBottomPadding,
                                 }
                             ]}
                             multiline
@@ -5638,6 +5656,7 @@ export const NoteEditScreen = () => {
                             autoScalingEnabled={shouldUseCreationAutoScalePreview}
                             lockedChecklistScaleFactor={activeVariantChecklistScaleFactor}
                             showToolbar={false}
+                            contentBottomPadding={editorContentBottomPadding}
                             onChange={(text: string) => {
                                 handleContentChange(text);
                             }}
