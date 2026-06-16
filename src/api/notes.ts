@@ -81,6 +81,7 @@ export interface SyncChangeRequest {
     is_pinned?: boolean;
     last_variant_id?: string | null;
     pending_server_delete?: boolean;
+    enc_epoch?: number;
 }
 
 export interface SyncImprovementChangeRequest {
@@ -95,12 +96,16 @@ export interface SyncImprovementChangeRequest {
     base_version: number;
     client_updated_at: string;
     is_active?: boolean;
+    enc_epoch?: number;
 }
 
 export interface SyncNotesRequest {
     changes: SyncChangeRequest[];
     improvement_changes?: SyncImprovementChangeRequest[];
+    // Legacy timestamp cursor (kept for back-compat). Prefer since_seq.
     since_updated_at?: string;
+    // Monotonic per-user server cursor. Send 0 for a full pull.
+    since_seq?: number;
 }
 
 export interface ServerNote {
@@ -115,6 +120,8 @@ export interface ServerNote {
     last_variant_id?: string | null;
     is_active?: boolean;
     is_pinned?: boolean;
+    server_seq?: number;
+    enc_epoch?: number;
 }
 
 export interface ServerImprovement {
@@ -129,7 +136,11 @@ export interface ServerImprovement {
     version: number;
     updated_at: string;
     is_active?: boolean;
+    server_seq?: number;
+    enc_epoch?: number;
 }
+
+export type EncryptionMode = 'off' | 'e2ee';
 
 export interface SyncNotesResponse {
     updated: ServerNote[];
@@ -138,6 +149,9 @@ export interface SyncNotesResponse {
     improvement_updates: ServerImprovement[];
     improvement_conflicts: ImprovementSyncConflict[];
     improvement_changes: ServerImprovement[];
+    next_cursor?: number | null;
+    enc_mode?: EncryptionMode | null;
+    key_epoch?: number | null;
 }
 
 export type NoteSyncConflict = {

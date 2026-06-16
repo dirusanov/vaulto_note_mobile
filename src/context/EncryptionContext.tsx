@@ -177,6 +177,17 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 try {
                     await e2eeApi.setConfig('standard');
                     await e2eeApi.storeKeyBundle(storedBundle);
+                    // Flip the account to e2ee (bumps key epoch) BEFORE pushing
+                    // ciphertext, otherwise the server's write validation rejects
+                    // encrypted writes on a still-'off' account. Idempotent so
+                    // migration resumes don't churn the epoch. (null = older server
+                    // without the state endpoint → just call setState.)
+                    const current1 = await e2eeApi.fetchState();
+                    const e2eeState = current1 && current1.enc_mode === 'e2ee'
+                        ? current1
+                        : await e2eeApi.setState('e2ee');
+                    syncService.setKeyEpoch(e2eeState.key_epoch);
+                    await storage.setKeyEpoch(currentUserId, e2eeState.key_epoch);
                     setHasRemoteKeyBundle(true);
                     await storage.setEncryptionMigrationState(currentUserId, 'sync');
                     state = 'sync';
@@ -202,6 +213,12 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                     try {
                         await e2eeApi.setConfig('standard');
                         await e2eeApi.storeKeyBundle(storedBundle);
+                        const current2 = await e2eeApi.fetchState();
+                        const e2eeState = current2 && current2.enc_mode === 'e2ee'
+                            ? current2
+                            : await e2eeApi.setState('e2ee');
+                        syncService.setKeyEpoch(e2eeState.key_epoch);
+                        await storage.setKeyEpoch(currentUserId, e2eeState.key_epoch);
                         setHasRemoteKeyBundle(true);
                     } catch (error) {
                         console.warn('[Encryption] Failed to publish E2EE key bundle. Migration sync remains pending:', error);
@@ -272,6 +289,73 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             return;
         }
 
+        // Server-authoritative encryption state is the source of truth. If another
+        // device disabled E2EE for this account, the server reports enc_mode='off'
+        // with a higher key_epoch — this device must drop its key and switch to
+        // plaintext rather than staying locked or re-encrypting on the next edit.
+        // We also remember the mode so the lock decision below trusts the server,
+        // not the device-local default cryptoMode (which is 'local' on a fresh
+        // device and would otherwise leak plaintext into an e2ee account).
+        let serverEncMode: 'off' | 'e2ee' | null = null;
+        if (!pendingMigrationState) {
+            try {
+                const serverState = await e2eeApi.fetchState();
+                // null => server doesn't support the state endpoint (older build);
+                // leave serverEncMode unknown and fall back to legacy detection.
+                if (serverState) {
+                    serverEncMode = serverState.enc_mode;
+                    const localEpoch = await storage.getKeyEpoch(userId);
+                    syncService.setKeyEpoch(serverState.key_epoch);
+                    await storage.setKeyEpoch(userId, serverState.key_epoch);
+
+                    if (serverState.enc_mode === 'off' && serverState.key_epoch >= localEpoch) {
+                    const hadE2EE = storedCryptoMode === 'e2ee' || !!(await storage.getKeyBundle(userId));
+                    if (hadE2EE) {
+                        console.log('[Encryption] Account encryption disabled remotely — switching this device to plaintext.');
+                        // Switch to local mode FIRST so encrypt() targets the device key.
+                        setCryptoMode('local');
+                        setMode('local');
+                        await storage.setCryptoMode('local', userId);
+                        // Rescue any local-only ciphertext to the device key WHILE the
+                        // master key can still be restored, so notes that never reached
+                        // the server are not stranded as undecryptable after we drop it.
+                        try {
+                            const keyRestored = await restoreMasterKey(userId);
+                            if (keyRestored && hasMasterKey()) {
+                                await decryptAndRescueAllNotes(userId);
+                            }
+                        } catch (e) {
+                            console.warn('[Encryption] Local rescue during remote-disable failed', e);
+                        }
+                        clearMasterKey();
+                        await storage.removeKeyBundle(userId);
+                        await storage.removeStoredMasterKey(userId);
+                    }
+                    setCryptoMode('local');
+                    setMode('local');
+                    setBundle(null);
+                    setHasRemoteKeyBundle(false);
+                    setSyncUnlocked(true);
+                    setStatus('ready');
+                    setSyncEnabled(shouldEnableSync);
+                    syncService.setSyncEnabled(shouldEnableSync);
+                    scheduleDatabaseInit(userId);
+                    if (hadE2EE) {
+                        // Push the rescued plaintext and pull the now-plaintext server
+                        // notes (overwriting any stale local ciphertext).
+                        void syncService.pullAllFromServer(userId)
+                            .catch((e) => console.warn('[Encryption] Re-pull after remote disable failed', e));
+                    }
+                    return;
+                    }
+                }
+            } catch (error) {
+                // Older server without /e2ee/state, or offline — fall through to
+                // the legacy bundle-based detection below.
+                console.warn('[Encryption] Could not fetch server encryption state:', error);
+            }
+        }
+
         const chooseNewestBundle = (local: KeyBundle | null, remote: KeyBundle | null): KeyBundle | null => {
             if (!local) return remote;
             if (!remote) return local;
@@ -319,7 +403,15 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                         hasEncryptedRemoteNotes = false;
                     }
 
-                    if (hasEncryptedRemoteNotes) {
+                    // Adopt the server bundle when the account is authoritatively
+                    // e2ee (serverEncMode) OR — for older servers without the state
+                    // endpoint — when we can still detect encrypted notes. This also
+                    // covers an e2ee account that currently has no encrypted notes
+                    // (e.g. just enabled / empty), where the heuristic alone would
+                    // miss it and a fresh device would wrongly skip the lock.
+                    const accountEncrypted = serverEncMode === 'e2ee'
+                        || (serverEncMode === null && hasEncryptedRemoteNotes);
+                    if (accountEncrypted) {
                         setHasRemoteKeyBundle(true);
                         const chosen = chooseNewestBundle(activeBundle, serverBundle);
                         activeBundle = chosen;
@@ -327,8 +419,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                             await storage.setKeyBundle(userId, serverBundle);
                         }
                     } else {
-                        // If there are no encrypted notes, we don't need to force a lock,
-                        // even if a bundle exists (it might be a legacy bundle).
+                        // Encryption is off (or a legacy bundle with no encrypted
+                        // data) — no need to force a lock.
                         setHasRemoteKeyBundle(false);
                         activeBundle = activeBundle || null;
                     }
@@ -342,6 +434,14 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             setBundle(activeBundle);
             const keyExists = await restoreMasterKey(userId);
             if (keyExists) {
+                // Defensive: a key-holding device on an e2ee account must be in
+                // e2ee mode, otherwise outgoing sync would emit plaintext (which
+                // the server now rejects). Corrects any stale local 'local' mode.
+                if (serverEncMode === 'e2ee' && storedCryptoMode !== 'e2ee') {
+                    await storage.setCryptoMode('e2ee', userId);
+                    setCryptoMode('e2ee');
+                    setMode('e2ee');
+                }
                 setStatus('ready');
                 setSyncUnlocked(true);
                 if (userId) {
@@ -355,16 +455,36 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                     }
                 }
             } else {
-                // If the user has explicitly set their preference to standard (local) sync,
-                // we should NOT enter the locked state, as they've chosen to ignore E2EE for now.
-                if (storedCryptoMode === 'local' && !pendingMigrationState) {
-                    console.log('[Encryption] Server has active bundle, but user preferred standard mode. Skipping lock.');
-                    setStatus('ready');
-                    setSyncUnlocked(true);
-                } else {
-                    console.log('[Encryption] Server has active bundle. Entering locked state.');
+                // No master key on this device. The lock decision is driven by the
+                // SERVER's encryption mode, not the device-local cryptoMode default.
+                //
+                // If the account is genuinely e2ee we must lock — even when the
+                // local default is 'local' (e.g. a freshly signed-in device).
+                // Locking does NOT block the app: the user can keep creating notes
+                // (stored locally, device-key encrypted) and sync stays paused until
+                // the passphrase is entered, at which point unlock() re-encrypts and
+                // uploads them. This is what prevents plaintext from leaking into an
+                // encrypted account.
+                //
+                // We only skip the lock when the server says encryption is 'off'
+                // (handled by the early off-branch above) or when we couldn't reach
+                // the server AND the user explicitly chose local mode before.
+                const accountIsE2EE = serverEncMode === 'e2ee'
+                    || (serverEncMode === null && storedCryptoMode === 'e2ee')
+                    || (serverEncMode === null && !!pendingMigrationState);
+
+                if (accountIsE2EE) {
+                    console.log('[Encryption] Account is e2ee and key is missing. Entering locked state.');
+                    // Ensure encryptForSync() refuses to emit plaintext while locked.
+                    await storage.setCryptoMode('e2ee', userId);
+                    setCryptoMode('e2ee');
+                    setMode('e2ee');
                     setStatus('locked');
                     setSyncUnlocked(false);
+                } else {
+                    console.log('[Encryption] Server has a (legacy) bundle but encryption is not active. Skipping lock.');
+                    setStatus('ready');
+                    setSyncUnlocked(true);
                 }
             }
         } else {
@@ -381,6 +501,17 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
     useEffect(() => {
         void loadState();
+    }, [loadState]);
+
+    // When the server rejects a write because the account encryption mode changed
+    // underneath us (e.g. another device disabled E2EE), reconcile by reloading
+    // the authoritative state.
+    useEffect(() => {
+        syncService.registerEncryptionConflictHandler((info) => {
+            console.log('[Encryption] Server reported encryption-mode mismatch; reconciling.', info);
+            void loadState();
+        });
+        return () => syncService.registerEncryptionConflictHandler(null);
     }, [loadState]);
 
     const resumePendingEncryptionMigration = useCallback(async () => {
@@ -507,11 +638,18 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setRecoveryCode(recoveryCodeFromMasterKey(mk));
         setSyncUnlocked(true);
         await persistMasterKey(userId, mk);
-        
+
+        // Entering a recovery code means the account is e2ee — switch this device
+        // to e2ee mode so re-encryption uses the master key and sync never emits
+        // plaintext (which the server would now reject).
+        await storage.setCryptoMode('e2ee', userId);
+        setCryptoMode('e2ee');
+        setMode('e2ee');
+
         // When using recovery code, we don't necessarily have a server bundle yet,
         // or we might want to create one using a dummy passphrase or similar.
         // But the roadmap says: "Вводит Код восстановления -> Новое устройство расшифровывает данные".
-        
+
         await storage.setSyncEnabled(true, userId);
         setSyncEnabled(true);
         syncService.setSyncEnabled(true);
@@ -564,7 +702,12 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setSyncUnlocked(true);
         if (userId) {
             await persistMasterKey(userId, resolvedMasterKey);
+            // Unlocking always means the account is e2ee — make sure outgoing sync
+            // encrypts with the master key (never emits plaintext to the server).
+            await storage.setCryptoMode('e2ee', userId);
         }
+        setCryptoMode('e2ee');
+        setMode('e2ee');
         reportProgress(92);
         setStatus('ready');
 
@@ -664,74 +807,101 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('User not available');
         }
 
+        // Disabling encryption must operate over the WHOLE account, not just the
+        // notes that happen to live on this device — otherwise notes that exist
+        // only on the server stay ciphertext after the key bundle is deleted and
+        // become permanently unreadable. Required ordering:
+        //   1. (key present) pull every server note locally and decrypt it
+        //   2. flip the account to enc_mode='off' so the server accepts plaintext
+        //   3. re-encrypt locally with the device key and push plaintext for all
+        //   4. only after everything is plaintext on the server, delete the key
+        if (!hasMasterKey()) {
+            throw new Error('Unlock encryption on this device before disabling it.');
+        }
+
         await storage.clearEncryptionMigrationState(userId);
-
-        // --- STEP 1: Decrypt all local notes while master key is still in memory ---
-        // Switch crypto mode to 'local' FIRST so encrypt() uses device key.
         setDeletionGuard(true);
-        try {
-            setCryptoMode('local');
-            setMode('local');
-            await decryptAndRescueAllNotes(userId);
-            console.log('[Encryption] decryptAndRescueAllNotes completed');
-        } catch (err) {
-            console.warn('[Encryption] Decrypt and rescue failed during resetSync, proceeding anyway...', err);
-        }
 
-        // --- STEP 2: Push the newly decrypted notes to the server ---
         let syncSucceeded = false;
-        try {
-            syncService.setSyncEnabled(true);
-            await syncService.resetSyncState(userId);
-            console.log('[Encryption] Starting forced sync to push decrypted notes...');
-            
-            // Mark as pending before we start
-            await setPendingDecryptSync(userId);
-            
-            await syncService.syncNowAndWait('manual');
-            
-            // Success! Clear the flag.
-            await clearPendingDecryptSync(userId);
-            syncSucceeded = true;
-            console.log('[Encryption] Forced sync completed — server should now have plaintext notes');
-        } catch (err) {
-            console.warn('[Encryption] Failed to push decrypted notes to server (will retry later):', err);
-            // Flag remains set for SyncService retry on network restore
-            syncSucceeded = false;
-        }
-
-        // --- STEP 3: Clean up keys and remote E2EE config ---
         let keyDeleted = false;
         try {
-            const deleteResult = await e2eeApi.deleteKeyBundle();
-            if (deleteResult === 'deleted') {
-                keyDeleted = true;
+            // --- STEP 1: capture server-only notes while still E2EE + unlocked.
+            syncService.setSyncEnabled(true);
+            try {
+                await syncService.pullAllFromServer(userId);
+                console.log('[Encryption] Full pre-reset pull completed');
+            } catch (err) {
+                // If we cannot guarantee we have the whole account locally, abort
+                // rather than risk orphaning encrypted notes on the server.
+                console.warn('[Encryption] Pre-reset pull failed — aborting reset to avoid data loss', err);
+                throw new Error('Could not reach the server to disable encryption. Try again when online.');
             }
-        } catch (err) {
-            console.warn('[Encryption] Failed to delete key bundle during reset:', err);
+
+            // --- STEP 2: flip account encryption OFF (bumps key epoch). After
+            // this the server rejects ciphertext writes and accepts plaintext.
+            try {
+                const state = await e2eeApi.setState('off');
+                syncService.setKeyEpoch(state.key_epoch);
+                await storage.setKeyEpoch(userId, state.key_epoch);
+            } catch (err) {
+                console.warn('[Encryption] Failed to set account encryption off on server', err);
+                throw err;
+            }
+
+            // --- STEP 3: decrypt locally + push plaintext for the whole set.
+            setCryptoMode('local');
+            setMode('local');
+            await storage.setCryptoMode('local', userId);
+            await decryptAndRescueAllNotes(userId);
+            console.log('[Encryption] decryptAndRescueAllNotes completed');
+
+            await setPendingDecryptSync(userId);
+            await syncService.resetSyncState(userId);
+            await syncService.syncNowAndWait('manual');
+
+            const stillPending = await syncService.hasUnsyncedChanges(userId);
+            if (!stillPending) {
+                await clearPendingDecryptSync(userId);
+                syncSucceeded = true;
+                console.log('[Encryption] Plaintext push completed — server fully decrypted');
+            } else {
+                console.warn('[Encryption] Some plaintext notes still pending; key retained for retry');
+            }
+
+            // --- STEP 4: only delete the key bundle once everything is plaintext.
+            if (syncSucceeded) {
+                try {
+                    const deleteResult = await e2eeApi.deleteKeyBundle();
+                    if (deleteResult === 'deleted') keyDeleted = true;
+                } catch (err) {
+                    console.warn('[Encryption] Failed to delete key bundle during reset:', err);
+                }
+                try {
+                    await e2eeApi.setConfig('standard');
+                } catch (error) {
+                    console.warn('[Encryption] Failed to reset server sync mode:', error);
+                }
+
+                await storage.removeKeyBundle(userId);
+                await storage.removeStoredMasterKey(userId);
+                clearMasterKey();
+                setBundle(null);
+                setHasRemoteKeyBundle(false);
+                setStatus('uninitialized');
+            } else {
+                // Encryption is logically off but the local key is kept so a later
+                // retry (network restore / app resume) can finish pushing plaintext
+                // before the irreversible key deletion.
+                setStatus('ready');
+            }
+        } finally {
+            setSyncUnlocked(true);
+            await storage.setCryptoMode('local', userId);
+            await storage.setSyncEnabled(true, userId);
+            setSyncEnabled(true);
+            syncService.setSyncEnabled(true);
+            setDeletionGuard(false);
         }
-
-        try {
-            await e2eeApi.setConfig('standard');
-        } catch (error) {
-            console.warn('[Encryption] Failed to reset server sync mode:', error);
-        }
-
-        // --- STEP 4: Clear local key material and update state ---
-        await storage.removeKeyBundle(userId);
-        await storage.removeStoredMasterKey(userId);
-        clearMasterKey();           
-        setBundle(null);
-        setSyncUnlocked(true);
-        setHasRemoteKeyBundle(false);
-        setStatus('uninitialized');
-        await storage.setCryptoMode('local', userId);
-
-        await storage.setSyncEnabled(true, userId);
-        setSyncEnabled(true);
-        syncService.setSyncEnabled(true);
-
-        setDeletionGuard(false);
 
         return { purged: keyDeleted, syncSucceeded };
     }, [isAuthenticated, isGuest, userId]);

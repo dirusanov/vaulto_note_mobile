@@ -28,6 +28,8 @@ const MASTER_KEY_PREFIX = 'vaulto_master_key_v1';
 const SYNC_RESET_BLOCK_PREFIX = 'vaulto_sync_reset_block_v1';
 const SYNC_LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
 const ENCRYPTION_MIGRATION_PREFIX = 'vaulto_encryption_migration_v1';
+// Last known server-authoritative encryption key epoch (per user).
+const KEY_EPOCH_PREFIX = 'vaulto_key_epoch_v1';
 
 // OpenAI-compatible settings (legacy self-hosted keys are read for migration).
 const OPENAI_BASE_URL_KEY = 'vaulto_openai_base_url_v1';
@@ -330,6 +332,24 @@ export const storage = {
             await AsyncStorage.removeItem(`${ENCRYPTION_MIGRATION_PREFIX}_${userId}`);
         } catch (e) {
             console.error('Failed to clear encryption migration state', e);
+        }
+    },
+    getKeyEpoch: async (userId?: string | null): Promise<number> => {
+        if (!userId) return 0;
+        try {
+            const value = await AsyncStorage.getItem(`${KEY_EPOCH_PREFIX}_${userId}`);
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        } catch (e) {
+            return 0;
+        }
+    },
+    setKeyEpoch: async (userId: string | null | undefined, epoch: number): Promise<void> => {
+        if (!userId) return;
+        try {
+            await AsyncStorage.setItem(`${KEY_EPOCH_PREFIX}_${userId}`, String(epoch));
+        } catch (e) {
+            console.error('Failed to set key epoch', e);
         }
     },
     getBiometricsEnabled: async (userId: string): Promise<boolean> => {

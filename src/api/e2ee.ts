@@ -8,6 +8,13 @@ export interface E2EEConfigResponse {
     custody_mode: 'standard';
 }
 
+export type AccountEncMode = 'off' | 'e2ee';
+
+export interface E2EEStateResponse {
+    enc_mode: AccountEncMode;
+    key_epoch: number;
+}
+
 export const e2eeApi = {
     fetchConfig: async (): Promise<E2EEConfigResponse> => {
         const response = await client.get('/e2ee/config', {
@@ -23,6 +30,44 @@ export const e2eeApi = {
             return response.data;
         }
         return { custody_mode: 'standard' };
+    },
+    // Returns null when the server does not support the endpoint (older build)
+    // so callers fall back to legacy detection instead of mistaking a missing
+    // endpoint for "encryption disabled" (which would drop a valid key bundle).
+    fetchState: async (): Promise<E2EEStateResponse | null> => {
+        const response = await client.get('/e2ee/state', {
+            validateStatus: (status) =>
+                (status >= 200 && status < 300) || status === 401 || status === 404 || status === 405,
+        });
+        if (response.status === 401 || response.status === 404 || response.status === 405) {
+            return null;
+        }
+        if (response.data?.enc_mode !== 'off' && response.data?.enc_mode !== 'e2ee') {
+            // Unexpected payload — treat as unknown rather than guessing 'off'.
+            return null;
+        }
+        return {
+            enc_mode: response.data.enc_mode,
+            key_epoch: Number(response.data?.key_epoch ?? 0),
+        };
+    },
+    setState: async (enc_mode: AccountEncMode, key_epoch?: number): Promise<E2EEStateResponse> => {
+        const response = await client.put('/e2ee/state', {
+            enc_mode,
+            ...(key_epoch !== undefined ? { key_epoch } : {}),
+        }, {
+            validateStatus: (status) =>
+                (status >= 200 && status < 300) || status === 404 || status === 405 || status === 409,
+        });
+        if (response.status === 404 || response.status === 405) {
+            // Older server — no-op, the account is implicitly plaintext.
+            return { enc_mode, key_epoch: key_epoch ?? 0 };
+        }
+        if (response.status === 409) {
+            throw new Error('Encryption state epoch conflict');
+        }
+        const mode = response.data?.enc_mode === 'e2ee' ? 'e2ee' : 'off';
+        return { enc_mode: mode, key_epoch: Number(response.data?.key_epoch ?? 0) };
     },
     setConfig: async (syncMode: 'standard' = 'standard'): Promise<E2EEConfigResponse> => {
         const response = await client.put('/e2ee/config', {

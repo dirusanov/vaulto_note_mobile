@@ -11,6 +11,7 @@ import {
     SyncImprovementChangeRequest,
     SyncNotesRequest,
     SyncNotesResponse,
+    NoteSyncConflict,
 } from '../api/notes';
 import {
     getNotesLocal,
@@ -30,12 +31,15 @@ import { hasMasterKey } from '../crypto/e2ee';
 import { storage, hasPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
 
 
-const SYNC_SINCE_KEY = 'vaulto_last_sync_time';
+// Numeric monotonic cursor (server_seq). New key so stale ISO timestamps from
+// the previous timestamp-based cursor are never parsed as a number.
+const SYNC_SEQ_KEY = 'vaulto_last_sync_seq';
 const SYNC_DEBOUNCE_MS = 5000;
 const RESUME_SYNC_THRESHOLD_MS = 30000; // 30 seconds
 
 type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch' | 'e2ee_migration';
 type SyncListener = () => void;
+type EncryptionConflictHandler = (info: { enc_mode: 'off' | 'e2ee' | null; key_epoch: number | null }) => void;
 
 const shouldSyncNote = (note: Note): boolean => {
     const storageScope = note.storage_scope ?? 'sync';
@@ -62,13 +66,16 @@ const isExpectedDecryptFailure = (error: unknown): boolean => {
 class SyncService {
     private isSyncing = false;
     private lastSyncCompletedAtMs: number = 0;
-    // Server cursor used for since_updated_at. Stored as an ISO string.
-    private lastSyncCursor: string | null = null;
+    // Monotonic per-user server cursor (server_seq). null => full pull (seq 0).
+    private lastSyncSeq: number | null = null;
+    // Server-authoritative encryption epoch stamped onto outgoing writes.
+    private currentKeyEpoch = 0;
     private syncTimeout: NodeJS.Timeout | null = null;
     private listeners: SyncListener[] = [];
     private isAuthenticated = false;
     private currentUserId: string | null = null;
     private syncEnabled = false;
+    private encryptionConflictHandler: EncryptionConflictHandler | null = null;
 
     constructor() {
         // App State Listener
@@ -108,7 +115,7 @@ class SyncService {
         }
 
         if (userId !== lastKnown) {
-            this.lastSyncCursor = null;
+            this.lastSyncSeq = null;
             if (userId) {
                 this.currentUserId = userId;
                 void this.bootstrapSync();
@@ -125,14 +132,38 @@ class SyncService {
         };
     }
 
+    /** Lets EncryptionContext reconcile when the server reports a mode mismatch. */
+    public registerEncryptionConflictHandler(handler: EncryptionConflictHandler | null) {
+        this.encryptionConflictHandler = handler;
+    }
+
+    public setKeyEpoch(epoch: number) {
+        this.currentKeyEpoch = Number.isFinite(epoch) ? epoch : 0;
+    }
+
     public async resetSyncState(userId?: string | null) {
-        this.lastSyncCursor = null;
+        this.lastSyncSeq = null;
         const effectiveUserId = userId ?? this.currentUserId;
         if (effectiveUserId) {
-            await AsyncStorage.removeItem(`${SYNC_SINCE_KEY}_${effectiveUserId}`);
+            await AsyncStorage.removeItem(`${SYNC_SEQ_KEY}_${effectiveUserId}`);
             await markAllDirty(effectiveUserId);
         }
         this.notifyListeners();
+    }
+
+    /**
+     * Force a full re-pull from the server (cursor reset to 0) and wait for it.
+     * Unlike resetSyncState() this does NOT mark everything dirty, so it only
+     * pulls server state into the local DB. Used by the encryption reset flow to
+     * capture notes that exist on the server but not yet on this device before
+     * decrypting and re-uploading them as plaintext.
+     */
+    public async pullAllFromServer(userId?: string | null): Promise<void> {
+        const effectiveUserId = userId ?? this.currentUserId;
+        if (!effectiveUserId) return;
+        this.lastSyncSeq = null;
+        await AsyncStorage.removeItem(`${SYNC_SEQ_KEY}_${effectiveUserId}`);
+        await this.syncNowAndWait('manual');
     }
 
     /** Waits for any in-progress sync to complete, then runs a fresh sync. */
@@ -230,16 +261,18 @@ class SyncService {
             await this.resetSyncState(userId);
         }
 
-        const stored = await AsyncStorage.getItem(`${SYNC_SINCE_KEY}_${userId}`);
-        this.lastSyncCursor = stored;
+        const stored = await AsyncStorage.getItem(`${SYNC_SEQ_KEY}_${userId}`);
+        const parsed = stored != null ? Number(stored) : NaN;
+        this.lastSyncSeq = Number.isFinite(parsed) ? parsed : null;
+        this.currentKeyEpoch = await storage.getKeyEpoch(userId);
         await this.syncNow('app_start');
     }
 
-    private async notifySuccess(newCursor: string | null) {
+    private async notifySuccess(newSeq: number | null) {
         this.lastSyncCompletedAtMs = Date.now();
-        if (newCursor && this.currentUserId) {
-            this.lastSyncCursor = newCursor;
-            await AsyncStorage.setItem(`${SYNC_SINCE_KEY}_${this.currentUserId}`, newCursor);
+        if (newSeq != null && this.currentUserId) {
+            this.lastSyncSeq = newSeq;
+            await AsyncStorage.setItem(`${SYNC_SEQ_KEY}_${this.currentUserId}`, String(newSeq));
         }
         this.notifyListeners();
     }
@@ -252,7 +285,7 @@ class SyncService {
         const response = await notesApi.sync({
             changes: [],
             improvement_changes: [],
-            since_updated_at: '1970-01-01T00:00:00+00:00',
+            since_seq: 0,
         });
 
         const incomingNotes = new Map<string, ServerNote>();
@@ -329,6 +362,9 @@ class SyncService {
 
         console.log(`[SyncService] Starting sync for user ${this.currentUserId}. Reason: ${reason}`);
         this.isSyncing = true;
+        // Stamp the generation the ciphertext was produced under. Plaintext
+        // (local mode) is epoch 0; encrypted writes carry the current key epoch.
+        const outgoingEncEpoch = getCryptoMode() === 'e2ee' ? this.currentKeyEpoch : 0;
 
         try {
             // 1. Gather local changes
@@ -382,6 +418,7 @@ class SyncService {
                     is_active: note.is_active,
                     is_pinned: note.is_pinned ?? false,
                     last_variant_id: null,
+                    enc_epoch: outgoingEncEpoch,
                 });
                 processedNotes += 1;
                 if (processedNotes % YIELD_EVERY === 0) {
@@ -422,6 +459,7 @@ class SyncService {
                     base_version: improvement.version ?? 0,
                     client_updated_at: improvement.updated_at || new Date().toISOString(),
                     is_active: isActive,
+                    enc_epoch: outgoingEncEpoch,
                 });
                 processedImprovements += 1;
                 if (processedImprovements % YIELD_EVERY === 0) {
@@ -429,21 +467,44 @@ class SyncService {
                 }
             }
 
-            // 3. Send to server
-            const since = !hasLocalNotes || !this.lastSyncCursor
-                ? '1970-01-01T00:00:00+00:00'
-                : this.lastSyncCursor;
+            // 3. Send to server (monotonic seq cursor; 0 = full pull)
+            const sinceSeq = !hasLocalNotes || this.lastSyncSeq == null ? 0 : this.lastSyncSeq;
 
             const response = await notesApi.sync({
                 changes,
                 improvement_changes: improvementChanges,
-                since_updated_at: since,
+                since_seq: sinceSeq,
             });
 
+            // Track server seqs we could NOT apply (e.g. locked while in another
+            // crypto mode), so we never advance the cursor past them.
+            const deferredSeqs: number[] = [];
+
+            // Reconcile account encryption state pushed back by the server.
+            if (response.key_epoch != null && this.currentUserId) {
+                if (response.key_epoch !== this.currentKeyEpoch) {
+                    this.currentKeyEpoch = response.key_epoch;
+                    await storage.setKeyEpoch(this.currentUserId, response.key_epoch);
+                }
+            }
+
             // 4. Process response
-            const conflictedNoteIds = new Set((response.conflicts || []).map((c) => c.id));
+            const allConflicts = response.conflicts || [];
+            const conflictedNoteIds = new Set(allConflicts.map((c) => c.id));
             if (conflictedNoteIds.size > 0) {
                 console.warn(`[SyncService] Server reported ${conflictedNoteIds.size} note conflicts; keeping local notes dirty.`);
+            }
+
+            // Surface encryption-mode mismatches so the app can transition this
+            // device (e.g. another device disabled E2EE for the account).
+            const encConflict = allConflicts.find(
+                (c) => c.error === 'encryption_disabled' || c.error === 'encryption_required',
+            ) as (NoteSyncConflict & { server_enc_mode?: 'off' | 'e2ee'; server_key_epoch?: number }) | undefined;
+            if (encConflict && this.encryptionConflictHandler) {
+                this.encryptionConflictHandler({
+                    enc_mode: (encConflict.server_enc_mode as 'off' | 'e2ee') ?? response.enc_mode ?? null,
+                    key_epoch: encConflict.server_key_epoch ?? response.key_epoch ?? null,
+                });
             }
 
             const serverNotes = [
@@ -454,7 +515,8 @@ class SyncService {
             serverNotes.forEach(n => uniqueIncoming.set(n.id, n));
 
             if (uniqueIncoming.size > 0) {
-                await this.applyServerChanges(Array.from(uniqueIncoming.values()));
+                const res = await this.applyServerChanges(Array.from(uniqueIncoming.values()));
+                deferredSeqs.push(...res.deferredSeqs);
             }
 
             const incomingImprovements = [
@@ -473,7 +535,8 @@ class SyncService {
             }
 
             if (incomingImprovements.length > 0) {
-                await this.applyServerImprovements(incomingImprovements);
+                const res = await this.applyServerImprovements(incomingImprovements);
+                deferredSeqs.push(...res.deferredSeqs);
             }
 
             // 5. Cleanup dirty flags
@@ -534,21 +597,24 @@ class SyncService {
                 }
             }
 
-            // 6. Update cursor based on server response
-            const cursorCandidates = [
-                ...Array.from(uniqueIncoming.values()).map((n) => n.updated_at),
-                ...incomingImprovements.map((i) => i.updated_at),
-            ];
-            const maxIncomingMs = cursorCandidates
-                .map((t) => Date.parse(t))
-                .filter((t) => Number.isFinite(t))
-                .reduce((acc, t) => Math.max(acc, t), 0);
-            
-            const prevMs = this.lastSyncCursor ? Date.parse(this.lastSyncCursor) : 0;
-            const nextMs = Math.max(Number.isFinite(prevMs) ? prevMs : 0, maxIncomingMs);
-            
-            const finalCursor = nextMs > 0 ? new Date(nextMs).toISOString() : this.lastSyncCursor;
-            await this.notifySuccess(finalCursor);
+            // 6. Advance the cursor — but NEVER past an item we failed to apply
+            //    (e.g. a ciphertext we could not decrypt yet). Those stay behind
+            //    the watermark so they're retried once a key becomes available.
+            const serverNext = response.next_cursor;
+            let finalSeq: number | null = this.lastSyncSeq;
+            if (serverNext != null) {
+                finalSeq = serverNext;
+                if (deferredSeqs.length > 0) {
+                    const minDeferred = Math.min(...deferredSeqs);
+                    // Hold the cursor strictly below the earliest deferred item.
+                    finalSeq = Math.min(serverNext, minDeferred - 1);
+                    // Never move backwards past where we already were.
+                    if (this.lastSyncSeq != null) {
+                        finalSeq = Math.max(finalSeq, this.lastSyncSeq);
+                    }
+                }
+            }
+            await this.notifySuccess(finalSeq);
             const pendingEncryptionMigration = await storage.getEncryptionMigrationState(this.currentUserId);
             if (pendingEncryptionMigration === 'sync') {
                 const { unsyncedCount } = await this.getSyncStatus(this.currentUserId);
@@ -564,11 +630,14 @@ class SyncService {
         }
     }
 
-    private async applyServerImprovements(improvements: ServerImprovement[]) {
-        if (!this.currentUserId) return;
+    private async applyServerImprovements(improvements: ServerImprovement[]): Promise<{ deferredSeqs: number[] }> {
+        const deferredSeqs: number[] = [];
+        if (!this.currentUserId) return { deferredSeqs };
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
             console.log('[SyncService] Skipping applyServerImprovements: E2EE enabled but locked.');
-            return;
+            // We applied nothing — keep the cursor behind every incoming item.
+            improvements.forEach((imp) => { if (imp.server_seq != null) deferredSeqs.push(imp.server_seq); });
+            return { deferredSeqs };
         }
         const localNotes = await getNotesLocal(this.currentUserId);
         const notesById = new Map(localNotes.map((n) => [n.id, n]));
@@ -597,6 +666,7 @@ class SyncService {
 
                 if (isLocked) {
                     skippedExpectedDecryptFailures += 1;
+                    if (improvement.server_seq != null) deferredSeqs.push(improvement.server_seq);
                     continue;
                 }
 
@@ -648,13 +718,16 @@ class SyncService {
                 `[SyncService] Skipped ${skippedExpectedDecryptFailures} improvements due to locked encryption or key mismatch.`
             );
         }
+        return { deferredSeqs };
     }
 
-    private async applyServerChanges(serverNotes: ServerNote[]) {
-        if (!this.currentUserId) return;
+    private async applyServerChanges(serverNotes: ServerNote[]): Promise<{ deferredSeqs: number[] }> {
+        const deferredSeqs: number[] = [];
+        if (!this.currentUserId) return { deferredSeqs };
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
             console.log('[SyncService] Skipping applyServerChanges: E2EE enabled but locked.');
-            return;
+            serverNotes.forEach((n) => { if (n.server_seq != null) deferredSeqs.push(n.server_seq); });
+            return { deferredSeqs };
         }
         const localNotes = await getNotesLocal(this.currentUserId);
         const localMap = new Map(localNotes.map(n => [n.id, n]));
@@ -711,7 +784,11 @@ class SyncService {
                         if (!isMasterCiphertext(raw) && !isDeviceCiphertext(raw)) {
                             title = raw;
                         } else {
-                            title = ''; // can't decrypt without key, leave empty
+                            // Can't decrypt the title with the current key. Keep the
+                            // existing local title rather than silently blanking it.
+                            title = existing?.title && existing.title !== '[Encrypted]'
+                                ? existing.title
+                                : '';
                         }
                     }
                 }
@@ -728,22 +805,30 @@ class SyncService {
 
                 if (isLocked) {
                     skippedExpectedDecryptFailures += 1;
+                    if (serverNote.server_seq != null) deferredSeqs.push(serverNote.server_seq);
                     continue;
                 }
 
                 if (isTagError) {
-                    console.warn(`[SyncService] Key mismatch or corruption for note ${serverNote.id}. Saving as [Encrypted] placeholder.`);
-                    // Save as placeholder to avoid infinite re-fetch loop.
-                    // SyncService.syncNow skips notes with '[Encrypted]' content, so this won't overwrite server data.
+                    console.warn(`[SyncService] Key mismatch for note ${serverNote.id}. Storing raw ciphertext for later decryption.`);
+                    // Persist the ORIGINAL server ciphertext (title/content left
+                    // undefined so saveNoteLocal keeps the raw blobs instead of
+                    // re-encrypting the literal "[Encrypted]" string). The read
+                    // path (processNotes) shows "[Encrypted]" until the correct
+                    // key is available, then transparently decrypts it — no
+                    // re-fetch needed, and no infinite loop because syncNow skips
+                    // notes whose decrypted content is "[Encrypted]".
                     const placeholder: Note = {
                         ...(existing ?? {}),
                         id: serverNote.id,
-                        title: '[Encrypted]',
-                        content: '[Encrypted]',
+                        title: undefined,
+                        content: undefined,
                         encrypted_title: serverNote.title || '',
                         encrypted_content: serverNote.content_ciphertext || '',
+                        content_nonce: serverNote.content_nonce ?? null,
                         updated_at: serverNote.updated_at,
                         version: serverNote.version,
+                        server_updated_at: serverNote.updated_at,
                         synced: 1,
                         dirty: false,
                     } as any;
@@ -797,6 +882,7 @@ class SyncService {
                 `[SyncService] Skipped ${skippedExpectedDecryptFailures} notes due to locked encryption or key mismatch.`
             );
         }
+        return { deferredSeqs };
     }
 }
 
