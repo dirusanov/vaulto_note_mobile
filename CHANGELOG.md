@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.65] - 2026-06-28
+
+### Changed
+- **Version Bump**: Updated app versions and build numbers across all release targets.
+
 ## [1.1.0] - 2026-05-13
 
 ### Changed
