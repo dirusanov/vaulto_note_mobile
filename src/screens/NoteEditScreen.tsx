@@ -4846,14 +4846,21 @@ export const NoteEditScreen = () => {
     // keyboard overlays it (edge-to-edge + adjustResize is a no-op on Android 15),
     // so when the keyboard is open we must add its height plus the docked toolbar
     // height; when it's closed we only need to clear the Android nav bar.
-    // iOS visual mode lets Tentap lift the content above the keyboard itself, so
-    // there we only reserve the toolbar clearance.
+    // Visual mode owns the WebView padding on both platforms (the CSS wins over
+    // Tentap's inline keyboard padding), so iOS visual also needs the keyboard
+    // height. iOS raw mode is lifted by KeyboardAvoidingView, so only the
+    // toolbar clearance is reserved there.
+    const editorKeyboardInset = Platform.OS === 'android' || editMode === 'visual'
+        ? keyboardHeight
+        : 0;
     const editorContentBottomPadding = Math.round(
         keyboardVisibleState
-            ? (Platform.OS === 'android' ? keyboardHeight : 0)
+            ? editorKeyboardInset
                 + FLOATING_MIC_TOOLBAR_HEIGHT
                 + EDITOR_CONTENT_BOTTOM_GAP
-            : insets.bottom + EDITOR_CONTENT_BOTTOM_GAP
+            : insets.bottom
+                + (isColorPickerVisible ? FLOATING_MIC_TOOLBAR_HEIGHT : 0)
+                + EDITOR_CONTENT_BOTTOM_GAP
     );
     const selectedRecordingText = selectedRecordingForText?.transcription?.trim() || '';
     const agentProcessingActive =

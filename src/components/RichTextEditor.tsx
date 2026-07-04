@@ -249,7 +249,10 @@ const getEditorCss = (
     min-height: 100%;
     width: 100%;
     max-width: 100%;
-    padding: 0 0 ${safeBottomPadding}px;
+    padding: 0;
+    /* !important beats the inline paddingBottom (44px/0px) that tentap's
+       RichText keeps writing on Android, which otherwise erases this gap. */
+    padding-bottom: ${safeBottomPadding}px !important;
     outline: none;
     white-space: pre-wrap;
     word-break: break-word;
@@ -293,6 +296,114 @@ const getEditorCss = (
   ${getChecklistCss(baseFontSize, checklistScaleFactor)}
 `;
 };
+
+// Keeps the caret visible above the keyboard + docked toolbar. The WebView is
+// not resized when the keyboard opens (edge-to-edge Android overlays it), so
+// the browser thinks the whole viewport is visible and never scrolls the caret
+// clear of the occluded bottom strip. This runtime scrolls the editor's scroll
+// container so the caret always stays above the inset reported from native.
+const getCaretVisibilityJs = () => `
+(() => {
+  const INSTALL_FLAG = '__vaultoCaretGuardInstalled';
+
+  if (window[INSTALL_FLAG]) {
+    return true;
+  }
+
+  window[INSTALL_FLAG] = true;
+  window.__vaultoCaretInsetBottom = 0;
+
+  const TOP_MARGIN = 12;
+
+  const findScrollContainer = () => {
+    const doc = document.querySelector('.ProseMirror');
+    let node = doc ? doc.parentElement : null;
+
+    while (node && node !== document.body) {
+      const style = window.getComputedStyle(node);
+      if (
+        (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        node.scrollHeight > node.clientHeight
+      ) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+
+    return null;
+  };
+
+  const getCaretRect = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0).cloneRange();
+    range.collapse(false);
+
+    const rects = range.getClientRects();
+    if (rects.length > 0) {
+      return rects[rects.length - 1];
+    }
+
+    const node = range.startContainer;
+    const element = node instanceof Element ? node : node.parentElement;
+    return element ? element.getBoundingClientRect() : null;
+  };
+
+  let pending = false;
+
+  const ensureCaretVisible = () => {
+    if (pending) {
+      return;
+    }
+
+    pending = true;
+    window.requestAnimationFrame(() => {
+      pending = false;
+
+      const doc = document.querySelector('.ProseMirror');
+      if (!doc || !document.activeElement || !doc.contains(document.activeElement)) {
+        return;
+      }
+
+      const container = findScrollContainer();
+      const caretRect = getCaretRect();
+      if (!container || !caretRect) {
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const visibleBottom = containerRect.bottom - (window.__vaultoCaretInsetBottom || 0);
+      const visibleTop = containerRect.top + TOP_MARGIN;
+
+      let delta = 0;
+      if (caretRect.bottom > visibleBottom) {
+        delta = caretRect.bottom - visibleBottom;
+      } else if (caretRect.top < visibleTop) {
+        delta = caretRect.top - visibleTop;
+      }
+
+      if (delta !== 0) {
+        container.scrollTop += delta;
+      }
+    });
+  };
+
+  window.__vaultoEnsureCaretVisible = ensureCaretVisible;
+  window.__vaultoSetCaretInsetBottom = (inset) => {
+    const next = Math.max(0, Number(inset) || 0);
+    if (window.__vaultoCaretInsetBottom !== next) {
+      window.__vaultoCaretInsetBottom = next;
+    }
+    ensureCaretVisible();
+  };
+
+  document.addEventListener('selectionchange', ensureCaretVisible);
+})();
+true;
+`;
 
 const TASK_ITEM_REFOCUS_MESSAGE_TYPE = 'vaulto-task-item-refocus';
 
@@ -608,7 +719,23 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         );
         editorApi.injectJS?.(getTaskItemRefocusJs());
         editorApi.injectJS?.(getAudioEmbedRuntimeJs());
-    }, [baseFontSize, checklistScaleFactor, contentBottomPadding, editorApi, editorState.isReady, resolvedPlaceholder]);
+
+        const caretInset = Math.max(0, Math.round(contentBottomPadding));
+        editorApi.injectJS?.(getCaretVisibilityJs());
+        editorApi.injectJS?.(`window.__vaultoSetCaretInsetBottom?.(${caretInset}); true;`);
+
+        // ProseMirror's own scrollIntoView (typing/Enter) honours this margin.
+        // Tentap re-sends 44px/0px for Android 200ms after every render, so
+        // assert our value both immediately and after its timer has fired.
+        editor.updateScrollThresholdAndMargin(caretInset);
+        const thresholdTimer = setTimeout(() => {
+            editor.updateScrollThresholdAndMargin(caretInset);
+        }, 400);
+
+        return () => {
+            clearTimeout(thresholdTimer);
+        };
+    }, [baseFontSize, checklistScaleFactor, contentBottomPadding, editor, editorApi, editorState.isReady, resolvedPlaceholder]);
 
 
     useEffect(() => {
