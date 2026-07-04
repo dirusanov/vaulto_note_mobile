@@ -1,6 +1,8 @@
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import {
     notesApi,
@@ -24,9 +26,22 @@ import {
     markAllDirty,
     migrateGuestData,
     registerResyncCallback,
+    setNoteAudioSyncState,
 } from './DatabaseService';
+import { AudioService } from './AudioService';
+import { audioApi } from '../api/audio';
 
-import { decrypt, encrypt, encryptForSync, decryptFromSync, getCryptoMode, isMasterCiphertext, isDeviceCiphertext } from '../crypto/encryption';
+import {
+    decrypt,
+    encrypt,
+    encryptForSync,
+    decryptFromSync,
+    getCryptoMode,
+    isMasterCiphertext,
+    isDeviceCiphertext,
+    encryptAudioBase64ForSync,
+    decryptAudioBase64FromSync,
+} from '../crypto/encryption';
 import { hasMasterKey } from '../crypto/e2ee';
 import { storage, hasPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
 
@@ -399,13 +414,16 @@ class SyncService {
                 const shouldDelete = !!note.deleted || !!note.pending_delete || !!note.pending_server_delete;
 
                 // Skip notes that failed decryption — never send '[Encrypted]' to server
-                if (!shouldDelete && (note.content === '[Encrypted]' || note.title === '[Encrypted]')) {
+                if (!shouldDelete && (note.content === '[Encrypted]' || note.title === '[Encrypted]' || note.transcription === '[Encrypted]')) {
                     console.warn(`[SyncService] Skipping note ${note.id} with placeholder content — decryption may have failed`);
                     continue;
                 }
 
                 const titleToSync = shouldDelete ? '' : await encryptForSync(note.title || '');
                 const contentToSync = shouldDelete ? '' : await encryptForSync(note.content || '');
+                const transcriptionToSync = !shouldDelete && note.transcription
+                    ? await encryptForSync(note.transcription)
+                    : null;
 
                 changes.push({
                     id: note.id,
@@ -419,6 +437,9 @@ class SyncService {
                     is_pinned: note.is_pinned ?? false,
                     last_variant_id: null,
                     enc_epoch: outgoingEncEpoch,
+                    transcription_ciphertext: transcriptionToSync,
+                    audio_duration: note.audio_duration ?? null,
+                    has_audio: !shouldDelete && !!note.has_audio,
                 });
                 processedNotes += 1;
                 if (processedNotes % YIELD_EVERY === 0) {
@@ -628,6 +649,168 @@ class SyncService {
         } finally {
             this.isSyncing = false;
         }
+
+        // Audio blobs ride behind the text sync, outside the isSyncing critical
+        // section so slow transfers never block the next text sync. Retries are
+        // driven by the per-note state flags, so a failed pass self-heals on the
+        // following sync.
+        void this.syncAudioBlobs().catch((audioError) => {
+            console.warn('[SyncService] Audio blob sync failed', audioError);
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // Audio blob sync. Runs after the text sync: uploads local recordings that
+    // are not yet in server storage and downloads blobs recorded on other
+    // devices. In E2EE mode blobs are encrypted client-side with the master
+    // key (binary VAE1 framing); in standard mode the raw m4a is uploaded and
+    // at-rest encryption is the bucket's responsibility.
+    // -----------------------------------------------------------------------
+
+    private audioSyncInProgress = false;
+
+    private async syncAudioBlobs(): Promise<void> {
+        if (Platform.OS === 'web') return;
+        if (!this.currentUserId || !this.syncEnabled || !this.isAuthenticated) return;
+        if (this.audioSyncInProgress) return;
+        const mode = getCryptoMode();
+        if (mode === 'e2ee' && !hasMasterKey()) return; // locked: retry next sync
+
+        this.audioSyncInProgress = true;
+        const userId = this.currentUserId;
+        let appliedDownload = false;
+        try {
+            const notes = await getNotesLocal(userId);
+            for (const note of notes) {
+                if (!shouldSyncNote(note) || note.deleted || note.pending_delete || note.pending_server_delete) continue;
+                if (userId !== this.currentUserId) return; // user switched mid-pass
+                try {
+                    if (note.has_audio && note.audio_file_path && !note.audio_synced) {
+                        await this.uploadNoteAudio(userId, note);
+                    } else if (note.has_audio && !note.audio_file_path && note.audio_remote) {
+                        await this.downloadNoteAudio(userId, note);
+                        appliedDownload = true;
+                    }
+                } catch (error) {
+                    console.warn(`[SyncService] Audio sync failed for note ${note.id}:`, getErrorMessage(error));
+                }
+            }
+        } finally {
+            this.audioSyncInProgress = false;
+            if (appliedDownload) {
+                this.notifyListeners();
+            }
+        }
+    }
+
+    private async uploadNoteAudio(userId: string, note: Note): Promise<void> {
+        const scheme: 'none' | 'e2ee' = getCryptoMode() === 'e2ee' ? 'e2ee' : 'none';
+        const mimeType = scheme === 'e2ee' ? 'application/octet-stream' : 'audio/m4a';
+
+        const plainBase64 = await AudioService.readAudioBase64(note.audio_file_path!);
+        const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, plainBase64);
+
+        // Same bytes already on the server (e.g. re-login re-marked everything):
+        // just record the fact instead of re-uploading.
+        if (note.audio_remote && note.audio_sha256 && note.audio_sha256 === sha256) {
+            await setNoteAudioSyncState(userId, note.id, { audio_synced: 1, audio_sha256: sha256 });
+            return;
+        }
+
+        const target = await audioApi.getUploadUrl(note.id, mimeType);
+        if (target.required_enc_scheme !== scheme) {
+            // Account encryption state changed under us; the text sync conflict
+            // path reconciles the mode, we just skip this round.
+            console.warn(`[SyncService] Audio upload skipped for note ${note.id}: server requires enc_scheme=${target.required_enc_scheme}`);
+            return;
+        }
+
+        const uploadBase64 = scheme === 'e2ee' ? await encryptAudioBase64ForSync(plainBase64) : plainBase64;
+
+        const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        if (!cacheDir) throw new Error('No cache directory for audio upload');
+        const tempUri = `${cacheDir}audioup_${note.id}.bin`;
+        try {
+            await FileSystem.writeAsStringAsync(tempUri, uploadBase64, { encoding: 'base64' });
+            const result = await FileSystem.uploadAsync(target.url, tempUri, {
+                httpMethod: 'PUT',
+                headers: target.headers,
+            });
+            if (result.status < 200 || result.status >= 300) {
+                throw new Error(`Audio upload failed with HTTP ${result.status}`);
+            }
+        } finally {
+            await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+        }
+
+        await audioApi.commit(note.id, {
+            enc_scheme: scheme,
+            enc_epoch: scheme === 'e2ee' ? this.currentKeyEpoch : 0,
+            mime_type: mimeType,
+            sha256,
+            duration: note.audio_duration ?? null,
+        });
+
+        await setNoteAudioSyncState(userId, note.id, {
+            audio_synced: 1,
+            audio_remote: 1,
+            audio_sha256: sha256,
+        });
+        console.log(`[SyncService] Uploaded audio for note ${note.id} (${scheme})`);
+    }
+
+    private async downloadNoteAudio(userId: string, note: Note): Promise<void> {
+        let target;
+        try {
+            target = await audioApi.getDownloadUrl(note.id);
+        } catch (error: any) {
+            if (error?.response?.status === 404) {
+                // Blob vanished server-side; stop trying until sync says otherwise.
+                await setNoteAudioSyncState(userId, note.id, { audio_remote: 0 });
+                return;
+            }
+            throw error;
+        }
+
+        if (target.enc_scheme === 'e2ee' && !hasMasterKey()) {
+            return; // locked: retry once unlocked
+        }
+
+        const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        if (!cacheDir) throw new Error('No cache directory for audio download');
+        const tempUri = `${cacheDir}audiodl_${note.id}.bin`;
+        let payloadBase64: string;
+        try {
+            const result = await FileSystem.downloadAsync(target.url, tempUri);
+            if (result.status < 200 || result.status >= 300) {
+                throw new Error(`Audio download failed with HTTP ${result.status}`);
+            }
+            payloadBase64 = await FileSystem.readAsStringAsync(tempUri, { encoding: 'base64' });
+        } finally {
+            await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+        }
+
+        const plainBase64 = target.enc_scheme === 'e2ee'
+            ? decryptAudioBase64FromSync(payloadBase64)
+            : payloadBase64;
+
+        if (target.sha256) {
+            const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, plainBase64);
+            if (sha256 !== target.sha256) {
+                throw new Error(`Audio checksum mismatch for note ${note.id}`);
+            }
+        }
+
+        const filePath = await AudioService.writeAudioBase64(plainBase64);
+        await setNoteAudioSyncState(userId, note.id, {
+            audio_file_path: filePath,
+            audio_synced: 1,
+            audio_remote: 1,
+            audio_sha256: target.sha256 ?? null,
+            has_audio: true,
+            audio_duration: target.duration ?? note.audio_duration ?? null,
+        });
+        console.log(`[SyncService] Downloaded audio for note ${note.id}`);
     }
 
     private async applyServerImprovements(improvements: ServerImprovement[]): Promise<{ deferredSeqs: number[] }> {
@@ -768,10 +951,25 @@ class SyncService {
             let title = '';
             let content = '';
             let encryptedTitle: string | undefined = undefined;
+            let transcription: string | undefined =
+                existing?.transcription && existing.transcription !== '[Encrypted]'
+                    ? existing.transcription
+                    : undefined;
 
             try {
                 if (serverNote.content_ciphertext) {
                     content = await decryptFromSync(serverNote.content_ciphertext);
+                }
+
+                if (serverNote.transcription_ciphertext) {
+                    try {
+                        transcription = await decryptFromSync(serverNote.transcription_ciphertext);
+                    } catch (transcriptionError) {
+                        // Keep the local transcription rather than blanking it; the
+                        // content decrypt above would already have failed on a real
+                        // key problem.
+                        console.warn(`[SyncService] Failed to decrypt transcription for note ${serverNote.id}`, transcriptionError);
+                    }
                 }
 
                 if (serverNote.title) {
@@ -823,8 +1021,10 @@ class SyncService {
                         id: serverNote.id,
                         title: undefined,
                         content: undefined,
+                        transcription: undefined,
                         encrypted_title: serverNote.title || '',
                         encrypted_content: serverNote.content_ciphertext || '',
+                        encrypted_transcription: serverNote.transcription_ciphertext || existing?.encrypted_transcription,
                         content_nonce: serverNote.content_nonce ?? null,
                         updated_at: serverNote.updated_at,
                         version: serverNote.version,
@@ -841,6 +1041,21 @@ class SyncService {
                 continue;
             }
 
+            // Audio reconciliation. Server has_audio=false is only authoritative
+            // when this device knows the blob was on the server before
+            // (audio_remote=1) — otherwise it is a legacy note whose local-only
+            // recording predates audio sync and must not be destroyed.
+            const serverRemovedAudio =
+                serverNote.has_audio === false && !!existing?.audio_remote && !!existing?.audio_file_path;
+            if (serverRemovedAudio && existing?.audio_file_path) {
+                try {
+                    await AudioService.deleteAudioFile(existing.audio_file_path);
+                } catch (audioError) {
+                    console.warn(`[SyncService] Failed to remove local audio for note ${serverNote.id}`, audioError);
+                }
+            }
+            const keepLocalAudio = !!existing?.audio_file_path && !serverRemovedAudio;
+
             const merged: Note = {
                 ...(existing ?? {}),
                 id: serverNote.id,
@@ -850,11 +1065,14 @@ class SyncService {
                 encrypted_content: await encrypt(content),
                 updated_at: serverNote.updated_at,
                 created_at: existing?.created_at ?? serverNote.updated_at,
-                transcription: existing?.transcription,
-                encrypted_transcription: existing?.encrypted_transcription,
-                audio_file_path: existing?.audio_file_path,
-                audio_duration: existing?.audio_duration,
-                has_audio: existing?.has_audio,
+                transcription,
+                encrypted_transcription: transcription !== undefined ? undefined : existing?.encrypted_transcription,
+                audio_file_path: keepLocalAudio ? existing?.audio_file_path : '',
+                audio_duration: serverNote.audio_duration ?? (keepLocalAudio ? existing?.audio_duration : undefined),
+                has_audio: keepLocalAudio || !!serverNote.has_audio,
+                audio_remote: serverNote.audio_available ? 1 : 0,
+                audio_synced: serverRemovedAudio ? 0 : existing?.audio_synced ?? 0,
+                audio_sha256: serverRemovedAudio ? null : serverNote.audio_sha256 ?? existing?.audio_sha256 ?? null,
                 is_pinned: serverNote.is_pinned ?? existing?.is_pinned ?? false,
                 synced: 1,
                 dirty: false,

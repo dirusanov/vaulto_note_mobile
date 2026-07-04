@@ -338,6 +338,38 @@ class AudioServiceClass {
         }
     }
 
+    /**
+     * Read a locally stored (encrypted) audio file and return the plaintext
+     * audio as base64. Used by the sync engine to prepare uploads.
+     */
+    async readAudioBase64(uri: string): Promise<string> {
+        if (Platform.OS === 'web') throw new Error('Audio sync not supported on web');
+        let sourceUri = uri;
+        if (Platform.OS === 'android' && sourceUri.startsWith('/') && !sourceUri.startsWith('file://')) {
+            sourceUri = `file://${sourceUri}`;
+        }
+        const encryptedData = await FileSystem.readAsStringAsync(sourceUri, { encoding: 'utf8' });
+        return await this.decryptAudioPayload(encryptedData);
+    }
+
+    /**
+     * Persist plaintext audio (base64) as a new encrypted local audio file and
+     * return its path. Used by the sync engine after downloading a blob.
+     */
+    async writeAudioBase64(plainBase64: string): Promise<string> {
+        if (Platform.OS === 'web') throw new Error('Audio sync not supported on web');
+        const filename = `audio_${Date.now()}.m4a`;
+        const audioDir = await this.getAudioDir();
+        const dirInfo = await FileSystem.getInfoAsync(audioDir);
+        if (!dirInfo.exists) {
+            await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+        }
+        const targetUri = `${audioDir}${filename}`;
+        const encryptedData = await this.encryptAudioPayload(plainBase64);
+        await FileSystem.writeAsStringAsync(targetUri, encryptedData, { encoding: 'utf8' });
+        return targetUri;
+    }
+
     async reencryptAudioFile(uri: string): Promise<void> {
         if (Platform.OS === 'web') return;
         const encryptedData = await FileSystem.readAsStringAsync(uri, {

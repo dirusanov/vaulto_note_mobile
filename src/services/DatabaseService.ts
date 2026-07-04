@@ -183,6 +183,14 @@ const openDb = async (): Promise<SQLite.SQLiteDatabase> => {
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN version INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync('ALTER TABLE note_improvements ADD COLUMN version INTEGER DEFAULT 0;'); } catch (e) {}
 
+    // AUDIO SYNC MIGRATION: blob upload/download state for voice notes.
+    // audio_synced: local recording has been uploaded to server storage.
+    // audio_remote: server storage holds a blob for this note (download source).
+    // audio_sha256: hash of the plaintext audio, for change detection.
+    try { await database.runAsync('ALTER TABLE notes ADD COLUMN audio_synced INTEGER DEFAULT 0;'); } catch (e) {}
+    try { await database.runAsync('ALTER TABLE notes ADD COLUMN audio_remote INTEGER DEFAULT 0;'); } catch (e) {}
+    try { await database.runAsync('ALTER TABLE notes ADD COLUMN audio_sha256 TEXT;'); } catch (e) {}
+
     return database;
 };
 
@@ -515,10 +523,10 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         await withDbRetry('save note', (database) => (
             database.runAsync(
                 `INSERT INTO notes (
-                    id, user_id, encrypted_title, encrypted_content, created_at, updated_at, 
+                    id, user_id, encrypted_title, encrypted_content, created_at, updated_at,
                     audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
-                    storage_scope, privacy, pending_server_delete, version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    storage_scope, privacy, pending_server_delete, version, audio_synced, audio_remote, audio_sha256
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     user_id=excluded.user_id,
                     encrypted_title=excluded.encrypted_title,
@@ -536,7 +544,12 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                     storage_scope=excluded.storage_scope,
                     privacy=excluded.privacy,
                     pending_server_delete=excluded.pending_server_delete,
-                    version=excluded.version
+                    version=excluded.version,
+                    -- A different recording invalidates the upload state no matter
+                    -- what the caller passed (UI paths just spread the old note).
+                    audio_synced=CASE WHEN excluded.audio_file_path IS notes.audio_file_path THEN excluded.audio_synced ELSE 0 END,
+                    audio_sha256=CASE WHEN excluded.audio_file_path IS notes.audio_file_path THEN excluded.audio_sha256 ELSE NULL END,
+                    audio_remote=excluded.audio_remote
                 `,
                 [
                     note.id, userId, encryptedTitle || '', encryptedContent,
@@ -544,12 +557,50 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                     note.audio_file_path || null, note.audio_duration || 0,
                     encryptedTranscription || null, note.has_audio ? 1 : 0, note.is_pinned ? 1 : 0,
                     note.synced ?? 1, isDirty, isDeleted, isActive, storageScope, privacy, pendingServerDelete,
-                    note.version ?? 0
+                    note.version ?? 0,
+                    note.audio_synced ?? 0, note.audio_remote ?? 0, note.audio_sha256 ?? null
                 ]
             )
         ));
     } catch (e) {
         console.error('[DatabaseService] Failed to save note', e);
+    }
+};
+
+/**
+ * Direct update of the audio blob sync state, bypassing saveNoteLocal's
+ * "path changed → reset" heuristic (which would wrongly clear the state the
+ * sync engine just recorded for a freshly downloaded/uploaded file).
+ */
+export const setNoteAudioSyncState = async (
+    userId: string,
+    noteId: string,
+    state: {
+        audio_file_path?: string | null;
+        audio_synced?: number;
+        audio_remote?: number;
+        audio_sha256?: string | null;
+        has_audio?: boolean;
+        audio_duration?: number | null;
+    }
+): Promise<void> => {
+    if (Platform.OS === 'web') return;
+    const assignments: string[] = [];
+    const params: any[] = [];
+    if (state.audio_file_path !== undefined) { assignments.push('audio_file_path = ?'); params.push(state.audio_file_path || null); }
+    if (state.audio_synced !== undefined) { assignments.push('audio_synced = ?'); params.push(state.audio_synced); }
+    if (state.audio_remote !== undefined) { assignments.push('audio_remote = ?'); params.push(state.audio_remote); }
+    if (state.audio_sha256 !== undefined) { assignments.push('audio_sha256 = ?'); params.push(state.audio_sha256); }
+    if (state.has_audio !== undefined) { assignments.push('has_audio = ?'); params.push(state.has_audio ? 1 : 0); }
+    if (state.audio_duration !== undefined) { assignments.push('audio_duration = ?'); params.push(state.audio_duration ?? 0); }
+    if (assignments.length === 0) return;
+    params.push(noteId, userId);
+    try {
+        await withDbRetry('set audio sync state', (database) => (
+            database.runAsync(`UPDATE notes SET ${assignments.join(', ')} WHERE id = ? AND user_id = ?`, params)
+        ));
+    } catch (e) {
+        console.error('[DatabaseService] Failed to set audio sync state', e);
     }
 };
 
@@ -884,7 +935,10 @@ export const markAllDirty = async (userId: string): Promise<void> => {
     }
     try {
         await withDbRetry('mark dirty', async (database) => {
-            await database.runAsync("UPDATE notes SET dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')", [userId]);
+            // audio_synced is reset too: mark-all-dirty runs on encryption mode /
+            // key-epoch transitions, after which every blob must be re-uploaded
+            // under the new scheme.
+            await database.runAsync("UPDATE notes SET dirty = 1, synced = 0, audio_synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')", [userId]);
             await database.runAsync('UPDATE note_improvements SET dirty = 1, synced = 0 WHERE user_id = ?', [userId]);
         });
     } catch (e) {}
@@ -966,7 +1020,7 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
     try {
         await withDbRetry('migrate', (database) => (
             database.withTransactionAsync(async () => {
-                await database.runAsync("UPDATE notes SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')", [toUserId, fromUserId]);
+                await database.runAsync("UPDATE notes SET user_id = ?, dirty = 1, synced = 0, audio_synced = 0, audio_remote = 0 WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync')", [toUserId, fromUserId]);
                 await database.runAsync("UPDATE notes SET user_id = ? WHERE user_id = ? AND storage_scope = 'local_only'", [toUserId, fromUserId]);
                 await database.runAsync("UPDATE note_improvements SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ?", [toUserId, fromUserId]);
                 await database.runAsync("UPDATE voice_recordings SET user_id = ? WHERE user_id = ?", [toUserId, fromUserId]);

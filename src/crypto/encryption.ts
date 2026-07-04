@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import { base64 } from '@scure/base';
 import { bytesToHex, bytesToUtf8, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import { gcm } from '@noble/ciphers/aes';
@@ -183,6 +184,61 @@ export async function decrypt(ciphertext: string): Promise<string> {
         }
         throw error;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Binary audio encryption for sync (E2EE accounts).
+//
+// Text notes travel as hex-encoded `v3m.` strings; audio blobs are too large
+// for hex doubling, so they use a compact binary framing that is uploaded to
+// object storage as raw bytes: magic 'VAE1' (4) || nonce (12) || AES-256-GCM
+// ciphertext. Base64 is only used at the JS boundary because React Native file
+// APIs exchange binary data as base64 strings.
+// ---------------------------------------------------------------------------
+
+export const AUDIO_E2EE_MAGIC = 'VAE1';
+const AUDIO_MAGIC_BYTES = utf8ToBytes(AUDIO_E2EE_MAGIC);
+const AUDIO_NONCE_SIZE = 12;
+
+const hasAudioMagic = (raw: Uint8Array): boolean => {
+    if (raw.length < AUDIO_MAGIC_BYTES.length + AUDIO_NONCE_SIZE + 16) return false;
+    for (let i = 0; i < AUDIO_MAGIC_BYTES.length; i++) {
+        if (raw[i] !== AUDIO_MAGIC_BYTES[i]) return false;
+    }
+    return true;
+};
+
+/** Encrypts plaintext audio (base64 of the m4a bytes) with the master key. */
+export async function encryptAudioBase64ForSync(plainBase64: string): Promise<string> {
+    const masterKey = getMasterKey();
+    if (!masterKey) throw new Error('E2EE locked');
+    const data = base64.decode(plainBase64);
+    const nonce = await Crypto.getRandomBytesAsync(AUDIO_NONCE_SIZE);
+    const ciphertext = gcm(masterKey, nonce).encrypt(data);
+    const framed = new Uint8Array(AUDIO_MAGIC_BYTES.length + AUDIO_NONCE_SIZE + ciphertext.length);
+    framed.set(AUDIO_MAGIC_BYTES, 0);
+    framed.set(nonce, AUDIO_MAGIC_BYTES.length);
+    framed.set(ciphertext, AUDIO_MAGIC_BYTES.length + AUDIO_NONCE_SIZE);
+    return base64.encode(framed);
+}
+
+/**
+ * Decrypts a downloaded audio payload (base64 of the stored bytes) back to the
+ * base64 of the plain m4a. Payloads without the VAE1 magic are plaintext audio
+ * from a non-encrypted account and pass through unchanged.
+ */
+export function decryptAudioBase64FromSync(payloadBase64: string): string {
+    const raw = base64.decode(payloadBase64);
+    if (!hasAudioMagic(raw)) {
+        return payloadBase64;
+    }
+    const masterKey = getMasterKey();
+    if (!masterKey) throw new Error('E2EE locked');
+    const nonce = raw.subarray(AUDIO_MAGIC_BYTES.length, AUDIO_MAGIC_BYTES.length + AUDIO_NONCE_SIZE);
+    const ciphertext = raw.subarray(AUDIO_MAGIC_BYTES.length + AUDIO_NONCE_SIZE);
+    const plain = gcm(masterKey, nonce).decrypt(ciphertext);
+    if (!plain) throw new Error('Invalid ciphertext');
+    return base64.encode(plain);
 }
 
 export async function decryptFromSync(ciphertext: string): Promise<string> {

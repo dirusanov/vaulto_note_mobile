@@ -40,6 +40,10 @@ export interface Note {
     audio_duration?: number;
     encrypted_transcription?: string;
     has_audio?: boolean;
+    // Audio blob sync state (see DatabaseService.setNoteAudioSyncState).
+    audio_synced?: number;
+    audio_remote?: number;
+    audio_sha256?: string | null;
     is_pinned?: boolean;
     storage_scope?: StorageScope;
     privacy?: NotePrivacy;
@@ -82,6 +86,11 @@ export interface SyncChangeRequest {
     last_variant_id?: string | null;
     pending_server_delete?: boolean;
     enc_epoch?: number;
+    // Voice-note payload: transcription mirrors content encryption; the audio
+    // blob itself is synced separately through the /sync/notes/{id}/audio API.
+    transcription_ciphertext?: string | null;
+    audio_duration?: number | null;
+    has_audio?: boolean;
 }
 
 export interface SyncImprovementChangeRequest {
@@ -108,6 +117,8 @@ export interface SyncNotesRequest {
     since_seq?: number;
 }
 
+export type AudioEncScheme = 'none' | 'e2ee';
+
 export interface ServerNote {
     id: string;
     title: string | null;
@@ -122,6 +133,16 @@ export interface ServerNote {
     is_pinned?: boolean;
     server_seq?: number;
     enc_epoch?: number;
+    transcription_ciphertext?: string | null;
+    audio_duration?: number | null;
+    has_audio?: boolean;
+    // True when the audio blob is actually present in server object storage.
+    audio_available?: boolean;
+    audio_size_bytes?: number | null;
+    audio_sha256?: string | null;
+    audio_enc_scheme?: AudioEncScheme | null;
+    audio_enc_epoch?: number | null;
+    audio_mime_type?: string | null;
 }
 
 export interface ServerImprovement {
