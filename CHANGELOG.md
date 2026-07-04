@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.66] - 2026-07-04
+
+### Added
+- **Voice Note Sync**: Transcriptions and audio recordings now sync across devices. Audio uploads to S3-compatible storage via presigned URLs; on end-to-end encrypted accounts both the transcription and the audio blob are encrypted client-side with the master key before leaving the device.
+- **Audio Sync State**: New local sync state (`audio_synced` / `audio_remote` / `audio_sha256`) drives idempotent retries and automatic re-upload after encryption mode or key changes; legacy local-only recordings are uploaded instead of being overwritten.
+
+### Fixed
+- **Editor Caret Visibility**: The caret now stays visible above the keyboard and the docked toolbar while typing (injected caret-visibility runtime + correct keyboard insets in visual mode on both platforms).
+
 ## [1.0.65] - 2026-06-28
 
 ### Changed
