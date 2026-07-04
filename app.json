@@ -45,6 +45,12 @@
     "scheme": "vaultonote",
     "plugins": [
       [
+        "expo-dev-client",
+        {
+          "launchMode": "launcher"
+        }
+      ],
+      [
         "expo-av",
         {
           "microphonePermission": "Allow Vaulto Note to access your microphone to record voice notes."

@@ -28,6 +28,12 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="vaultonote"/>
       </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="exp+vaulto-note-mobile"/>
+      </intent-filter>
     </activity>
   </application>
 </manifest>
