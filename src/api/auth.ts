@@ -2,7 +2,7 @@ import authClient from './authClient';
 import client from './client';
 import { AUTH_AUDIENCE } from '../utils/env';
 import axios from 'axios';
-import { API_URL, AUTH_API_URL } from '../utils/env';
+import { API_URL } from '../utils/env';
 
 export interface AuthTokens {
     access_token: string;

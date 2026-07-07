@@ -3,7 +3,7 @@ import { base64 } from '@scure/base';
 import { bytesToHex, bytesToUtf8, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import { gcm } from '@noble/ciphers/aes';
-import { CIPHER_VERSION, getMasterKey, hasMasterKey } from './e2ee';
+import { getMasterKey, hasMasterKey } from './e2ee';
 import { storage, CryptoMode } from '../utils/storage';
 
 export const V3_MASTER_PREFIX = 'v3m.';
@@ -279,4 +279,3 @@ export async function decryptFromSync(ciphertext: string): Promise<string> {
         throw error;
     }
 }
-

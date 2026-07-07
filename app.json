@@ -36,8 +36,7 @@
         "com.android.vending.BILLING"
       ],
       "package": "com.vaultonotemobile",
-      "versionCode": 66,
-      "usesCleartextTraffic": true
+      "versionCode": 66
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -62,7 +61,7 @@
           "enableEntitlements": true,
           "entitlementsProfile": "production",
           "forceCxx20": true,
-          "enableOpenCL": false
+          "enableOpenCLAndHexagon": false
         }
       ],
       "@react-native-google-signin/google-signin",

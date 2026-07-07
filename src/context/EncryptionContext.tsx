@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AppState, InteractionManager } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import { BiometricService } from '../services/BiometricService';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { useAuth } from '../hooks/useAuth';
 import { storage, CryptoMode, setPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
@@ -21,17 +20,14 @@ import {
     unwrapMasterKeyAsync,
     wrapMasterKey,
 } from '../crypto/e2ee';
-import { decrypt, encrypt, setCryptoMode, isMasterCiphertext } from '../crypto/encryption';
+import { setCryptoMode, isMasterCiphertext } from '../crypto/encryption';
 import { e2eeApi } from '../api/e2ee';
 import { notesApi } from '../api/notes';
 import { 
     initDatabase, 
-    wipeLocalDatabase, 
     setDeletionGuard, 
-    rescueAllNotes, 
     decryptAndRescueAllNotes,
     forceReencryptionLocal,
-    getNotesLocal
 } from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 

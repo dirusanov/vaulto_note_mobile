@@ -264,7 +264,6 @@ export const SettingsScreen = () => {
         syncEnabled,
         syncLocked,
         hasRemoteKeyBundle,
-        bundle,
         recoveryCode,
         setSyncEnabledPreference,
     } = useEncryption();
@@ -301,7 +300,6 @@ export const SettingsScreen = () => {
     const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
-    const [isUsageLoading, setIsUsageLoading] = useState(false);
     const [localWhisperStatus, setLocalWhisperStatus] = useState<Awaited<ReturnType<typeof getLocalWhisperModelStatus>> | null>(null);
     const [localWhisperBusy, setLocalWhisperBusy] = useState(false);
     const [localWhisperProgress, setLocalWhisperProgress] = useState(0);
@@ -378,9 +376,6 @@ export const SettingsScreen = () => {
     const isSyncLocked = syncLocked || encryptionStatus === 'locked';
     const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking') : (isSyncLocked ? t('settings.ui.locked') : !syncEnabled ? t('settings.ui.off') : t('settings.ui.on'));
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
-    // When configured, we show the Change button only (no extra "Configured" label).
-    const passphraseStatusLabel = !hasConfiguredKey ? t('settings.ui.notSet') : encryptionStatus === 'locked' ? t('settings.ui.locked') : '';
-    const passphraseStatusColor = !hasConfiguredKey ? colors.textSecondary : encryptionStatus === 'locked' ? colors.warning : colors.accentGreen;
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
     const transcriptionAuthRequired = isGuestOrAnonymous && aiProvider === 'vaulto_ai';
@@ -517,18 +512,14 @@ export const SettingsScreen = () => {
     const refreshCurrentPeriodUsage = useCallback(async () => {
         if (!isAuthenticated || isGuest) {
             setCurrentPeriodUsage(null);
-            setIsUsageLoading(false);
             return;
         }
 
-        setIsUsageLoading(true);
         try {
             const usage = await subscriptionApi.getCurrentPeriodUsage();
             setCurrentPeriodUsage(usage);
         } catch (error: any) {
             console.warn('[SettingsScreen] Failed to load current period usage', error?.message ?? error);
-        } finally {
-            setIsUsageLoading(false);
         }
     }, [isAuthenticated, isGuest]);
 
@@ -932,9 +923,6 @@ export const SettingsScreen = () => {
     const trialRemainingSeconds = currentPeriodUsage?.limits.transcription_trial_remaining_seconds
         ?? user?.transcription_trial_remaining_seconds
         ?? Math.max(0, (user?.transcription_trial_total_seconds ?? 0) - trialUsedSeconds);
-    const trialTotalSeconds = currentPeriodUsage?.limits.transcription_trial_total_seconds
-        ?? user?.transcription_trial_total_seconds
-        ?? (trialUsedSeconds + trialRemainingSeconds);
     const progress = subscriptionTotalSeconds > 0
         ? Math.min(1, subscriptionUsedSeconds / subscriptionTotalSeconds)
         : 0;
@@ -960,20 +948,6 @@ export const SettingsScreen = () => {
         ?? user?.subscription_next_refill_at
         ?? null
     );
-    const usagePeriodStartLabel = formatSubscriptionDate(
-        currentPeriodUsage?.period_start_at
-        ?? user?.current_usage_period_start_at
-        ?? null
-    );
-    const usagePeriodEndLabel = formatSubscriptionDate(
-        currentPeriodUsage?.period_end_at
-        ?? user?.current_usage_period_end_at
-        ?? null
-    );
-    const llmUsedTokens = currentPeriodUsage?.usage.llm_total_tokens ?? (user?.llm_used_tokens ?? 0);
-    const llmInputTokens = currentPeriodUsage?.usage.llm_input_tokens ?? 0;
-    const llmOutputTokens = currentPeriodUsage?.usage.llm_output_tokens ?? 0;
-    const llmLimitTokens = currentPeriodUsage?.limits.llm_max_tokens ?? (user?.llm_max_tokens ?? 0);
 
     return (
         <ScreenContainer>

@@ -19,7 +19,7 @@ interface NoteCardProps {
 
 export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
     const { t } = useTranslation();
-    const { bundle, mode } = useEncryption();
+    const { mode } = useEncryption();
     const activeChild = note.improvements?.find(imp => imp.is_active);
     const activeChildTitle = (activeChild?.title || activeChild?.label || '').trim();
     let content = note.content || '';

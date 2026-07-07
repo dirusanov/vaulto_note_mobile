@@ -17,7 +17,6 @@ import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/open
 import { isRichHtmlContent, richContentToAgentMarkdown } from '../utils/richContent';
 import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
-import client from '../api/client';
 import { prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 
 const MAX_RETRIES = 3;

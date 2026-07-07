@@ -11,16 +11,12 @@ import {
     ServerImprovement,
     SyncChangeRequest,
     SyncImprovementChangeRequest,
-    SyncNotesRequest,
-    SyncNotesResponse,
     NoteSyncConflict,
 } from '../api/notes';
 import {
     getNotesLocal,
     saveNoteLocal,
-    deleteNoteLocal,
     hardDeleteNoteLocal,
-    hardDeleteImprovementLocal,
     getAllImprovementsLocal,
     saveImprovementLocal,
     markAllDirty,
@@ -64,18 +60,6 @@ const shouldSyncNote = (note: Note): boolean => {
 const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     return String(error ?? '');
-};
-
-const isExpectedDecryptFailure = (error: unknown): boolean => {
-    const message = getErrorMessage(error).toLowerCase();
-    return (
-        message.includes('invalid tag') ||
-        message.includes('ghash tag') ||
-        message.includes('e2ee locked') ||
-        message.includes('master key missing') ||
-        message.includes('unsupported ciphertext format') ||
-        message.includes('invalid ciphertext')
-    );
 };
 
 class SyncService {

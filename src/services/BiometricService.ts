@@ -1,5 +1,4 @@
 import * as LocalAuthentication from 'expo-local-authentication';
-import { Alert, Platform } from 'react-native';
 
 export const BiometricService = {
     /**

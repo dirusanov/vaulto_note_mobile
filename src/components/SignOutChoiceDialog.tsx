@@ -6,9 +6,6 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
-import * as Clipboard from 'expo-clipboard';
-import { Alert } from 'react-native';
-
 interface SignOutChoiceDialogProps {
     visible: boolean;
     unsyncedCount: number;
@@ -26,7 +23,6 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
     onDelete,
     onCancel,
     hasE2EE,
-    recoveryCode,
 }) => {
     const { t } = useTranslation();
     const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);

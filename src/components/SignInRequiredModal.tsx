@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
 interface SignInRequiredModalProps {

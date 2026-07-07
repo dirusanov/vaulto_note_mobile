@@ -16,12 +16,7 @@ const withLlamaRN = (config, options = {}) => {
         entitlementsProfile = 'production',
         forceCxx20 = true,
         enableOpenCLAndHexagon = true,
-        enableOpenCL = true,
     } = options;
-
-    if (typeof options.enableOpenCL !== 'undefined') {
-        console.warn('enableOpenCL is deprecated. Use enableOpenCLAndHexagon instead.');
-    }
 
     const isProdProfile =
         process.env.EAS_BUILD_PROFILE === entitlementsProfile ||
@@ -81,7 +76,7 @@ const withLlamaRN = (config, options = {}) => {
         ]);
     }
 
-    if (enableOpenCL && enableOpenCLAndHexagon) {
+    if (enableOpenCLAndHexagon) {
         config = withAndroidManifest(config, (c) => {
             const app = c.modResults.manifest.application?.[0];
             if (!app) return c;

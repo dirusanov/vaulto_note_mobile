@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+
 package com.vaultonotemobile
 
 import com.facebook.react.ReactPackage
