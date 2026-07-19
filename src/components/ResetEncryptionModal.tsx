@@ -27,7 +27,7 @@ const REQUIRED_CONFIRM = 'DELETE';
 export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncryptionModalProps) => {
     const { t } = useTranslation();
 
-    const { resetEncryption } = useEncryption();
+    const { forceResetEncryption } = useEncryption();
     const [confirmText, setConfirmText] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
         setError(null);
         setLoading(true);
         try {
-            const result = await resetEncryption();
+            const result = await forceResetEncryption();
             onReset?.(result);
             onClose();
         } catch (e: any) {

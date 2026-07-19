@@ -24,10 +24,11 @@ import { setCryptoMode, isMasterCiphertext } from '../crypto/encryption';
 import { e2eeApi } from '../api/e2ee';
 import { notesApi } from '../api/notes';
 import { 
-    initDatabase, 
-    setDeletionGuard, 
+    initDatabase,
+    setDeletionGuard,
     decryptAndRescueAllNotes,
     forceReencryptionLocal,
+    wipeLocalDatabase,
 } from '../services/DatabaseService';
 import { syncService } from '../services/SyncService';
 
@@ -50,6 +51,7 @@ interface EncryptionContextType {
     setSyncEnabledPreference: (enabled: boolean) => Promise<void>;
     resetSync: () => Promise<ResetEncryptionResult>;
     resetEncryption: () => Promise<ResetEncryptionResult>;
+    forceResetEncryption: () => Promise<ResetEncryptionResult>;
     lock: () => void;
 }
 
@@ -912,6 +914,65 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         return result;
     }, [isAuthenticated, isGuest, resetSync]);
 
+    // Destructive "forgot passphrase" reset. Unlike resetSync() this must work
+    // while the key is LOCKED: the passphrase is gone, so every note that is
+    // ciphertext under the lost key — on the server and on this device — is
+    // forfeited (the ResetEncryptionModal warns about exactly this). The server
+    // purge runs first; if the server is unreachable nothing is deleted locally
+    // and the user can retry.
+    const forceResetEncryption = useCallback(async (): Promise<ResetEncryptionResult> => {
+        if (!isAuthenticated || isGuest) {
+            throw new Error('Sign in required to reset encryption');
+        }
+        if (!userId) {
+            throw new Error('User not available');
+        }
+
+        setDeletionGuard(true);
+        try {
+            // Server side: soft-delete all synced notes, drop the key bundle,
+            // purge audio blobs, custody mode back to standard.
+            try {
+                await e2eeApi.resetSyncData();
+            } catch (err) {
+                console.warn('[Encryption] Force reset: server purge failed', err);
+                throw new Error('Could not reach the server to reset encryption. Try again when online.');
+            }
+
+            // Flip the account to plaintext mode (bumps the key epoch) so new
+            // notes sync unencrypted. Must not be skipped: an account left in
+            // e2ee mode with no key bundle would reject all future writes.
+            const state = await e2eeApi.setState('off');
+            syncService.setKeyEpoch(state.key_epoch);
+            await storage.setKeyEpoch(userId, state.key_epoch);
+
+            // Local side: the modal promises a full device wipe — everything
+            // synced here is master-key ciphertext we can no longer read.
+            await wipeLocalDatabase();
+            await storage.clearEncryptionMigrationState(userId);
+            await clearPendingDecryptSync(userId);
+            await storage.removeKeyBundle(userId);
+            await storage.removeStoredMasterKey(userId);
+            clearMasterKey();
+            setBundle(null);
+            setHasRemoteKeyBundle(false);
+            setCryptoMode('local');
+            setMode('local');
+            await storage.setCryptoMode('local', userId);
+            setStatus('uninitialized');
+
+            await syncService.resetSyncState(userId);
+            setSyncUnlocked(true);
+            await storage.setSyncEnabled(true, userId);
+            setSyncEnabled(true);
+            syncService.setSyncEnabled(true);
+        } finally {
+            setDeletionGuard(false);
+        }
+
+        return { purged: true, syncSucceeded: true };
+    }, [isAuthenticated, isGuest, userId]);
+
     const lock = useCallback(() => {
         clearMasterKey();
         setSyncUnlocked(false);
@@ -937,8 +998,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setSyncEnabledPreference,
         resetSync,
         resetEncryption,
+        forceResetEncryption,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>
