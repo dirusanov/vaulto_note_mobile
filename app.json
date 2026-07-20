@@ -3,7 +3,7 @@
     "name": "Vaulto Note",
     "slug": "vaulto-note-mobile",
     "owner": "random1k11",
-    "version": "1.0.67",
+    "version": "1.0.68",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "67",
+      "buildNumber": "68",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes."
       },
@@ -37,7 +37,7 @@
         "android.permission.CAMERA"
       ],
       "package": "com.vaultonotemobile",
-      "versionCode": 67
+      "versionCode": 68
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.68] - 2026-07-20
+
+### Fixed
+- **Forgot-Passphrase Encryption Reset**: The "Forgot passphrase? Reset encryption" flow no longer requires unlocking the device first. It now purges the account server-side (notes, key bundle, synced audio), flips the account to plaintext mode, and wipes the local device — all without needing the lost passphrase.
+
 ## [1.0.66] - 2026-07-04
 
 ### Added
