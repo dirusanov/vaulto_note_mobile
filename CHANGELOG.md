@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.69] - 2026-07-21
+
+### Fixed
+- **Localization Coverage**: Completed translations for Spanish, French, German, Portuguese, Chinese, Japanese, Arabic and Hindi — each was missing 137 strings (mainly the entire sign-in/sign-up/password-reset flow, plus assorted error dialogs and voice-recording notices) and silently falling back to English for that content.
+
 ## [1.0.68] - 2026-07-20
 
 ### Fixed
