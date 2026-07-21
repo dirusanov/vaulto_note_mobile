@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.70] - 2026-07-21
+
+### Fixed
+- **Multi-device encryption sync**: Account encryption transitions are reconciled before applying sync responses, concurrent setup is handled safely, offline edits survive version conflicts, and voice recordings migrate with the active encryption generation.
+
 ## [1.0.69] - 2026-07-21
 
 ### Fixed
