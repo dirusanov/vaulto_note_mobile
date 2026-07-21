@@ -10,9 +10,11 @@ export interface AudioUploadTarget {
     /** Scheme the server will accept on commit ('e2ee' for encrypted accounts). */
     required_enc_scheme: AudioEncScheme;
     key_epoch: number;
+    upload_id?: string;
 }
 
 export interface AudioCommitRequest {
+    upload_id?: string;
     enc_scheme: AudioEncScheme;
     enc_epoch: number;
     mime_type: string;
@@ -41,6 +43,7 @@ export const audioApi = {
         const response = await client.post(`/sync/notes/${noteId}/audio/upload-url`, {
             mime_type: mimeType,
             size_bytes: sizeBytes,
+            supports_versioned_upload: true,
         });
         return response.data;
     },

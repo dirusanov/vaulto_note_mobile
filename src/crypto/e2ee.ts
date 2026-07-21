@@ -41,6 +41,9 @@ export type KeyBundle = {
     wrapped_key: string; // hex
     created_at: string;
     secret_mode?: KeyBundleSecretMode;
+    // Non-secret commitment used by the server to ensure passphrase re-wraps
+    // keep the same master key. SHA-256 is safe here because the key is random.
+    key_id?: string;
 };
 
 let masterKey: Uint8Array | null = null;
@@ -52,6 +55,8 @@ export const setMasterKey = (key: Uint8Array | null) => {
 export const getMasterKey = () => masterKey;
 
 export const hasMasterKey = () => masterKey !== null;
+
+export const keyIdFromMasterKey = (key: Uint8Array): string => bytesToHex(sha256(key));
 
 export const clearMasterKey = () => {
     masterKey = null;
@@ -239,6 +244,7 @@ export const wrapMasterKey = async (
         wrapped_key: bytesToHex(wrappedKey),
         created_at: new Date().toISOString(),
         secret_mode: mode,
+        key_id: keyIdFromMasterKey(masterKey),
     };
 
     return bundle;
@@ -345,6 +351,9 @@ export const isKeyBundle = (value: any): value is KeyBundle => {
         typeof value.kdf.salt === 'string' &&
         typeof value.wrap.nonce === 'string' &&
         typeof value.wrapped_key === 'string' &&
+        (value.key_id === undefined || (
+            typeof value.key_id === 'string' && /^[0-9a-f]{64}$/.test(value.key_id)
+        )) &&
         (value.secret_mode === undefined ||
             value.secret_mode === 'passphrase' ||
             value.secret_mode === 'recovery_code' ||

@@ -310,7 +310,11 @@ export const rescueAllNotes = async (userId: string): Promise<number> => {
     }
 };
 
-export const decryptAndRescueAllNotes = async (userId: string): Promise<number> => {
+export const decryptAndRescueAllNotes = async (
+    userId: string,
+    markDirty = true,
+    strict = false,
+): Promise<number> => {
     if (!userId) return 0;
     try {
         // Fetch RAW rows to avoid the placeholder logic in processNotes.
@@ -336,15 +340,20 @@ export const decryptAndRescueAllNotes = async (userId: string): Promise<number> 
                 const encContent = await encrypt(content);
                 const encTranscription = transcription ? await encrypt(transcription) : undefined;
 
-                await withDbRetry(`rescue note ${n.id}`, (database) =>
-                    database.runAsync(
+                await withDbRetry(`rescue note ${n.id}`, (database) => markDirty
+                    ? database.runAsync(
                         "UPDATE notes SET encrypted_title = ?, encrypted_content = ?, encrypted_transcription = ?, dirty = 1, synced = 0, deleted = 0, updated_at = ? WHERE id = ? AND user_id = ?",
                         [encTitle, encContent, encTranscription ?? null, new Date().toISOString(), n.id, userId]
+                    )
+                    : database.runAsync(
+                        "UPDATE notes SET encrypted_title = ?, encrypted_content = ?, encrypted_transcription = ? WHERE id = ? AND user_id = ?",
+                        [encTitle, encContent, encTranscription ?? null, n.id, userId]
                     )
                 );
                 count++;
             } catch (err) {
                 console.warn(`[DatabaseService] Failed to rescue note ${n.id}, skipping`, err);
+                if (strict) throw err;
             }
         }
 
@@ -357,14 +366,19 @@ export const decryptAndRescueAllNotes = async (userId: string): Promise<number> 
                 const encTitle = await encrypt(title);
                 const encContent = await encrypt(content);
 
-                await withDbRetry(`rescue improvement ${imp.id}`, (database) =>
-                    database.runAsync(
+                await withDbRetry(`rescue improvement ${imp.id}`, (database) => markDirty
+                    ? database.runAsync(
                         "UPDATE note_improvements SET encrypted_title = ?, encrypted_content = ?, dirty = 1, synced = 0, deleted = 0, updated_at = ? WHERE id = ? AND user_id = ?",
                         [encTitle, encContent, new Date().toISOString(), imp.id, userId]
+                    )
+                    : database.runAsync(
+                        "UPDATE note_improvements SET encrypted_title = ?, encrypted_content = ? WHERE id = ? AND user_id = ?",
+                        [encTitle, encContent, imp.id, userId]
                     )
                 );
             } catch (err) {
                 console.warn(`[DatabaseService] Failed to rescue improvement ${imp.id}, skipping`, err);
+                if (strict) throw err;
             }
         }
 

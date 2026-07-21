@@ -11,7 +11,6 @@ import {
     ServerImprovement,
     SyncChangeRequest,
     SyncImprovementChangeRequest,
-    NoteSyncConflict,
 } from '../api/notes';
 import {
     getNotesLocal,
@@ -40,6 +39,11 @@ import {
 } from '../crypto/encryption';
 import { hasMasterKey } from '../crypto/e2ee';
 import { storage, hasPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
+import {
+    isRetryableSyncConflict,
+    rebasedClientTimestamp,
+    shouldPauseForEncryptionState,
+} from './encryptionState';
 
 
 // Numeric monotonic cursor (server_seq). New key so stale ISO timestamps from
@@ -50,7 +54,17 @@ const RESUME_SYNC_THRESHOLD_MS = 30000; // 30 seconds
 
 type SyncReason = 'app_start' | 'resume' | 'auto' | 'manual' | 'variant_switch' | 'e2ee_migration';
 type SyncListener = () => void;
-type EncryptionConflictHandler = (info: { enc_mode: 'off' | 'e2ee' | null; key_epoch: number | null }) => void;
+type EncryptionConflictInfo = {
+    enc_mode: 'off' | 'e2ee' | null;
+    key_epoch: number | null;
+    previous_key_epoch: number;
+};
+type EncryptionConflictHandler = (info: EncryptionConflictInfo) => void | Promise<void>;
+type SyncEncryptionConflict = {
+    error: string;
+    server_enc_mode?: 'off' | 'e2ee';
+    server_key_epoch?: number;
+};
 
 const shouldSyncNote = (note: Note): boolean => {
     const storageScope = note.storage_scope ?? 'sync';
@@ -140,6 +154,74 @@ class SyncService {
         this.currentKeyEpoch = Number.isFinite(epoch) ? epoch : 0;
     }
 
+    /**
+     * Reconcile the account-level encryption state before applying a sync
+     * response. A mode change can happen without producing a write conflict
+     * (for example, a clean second device only pulls), so conflicts alone are
+     * not a reliable state-change signal.
+     *
+     * Returns true when the caller must stop the current sync pass. In that
+     * case the response must not be applied and the cursor must not advance;
+     * EncryptionContext will switch modes or lock the device, and the next
+     * sync will replay the same server changes safely.
+     */
+    private async reconcileEncryptionState(
+        serverMode: 'off' | 'e2ee' | null | undefined,
+        serverEpoch: number | null | undefined,
+    ): Promise<boolean> {
+        if (!this.currentUserId) return false;
+
+        const normalizedEpoch = serverEpoch != null && Number.isFinite(serverEpoch)
+            ? serverEpoch
+            : null;
+        const previousEpoch = this.currentKeyEpoch;
+        const localCryptoMode = getCryptoMode();
+        const localAccountMode: 'off' | 'e2ee' = localCryptoMode === 'e2ee' ? 'e2ee' : 'off';
+        const encryptionStateChanged = shouldPauseForEncryptionState(
+            localCryptoMode,
+            serverMode,
+            previousEpoch,
+            normalizedEpoch,
+        );
+
+        if (encryptionStateChanged) {
+            console.log('[SyncService] Server encryption state changed; pausing sync before apply.', {
+                local_mode: localAccountMode,
+                server_mode: serverMode,
+                local_key_epoch: previousEpoch,
+                server_key_epoch: normalizedEpoch,
+            });
+
+            if (!this.encryptionConflictHandler) {
+                // EncryptionContext may still be mounting. Keep both the cursor
+                // and local epoch untouched so the next sync observes the same
+                // transition instead of pairing a new epoch with an old key.
+                console.log('[SyncService] Encryption reconciliation handler is not ready; deferring state change.');
+                return true;
+            }
+
+            await this.encryptionConflictHandler({
+                enc_mode: serverMode ?? null,
+                key_epoch: normalizedEpoch,
+                previous_key_epoch: previousEpoch,
+            });
+
+            // Persist the authoritative generation after the handler has had a
+            // chance to inspect the previously stored epoch.
+            if (normalizedEpoch != null) {
+                this.currentKeyEpoch = normalizedEpoch;
+                await storage.setKeyEpoch(this.currentUserId, normalizedEpoch);
+            }
+            return true;
+        }
+
+        if (normalizedEpoch != null && normalizedEpoch !== previousEpoch) {
+            this.currentKeyEpoch = normalizedEpoch;
+            await storage.setKeyEpoch(this.currentUserId, normalizedEpoch);
+        }
+        return false;
+    }
+
     public async resetSyncState(userId?: string | null) {
         this.lastSyncSeq = null;
         const effectiveUserId = userId ?? this.currentUserId;
@@ -157,26 +239,42 @@ class SyncService {
      * capture notes that exist on the server but not yet on this device before
      * decrypting and re-uploading them as plaintext.
      */
-    public async pullAllFromServer(userId?: string | null): Promise<void> {
+    public async pullAllFromServer(
+        userId?: string | null,
+        reason: SyncReason = 'manual',
+    ): Promise<void> {
         const effectiveUserId = userId ?? this.currentUserId;
         if (!effectiveUserId) return;
         this.lastSyncSeq = null;
         await AsyncStorage.removeItem(`${SYNC_SEQ_KEY}_${effectiveUserId}`);
-        await this.syncNowAndWait('manual');
+        await this.syncNowAndWait(reason, true);
     }
 
     /** Waits for any in-progress sync to complete, then runs a fresh sync. */
-    public async syncNowAndWait(reason: SyncReason = 'manual'): Promise<void> {
+    public async syncNowAndWait(
+        reason: SyncReason = 'manual',
+        throwOnError = false,
+    ): Promise<void> {
         // Wait for any in-flight sync to finish first
         const startWait = Date.now();
         while (this.isSyncing && Date.now() - startWait < 15000) {
             await new Promise<void>((resolve) => setTimeout(resolve, 100));
         }
-        await this.syncNow(reason);
+        if (this.isSyncing) {
+            const error = new Error('Timed out waiting for the previous sync operation.');
+            if (throwOnError) throw error;
+            console.warn('[SyncService]', error.message);
+            return;
+        }
+
+        await this.syncNow(reason, throwOnError);
         // Wait for the sync we just started to complete
         const startSync = Date.now();
         while (this.isSyncing && Date.now() - startSync < 15000) {
             await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+        if (this.isSyncing && throwOnError) {
+            throw new Error('Timed out waiting for sync to complete.');
         }
     }
 
@@ -200,7 +298,17 @@ class SyncService {
             return !!parent && shouldSyncNote(parent) && !parent.pending_server_delete && (imp.dirty || imp.deleted);
         }).length;
 
-        return { unsyncedCount: dirtyNotes + dirtyImprovements };
+        const dirtyAudio = notes.filter((note) => (
+            shouldSyncNote(note)
+            && !note.deleted
+            && !note.pending_delete
+            && !note.pending_server_delete
+            && !!note.has_audio
+            && !!note.audio_file_path
+            && !note.audio_synced
+        )).length;
+
+        return { unsyncedCount: dirtyNotes + dirtyImprovements + dirtyAudio };
     }
 
     public async hasUnsyncedChanges(userId?: string | null): Promise<boolean> {
@@ -332,22 +440,28 @@ class SyncService {
         }
     }
 
-    public async syncNow(reason: SyncReason) {
+    public async syncNow(reason: SyncReason, throwOnError = false) {
         if (this.isSyncing) {
             console.log(`[SyncService] Sync already in progress. Reason: ${reason} ignored.`);
+            if (throwOnError) {
+                throw new Error('Sync is already in progress.');
+            }
             return;
         }
 
         if (!this.isAuthenticated || !this.currentUserId) {
             console.log('[SyncService] Not authenticated or no user selected. Skipping sync.');
+            if (throwOnError) throw new Error('Cannot sync without an authenticated user.');
             return;
         }
         if (!this.syncEnabled) {
             console.log('[SyncService] Sync disabled. Skipping sync.');
+            if (throwOnError) throw new Error('Sync is disabled.');
             return;
         }
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
             console.log('[SyncService] Encryption locked. Skipping sync.');
+            if (throwOnError) throw new Error('Encryption is locked.');
             return;
         }
         const pendingEncryptionMigration = await storage.getEncryptionMigrationState(this.currentUserId);
@@ -356,6 +470,7 @@ class SyncService {
             (pendingEncryptionMigration === 'sync' && (getCryptoMode() !== 'e2ee' || !hasMasterKey()));
         if (migrationNeedsOwner && reason !== 'e2ee_migration') {
             console.log('[SyncService] E2EE migration is pending. Skipping regular sync until encryption is ready.');
+            if (throwOnError) throw new Error('Encryption migration is still pending.');
             return;
         }
 
@@ -481,35 +596,67 @@ class SyncService {
                 since_seq: sinceSeq,
             });
 
+            // Encryption state is part of every modern sync response. Check it
+            // before applying notes or clearing dirty flags: a clean stale
+            // device receives no write conflict, but still has to lock when
+            // another device enables E2EE.
+            const encryptionStateChanged = await this.reconcileEncryptionState(
+                response.enc_mode,
+                response.key_epoch,
+            );
+            if (encryptionStateChanged) {
+                if (throwOnError) {
+                    throw new Error('Account encryption state changed during sync.');
+                }
+                return;
+            }
+
             // Track server seqs we could NOT apply (e.g. locked while in another
             // crypto mode), so we never advance the cursor past them.
             const deferredSeqs: number[] = [];
 
-            // Reconcile account encryption state pushed back by the server.
-            if (response.key_epoch != null && this.currentUserId) {
-                if (response.key_epoch !== this.currentKeyEpoch) {
-                    this.currentKeyEpoch = response.key_epoch;
-                    await storage.setKeyEpoch(this.currentUserId, response.key_epoch);
-                }
-            }
-
             // 4. Process response
             const allConflicts = response.conflicts || [];
+            const allImprovementConflicts = response.improvement_conflicts || [];
             const conflictedNoteIds = new Set(allConflicts.map((c) => c.id));
+            const retryableNoteConflictIds = new Set(
+                allConflicts
+                    .filter((c) => isRetryableSyncConflict(c.error))
+                    .map((c) => c.id),
+            );
             if (conflictedNoteIds.size > 0) {
                 console.warn(`[SyncService] Server reported ${conflictedNoteIds.size} note conflicts; keeping local notes dirty.`);
             }
 
             // Surface encryption-mode mismatches so the app can transition this
             // device (e.g. another device disabled E2EE for the account).
-            const encConflict = allConflicts.find(
-                (c) => c.error === 'encryption_disabled' || c.error === 'encryption_required',
-            ) as (NoteSyncConflict & { server_enc_mode?: 'off' | 'e2ee'; server_key_epoch?: number }) | undefined;
-            if (encConflict && this.encryptionConflictHandler) {
-                this.encryptionConflictHandler({
-                    enc_mode: (encConflict.server_enc_mode as 'off' | 'e2ee') ?? response.enc_mode ?? null,
-                    key_epoch: encConflict.server_key_epoch ?? response.key_epoch ?? null,
-                });
+            const encConflict = (
+                allConflicts.find(
+                    (c) => c.error === 'encryption_disabled'
+                        || c.error === 'encryption_required'
+                        || c.error === 'key_epoch_mismatch',
+                )
+                ?? allImprovementConflicts.find(
+                    (c) => c.error === 'encryption_disabled'
+                        || c.error === 'encryption_required'
+                        || c.error === 'key_epoch_mismatch',
+                )
+            ) as SyncEncryptionConflict | undefined;
+            if (encConflict) {
+                if (this.encryptionConflictHandler) {
+                    await this.encryptionConflictHandler({
+                        enc_mode: encConflict.server_enc_mode ?? response.enc_mode ?? null,
+                        key_epoch: encConflict.server_key_epoch ?? response.key_epoch ?? null,
+                        previous_key_epoch: this.currentKeyEpoch,
+                    });
+                }
+                // The rejected changes must remain dirty, and the response must
+                // be replayed after reconciliation. Do not apply it or advance
+                // the cursor in the stale crypto mode.
+                if (throwOnError) {
+                    throw new Error(`Server rejected stale encryption state: ${encConflict.error}`);
+                }
+                return;
             }
 
             const serverNotes = [
@@ -520,7 +667,13 @@ class SyncService {
             serverNotes.forEach(n => uniqueIncoming.set(n.id, n));
 
             if (uniqueIncoming.size > 0) {
-                const res = await this.applyServerChanges(Array.from(uniqueIncoming.values()));
+                // A dirty local edit that lost optimistic concurrency must not
+                // be overwritten by the server echo. Keep its semantic content,
+                // rebase it onto the observed server version below, and retry.
+                const safeIncoming = Array.from(uniqueIncoming.values()).filter(
+                    (note) => !retryableNoteConflictIds.has(note.id),
+                );
+                const res = await this.applyServerChanges(safeIncoming);
                 deferredSeqs.push(...res.deferredSeqs);
             }
 
@@ -528,7 +681,12 @@ class SyncService {
                 ...(response.improvement_updates || []),
                 ...(response.improvement_changes || []),
             ];
-            const conflictedImprovementIds = new Set((response.improvement_conflicts || []).map((c) => c.id));
+            const conflictedImprovementIds = new Set(allImprovementConflicts.map((c) => c.id));
+            const retryableImprovementConflictIds = new Set(
+                allImprovementConflicts
+                    .filter((c) => isRetryableSyncConflict(c.error))
+                    .map((c) => c.id),
+            );
             if (conflictedImprovementIds.size > 0) {
                 console.warn(`[SyncService] Server reported ${conflictedImprovementIds.size} improvement conflicts; keeping local improvements dirty.`);
             }
@@ -540,8 +698,58 @@ class SyncService {
             }
 
             if (incomingImprovements.length > 0) {
-                const res = await this.applyServerImprovements(incomingImprovements);
+                const safeIncomingImprovements = incomingImprovements.filter(
+                    (improvement) => !retryableImprovementConflictIds.has(improvement.id),
+                );
+                const res = await this.applyServerImprovements(safeIncomingImprovements);
                 deferredSeqs.push(...res.deferredSeqs);
+            }
+
+            // Rebase retryable conflicts after the pull. This is especially
+            // important when another device only re-encrypted a note: an
+            // offline semantic edit must survive that mechanical version bump.
+            // Move the client timestamp past the observed server timestamp so
+            // the replay guard accepts the retry even when device clocks differ.
+            for (const conflict of allConflicts) {
+                if (!retryableNoteConflictIds.has(conflict.id) || !this.currentUserId) continue;
+                const local = noteMap.get(conflict.id);
+                if (!local) continue;
+                const serverNote = uniqueIncoming.get(conflict.id);
+                const serverVersion = conflict.server_version ?? serverNote?.version;
+                if (serverVersion == null) continue;
+                const retryTimestamp = rebasedClientTimestamp(
+                    Date.now(),
+                    conflict.server_updated_at ?? serverNote?.updated_at,
+                );
+                await saveNoteLocal(this.currentUserId, {
+                    ...local,
+                    version: serverVersion,
+                    server_updated_at: conflict.server_updated_at ?? serverNote?.updated_at ?? local.server_updated_at,
+                    updated_at: retryTimestamp,
+                    dirty: true,
+                    synced: 0,
+                });
+            }
+
+            for (const conflict of allImprovementConflicts) {
+                if (!retryableImprovementConflictIds.has(conflict.id) || !this.currentUserId) continue;
+                const local = improvementMap.get(conflict.id);
+                if (!local) continue;
+                const serverImprovement = incomingImprovements.find((item) => item.id === conflict.id);
+                const serverVersion = conflict.server_version ?? serverImprovement?.version;
+                if (serverVersion == null) continue;
+                const retryTimestamp = rebasedClientTimestamp(
+                    Date.now(),
+                    conflict.server_updated_at ?? serverImprovement?.updated_at,
+                );
+                await saveImprovementLocal(this.currentUserId, {
+                    ...local,
+                    version: serverVersion,
+                    server_updated_at: conflict.server_updated_at ?? serverImprovement?.updated_at ?? local.server_updated_at,
+                    updated_at: retryTimestamp,
+                    dirty: true,
+                    synced: 0,
+                });
             }
 
             // 5. Cleanup dirty flags
@@ -630,6 +838,7 @@ class SyncService {
 
         } catch (e) {
             console.error('[SyncService] Sync failed', e);
+            if (throwOnError) throw e;
         } finally {
             this.isSyncing = false;
         }
@@ -652,6 +861,49 @@ class SyncService {
     // -----------------------------------------------------------------------
 
     private audioSyncInProgress = false;
+
+    public async syncAudioNowAndWait(): Promise<void> {
+        const startedAt = Date.now();
+        while (this.audioSyncInProgress && Date.now() - startedAt < 60000) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+        if (this.audioSyncInProgress) {
+            throw new Error('Timed out waiting for audio synchronization.');
+        }
+        await this.syncAudioBlobs();
+    }
+
+    /** Ensure no server audio would be stranded by a key/mode transition. */
+    public async ensureAllRemoteAudioAvailable(userId: string): Promise<void> {
+        await this.syncAudioNowAndWait();
+        const notes = await getNotesLocal(userId);
+        const missing = notes.find((note) => (
+            shouldSyncNote(note)
+            && !note.deleted
+            && !!note.has_audio
+            && !!note.audio_remote
+            && !note.audio_file_path
+        ));
+        if (missing) {
+            throw new Error(`Audio for note ${missing.id} is not available locally.`);
+        }
+    }
+
+    /** Force local audio to be committed again under the new account mode. */
+    public async markAllLocalAudioForResync(userId: string): Promise<void> {
+        const notes = await getNotesLocal(userId);
+        for (const note of notes) {
+            if (
+                shouldSyncNote(note)
+                && !note.deleted
+                && !!note.has_audio
+                && !!note.audio_file_path
+            ) {
+                await setNoteAudioSyncState(userId, note.id, { audio_synced: 0 });
+            }
+        }
+        this.notifyListeners();
+    }
 
     private async syncAudioBlobs(): Promise<void> {
         if (Platform.OS === 'web') return;
@@ -702,6 +954,13 @@ class SyncService {
         }
 
         const target = await audioApi.getUploadUrl(note.id, mimeType);
+        const audioEncryptionStateChanged = await this.reconcileEncryptionState(
+            target.required_enc_scheme === 'e2ee' ? 'e2ee' : 'off',
+            target.key_epoch,
+        );
+        if (audioEncryptionStateChanged) {
+            return;
+        }
         if (target.required_enc_scheme !== scheme) {
             // Account encryption state changed under us; the text sync conflict
             // path reconciles the mode, we just skip this round.
@@ -728,6 +987,7 @@ class SyncService {
         }
 
         await audioApi.commit(note.id, {
+            upload_id: target.upload_id,
             enc_scheme: scheme,
             enc_epoch: scheme === 'e2ee' ? this.currentKeyEpoch : 0,
             mime_type: mimeType,

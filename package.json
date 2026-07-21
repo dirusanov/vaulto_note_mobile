@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:encryption-state": "tsc src/services/encryptionState.ts --target ES2020 --module commonjs --outDir .test-build --skipLibCheck --esModuleInterop && node tests/encryptionState.test.cjs"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",

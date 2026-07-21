@@ -21,8 +21,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
-import { notesApi } from '../api/notes';
-import { getSyncLockBannerDismissed, setSyncLockBannerDismissed } from '../utils/storage';
 import { hasMeaningfulRichContent } from '../utils/richContent';
 
 const { width } = Dimensions.get('window');
@@ -51,8 +49,7 @@ export const NotesListScreen = () => {
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
     const [unlockProgress, setUnlockProgress] = useState<number | null>(null);
     const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null);
-    const [lockBannerDismissed, setLockBannerDismissed] = useState<boolean | null>(null);
-    const [hasServerNotes, setHasServerNotes] = useState(false);
+    const [lockBannerDismissed, setLockBannerDismissed] = useState(false);
     const [dockInstanceKey, setDockInstanceKey] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const lastFetchAtRef = useRef(0);
@@ -185,8 +182,7 @@ export const NotesListScreen = () => {
         isAuthenticated &&
         !isGuest &&
         syncLocked &&
-        hasServerNotes &&
-        lockBannerDismissed === false;
+        !lockBannerDismissed;
 
     useEffect(() => {
         if (Platform.OS === 'android') {
@@ -199,70 +195,14 @@ export const NotesListScreen = () => {
     }, [shouldShowLockBanner]);
 
     useEffect(() => {
-        let cancelled = false;
-
-        const checkServerNotesPresence = async () => {
-            if (!isAuthenticated || isGuest || !syncLocked) {
-                if (!cancelled) {
-                    setHasServerNotes(false);
-                }
-                return;
-            }
-
-            try {
-                const response = await notesApi.sync({
-                    changes: [],
-                    improvement_changes: [],
-                    since_updated_at: '1970-01-01T00:00:00+00:00',
-                });
-                const activeChanges = response.server_changes?.filter(n => !n.deleted) ?? [];
-                const activeUpdated = response.updated?.filter(n => !n.deleted) ?? [];
-
-                const hasRemoteData = activeChanges.length > 0 || activeUpdated.length > 0;
-
-                if (!cancelled) {
-                    setHasServerNotes(hasRemoteData);
-                }
-            } catch (error) {
-                console.warn('[NotesList] Failed to check remote notes presence for lock banner', error);
-                if (!cancelled) {
-                    setHasServerNotes(false);
-                }
-            }
-        };
-
-        void checkServerNotesPresence();
-        return () => {
-            cancelled = true;
-        };
-    }, [isAuthenticated, isGuest, syncLocked, userId]);
-
-    useEffect(() => {
-        let mounted = true;
-
-        const hydrateDismissState = async () => {
-            if (!userId || !isAuthenticated || isGuest) {
-                if (mounted) setLockBannerDismissed(null);
-                return;
-            }
-            if (mounted) setLockBannerDismissed(null);
-            const stored = await getSyncLockBannerDismissed(userId);
-            if (mounted) {
-                setLockBannerDismissed(stored);
-            }
-        };
-
-        void hydrateDismissState();
-        return () => {
-            mounted = false;
-        };
-    }, [userId, isAuthenticated, isGuest]);
+        // A dismissal belongs only to the current lock session. A later remote
+        // enable/key rotation must surface the unlock action again.
+        setLockBannerDismissed(false);
+    }, [syncLocked, userId]);
 
     const dismissLockBanner = useCallback(() => {
         setLockBannerDismissed(true);
-        if (!userId) return;
-        void setSyncLockBannerDismissed(userId);
-    }, [userId]);
+    }, []);
 
     const handleMicPress = () => {
         setIsVoiceRecorderVisible(true);

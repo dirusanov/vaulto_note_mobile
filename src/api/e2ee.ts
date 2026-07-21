@@ -2,7 +2,11 @@ import client from './client';
 import { KeyBundle } from '../crypto/e2ee';
 
 export type DeleteKeyBundleResult = 'deleted' | 'unsupported';
-export type ResetSyncResult = 'deleted';
+export type ResetSyncResult = E2EEStateResponse & {
+    status: 'ok';
+    deleted_notes: number;
+    key_deleted: boolean;
+};
 
 export interface E2EEConfigResponse {
     custody_mode: 'standard';
@@ -13,6 +17,13 @@ export type AccountEncMode = 'off' | 'e2ee';
 export interface E2EEStateResponse {
     enc_mode: AccountEncMode;
     key_epoch: number;
+}
+
+export class E2EEEnableConflictError extends Error {
+    constructor() {
+        super('Encryption was enabled concurrently on another device.');
+        this.name = 'E2EEEnableConflictError';
+    }
 }
 
 export const e2eeApi = {
@@ -69,6 +80,28 @@ export const e2eeApi = {
         const mode = response.data?.enc_mode === 'e2ee' ? 'e2ee' : 'off';
         return { enc_mode: mode, key_epoch: Number(response.data?.key_epoch ?? 0) };
     },
+    enableWithBundle: async (
+        bundle: KeyBundle,
+        expectedKeyEpoch: number,
+    ): Promise<E2EEStateResponse | null> => {
+        const response = await client.put('/e2ee/enable', {
+            bundle,
+            expected_key_epoch: expectedKeyEpoch,
+        }, {
+            validateStatus: (status) =>
+                (status >= 200 && status < 300) || status === 404 || status === 405 || status === 409,
+        });
+        if (response.status === 404 || response.status === 405) {
+            return null;
+        }
+        if (response.status === 409) {
+            throw new E2EEEnableConflictError();
+        }
+        return {
+            enc_mode: response.data?.enc_mode === 'e2ee' ? 'e2ee' : 'off',
+            key_epoch: Number(response.data?.key_epoch ?? 0),
+        };
+    },
     setConfig: async (syncMode: 'standard' = 'standard'): Promise<E2EEConfigResponse> => {
         const response = await client.put('/e2ee/config', {
             custody_mode: syncMode,
@@ -110,7 +143,13 @@ export const e2eeApi = {
         return 'deleted';
     },
     resetSyncData: async (): Promise<ResetSyncResult> => {
-        await client.delete('/e2ee/reset');
-        return 'deleted';
+        const response = await client.delete('/e2ee/reset');
+        return {
+            status: 'ok',
+            deleted_notes: Number(response.data?.deleted_notes ?? 0),
+            key_deleted: !!response.data?.key_deleted,
+            enc_mode: response.data?.enc_mode === 'e2ee' ? 'e2ee' : 'off',
+            key_epoch: Number(response.data?.key_epoch ?? 0),
+        };
     },
 };
