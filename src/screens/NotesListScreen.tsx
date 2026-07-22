@@ -31,7 +31,7 @@ export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
     const { userId, isAuthenticated, isGuest } = useAuth();
-    const { syncLocked } = useEncryption();
+    const { syncLocked, resetRecoveryPending } = useEncryption();
     const {
         notes,
         loading,
@@ -183,6 +183,11 @@ export const NotesListScreen = () => {
         !isGuest &&
         syncLocked &&
         !lockBannerDismissed;
+    const shouldShowResetRecoveryBanner =
+        !isSelectionMode
+        && isAuthenticated
+        && !isGuest
+        && resetRecoveryPending;
 
     useEffect(() => {
         if (Platform.OS === 'android') {
@@ -192,7 +197,7 @@ export const NotesListScreen = () => {
 
     useEffect(() => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    }, [shouldShowLockBanner]);
+    }, [shouldShowLockBanner, shouldShowResetRecoveryBanner]);
 
     useEffect(() => {
         // A dismissal belongs only to the current lock session. A later remote
@@ -478,6 +483,35 @@ export const NotesListScreen = () => {
                 />
             ) : (
                 <View style={styles.topBar} />
+            )}
+            {shouldShowResetRecoveryBanner && (
+                <View style={styles.lockBanner}>
+                    <View style={styles.lockBannerHeader}>
+                        <View style={styles.lockBannerIcon}>
+                            <MaterialIcons name="security" size={20} color={colors.warning} />
+                        </View>
+                        <View style={styles.lockBannerTextWrap}>
+                            <Text style={styles.lockBannerTitle}>
+                                {t('notes.resetRecoveryTitle', 'Encrypted vault was reset')}
+                            </Text>
+                            <Text style={styles.lockBannerText}>
+                                {t('notes.resetRecoveryDescription', 'Your retained notes are local-only and sync is paused. Choose how to recover them in Settings.')}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.lockActionsRow}>
+                        <TouchableOpacity
+                            style={styles.lockActionPrimary}
+                            onPress={handleSettingsPress}
+                            activeOpacity={0.85}
+                        >
+                            <MaterialIcons name="settings" size={16} color={colors.surface} />
+                            <Text style={styles.lockActionPrimaryText}>
+                                {t('notes.reviewRecovery', 'Review options')}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             )}
             {shouldShowLockBanner && (
                 <View style={styles.lockBanner}>

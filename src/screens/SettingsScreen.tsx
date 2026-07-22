@@ -263,9 +263,12 @@ export const SettingsScreen = () => {
         mode: encryptionMode,
         syncEnabled,
         syncLocked,
+        resetRecoveryPending,
         hasRemoteKeyBundle,
         recoveryCode,
         setSyncEnabledPreference,
+        keepResetArchiveLocal,
+        resumeStandardSyncAfterReset,
     } = useEncryption();
 
     const [apiKey, setApiKeyState] = useState('');
@@ -431,6 +434,43 @@ export const SettingsScreen = () => {
 
         setShowDisableSyncModal(true);
     }, [encryptionStatus, setSyncEnabledPreference, syncToggleDisabled, t]);
+
+    const confirmKeepResetArchiveLocal = useCallback(() => {
+        Alert.alert(
+            t('settings.resetRecovery.keepTitle', 'Keep notes only on this device?'),
+            t('settings.resetRecovery.keepDescription', 'The recovered notes will remain local and cloud sync will stay off.'),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('settings.resetRecovery.keepLocal', 'Keep local'),
+                    onPress: () => {
+                        void keepResetArchiveLocal().catch((error: any) => {
+                            Alert.alert(t('common.failed'), error?.message || t('aux.somethingWentWrong'));
+                        });
+                    },
+                },
+            ],
+        );
+    }, [keepResetArchiveLocal, t]);
+
+    const confirmStandardResetRecovery = useCallback(() => {
+        Alert.alert(
+            t('settings.resetRecovery.standardTitle', 'Sync without E2EE?'),
+            t('settings.resetRecovery.standardDescription', 'Your recovered notes will be uploaded using standard sync. Vaulto can technically process their contents.'),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('settings.resetRecovery.standardAction', 'Use standard sync'),
+                    style: 'destructive',
+                    onPress: () => {
+                        void resumeStandardSyncAfterReset().catch((error: any) => {
+                            Alert.alert(t('common.failed'), error?.message || t('aux.somethingWentWrong'));
+                        });
+                    },
+                },
+            ],
+        );
+    }, [resumeStandardSyncAfterReset, t]);
 
     type ProviderOption = {
         key: AIProvider;
@@ -1060,6 +1100,55 @@ export const SettingsScreen = () => {
                         </TouchableOpacity>
                     </View>
 
+                    {resetRecoveryPending && (
+                        <View style={{
+                            borderWidth: 1,
+                            borderColor: colors.warning + '80',
+                            backgroundColor: colors.warning + '12',
+                            borderRadius: 14,
+                            padding: spacing.m,
+                            marginBottom: spacing.m,
+                        }}>
+                            <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' }}>
+                                <MaterialCommunityIcons name="shield-alert-outline" size={20} color={colors.warning} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.preferenceTitle}>
+                                        {t('settings.resetRecovery.title', 'Encrypted vault was reset')}
+                                    </Text>
+                                    <Text style={[styles.preferenceDescription, { marginTop: 4 }]}>
+                                        {t('settings.resetRecovery.description', 'Notes retained on this device are isolated locally. Sync is paused so they cannot be uploaded without your choice.')}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginTop: spacing.m }}>
+                                <TouchableOpacity
+                                    style={[styles.smallButton, { backgroundColor: colors.primary }]}
+                                    onPress={() => setShowEnableSyncModal(true)}
+                                >
+                                    <Text style={styles.smallButtonText}>
+                                        {t('settings.resetRecovery.enableE2EE', 'Restore with E2EE')}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.smallButtonOutlined}
+                                    onPress={confirmKeepResetArchiveLocal}
+                                >
+                                    <Text style={styles.smallButtonTextOutlined}>
+                                        {t('settings.resetRecovery.keepLocal', 'Keep local')}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
+                                    onPress={confirmStandardResetRecovery}
+                                >
+                                    <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>
+                                        {t('settings.resetRecovery.standardAction', 'Use standard sync')}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+
                     {(!hasConfiguredKey) ? (
                         <>
                             <View style={styles.securityRowMinimal}>
@@ -1075,7 +1164,7 @@ export const SettingsScreen = () => {
                                         onValueChange={(value) => {
                                             void handleToggleSync(value);
                                         }}
-                                        disabled={showUnlockingOverlay}
+                                        disabled={showUnlockingOverlay || resetRecoveryPending}
                                         trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
                                         thumbColor={colors.surface}
                                         style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
@@ -2108,6 +2197,8 @@ export const SettingsScreen = () => {
             <SecurityInfoModal
                 visible={showSecurityInfoModal}
                 onClose={() => setShowSecurityInfoModal(false)}
+                e2eeEnabled={hasConfiguredKey}
+                syncEnabled={syncEnabled}
             />
 
             <RecoveryCodeModal

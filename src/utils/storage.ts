@@ -30,6 +30,28 @@ const SYNC_LOCK_BANNER_DISMISS_PREFIX = 'vaulto_sync_lock_banner_dismissed_v1';
 const ENCRYPTION_MIGRATION_PREFIX = 'vaulto_encryption_migration_v1';
 // Last known server-authoritative encryption key epoch (per user).
 const KEY_EPOCH_PREFIX = 'vaulto_key_epoch_v1';
+// Destructive encrypted-vault generation. This changes only after a global
+// reset and is sent with every write so stale devices cannot resurrect data.
+const VAULT_GENERATION_PREFIX = 'vaulto_vault_generation_v1';
+// The device retained readable notes from a remotely reset vault. Those notes
+// are isolated as local-only until the user chooses how to recover them.
+const RESET_RECOVERY_PENDING_PREFIX = 'vaulto_reset_recovery_pending_v1';
+// The account was safely converted to standard sync elsewhere, but this
+// device still needs the old passphrase to rewrap its local-only ciphertext.
+const REMOTE_DISABLE_RESCUE_PENDING_PREFIX = 'vaulto_remote_disable_rescue_pending_v1';
+// Durable client-side journal for a destructive reset. The marker is written
+// before the network request and cleared only after local purge/key cleanup,
+// closing app-kill windows where old dirty notes could otherwise be uploaded
+// under the newly returned vault generation.
+const DESTRUCTIVE_RESET_MARKER_PREFIX = 'vaulto_destructive_reset_marker_v1';
+const ENCRYPTION_TRANSITION_TOKEN_PREFIX = 'vaulto_encryption_transition_token_v1';
+const ENCRYPTION_TRANSITION_KIND_PREFIX = 'vaulto_encryption_transition_kind_v1';
+export type EncryptionTransitionKind = 'enable' | 'disable';
+
+export type DestructiveResetMarker = {
+    expectedVaultGeneration: number;
+    previousSyncEnabled: boolean;
+};
 
 // OpenAI-compatible settings (legacy self-hosted keys are read for migration).
 const OPENAI_BASE_URL_KEY = 'vaulto_openai_base_url_v1';
@@ -351,6 +373,128 @@ export const storage = {
         } catch (e) {
             console.error('Failed to set key epoch', e);
         }
+    },
+    getVaultGeneration: async (userId?: string | null): Promise<number> => {
+        if (!userId) return 0;
+        try {
+            const value = await AsyncStorage.getItem(`${VAULT_GENERATION_PREFIX}_${userId}`);
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        } catch (e) {
+            return 0;
+        }
+    },
+    setVaultGeneration: async (userId: string | null | undefined, generation: number): Promise<void> => {
+        if (!userId) return;
+        try {
+            await AsyncStorage.setItem(
+                `${VAULT_GENERATION_PREFIX}_${userId}`,
+                String(Math.max(0, generation)),
+            );
+        } catch (e) {
+            console.error('Failed to set vault generation', e);
+        }
+    },
+    getResetRecoveryPending: async (userId: string): Promise<boolean> => {
+        if (!userId) return false;
+        try {
+            return await AsyncStorage.getItem(
+                `${RESET_RECOVERY_PENDING_PREFIX}_${userId}`,
+            ) === '1';
+        } catch (e) {
+            return false;
+        }
+    },
+    setResetRecoveryPending: async (userId: string, pending: boolean): Promise<void> => {
+        if (!userId) return;
+        const key = `${RESET_RECOVERY_PENDING_PREFIX}_${userId}`;
+        try {
+            if (pending) {
+                await AsyncStorage.setItem(key, '1');
+            } else {
+                await AsyncStorage.removeItem(key);
+            }
+        } catch (e) {
+            console.error('Failed to set reset recovery state', e);
+        }
+    },
+    getRemoteDisableRescuePending: async (userId: string): Promise<boolean> => {
+        if (!userId) return false;
+        return await AsyncStorage.getItem(
+            `${REMOTE_DISABLE_RESCUE_PENDING_PREFIX}_${userId}`,
+        ) === '1';
+    },
+    setRemoteDisableRescuePending: async (
+        userId: string,
+        pending: boolean,
+    ): Promise<void> => {
+        if (!userId) return;
+        const key = `${REMOTE_DISABLE_RESCUE_PENDING_PREFIX}_${userId}`;
+        if (pending) await AsyncStorage.setItem(key, '1');
+        else await AsyncStorage.removeItem(key);
+    },
+    getDestructiveResetMarker: async (userId: string): Promise<DestructiveResetMarker | null> => {
+        if (!userId) return null;
+        try {
+            const raw = await AsyncStorage.getItem(
+                `${DESTRUCTIVE_RESET_MARKER_PREFIX}_${userId}`,
+            );
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            const expectedVaultGeneration = Number(parsed?.expectedVaultGeneration);
+            if (!Number.isFinite(expectedVaultGeneration) || expectedVaultGeneration < 0) {
+                return null;
+            }
+            return {
+                expectedVaultGeneration,
+                previousSyncEnabled: parsed?.previousSyncEnabled !== false,
+            };
+        } catch (e) {
+            console.error('Failed to read destructive reset marker', e);
+            return null;
+        }
+    },
+    setDestructiveResetMarker: async (
+        userId: string,
+        marker: DestructiveResetMarker,
+    ): Promise<void> => {
+        if (!userId) return;
+        await AsyncStorage.setItem(
+            `${DESTRUCTIVE_RESET_MARKER_PREFIX}_${userId}`,
+            JSON.stringify({
+                expectedVaultGeneration: Math.max(0, marker.expectedVaultGeneration),
+                previousSyncEnabled: marker.previousSyncEnabled,
+            }),
+        );
+    },
+    clearDestructiveResetMarker: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        await AsyncStorage.removeItem(`${DESTRUCTIVE_RESET_MARKER_PREFIX}_${userId}`);
+    },
+    getEncryptionTransitionToken: async (userId: string): Promise<string | null> => {
+        if (!userId) return null;
+        return await AsyncStorage.getItem(`${ENCRYPTION_TRANSITION_TOKEN_PREFIX}_${userId}`);
+    },
+    setEncryptionTransitionToken: async (userId: string, token: string): Promise<void> => {
+        if (!userId) return;
+        await AsyncStorage.setItem(`${ENCRYPTION_TRANSITION_TOKEN_PREFIX}_${userId}`, token);
+    },
+    getEncryptionTransitionKind: async (userId: string): Promise<EncryptionTransitionKind | null> => {
+        if (!userId) return null;
+        const value = await AsyncStorage.getItem(`${ENCRYPTION_TRANSITION_KIND_PREFIX}_${userId}`);
+        return value === 'enable' || value === 'disable' ? value : null;
+    },
+    setEncryptionTransitionKind: async (
+        userId: string,
+        kind: EncryptionTransitionKind,
+    ): Promise<void> => {
+        if (!userId) return;
+        await AsyncStorage.setItem(`${ENCRYPTION_TRANSITION_KIND_PREFIX}_${userId}`, kind);
+    },
+    clearEncryptionTransitionToken: async (userId: string): Promise<void> => {
+        if (!userId) return;
+        await AsyncStorage.removeItem(`${ENCRYPTION_TRANSITION_TOKEN_PREFIX}_${userId}`);
+        await AsyncStorage.removeItem(`${ENCRYPTION_TRANSITION_KIND_PREFIX}_${userId}`);
     },
     getBiometricsEnabled: async (userId: string): Promise<boolean> => {
         if (!userId) return false;

@@ -55,7 +55,7 @@ export const DisableEncryptionModal = ({ visible, onClose, onDisable }: DisableE
         setError(null);
         setLoading(true);
         try {
-            const { syncSucceeded } = await resetEncryption();
+            const { purged, syncSucceeded } = await resetEncryption();
             
             if (!syncSucceeded) {
                 Alert.alert(
@@ -64,7 +64,7 @@ export const DisableEncryptionModal = ({ visible, onClose, onDisable }: DisableE
                 );
             }
             
-            onDisable?.('purged'); // We use 'purged' as default success since key is gone
+            onDisable?.(purged && syncSucceeded ? 'purged' : 'partial');
             onClose();
         } catch (e: any) {
             setError(e?.message || 'Failed to disable encryption.');

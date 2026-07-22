@@ -9,9 +9,16 @@ import { typography } from '../theme/typography';
 interface SecurityInfoModalProps {
     visible: boolean;
     onClose: () => void;
+    e2eeEnabled: boolean;
+    syncEnabled: boolean;
 }
 
-export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, onClose }) => {
+export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({
+    visible,
+    onClose,
+    e2eeEnabled,
+    syncEnabled,
+}) => {
     const { t } = useTranslation();
 
     return (
@@ -47,9 +54,15 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                                 <MaterialIcons name="lock" size={20} color={colors.accentGreen} />
                             </View>
                             <View style={styles.sectionText}>
-                                <Text style={styles.sectionTitle}>{t("aux.e2eEncryption", "End-to-End Encryption")}</Text>
+                                <Text style={styles.sectionTitle}>
+                                    {e2eeEnabled
+                                        ? t("aux.e2eEncryption", "End-to-End Encryption")
+                                        : t("settings.security.localProtection", "Local protection")}
+                                </Text>
                                 <Text style={styles.sectionDescription}>
-                                    Your notes are encrypted on your device using a key only you have. We cannot see your data.
+                                    {e2eeEnabled
+                                        ? t("aux.e2eEncryptionDesc", "Your notes are encrypted on your device using a key only you have. Vaulto cannot read the synced content.")
+                                        : t("settings.security.localProtectionDescription", "Notes are encrypted in the app's local storage with a device key.")}
                                 </Text>
                             </View>
                         </View>
@@ -61,9 +74,19 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                                 <MaterialIcons name="cloud-sync" size={20} color={colors.primary} />
                             </View>
                             <View style={styles.sectionText}>
-                                <Text style={styles.sectionTitle}>{t("aux.secureSync", "Secure Sync")}</Text>
+                                <Text style={styles.sectionTitle}>
+                                    {e2eeEnabled
+                                        ? t("aux.secureSync", "Encrypted cloud sync")
+                                        : syncEnabled
+                                            ? t("settings.security.standardSync", "Standard cloud sync")
+                                            : t("settings.security.syncOff", "Cloud sync is off")}
+                                </Text>
                                 <Text style={styles.sectionDescription}>
-                                    Encrypted data is safely stored in the cloud so you can access it across devices.
+                                    {e2eeEnabled
+                                        ? t("aux.secureSyncDesc", "End-to-end encrypted data is stored in the cloud for access across your devices.")
+                                        : syncEnabled
+                                            ? t("settings.security.standardSyncDescription", "Notes use standard cloud sync. Vaulto can technically process their contents to provide server features and account recovery.")
+                                            : t("settings.security.syncOffDescription", "New changes stay on this device until you enable a sync mode.")}
                                 </Text>
                             </View>
                         </View>
@@ -75,9 +98,15 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                                 <MaterialIcons name="vpn-key" size={20} color={colors.accentPurple} />
                             </View>
                             <View style={styles.sectionText}>
-                                <Text style={styles.sectionTitle}>{t("aux.yourKeyYourData", "Your Key, Your Data")}</Text>
+                                <Text style={styles.sectionTitle}>
+                                    {e2eeEnabled
+                                        ? t("aux.yourKeyYourData", "Your Key, Your Data")
+                                        : t("settings.security.optionalE2EE", "Optional E2EE")}
+                                </Text>
                                 <Text style={styles.sectionDescription}>
-                                    If you lose your access key, we cannot recover your data. Keep it safe.
+                                    {e2eeEnabled
+                                        ? t("aux.yourKeyYourDataDesc", "If you lose every recovery method, Vaulto cannot recover your encrypted vault.")
+                                        : t("settings.security.optionalE2EEDescription", "You can enable end-to-end encryption in Settings when you want the server to be unable to read note contents.")}
                                 </Text>
                             </View>
                         </View>
@@ -85,7 +114,9 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({ visible, o
                         <View style={styles.infoBox}>
                             <MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />
                             <Text style={styles.infoBoxText}>
-                                We practice Zero Knowledge architecture. Your privacy comes first.
+                                {e2eeEnabled
+                                    ? t("aux.zeroKnowledge", "E2EE mode uses a zero-knowledge design for note contents.")
+                                    : t("settings.security.standardDisclosure", "Standard sync is not zero-knowledge. Enable E2EE for maximum cloud privacy.")}
                             </Text>
                         </View>
 

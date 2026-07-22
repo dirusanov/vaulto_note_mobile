@@ -85,7 +85,7 @@ export const ResetEncryptionModal = ({ visible, onClose, onReset }: ResetEncrypt
                             <View style={styles.card}>
                                 <Text style={styles.title}>{t("aux.resetEncryptionTitle", "Reset Encryption")}</Text>
                                 <Text style={styles.subtitle}>
-                                    {t("settings.ui.resetSubtitle", "This will permanently delete all notes stored on this device and all encrypted sync data. It cannot be undone. After resetting, you can continue using the application: new notes will be synced without encryption.")}
+                                    {t("aux.resetEncryptionWarn1", "This permanently deletes the encrypted cloud vault and its synced copy on this device. Readable device-local notes are preserved; data protected only by the lost key cannot be recovered. Sync stays off until you choose a new mode.")}
                                 </Text>
 
                                 <View style={styles.warningBox}>

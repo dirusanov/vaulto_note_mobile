@@ -57,13 +57,20 @@ type SyncListener = () => void;
 type EncryptionConflictInfo = {
     enc_mode: 'off' | 'e2ee' | null;
     key_epoch: number | null;
+    transition_state: 'enabling_e2ee' | 'disabling_e2ee' | null;
+    transition_owned: boolean;
     previous_key_epoch: number;
+    vault_generation: number | null;
+    previous_vault_generation: number;
 };
 type EncryptionConflictHandler = (info: EncryptionConflictInfo) => void | Promise<void>;
 type SyncEncryptionConflict = {
     error: string;
     server_enc_mode?: 'off' | 'e2ee';
     server_key_epoch?: number;
+    server_vault_generation?: number;
+    transition_state?: 'enabling_e2ee' | 'disabling_e2ee' | null;
+    transition_owned?: boolean;
 };
 
 const shouldSyncNote = (note: Note): boolean => {
@@ -83,11 +90,13 @@ class SyncService {
     private lastSyncSeq: number | null = null;
     // Server-authoritative encryption epoch stamped onto outgoing writes.
     private currentKeyEpoch = 0;
+    private currentVaultGeneration = 0;
     private syncTimeout: NodeJS.Timeout | null = null;
     private listeners: SyncListener[] = [];
     private isAuthenticated = false;
     private currentUserId: string | null = null;
     private syncEnabled = false;
+    private currentTransitionToken: string | null = null;
     private encryptionConflictHandler: EncryptionConflictHandler | null = null;
 
     constructor() {
@@ -129,6 +138,7 @@ class SyncService {
 
         if (userId !== lastKnown) {
             this.lastSyncSeq = null;
+            this.currentTransitionToken = null;
             if (userId) {
                 this.currentUserId = userId;
                 void this.bootstrapSync();
@@ -154,6 +164,20 @@ class SyncService {
         this.currentKeyEpoch = Number.isFinite(epoch) ? epoch : 0;
     }
 
+    public setVaultGeneration(generation: number) {
+        this.currentVaultGeneration = Number.isFinite(generation) ? Math.max(0, generation) : 0;
+    }
+
+    /** Identifies the one device allowed to finish an account mode transition. */
+    public setEncryptionTransitionToken(token: string | null) {
+        this.currentTransitionToken = token;
+    }
+
+    /** Last fully-applied server cursor used to fence encryption transitions. */
+    public getServerSeqSnapshot(): number {
+        return Number.isFinite(this.lastSyncSeq) ? Math.max(0, this.lastSyncSeq as number) : 0;
+    }
+
     /**
      * Reconcile the account-level encryption state before applying a sync
      * response. A mode change can happen without producing a write conflict
@@ -168,6 +192,9 @@ class SyncService {
     private async reconcileEncryptionState(
         serverMode: 'off' | 'e2ee' | null | undefined,
         serverEpoch: number | null | undefined,
+        serverVaultGeneration: number | null | undefined,
+        transitionState: 'enabling_e2ee' | 'disabling_e2ee' | null | undefined = null,
+        transitionOwned = false,
     ): Promise<boolean> {
         if (!this.currentUserId) return false;
 
@@ -175,14 +202,19 @@ class SyncService {
             ? serverEpoch
             : null;
         const previousEpoch = this.currentKeyEpoch;
+        const previousVaultGeneration = this.currentVaultGeneration;
         const localCryptoMode = getCryptoMode();
         const localAccountMode: 'off' | 'e2ee' = localCryptoMode === 'e2ee' ? 'e2ee' : 'off';
-        const encryptionStateChanged = shouldPauseForEncryptionState(
+        const ownsActiveTransition = !!transitionState && transitionOwned;
+        const transitionNeedsOwner = !!transitionState && !ownsActiveTransition;
+        const encryptionStateChanged = transitionNeedsOwner || (!ownsActiveTransition && shouldPauseForEncryptionState(
             localCryptoMode,
             serverMode,
             previousEpoch,
             normalizedEpoch,
-        );
+            previousVaultGeneration,
+            serverVaultGeneration,
+        ));
 
         if (encryptionStateChanged) {
             console.log('[SyncService] Server encryption state changed; pausing sync before apply.', {
@@ -190,6 +222,8 @@ class SyncService {
                 server_mode: serverMode,
                 local_key_epoch: previousEpoch,
                 server_key_epoch: normalizedEpoch,
+                local_vault_generation: previousVaultGeneration,
+                server_vault_generation: serverVaultGeneration,
             });
 
             if (!this.encryptionConflictHandler) {
@@ -204,20 +238,32 @@ class SyncService {
                 enc_mode: serverMode ?? null,
                 key_epoch: normalizedEpoch,
                 previous_key_epoch: previousEpoch,
+                vault_generation: serverVaultGeneration ?? null,
+                previous_vault_generation: previousVaultGeneration,
+                transition_state: transitionState ?? null,
+                transition_owned: ownsActiveTransition,
             });
 
-            // Persist the authoritative generation after the handler has had a
-            // chance to inspect the previously stored epoch.
-            if (normalizedEpoch != null) {
-                this.currentKeyEpoch = normalizedEpoch;
-                await storage.setKeyEpoch(this.currentUserId, normalizedEpoch);
-            }
+            // EncryptionContext owns durable reconciliation. It may
+            // intentionally reject a regressed vault generation or delay a new
+            // epoch until local rescue is complete, so never overwrite that
+            // decision with raw response values here.
+            this.currentKeyEpoch = await storage.getKeyEpoch(this.currentUserId);
+            this.currentVaultGeneration = await storage.getVaultGeneration(this.currentUserId);
             return true;
         }
 
         if (normalizedEpoch != null && normalizedEpoch !== previousEpoch) {
             this.currentKeyEpoch = normalizedEpoch;
             await storage.setKeyEpoch(this.currentUserId, normalizedEpoch);
+        }
+        if (
+            serverVaultGeneration != null
+            && Number.isFinite(serverVaultGeneration)
+            && serverVaultGeneration !== previousVaultGeneration
+        ) {
+            this.currentVaultGeneration = serverVaultGeneration;
+            await storage.setVaultGeneration(this.currentUserId, serverVaultGeneration);
         }
         return false;
     }
@@ -247,13 +293,17 @@ class SyncService {
         if (!effectiveUserId) return;
         this.lastSyncSeq = null;
         await AsyncStorage.removeItem(`${SYNC_SEQ_KEY}_${effectiveUserId}`);
-        await this.syncNowAndWait(reason, true);
+        // A migration preflight must never upload local dirty rows. In
+        // particular, a retained E2EE reset archive must not briefly reach a
+        // standard-mode server as plaintext before E2EE is established.
+        await this.syncNowAndWait(reason, true, false);
     }
 
     /** Waits for any in-progress sync to complete, then runs a fresh sync. */
     public async syncNowAndWait(
         reason: SyncReason = 'manual',
         throwOnError = false,
+        uploadLocalChanges = true,
     ): Promise<void> {
         // Wait for any in-flight sync to finish first
         const startWait = Date.now();
@@ -267,7 +317,7 @@ class SyncService {
             return;
         }
 
-        await this.syncNow(reason, throwOnError);
+        await this.syncNow(reason, throwOnError, uploadLocalChanges);
         // Wait for the sync we just started to complete
         const startSync = Date.now();
         while (this.isSyncing && Date.now() - startSync < 15000) {
@@ -372,6 +422,8 @@ class SyncService {
         const parsed = stored != null ? Number(stored) : NaN;
         this.lastSyncSeq = Number.isFinite(parsed) ? parsed : null;
         this.currentKeyEpoch = await storage.getKeyEpoch(userId);
+        this.currentVaultGeneration = await storage.getVaultGeneration(userId);
+        this.currentTransitionToken = await storage.getEncryptionTransitionToken(userId);
         await this.syncNow('app_start');
     }
 
@@ -393,6 +445,8 @@ class SyncService {
             changes: [],
             improvement_changes: [],
             since_seq: 0,
+            vault_generation: this.currentVaultGeneration,
+            transition_token: this.currentTransitionToken ?? undefined,
         });
 
         const incomingNotes = new Map<string, ServerNote>();
@@ -440,7 +494,11 @@ class SyncService {
         }
     }
 
-    public async syncNow(reason: SyncReason, throwOnError = false) {
+    public async syncNow(
+        reason: SyncReason,
+        throwOnError = false,
+        uploadLocalChanges = true,
+    ) {
         if (this.isSyncing) {
             console.log(`[SyncService] Sync already in progress. Reason: ${reason} ignored.`);
             if (throwOnError) {
@@ -485,13 +543,17 @@ class SyncService {
             const allNotes = await getNotesLocal(this.currentUserId);
             const allImprovements = await getAllImprovementsLocal(this.currentUserId);
             const notesById = new Map(allNotes.map((n) => [n.id, n]));
-            const dirtyNotes = allNotes.filter(
-                (n) => (shouldSyncNote(n) || n.pending_server_delete) && (n.dirty || n.deleted || n.pending_delete || n.pending_server_delete)
-            );
-            const dirtyImprovements = allImprovements.filter((imp) => {
-                const parent = notesById.get(imp.note_id);
-                return !!parent && shouldSyncNote(parent) && !parent.pending_server_delete && (imp.dirty || imp.deleted);
-            });
+            const dirtyNotes = uploadLocalChanges
+                ? allNotes.filter(
+                    (n) => (shouldSyncNote(n) || n.pending_server_delete) && (n.dirty || n.deleted || n.pending_delete || n.pending_server_delete)
+                )
+                : [];
+            const dirtyImprovements = uploadLocalChanges
+                ? allImprovements.filter((imp) => {
+                    const parent = notesById.get(imp.note_id);
+                    return !!parent && shouldSyncNote(parent) && !parent.pending_server_delete && (imp.dirty || imp.deleted);
+                })
+                : [];
             const hasLocalNotes = allNotes.some((n) => shouldSyncNote(n));
 
             // 2. Prepare changes for server
@@ -594,6 +656,8 @@ class SyncService {
                 changes,
                 improvement_changes: improvementChanges,
                 since_seq: sinceSeq,
+                vault_generation: this.currentVaultGeneration,
+                transition_token: this.currentTransitionToken ?? undefined,
             });
 
             // Encryption state is part of every modern sync response. Check it
@@ -603,6 +667,9 @@ class SyncService {
             const encryptionStateChanged = await this.reconcileEncryptionState(
                 response.enc_mode,
                 response.key_epoch,
+                response.vault_generation,
+                response.transition_state,
+                response.transition_owned === true,
             );
             if (encryptionStateChanged) {
                 if (throwOnError) {
@@ -634,12 +701,16 @@ class SyncService {
                 allConflicts.find(
                     (c) => c.error === 'encryption_disabled'
                         || c.error === 'encryption_required'
-                        || c.error === 'key_epoch_mismatch',
+                        || c.error === 'key_epoch_mismatch'
+                        || c.error === 'vault_generation_mismatch'
+                        || c.error === 'encryption_transition_in_progress',
                 )
                 ?? allImprovementConflicts.find(
                     (c) => c.error === 'encryption_disabled'
                         || c.error === 'encryption_required'
-                        || c.error === 'key_epoch_mismatch',
+                        || c.error === 'key_epoch_mismatch'
+                        || c.error === 'vault_generation_mismatch'
+                        || c.error === 'encryption_transition_in_progress',
                 )
             ) as SyncEncryptionConflict | undefined;
             if (encConflict) {
@@ -648,6 +719,10 @@ class SyncService {
                         enc_mode: encConflict.server_enc_mode ?? response.enc_mode ?? null,
                         key_epoch: encConflict.server_key_epoch ?? response.key_epoch ?? null,
                         previous_key_epoch: this.currentKeyEpoch,
+                        vault_generation: encConflict.server_vault_generation ?? response.vault_generation ?? null,
+                        previous_vault_generation: this.currentVaultGeneration,
+                        transition_state: encConflict.transition_state ?? response.transition_state ?? null,
+                        transition_owned: encConflict.transition_owned ?? response.transition_owned ?? false,
                     });
                 }
                 // The rejected changes must remain dirty, and the response must
@@ -673,7 +748,7 @@ class SyncService {
                 const safeIncoming = Array.from(uniqueIncoming.values()).filter(
                     (note) => !retryableNoteConflictIds.has(note.id),
                 );
-                const res = await this.applyServerChanges(safeIncoming);
+                const res = await this.applyServerChanges(safeIncoming, !uploadLocalChanges);
                 deferredSeqs.push(...res.deferredSeqs);
             }
 
@@ -701,7 +776,10 @@ class SyncService {
                 const safeIncomingImprovements = incomingImprovements.filter(
                     (improvement) => !retryableImprovementConflictIds.has(improvement.id),
                 );
-                const res = await this.applyServerImprovements(safeIncomingImprovements);
+                const res = await this.applyServerImprovements(
+                    safeIncomingImprovements,
+                    !uploadLocalChanges,
+                );
                 deferredSeqs.push(...res.deferredSeqs);
             }
 
@@ -847,7 +925,7 @@ class SyncService {
         // section so slow transfers never block the next text sync. Retries are
         // driven by the per-note state flags, so a failed pass self-heals on the
         // following sync.
-        void this.syncAudioBlobs().catch((audioError) => {
+        void this.syncAudioBlobs(uploadLocalChanges).catch((audioError) => {
             console.warn('[SyncService] Audio blob sync failed', audioError);
         });
     }
@@ -862,7 +940,7 @@ class SyncService {
 
     private audioSyncInProgress = false;
 
-    public async syncAudioNowAndWait(): Promise<void> {
+    public async syncAudioNowAndWait(allowUploads = true): Promise<void> {
         const startedAt = Date.now();
         while (this.audioSyncInProgress && Date.now() - startedAt < 60000) {
             await new Promise<void>((resolve) => setTimeout(resolve, 100));
@@ -870,12 +948,12 @@ class SyncService {
         if (this.audioSyncInProgress) {
             throw new Error('Timed out waiting for audio synchronization.');
         }
-        await this.syncAudioBlobs();
+        await this.syncAudioBlobs(allowUploads);
     }
 
     /** Ensure no server audio would be stranded by a key/mode transition. */
     public async ensureAllRemoteAudioAvailable(userId: string): Promise<void> {
-        await this.syncAudioNowAndWait();
+        await this.syncAudioNowAndWait(false);
         const notes = await getNotesLocal(userId);
         const missing = notes.find((note) => (
             shouldSyncNote(note)
@@ -905,7 +983,7 @@ class SyncService {
         this.notifyListeners();
     }
 
-    private async syncAudioBlobs(): Promise<void> {
+    private async syncAudioBlobs(allowUploads = true): Promise<void> {
         if (Platform.OS === 'web') return;
         if (!this.currentUserId || !this.syncEnabled || !this.isAuthenticated) return;
         if (this.audioSyncInProgress) return;
@@ -921,7 +999,7 @@ class SyncService {
                 if (!shouldSyncNote(note) || note.deleted || note.pending_delete || note.pending_server_delete) continue;
                 if (userId !== this.currentUserId) return; // user switched mid-pass
                 try {
-                    if (note.has_audio && note.audio_file_path && !note.audio_synced) {
+                    if (allowUploads && note.has_audio && note.audio_file_path && !note.audio_synced) {
                         await this.uploadNoteAudio(userId, note);
                     } else if (note.has_audio && !note.audio_file_path && note.audio_remote) {
                         await this.downloadNoteAudio(userId, note);
@@ -948,15 +1026,27 @@ class SyncService {
 
         // Same bytes already on the server (e.g. re-login re-marked everything):
         // just record the fact instead of re-uploading.
-        if (note.audio_remote && note.audio_sha256 && note.audio_sha256 === sha256) {
+        if (
+            !this.currentTransitionToken
+            && note.audio_remote
+            && note.audio_sha256
+            && note.audio_sha256 === sha256
+        ) {
             await setNoteAudioSyncState(userId, note.id, { audio_synced: 1, audio_sha256: sha256 });
             return;
         }
 
-        const target = await audioApi.getUploadUrl(note.id, mimeType);
+        const target = await audioApi.getUploadUrl(
+            note.id,
+            mimeType,
+            undefined,
+            this.currentVaultGeneration,
+            this.currentTransitionToken,
+        );
         const audioEncryptionStateChanged = await this.reconcileEncryptionState(
             target.required_enc_scheme === 'e2ee' ? 'e2ee' : 'off',
             target.key_epoch,
+            target.vault_generation,
         );
         if (audioEncryptionStateChanged) {
             return;
@@ -993,6 +1083,8 @@ class SyncService {
             mime_type: mimeType,
             sha256,
             duration: note.audio_duration ?? null,
+            vault_generation: this.currentVaultGeneration,
+            transition_token: this.currentTransitionToken ?? undefined,
         });
 
         await setNoteAudioSyncState(userId, note.id, {
@@ -1006,7 +1098,7 @@ class SyncService {
     private async downloadNoteAudio(userId: string, note: Note): Promise<void> {
         let target;
         try {
-            target = await audioApi.getDownloadUrl(note.id);
+            target = await audioApi.getDownloadUrl(note.id, this.currentTransitionToken);
         } catch (error: any) {
             if (error?.response?.status === 404) {
                 // Blob vanished server-side; stop trying until sync says otherwise.
@@ -1057,7 +1149,10 @@ class SyncService {
         console.log(`[SyncService] Downloaded audio for note ${note.id}`);
     }
 
-    private async applyServerImprovements(improvements: ServerImprovement[]): Promise<{ deferredSeqs: number[] }> {
+    private async applyServerImprovements(
+        improvements: ServerImprovement[],
+        preserveAllDirty = false,
+    ): Promise<{ deferredSeqs: number[] }> {
         const deferredSeqs: number[] = [];
         if (!this.currentUserId) return { deferredSeqs };
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
@@ -1068,12 +1163,38 @@ class SyncService {
         }
         const localNotes = await getNotesLocal(this.currentUserId);
         const notesById = new Map(localNotes.map((n) => [n.id, n]));
+        const localImprovements = preserveAllDirty
+            ? await getAllImprovementsLocal(this.currentUserId)
+            : [];
+        const localImprovementsById = new Map(localImprovements.map((item) => [item.id, item]));
         let processed = 0;
         let skippedExpectedDecryptFailures = 0;
         const YIELD_EVERY = 20;
         for (const improvement of improvements) {
+            const existingLocalImprovement = localImprovementsById.get(improvement.id);
+            if (preserveAllDirty && existingLocalImprovement?.dirty) {
+                await saveImprovementLocal(this.currentUserId, {
+                    ...existingLocalImprovement,
+                    version: Math.max(
+                        existingLocalImprovement.version ?? 0,
+                        improvement.version ?? 0,
+                    ),
+                    server_updated_at: improvement.updated_at,
+                    dirty: true,
+                });
+                continue;
+            }
             const parent = notesById.get(improvement.note_id);
             if (parent && (!shouldSyncNote(parent) || parent.pending_server_delete)) {
+                continue;
+            }
+            if (!parent) {
+                // Parent note not materialized locally yet (e.g. its own sync was
+                // deferred while locked, or it arrives in a later page). Saving now
+                // would violate the note_improvements -> notes foreign key and crash
+                // the sync loop. Defer this improvement's seq so it is retried once
+                // the parent note exists.
+                if (improvement.server_seq != null) deferredSeqs.push(improvement.server_seq);
                 continue;
             }
             let content = '';
@@ -1148,7 +1269,10 @@ class SyncService {
         return { deferredSeqs };
     }
 
-    private async applyServerChanges(serverNotes: ServerNote[]): Promise<{ deferredSeqs: number[] }> {
+    private async applyServerChanges(
+        serverNotes: ServerNote[],
+        preserveAllDirty = false,
+    ): Promise<{ deferredSeqs: number[] }> {
         const deferredSeqs: number[] = [];
         if (!this.currentUserId) return { deferredSeqs };
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
@@ -1165,12 +1289,40 @@ class SyncService {
         for (const serverNote of serverNotes) {
             const existing = localMap.get(serverNote.id);
 
+            if (existing?.dirty && preserveAllDirty) {
+                // Pull-only migration preflights preserve the local semantic
+                // edit, but still rebase its server metadata. In particular,
+                // learn about a remote audio blob so it can be downloaded
+                // before the account encryption mode changes.
+                const serverHasAudio = !serverNote.deleted && !!serverNote.audio_available;
+                const keepLocalAudio = !!existing.audio_file_path;
+                await saveNoteLocal(this.currentUserId, {
+                    ...existing,
+                    version: Math.max(existing.version ?? 0, serverNote.version ?? 0),
+                    server_updated_at: serverNote.updated_at,
+                    audio_remote: serverHasAudio ? 1 : 0,
+                    audio_sha256: serverHasAudio
+                        ? serverNote.audio_sha256 ?? existing.audio_sha256 ?? null
+                        : existing.audio_sha256 ?? null,
+                    audio_duration: serverNote.audio_duration ?? existing.audio_duration,
+                    has_audio: keepLocalAudio || serverHasAudio || !!existing.has_audio,
+                    audio_synced: !serverHasAudio && keepLocalAudio
+                        ? 0
+                        : existing.audio_synced,
+                    dirty: true,
+                });
+                continue;
+            }
+
             // Skip dirty local notes ONLY if our version is >= server version.
             // This protects locally-migrated notes (e.g. after re-encryption) from
             // being overwritten by a stale server echo in the same sync cycle.
             // If the server has a NEWER version, we must apply it — it could be
             // a change from another device that we haven't seen yet.
-            if (existing?.dirty && (existing.version ?? 0) >= (serverNote.version ?? 0)) {
+            if (
+                existing?.dirty
+                && (existing.version ?? 0) >= (serverNote.version ?? 0)
+            ) {
                 continue;
             }
 

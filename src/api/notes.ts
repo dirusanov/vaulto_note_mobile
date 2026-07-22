@@ -46,6 +46,9 @@ export interface Note {
     audio_sha256?: string | null;
     is_pinned?: boolean;
     storage_scope?: StorageScope;
+    // Local-only copy retained after another device reset the encrypted vault.
+    // It never participates in sync until the user explicitly recovers it.
+    reset_archived?: boolean;
     privacy?: NotePrivacy;
     pending_server_delete?: boolean;
     title?: string;
@@ -115,6 +118,8 @@ export interface SyncNotesRequest {
     since_updated_at?: string;
     // Monotonic per-user server cursor. Send 0 for a full pull.
     since_seq?: number;
+    vault_generation?: number;
+    transition_token?: string;
 }
 
 export type AudioEncScheme = 'none' | 'e2ee';
@@ -173,6 +178,9 @@ export interface SyncNotesResponse {
     next_cursor?: number | null;
     enc_mode?: EncryptionMode | null;
     key_epoch?: number | null;
+    vault_generation?: number | null;
+    transition_state?: 'enabling_e2ee' | 'disabling_e2ee' | null;
+    transition_owned?: boolean;
 }
 
 export type NoteSyncConflict = {
@@ -184,6 +192,8 @@ export type NoteSyncConflict = {
     client_updated_at?: string;
     server_version?: number;
     client_base_version?: number;
+    server_vault_generation?: number;
+    client_vault_generation?: number | null;
 };
 
 export type ImprovementSyncConflict = {
@@ -195,6 +205,8 @@ export type ImprovementSyncConflict = {
     client_updated_at?: string;
     server_version?: number | null;
     client_base_version?: number;
+    server_vault_generation?: number;
+    client_vault_generation?: number | null;
 };
 
 export const notesApi = {
@@ -202,8 +214,9 @@ export const notesApi = {
         const response = await client.post('/sync/notes', payload);
         return response.data;
     },
-    deleteAllSyncNotes: async (): Promise<DeleteSyncNotesResult> => {
+    deleteAllSyncNotes: async (vaultGeneration = 0): Promise<DeleteSyncNotesResult> => {
         const response = await client.delete('/sync/notes', {
+            params: { vault_generation: vaultGeneration },
             validateStatus: (status) =>
                 (status >= 200 && status < 300) || status === 404 || status === 405,
         });

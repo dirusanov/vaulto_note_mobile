@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.71] - 2026-07-22
+
+### Fixed
+- **Safe account-wide encryption transitions**: E2EE enable, disable, recovery and destructive reset now use server-authoritative transition and vault generations so stale devices cannot overwrite or resurrect data.
+- **Second-device recovery**: Locked devices keep new notes local, clearly request the passphrase, and isolate notes retained after a remote reset until the user chooses local-only, standard sync or E2EE recovery.
+- **Encrypted audio migration**: Audio downloads and uploads are fenced together with note data during encryption transitions.
+
 ## [1.0.70] - 2026-07-21
 
 ### Fixed

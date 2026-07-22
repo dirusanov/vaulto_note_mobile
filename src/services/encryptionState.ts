@@ -10,8 +10,17 @@ export const shouldPauseForEncryptionState = (
     serverMode: AccountEncryptionMode | null | undefined,
     localKeyEpoch = 0,
     serverKeyEpoch: number | null | undefined = null,
+    localVaultGeneration = 0,
+    serverVaultGeneration: number | null | undefined = null,
 ): boolean => {
     if (serverMode == null) return false;
+    if (
+        serverVaultGeneration != null
+        && (serverVaultGeneration > 0 || localVaultGeneration > 0)
+        && serverVaultGeneration !== localVaultGeneration
+    ) {
+        return true;
+    }
     const localAccountMode: AccountEncryptionMode = localCryptoMode === 'e2ee' ? 'e2ee' : 'off';
     if (serverMode !== localAccountMode) return true;
 

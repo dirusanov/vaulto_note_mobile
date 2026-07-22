@@ -46,6 +46,9 @@
     "audioChip": "audio",
     "syncLockedDescription": "Encrypted notes are on the server. Enter your passphrase to show them on this device.",
     "unlockSync": "Unlock encrypted notes",
+    "resetRecoveryTitle": "Encrypted vault was reset",
+    "resetRecoveryDescription": "Your retained notes are local-only and sync is paused. Choose how to recover them in Settings.",
+    "reviewRecovery": "Review options",
     "note": "Note"
   },
   "settings": {
@@ -53,6 +56,17 @@
     "language": "Language",
     "languageSelection": "App Language",
     "systemDefault": "System Default",
+    "resetRecovery": {
+      "title": "Encrypted vault was reset",
+      "description": "Notes retained on this device are isolated locally. Sync is paused so they cannot be uploaded without your choice.",
+      "enableE2EE": "Restore with E2EE",
+      "keepTitle": "Keep notes only on this device?",
+      "keepDescription": "The recovered notes will remain local and cloud sync will stay off.",
+      "keepLocal": "Keep local",
+      "standardTitle": "Sync without E2EE?",
+      "standardDescription": "Your recovered notes will be uploaded using standard sync. Vaulto can technically process their contents.",
+      "standardAction": "Use standard sync"
+    },
     "pro": {
       "upgrade": "Upgrade to Pro",
       "active": "ACTIVE",
@@ -367,9 +381,9 @@
     "dontShowAgain": "Don't show again",
     "gotIt": "Got it",
     "resetEncryptionTitle": "Reset Encryption",
-    "resetEncryptionWarn1": "This will permanently delete all notes stored on this device and all encrypted sync data. It cannot be undone.",
+    "resetEncryptionWarn1": "This permanently deletes the encrypted cloud vault and its synced copy on this device. Readable device-local notes are preserved; data protected only by the lost key cannot be recovered. Sync stays off until you choose a new mode.",
     "resetEncryptionWarn2": "You will lose:",
-    "resetEncryptionWarn3": "Local notes in the database",
+    "resetEncryptionWarn3": "Synced notes on this device",
     "resetEncryptionWarn4": "Encrypted synced notes on the server",
     "resetEncryptionWarn5": "The current encryption key",
     "selectLanguage": "Select Language",

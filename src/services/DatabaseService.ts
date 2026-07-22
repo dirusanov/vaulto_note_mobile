@@ -110,6 +110,7 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             is_active INTEGER DEFAULT 0,
             is_pinned INTEGER DEFAULT 0,
             storage_scope TEXT DEFAULT 'sync',
+            reset_archived INTEGER DEFAULT 0,
             privacy TEXT DEFAULT 'normal',
             pending_server_delete INTEGER DEFAULT 0,
             version INTEGER DEFAULT 0
@@ -168,6 +169,7 @@ const openDb = async (): Promise<SQLite.SQLiteDatabase> => {
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN is_active INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync("ALTER TABLE notes ADD COLUMN storage_scope TEXT DEFAULT 'sync';"); } catch (e) {}
+    try { await database.runAsync('ALTER TABLE notes ADD COLUMN reset_archived INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync("ALTER TABLE notes ADD COLUMN privacy TEXT DEFAULT 'normal';"); } catch (e) {}
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN pending_server_delete INTEGER DEFAULT 0;'); } catch (e) {}
 
@@ -539,8 +541,8 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                 `INSERT INTO notes (
                     id, user_id, encrypted_title, encrypted_content, created_at, updated_at,
                     audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
-                    storage_scope, privacy, pending_server_delete, version, audio_synced, audio_remote, audio_sha256
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    storage_scope, reset_archived, privacy, pending_server_delete, version, audio_synced, audio_remote, audio_sha256
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     user_id=excluded.user_id,
                     encrypted_title=excluded.encrypted_title,
@@ -556,6 +558,7 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                     deleted=excluded.deleted,
                     is_active=excluded.is_active,
                     storage_scope=excluded.storage_scope,
+                    reset_archived=excluded.reset_archived,
                     privacy=excluded.privacy,
                     pending_server_delete=excluded.pending_server_delete,
                     version=excluded.version,
@@ -570,7 +573,7 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                     note.created_at || new Date().toISOString(), note.updated_at || new Date().toISOString(),
                     note.audio_file_path || null, note.audio_duration || 0,
                     encryptedTranscription || null, note.has_audio ? 1 : 0, note.is_pinned ? 1 : 0,
-                    note.synced ?? 1, isDirty, isDeleted, isActive, storageScope, privacy, pendingServerDelete,
+                    note.synced ?? 1, isDirty, isDeleted, isActive, storageScope, note.reset_archived ? 1 : 0, privacy, pendingServerDelete,
                     note.version ?? 0,
                     note.audio_synced ?? 0, note.audio_remote ?? 0, note.audio_sha256 ?? null
                 ]
@@ -825,6 +828,7 @@ const processNotes = async (
             version: n.version ?? 0,
             pending_delete: !!n.deleted || !!n.pending_delete,
             storage_scope: normalizeStorageScope(n.storage_scope),
+            reset_archived: !!n.reset_archived,
             privacy: normalizePrivacy(n.privacy),
             improvements: improvements.get(n.id) || [],
             voice_files: voiceRecordings.get(n.id) || [],
@@ -938,6 +942,235 @@ export const wipeLocalDatabase = async (): Promise<void> => {
             await database.runAsync('DELETE FROM notes;');
         });
     } catch (e) { throw e; }
+};
+
+/**
+ * Preserve readable notes from an older, remotely reset encrypted vault.
+ * They become an explicitly local-only archive and therefore cannot be
+ * uploaded by normal sync, even if the user later enables the sync toggle.
+ */
+export const archiveSyncedNotesAfterReset = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
+    if (Platform.OS === 'web') {
+        const notes = getWebStore(userId);
+        let archived = 0;
+        const retained = notes.flatMap((note) => {
+            if (normalizeStorageScope(note.storage_scope) !== 'sync') return [note];
+            if (note.deleted || note.pending_delete) return [];
+            archived += 1;
+            return [{
+                ...note,
+                storage_scope: 'local_only' as const,
+                reset_archived: true,
+                dirty: false,
+                synced: 0,
+                pending_server_delete: false,
+            }];
+        });
+        saveWebStore(userId, retained);
+        return archived;
+    }
+
+    return await withDbRetry('archive reset vault', async (database) => {
+        // User-deleted rows are not useful recovery material and must not be
+        // turned back into visible notes by the archive operation.
+        await database.runAsync(
+            "DELETE FROM notes WHERE user_id = ? AND (storage_scope IS NULL OR storage_scope = 'sync') AND deleted = 1",
+            [userId],
+        );
+        const result = await database.runAsync(
+            `UPDATE notes
+             SET storage_scope = 'local_only', reset_archived = 1,
+                 dirty = 0, synced = 0, pending_server_delete = 0
+             WHERE user_id = ?
+               AND (storage_scope IS NULL OR storage_scope = 'sync')
+               AND deleted = 0`,
+            [userId],
+        );
+        await database.runAsync(
+            `UPDATE note_improvements
+             SET dirty = 0, synced = 0
+             WHERE user_id = ?
+               AND note_id IN (
+                   SELECT id FROM notes WHERE user_id = ? AND reset_archived = 1
+               )`,
+            [userId, userId],
+        );
+        return result.changes;
+    });
+};
+
+/** Promote only the reset archive back into sync after explicit consent. */
+export const promoteResetArchiveToSync = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
+    if (Platform.OS === 'web') {
+        let promoted = 0;
+        const notes = getWebStore(userId).map((note) => {
+            if (!note.reset_archived) return note;
+            promoted += 1;
+            return {
+                ...note,
+                storage_scope: 'sync' as const,
+                reset_archived: false,
+                dirty: true,
+                synced: 0,
+            };
+        });
+        saveWebStore(userId, notes);
+        return promoted;
+    }
+
+    return await withDbRetry('promote reset archive', async (database) => {
+        await database.runAsync(
+            `UPDATE note_improvements
+             SET dirty = 1, synced = 0
+             WHERE user_id = ?
+               AND note_id IN (
+                   SELECT id FROM notes WHERE user_id = ? AND reset_archived = 1
+               )`,
+            [userId, userId],
+        );
+        const result = await database.runAsync(
+            `UPDATE notes
+             SET storage_scope = 'sync', reset_archived = 0,
+                 dirty = 1, synced = 0, audio_synced = 0
+             WHERE user_id = ? AND reset_archived = 1`,
+            [userId],
+        );
+        return result.changes;
+    });
+};
+
+/** Keep recovered rows local permanently and dismiss the recovery marker. */
+export const finalizeResetArchiveAsLocal = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
+    if (Platform.OS === 'web') {
+        let finalized = 0;
+        const notes = getWebStore(userId).map((note) => {
+            if (!note.reset_archived) return note;
+            finalized += 1;
+            return { ...note, reset_archived: false, storage_scope: 'local_only' as const };
+        });
+        saveWebStore(userId, notes);
+        return finalized;
+    }
+    return await withDbRetry('finalize reset archive', async (database) => {
+        const result = await database.runAsync(
+            `UPDATE notes SET reset_archived = 0
+             WHERE user_id = ? AND reset_archived = 1`,
+            [userId],
+        );
+        return result.changes;
+    });
+};
+
+/** Delete only sync-scoped rows for one account; preserve local-only notes. */
+export const purgeSyncedNotesForUser = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
+    if (Platform.OS === 'web') {
+        const notes = getWebStore(userId);
+        const retained = notes.filter(
+            (note) => normalizeStorageScope(note.storage_scope) === 'local_only',
+        );
+        saveWebStore(userId, retained);
+        return notes.length - retained.length;
+    }
+
+    const audioPaths = await withDbRetry('purge synced notes (collect)', async (database) => {
+        const noteAudio = await database.getAllAsync<{ audio_file_path: string | null }>(
+            `SELECT audio_file_path FROM notes
+             WHERE user_id = ?
+               AND (storage_scope IS NULL OR storage_scope = 'sync')
+               AND audio_file_path IS NOT NULL AND audio_file_path != ''`,
+            [userId],
+        );
+        const voiceAudio = await database.getAllAsync<{ file_path: string }>(
+            `SELECT vr.file_path FROM voice_recordings vr
+             JOIN notes n ON n.id = vr.note_id AND n.user_id = vr.user_id
+             WHERE n.user_id = ?
+               AND (n.storage_scope IS NULL OR n.storage_scope = 'sync')
+               AND vr.file_path IS NOT NULL AND vr.file_path != ''`,
+            [userId],
+        );
+        return [
+            ...noteAudio.map((row) => row.audio_file_path),
+            ...voiceAudio.map((row) => row.file_path),
+        ];
+    });
+    await purgeAudioFiles(audioPaths, 'encrypted vault reset');
+
+    return await withDbRetry('purge synced notes (delete)', async (database) => {
+        const result = await database.runAsync(
+            `DELETE FROM notes
+             WHERE user_id = ?
+               AND (storage_scope IS NULL OR storage_scope = 'sync')`,
+            [userId],
+        );
+        return result.changes;
+    });
+};
+
+/**
+ * Remove local-only rows that are still protected by a master key which is no
+ * longer available during a forgotten-passphrase reset. Keeping those rows
+ * would misleadingly show blank/locked notes after the key bundle is erased.
+ * Device-key local-only rows are preserved.
+ */
+export const purgeUnreadableLocalOnlyNotesForUser = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
+    if (Platform.OS === 'web') {
+        const notes = getWebStore(userId);
+        const unreadable = (note: Note) => (
+            normalizeStorageScope(note.storage_scope) === 'local_only'
+            && [note.encrypted_title, note.encrypted_content, note.encrypted_transcription]
+                .some((value) => typeof value === 'string' && isMasterCiphertext(value))
+        );
+        const retained = notes.filter((note) => !unreadable(note));
+        saveWebStore(userId, retained);
+        return notes.length - retained.length;
+    }
+
+    const masterCipherPredicate = `(
+        encrypted_title LIKE 'v3m.%' OR encrypted_title LIKE 'v3.%'
+        OR encrypted_title LIKE 'v2m.%' OR encrypted_title LIKE 'v2.%'
+        OR encrypted_content LIKE 'v3m.%' OR encrypted_content LIKE 'v3.%'
+        OR encrypted_content LIKE 'v2m.%' OR encrypted_content LIKE 'v2.%'
+        OR encrypted_transcription LIKE 'v3m.%' OR encrypted_transcription LIKE 'v3.%'
+        OR encrypted_transcription LIKE 'v2m.%' OR encrypted_transcription LIKE 'v2.%'
+    )`;
+
+    const audioPaths = await withDbRetry('purge unreadable local notes (collect)', async (database) => {
+        const noteAudio = await database.getAllAsync<{ audio_file_path: string | null }>(
+            `SELECT audio_file_path FROM notes
+             WHERE user_id = ? AND storage_scope = 'local_only'
+               AND ${masterCipherPredicate}
+               AND audio_file_path IS NOT NULL AND audio_file_path != ''`,
+            [userId],
+        );
+        const voiceAudio = await database.getAllAsync<{ file_path: string }>(
+            `SELECT vr.file_path FROM voice_recordings vr
+             JOIN notes n ON n.id = vr.note_id AND n.user_id = vr.user_id
+             WHERE n.user_id = ? AND n.storage_scope = 'local_only'
+               AND ${masterCipherPredicate.replaceAll('encrypted_', 'n.encrypted_')}
+               AND vr.file_path IS NOT NULL AND vr.file_path != ''`,
+            [userId],
+        );
+        return [
+            ...noteAudio.map((row) => row.audio_file_path),
+            ...voiceAudio.map((row) => row.file_path),
+        ];
+    });
+    await purgeAudioFiles(audioPaths, 'unreadable local-only reset data');
+
+    return await withDbRetry('purge unreadable local notes (delete)', async (database) => {
+        const result = await database.runAsync(
+            `DELETE FROM notes
+             WHERE user_id = ? AND storage_scope = 'local_only'
+               AND ${masterCipherPredicate}`,
+            [userId],
+        );
+        return result.changes;
+    });
 };
 
 export const markAllDirty = async (userId: string): Promise<void> => {
