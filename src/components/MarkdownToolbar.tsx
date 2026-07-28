@@ -10,7 +10,7 @@ import {
     normalizeHighlightColorForCss,
 } from '../utils/highlightColors';
 
-export type MarkdownFormatType = 'bold' | 'italic' | 'strikethrough' | 'underline' | 'list' | 'todo' | 'h1' | 'h2' | 'h3' | 'highlight' | string;
+export type MarkdownFormatType = 'bold' | 'italic' | 'strikethrough' | 'underline' | 'list' | 'todo' | 'h1' | 'h2' | 'h3' | 'highlight' | 'dictate' | string;
 
 interface MarkdownToolbarProps {
     onFormat: (type: MarkdownFormatType) => void;
@@ -113,6 +113,12 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     isActive={isActive('list')}
                     onPress={() => onFormat('list')}
                     iconName="format-list-bulleted"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('dictate')}
+                    onPress={() => onFormat('dictate')}
+                    iconName="mic"
                 />
 
                 <View style={styles.spacer} />

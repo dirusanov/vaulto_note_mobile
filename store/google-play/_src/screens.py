@@ -1,6 +1,7 @@
-"""Faithful reproductions of real Vaulto Note screens (393x852)."""
+"""Faithful reproductions of real Vaulto Note screens (412x915, Android)."""
 from common import (SURFACE, BG, BG2, INK, INK2, INK3, MUTED, PRIMARY, PRIMARYD,
-                    GREEN, PURPLE, YELLOW, ORANGE, RED, BORDER, ic, logo, statusbar, wordmark)
+                    GREEN, PURPLE, YELLOW, ORANGE, RED, BORDER, ic, logo, statusbar,
+                    wordmark, NAV_H)
 
 SCREEN_CSS = f"""
 .scrn{{position:absolute;inset:0;display:flex;flex-direction:column;background:{BG}}}
@@ -33,28 +34,39 @@ def note_card(title, preview, date, audio=False, locked=False, local=False, pinn
       </div>
     </div>"""
 
-def _notes_masonry(L):
+def _notes_masonry(L, top=14):
     left = [
         note_card(L["n1t"], L["n1s"], L["now"], audio=True, pinned=True, locked=True),
-        note_card(L["n3t"], L["n3s"], "Mon", locked=True),
+        note_card(L["n3t"], L["n3s"], L["d_mon"], locked=True),
         note_card(L["n5t"], L["n5s"], "12 " + L["mon_apr"], local=True),
         note_card(L["n7t"], L["n7s"], "9 " + L["mon_apr"], locked=True),
         note_card(L["n9t"], L["n9s"], "7 " + L["mon_apr"], locked=True),
+        note_card(L["n11t"], L["n11s"], "5 " + L["mon_apr"], locked=True),
     ]
     right = [
-        note_card(L["n2t"], L["n2s"], "2h", locked=True),
+        note_card(L["n2t"], L["n2s"], L["d_2h"], locked=True),
         note_card(L["n4t"], "", L["now"], audio=True, locked=True),
         note_card(L["n6t"], L["n6s"], "9 " + L["mon_apr"], locked=True),
         note_card(L["n8t"], L["n8s"], "8 " + L["mon_apr"], audio=True, locked=True),
         note_card(L["n10t"], L["n10s"], "6 " + L["mon_apr"], local=True),
+        note_card(L["n12t"], L["n12s"], "4 " + L["mon_apr"], audio=True, locked=True),
     ]
     col = lambda cards: f'<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column">{"".join(cards)}</div>'
-    return f'<div style="display:flex;gap:12px;padding:14px 16px 0;align-items:flex-start">{col(left)}{col(right)}</div>'
+    return (f'<div style="display:flex;gap:12px;padding:{top}px 16px 0;align-items:flex-start">'
+            f'{col(left)}{col(right)}</div>')
+
+# ---------------- search bar (NotesListScreen) ----------------
+def _searchbar(L):
+    return f"""<div style="padding:4px 16px 0">
+      <div style="display:flex;align-items:center;gap:8px;height:56px;background:{SURFACE};border-radius:12px;padding:0 16px;box-shadow:0 2px 8px rgba(0,0,0,.05)">
+        {ic("search",20,INK3)}
+        <span style="flex:1;font-size:16px;color:{INK3}">{L["search_ph"]}</span>
+      </div></div>"""
 
 # ---------------- floating dock ----------------
 def _dock(L):
-    return f"""<div style="position:absolute;left:0;right:0;bottom:64px;display:flex;justify-content:center;z-index:30">
-      <div style="width:330px;height:70px;background:{SURFACE};border-radius:32px;box-shadow:0 10px 26px rgba(0,0,0,.15);border:1px solid rgba(0,0,0,.03);padding:8px 32px 4px;display:flex;flex-direction:column;align-items:center">
+    return f"""<div style="position:absolute;left:0;right:0;bottom:{NAV_H+42}px;display:flex;justify-content:center;z-index:30">
+      <div style="width:340px;height:70px;background:{SURFACE};border-radius:32px;box-shadow:0 10px 26px rgba(0,0,0,.15);border:1px solid rgba(0,0,0,.03);padding:8px 32px 4px;display:flex;flex-direction:column;align-items:center">
         <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
           <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center">{ic("settings",26,INK2)}</div>
           <div style="width:88px;height:88px;margin-top:-35px;background:{BG};border-radius:44px;padding:6px;display:flex">
@@ -67,11 +79,15 @@ def _dock(L):
     </div>"""
 
 # ================= 1. NOTES LIST =================
-def scr_notes(L, dock=True):
+def scr_notes(L, dock=True, search=False):
     return f"""<div class="scrn">{statusbar(INK)}<div class="ca">
-      {_notes_masonry(L)}
+      {_searchbar(L) if search else ""}
+      {_notes_masonry(L, top=12 if search else 14)}
       {_dock(L) if dock else ""}
     </div></div>"""
+
+def scr_search(L):
+    return scr_notes(L, dock=True, search=True)
 
 # ================= 2. RECORDING (overlay bar) =================
 def scr_record(L):
@@ -81,8 +97,8 @@ def scr_record(L):
     badge = lambda icon, txt: f'<div style="display:flex;align-items:center;gap:8px;background:{PRIMARY};border-radius:24px;padding:10px 18px;box-shadow:0 2px 6px rgba(0,0,0,.12)">{icon}<span style="font-size:14px;font-weight:600;color:#fff">{txt}</span></div>'
     return f"""<div class="scrn">{statusbar(INK)}<div class="ca">
       {_notes_masonry(L)}
-      <div style="position:absolute;left:0;right:0;bottom:0;height:360px;background:linear-gradient(to top,{BG} 60%,rgba(248,249,250,0))"></div>
-      <div style="position:absolute;left:16px;right:16px;bottom:40px;display:flex;flex-direction:column;align-items:center">
+      <div style="position:absolute;left:0;right:0;bottom:0;height:380px;background:linear-gradient(to top,{BG} 60%,rgba(248,249,250,0))"></div>
+      <div style="position:absolute;left:16px;right:16px;bottom:{NAV_H+26}px;display:flex;flex-direction:column;align-items:center">
         <div style="display:flex;gap:8px;margin-bottom:16px">
           {badge(ic("mic",18,"#fff"), L["transcribe_on"])}
           {badge(ic("smart_toy",18,"#fff"), L["agent_on"])}
@@ -100,19 +116,19 @@ def scr_record(L):
     </div></div>"""
 
 # ================= 3. EDITOR =================
-def scr_editor(L):
-    tb = lambda icon, active=False: f'<div style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;{"background:"+BG2 if active else ""}">{icon}</div>'
-    check_item = lambda txt, done: f'''<div style="display:flex;align-items:center;gap:10px;margin:7px 0">
-        {ic("check_box",22,PRIMARY) if done else '<div style="width:20px;height:20px;border:2px solid '+MUTED+';border-radius:4px;flex:none"></div>'}
-        <span style="font-size:16px;color:{INK2 if done else INK};{'text-decoration:line-through' if done else ''}">{txt}</span></div>'''
-    return f"""<div class="scrn">{statusbar(INK)}<div class="ca" style="display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px">
+def _editor_head(L):
+    return f"""<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px">
         <div style="padding:4px;min-width:40px">{ic("arrow_back",28,INK)}</div>
         <div style="display:flex;align-items:center;gap:16px">
           {ic("text_fields",24,INK)}{ic("auto_awesome",24,PRIMARY)}{ic("mic",24,INK)}{ic("check",24,INK)}
         </div>
-      </div>
-      <div style="flex:1;padding:4px 20px 0;overflow:hidden">
+      </div>"""
+
+def _editor_body(L):
+    check_item = lambda txt, done: f'''<div style="display:flex;align-items:center;gap:10px;margin:7px 0">
+        {ic("check_box",22,PRIMARY) if done else '<div style="width:20px;height:20px;border:2px solid '+MUTED+';border-radius:4px;flex:none"></div>'}
+        <span style="font-size:16px;color:{INK2 if done else INK};{'text-decoration:line-through' if done else ''}">{txt}</span></div>'''
+    return f"""<div style="flex:1;padding:4px 20px 0;overflow:hidden">
         <div style="font-size:24px;font-weight:400;color:{INK};margin-bottom:4px">{L["ed_ttl"]}</div>
         <div style="font-size:12px;color:{INK3};margin-bottom:14px">{L["ed_meta"]}</div>
         <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -123,8 +139,18 @@ def scr_editor(L):
         <div style="font-size:16px;line-height:26px;color:{INK};margin-bottom:10px">{L["ed_p1"]}</div>
         {check_item(L["ed_c1"], True)}{check_item(L["ed_c2"], False)}{check_item(L["ed_c3"], False)}
         <div style="font-size:16px;line-height:26px;color:{INK};margin-top:10px">{L["ed_p2a"]} <span style="background:#BAE1FF;padding:1px 3px;border-radius:3px">{L["ed_hl"]}</span> {L["ed_p2b"]}</div>
-      </div>
-      <div style="background:{SURFACE};border-top:1px solid rgba(0,0,0,.05);box-shadow:0 -3px 5px rgba(0,0,0,.05);height:52px;display:flex;align-items:center;justify-content:center;gap:4px">
+        <div style="font-size:20px;font-weight:700;color:{INK};margin:22px 0 8px">{L["ed_h2"]}</div>
+        <div style="font-size:16px;line-height:26px;color:{INK};margin-bottom:10px">{L["ed_p3"]}</div>
+        {check_item(L["ed_c4"], False)}{check_item(L["ed_c5"], False)}
+        <div style="font-size:16px;line-height:26px;color:{INK};margin-top:10px">{L["ed_p4"]}</div>
+      </div>"""
+
+def scr_editor(L):
+    tb = lambda icon, active=False: f'<div style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;{"background:"+BG2 if active else ""}">{icon}</div>'
+    return f"""<div class="scrn">{statusbar(INK)}<div class="ca" style="display:flex;flex-direction:column">
+      {_editor_head(L)}
+      {_editor_body(L)}
+      <div style="background:{SURFACE};border-top:1px solid rgba(0,0,0,.05);box-shadow:0 -3px 5px rgba(0,0,0,.05);height:{52+NAV_H}px;padding-bottom:{NAV_H}px;display:flex;align-items:center;justify-content:center;gap:4px">
         {tb(ic("check_box",22,PRIMARY),True)}{tb(ic("format_list_bulleted",22,INK2))}
         <div style="width:4px"></div>{tb(f'<span style="font-size:15px;font-weight:700;color:{INK2}">H2</span>')}<div style="width:4px"></div>
         {tb(ic("format_bold",22,INK2))}{tb(ic("format_italic",22,INK2))}{tb(ic("format_underlined",22,INK2))}{tb(ic("format_strikethrough",22,INK2))}
@@ -139,12 +165,13 @@ def scr_ai(L):
         <div style="width:40px;height:40px;border-radius:20px;background:{BG};display:flex;align-items:center;justify-content:center;margin-right:16px;flex:none">{ic(icon,24,PRIMARY)}</div>
         <div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:500;color:{INK}">{label}</div><div style="font-size:12px;color:{INK2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{prompt}</div></div>
         {ic("drag_handle",22,MUTED)}</div>"""
-    behind = f"""<div style="position:absolute;inset:0;padding:22px 20px 0">
-        <div style="font-size:24px;color:{INK};margin-bottom:10px">{L["ed_ttl"]}</div>
-        <div style="font-size:16px;line-height:26px;color:{INK2}">{L["ai_behind"]}</div></div>"""
+    # the real backdrop is the note editor itself, not a stub — otherwise the dim
+    # layer reads as one flat grey block instead of a screen behind a sheet
+    behind = (f'<div style="position:absolute;inset:0;display:flex;flex-direction:column">'
+              f'{_editor_head(L)}{_editor_body(L)}</div>')
     return f"""<div class="scrn">{statusbar(INK)}<div class="ca">{behind}
-      <div style="position:absolute;inset:0;background:rgba(0,0,0,.5)"></div>
-      <div style="position:absolute;left:0;right:0;bottom:0;background:{SURFACE};border-radius:24px 24px 0 0;padding:22px 24px 26px">
+      <div style="position:absolute;inset:0;background:rgba(11,13,16,.34)"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;background:{SURFACE};border-radius:24px 24px 0 0;padding:22px 24px {26+NAV_H}px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <span style="font-size:20px;font-weight:600;color:{INK}">{L["improve_ttl"]}</span>
           <div style="display:flex;align-items:center;gap:4px;padding:8px 14px;border-radius:12px;background:{BG};border:1px solid {BORDER}">{ic("add",18,PRIMARY)}<span style="font-size:15px;font-weight:600;color:{PRIMARY}">{L["create"]}</span></div>
@@ -194,35 +221,85 @@ def scr_privacy(L):
       </div>
     </div></div>"""
 
-# ================= 6. SETTINGS — encrypted sync & security =================
+# ================= 6. SETTINGS =================
+# Mirrors SettingsScreen.tsx: styles.card (surface, r16, 1px border, 16px padding),
+# styles.cardHeader (icon + h2/20 title + help), styles.securityRowMinimal
+# (36px round iconContainer at 20% tint + caption label + value/control),
+# styles.separator (1px border @ 50%), styles.preferenceRow (24px icon + title/desc).
 def scr_settings(L):
-    on_badge = f'<div style="display:flex;align-items:center;gap:5px;background:rgba(16,185,129,.1);border-radius:100px;padding:6px 11px">{ic("cloud_done",15,GREEN)}<span style="font-size:12px;font-weight:700;color:{GREEN}">{L["st_on"]}</span></div>'
-    def prow(icon, title, sub, right, mc=False):
-        return f"""<div style="display:flex;align-items:center;gap:14px;padding:15px 0">
-        {ic(icon,24,GREEN if mc else PRIMARY,cls="mc" if mc else "mi")}
-        <div style="flex:1"><div style="font-size:16px;font-weight:600;color:{INK}">{title}</div><div style="font-size:13px;color:{INK2};margin-top:2px">{sub}</div></div>{right}</div>"""
-    card = lambda inner, mb=14: f'<div style="background:{SURFACE};border-radius:20px;padding:4px 18px;margin:0 16px {mb}px;box-shadow:0 2px 8px rgba(0,0,0,.05)">{inner}</div>'
-    section = lambda icon, txt, mc=False: f'<div style="display:flex;align-items:center;gap:8px;padding:18px 16px 8px"><span>{ic(icon,18,PRIMARY,cls="mc" if mc else "mi")}</span><span style="font-size:14px;font-weight:700;color:{INK2};letter-spacing:.05em">{txt}</span></div>'
-    divider = f'<div style="height:1px;background:{BORDER}"></div>'
+    def card(inner, mb=16):
+        return (f'<div style="background:{SURFACE};border-radius:16px;padding:16px;'
+                f'border:1px solid {BORDER};margin-bottom:{mb}px">{inner}</div>')
+
+    def card_header(icon, title, mc=False, right=""):
+        return (f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+                f'<div style="display:flex;align-items:center;gap:8px">{ic(icon,18,PRIMARY,cls="mc" if mc else "mi")}'
+                f'<span style="font-size:20px;font-weight:600;letter-spacing:-.3px;color:{INK}">{title}</span></div>'
+                f'{right}</div>')
+
+    def icon_box(icon, color, mc=False):
+        return (f'<div style="width:36px;height:36px;border-radius:18px;background:{color}33;'
+                f'display:flex;align-items:center;justify-content:center;flex:none">'
+                f'{ic(icon,16,color,cls="mc" if mc else "mi")}</div>')
+
+    def sec_row(box, label, right):
+        return (f'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0">'
+                f'<div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0">{box}'
+                f'<span style="font-size:13px;line-height:18px;font-weight:500;color:{INK2};flex:1">{label}</span></div>'
+                f'<div style="display:flex;align-items:center;gap:8px;flex:none">{right}</div></div>')
+
+    def pref_row(icon, title, desc, right, color=PRIMARY):
+        return (f'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">'
+                f'<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">{ic(icon,24,color)}'
+                f'<div style="flex:1;min-width:0"><div style="font-size:16px;line-height:24px;font-weight:600;color:{INK};margin-bottom:2px">{title}</div>'
+                f'<div style="font-size:13px;line-height:18px;color:{INK2}">{desc}</div></div></div>{right}</div>')
+
+    sep     = f'<div style="height:1px;background:{BORDER};opacity:.5"></div>'
+    value   = lambda t, c: f'<span style="font-size:14px;line-height:20px;font-weight:600;color:{c}">{t}</span>'
+    outlined = lambda t, c=INK, bc=BORDER: (
+        f'<span style="display:inline-flex;padding:6px 12px;border-radius:8px;border:1px solid {bc};'
+        f'font-size:13px;line-height:18px;font-weight:600;color:{c}">{t}</span>')
+
     return f"""<div class="scrn">{statusbar(INK)}<div class="ca" style="display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;gap:14px;padding:12px 16px 8px">
-        {ic("arrow_back",24,INK)}<span style="font-size:22px;font-weight:700;color:{INK}">{L["settings"]}</span>
+      <div style="display:flex;align-items:center;gap:16px;padding:8px 16px 8px">
+        <div style="width:42px;height:42px;border-radius:12px;border:1px solid {BORDER};background:{SURFACE};display:flex;align-items:center;justify-content:center">{ic("arrow_back",22,INK)}</div>
+        <span style="font-size:24px;font-weight:700;letter-spacing:-.5px;color:{INK}">{L["settings"]}</span>
       </div>
-      <div style="flex:1;overflow:hidden">
-        {section("cloud_sync", L["st_sync"])}
-        {card(prow("cloud_done", L["st_synced"], L["st_synced_sub"], switch(True))
-              + divider +
-              prow("shield_check_outline", L["st_e2e"], L["st_e2e_sub"], on_badge, mc=True))}
-        {section("security", L["st_security"], mc=True)}
-        {card(prow("shield_key", L["st_recovery"], L["st_recovery_sub"], ic("chevron_right",22,INK3), mc=True)
-              + divider +
-              prow("lock", L["st_lock"], L["st_lock_sub"], switch(True)))}
-        {section("graphic_eq", L["st_notes"])}
-        {card(prow("graphic_eq", L["st_trans"], L["st_trans_sub"], switch(True)))}
+      <div style="flex:1;overflow:hidden;padding:8px 16px 0">
+
+        {card(pref_row("language", L["st_lang"], L["st_lang_sub"],
+                       ic("chevron_right",20,INK2), color=INK2))}
+
+        {card(card_header("cloud_sync", L["st_sync"], right=ic("help_outline",18,INK2))
+              + sec_row(icon_box("cloud_done", GREEN), L["st_synced"],
+                        value(L["st_on"], GREEN) + switch(True))
+              + sep
+              + sec_row(icon_box("shield_key", PRIMARY, mc=True), L["st_recovery"],
+                        outlined(L["st_copy"]))
+              + sep
+              + sec_row(icon_box("security", ORANGE, mc=True), L["st_disable"],
+                        outlined(L["st_disable_btn"], ORANGE, ORANGE)))}
+
+        {card(card_header("psychology", L["st_ai"])
+              + pref_row("smart_toy", L["st_agent"], L["st_agent_sub"], switch(True))
+              + sep
+              + pref_row("mic", L["st_trans"], L["st_trans_sub"], switch(True))
+              + sep
+              + pref_row("tune", L["st_adv"], L["st_adv_sub"], ic("expand_more",24,INK2), color=INK2))}
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;height:52px;
+                    border:1px solid {BORDER};border-radius:16px;background:{SURFACE};margin-bottom:16px">
+          {ic("logout",20,RED)}<span style="font-size:16px;font-weight:600;color:{RED}">{L["st_signout"]}</span></div>
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;color:{PRIMARY};font-weight:500">
+          <span>{L["st_privacy"]}</span><span style="color:{MUTED}">·</span><span>{L["st_terms"]}</span></div>
+        <div style="text-align:center;font-size:12px;color:{INK3};margin-top:10px">Vaulto v1.1.0</div>
+
       </div>
     </div></div>"""
 
 SCREENS = {
-    "notes": scr_notes, "record": scr_record, "editor": scr_editor,
-    "ai": scr_ai, "privacy": scr_privacy, "settings": scr_settings,
+    "notes": scr_notes, "search": scr_search, "record": scr_record,
+    "editor": scr_editor, "ai": scr_ai, "privacy": scr_privacy,
+    "settings": scr_settings,
 }

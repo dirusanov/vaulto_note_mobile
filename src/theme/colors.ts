@@ -1,32 +1,38 @@
-export const colors = {
-    // Backgrounds - Rich, modern palette
-    background: '#F8F9FA', // Soft off-white with warmth
-    backgroundSecondary: '#E9ECEF', // Slightly darker for contrast
+// ─── Shared Vaulto palette ───────────────────────────────────────────────────
+// This block is byte-identical in vaulto-cards and vaulto_note_mobile, and the
+// Chrome extension mirrors the same roles in tailwind.config.js. The table in
+// DESIGN_TOKENS.md is the reference; change a value in all three or in none.
+// App-specific colours belong below `colors`, not in here.
+export const sharedColors = {
+    // Backgrounds
+    background: '#F8F9FA',
+    backgroundSecondary: '#E9ECEF',
 
-    // Surfaces - layered for depth
+    // Surfaces
     surface: '#FFFFFF',
     surfaceElevated: '#FFFFFF',
 
-    // Primary - Vibrant blue for actions
+    // Primary
     primary: '#0066FF',
+    primaryLight: 'rgba(0, 102, 255, 0.12)',
     primaryHover: '#0052CC',
 
-    // Text - High contrast hierarchy
+    // Text hierarchy
     text: '#1A1A1A',
     textSecondary: '#6C757D',
     textTertiary: '#ADB5BD',
     textMuted: '#CED4DA',
 
-    // Accents - Vibrant color palette
-    accent: '#0066FF', // Modern blue
+    // Accents
+    accent: '#0066FF',
     accentLight: '#4D94FF',
     accentPurple: '#8B5CF6',
     accentPink: '#EC4899',
     accentGreen: '#10B981',
     accentOrange: '#F59E0B',
-    accentYellow: '#FFC107', // New yellow accent
+    accentYellow: '#FFC107',
 
-    // Borders - Subtle but visible
+    // Borders
     border: '#DEE2E6',
     borderHover: '#CED4DA',
 
@@ -38,9 +44,8 @@ export const colors = {
     // Overlays
     overlay: 'rgba(0, 0, 0, 0.5)',
     cardShadow: 'rgba(0, 0, 0, 0.06)',
-    activeWordHighlight: 'rgba(0, 102, 255, 0.1)', // Subtle primary highlight
 
-    // Highlight Colors - Pastel Palette
+    // Highlight palette
     highlight: {
         yellow: '#FFFFBA',
         red: '#FFB3BA',
@@ -52,5 +57,13 @@ export const colors = {
         cyan: '#B5F2EA',
         lime: '#E7FFAC',
         white: '#FFFFFF',
-    }
+    },
+};
+// ─── End shared Vaulto palette ───────────────────────────────────────────────
+
+export const colors = {
+    ...sharedColors,
+
+    // Notes-specific
+    activeWordHighlight: 'rgba(0, 102, 255, 0.1)',
 };

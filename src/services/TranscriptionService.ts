@@ -26,7 +26,9 @@ const BACKEND_TRANSCRIBE_URL = `${API_URL}${BACKEND_TRANSCRIBE_PATH}`;
 const BACKEND_TRANSCRIBE_TIMEOUT_MS = 90000;
 const BACKEND_PROCESS_NOTE_PATH = '/ai/agent';
 const BACKEND_PROCESS_NOTE_URL = `${API_URL}${BACKEND_PROCESS_NOTE_PATH}`;
-const BACKEND_AGENT_TIMEOUT_MS = 90000;
+// The agent may chain a checklist pass before the main pass, each with its own
+// upstream budget, so the client deadline has to sit above the server's worst case.
+const BACKEND_AGENT_TIMEOUT_MS = 150000;
 const BACKEND_AGENT_MAX_ATTEMPTS = 2;
 const BACKEND_AGENT_RETRY_DELAY_MS = 1500;
 
@@ -36,14 +38,34 @@ export interface TranscriptionResult {
     error?: string;
 }
 
+/** How the returned content relates to the note it was built from. */
+export type AgentContentAction = 'append' | 'replace' | 'none';
+
+/** Machine-readable reason for a confirmation, so the UI can localize the prompt. */
+export type AgentConfirmationKind =
+    | 'clear_content'
+    | 'replace_content'
+    | 'remove_items'
+    | 'checklist_update'
+    | '';
+
+const AGENT_CONFIRMATION_KINDS: AgentConfirmationKind[] = [
+    'clear_content',
+    'replace_content',
+    'remove_items',
+    'checklist_update',
+];
+
 export interface VoiceNoteResult {
     originalText: string;
     processedText?: string | null;
     hasInstruction: boolean;
     instruction?: string | null;
     mode?: string | null;
-    applyTarget?: 'current_variant' | 'new_improvement' | null;
+    /** Server-decided append-vs-replace. Never infer this from content length. */
+    contentAction?: AgentContentAction;
     needsConfirmation?: boolean;
+    confirmationKind?: AgentConfirmationKind;
     confirmationMessage?: string | null;
     titleAction?: 'set' | 'none';
     titleValue?: string | null;
@@ -51,6 +73,20 @@ export interface VoiceNoteResult {
     success: boolean;
     error?: string;
 }
+
+const parseContentAction = (value: unknown): AgentContentAction => {
+    if (value === 'append' || value === 'replace' || value === 'none') {
+        return value;
+    }
+    return 'none';
+};
+
+const parseConfirmationKind = (value: unknown): AgentConfirmationKind => {
+    if (typeof value === 'string' && (AGENT_CONFIRMATION_KINDS as string[]).includes(value)) {
+        return value as AgentConfirmationKind;
+    }
+    return '';
+};
 
 const normalizeAgentContextContent = (content?: string): string | undefined => {
     if (!content) {
@@ -292,6 +328,7 @@ const buildBackendAgentFormData = (
 async function performBackendAgentRequest(
     transcript: string,
     accessToken: string,
+    idempotencyKey: string,
     currentContent?: string,
     recentMessages: string[] = [],
 ): Promise<Response> {
@@ -301,6 +338,8 @@ async function performBackendAgentRequest(
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${accessToken}`,
+                // Retries below must never bill the user twice for the same command.
+                'Idempotency-Key': idempotencyKey,
             },
             body: buildBackendAgentFormData(transcript, currentContent, recentMessages),
         },
@@ -310,6 +349,7 @@ async function performBackendAgentRequest(
 
 async function fetchBackendAgentWithAuth(
     transcript: string,
+    idempotencyKey: string,
     currentContent?: string,
     recentMessages: string[] = [],
 ): Promise<Response> {
@@ -323,6 +363,7 @@ async function fetchBackendAgentWithAuth(
     const initialResponse = await performBackendAgentRequest(
         transcript,
         accessToken,
+        idempotencyKey,
         currentContent,
         recentMessages,
     );
@@ -339,6 +380,7 @@ async function fetchBackendAgentWithAuth(
     return performBackendAgentRequest(
         transcript,
         refreshedAccessToken,
+        idempotencyKey,
         currentContent,
         recentMessages,
     );
@@ -676,8 +718,9 @@ export async function processVoiceNote(
                 hasInstruction: false,
                 instruction: null,
                 mode: 'none',
-                applyTarget: null,
+                contentAction: 'none',
                 needsConfirmation: false,
+                confirmationKind: '',
                 confirmationMessage: null,
                 titleAction: 'none',
                 titleValue: null,
@@ -692,8 +735,9 @@ export async function processVoiceNote(
             hasInstruction: false,
             instruction: null,
             mode: 'none',
-            applyTarget: null,
+            contentAction: 'none',
             needsConfirmation: false,
+            confirmationKind: '',
             confirmationMessage: null,
             titleAction: 'none',
             titleValue: null,
@@ -708,6 +752,9 @@ export async function processVoiceNote(
 
     // Agent endpoint accepts only transcript text.
     // If text was not provided, transcribe first via standard transcription flow.
+    // One key per logical command: retries below reuse it so quota is charged once.
+    const agentIdempotencyKey = await generateUUID();
+
     let transcriptText = preTranscribedText || '';
     if (!transcriptText) {
         const transResult = await transcribeAudio(audioUri, language);
@@ -726,6 +773,7 @@ export async function processVoiceNote(
         try {
             const response = await fetchBackendAgentWithAuth(
                 transcriptText,
+                agentIdempotencyKey,
                 normalizedCurrentContent,
                 recentMessages,
             );
@@ -771,7 +819,9 @@ export async function processVoiceNote(
             }
 
             const result = await response.json();
-            // Backend returns: { "mode": "...", "raw_note": "...", "improved_markdown": "...", "has_instruction": bool, "apply_target": "current_variant|new_improvement" }
+            // Backend returns: { mode, raw_note, improved_markdown, has_instruction,
+            //   content_action, needs_confirmation, confirmation_kind, confirmation_message,
+            //   title_action, title_value, suggested_title }
 
             return {
                 originalText: result.raw_note || transcriptText || '',
@@ -779,8 +829,9 @@ export async function processVoiceNote(
                 hasInstruction: typeof result.has_instruction === 'boolean' ? result.has_instruction : (result.mode !== "none"),
                 instruction: null,
                 mode: result.mode,
-                applyTarget: result.apply_target === 'current_variant' ? 'current_variant' : 'new_improvement',
+                contentAction: parseContentAction(result.content_action),
                 needsConfirmation: typeof result.needs_confirmation === 'boolean' ? result.needs_confirmation : false,
+                confirmationKind: parseConfirmationKind(result.confirmation_kind),
                 confirmationMessage: typeof result.confirmation_message === 'string' ? result.confirmation_message : null,
                 titleAction: result.title_action === 'set' ? 'set' : 'none',
                 titleValue: typeof result.title_value === 'string' ? result.title_value : null,

@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { NativeModules, Platform } from 'react-native';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
 
-export type LocalWhisperModelKey = 'tiny' | 'base' | 'large';
+export type LocalWhisperModelKey = 'tiny' | 'base' | 'large' | 'turbo';
 
 export interface LocalWhisperModelDescriptor {
     key: LocalWhisperModelKey;
@@ -27,6 +27,12 @@ type WhisperRnContext = {
         audioUri: string,
         options?: Record<string, unknown>
     ) => { promise?: Promise<WhisperTranscriptPayload> } | Promise<WhisperTranscriptPayload>;
+    transcribeRealtime: (
+        options?: Record<string, unknown>
+    ) => Promise<{
+        stop: () => Promise<void>;
+        subscribe: (callback: (event: any) => void) => void;
+    }>;
     release?: () => Promise<void> | void;
 };
 
@@ -73,6 +79,16 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         filename: 'ggml-large-v3.bin',
         url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
         power: 4,
+    },
+    turbo: {
+        key: 'turbo',
+        label: 'Turbo',
+        sizeLabel: '~547 MB',
+        sizeBytes: 547 * 1024 * 1024,
+        filename: 'ggml-large-v3-turbo-q5_0.bin',
+        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
+        power: 4,
+        recommended: true,
     },
 };
 
@@ -303,3 +319,38 @@ export const prepareAudioForLocalWhisper = async (audioUri: string): Promise<str
 
     return await transcodeModule.convertToWav(audioUri);
 };
+
+export const startRealtimeDictation = async (
+    options: { language?: string, onUpdate?: (text: string) => void }
+): Promise<{ stop: () => Promise<void> }> => {
+    if (Platform.OS === 'web') {
+        throw new Error('Local Whisper is not supported in the browser');
+    }
+
+    const status = await getLocalWhisperModelStatus();
+    if (!status.isDownloaded) {
+        throw new Error(`Local Whisper model "${status.selectedModel.label}" is not downloaded`);
+    }
+
+    const context = await getReadyContext(status.fileUri);
+    const realtimeJob = await context.transcribeRealtime({
+        language: options.language,
+        realtimeAudioSec: 30, // Default window
+        realtimeAudioSliceSec: 25,
+        useVad: true,
+        vadMs: 2000,
+    });
+
+    realtimeJob.subscribe((event: any) => {
+        if (event.data?.result && options.onUpdate) {
+            options.onUpdate(event.data.result);
+        }
+    });
+
+    return {
+        stop: async () => {
+            await realtimeJob.stop();
+        }
+    };
+};
+

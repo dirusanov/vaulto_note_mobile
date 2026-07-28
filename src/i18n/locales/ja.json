@@ -302,7 +302,36 @@
     "enableSyncBtn": "同期を有効にする",
     "shareBlockedTitle": "共有が無効です",
     "exportMarkdownFailed": "Markdownのエクスポートに失敗しました",
-    "exportImageFailed": "画像のエクスポートに失敗しました"
+    "exportImageFailed": "画像のエクスポートに失敗しました",
+    "agent": {
+      "confirmTitle": "変更の確認",
+      "confirmClear": "ノート全体を空にしますか？",
+      "confirmReplace": "ノート全体を置き換えますか？",
+      "confirmRemoveItems": "これらの項目を削除しますか？",
+      "confirmChecklist": "このリストの変更を適用しますか？",
+      "apply": "適用",
+      "createdChecklist": "チェックリストを作成しました",
+      "updatedChecklist": "チェックリストを更新しました",
+      "createdImprovedView": "改善版を作成しました",
+      "updatedFormatting": "書式を更新しました",
+      "updatedNote": "ノートを更新しました",
+      "updatedTitle": "タイトルを更新しました",
+      "addedToOriginal": "オリジナルに追加しました",
+      "addedToImproved": "改善版に追加しました",
+      "savedRecording": "録音を保存しました",
+      "cancelled": "変更をキャンセルしました"
+    },
+    "improvePreview": {
+      "title": "AI の提案",
+      "accept": "適用",
+      "discard": "破棄",
+      "retry": "やり直す",
+      "result": "結果",
+      "noChanges": "すでに問題ありません — 変更点はありません。",
+      "emptyText": "改善を依頼する前にテキストを入力してください。",
+      "grammarPerfect": "完璧です！誤りは見つかりませんでした。",
+      "working": "処理中…"
+    }
   },
   "voice": {
     "transcribeOn": "文字起こし ON",

@@ -316,7 +316,36 @@
     "enableSyncBtn": "Enable Sync",
     "shareBlockedTitle": "Sharing disabled",
     "exportMarkdownFailed": "Failed to export Markdown",
-    "exportImageFailed": "Failed to export image"
+    "exportImageFailed": "Failed to export image",
+    "agent": {
+      "confirmTitle": "Confirm change",
+      "confirmClear": "Clear the whole note?",
+      "confirmReplace": "Replace the whole note?",
+      "confirmRemoveItems": "Remove these checklist items?",
+      "confirmChecklist": "Apply this checklist update?",
+      "apply": "Apply",
+      "createdChecklist": "Created checklist",
+      "updatedChecklist": "Updated checklist",
+      "createdImprovedView": "Created improved view",
+      "updatedFormatting": "Updated formatting",
+      "updatedNote": "Updated note",
+      "updatedTitle": "Updated title",
+      "addedToOriginal": "Added to Original",
+      "addedToImproved": "Added to Improved",
+      "savedRecording": "Saved recording",
+      "cancelled": "Change cancelled"
+    },
+    "improvePreview": {
+      "title": "AI suggestion",
+      "accept": "Accept",
+      "discard": "Discard",
+      "retry": "Try again",
+      "result": "Result",
+      "noChanges": "The text is already fine — nothing to change.",
+      "emptyText": "Enter some text before requesting an improvement.",
+      "grammarPerfect": "Perfect! No grammar errors found.",
+      "working": "Thinking…"
+    }
   },
   "voice": {
     "transcribeOn": "Transcribe ON",

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../utils/env';
-import { getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl, storage } from '../utils/storage';
-import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
+import { getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel, storage } from '../utils/storage';
+import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL, modelSupportsTemperature } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
 import { generateWithLocalLLM } from './LocalLLMService';
 
@@ -23,6 +23,8 @@ export interface AIImprovementOption {
     icon: string; // Material icon name
     prompt: string;
     isCustom?: boolean;
+    /** Options whose answer is parsed as JSON must put the provider into strict JSON mode. */
+    responseFormat?: 'json';
 }
 
 export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
@@ -30,6 +32,7 @@ export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
         id: 'grammar',
         label: 'Fix Grammar',
         icon: 'spellcheck',
+        responseFormat: 'json',
         prompt: 'Check the following text for grammatical and spelling errors. You MUST return a specific JSON object. Response format: JSON object with keys "is_correct" (boolean) and "fixed_text" (string). You MUST ignore all stylistic choices, including dashes, quotes, and spacing. Only correct actual grammar or spelling mistakes. If the only differences are stylistic or punctuation preferences, or if the text is already correct, set "is_correct": true and "fixed_text": "". If there are errors, set "is_correct": false and "fixed_text": "YOUR_CORRECTED_TEXT_HERE". Do not include markdown formatting or code blocks. Return ONLY the JSON string. Text to check: {text}'
     },
     {
@@ -61,22 +64,54 @@ export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
 // Backward compatibility export
 export const IMPROVEMENT_OPTIONS = DEFAULT_IMPROVEMENT_OPTIONS;
 
-const sanitizeOptions = (options: AIImprovementOption[]): AIImprovementOption[] => {
-    const mergedIds = new Set<string>();
-    const cleaned = options.filter((item) => {
-        if (!item.id || !item.label || !item.prompt) return false;
-        if (mergedIds.has(item.id)) return false;
-        mergedIds.add(item.id);
-        if (!item.icon) item.icon = 'bolt';
-        item.prompt = ensureTemplateHasPlaceholder(item.prompt);
-        return true;
+const DEFAULT_OPTION_IDS = new Set(DEFAULT_IMPROVEMENT_OPTIONS.map((option) => option.id));
+
+interface StoredPrompts {
+    options: AIImprovementOption[];
+    /** Built-in options the user deliberately deleted; they must not come back. */
+    removedDefaultIds: string[];
+}
+
+const readStoredPrompts = (raw: string): StoredPrompts => {
+    const parsed = JSON.parse(raw);
+    // Legacy shape: a bare array of options.
+    if (Array.isArray(parsed)) {
+        return { options: parsed, removedDefaultIds: [] };
+    }
+    return {
+        options: Array.isArray(parsed?.options) ? parsed.options : [],
+        removedDefaultIds: Array.isArray(parsed?.removedDefaultIds) ? parsed.removedDefaultIds : [],
+    };
+};
+
+/**
+ * Returns a cleaned copy. Never mutates the inputs — callers may pass the shared
+ * DEFAULT_IMPROVEMENT_OPTIONS objects, and mutating those corrupts the module constant.
+ */
+const sanitizeOptions = (
+    options: AIImprovementOption[],
+    removedDefaultIds: string[] = []
+): AIImprovementOption[] => {
+    const seenIds = new Set<string>();
+    const cleaned: AIImprovementOption[] = [];
+
+    options.forEach((item) => {
+        if (!item?.id || !item.label || !item.prompt) return;
+        if (seenIds.has(item.id)) return;
+        seenIds.add(item.id);
+        cleaned.push({
+            ...item,
+            icon: item.icon || 'bolt',
+            prompt: ensureTemplateHasPlaceholder(item.prompt),
+        });
     });
 
-    // Ensure defaults always exist (if user removed them)
+    // Restore built-ins the user never removed, so a corrupt entry cannot lose them.
+    const removed = new Set(removedDefaultIds);
     DEFAULT_IMPROVEMENT_OPTIONS.forEach((defaultItem) => {
-        if (!mergedIds.has(defaultItem.id)) {
-            cleaned.push(defaultItem);
-            mergedIds.add(defaultItem.id);
+        if (!seenIds.has(defaultItem.id) && !removed.has(defaultItem.id)) {
+            cleaned.push({ ...defaultItem });
+            seenIds.add(defaultItem.id);
         }
     });
 
@@ -86,20 +121,26 @@ const sanitizeOptions = (options: AIImprovementOption[]): AIImprovementOption[] 
 export const loadImprovementOptions = async (): Promise<AIImprovementOption[]> => {
     try {
         const stored = await AsyncStorage.getItem(AI_PROMPTS_STORAGE_KEY);
-        if (!stored) return DEFAULT_IMPROVEMENT_OPTIONS;
+        if (!stored) return DEFAULT_IMPROVEMENT_OPTIONS.map((option) => ({ ...option }));
 
-        const parsed: AIImprovementOption[] = JSON.parse(stored);
-        return sanitizeOptions(parsed);
+        const { options, removedDefaultIds } = readStoredPrompts(stored);
+        return sanitizeOptions(options, removedDefaultIds);
     } catch (e) {
         console.error('Failed to load AI prompts from storage', e);
-        return DEFAULT_IMPROVEMENT_OPTIONS;
+        return DEFAULT_IMPROVEMENT_OPTIONS.map((option) => ({ ...option }));
     }
 };
 
 export const saveImprovementOptions = async (options: AIImprovementOption[]): Promise<void> => {
     try {
-        const sanitized = sanitizeOptions(options);
-        await AsyncStorage.setItem(AI_PROMPTS_STORAGE_KEY, JSON.stringify(sanitized));
+        // A built-in missing from the incoming list was deleted on purpose.
+        const presentIds = new Set(options.map((option) => option?.id).filter(Boolean));
+        const removedDefaultIds = [...DEFAULT_OPTION_IDS].filter((id) => !presentIds.has(id));
+        const payload: StoredPrompts = {
+            options: sanitizeOptions(options, removedDefaultIds),
+            removedDefaultIds,
+        };
+        await AsyncStorage.setItem(AI_PROMPTS_STORAGE_KEY, JSON.stringify(payload));
     } catch (e) {
         console.error('Failed to save AI prompts to storage', e);
     }
@@ -117,8 +158,17 @@ export const buildPromptPreview = (template: string, sampleText: string = FALLBA
 
 const buildPromptForRequest = (template: string, text: string): string => {
     const withPlaceholder = ensureTemplateHasPlaceholder(template);
-    return withPlaceholder.replace(/{text}/gi, `"${text}"`);
+    // Delimited block instead of bare quotes: note text routinely contains quote
+    // characters, which used to break the boundary between instruction and content.
+    return withPlaceholder.replace(/{text}/gi, `\n<<<TEXT\n${text}\nTEXT>>>\n`);
 };
+
+/**
+ * Whether this option's answer must be parsed as JSON. Built-ins declare it;
+ * legacy stored copies of the grammar option are recognised by id.
+ */
+export const optionExpectsJson = (option: AIImprovementOption): boolean =>
+    option.responseFormat === 'json' || option.id === 'grammar';
 
 export async function improveText(text: string, option: AIImprovementOption): Promise<string> {
     if (!option) throw new Error('Invalid option');
@@ -141,24 +191,30 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
         const baseUrl = await getOpenAIBaseUrl();
         const chatUrl = buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/chat/completions');
 
+        const wantsJson = optionExpectsJson(option);
+        const model = await getOpenAIModel();
         const requestBody: any = {
-            model: 'gpt-3.5-turbo-1106',
+            model,
             messages: [
                 {
                     role: 'system',
-                    content: 'You are a helpful writing assistant. Return ONLY the improved text, without any conversational filler or explanations.'
+                    content: wantsJson
+                        ? 'You are a precise writing assistant. Follow the output contract in the user message exactly and return ONLY valid JSON.'
+                        : 'You are a helpful writing assistant. Return ONLY the improved text, without any conversational filler or explanations.'
                 },
                 {
                     role: 'user',
                     content: promptForModel
                 }
             ],
-            temperature: 0.7,
         };
 
-        if (option.id === 'grammar') {
+        if (modelSupportsTemperature(model)) {
+            requestBody.temperature = wantsJson ? 0.2 : 0.7;
+        }
+
+        if (wantsJson) {
             requestBody.response_format = { type: 'json_object' };
-            requestBody.temperature = 0.2;
         }
 
         const response = await fetch(chatUrl, {
@@ -192,11 +248,18 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         throw new Error('Sign in required to use Vaulto AI.');
     }
 
-    const promptToSend = `You are a helpful writing assistant. Return ONLY the improved output, without any conversational filler, explanations, or echoing the original text. ${option.prompt.replace(/{text}/gi, '').trim()}`.trim();
+    // JSON options carry their own output contract. Prefixing the plain-text
+    // instruction here made the two contradict each other and broke the parse.
+    const wantsJson = optionExpectsJson(option);
+    const instruction = option.prompt.replace(/{text}/gi, '').trim();
+    const promptToSend = wantsJson
+        ? `You are a precise writing assistant. Return ONLY valid JSON, no prose, no code fences. ${instruction}`.trim()
+        : `You are a helpful writing assistant. Return ONLY the improved output, without any conversational filler, explanations, or echoing the original text. ${instruction}`.trim();
 
     const body = {
         text,
         prompt: promptToSend,
+        json_mode: wantsJson,
     };
 
     const response = await fetch(baseUrl, {

@@ -302,7 +302,36 @@
     "enableSyncBtn": "Synchronisierung aktivieren",
     "shareBlockedTitle": "Teilen deaktiviert",
     "exportMarkdownFailed": "Markdown konnte nicht exportiert werden",
-    "exportImageFailed": "Bild konnte nicht exportiert werden"
+    "exportImageFailed": "Bild konnte nicht exportiert werden",
+    "agent": {
+      "confirmTitle": "Änderung bestätigen",
+      "confirmClear": "Die ganze Notiz leeren?",
+      "confirmReplace": "Die ganze Notiz ersetzen?",
+      "confirmRemoveItems": "Diese Checklisten-Einträge löschen?",
+      "confirmChecklist": "Diese Checklisten-Änderung anwenden?",
+      "apply": "Anwenden",
+      "createdChecklist": "Checkliste erstellt",
+      "updatedChecklist": "Checkliste aktualisiert",
+      "createdImprovedView": "Verbesserte Fassung erstellt",
+      "updatedFormatting": "Formatierung aktualisiert",
+      "updatedNote": "Notiz aktualisiert",
+      "updatedTitle": "Titel aktualisiert",
+      "addedToOriginal": "Zum Original hinzugefügt",
+      "addedToImproved": "Zur Verbesserung hinzugefügt",
+      "savedRecording": "Aufnahme gespeichert",
+      "cancelled": "Änderung abgebrochen"
+    },
+    "improvePreview": {
+      "title": "KI-Vorschlag",
+      "accept": "Übernehmen",
+      "discard": "Verwerfen",
+      "retry": "Nochmal",
+      "result": "Ergebnis",
+      "noChanges": "Der Text ist bereits gut — nichts zu ändern.",
+      "emptyText": "Gib Text ein, bevor du eine Verbesserung anforderst.",
+      "grammarPerfect": "Perfekt! Keine Fehler gefunden.",
+      "working": "Denke nach…"
+    }
   },
   "voice": {
     "transcribeOn": "Transkription AN",

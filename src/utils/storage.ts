@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { UserProfile } from '../api/auth';
 import { KeyBundle } from '../crypto/e2ee';
 import { isLocalAIProvider, LOCAL_MODELS_ENABLED } from './featureFlags';
+import { DEFAULT_OPENAI_CHAT_MODEL } from './openaiCompat';
 
 // NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
 export type AIProvider = 'vaulto_ai' | 'openai' | 'local_whisper' | 'local_llm' | 'local';
@@ -56,6 +57,7 @@ export type DestructiveResetMarker = {
 // OpenAI-compatible settings (legacy self-hosted keys are read for migration).
 const OPENAI_BASE_URL_KEY = 'vaulto_openai_base_url_v1';
 const LEGACY_SELF_HOSTED_URL_KEY = 'vaulto_self_hosted_url';
+const OPENAI_MODEL_KEY = 'vaulto_openai_model_v1';
 const LEGACY_SELF_HOSTED_API_KEY = 'vaulto_self_hosted_api_key';
 const LOCAL_ONLY_WARNING_DISMISSED_KEY = 'vaulto_local_only_warning_dismissed_v1';
 const PRIVATE_AI_ALLOWED_KEY = 'vaulto_private_ai_allowed_v1';
@@ -565,6 +567,24 @@ export const setOpenAIBaseUrl = async (baseUrl: string): Promise<void> => {
         await AsyncStorage.setItem(OPENAI_BASE_URL_KEY, baseUrl);
     } catch (e) {
         console.error('Failed to set OpenAI base URL', e);
+    }
+};
+
+export const getOpenAIModel = async (): Promise<string> => {
+    try {
+        const value = await AsyncStorage.getItem(OPENAI_MODEL_KEY);
+        return (value || '').trim() || DEFAULT_OPENAI_CHAT_MODEL;
+    } catch (e) {
+        console.error('Failed to get OpenAI model', e);
+        return DEFAULT_OPENAI_CHAT_MODEL;
+    }
+};
+
+export const setOpenAIModel = async (model: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(OPENAI_MODEL_KEY, model.trim());
+    } catch (e) {
+        console.error('Failed to set OpenAI model', e);
     }
 };
 

@@ -302,7 +302,36 @@
     "enableSyncBtn": "सिंक चालू करें",
     "shareBlockedTitle": "शेयरिंग अक्षम है",
     "exportMarkdownFailed": "Markdown एक्सपोर्ट करने में विफल",
-    "exportImageFailed": "इमेज एक्सपोर्ट करने में विफल"
+    "exportImageFailed": "इमेज एक्सपोर्ट करने में विफल",
+    "agent": {
+      "confirmTitle": "बदलाव की पुष्टि करें",
+      "confirmClear": "पूरा नोट खाली करें?",
+      "confirmReplace": "पूरा नोट बदलें?",
+      "confirmRemoveItems": "ये चेकलिस्ट आइटम हटाएँ?",
+      "confirmChecklist": "यह चेकलिस्ट बदलाव लागू करें?",
+      "apply": "लागू करें",
+      "createdChecklist": "चेकलिस्ट बनाई गई",
+      "updatedChecklist": "चेकलिस्ट अपडेट हुई",
+      "createdImprovedView": "बेहतर संस्करण बनाया गया",
+      "updatedFormatting": "फ़ॉर्मैटिंग अपडेट हुई",
+      "updatedNote": "नोट अपडेट हुआ",
+      "updatedTitle": "शीर्षक अपडेट हुआ",
+      "addedToOriginal": "मूल में जोड़ा गया",
+      "addedToImproved": "बेहतर संस्करण में जोड़ा गया",
+      "savedRecording": "रिकॉर्डिंग सहेजी गई",
+      "cancelled": "बदलाव रद्द किया गया"
+    },
+    "improvePreview": {
+      "title": "AI सुझाव",
+      "accept": "स्वीकारें",
+      "discard": "छोड़ें",
+      "retry": "फिर कोशिश करें",
+      "result": "परिणाम",
+      "noChanges": "टेक्स्ट पहले से ठीक है — बदलने को कुछ नहीं।",
+      "emptyText": "सुधार माँगने से पहले कुछ लिखें।",
+      "grammarPerfect": "बढ़िया! कोई गलती नहीं मिली।",
+      "working": "सोच रहा हूँ…"
+    }
   },
   "voice": {
     "transcribeOn": "ट्रांसक्रिप्शन चालू",

@@ -302,7 +302,36 @@
     "enableSyncBtn": "Activar sincronización",
     "shareBlockedTitle": "Compartir desactivado",
     "exportMarkdownFailed": "Error al exportar Markdown",
-    "exportImageFailed": "Error al exportar la imagen"
+    "exportImageFailed": "Error al exportar la imagen",
+    "agent": {
+      "confirmTitle": "Confirmar cambio",
+      "confirmClear": "¿Vaciar toda la nota?",
+      "confirmReplace": "¿Reemplazar toda la nota?",
+      "confirmRemoveItems": "¿Eliminar estos elementos de la lista?",
+      "confirmChecklist": "¿Aplicar este cambio en la lista?",
+      "apply": "Aplicar",
+      "createdChecklist": "Lista creada",
+      "updatedChecklist": "Lista actualizada",
+      "createdImprovedView": "Versión mejorada creada",
+      "updatedFormatting": "Formato actualizado",
+      "updatedNote": "Nota actualizada",
+      "updatedTitle": "Título actualizado",
+      "addedToOriginal": "Añadido al original",
+      "addedToImproved": "Añadido a la mejora",
+      "savedRecording": "Grabación guardada",
+      "cancelled": "Cambio cancelado"
+    },
+    "improvePreview": {
+      "title": "Sugerencia de IA",
+      "accept": "Aceptar",
+      "discard": "Descartar",
+      "retry": "Reintentar",
+      "result": "Resultado",
+      "noChanges": "El texto ya está bien: nada que cambiar.",
+      "emptyText": "Escribe algo antes de pedir una mejora.",
+      "grammarPerfect": "¡Perfecto! No se encontraron errores.",
+      "working": "Pensando…"
+    }
   },
   "voice": {
     "transcribeOn": "Transcripción ACTIVADA",

@@ -41,6 +41,8 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { VoiceRecorder } from '../components/VoiceRecorder';
+import { startRealtimeDictation } from '../services/LocalWhisperService';
+import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadModal';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
@@ -55,6 +57,7 @@ import * as Haptics from 'expo-haptics';
 import {
     improveText,
     loadImprovementOptions,
+    optionExpectsJson,
     saveImprovementOptions,
     AIImprovementOption,
     DEFAULT_IMPROVEMENT_OPTIONS,
@@ -486,18 +489,24 @@ const appendDictationToTodoContent = (base: string, dictatedText: string): strin
     return appendSnippetToContent(normalizedBase, normalizedDictation);
 };
 
-const buildAgentStatusMessage = (mode?: string | null, action: 'created' | 'updated' = 'updated'): string => {
+/** Returns an i18n key rather than English text so agent feedback follows the app language. */
+const buildAgentStatusKey = (mode?: string | null, action: 'created' | 'updated' = 'updated'): string => {
     const normalizedMode = (mode || '').toLowerCase();
     if (normalizedMode === 'todo' || normalizedMode === 'list') {
-        return action === 'created' ? 'Created checklist' : 'Updated checklist';
+        return action === 'created' ? 'edit.agent.createdChecklist' : 'edit.agent.updatedChecklist';
     }
     if (normalizedMode === 'format') {
-        return action === 'created' ? 'Created improved view' : 'Updated formatting';
+        return action === 'created' ? 'edit.agent.createdImprovedView' : 'edit.agent.updatedFormatting';
     }
-    if (normalizedMode === 'edit_content') {
-        return action === 'created' ? 'Created improved view' : 'Updated note';
-    }
-    return action === 'created' ? 'Created improved view' : 'Updated note';
+    return action === 'created' ? 'edit.agent.createdImprovedView' : 'edit.agent.updatedNote';
+};
+
+/** Maps the server's machine-readable confirmation reason to a localized question. */
+const AGENT_CONFIRMATION_KEYS: Record<string, string> = {
+    clear_content: 'edit.agent.confirmClear',
+    replace_content: 'edit.agent.confirmReplace',
+    remove_items: 'edit.agent.confirmRemoveItems',
+    checklist_update: 'edit.agent.confirmChecklist',
 };
 
 const HeaderTitle = memo(({
@@ -530,16 +539,19 @@ const HeaderMeta = memo(({ dateStr, charCount }: { dateStr: string; charCount: n
     </View>
 ));
 
-const MemoizedImprovementChips = memo(({ 
-    noteImprovements, 
-    activeVariantId, 
+const MemoizedImprovementChips = memo(({
+    noteImprovements,
+    activeVariantId,
     handleVariantSelect,
-    confirmDeleteImprovement
-}: { 
-    noteImprovements: any[], 
-    activeVariantId: string, 
+    confirmDeleteImprovement,
+    optionIcons,
+}: {
+    noteImprovements: any[],
+    activeVariantId: string,
     handleVariantSelect: (id: string) => void,
-    confirmDeleteImprovement: (id: string) => void
+    confirmDeleteImprovement: (id: string) => void,
+    /** option id -> Material icon, so a chip shows which action produced it. */
+    optionIcons: Record<string, string>,
 }) => {
     const { t } = useTranslation();
 
@@ -574,39 +586,48 @@ const MemoizedImprovementChips = memo(({
                     </Text>
                 </TouchableOpacity>
 
-                {noteImprovements.map((imp: any) => (
-                    <View style={styles.variantChipWrapper} key={imp.id}>
-                        <TouchableOpacity
-                            style={[
-                                styles.variantChip,
-                                activeVariantId === imp.id && styles.variantChipActive,
-                            ]}
-                            onPress={() => handleVariantSelect(imp.id)}
-                        >
-                            <MaterialIcons
-                                name="auto-awesome"
-                                size={14}
-                                color={activeVariantId === imp.id ? colors.background : colors.textSecondary}
-                                style={styles.variantChipIcon}
-                            />
-                            <Text
-                                numberOfLines={1}
-                                style={[
-                                    styles.variantChipText,
-                                    activeVariantId === imp.id && styles.variantChipTextActive,
-                                ]}
+                {noteImprovements.map((imp: any) => {
+                    const isActive = activeVariantId === imp.id;
+                    const chipIcon = (imp.option_id && optionIcons[imp.option_id]) || 'auto-awesome';
+                    return (
+                        <View style={styles.variantChipWrapper} key={imp.id}>
+                            <TouchableOpacity
+                                style={[styles.variantChip, isActive && styles.variantChipActive]}
+                                onPress={() => handleVariantSelect(imp.id)}
+                                onLongPress={() => confirmDeleteImprovement(imp.id)}
+                                delayLongPress={400}
                             >
-                                {imp.label || t("edit.improvement")}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.variantDeleteButton}
-                            onPress={() => confirmDeleteImprovement(imp.id)}
-                        >
-                            <MaterialIcons name="close" size={14} color={colors.textMuted} />
-                        </TouchableOpacity>
-                    </View>
-                ))}
+                                <MaterialIcons
+                                    name={chipIcon as any}
+                                    size={14}
+                                    color={isActive ? colors.background : colors.textSecondary}
+                                    style={styles.variantChipIcon}
+                                />
+                                <Text
+                                    numberOfLines={1}
+                                    style={[
+                                        styles.variantChipText,
+                                        isActive && styles.variantChipTextActive,
+                                    ]}
+                                >
+                                    {imp.label || t("edit.improvement")}
+                                </Text>
+                            </TouchableOpacity>
+                            {/* Close affordance only on the active chip, like editor tabs.
+                                Inactive chips are deleted via long-press, which stops
+                                stray taps from destroying a variant. */}
+                            {isActive && (
+                                <TouchableOpacity
+                                    style={styles.variantDeleteButton}
+                                    onPress={() => confirmDeleteImprovement(imp.id)}
+                                    hitSlop={6}
+                                >
+                                    <MaterialIcons name="close" size={14} color={colors.textMuted} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    );
+                })}
             </GestureHandlerScrollView>
         </View>
     );
@@ -729,7 +750,9 @@ const subscribeNoteProcessingState = (
 export const NoteEditScreen = () => {
     const { t } = useTranslation();
     const AGENT_HISTORY_LIMIT = 5;
-    const AGENT_TASK_TIMEOUT_MS = 60000;
+    // Outer safety net only. It must stay above the inner deadlines
+    // (transcription + agent), otherwise it aborts work that is still healthy.
+    const AGENT_TASK_TIMEOUT_MS = 240000;
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
     const route = useRoute<NoteEditScreenRouteProp>();
     const insets = useSafeAreaInsets();
@@ -745,6 +768,9 @@ export const NoteEditScreen = () => {
         updateNoteStorageScope,
     } = useNotesContext();
     const { isAuthenticated, isGuest, userId, refreshProfile } = useAuth();
+    const [isRealtimeDictating, setIsRealtimeDictating] = useState(false);
+    const [showLocalWhisperModal, setShowLocalWhisperModal] = useState(false);
+    const realtimeDictationStopRef = useRef<(() => Promise<void>) | null>(null);
     const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
     const normalizePrivacy = (value?: NotePrivacy): NotePrivacy => {
@@ -1073,6 +1099,15 @@ export const NoteEditScreen = () => {
     const [showAIModal, setShowAIModal] = useState(false);
     const [isAIProcessing, setIsAIProcessingState] = useState(false);
     const [aiOptions, setAiOptions] = useState<AIImprovementOption[]>(DEFAULT_IMPROVEMENT_OPTIONS);
+    // Lets a variant chip show the icon of the action that produced it, so
+    // "Fix Grammar" and "Summarize" are distinguishable at a glance.
+    const improvementOptionIcons = useMemo(
+        () => aiOptions.reduce<Record<string, string>>((acc, option) => {
+            if (option.id && option.icon) acc[option.id] = option.icon;
+            return acc;
+        }, {}),
+        [aiOptions]
+    );
     const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
     const [showPromptBuilder, setShowPromptBuilder] = useState(false);
     const [newPromptTitle, setNewPromptTitle] = useState('');
@@ -1177,6 +1212,15 @@ export const NoteEditScreen = () => {
     const [currentAIProvider, setCurrentAIProvider] = useState<AIProvider>('vaulto_ai');
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [activeImprovementTask, setActiveImprovementTask] = useState<AIActiveTask | null>(null);
+    // Manual AI results wait here for Accept / Try again / Discard. Nothing is
+    // persisted and no variant is created until the user accepts.
+    const [improvementPreview, setImprovementPreview] = useState<{
+        option: AIImprovementOption;
+        sourceText: string;
+        resultText: string;
+        variantId: string;
+    } | null>(null);
+    const [isPreviewRegenerating, setIsPreviewRegenerating] = useState(false);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
         const originalErrorMsg = getErrorMessage(errorValue, '');
         const raw = originalErrorMsg.toLowerCase();
@@ -1241,6 +1285,37 @@ export const NoteEditScreen = () => {
             );
         });
     }, [allowPrivateAI, currentAIProvider, privacy, setAllowPrivateAI, storageScope]);
+
+    /**
+     * Destructive agent results (clearing, whole-note rewrites, checklist removals) are
+     * gated here. The backend flags them; nothing may be written until the user agrees.
+     */
+    const confirmAgentChange = useCallback(
+        async (kind?: string, serverMessage?: string | null): Promise<boolean> => {
+            const localizedKey = kind ? AGENT_CONFIRMATION_KEYS[kind] : undefined;
+            const question =
+                (localizedKey ? t(localizedKey) : '') ||
+                (serverMessage || '').trim() ||
+                t('edit.agent.confirmTitle');
+
+            return await new Promise<boolean>((resolve) => {
+                Alert.alert(
+                    t('edit.agent.confirmTitle'),
+                    question,
+                    [
+                        { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                        {
+                            text: t('edit.agent.apply'),
+                            style: kind === 'clear_content' || kind === 'remove_items' ? 'destructive' : 'default',
+                            onPress: () => resolve(true),
+                        },
+                    ],
+                    { cancelable: true, onDismiss: () => resolve(false) }
+                );
+            });
+        },
+        [t]
+    );
 
     const handleAiAccess = async (callback: () => void) => {
         const isLocalAiProvider =
@@ -3537,7 +3612,9 @@ export const NoteEditScreen = () => {
                     if (!appliedOnce) return false;
                     dictationFinalized = true;
                     if (!options?.silent) {
-                        const status = taskVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
+                        const status = taskVariantId === 'original'
+                            ? t('edit.agent.addedToOriginal')
+                            : t('edit.agent.addedToImproved');
                         allRecordingIds.forEach(id => {
                             setRecordingOutcomeStatus(id, status);
                             showVoiceResultStatus(status, id);
@@ -3566,10 +3643,12 @@ export const NoteEditScreen = () => {
                     // Check session again after async op
                     if (task.sessionId !== agentSessionIdRef.current || task.noteId !== localNoteIdRef.current) {
                         console.log(`[NoteEditScreen] Task finished but session stale, discarding result for batch`);
+                        // Resolved before the loop: the callback parameter shadows `t`.
+                        const savedRecordingStatus = t('edit.agent.savedRecording');
                         validBatch.forEach(t => {
                             if (t.recordingId) {
                                 pendingVoiceInsertionsRef.current.delete(t.recordingId);
-                                setRecordingOutcomeStatus(t.recordingId, 'Saved recording');
+                                setRecordingOutcomeStatus(t.recordingId, savedRecordingStatus);
                             }
                         });
                         // We still shift below
@@ -3600,9 +3679,9 @@ export const NoteEditScreen = () => {
                         const processedText = typeof agentResult.processedText === 'string'
                             ? agentResult.processedText.trim()
                             : '';
-                        // applyTarget (agentResult.applyTarget) is intentionally not used to
-                        // route 'original' variant writes — the original note is always protected.
-                        // See the hasApplicableInstruction branch below for details.
+                        // The original note is never written by the agent: instructions
+                        // targeting it produce a separate improvement variant instead.
+                        // See the hasApplicableInstruction branch below.
                         const hasProcessedPayload =
                             typeof agentResult.processedText === 'string' &&
                             (agentResult.mode === 'edit_content' || processedText.length > 0);
@@ -3655,9 +3734,10 @@ export const NoteEditScreen = () => {
                             } catch (titleError) {
                                 console.error('[NoteEditScreen] Failed to apply explicit agent title', titleError);
                             }
+                            const titleStatus = t('edit.agent.updatedTitle');
                             allRecordingIds.forEach(id => {
-                                setRecordingOutcomeStatus(id, 'Updated title');
-                                showVoiceResultStatus('Updated title', id);
+                                setRecordingOutcomeStatus(id, titleStatus);
+                                showVoiceResultStatus(titleStatus, id);
                             });
                             // Explicit title command should not mutate note content.
                             continue;
@@ -3692,29 +3772,57 @@ export const NoteEditScreen = () => {
                         }
 
                         if (hasApplicableInstruction) {
+                            // The server decides append-vs-replace; guessing it from content
+                            // length used to silently wipe short notes when a list was dictated.
+                            const contentAction = agentResult.contentAction
+                                ?? (agentResult.mode === 'edit_content' ? 'replace' : 'append');
+
                             let newText: string | null = null;
-                            if (agentResult.mode === 'edit_content') {
+                            if (contentAction === 'replace') {
                                 newText = processedText;
-                            } else if (agentResult.mode === 'todo' || agentResult.mode === 'list' || agentResult.mode === 'format') {
-                                const looksLikeFullDocument =
-                                    processedText.includes('\n') &&
-                                    processedText.length >= Math.max(40, Math.floor(commandBaseContent.length * 0.5));
+                            } else if (contentAction === 'none') {
+                                newText = commandBaseContent;
+                            } else {
                                 const duplicatesExistingStructuredBlock =
                                     (agentResult.mode === 'todo' || agentResult.mode === 'list') &&
                                     contentAlreadyContainsStructuredListBlock(commandBaseContent, processedText);
-                                newText = looksLikeFullDocument
-                                    ? processedText
-                                    : duplicatesExistingStructuredBlock
-                                        ? commandBaseContent
-                                        : appendSnippetToContent(commandBaseContent, processedText);
-                            } else {
-                                newText = appendSnippetToContent(commandBaseContent, processedText);
+                                newText = duplicatesExistingStructuredBlock
+                                    ? commandBaseContent
+                                    : appendSnippetToContent(commandBaseContent, processedText);
                             }
 
                             if (newText !== null && !areTextsEquivalent(newText, commandBaseContent)) {
+                                // Destructive results must be confirmed before anything is written.
+                                if (agentResult.needsConfirmation) {
+                                    const approved = await confirmAgentChange(
+                                        agentResult.confirmationKind,
+                                        agentResult.confirmationMessage
+                                    );
+                                    if (!approved) {
+                                        clearTranscribedInsertionExpectation();
+                                        if (hasPendingDraft) {
+                                            validBatch.forEach(t => {
+                                                if (t.recordingId) pendingVoiceInsertionsRef.current.delete(t.recordingId);
+                                            });
+                                        }
+                                        await setVariantContentWithOptions(taskVariantId, commandBaseContent, {
+                                            persist: true,
+                                            updateHistory: false,
+                                        });
+                                        dictationFinalized = true;
+                                        shouldFallbackToDictationOnError = false;
+                                        const cancelledStatus = t('edit.agent.cancelled');
+                                        allRecordingIds.forEach(id => {
+                                            setRecordingOutcomeStatus(id, cancelledStatus);
+                                            showVoiceResultStatus(cancelledStatus, id);
+                                        });
+                                        continue;
+                                    }
+                                }
+
                                 clearTranscribedInsertionExpectation();
-                                // Original note must never be overwritten by agent instructions.
-                                // applyTarget === 'current_variant' is only honoured for improvement variants.
+                                // Original note must never be overwritten by agent instructions:
+                                // a destructive result becomes a separate improvement instead.
                                 if (taskVariantId === 'original') {
                                     if (hasPendingDraft) {
                                         validBatch.forEach(t => {
@@ -3773,7 +3881,7 @@ export const NoteEditScreen = () => {
                                         await setActiveVariant(targetNoteId, improvement.id);
                                     }
 
-                                    const status = buildAgentStatusMessage(agentResult.mode, 'created');
+                                    const status = t(buildAgentStatusKey(agentResult.mode, 'created'));
                                     allRecordingIds.forEach(id => {
                                         setRecordingOutcomeStatus(id, status);
                                         showVoiceResultStatus(status, id);
@@ -3806,7 +3914,7 @@ export const NoteEditScreen = () => {
                                         persist: true,
                                         updateHistory: true,
                                     });
-                                    const status = buildAgentStatusMessage(agentResult.mode, 'updated');
+                                    const status = t(buildAgentStatusKey(agentResult.mode, 'updated'));
                                     allRecordingIds.forEach(id => {
                                         setRecordingOutcomeStatus(id, status);
                                         showVoiceResultStatus(status, id);
@@ -3832,9 +3940,10 @@ export const NoteEditScreen = () => {
                                     updateHistory: false,
                                 });
                                 dictationFinalized = true;
+                                const noChangeStatus = t('edit.agent.updatedNote');
                                 allRecordingIds.forEach(id => {
-                                    setRecordingOutcomeStatus(id, 'No changes');
-                                    showVoiceResultStatus('No changes', id);
+                                    setRecordingOutcomeStatus(id, noChangeStatus);
+                                    showVoiceResultStatus(noChangeStatus, id);
                                 });
                             }
                         } else {
@@ -3862,9 +3971,10 @@ export const NoteEditScreen = () => {
                                 });
                                 dictationFinalized = true;
                                 shouldFallbackToDictationOnError = false;
+                                const checklistStatus = t('edit.agent.updatedChecklist');
                                 allRecordingIds.forEach(id => {
-                                    setRecordingOutcomeStatus(id, 'Updated checklist');
-                                    showVoiceResultStatus('Updated checklist', id);
+                                    setRecordingOutcomeStatus(id, checklistStatus);
+                                    showVoiceResultStatus(checklistStatus, id);
                                 });
                             } else {
                                 await finalizeAsDictation(originalText || normalizedTaskText);
@@ -4444,9 +4554,43 @@ export const NoteEditScreen = () => {
         showVoiceResultStatus('Copied transcript', selected?.id);
     }, [selectedRecordingForText, showVoiceResultStatus]);
 
-    const handleFormat = useCallback((type: MarkdownFormatType) => {
+    const handleFormat = useCallback(async (type: MarkdownFormatType) => {
+        if (type === 'dictate') {
+            if (isRealtimeDictating) {
+                // Stop dictation
+                setIsRealtimeDictating(false);
+                if (realtimeDictationStopRef.current) {
+                    await realtimeDictationStopRef.current();
+                    realtimeDictationStopRef.current = null;
+                }
+            } else {
+                // Start dictation
+                setIsRealtimeDictating(true);
+                try {
+                    const job = await startRealtimeDictation({
+                        onUpdate: (text) => {
+                            // Append text to the current variant content
+                            const variantId = activeVariantIdRef.current;
+                            const current = resolveVariantContent(variantId) || '';
+                            const newText = current + (current && !current.endsWith(' ') ? ' ' : '') + text;
+                            setVariantContentWithOptions(variantId, newText, { persist: true });
+                        }
+                    });
+                    realtimeDictationStopRef.current = job.stop;
+                } catch (e: any) {
+                    setIsRealtimeDictating(false);
+                    const msg = e.message || '';
+                    if (msg.includes('is not downloaded') || msg.includes('download')) {
+                        setShowLocalWhisperModal(true);
+                    } else {
+                        Alert.alert('Dictation Error', msg || 'Failed to start dictation');
+                    }
+                }
+            }
+            return;
+        }
         editorRef.current?.handleFormat(type);
-    }, []);
+    }, [isRealtimeDictating, resolveVariantContent, setVariantContentWithOptions]);
 
     const handleCheckPress = useCallback(() => {
         setIsColorPickerVisible(false);
@@ -4459,12 +4603,52 @@ export const NoteEditScreen = () => {
             });
     }, [prepareEditorSnapshotForExit, saveNote]);
 
+    /**
+     * Runs one improvement request and returns the text to apply, or null when the
+     * model reports nothing worth changing. Does not touch the note.
+     */
+    const generateImprovement = useCallback(async (
+        option: AIImprovementOption,
+        sourceText: string,
+    ): Promise<string | null> => {
+        const improvedText = await improveText(sourceText, option);
+
+        if (optionExpectsJson(option)) {
+            try {
+                let jsonString = improvedText;
+                const jsonStart = improvedText.indexOf('{');
+                const jsonEnd = improvedText.lastIndexOf('}');
+                if (jsonStart !== -1 && jsonEnd !== -1) {
+                    jsonString = improvedText.substring(jsonStart, jsonEnd + 1);
+                }
+                const jsonRes = JSON.parse(jsonString);
+
+                if (jsonRes.is_correct) {
+                    return null;
+                }
+                // `corrected_text` covers models that hallucinate the older key name.
+                const fixed = jsonRes.fixed_text || jsonRes.corrected_text;
+                if (typeof fixed === 'string' && fixed.trim()) {
+                    return areTextsEquivalent(sourceText, fixed) ? null : fixed;
+                }
+                return null;
+            } catch (e) {
+                // Not JSON after all. Only reuse the raw answer when it actually
+                // differs from the source, so chatty replies cannot corrupt the note.
+                console.warn('Failed to parse grammar correction JSON', e);
+                return areTextsEquivalent(sourceText, improvedText) ? null : improvedText;
+            }
+        }
+
+        return areTextsEquivalent(sourceText, improvedText) ? null : improvedText;
+    }, []);
+
     const handleAIImprovement = async (option: AIImprovementOption) => {
         setShowAIModal(false);
         setTrackedIsAIProcessing(true);
         setActiveImprovementTask({
             id: 'improvement-' + Date.now(),
-            text: option.label || 'Improving text...',
+            text: option.label || t('edit.improvePreview.working'),
             isTranscribing: false,
         });
         const variantAtRequestStart = activeVariantIdRef.current;
@@ -4475,58 +4659,45 @@ export const NoteEditScreen = () => {
             }
             const sourceText = richContentToPlainText(content).trim();
             if (!sourceText) {
-                Alert.alert('Empty Text', 'Enter some text before requesting an improvement.');
-                return;
-            }
-            const improvedText = await improveText(sourceText, option);
-
-            let finalText = improvedText;
-
-            if (option.id === 'grammar') {
-                try {
-                    let jsonString = improvedText;
-                    const jsonStart = improvedText.indexOf('{');
-                    const jsonEnd = improvedText.lastIndexOf('}');
-                    if (jsonStart !== -1 && jsonEnd !== -1) {
-                        jsonString = improvedText.substring(jsonStart, jsonEnd + 1);
-                    }
-                    const jsonRes = JSON.parse(jsonString);
-
-                    // If the AI says it's correct, we stop here.
-                    if (jsonRes.is_correct) {
-                        showToast('✨ Perfect! No grammar errors found.', 3000);
-                        setTrackedIsAIProcessing(false);
-                        return;
-                    }
-
-                    // Otherwise, we expect fixed_text
-                    if (jsonRes.fixed_text) {
-                        finalText = jsonRes.fixed_text;
-                    } else if (jsonRes.corrected_text) {
-                        // Fallback in case AI hallucinates the old key
-                        finalText = jsonRes.corrected_text;
-                    }
-                } catch (e) {
-                    // Use warn instead of error to avoid RedBox in development
-                    console.warn('Failed to parse grammar correction JSON', e);
-
-
-                    // Fallback: if the response looks like just the corrected text (no JSON structure), use it
-                    // But for grammar, we expect JSON. If parsing failed, it might be a chatty response.
-                    // If it's chatty, we probably shouldn't blindly use it. 
-                    // However, we verify if it matches source text to avoid false positives.
-                    if (areTextsEquivalent(sourceText, improvedText)) {
-                        showToast('✨ Perfect! No grammar errors found.', 3000);
-                        setTrackedIsAIProcessing(false);
-                        return;
-                    }
-                }
-            } else if (areTextsEquivalent(sourceText, improvedText)) {
-                Alert.alert('No changes', 'The text remains unchanged.');
-                setTrackedIsAIProcessing(false);
+                Alert.alert(t('edit.improvePreview.title'), t('edit.improvePreview.emptyText'));
                 return;
             }
 
+            const finalText = await generateImprovement(option, sourceText);
+            if (finalText === null) {
+                showToast(
+                    optionExpectsJson(option)
+                        ? `✨ ${t('edit.improvePreview.grammarPerfect')}`
+                        : t('edit.improvePreview.noChanges'),
+                    3000
+                );
+                return;
+            }
+
+            // Nothing is written yet: the user reviews the result and decides.
+            setImprovementPreview({
+                option,
+                sourceText,
+                resultText: finalText,
+                variantId: variantAtRequestStart,
+            });
+        } catch (error: any) {
+            const prettyMessage = getErrorMessage(error, 'Failed to improve text. Check AI settings.');
+            showPrettyQuotaNotification(error, prettyMessage);
+        } finally {
+            setTrackedIsAIProcessing(false);
+            setActiveImprovementTask(null);
+        }
+    };
+
+    /** Persists an improvement the user accepted in the preview. */
+    const commitImprovement = async (
+        option: AIImprovementOption,
+        finalText: string,
+        variantAtRequestStart: string,
+    ) => {
+        setTrackedIsAIProcessing(true);
+        try {
             // Wait for any pending creation to finish
             while (isCreatingNote.current) {
                 await new Promise(r => setTimeout(r, 100));
@@ -4640,6 +4811,43 @@ export const NoteEditScreen = () => {
         }
     };
 
+    // Deliberately not memoized: commitImprovement closes over note state that can
+    // change while the preview is open, and a stale closure would write the wrong note.
+    const handlePreviewAccept = async () => {
+        const preview = improvementPreview;
+        if (!preview) return;
+        setImprovementPreview(null);
+        await commitImprovement(preview.option, preview.resultText, preview.variantId);
+    };
+
+    const handlePreviewDiscard = useCallback(() => {
+        setImprovementPreview(null);
+    }, []);
+
+    const handlePreviewRetry = useCallback(async () => {
+        const preview = improvementPreview;
+        if (!preview) return;
+
+        setIsPreviewRegenerating(true);
+        try {
+            const nextText = await generateImprovement(preview.option, preview.sourceText);
+            if (nextText === null) {
+                setImprovementPreview(null);
+                showToast(t('edit.improvePreview.noChanges'), 3000);
+                return;
+            }
+            setImprovementPreview({ ...preview, resultText: nextText });
+            refreshProfile?.().catch(() => {});
+        } catch (error: any) {
+            showPrettyQuotaNotification(
+                error,
+                getErrorMessage(error, 'Failed to improve text. Check AI settings.')
+            );
+        } finally {
+            setIsPreviewRegenerating(false);
+        }
+    }, [improvementPreview, generateImprovement, refreshProfile, t]);
+
     const handleReorderEnd = async (data: AIImprovementOption[]) => {
         setAiOptions(data);
         await saveImprovementOptions(data);
@@ -4672,7 +4880,7 @@ export const NoteEditScreen = () => {
         const preparedTemplate = ensureTemplateHasPlaceholder(newPromptTemplate.trim());
 
         const newOption: AIImprovementOption = {
-            id: `custom - ${Date.now()} `,
+            id: `custom-${Date.now()}`,
             label: newPromptTitle.trim(),
             prompt: preparedTemplate,
             icon: newPromptIcon,
@@ -5067,6 +5275,7 @@ export const NoteEditScreen = () => {
                 activeVariantId={activeVariantId}
                 handleVariantSelect={handleVariantSelect}
                 confirmDeleteImprovement={confirmDeleteImprovement}
+                optionIcons={improvementOptionIcons}
             />
         </View>
     ), [
@@ -5076,6 +5285,7 @@ export const NoteEditScreen = () => {
         dateStr,
         handleTitleChange,
         handleVariantSelect,
+        improvementOptionIcons,
         noteImprovements,
         title,
     ]);
@@ -5168,6 +5378,78 @@ export const NoteEditScreen = () => {
                     )}
                 </View>
             </View>
+
+            {/* AI result preview: review before anything is written to the note */}
+            <Modal
+                visible={!!improvementPreview}
+                transparent
+                animationType="slide"
+                onRequestClose={handlePreviewDiscard}
+            >
+                <TouchableWithoutFeedback onPress={handlePreviewDiscard}>
+                    <View style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback onPress={() => { }}>
+                            <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 16 }]}>
+                                <View style={styles.aiModalHeader}>
+                                    <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]} numberOfLines={1}>
+                                        {improvementPreview?.option.label || t('edit.improvePreview.title')}
+                                    </Text>
+                                    <TouchableOpacity onPress={handlePreviewDiscard} hitSlop={8}>
+                                        <MaterialIcons name="close" size={22} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <Text style={styles.previewSectionLabel}>{t('edit.improvePreview.result')}</Text>
+                                <ScrollView style={styles.previewBody} keyboardShouldPersistTaps="handled">
+                                    <Text style={styles.previewText} selectable>
+                                        {improvementPreview?.resultText || ''}
+                                    </Text>
+                                </ScrollView>
+
+                                {isPreviewRegenerating && (
+                                    <View style={styles.previewLoadingRow}>
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                        <Text style={styles.previewLoadingText}>{t('edit.improvePreview.working')}</Text>
+                                    </View>
+                                )}
+
+                                <View style={styles.previewActions}>
+                                    <TouchableOpacity
+                                        style={[styles.previewButton, styles.previewButtonSecondary]}
+                                        onPress={handlePreviewDiscard}
+                                        disabled={isPreviewRegenerating}
+                                    >
+                                        <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                                        <Text style={styles.previewButtonSecondaryText}>
+                                            {t('edit.improvePreview.discard')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.previewButton, styles.previewButtonSecondary]}
+                                        onPress={handlePreviewRetry}
+                                        disabled={isPreviewRegenerating}
+                                    >
+                                        <MaterialIcons name="refresh" size={18} color={colors.textSecondary} />
+                                        <Text style={styles.previewButtonSecondaryText}>
+                                            {t('edit.improvePreview.retry')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.previewButton, styles.previewButtonPrimary]}
+                                        onPress={handlePreviewAccept}
+                                        disabled={isPreviewRegenerating}
+                                    >
+                                        <MaterialIcons name="check" size={18} color={colors.background} />
+                                        <Text style={styles.previewButtonPrimaryText}>
+                                            {t('edit.improvePreview.accept')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </TouchableWithoutFeedback>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
 
             {/* AI Options Modal */}
             <Modal
@@ -5617,7 +5899,7 @@ export const NoteEditScreen = () => {
                     <View pointerEvents="auto" style={styles.toolbarKeyboardInner}>
                         <MarkdownToolbar
                             onFormat={handleFormat}
-                            activeFormats={activeFormats}
+                            activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
                             onColorPickerToggle={(visible) => {
                                 setIsColorPickerVisible(visible);
                                 if (!visible && !keyboardVisibleRef.current) {
@@ -5752,7 +6034,9 @@ export const NoteEditScreen = () => {
 
             <VoiceRecorder
                 visible={showVoiceRecorder}
+                autoStart={micLongPressHandledRef.current}
                 micMode={pendingMicInputMode}
+                isMainScreen={false}
                 onFinish={(rec, transcribe, agentEnabled) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
@@ -5768,7 +6052,15 @@ export const NoteEditScreen = () => {
                     setPendingMicInputMode('agent');
                     pendingMicInputModeRef.current = 'agent';
                 }}
-                autoStart={true}
+            />
+
+            <LocalWhisperDownloadModal
+                visible={showLocalWhisperModal}
+                onClose={() => setShowLocalWhisperModal(false)}
+                onDownloadComplete={() => {
+                    setShowLocalWhisperModal(false);
+                    handleFormat('dictate'); // Auto-start after download
+                }}
             />
 
             <TranscriptionIndicator visible={isTranscribing} />
@@ -6234,6 +6526,69 @@ const styles = StyleSheet.create({
     },
     aiModalTitleInline: {
         marginBottom: 0,
+        flexShrink: 1,
+    },
+    previewSectionLabel: {
+        ...typography.caption,
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: spacing.xs,
+    },
+    previewBody: {
+        maxHeight: 280,
+        backgroundColor: colors.background,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
+    },
+    previewText: {
+        ...typography.body,
+        color: colors.text,
+    },
+    previewLoadingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        marginTop: spacing.s,
+    },
+    previewLoadingText: {
+        ...typography.caption,
+        color: colors.primary,
+    },
+    previewActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        marginTop: spacing.l,
+    },
+    previewButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        paddingVertical: spacing.m,
+        borderRadius: 12,
+    },
+    previewButtonSecondary: {
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    previewButtonSecondaryText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    previewButtonPrimary: {
+        backgroundColor: colors.primary,
+    },
+    previewButtonPrimaryText: {
+        ...typography.caption,
+        color: colors.background,
+        fontWeight: '600',
     },
     aiModalHeader: {
         flexDirection: 'row',

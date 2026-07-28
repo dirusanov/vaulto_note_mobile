@@ -302,7 +302,36 @@
     "enableSyncBtn": "Activer la synchronisation",
     "shareBlockedTitle": "Partage désactivé",
     "exportMarkdownFailed": "Échec de l'exportation en Markdown",
-    "exportImageFailed": "Échec de l'exportation de l'image"
+    "exportImageFailed": "Échec de l'exportation de l'image",
+    "agent": {
+      "confirmTitle": "Confirmer la modification",
+      "confirmClear": "Vider toute la note ?",
+      "confirmReplace": "Remplacer toute la note ?",
+      "confirmRemoveItems": "Supprimer ces éléments de la liste ?",
+      "confirmChecklist": "Appliquer cette modification de liste ?",
+      "apply": "Appliquer",
+      "createdChecklist": "Liste créée",
+      "updatedChecklist": "Liste mise à jour",
+      "createdImprovedView": "Version améliorée créée",
+      "updatedFormatting": "Mise en forme mise à jour",
+      "updatedNote": "Note mise à jour",
+      "updatedTitle": "Titre mis à jour",
+      "addedToOriginal": "Ajouté à l'original",
+      "addedToImproved": "Ajouté à l'amélioration",
+      "savedRecording": "Enregistrement sauvegardé",
+      "cancelled": "Modification annulée"
+    },
+    "improvePreview": {
+      "title": "Suggestion de l'IA",
+      "accept": "Accepter",
+      "discard": "Rejeter",
+      "retry": "Réessayer",
+      "result": "Résultat",
+      "noChanges": "Le texte est déjà bon — rien à changer.",
+      "emptyText": "Saisissez du texte avant de demander une amélioration.",
+      "grammarPerfect": "Parfait ! Aucune faute trouvée.",
+      "working": "Réflexion…"
+    }
   },
   "voice": {
     "transcribeOn": "Transcription ACTIVÉE",

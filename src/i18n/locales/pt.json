@@ -302,7 +302,36 @@
     "enableSyncBtn": "Ativar sincronização",
     "shareBlockedTitle": "Compartilhamento desativado",
     "exportMarkdownFailed": "Falha ao exportar Markdown",
-    "exportImageFailed": "Falha ao exportar imagem"
+    "exportImageFailed": "Falha ao exportar imagem",
+    "agent": {
+      "confirmTitle": "Confirmar alteração",
+      "confirmClear": "Esvaziar a nota inteira?",
+      "confirmReplace": "Substituir a nota inteira?",
+      "confirmRemoveItems": "Remover estes itens da lista?",
+      "confirmChecklist": "Aplicar esta alteração na lista?",
+      "apply": "Aplicar",
+      "createdChecklist": "Lista criada",
+      "updatedChecklist": "Lista atualizada",
+      "createdImprovedView": "Versão melhorada criada",
+      "updatedFormatting": "Formatação atualizada",
+      "updatedNote": "Nota atualizada",
+      "updatedTitle": "Título atualizado",
+      "addedToOriginal": "Adicionado ao original",
+      "addedToImproved": "Adicionado à melhoria",
+      "savedRecording": "Gravação salva",
+      "cancelled": "Alteração cancelada"
+    },
+    "improvePreview": {
+      "title": "Sugestão da IA",
+      "accept": "Aceitar",
+      "discard": "Descartar",
+      "retry": "Tentar de novo",
+      "result": "Resultado",
+      "noChanges": "O texto já está bom — nada a mudar.",
+      "emptyText": "Digite algo antes de pedir uma melhoria.",
+      "grammarPerfect": "Perfeito! Nenhum erro encontrado.",
+      "working": "Pensando…"
+    }
   },
   "voice": {
     "transcribeOn": "Transcrição ATIVADA",

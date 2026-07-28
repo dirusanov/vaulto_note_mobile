@@ -320,7 +320,36 @@
     "enableSyncBtn": "Включить",
     "shareBlockedTitle": "Поделиться недоступно",
     "exportMarkdownFailed": "Ошибка экспорта Markdown",
-    "exportImageFailed": "Ошибка экспорта изображения"
+    "exportImageFailed": "Ошибка экспорта изображения",
+    "agent": {
+      "confirmTitle": "Подтвердите изменение",
+      "confirmClear": "Очистить всю заметку?",
+      "confirmReplace": "Заменить всю заметку?",
+      "confirmRemoveItems": "Удалить эти пункты списка?",
+      "confirmChecklist": "Применить изменение списка?",
+      "apply": "Применить",
+      "createdChecklist": "Список создан",
+      "updatedChecklist": "Список обновлён",
+      "createdImprovedView": "Создан улучшенный вариант",
+      "updatedFormatting": "Форматирование обновлено",
+      "updatedNote": "Заметка обновлена",
+      "updatedTitle": "Заголовок обновлён",
+      "addedToOriginal": "Добавлено в оригинал",
+      "addedToImproved": "Добавлено в улучшение",
+      "savedRecording": "Запись сохранена",
+      "cancelled": "Изменение отменено"
+    },
+    "improvePreview": {
+      "title": "Предложение ИИ",
+      "accept": "Принять",
+      "discard": "Отклонить",
+      "retry": "Ещё раз",
+      "result": "Результат",
+      "noChanges": "Текст и так хорош — менять нечего.",
+      "emptyText": "Введите текст, прежде чем просить улучшение.",
+      "grammarPerfect": "Отлично! Ошибок не найдено.",
+      "working": "Думаю…"
+    }
   },
   "voice": {
     "transcribeOn": "Транскрипция ВКЛ",

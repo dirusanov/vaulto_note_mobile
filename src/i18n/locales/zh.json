@@ -302,7 +302,36 @@
     "enableSyncBtn": "启用同步",
     "shareBlockedTitle": "分享已禁用",
     "exportMarkdownFailed": "导出 Markdown 失败",
-    "exportImageFailed": "导出图片失败"
+    "exportImageFailed": "导出图片失败",
+    "agent": {
+      "confirmTitle": "确认更改",
+      "confirmClear": "清空整条笔记？",
+      "confirmReplace": "替换整条笔记？",
+      "confirmRemoveItems": "删除这些清单项？",
+      "confirmChecklist": "应用此清单更改？",
+      "apply": "应用",
+      "createdChecklist": "已创建清单",
+      "updatedChecklist": "已更新清单",
+      "createdImprovedView": "已创建改进版本",
+      "updatedFormatting": "已更新格式",
+      "updatedNote": "已更新笔记",
+      "updatedTitle": "已更新标题",
+      "addedToOriginal": "已添加到原始版本",
+      "addedToImproved": "已添加到改进版本",
+      "savedRecording": "已保存录音",
+      "cancelled": "已取消更改"
+    },
+    "improvePreview": {
+      "title": "AI 建议",
+      "accept": "接受",
+      "discard": "放弃",
+      "retry": "重试",
+      "result": "结果",
+      "noChanges": "文本已经很好 — 无需更改。",
+      "emptyText": "请先输入文本再请求改进。",
+      "grammarPerfect": "完美！没有发现错误。",
+      "working": "思考中…"
+    }
   },
   "voice": {
     "transcribeOn": "转录已开启",

@@ -302,7 +302,36 @@
     "enableSyncBtn": "تفعيل المزامنة",
     "shareBlockedTitle": "المشاركة معطّلة",
     "exportMarkdownFailed": "فشل تصدير Markdown",
-    "exportImageFailed": "فشل تصدير الصورة"
+    "exportImageFailed": "فشل تصدير الصورة",
+    "agent": {
+      "confirmTitle": "تأكيد التغيير",
+      "confirmClear": "إفراغ الملاحظة بالكامل؟",
+      "confirmReplace": "استبدال الملاحظة بالكامل؟",
+      "confirmRemoveItems": "حذف هذه العناصر من القائمة؟",
+      "confirmChecklist": "تطبيق هذا التغيير على القائمة؟",
+      "apply": "تطبيق",
+      "createdChecklist": "تم إنشاء القائمة",
+      "updatedChecklist": "تم تحديث القائمة",
+      "createdImprovedView": "تم إنشاء نسخة محسّنة",
+      "updatedFormatting": "تم تحديث التنسيق",
+      "updatedNote": "تم تحديث الملاحظة",
+      "updatedTitle": "تم تحديث العنوان",
+      "addedToOriginal": "أُضيف إلى الأصل",
+      "addedToImproved": "أُضيف إلى النسخة المحسّنة",
+      "savedRecording": "تم حفظ التسجيل",
+      "cancelled": "تم إلغاء التغيير"
+    },
+    "improvePreview": {
+      "title": "اقتراح الذكاء الاصطناعي",
+      "accept": "قبول",
+      "discard": "تجاهل",
+      "retry": "إعادة المحاولة",
+      "result": "النتيجة",
+      "noChanges": "النص جيد بالفعل — لا شيء لتغييره.",
+      "emptyText": "أدخل نصاً قبل طلب التحسين.",
+      "grammarPerfect": "ممتاز! لم يتم العثور على أخطاء.",
+      "working": "جارٍ التفكير…"
+    }
   },
   "voice": {
     "transcribeOn": "النسخ الصوتي مفعّل",
