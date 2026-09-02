@@ -6,6 +6,7 @@ import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
+import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { useEncryption } from '../context/EncryptionContext';
 import { isMasterCiphertext } from '../crypto/encryption';
 
@@ -21,7 +22,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const { t } = useTranslation();
     const { mode } = useEncryption();
     const activeChild = note.improvements?.find(imp => imp.is_active);
-    const activeChildTitle = (activeChild?.title || activeChild?.label || '').trim();
+    // AI-written titles can still carry markdown; a card renders plain text.
+    const activeChildTitle = stripStoredTitleMarkdown(activeChild?.title || activeChild?.label || '');
     let content = note.content || '';
     const storageScope = note.storage_scope ?? 'sync';
     
@@ -46,7 +48,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 
     const buildTitle = () => {
         if (activeChildTitle) return activeChildTitle;
-        if (note.title && note.title.trim().length > 0) return note.title.trim();
+        if (note.title && note.title.trim().length > 0) return stripStoredTitleMarkdown(note.title);
 
         const cleanedTokens = plainContent
             .replace(/\s+/g, ' ')

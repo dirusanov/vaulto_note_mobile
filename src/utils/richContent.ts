@@ -150,6 +150,9 @@ export const richContentToPlainText = (content: string): string => {
             .replace(/<style[\s\S]*?<\/style>/gi, '')
             .replace(/<script[\s\S]*?<\/script>/gi, '')
             .replace(/<br\s*\/?>/gi, '\n')
+            // A paragraph that only wraps a list item must not contribute its own
+            // line break, otherwise every bullet is followed by a blank line.
+            .replace(/(?:<\/(?:p|div)>\s*)+(?=<\/li>)/gi, '')
             .replace(/<\/(p|div|li|blockquote|h[1-6])>/gi, '\n')
             .replace(/<(li)\b[^>]*>/gi, '- ')
             .replace(/<\/(ul|ol)>/gi, '\n')

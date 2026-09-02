@@ -345,18 +345,30 @@ export const stripMarkdownSyntax = (text: string): string => {
     if (!text) return '';
 
     // 1. Strip Block Elements
-    // Headers (# Header)
-    let stripped = text.replace(/^#+\s+/gm, '');
+    // Every block rule matches horizontal whitespace only ([ \t]), never \s:
+    // \s swallows the newline of the previous line and silently glues blocks
+    // together, which is how AI output ended up as one run-on paragraph.
+
+    // Fenced code blocks - drop the fence lines, keep the code
+    let stripped = text.replace(/^[ \t]*(?:```|~~~)[^\n]*$/gm, '');
+
+    // Headers (# Header, optionally closed with trailing hashes)
+    stripped = stripped.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '');
+    stripped = stripped.replace(/[ \t]+#+[ \t]*$/gm, '');
+
+    // Todos (- [ ] Todo) must run before the generic list rule, otherwise
+    // "- [ ] task" loses its bullet first and leaks a bare "[ ]" into previews.
+    stripped = stripped.replace(/^[ \t]*[-*+][ \t]*\[(?:[ xX])?\][ \t]+/gm, '');
+
+    // Horizontal rules before list markers, so "***" is not read as emphasis
+    stripped = stripped.replace(/^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/gm, '');
 
     // Lists (- Item, * Item, 1. Item)
-    stripped = stripped.replace(/^\s*[-*+]\s+/gm, '');
-    stripped = stripped.replace(/^\s*\d+\.\s+/gm, ''); // Ordered list
+    stripped = stripped.replace(/^[ \t]*[-*+][ \t]+/gm, '');
+    stripped = stripped.replace(/^[ \t]*\d+[.)][ \t]+/gm, ''); // Ordered list
 
-    // Blockquotes (> Quote)
-    stripped = stripped.replace(/^\s*>\s+/gm, '');
-
-    // Todos (- [ ] Todo)
-    stripped = stripped.replace(/^\s*-\s\[(?:[ xX])?\]\s+/gm, '');
+    // Blockquotes (> Quote), including nested "> >" and the space-less ">Quote"
+    stripped = stripped.replace(/^[ \t]*>[ \t]*(?:>[ \t]*)*/gm, '');
 
     // Audio tags - remove entirely
     stripped = stripped.replace(/!\[audio\]\([^)]+\)/g, '');
@@ -364,8 +376,12 @@ export const stripMarkdownSyntax = (text: string): string => {
     // Other Images (![alt](url)) - Keep alt text
     stripped = stripped.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
 
-    // horizontal rules
-    stripped = stripped.replace(/^-{3,}$/gm, '');
+    // Links ([text](url)) - keep the label, drop the target
+    stripped = stripped.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+
+    // Table separator rows (|---|:--:|) - take the line break with them, so the
+    // row does not leave a blank line in the middle of a table.
+    stripped = stripped.replace(/^[ \t]*\|[ \t:|-]*-[ \t:|-]*$\n?/gm, '');
 
     // 2. Strip Inline Elements using our existing logic logic
     // We can reuse parseMarkdownToData which strips syntax by regex capturing group 1?
@@ -378,4 +394,52 @@ export const stripMarkdownSyntax = (text: string): string => {
 
     const { content } = parseMarkdownToData(stripped);
     return content;
+};
+
+/**
+ * Cleans markdown out of a title that is already stored, so notes created before
+ * titles were sanitized stop showing "**Итоги**" in a plain TextInput.
+ * Deliberately narrower than sanitizeDisplayLabel: it only unwraps syntax that
+ * is unambiguous (**, ~~, ==, `, links, leading block markers) and leaves single
+ * "*"/"_" alone, because those may well be characters the user typed on purpose.
+ */
+export const stripStoredTitleMarkdown = (value: string): string => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return '';
+    const cleaned = trimmed
+        .replace(/^#{1,6}\s+/, '')
+        .replace(/^[-*+]\s*\[(?:[ xX])?\]\s+/, '')
+        .replace(/^[-*+]\s+/, '')
+        .replace(/^\d+[.)]\s+/, '')
+        .replace(/^>+\s*/, '')
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/~~([^~]+)~~/g, '$1')
+        .replace(/==(?:[a-z]+:)?([^=]+)==/gi, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/<\/?u>/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return cleaned || trimmed;
+};
+
+const WRAPPING_QUOTES_REGEX = /^["'«»“”„‘’`]+|["'«»“”„‘’`]+$/g;
+
+/**
+ * Turns model output into something safe to drop into a single-line UI slot
+ * (a note title, a variant chip). Models keep answering with "**Итоги:**" or
+ * "«План»", and a TextInput or chip renders that syntax literally.
+ */
+export const sanitizeDisplayLabel = (text: string): string => {
+    if (!text) return '';
+
+    return stripMarkdownSyntax(text)
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(WRAPPING_QUOTES_REGEX, '')
+        .trim()
+        .replace(/[\s:;,.\-–—]+$/, '')
+        .trim();
 };

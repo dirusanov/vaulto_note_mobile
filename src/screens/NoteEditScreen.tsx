@@ -101,6 +101,8 @@ import {
     resolveChecklistScaleForContent,
 } from '../utils/checklistScale';
 import { buildAudioEmbedHtml } from '../utils/audioEmbeds';
+import { sanitizeDisplayLabel, stripStoredTitleMarkdown } from '../utils/markdownUtils';
+import { MarkdownPreview } from '../components/MarkdownPreview';
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -176,17 +178,10 @@ const normalizeAttachedAudioPath = (value?: string | null): string | null => {
     return normalized;
 };
 
-
-
 const deriveTitleFromText = (text: string): string => {
-    const cleaned = (text || '')
-        .replace(/!\[audio\]\([^)]+\)/g, ' ')
-        .replace(/^#{1,6}\s+/gm, '')
-        .replace(/^\s*[-*]\s+\[[ xX]\]\s+/gm, '')
-        .replace(/^\s*[-*]\s+/gm, '')
-        .replace(/^\s*\d+[\.\)]\s+/gm, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+    // The source can be raw markdown from the model or editor HTML, and both used
+    // to leak syntax ("**Итоги:**") into the title field, which renders literally.
+    const cleaned = sanitizeDisplayLabel(richContentToPlainText(text || ''));
 
     if (!cleaned) return '';
 
@@ -554,46 +549,124 @@ const MemoizedImprovementChips = memo(({
     optionIcons: Record<string, string>,
 }) => {
     const { t } = useTranslation();
+    const scrollRef = useRef<any>(null);
+    /** variant id -> chip offset/width, so the active tab can be revealed. */
+    const chipLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
+    const viewportWidthRef = useRef(0);
+    /** Last variant we actually scrolled to, so onLayout does not fight the user. */
+    const revealedForRef = useRef<string | null>(null);
+
+    const revealChip = useCallback((variantId: string, force = false) => {
+        if (!force && revealedForRef.current === variantId) return;
+
+        const layout = chipLayoutsRef.current[variantId];
+        const viewportWidth = viewportWidthRef.current;
+        // Measurements can still be missing right after mount; leave the marker
+        // untouched so the next onLayout retries.
+        if (!layout || !viewportWidth) return;
+        if (typeof scrollRef.current?.scrollTo !== 'function') return;
+
+        // Centre the active chip so neighbours stay visible on both sides and it
+        // stays obvious that there are more variants past the edge.
+        const target = layout.x + layout.width / 2 - viewportWidth / 2;
+        revealedForRef.current = variantId;
+        scrollRef.current.scrollTo({ x: Math.max(0, target), animated: true });
+    }, []);
+
+    // Switching a variant first flushes the editor and saves the draft, so the
+    // real active id lands a few hundred ms after the tap. Highlight the tapped
+    // chip immediately instead of leaving the row looking unresponsive.
+    const [pendingVariantId, setPendingVariantId] = useState<string | null>(null);
+    const selectedVariantId = pendingVariantId ?? activeVariantId;
+
+    useEffect(() => {
+        if (pendingVariantId === null) return undefined;
+        if (pendingVariantId === activeVariantId) {
+            setPendingVariantId(null);
+            return undefined;
+        }
+        // Safety net: never leave a stale highlight if the switch never lands.
+        const timer = setTimeout(() => setPendingVariantId(null), 4000);
+        return () => clearTimeout(timer);
+    }, [activeVariantId, pendingVariantId]);
+
+    // Switching from anywhere (chip tap, agent creating a variant) should bring
+    // the active tab into view instead of leaving it off-screen.
+    useEffect(() => {
+        const timer = setTimeout(() => revealChip(selectedVariantId, true), 60);
+        return () => clearTimeout(timer);
+    }, [selectedVariantId, noteImprovements.length, revealChip]);
+
+    const selectVariant = useCallback((variantId: string) => {
+        if (variantId === selectedVariantId) return;
+        void Haptics.selectionAsync().catch(() => undefined);
+        setPendingVariantId(variantId);
+        handleVariantSelect(variantId);
+    }, [selectedVariantId, handleVariantSelect]);
 
     if (noteImprovements.length === 0) return null;
     return (
         <View style={styles.variantContainer}>
             <GestureHandlerScrollView
+                ref={scrollRef}
                 horizontal
                 nestedScrollEnabled
                 directionalLockEnabled
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.variantScrollContent}
                 keyboardShouldPersistTaps="always"
+                onLayout={(event) => {
+                    // Chips can be measured before the row is, so retry the reveal
+                    // once the viewport width is finally known.
+                    viewportWidthRef.current = event.nativeEvent.layout.width;
+                    revealChip(selectedVariantId);
+                }}
             >
                 <TouchableOpacity
-                    style={[styles.variantChip, activeVariantId === 'original' && styles.variantChipActive]}
-                    onPress={() => handleVariantSelect('original')}
+                    style={[styles.variantChip, selectedVariantId === 'original' && styles.variantChipActive]}
+                    onPress={() => selectVariant('original')}
+                    onLayout={(event) => {
+                        const { x, width } = event.nativeEvent.layout;
+                        chipLayoutsRef.current.original = { x, width };
+                        revealChip(selectedVariantId);
+                    }}
                 >
                     <MaterialIcons
                         name="lock"
                         size={14}
-                        color={activeVariantId === 'original' ? colors.background : colors.textSecondary}
+                        color={selectedVariantId === 'original' ? colors.background : colors.textSecondary}
                         style={styles.variantChipIcon}
                     />
                     <Text
                         style={[
                             styles.variantChipText,
-                            activeVariantId === 'original' && styles.variantChipTextActive,
+                            selectedVariantId === 'original' && styles.variantChipTextActive,
                         ]}
                     >
                         {t("edit.original")}
                     </Text>
                 </TouchableOpacity>
 
-                {noteImprovements.map((imp: any) => {
-                    const isActive = activeVariantId === imp.id;
+                {noteImprovements.map((imp: any, index: number) => {
+                    const isActive = selectedVariantId === imp.id;
                     const chipIcon = (imp.option_id && optionIcons[imp.option_id]) || 'auto-awesome';
+                    // Labels stored before markdown was stripped at creation still
+                    // carry "**"/"##", so clean them on the way to the screen too.
+                    const chipLabel = sanitizeDisplayLabel(imp.label || imp.title || '')
+                        || `${t("edit.improvement")} ${index + 1}`;
                     return (
-                        <View style={styles.variantChipWrapper} key={imp.id}>
+                        <View
+                            style={styles.variantChipWrapper}
+                            key={imp.id}
+                            onLayout={(event) => {
+                                const { x, width } = event.nativeEvent.layout;
+                                chipLayoutsRef.current[imp.id] = { x, width };
+                                revealChip(selectedVariantId);
+                            }}
+                        >
                             <TouchableOpacity
                                 style={[styles.variantChip, isActive && styles.variantChipActive]}
-                                onPress={() => handleVariantSelect(imp.id)}
+                                onPress={() => selectVariant(imp.id)}
                                 onLongPress={() => confirmDeleteImprovement(imp.id)}
                                 delayLongPress={400}
                             >
@@ -610,7 +683,7 @@ const MemoizedImprovementChips = memo(({
                                         isActive && styles.variantChipTextActive,
                                     ]}
                                 >
-                                    {imp.label || t("edit.improvement")}
+                                    {chipLabel}
                                 </Text>
                             </TouchableOpacity>
                             {/* Close affordance only on the active chip, like editor tabs.
@@ -637,10 +710,9 @@ const buildAgentImprovementLabel = (
     primaryTitle?: string | null,
     fallbackTitle?: string | null,
 ): string => {
-    const normalizeTitleLabel = (value: string): string =>
-        (value || '')
-            .replace(/\s+/g, ' ')
-            .trim();
+    // Chips are plain <Text>: any markdown the model wraps a title in would be
+    // rendered as literal "**" characters, so strip it at the single funnel.
+    const normalizeTitleLabel = (value: string): string => sanitizeDisplayLabel(value);
 
     const candidates = [primaryTitle || '', fallbackTitle || ''];
     for (const candidate of candidates) {
@@ -1044,7 +1116,7 @@ export const NoteEditScreen = () => {
     const [isTranscribing, setIsTranscribingState] = useState(false);
     const [, setIsRecordingFlowActive] = useState(false);
 
-    const lastSavedTitle = useRef(existingNote?.title || '');
+    const lastSavedTitle = useRef(stripStoredTitleMarkdown(existingNote?.title || ''));
     const lastSavedContent = useRef(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
     const skipAutoSaveRef = useRef(false);
     const isMounted = useRef(true);
@@ -1460,14 +1532,18 @@ export const NoteEditScreen = () => {
     const resolveImprovementVariantTitle = useCallback((variantId: string): string => {
         const draftTitle = improvementTitleDraftsRef.current[variantId];
         if (typeof draftTitle === 'string') {
+            // What the user is typing right now stays untouched.
             return draftTitle;
         }
+        // Stored titles predate the markdown stripping done at creation time, so
+        // heal them on read - the title field is a plain TextInput and would
+        // otherwise show "**Итоги**" verbatim.
         const improvement = noteImprovements.find((imp) => imp.id === variantId);
-        const improvementTitle = (improvement?.title || '').trim();
+        const improvementTitle = stripStoredTitleMarkdown(improvement?.title || '');
         if (improvementTitle) {
             return improvementTitle;
         }
-        const improvementLabel = (improvement?.label || '').trim();
+        const improvementLabel = stripStoredTitleMarkdown(improvement?.label || '');
         if (improvementLabel) {
             return improvementLabel;
         }
@@ -1575,8 +1651,11 @@ export const NoteEditScreen = () => {
     }, [editMode, stageOriginalCreationAutoScale]);
 
     const syncVisibleTitle = useCallback((nextTitle: string) => {
-        setTitle(nextTitle);
-        currentTitleRef.current = nextTitle;
+        // Only programmatic loads go through here; user typing uses
+        // handleTitleChange, so cleaning stored markdown is safe.
+        const visibleTitle = stripStoredTitleMarkdown(nextTitle);
+        setTitle(visibleTitle);
+        currentTitleRef.current = visibleTitle;
     }, []);
 
     const flushVisualEditorContent = useCallback(async (): Promise<string> => {
@@ -2015,7 +2094,7 @@ export const NoteEditScreen = () => {
 
             noteImprovements.forEach(imp => {
                 const contentValue = stripAudioEmbedsFromRichContent(imp.content ?? '');
-                const titleValue = (imp.title || imp.label || '').trim();
+                const titleValue = stripStoredTitleMarkdown(imp.title || imp.label || '');
 
                 if (saved[imp.id] === undefined) {
                     drafts[imp.id] = contentValue;
@@ -2072,7 +2151,7 @@ export const NoteEditScreen = () => {
             }
         }
 
-        lastSavedTitle.current = existingNote.title || '';
+        lastSavedTitle.current = stripStoredTitleMarkdown(existingNote.title || '');
         lastSavedContent.current = stripAudioEmbedsFromRichContent(existingNote.content || '');
     }, [existingNote, noteImprovements, activeVariantId, title, content, editMode, resolveImprovementVariantTitle, syncVisibleContent, syncVisibleTitle]);
 
@@ -3665,7 +3744,8 @@ export const NoteEditScreen = () => {
                         }
 
                         const originalText = (agentResult.originalText || normalizedTaskText || '').trim();
-                        const explicitTitle = (agentResult.titleValue || '').trim();
+                        // Model-authored titles land in a plain TextInput and a chip.
+                        const explicitTitle = sanitizeDisplayLabel(agentResult.titleValue || '');
                         const pendingContext = resolvePendingInsertionContext(taskVariantId, representativeRecordingId);
                         const commandBaseContent = pendingContext.contentWithoutPending;
                         const hasPendingDraft = validBatch.some(t => t.recordingId && pendingContext.pending);
@@ -3743,7 +3823,7 @@ export const NoteEditScreen = () => {
                             continue;
                         }
 
-                        const suggestedTitleRaw = (agentResult.suggestedTitle || '').trim();
+                        const suggestedTitleRaw = sanitizeDisplayLabel(agentResult.suggestedTitle || '');
                         const suggestedTitle = suggestedTitleRaw || deriveTitleFromText(
                             processedText || contextContent || originalText
                         );
@@ -5401,9 +5481,11 @@ export const NoteEditScreen = () => {
 
                                 <Text style={styles.previewSectionLabel}>{t('edit.improvePreview.result')}</Text>
                                 <ScrollView style={styles.previewBody} keyboardShouldPersistTaps="handled">
-                                    <Text style={styles.previewText} selectable>
-                                        {improvementPreview?.resultText || ''}
-                                    </Text>
+                                    <MarkdownPreview
+                                        content={improvementPreview?.resultText || ''}
+                                        fontSize={fontSize}
+                                        selectable
+                                    />
                                 </ScrollView>
 
                                 {isPreviewRegenerating && (
@@ -6455,6 +6537,8 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: colors.textSecondary,
         fontWeight: '500',
+        // A long AI title must not stretch one chip across the whole row.
+        maxWidth: 150,
     },
     variantChipTextActive: {
         color: colors.background,
@@ -6536,17 +6620,15 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xs,
     },
     previewBody: {
-        maxHeight: 280,
+        // The sheet itself is capped at 82%, so let the result use the room it
+        // has instead of scrolling a long suggestion inside a 280pt window.
+        maxHeight: Math.round(Dimensions.get('window').height * 0.45),
         backgroundColor: colors.background,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: colors.border,
         paddingHorizontal: spacing.m,
         paddingVertical: spacing.s,
-    },
-    previewText: {
-        ...typography.body,
-        color: colors.text,
     },
     previewLoadingRow: {
         flexDirection: 'row',
