@@ -14,8 +14,8 @@ const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
 const TASK_ITEM_HTML_REGEX = /<li\b[^>]*data-type=(["'])taskItem\1/i;
 const EMPTY_CHECKLIST_MARKDOWN_REGEX = /(?:^|\n)\s*-\s\[(?: |x|X)\]\s*(?=\n|$)/;
 const TRAILING_IMG_TAG_REGEX = /<img\b[^>]*>\s*$/i;
-const RICH_TASK_ITEM_BLOCK_REGEX = /<li\b(?=[^>]*data-type=(["'])taskItem\1)[^>]*>[\s\S]*?<\/li>/gi;
-const RICH_LIST_ITEM_BLOCK_REGEX = /<li\b[^>]*>[\s\S]*?<\/li>/gi;
+/** An <li> with no further <li> inside it - i.e. the innermost item. */
+const LEAF_LIST_ITEM_REGEX = /<li\b([^>]*)>((?:(?!<li\b)[\s\S])*?)<\/li>/i;
 
 const escapeHtml = (text: string): string =>
     text
@@ -28,45 +28,125 @@ const escapeHtml = (text: string): string =>
 const decodeHtmlEntities = (text: string): string =>
     text
         .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&')
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
         .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'");
+        .replace(/&#39;/gi, "'")
+        // Last on purpose: decoding it earlier would turn "&amp;lt;" into "<".
+        .replace(/&amp;/gi, '&');
 
-const normalizeAgentTextWhitespace = (text: string): string =>
-    text
+const LIST_LINE_REGEX = /^[ \t]*(?:[-*]\s|\d+[.)]\s)/;
+
+/**
+ * Collapses runs of spaces without touching the indentation that carries list
+ * nesting - a blanket "\n[ \t]+" strip used to flatten every nested bullet.
+ */
+const normalizeAgentTextWhitespace = (text: string): string => {
+    let insideList = false;
+
+    return text
         .replace(/\u00a0/g, ' ')
-        .replace(/[ \t]+\n/g, '\n')
-        .replace(/\n[ \t]+/g, '\n')
-        .replace(/[ \t]{2,}/g, ' ')
+        .split('\n')
+        .map((line) => {
+            const body = line.trim().replace(/[ \t]{2,}/g, ' ');
+            if (!body) {
+                insideList = false;
+                return '';
+            }
+
+            const isListLine = LIST_LINE_REGEX.test(line);
+            const isIndentedContinuation = insideList && /^[ \t]/.test(line);
+            if (!isListLine && !isIndentedContinuation) {
+                insideList = false;
+                return body;
+            }
+
+            insideList = true;
+            const indent = (line.match(/^[ \t]*/)?.[0] || '').replace(/\t/g, '  ');
+            return `${indent}${body}`;
+        })
+        .join('\n')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
+};
 
-const richHtmlFragmentToInlineText = (html: string): string => {
-    if (!html) {
-        return '';
+const richHtmlFragmentToRawText = (html: string): string =>
+    html
+        .replace(/<img\b[^>]*>/gi, (match) => (getAudioEmbedAttributesFromHtml(match) ? ' ' : match))
+        .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|blockquote|h[1-6]|li)>/gi, '\n')
+        .replace(/<li\b[^>]*>/gi, ' ')
+        .replace(/<label\b[^>]*>/gi, '')
+        .replace(/<\/label>/gi, ' ')
+        .replace(/<input\b[^>]*>/gi, '')
+        .replace(/<[^>]+>/g, '');
+
+/**
+ * Same cleanup, but line breaks survive and entities stay encoded, so the text
+ * can be spliced back into the HTML that is still being processed.
+ */
+const richHtmlFragmentToRawLines = (html: string): string[] =>
+    richHtmlFragmentToRawText(html || '')
+        .split('\n')
+        .map((line) => {
+            // Leading whitespace is kept: on a line this function is re-reading,
+            // it is the indentation of an already converted nested list item.
+            const indent = line.match(/^[ \t]*/)?.[0] || '';
+            const body = line.slice(indent.length).replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
+            return body ? `${indent}${body}` : '';
+        })
+        .filter((line) => line.length > 0);
+
+/** Nesting level of the <li> that starts at `index`, counted in open lists. */
+const listDepthAt = (html: string, index: number): number => {
+    const prefix = html.slice(0, index);
+    const opened = (prefix.match(/<(?:ul|ol)\b/gi) || []).length;
+    const closed = (prefix.match(/<\/(?:ul|ol)>/gi) || []).length;
+    return Math.max(0, opened - closed - 1);
+};
+
+/**
+ * Rewrites list items innermost-first, so a nested list keeps its own lines and
+ * its indentation instead of being glued onto the end of its parent bullet
+ * ("- Top Child"), which is what a single flat regex pass produced.
+ */
+const convertListItemsToMarkdown = (html: string): string => {
+    let current = html;
+
+    // Each pass removes one <li>, so the loop always terminates; the bound is
+    // only a backstop for pathological input.
+    for (let guard = 0; guard < 2000; guard += 1) {
+        const match = LEAF_LIST_ITEM_REGEX.exec(current);
+        if (!match) {
+            break;
+        }
+
+        const [block, attributes, inner] = match;
+        const isTask = /data-type=(["'])taskItem\1/i.test(attributes);
+        const checked = /data-checked=(["'])true\1/i.test(attributes);
+        const marker = isTask ? `- [${checked ? 'x' : ' '}] ` : '- ';
+        const indent = '  '.repeat(listDepthAt(current, match.index));
+
+        const lines = richHtmlFragmentToRawLines(inner);
+        const ownText = (lines.shift() || '').trim();
+        // Wrapped lines of the same item are indented under its text; lines that
+        // are already list items keep the indentation they were rendered with.
+        const continuation = lines.map((line) => (
+            LIST_LINE_REGEX.test(line) ? line : `${indent}${' '.repeat(marker.length)}${line}`
+        ));
+        const rendered = ownText || continuation.length > 0
+            ? [`${indent}${marker}${ownText}`.trimEnd(), ...continuation].join('\n')
+            : '';
+
+        // Leading break only: a trailing one would put a blank line between
+        // every pair of items once the next item is spliced in.
+        current = `${current.slice(0, match.index)}\n${rendered}${current.slice(match.index + block.length)}`;
     }
 
-    const normalized = decodeHtmlEntities(
-        html
-            .replace(/<img\b[^>]*>/gi, (match) => (getAudioEmbedAttributesFromHtml(match) ? ' ' : match))
-            .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, ' ')
-            .replace(/<style[\s\S]*?<\/style>/gi, '')
-            .replace(/<script[\s\S]*?<\/script>/gi, '')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<\/(p|div|blockquote|h[1-6]|li)>/gi, '\n')
-            .replace(/<li\b[^>]*>/gi, ' ')
-            .replace(/<label\b[^>]*>/gi, '')
-            .replace(/<\/label>/gi, ' ')
-            .replace(/<input\b[^>]*>/gi, '')
-            .replace(/<[^>]+>/g, '')
-    );
-
-    return normalized
-        .replace(/\u00a0/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+    return current;
 };
 
 export const stripAudioEmbedsFromRichContent = (content: string): string => {
@@ -182,24 +262,7 @@ export const richContentToAgentMarkdown = (content: string): string => {
         .replace(/<style[\s\S]*?<\/style>/gi, '')
         .replace(/<script[\s\S]*?<\/script>/gi, '');
 
-    normalized = normalized.replace(RICH_TASK_ITEM_BLOCK_REGEX, (block) => {
-        const checked = /data-checked=(["'])true\1/i.test(block);
-        const innerHtml = block.replace(/^<li\b[^>]*>/i, '').replace(/<\/li>\s*$/i, '');
-        const text = richHtmlFragmentToInlineText(innerHtml);
-        if (!text) {
-            return '\n';
-        }
-        return `- [${checked ? 'x' : ' '}] ${text}\n`;
-    });
-
-    normalized = normalized.replace(RICH_LIST_ITEM_BLOCK_REGEX, (block) => {
-        const innerHtml = block.replace(/^<li\b[^>]*>/i, '').replace(/<\/li>\s*$/i, '');
-        const text = richHtmlFragmentToInlineText(innerHtml);
-        if (!text) {
-            return '\n';
-        }
-        return `- ${text}\n`;
-    });
+    normalized = convertListItemsToMarkdown(normalized);
 
     normalized = decodeHtmlEntities(
         normalized

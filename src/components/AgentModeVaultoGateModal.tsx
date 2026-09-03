@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Modal,
     View,
@@ -23,8 +24,12 @@ export const AgentModeVaultoGateModal: React.FC<AgentModeVaultoGateModalProps> =
     visible,
     onClose,
     onPrimaryAction,
-    primaryActionLabel = 'Switch to Vaulto AI',
+    primaryActionLabel,
 }) => {
+    const { t } = useTranslation();
+    const resolvedPrimaryLabel = primaryActionLabel
+        ?? t('aux.switchToVaultoAI', 'Switch to Vaulto AI');
+
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <TouchableWithoutFeedback onPress={onClose}>
@@ -36,8 +41,8 @@ export const AgentModeVaultoGateModal: React.FC<AgentModeVaultoGateModalProps> =
                                 <Text style={styles.pillText}>Vaulto AI</Text>
                             </View>
 
-                            <Text style={styles.title}>Vaulto AI required</Text>
-                            <Text style={styles.message}>Agent Mode is available only with Vaulto AI.</Text>
+                            <Text style={styles.title}>{t('aux.vaultoAIReq', 'Vaulto AI required')}</Text>
+                            <Text style={styles.message}>{t('aux.agentModeVaultoAIAvail', 'Agent Mode is available only with Vaulto AI.')}</Text>
 
                             <View style={styles.actionsRow}>
                                 {onPrimaryAction && (
@@ -49,11 +54,11 @@ export const AgentModeVaultoGateModal: React.FC<AgentModeVaultoGateModalProps> =
                                         }}
                                         activeOpacity={0.85}
                                     >
-                                        <Text style={styles.primaryText}>{primaryActionLabel}</Text>
+                                        <Text style={styles.primaryText}>{resolvedPrimaryLabel}</Text>
                                     </TouchableOpacity>
                                 )}
                                 <TouchableOpacity style={styles.secondaryButton} onPress={onClose} activeOpacity={0.85}>
-                                    <Text style={styles.secondaryText}>Close</Text>
+                                    <Text style={styles.secondaryText}>{t('common.close', 'Close')}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>

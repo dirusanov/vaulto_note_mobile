@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import {
@@ -9,8 +10,13 @@ import {
     LocalWhisperModelDescriptor,
     LocalWhisperModelKey,
     getAvailableLocalWhisperModels,
+    canFitLocalWhisperModel,
+    isLocalWhisperModelSupportedByDevice,
 } from '../services/LocalWhisperService';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
+
+/** Why a model cannot be downloaded on this device, if it cannot. */
+type ModelBlocker = 'memory' | 'space' | null;
 
 interface Props {
     visible: boolean;
@@ -19,20 +25,42 @@ interface Props {
 }
 
 export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, onDownloadComplete }) => {
+    const { t } = useTranslation();
     const [models, setModels] = useState<LocalWhisperModelDescriptor[]>([]);
     const [selectedModelKey, setSelectedModelKey] = useState<LocalWhisperModelKey>('turbo');
+    const [blockers, setBlockers] = useState<Partial<Record<LocalWhisperModelKey, ModelBlocker>>>({});
     const [isDownloading, setIsDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [bytesLoaded, setBytesLoaded] = useState(0);
     const [bytesTotal, setBytesTotal] = useState(0);
 
     useEffect(() => {
-        if (visible) {
-            setModels(getAvailableLocalWhisperModels());
-            getLocalWhisperModelKey().then(key => {
-                if (key) setSelectedModelKey(key as LocalWhisperModelKey);
-            });
-        }
+        if (!visible) return;
+
+        const available = getAvailableLocalWhisperModels();
+        setModels(available);
+        getLocalWhisperModelKey().then(key => {
+            if (key) setSelectedModelKey(key as LocalWhisperModelKey);
+        });
+
+        // A model the device cannot hold must not start a multi-gigabyte download.
+        let cancelled = false;
+        void (async () => {
+            const entries = await Promise.all(available.map(async (model) => {
+                if (!(await isLocalWhisperModelSupportedByDevice(model.key))) {
+                    return [model.key, 'memory'] as const;
+                }
+                if (!(await canFitLocalWhisperModel(model.key))) {
+                    return [model.key, 'space'] as const;
+                }
+                return [model.key, null] as const;
+            }));
+            if (!cancelled) {
+                setBlockers(Object.fromEntries(entries) as Partial<Record<LocalWhisperModelKey, ModelBlocker>>);
+            }
+        })();
+
+        return () => { cancelled = true; };
     }, [visible]);
 
     const handleDownload = async () => {
@@ -55,8 +83,11 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
             onDownloadComplete();
         } catch (e: any) {
             setIsDownloading(false);
-            if (e.message !== 'Download cancelled') {
-                alert('Download failed: ' + e.message);
+            if (e?.message !== 'Download cancelled') {
+                Alert.alert(
+                    t('edit.dictation.downloadFailed', 'Download failed'),
+                    e?.message || '',
+                );
             }
         }
     };
@@ -73,6 +104,13 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
     if (!visible) return null;
 
     const selectedModel = models.find(m => m.key === selectedModelKey);
+    const selectedBlocker = blockers[selectedModelKey] ?? null;
+
+    const describeBlocker = (blocker: ModelBlocker): string | null => {
+        if (blocker === 'memory') return t('edit.dictation.unsupportedDevice', 'Not supported on this device');
+        if (blocker === 'space') return t('edit.dictation.notEnoughSpace', 'Not enough free space');
+        return null;
+    };
 
     return (
         <Modal visible={visible} transparent animationType="fade">
@@ -80,48 +118,67 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                 <View style={styles.container}>
                     <View style={styles.header}>
                         <MaterialIcons name="cloud-download" size={32} color={colors.primary} />
-                        <Text style={styles.title}>Offline Dictation Model</Text>
+                        <Text style={styles.title}>{t('edit.dictation.modelTitle', 'Offline Dictation Model')}</Text>
                     </View>
                     
                     {!isDownloading ? (
                         <>
                             <Text style={styles.description}>
-                                To use real-time dictation offline without an internet connection, you need to download a speech recognition model.
+                                {t('edit.dictation.modelDescription', 'To use real-time dictation offline without an internet connection, you need to download a speech recognition model.')}
                             </Text>
 
                             <View style={styles.modelList}>
-                                {models.map(model => (
-                                    <TouchableOpacity
-                                        key={model.key}
-                                        style={[styles.modelOption, selectedModelKey === model.key && styles.modelOptionSelected]}
-                                        onPress={() => setSelectedModelKey(model.key)}
-                                    >
-                                        <View style={styles.modelOptionContent}>
-                                            <Text style={[styles.modelName, selectedModelKey === model.key && styles.modelNameSelected]}>
-                                                {model.label}
-                                                {model.recommended && ' (Recommended)'}
-                                            </Text>
-                                            <Text style={styles.modelSize}>{model.sizeLabel}</Text>
-                                        </View>
-                                        {selectedModelKey === model.key && (
-                                            <MaterialIcons name="check-circle" size={24} color={colors.primary} />
-                                        )}
-                                    </TouchableOpacity>
-                                ))}
+                                {models.map(model => {
+                                    const blocker = blockers[model.key] ?? null;
+                                    const blockerLabel = describeBlocker(blocker);
+                                    return (
+                                        <TouchableOpacity
+                                            key={model.key}
+                                            style={[
+                                                styles.modelOption,
+                                                selectedModelKey === model.key && styles.modelOptionSelected,
+                                                blocker !== null && styles.modelOptionDisabled,
+                                            ]}
+                                            onPress={() => setSelectedModelKey(model.key)}
+                                            disabled={blocker !== null}
+                                        >
+                                            <View style={styles.modelOptionContent}>
+                                                <Text style={[styles.modelName, selectedModelKey === model.key && styles.modelNameSelected]}>
+                                                    {model.label}
+                                                    {model.recommended && ` (${t('edit.dictation.recommended', 'Recommended')})`}
+                                                </Text>
+                                                <Text style={styles.modelSize}>
+                                                    {blockerLabel ? `${model.sizeLabel} - ${blockerLabel}` : model.sizeLabel}
+                                                </Text>
+                                            </View>
+                                            {selectedModelKey === model.key && blocker === null && (
+                                                <MaterialIcons name="check-circle" size={24} color={colors.primary} />
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </View>
 
                             <View style={styles.actions}>
                                 <TouchableOpacity style={styles.buttonCancel} onPress={handleCancel}>
-                                    <Text style={styles.buttonCancelText}>Cancel</Text>
+                                    <Text style={styles.buttonCancelText}>{t('common.cancel', 'Cancel')}</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.buttonDownload} onPress={handleDownload}>
-                                    <Text style={styles.buttonDownloadText}>Download</Text>
+                                <TouchableOpacity
+                                    style={[styles.buttonDownload, selectedBlocker !== null && styles.buttonDownloadDisabled]}
+                                    onPress={handleDownload}
+                                    disabled={selectedBlocker !== null}
+                                >
+                                    <Text style={styles.buttonDownloadText}>
+                                        {describeBlocker(selectedBlocker) || t('edit.dictation.download', 'Download')}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
                         </>
                     ) : (
                         <View style={styles.downloadingContainer}>
-                            <Text style={styles.downloadingText}>Downloading {selectedModel?.label} Model...</Text>
+                            <Text style={styles.downloadingText}>
+                                {t('edit.dictation.downloading', 'Downloading the {{model}} model...', { model: selectedModel?.label ?? '' })}
+                            </Text>
                             
                             <View style={styles.progressBarContainer}>
                                 <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
@@ -135,7 +192,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                             </View>
 
                             <TouchableOpacity style={styles.buttonCancelDownload} onPress={handleCancel}>
-                                <Text style={styles.buttonCancelText}>Cancel Download</Text>
+                                <Text style={styles.buttonCancelText}>{t('edit.dictation.cancelDownload', 'Cancel Download')}</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -196,6 +253,9 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
         backgroundColor: colors.background,
     },
+    modelOptionDisabled: {
+        opacity: 0.45,
+    },
     modelOptionSelected: {
         borderColor: colors.primary,
         backgroundColor: `${colors.primary}10`,
@@ -237,6 +297,9 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         backgroundColor: colors.primary,
         alignItems: 'center',
+    },
+    buttonDownloadDisabled: {
+        backgroundColor: colors.textTertiary,
     },
     buttonDownloadText: {
         ...typography.button,

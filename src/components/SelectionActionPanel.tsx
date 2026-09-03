@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 
@@ -21,6 +22,8 @@ export const SelectionActionPanel = ({
     onClose,
     allPinned,
 }: SelectionActionPanelProps) => {
+    const { t } = useTranslation();
+
     return (
         <View style={styles.container}>
             <View style={styles.content}>
@@ -28,12 +31,12 @@ export const SelectionActionPanel = ({
                     <MaterialIcons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
 
-                <Text style={styles.countText}>{selectedCount} selected</Text>
+                <Text style={styles.countText}>{t('notes.selectedCount', '{{count}} selected', { count: selectedCount })}</Text>
 
                 <View style={styles.actions}>
                     <TouchableOpacity onPress={allPinned ? onUnpin : onPin} style={styles.actionButton}>
                         <MaterialIcons
-                            name={allPinned ? "push-pin" : "push-pin"}
+                            name="push-pin"
                             size={24}
                             color={allPinned ? colors.primary : colors.text}
                         />
@@ -67,8 +70,8 @@ const styles = StyleSheet.create({
         minHeight: 60,
     },
     closeButton: {
-        marginRight: spacing.m,
-        padding: spacing.xs,
+        marginRight: spacing.s,
+        padding: spacing.s,
     },
     countText: {
         flex: 1,
@@ -82,5 +85,9 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         padding: spacing.s,
+        minWidth: 44,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });

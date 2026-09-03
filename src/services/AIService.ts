@@ -170,6 +170,19 @@ const buildPromptForRequest = (template: string, text: string): string => {
 export const optionExpectsJson = (option: AIImprovementOption): boolean =>
     option.responseFormat === 'json' || option.id === 'grammar';
 
+/**
+ * Shape the grammar check must answer with. Hosted models follow the prompt, but
+ * a 1-2B local model needs the schema enforced during sampling or it replies in prose.
+ */
+const GRAMMAR_RESPONSE_SCHEMA = {
+    type: 'object',
+    properties: {
+        is_correct: { type: 'boolean' },
+        fixed_text: { type: 'string' },
+    },
+    required: ['is_correct', 'fixed_text'],
+};
+
 export async function improveText(text: string, option: AIImprovementOption): Promise<string> {
     if (!option) throw new Error('Invalid option');
 
@@ -180,7 +193,9 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     
     if (provider === 'local_llm' || provider === 'local') {
         const promptForModel = buildPromptForRequest(option.prompt, text);
-        return generateWithLocalLLM(promptForModel);
+        return generateWithLocalLLM(promptForModel, {
+            jsonSchema: optionExpectsJson(option) ? GRAMMAR_RESPONSE_SCHEMA : undefined,
+        });
     }
 
     const apiKey = await getOpenAIApiKey();

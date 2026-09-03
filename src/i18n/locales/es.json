@@ -33,7 +33,11 @@
     "unavailable": "No disponible",
     "failed": "Error",
     "ok": "Aceptar",
-    "pro": "PRO"
+    "pro": "PRO",
+    "openSettings": "Abrir ajustes",
+    "errorOccurred": "Se produjo un error",
+    "permission": "Permiso",
+    "unlock": "Desbloquear"
   },
   "notes": {
     "emptyStateMic": "Toca el micrófono para grabar",
@@ -46,7 +50,11 @@
     "audioChip": "audio",
     "syncLockedDescription": "Datos cifrados detectados en el servidor. Desbloquea con tu frase de contraseña para acceder.",
     "unlockSync": "Desbloquear sincronización",
-    "note": "Nota"
+    "note": "Nota",
+    "selectedCount": "{{count}} seleccionadas",
+    "resetRecoveryTitle": "El almacén cifrado se restableció",
+    "resetRecoveryDescription": "Tus notas conservadas son solo locales y la sincronización está en pausa. Elige cómo recuperarlas en Ajustes.",
+    "reviewRecovery": "Ver opciones"
   },
   "settings": {
     "title": "Ajustes",
@@ -164,7 +172,7 @@
       "passphraseObject": "Contraseña",
       "encryptedSyncObject": "Sincronización Cifrada",
       "derivingKeysSubtitle": "Generando claves de cifrado y protegiendo tus notas. Esto puede tomar un minuto dependiendo de tu dispositivo. Por favor espera...",
-      "vaultoVersion": "Vaulto v1.1.0",
+      "vaultoVersion": "Vaulto v{{version}}",
       "exportRecoveryCode": "Exportar clave de recuperación",
       "copyBtn": "Copiar",
       "disableBtn": "Desactivar",
@@ -174,7 +182,25 @@
       "yesDisable": "Sí, desactivar",
       "setupSync": "Pasar al modo cifrado",
       "setupPassphrase": "Configurar contraseña",
-      "enterPassphrase": "Introduce tu contraseña"
+      "enterPassphrase": "Introduce tu contraseña",
+      "autoTranscribeAuthMessage": "La transcripción automática está disponible después de crear una cuenta.",
+      "securityAuthMessage": "La sincronización y el cifrado están disponibles después de crear una cuenta.",
+      "providerProOnly": "{{provider}} está disponible en Pro.",
+      "providerNeedsAccount": "Crea una cuenta para usar {{provider}}.",
+      "removeWhisperTitle": "¿Eliminar el modelo?",
+      "removeWhisperDesc": "El modelo Whisper {{model}} se eliminará de este dispositivo. Tendrás que descargarlo de nuevo para usar la transcripción sin conexión.",
+      "removeLLMTitle": "¿Eliminar el LLM?",
+      "removeLLMDesc": "El modelo LLM {{model}} se eliminará de este dispositivo. Tendrás que descargarlo de nuevo para usar el razonamiento sin conexión.",
+      "confirmDeleteFull": "Esto eliminará de forma permanente todos los datos locales de esta cuenta.",
+      "encryptionDisabledTitle": "Cifrado desactivado",
+      "minutesWarningText": "Has usado todos los minutos del mes. A continuación se usará la reserva de prueba.",
+      "minutesWarningTextLow": "Te quedan pocos minutos de transcripción este mes",
+      "saveRecoveryFirst": "Asegúrate de haber guardado tu código de recuperación para acceder a las notas en otros dispositivos.",
+      "signOutMessage": "¿Qué hacemos con tus notas en este dispositivo?",
+      "syncPendingMessage": "El cifrado de extremo a extremo se ha desactivado en este dispositivo. Sin embargo, tus notas no se pudieron sincronizar con el servidor ahora. Se actualizarán automáticamente a texto plano en cuanto tengas conexión a internet.",
+      "unableDisableSync": "No se pudo desactivar la sincronización.",
+      "cloudSync": "Sincronización en la nube",
+      "failed": "Error"
     },
     "recovery": {
       "title": "Código de recuperación",
@@ -196,7 +222,30 @@
       "decodeFailed": "No se pudo decodificar la imagen.",
       "errorProcessingImage": "Error al procesar la imagen.",
       "scanQr": "Escanear código QR",
-      "pickQr": "Importar imagen"
+      "pickQr": "Importar imagen",
+      "noRecoveryCode": "No se encontró el código de recuperación. Intenta desbloquear de nuevo."
+    },
+    "resetRecovery": {
+      "title": "El almacén cifrado se restableció",
+      "description": "Las notas conservadas en este dispositivo están aisladas localmente. La sincronización está en pausa para que no se suban sin tu decisión.",
+      "enableE2EE": "Restaurar con E2EE",
+      "keepTitle": "¿Mantener las notas solo en este dispositivo?",
+      "keepDescription": "Las notas recuperadas seguirán siendo locales y la sincronización en la nube permanecerá desactivada.",
+      "keepLocal": "Mantener local",
+      "standardTitle": "¿Sincronizar sin E2EE?",
+      "standardDescription": "Tus notas recuperadas se subirán con la sincronización estándar. Vaulto podría técnicamente procesar su contenido.",
+      "standardAction": "Usar sincronización estándar"
+    },
+    "security": {
+      "localProtection": "Protección local",
+      "localProtectionDescription": "Las notas se cifran en el almacenamiento local de la app con una clave del dispositivo.",
+      "optionalE2EE": "E2EE opcional",
+      "optionalE2EEDescription": "Puedes activar el cifrado de extremo a extremo en Ajustes cuando quieras que el servidor no pueda leer el contenido de las notas.",
+      "standardDisclosure": "La sincronización estándar no es de conocimiento cero. Activa E2EE para máxima privacidad en la nube.",
+      "standardSync": "Sincronización estándar en la nube",
+      "standardSyncDescription": "Las notas usan la sincronización estándar en la nube. Vaulto puede procesar técnicamente su contenido para ofrecer funciones del servidor y la recuperación de la cuenta.",
+      "syncOff": "La sincronización en la nube está desactivada",
+      "syncOffDescription": "Los cambios nuevos permanecen en este dispositivo hasta que actives un modo de sincronización."
     }
   },
   "languages": {
@@ -256,7 +305,8 @@
     "resetPasswordFailed": "No se pudo restablecer la contraseña",
     "sendResetEmailFailed": "No se pudo enviar el correo de restablecimiento",
     "iAcceptThe": "Acepto los",
-    "andThe": "y"
+    "andThe": "y",
+    "locallyStoredUnaffected": "Tus notas locales permanecerán seguras y accesibles."
   },
   "edit": {
     "visualEditor": "Editor visual",
@@ -331,7 +381,33 @@
       "emptyText": "Escribe algo antes de pedir una mejora.",
       "grammarPerfect": "¡Perfecto! No se encontraron errores.",
       "working": "Pensando…"
-    }
+    },
+    "dictation": {
+      "errorTitle": "Error de dictado",
+      "permissionDenied": "Se necesita acceso al micrófono para dictar.",
+      "startFailed": "No se pudo iniciar el dictado",
+      "modelTitle": "Modelo de dictado sin conexión",
+      "modelDescription": "Para dictar en tiempo real sin conexión a internet, debes descargar un modelo de reconocimiento de voz.",
+      "recommended": "Recomendado",
+      "unsupportedDevice": "No compatible con este dispositivo",
+      "notEnoughSpace": "No hay suficiente espacio libre",
+      "download": "Descargar",
+      "downloading": "Descargando el modelo {{model}}...",
+      "cancelDownload": "Cancelar descarga",
+      "downloadFailed": "Error al descargar"
+    },
+    "titlePlaceholder": "Título",
+    "charactersCount": "{{count}} caracteres",
+    "placeholderVisual": "Empieza a escribir...",
+    "placeholderMarkdown": "Empieza a escribir markdown...",
+    "promptNamePlaceholder": "Nombre del prompt",
+    "promptTextPlaceholder": "Texto del prompt",
+    "deleteImprovementTitle": "¿Eliminar la mejora?",
+    "deleteImprovementDesc": "Esta versión se eliminará. Siempre puedes generarla de nuevo.",
+    "deleteRecordingTitle": "¿Eliminar la grabación?",
+    "deleteRecordingDesc": "¿Seguro que quieres eliminar esta grabación?",
+    "deleteNoteDesc": "¿Seguro que quieres eliminar esta nota?",
+    "micHintHold": "Mantén: sin agente"
   },
   "voice": {
     "transcribeOn": "Transcripción ACTIVADA",
@@ -447,6 +523,13 @@
     "yearlyPlan": "Plan anual",
     "monthlyPlan": "Plan mensual",
     "savePercentage": "AHORRA {{percentage}}%",
-    "vaultoAiMinsMonth": "{{minutes}} minutos de Vaulto AI / mes"
+    "vaultoAiMinsMonth": "{{minutes}} minutos de Vaulto AI / mes",
+    "switchToVaultoAI": "Cambiar a Vaulto AI",
+    "searchLanguage": "Buscar idioma...",
+    "confirmAndDelete": "Sí, eliminar todo",
+    "confirmDeletion": "Confirmar eliminación",
+    "goBack": "Volver",
+    "somethingWentWrong": "Algo salió mal",
+    "unsyncedNotesWarn": "notas sin sincronizar se perderán para siempre."
   }
 }

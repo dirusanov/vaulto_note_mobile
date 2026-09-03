@@ -33,7 +33,11 @@
     "unavailable": "Unavailable",
     "failed": "Failed",
     "ok": "OK",
-    "pro": "PRO"
+    "pro": "PRO",
+    "openSettings": "Open Settings",
+    "errorOccurred": "An error occurred",
+    "permission": "Permission",
+    "unlock": "Unlock"
   },
   "notes": {
     "emptyStateMic": "Tap the microphone to record",
@@ -49,7 +53,8 @@
     "resetRecoveryTitle": "Encrypted vault was reset",
     "resetRecoveryDescription": "Your retained notes are local-only and sync is paused. Choose how to recover them in Settings.",
     "reviewRecovery": "Review options",
-    "note": "Note"
+    "note": "Note",
+    "selectedCount": "{{count}} selected"
   },
   "settings": {
     "title": "Settings",
@@ -178,7 +183,7 @@
       "passphraseObject": "Passphrase",
       "encryptedSyncObject": "Encrypted Sync",
       "derivingKeysSubtitle": "Creating the key and encrypting your notes.",
-      "vaultoVersion": "Vaulto v1.1.0",
+      "vaultoVersion": "Vaulto v{{version}}",
       "exportRecoveryCode": "Export Recovery Code",
       "copyBtn": "Copy",
       "disableBtn": "Disable",
@@ -188,7 +193,25 @@
       "yesDisable": "Yes, disable",
       "setupSync": "Upgrade to Encrypted Mode",
       "setupPassphrase": "Setup Passphrase",
-      "enterPassphrase": "Enter your passphrase"
+      "enterPassphrase": "Enter your passphrase",
+      "autoTranscribeAuthMessage": "Auto-transcription is available after you create an account.",
+      "securityAuthMessage": "Sync and encryption are available after you create an account.",
+      "providerProOnly": "{{provider}} is available in Pro.",
+      "providerNeedsAccount": "Create an account to use {{provider}}.",
+      "removeWhisperTitle": "Remove Model?",
+      "removeWhisperDesc": "The {{model}} Whisper model will be deleted from this device. You will need to download it again to use offline transcription.",
+      "removeLLMTitle": "Remove LLM?",
+      "removeLLMDesc": "The {{model}} LLM model will be deleted from this device. You will need to download it again to use offline reasoning.",
+      "confirmDeleteFull": "This will permanently remove all local data for this account.",
+      "encryptionDisabledTitle": "Encryption Disabled",
+      "minutesWarningText": "You've used all monthly minutes. Trial reserve will be used next.",
+      "minutesWarningTextLow": "Running low on monthly transcription minutes",
+      "saveRecoveryFirst": "Ensure you have saved your Recovery Code to access notes on other devices.",
+      "signOutMessage": "What should we do with your notes on this device?",
+      "syncPendingMessage": "End-to-end encryption has been disabled on this device. However, your notes could not be synced to the server right now. They will be automatically updated to plain text as soon as you have an internet connection.",
+      "unableDisableSync": "Unable to disable sync.",
+      "cloudSync": "Cloud Sync",
+      "failed": "Failed"
     },
     "recovery": {
       "title": "Recovery Code",
@@ -210,7 +233,19 @@
       "decodeFailed": "Failed to decode image data.",
       "errorProcessingImage": "Failed to process image.",
       "scanQr": "Scan QR Code",
-      "pickQr": "Import from Image"
+      "pickQr": "Import from Image",
+      "noRecoveryCode": "No recovery code found. Try unlocking again."
+    },
+    "security": {
+      "localProtection": "Local protection",
+      "localProtectionDescription": "Notes are encrypted in the app's local storage with a device key.",
+      "optionalE2EE": "Optional E2EE",
+      "optionalE2EEDescription": "You can enable end-to-end encryption in Settings when you want the server to be unable to read note contents.",
+      "standardDisclosure": "Standard sync is not zero-knowledge. Enable E2EE for maximum cloud privacy.",
+      "standardSync": "Standard cloud sync",
+      "standardSyncDescription": "Notes use standard cloud sync. Vaulto can technically process their contents to provide server features and account recovery.",
+      "syncOff": "Cloud sync is off",
+      "syncOffDescription": "New changes stay on this device until you enable a sync mode."
     }
   },
   "languages": {
@@ -270,7 +305,8 @@
     "resetPasswordFailed": "Failed to reset password",
     "sendResetEmailFailed": "Failed to send reset email",
     "iAcceptThe": "I accept the",
-    "andThe": "and"
+    "andThe": "and",
+    "locallyStoredUnaffected": "Your locally stored notes remain unaffected and fully accessible."
   },
   "edit": {
     "visualEditor": "Visual Editor",
@@ -345,7 +381,33 @@
       "emptyText": "Enter some text before requesting an improvement.",
       "grammarPerfect": "Perfect! No grammar errors found.",
       "working": "Thinking…"
-    }
+    },
+    "dictation": {
+      "errorTitle": "Dictation Error",
+      "permissionDenied": "Microphone access is required for dictation.",
+      "startFailed": "Failed to start dictation",
+      "modelTitle": "Offline Dictation Model",
+      "modelDescription": "To use real-time dictation offline without an internet connection, you need to download a speech recognition model.",
+      "recommended": "Recommended",
+      "unsupportedDevice": "Not supported on this device",
+      "notEnoughSpace": "Not enough free space",
+      "download": "Download",
+      "downloading": "Downloading the {{model}} model...",
+      "cancelDownload": "Cancel Download",
+      "downloadFailed": "Download failed"
+    },
+    "titlePlaceholder": "Title",
+    "charactersCount": "{{count}} characters",
+    "placeholderVisual": "Start typing...",
+    "placeholderMarkdown": "Start typing markdown...",
+    "promptNamePlaceholder": "Prompt name",
+    "promptTextPlaceholder": "Prompt text",
+    "deleteImprovementTitle": "Delete Improvement?",
+    "deleteImprovementDesc": "This version will be removed. You can always regenerate it later.",
+    "deleteRecordingTitle": "Delete Recording?",
+    "deleteRecordingDesc": "Are you sure you want to delete this recording?",
+    "deleteNoteDesc": "Are you sure you want to delete this note?",
+    "micHintHold": "Hold: no agent"
   },
   "voice": {
     "transcribeOn": "Transcribe ON",
@@ -461,6 +523,13 @@
     "yearlyPlan": "Yearly Plan",
     "monthlyPlan": "Monthly Plan",
     "savePercentage": "SAVE {{percentage}}%",
-    "vaultoAiMinsMonth": "{{minutes}} Vaulto AI minutes / month"
+    "vaultoAiMinsMonth": "{{minutes}} Vaulto AI minutes / month",
+    "switchToVaultoAI": "Switch to Vaulto AI",
+    "searchLanguage": "Search language...",
+    "confirmAndDelete": "Yes, Delete Everything",
+    "confirmDeletion": "Confirm Deletion",
+    "goBack": "Go Back",
+    "somethingWentWrong": "Something went wrong",
+    "unsyncedNotesWarn": "unsynced notes will be lost forever."
   }
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, Animated, Easing } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
+    const { t } = useTranslation();
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -66,7 +68,7 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
                 <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                     <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
                 </Animated.View>
-                <Text style={styles.text}>Transcribing...</Text>
+                <Text style={styles.text}>{t('aux.transcribing', 'Transcribing...')}</Text>
             </View>
         </Animated.View>
     );

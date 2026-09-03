@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
+import appConfig from '../../app.json';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -445,7 +446,7 @@ export const SettingsScreen = () => {
                     text: t('settings.resetRecovery.keepLocal', 'Keep local'),
                     onPress: () => {
                         void keepResetArchiveLocal().catch((error: any) => {
-                            Alert.alert(t('common.failed'), error?.message || t('aux.somethingWentWrong'));
+                            Alert.alert(t('common.failed', 'Failed'), error?.message || t('aux.somethingWentWrong', 'Something went wrong'));
                         });
                     },
                 },
@@ -464,7 +465,7 @@ export const SettingsScreen = () => {
                     style: 'destructive',
                     onPress: () => {
                         void resumeStandardSyncAfterReset().catch((error: any) => {
-                            Alert.alert(t('common.failed'), error?.message || t('aux.somethingWentWrong'));
+                            Alert.alert(t('common.failed', 'Failed'), error?.message || t('aux.somethingWentWrong', 'Something went wrong'));
                         });
                     },
                 },
@@ -1925,7 +1926,9 @@ export const SettingsScreen = () => {
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com')}>
-                            <Text style={styles.versionText}>{t('settings.ui.vaultoVersion', 'Vaulto v1.1.0')}</Text>
+                            <Text style={styles.versionText}>
+                                {t('settings.ui.vaultoVersion', 'Vaulto v{{version}}', { version: appConfig.expo.version })}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -2038,8 +2041,8 @@ export const SettingsScreen = () => {
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
-                title="Sign in required"
-                message="Auto-transcription is available after you create an account."
+                title={t('voice.signInRequired', 'Sign in required')}
+                message={t('settings.ui.autoTranscribeAuthMessage', 'Auto-transcription is available after you create an account.')}
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
                     setShowTranscriptionAuthModal(false);
@@ -2049,8 +2052,8 @@ export const SettingsScreen = () => {
 
             <SignInRequiredModal
                 visible={showSecurityAuthModal}
-                title="Sign in required"
-                message="Sync and encryption are available after you create an account."
+                title={t('voice.signInRequired', 'Sign in required')}
+                message={t('settings.ui.securityAuthMessage', 'Sync and encryption are available after you create an account.')}
                 onClose={() => setShowSecurityAuthModal(false)}
                 onSignIn={() => {
                     setShowSecurityAuthModal(false);
@@ -2060,13 +2063,17 @@ export const SettingsScreen = () => {
 
             <SignInRequiredModal
                 visible={!!providerGate}
-                title={providerGate?.kind === 'upgrade' ? 'Upgrade to Pro' : 'Sign in required'}
+                title={providerGate?.kind === 'upgrade'
+                    ? t('settings.pro.upgrade', 'Upgrade to Pro')
+                    : t('voice.signInRequired', 'Sign in required')}
                 message={providerGate
                     ? (providerGate.kind === 'upgrade'
-                        ? `${providerGate.providerTitle} is available in Pro.`
-                        : `Create an account to use ${providerGate.providerTitle}.`)
+                        ? t('settings.ui.providerProOnly', '{{provider}} is available in Pro.', { provider: providerGate.providerTitle })
+                        : t('settings.ui.providerNeedsAccount', 'Create an account to use {{provider}}.', { provider: providerGate.providerTitle }))
                     : ''}
-                signInLabel={providerGate?.kind === 'upgrade' ? 'Upgrade' : 'Sign In'}
+                signInLabel={providerGate?.kind === 'upgrade'
+                    ? t('aux.upgrade', 'Upgrade')
+                    : t('auth.signIn', 'Sign In')}
                 onClose={() => setProviderGate(null)}
                 onSignIn={() => {
                     const kind = providerGate?.kind;
@@ -2087,16 +2094,24 @@ export const SettingsScreen = () => {
 
             <DeleteConfirmationDialog
                 visible={showLocalWhisperDeleteConfirm}
-                title="Remove Model?"
-                message={`The ${localWhisperStatus?.selectedModel.label || 'local'} Whisper model will be deleted from this device. You will need to download it again to use offline transcription.`}
+                title={t('settings.ui.removeWhisperTitle', 'Remove Model?')}
+                message={t(
+                    'settings.ui.removeWhisperDesc',
+                    'The {{model}} Whisper model will be deleted from this device. You will need to download it again to use offline transcription.',
+                    { model: localWhisperStatus?.selectedModel.label || 'local' }
+                )}
                 onConfirm={handleDeleteLocalWhisper}
                 onCancel={() => setShowLocalWhisperDeleteConfirm(false)}
             />
 
             <DeleteConfirmationDialog
                 visible={showLocalLLMDeleteConfirm}
-                title="Remove LLM?"
-                message={`The ${localLLMStatus?.selectedModel.label || 'local'} LLM model will be deleted from this device. You will need to download it again to use offline reasoning.`}
+                title={t('settings.ui.removeLLMTitle', 'Remove LLM?')}
+                message={t(
+                    'settings.ui.removeLLMDesc',
+                    'The {{model}} LLM model will be deleted from this device. You will need to download it again to use offline reasoning.',
+                    { model: localLLMStatus?.selectedModel.label || 'local' }
+                )}
                 onConfirm={handleDeleteLocalLLM}
                 onCancel={() => setShowLocalLLMDeleteConfirm(false)}
             />

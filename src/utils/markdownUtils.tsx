@@ -18,6 +18,51 @@ export interface FormattedBlockData {
 }
 
 /**
+ * Letters and digits of the scripts the app ships in, plus `_` itself, so
+ * `user_id` and `имя_поля` never open emphasis. Written as a whitelist rather
+ * than a punctuation blacklist: a character that is not listed (an emoji, «», a
+ * CJK bracket) only ever *allows* emphasis, which is the harmless direction.
+ * Unicode property escapes are avoided on purpose - Hermes support for them is
+ * not something to bet the parser on.
+ */
+const WORD_CHARACTER_REGEX = /[0-9A-Za-z_\u00c0-\u024f\u0370-\u03ff\u0400-\u04ff\u0590-\u05ff\u0600-\u06ff\u0900-\u097f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
+
+const isWordCharacter = (char: string | undefined): boolean =>
+    !!char && WORD_CHARACTER_REGEX.test(char);
+
+/**
+ * `_` and `*` are the two markers that appear constantly inside ordinary text
+ * (`user_id`, `my_file.txt`, `2 * 3 * 4`, `a_b_c` in a URL). Treating those as
+ * emphasis silently deletes the characters from the note the first time the
+ * content is round-tripped through the editor, so both markers now follow the
+ * CommonMark flanking rules that every other editor applies:
+ *   - the emphasised run may not start or end with whitespace;
+ *   - `_` may not touch a word character on either side (no intraword `_`).
+ */
+const isValidEmphasisRun = (
+    marker: '_' | '*',
+    chunk: string,
+    text: string,
+    index: number
+): boolean => {
+    const inner = chunk.slice(marker.length, chunk.length - marker.length);
+
+    if (!inner || /^\s/.test(inner) || /\s$/.test(inner)) {
+        return false;
+    }
+
+    if (marker === '_') {
+        const before = index > 0 ? text[index - 1] : undefined;
+        const after = text[index + chunk.length];
+        if (isWordCharacter(before) || isWordCharacter(after)) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
+/**
  * Parses raw markdown text into separated content and format ranges.
  * Example: "**Bold**" -> { content: "Bold", formats: [{type:'bold', start:0, end:4}] }
  */
@@ -63,16 +108,16 @@ export const parseMarkdownToData = (text: string, depth: number = 0): FormattedB
 
         if (chunk.startsWith('**')) {
             type = 'bold';
-            innerRaw = chunk.substring(2, chunk.length - 2);
+            innerRaw = chunk.slice(2, -2);
         } else if (chunk.startsWith('~~')) {
             type = 'strikethrough';
-            innerRaw = chunk.substring(2, chunk.length - 2);
+            innerRaw = chunk.slice(2, -2);
         } else if (chunk.startsWith('`')) {
             type = 'code';
-            innerRaw = chunk.substring(1, chunk.length - 1);
+            innerRaw = chunk.slice(1, -1);
         } else if (chunk.startsWith('==')) {
             type = 'highlight';
-            innerRaw = chunk.substring(2, chunk.length - 2);
+            innerRaw = chunk.slice(2, -2);
             const separatorIndex = innerRaw.indexOf(':');
             if (separatorIndex > 0) {
                 const candidateColor = innerRaw.slice(0, separatorIndex).trim();
@@ -88,13 +133,34 @@ export const parseMarkdownToData = (text: string, depth: number = 0): FormattedB
             }
         } else if (chunk.startsWith('<u>')) {
             type = 'underline';
-            innerRaw = chunk.substring(3, chunk.length - 4);
+            innerRaw = chunk.slice(3, -4);
         } else if (chunk.startsWith('_')) {
             type = 'italic';
-            innerRaw = chunk.substring(1, chunk.length - 1);
+            innerRaw = chunk.slice(1, -1);
         } else if (chunk.startsWith('*')) {
             type = 'italic';
-            innerRaw = chunk.substring(1, chunk.length - 1);
+            innerRaw = chunk.slice(1, -1);
+        }
+
+        if (type && !innerRaw) {
+            // Nothing between the markers: "**" is two characters the user
+            // typed, not empty bold.
+            addText(chunk);
+            lastIndex = pattern.lastIndex;
+            continue;
+        }
+
+        if (type === 'italic') {
+            const marker = chunk.startsWith('_') ? '_' : '*';
+            if (!isValidEmphasisRun(marker, chunk, text, match.index)) {
+                // Not emphasis after all. Emit only the marker itself and rescan
+                // from the next character, so a real `_italic_` later on the same
+                // line is still recognised.
+                addText(chunk[0]);
+                lastIndex = match.index + 1;
+                pattern.lastIndex = lastIndex;
+                continue;
+            }
         }
 
         if (type) {

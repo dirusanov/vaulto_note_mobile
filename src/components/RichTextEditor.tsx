@@ -280,6 +280,102 @@ const getEditorCss = (
     min-width: 0;
   }
 
+  /* Tentap ships no typography of its own, so headings, quotes, code and links
+     would otherwise fall back to the WebView's UA stylesheet (a 2em h1 with
+     0.67em margins, a 40px-indented blockquote, unstyled code). These rules keep
+     the editor in step with MarkdownPreview and with the chosen font size. */
+  .ProseMirror h1,
+  .ProseMirror h2,
+  .ProseMirror h3,
+  .ProseMirror h4,
+  .ProseMirror h5,
+  .ProseMirror h6 {
+    color: ${colors.text};
+    font-weight: 700;
+    margin: ${Math.round(baseFontSize * 0.5)}px 0 ${Math.round(baseFontSize * 0.25)}px;
+  }
+
+  .ProseMirror h1:first-child,
+  .ProseMirror h2:first-child,
+  .ProseMirror h3:first-child {
+    margin-top: 0;
+  }
+
+  .ProseMirror h1 {
+    font-size: ${baseFontSize + 8}px;
+    line-height: ${Math.round((baseFontSize + 8) * 1.35)}px;
+  }
+
+  .ProseMirror h2 {
+    font-size: ${baseFontSize + 6}px;
+    line-height: ${Math.round((baseFontSize + 6) * 1.35)}px;
+  }
+
+  .ProseMirror h3 {
+    font-size: ${baseFontSize + 4}px;
+    line-height: ${Math.round((baseFontSize + 4) * 1.35)}px;
+  }
+
+  .ProseMirror h4,
+  .ProseMirror h5,
+  .ProseMirror h6 {
+    font-size: ${baseFontSize + 2}px;
+    line-height: ${Math.round((baseFontSize + 2) * 1.35)}px;
+  }
+
+  .ProseMirror blockquote {
+    margin: ${Math.round(baseFontSize * 0.25)}px 0;
+    padding-left: ${Math.max(8, Math.round(baseFontSize * 0.6))}px;
+    border-left: 3px solid ${colors.border};
+    color: ${colors.textSecondary};
+    font-style: italic;
+  }
+
+  .ProseMirror code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: ${colors.backgroundSecondary};
+    border-radius: 4px;
+    padding: 0.1em 0.3em;
+  }
+
+  .ProseMirror pre {
+    background: ${colors.backgroundSecondary};
+    border-radius: 8px;
+    padding: ${Math.round(baseFontSize * 0.6)}px;
+    margin: ${Math.round(baseFontSize * 0.35)}px 0;
+    overflow-x: auto;
+  }
+
+  .ProseMirror pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  .ProseMirror mark {
+    padding: 0.04em 0.12em;
+    border-radius: 0.22em;
+    color: ${colors.text};
+  }
+
+  .ProseMirror a {
+    color: ${colors.primary};
+    text-decoration: underline;
+  }
+
+  .ProseMirror hr {
+    border: none;
+    height: 1px;
+    background: ${colors.border};
+    margin: ${Math.round(baseFontSize * 0.75)}px 0;
+  }
+
+  .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 12px;
+  }
+
   /* Hide placeholder on empty checklist items */
   .ProseMirror ul[data-type="taskList"] *::before,
   .ProseMirror ul[data-type="taskList"]::before,
@@ -816,13 +912,28 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         applyProgrammaticContent(initialContent, renderedExternalHtml);
     }, [editorState.isReady, initialContent, renderedExternalHtml, reparseTrigger]);
 
+    const activeFormats = useMemo(
+        () => mapEditorStateToFormats(editorState),
+        [editorState]
+    );
+    const lastActiveFormatsKeyRef = useRef<string | null>(null);
+
     useEffect(() => {
         if (!onActiveStylesChange) {
             return;
         }
 
-        onActiveStylesChange(mapEditorStateToFormats(editorState));
-    }, [editorState, onActiveStylesChange]);
+        // useBridgeState publishes a fresh state object on every keystroke, so
+        // without this guard the parent screen re-rendered for every character
+        // typed even when the active formatting had not changed at all.
+        const key = activeFormats.join('|');
+        if (key === lastActiveFormatsKeyRef.current) {
+            return;
+        }
+
+        lastActiveFormatsKeyRef.current = key;
+        onActiveStylesChange(activeFormats);
+    }, [activeFormats, onActiveStylesChange]);
 
     useEffect(() => {
         if (!onSelectionChange || !editorState.selection) {
@@ -995,7 +1106,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                         <View pointerEvents="auto" style={styles.toolbarContainer}>
                             <MarkdownToolbar
                                 onFormat={applyFormat}
-                                activeFormats={mapEditorStateToFormats(editorState)}
+                                activeFormats={activeFormats}
                                 onColorPickerToggle={setIsColorPickerVisible}
                             />
                         </View>
@@ -1005,7 +1116,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                         <View pointerEvents="auto" style={styles.toolbarContainer}>
                             <MarkdownToolbar
                                 onFormat={applyFormat}
-                                activeFormats={mapEditorStateToFormats(editorState)}
+                                activeFormats={activeFormats}
                                 onColorPickerToggle={setIsColorPickerVisible}
                             />
                         </View>
@@ -1016,6 +1127,11 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     );
 });
 
+// Every prop has to take part in the comparison. Leaving the callbacks out kept
+// the component bound to the first onChange/onFocus it ever received, so edits
+// were reported to a stale closure (and `showToolbar` never toggled) whenever the
+// parent re-created its handlers. The screen passes stable useCallback handlers,
+// so comparing them costs nothing.
 export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.reparseTrigger === next.reparseTrigger &&
     prev.baseFontSize === next.baseFontSize &&
@@ -1024,7 +1140,14 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.placeholder === next.placeholder &&
     prev.initialContent === next.initialContent &&
     prev.contentBottomPadding === next.contentBottomPadding &&
-    prev.onAudioAction === next.onAudioAction
+    prev.showToolbar === next.showToolbar &&
+    prev.onAudioAction === next.onAudioAction &&
+    prev.onChange === next.onChange &&
+    prev.onPlainTextChange === next.onPlainTextChange &&
+    prev.onSelectionChange === next.onSelectionChange &&
+    prev.onActiveStylesChange === next.onActiveStylesChange &&
+    prev.onFocus === next.onFocus &&
+    prev.onBlur === next.onBlur
 ));
 
 const styles = StyleSheet.create({

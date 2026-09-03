@@ -47,7 +47,10 @@ const PROCESSING_PREVIEW_SVG = encodeURIComponent(
 );
 const PROCESSING_PREVIEW_DATA_URI = `data:image/svg+xml;charset=utf-8,${PROCESSING_PREVIEW_SVG}`;
 
-const TODO_REGEX = /^(\s*[-*]\s*\[(?:([ xX]))?\]\s)(.*)$/;
+// The checkbox body is optional (`- []` is what models keep emitting) and the
+// trailing space is optional too, so an item that is still empty stays a
+// checklist item instead of degrading into a bullet that reads "[x]".
+const TODO_REGEX = /^(\s*[-*]\s*\[([ xX])?\](?:\s+|\s*$))(.*)$/;
 const ORDERED_REGEX = /^(\s*)(\d+)\.\s+(.*)$/;
 const BULLET_REGEX = /^(\s*)[-*]\s+(.*)$/;
 const BLOCKQUOTE_REGEX = /^\s*>\s?(.*)$/;
@@ -356,6 +359,117 @@ const createTaskItemNode = (markdown: string, checked: boolean): TiptapNode => (
     content: [createParagraphNode(markdown)],
 });
 
+type ListKind = 'bullet' | 'ordered' | 'task';
+
+type ListLineInfo = {
+    indent: number;
+    kind: ListKind;
+    text: string;
+    checked: boolean;
+    start: number;
+};
+
+const getIndentWidth = (raw: string): number => raw.replace(/\t/g, '  ').length;
+
+const matchListLine = (line: string): ListLineInfo | null => {
+    const todo = line.match(TODO_REGEX);
+    if (todo) {
+        const leading = todo[1].match(/^\s*/);
+        return {
+            indent: getIndentWidth(leading ? leading[0] : ''),
+            kind: 'task',
+            text: todo[3],
+            checked: (todo[2] || '').toLowerCase() === 'x',
+            start: 1,
+        };
+    }
+
+    const ordered = line.match(ORDERED_REGEX);
+    if (ordered) {
+        return {
+            indent: getIndentWidth(ordered[1]),
+            kind: 'ordered',
+            text: ordered[3],
+            checked: false,
+            start: parseInt(ordered[2], 10) || 1,
+        };
+    }
+
+    const bullet = line.match(BULLET_REGEX);
+    if (bullet) {
+        return {
+            indent: getIndentWidth(bullet[1]),
+            kind: 'bullet',
+            text: bullet[2],
+            checked: false,
+            start: 1,
+        };
+    }
+
+    return null;
+};
+
+const createListNodeForKind = (kind: ListKind, start: number, items: TiptapNode[]): TiptapNode => {
+    if (kind === 'task') {
+        return { type: 'taskList', content: items };
+    }
+
+    if (kind === 'ordered') {
+        return { type: 'orderedList', attrs: { start }, content: items };
+    }
+
+    return { type: 'bulletList', content: items };
+};
+
+/**
+ * Builds one list (and everything nested under it) starting at `index`.
+ * Indented lines become child lists of the item above them instead of being
+ * flattened into siblings, which is how AI answers and imported notes keep the
+ * structure they were written with.
+ */
+const buildListNode = (lines: ListLineInfo[], index: number): [TiptapNode, number] => {
+    const first = lines[index];
+    const { indent, kind } = first;
+    const items: TiptapNode[] = [];
+    let cursor = index;
+
+    while (cursor < lines.length) {
+        const line = lines[cursor];
+
+        if (line.indent < indent || (line.indent === indent && line.kind !== kind)) {
+            break;
+        }
+
+        if (line.indent > indent) {
+            const [childList, nextIndex] = buildListNode(lines, cursor);
+            const parent = items[items.length - 1];
+
+            if (parent) {
+                parent.content = [...(parent.content || []), childList];
+            } else {
+                // A list that starts indented: keep it, wrapped in an empty item.
+                items.push({
+                    type: kind === 'task' ? 'taskItem' : 'listItem',
+                    ...(kind === 'task' ? { attrs: { checked: false } } : {}),
+                    content: [{ type: 'paragraph' }, childList],
+                });
+            }
+
+            cursor = nextIndex;
+            continue;
+        }
+
+        items.push(
+            kind === 'task'
+                ? createTaskItemNode(line.text, line.checked)
+                : createListItemNode(line.text)
+        );
+        cursor += 1;
+    }
+
+    return [createListNodeForKind(kind, first.start, items), cursor];
+};
+
 const createAudioEmbedNode = (path: string): TiptapNode => ({
     type: 'image',
     attrs: {
@@ -385,7 +499,34 @@ const listItemParagraph = (node?: TiptapNode) => {
     return paragraphContentToMarkdown(paragraphNode);
 };
 
-const serializeBlockNode = (node: TiptapNode, orderedStart = 1): string[] => {
+const LIST_NODE_TYPES = ['bulletList', 'orderedList', 'taskList'];
+
+/** Mirrors buildListNode: two spaces of indentation per nesting level. */
+const serializeListNode = (node: TiptapNode, depth: number = 0): string[] => {
+    const indent = '  '.repeat(depth);
+    const start = node.type === 'orderedList' ? Number(node.attrs?.start || 1) : 1;
+    const lines: string[] = [];
+
+    (node.content || []).forEach((item, position) => {
+        const marker = node.type === 'orderedList'
+            ? `${start + position}. `
+            : node.type === 'taskList'
+                ? `- [${item.attrs?.checked ? 'x' : ' '}] `
+                : '- ';
+
+        lines.push(`${indent}${marker}${listItemParagraph(item)}`);
+
+        (item.content || []).forEach((child) => {
+            if (LIST_NODE_TYPES.includes(child.type)) {
+                lines.push(...serializeListNode(child, depth + 1));
+            }
+        });
+    });
+
+    return lines;
+};
+
+const serializeBlockNode = (node: TiptapNode): string[] => {
     switch (node.type) {
         case 'paragraph':
             return [inlineNodesToMarkdown(node.content)];
@@ -395,16 +536,9 @@ const serializeBlockNode = (node: TiptapNode, orderedStart = 1): string[] => {
             return [`${prefix} ${inlineNodesToMarkdown(node.content)}`.trimEnd()];
         }
         case 'bulletList':
-            return (node.content || []).flatMap((item) => [`- ${listItemParagraph(item)}`]);
-        case 'orderedList': {
-            const start = Number(node.attrs?.start || orderedStart || 1);
-            return (node.content || []).map((item, index) => `${start + index}. ${listItemParagraph(item)}`);
-        }
+        case 'orderedList':
         case 'taskList':
-            return (node.content || []).flatMap((item) => {
-                const checked = !!item.attrs?.checked;
-                return [`- [${checked ? 'x' : ' '}] ${listItemParagraph(item)}`];
-            });
+            return serializeListNode(node);
         case 'blockquote':
             return (node.content || []).flatMap((child) => serializeBlockNode(child)).map((line) => `> ${line}`);
         case AUDIO_EMBED_NODE_NAME: {
@@ -454,103 +588,6 @@ const removeMatchingNode = (node: TiptapNode, predicate: (candidate: TiptapNode)
         content: nextContent,
     };
 };
-
-export const getEditorPlaceholderCss = (
-    baseFontSize: number,
-    placeholder?: string
-) => `
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: ${'#ffffff'};
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    color: ${'#1f2937'};
-    font-size: ${baseFontSize}px;
-    line-height: ${Math.round(baseFontSize * 1.55)}px;
-  }
-
-  .ProseMirror {
-    min-height: 120px;
-    padding: 0 0 24px;
-    outline: none;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .ProseMirror p {
-    margin: 0;
-    min-height: ${Math.round(baseFontSize * 1.55)}px;
-  }
-
-  .ProseMirror h1,
-  .ProseMirror h2,
-  .ProseMirror h3 {
-    color: ${'#111827'};
-    font-weight: 700;
-  }
-
-  .ProseMirror h1 {
-    font-size: ${Math.round(baseFontSize * 1.28)}px;
-    line-height: ${Math.round(baseFontSize * 1.65)}px;
-    margin: 10px 0 6px;
-  }
-
-  .ProseMirror h2 {
-    font-size: ${Math.round(baseFontSize * 1.16)}px;
-    line-height: ${Math.round(baseFontSize * 1.58)}px;
-    margin: 8px 0 5px;
-  }
-
-  .ProseMirror h3 {
-    font-size: ${Math.round(baseFontSize * 1.08)}px;
-    line-height: ${Math.round(baseFontSize * 1.52)}px;
-    margin: 6px 0 4px;
-  }
-
-  .ProseMirror ul,
-  .ProseMirror ol {
-    padding-left: 1.35rem;
-    margin: 0;
-  }
-
-  .ProseMirror li > p {
-    margin: 0;
-  }
-
-  .ProseMirror ul[data-type="taskList"] {
-    list-style: none;
-    padding-left: 0.25rem;
-  }
-
-  .ProseMirror ul[data-type="taskList"] li {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .ProseMirror ul[data-type="taskList"] li label {
-    margin-top: 0.2rem;
-  }
-
-  .ProseMirror img[alt="processing-preview"] {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    margin: 8px 0;
-    border-radius: 18px;
-  }
-
-  .ProseMirror mark {
-    padding: 0.04em 0.12em;
-    border-radius: 0.22em;
-  }
-
-  ${placeholder ? `.ProseMirror p.is-editor-empty:first-child::before { color: #9CA3AF; content: "${placeholder.replace(/"/g, '\\"')}"; float: left; height: 0; pointer-events: none; }` : ''}
-`;
 
 export const markdownToTiptapDocument = (markdown: string): TiptapDocument => {
     const lines = markdown.split('\n');
@@ -606,49 +643,24 @@ export const markdownToTiptapDocument = (markdown: string): TiptapDocument => {
             continue;
         }
 
-        if (todoMatch) {
-            const items: TiptapNode[] = [];
+        if (todoMatch || orderedMatch || bulletMatch) {
+            const listLines: ListLineInfo[] = [];
             while (index < lines.length) {
-                const candidate = lines[index].match(TODO_REGEX);
-                if (!candidate) {
+                const info = matchListLine(lines[index]);
+                if (!info) {
                     break;
                 }
-                items.push(createTaskItemNode(candidate[3], candidate[2].toLowerCase() === 'x'));
+                listLines.push(info);
                 index += 1;
             }
 
-            content.push({ type: 'taskList', content: items });
-            continue;
-        }
-
-        if (orderedMatch) {
-            const items: TiptapNode[] = [];
-            const start = parseInt(orderedMatch[2], 10) || 1;
-            while (index < lines.length) {
-                const candidate = lines[index].match(ORDERED_REGEX);
-                if (!candidate) {
-                    break;
-                }
-                items.push(createListItemNode(candidate[3]));
-                index += 1;
+            let cursor = 0;
+            while (cursor < listLines.length) {
+                const [node, nextCursor] = buildListNode(listLines, cursor);
+                content.push(node);
+                cursor = nextCursor > cursor ? nextCursor : cursor + 1;
             }
 
-            content.push({ type: 'orderedList', attrs: { start }, content: items });
-            continue;
-        }
-
-        if (bulletMatch) {
-            const items: TiptapNode[] = [];
-            while (index < lines.length) {
-                const candidate = lines[index].match(BULLET_REGEX);
-                if (!candidate || TODO_REGEX.test(lines[index])) {
-                    break;
-                }
-                items.push(createListItemNode(candidate[2]));
-                index += 1;
-            }
-
-            content.push({ type: 'bulletList', content: items });
             continue;
         }
 

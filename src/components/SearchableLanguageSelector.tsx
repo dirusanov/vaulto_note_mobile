@@ -176,7 +176,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                         <MaterialIcons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search language..."
+                            placeholder={t('aux.searchLanguage', 'Search language...')}
                             placeholderTextColor={colors.textSecondary}
                             value={searchQuery}
                             onChangeText={setSearchQuery}

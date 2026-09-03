@@ -1,6 +1,15 @@
+import { AppState, NativeModules, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { NativeModules, Platform } from 'react-native';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
+import { canDeviceRunModel, describeDeviceMemory } from './DeviceCapabilities';
+import {
+    createMutex,
+    downloadModelFile,
+    formatBytes,
+    GGML_MAGIC,
+    hasRoomForModel,
+    ModelDownloadProgress,
+} from './modelDownload';
 
 export type LocalWhisperModelKey = 'tiny' | 'base' | 'large' | 'turbo';
 
@@ -22,6 +31,22 @@ export interface LocalWhisperModelStatus {
     bytesOnDisk: number;
 }
 
+export interface RealtimeDictationHandle {
+    stop: () => Promise<void>;
+}
+
+type WhisperTranscriptPayload = {
+    result?: string;
+    text?: string;
+};
+
+type WhisperRealtimeEvent = {
+    isCapturing: boolean;
+    code: number;
+    error?: string;
+    data?: WhisperTranscriptPayload;
+};
+
 type WhisperRnContext = {
     transcribe: (
         audioUri: string,
@@ -31,18 +56,13 @@ type WhisperRnContext = {
         options?: Record<string, unknown>
     ) => Promise<{
         stop: () => Promise<void>;
-        subscribe: (callback: (event: any) => void) => void;
+        subscribe: (callback: (event: WhisperRealtimeEvent) => void) => void;
     }>;
     release?: () => Promise<void> | void;
 };
 
 type WhisperRnModule = {
     initWhisper: (options: Record<string, unknown>) => Promise<WhisperRnContext>;
-};
-
-type WhisperTranscriptPayload = {
-    result?: string;
-    text?: string;
 };
 
 const hasAsyncTranscript = (
@@ -56,37 +76,37 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         key: 'tiny',
         label: 'Tiny',
         sizeLabel: '~75 MB',
-        sizeBytes: 75 * 1024 * 1024,
+        sizeBytes: 77691713,
         filename: 'ggml-tiny.bin',
-        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
         power: 1,
         recommended: true,
     },
     base: {
         key: 'base',
         label: 'Base',
-        sizeLabel: '~142 MB',
-        sizeBytes: 142 * 1024 * 1024,
+        sizeLabel: '~141 MB',
+        sizeBytes: 147951465,
         filename: 'ggml-base.bin',
-        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
         power: 2,
     },
     large: {
         key: 'large',
         label: 'Large',
         sizeLabel: '~2.9 GB',
-        sizeBytes: 2900 * 1024 * 1024,
+        sizeBytes: 3095033483,
         filename: 'ggml-large-v3.bin',
-        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin',
         power: 4,
     },
     turbo: {
         key: 'turbo',
         label: 'Turbo',
         sizeLabel: '~547 MB',
-        sizeBytes: 547 * 1024 * 1024,
+        sizeBytes: 574041195,
         filename: 'ggml-large-v3-turbo-q5_0.bin',
-        url: 'https://huggingface.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
+        url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
         power: 4,
         recommended: true,
     },
@@ -99,9 +119,17 @@ type AudioTranscodeModuleShape = {
 const baseDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? null;
 const MODELS_DIR = baseDir ? `${baseDir}whisper-models/` : null;
 
+/** whisper.cpp processes audio in 30s chunks; slices below that keep latency low. */
+const REALTIME_SLICE_SEC = 20;
+/** Upper bound for one dictation session. The old 30s default ended dictation mid-sentence. */
+const REALTIME_MAX_SEC = 900;
+
 let activeContext: WhisperRnContext | null = null;
 let activeModelUri: string | null = null;
 let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
+/** Whisper allows one job per context: a second one entering whisper_full crashes the app. */
+let activeJob: 'transcribe' | 'dictation' | null = null;
+const withContextLock = createMutex();
 
 const ensureModelsDir = async () => {
     if (!MODELS_DIR) {
@@ -146,6 +174,8 @@ const resolveWhisperModule = (): WhisperRnModule | null => {
     return null;
 };
 
+export const isLocalWhisperRuntimeAvailable = (): boolean => resolveWhisperModule() !== null;
+
 const resolveAudioTranscodeModule = (): AudioTranscodeModuleShape | null => {
     const nativeModule = (NativeModules as Record<string, unknown>).AudioTranscode;
     if (
@@ -157,13 +187,35 @@ const resolveAudioTranscodeModule = (): AudioTranscodeModuleShape | null => {
     return null;
 };
 
-const getReadyContext = async (modelUri: string): Promise<WhisperRnContext> => {
+const beginJob = (kind: 'transcribe' | 'dictation') => {
+    if (activeJob) {
+        throw new Error(
+            activeJob === 'dictation'
+                ? 'Dictation is already running. Stop it before starting another recognition.'
+                : 'Another recording is being transcribed. Wait for it to finish.'
+        );
+    }
+    activeJob = kind;
+};
+
+const endJob = (kind: 'transcribe' | 'dictation') => {
+    if (activeJob === kind) {
+        activeJob = null;
+    }
+};
+
+const getReadyContext = async (modelUri: string): Promise<WhisperRnContext> => withContextLock(async () => {
     if (activeContext && activeModelUri === modelUri) {
         return activeContext;
     }
 
-    if (activeContext?.release) {
-        await activeContext.release();
+    // Drop the old context first: keeping the reference around means a failed
+    // init below would hand the next caller an already released native pointer.
+    const previous = activeContext;
+    activeContext = null;
+    activeModelUri = null;
+    if (previous?.release) {
+        await Promise.resolve(previous.release()).catch(() => undefined);
     }
 
     const whisperModule = resolveWhisperModule();
@@ -171,15 +223,35 @@ const getReadyContext = async (modelUri: string): Promise<WhisperRnContext> => {
         throw new Error('Local Whisper engine is not installed in this build');
     }
 
-    activeContext = await whisperModule.initWhisper({
+    const context = await whisperModule.initWhisper({
         filePath: modelUri,
-        modelPath: modelUri,
-        useGpu: false,
-        useCoreMLIos: true,
+        // Metal on iOS; Core ML is ignored when the GPU is enabled and we ship no Core ML assets.
+        useGpu: Platform.OS === 'ios',
     });
+    activeContext = context;
     activeModelUri = modelUri;
-    return activeContext;
-};
+    return context;
+});
+
+/** Frees the native context and its weights (0.5-3 GB of RAM). Safe to call at any time. */
+export const releaseLocalWhisperContext = async (): Promise<void> => withContextLock(async () => {
+    if (activeJob) return;
+
+    const previous = activeContext;
+    activeContext = null;
+    activeModelUri = null;
+    if (previous?.release) {
+        await Promise.resolve(previous.release()).catch(() => undefined);
+    }
+});
+
+// Whisper weights stay resident until released, which is what gets the app killed
+// in the background on Android.
+AppState.addEventListener('change', (state) => {
+    if (state === 'background') {
+        void releaseLocalWhisperContext();
+    }
+});
 
 export const getAvailableLocalWhisperModels = (): LocalWhisperModelDescriptor[] => {
     return Object.values(MODELS);
@@ -193,57 +265,68 @@ export const setSelectedLocalWhisperModel = async (key: LocalWhisperModelKey): P
     await setLocalWhisperModelKey(key);
 };
 
+/** Whether the device can still fit this model on disk. */
+export const canFitLocalWhisperModel = async (key: LocalWhisperModelKey): Promise<boolean> => {
+    return hasRoomForModel(getDescriptor(key).sizeBytes);
+};
+
+/** Whether this device has the RAM to load the model at all. */
+export const isLocalWhisperModelSupportedByDevice = async (key: LocalWhisperModelKey): Promise<boolean> => {
+    return canDeviceRunModel(getDescriptor(key).sizeBytes);
+};
+
 export const getLocalWhisperModelStatus = async (key?: string): Promise<LocalWhisperModelStatus> => {
     const { model, fileUri } = await getFileUriForModel(key);
     const info = await FileSystem.getInfoAsync(fileUri);
+    const bytesOnDisk = info.exists ? info.size ?? 0 : 0;
 
     return {
         selectedModel: model,
-        isDownloaded: info.exists && (info.size ?? 0) > 0,
+        // A short file is a leftover from an interrupted or rejected download, not a usable model.
+        isDownloaded: bytesOnDisk >= Math.round(model.sizeBytes * 0.9),
         fileUri,
-        bytesOnDisk: info.exists ? (info.size ?? 0) : 0,
+        bytesOnDisk,
     };
 };
 
 export const downloadLocalWhisperModel = async (
     key: LocalWhisperModelKey,
-    onProgress?: (progress: number, loaded: number, total: number) => void,
+    onProgress?: ModelDownloadProgress,
 ): Promise<LocalWhisperModelStatus> => {
     if (Platform.OS === 'web') {
         throw new Error('Local Whisper is not supported in the browser');
     }
 
+    const descriptor = getDescriptor(key);
+    if (!(await canDeviceRunModel(descriptor.sizeBytes))) {
+        throw new Error(
+            `${descriptor.label} needs more memory than this device has (${await describeDeviceMemory()} of RAM). Choose a smaller model.`
+        );
+    }
+    if (!(await hasRoomForModel(descriptor.sizeBytes))) {
+        throw new Error(`Not enough free space for ${descriptor.label} (${formatBytes(descriptor.sizeBytes)}).`);
+    }
+
     await setSelectedLocalWhisperModel(key);
     const { model, fileUri } = await getFileUriForModel(key);
-    const tempUri = `${fileUri}.download`;
-
-    await FileSystem.deleteAsync(tempUri, { idempotent: true });
-    await FileSystem.deleteAsync(fileUri, { idempotent: true });
-
-    let activeLocalWhisperDownload = FileSystem.createDownloadResumable(
-        model.url,
-        tempUri,
-        {},
-        ({ totalBytesExpectedToWrite, totalBytesWritten }) => {
-            if (!onProgress || !totalBytesExpectedToWrite) return;
-            onProgress(totalBytesWritten / totalBytesExpectedToWrite, totalBytesWritten, totalBytesExpectedToWrite);
-        },
-    );
-
-    // Save it globally for cancellation
-    activeDownloadResumable = activeLocalWhisperDownload;
 
     try {
-        const result = await activeLocalWhisperDownload.downloadAsync();
-        if (!result || !result?.uri) {
-            throw new Error('Download cancelled');
-        }
-
-        await FileSystem.moveAsync({ from: tempUri, to: fileUri });
-        return getLocalWhisperModelStatus(key);
+        await downloadModelFile(
+            { url: model.url, sizeBytes: model.sizeBytes, magic: GGML_MAGIC },
+            fileUri,
+            onProgress,
+            (task) => { activeDownloadResumable = task; },
+        );
     } finally {
         activeDownloadResumable = null;
     }
+
+    // The replaced file may be the one currently loaded natively.
+    if (activeModelUri === fileUri) {
+        await releaseLocalWhisperContext();
+    }
+
+    return getLocalWhisperModelStatus(key);
 };
 
 export const cancelLocalWhisperDownload = async (): Promise<void> => {
@@ -262,9 +345,7 @@ export const deleteLocalWhisperModel = async (key?: string): Promise<void> => {
     const { fileUri } = await getFileUriForModel(key);
 
     if (activeModelUri === fileUri) {
-        await activeContext?.release?.();
-        activeContext = null;
-        activeModelUri = null;
+        await releaseLocalWhisperContext();
     }
 
     await FileSystem.deleteAsync(fileUri, { idempotent: true });
@@ -283,20 +364,29 @@ export const transcribeWithLocalWhisper = async (
         throw new Error(`Local Whisper model "${status.selectedModel.label}" is not downloaded`);
     }
 
-    const context = await getReadyContext(status.fileUri);
-    const response = context.transcribe(audioUri, {
-        language: options?.language,
-        translate: false,
-    });
+    beginJob('transcribe');
+    try {
+        const context = await getReadyContext(status.fileUri);
+        const response = context.transcribe(audioUri, {
+            language: options?.language,
+            translate: false,
+        });
 
-    const result: WhisperTranscriptPayload = hasAsyncTranscript(response)
-        ? (await response.promise) ?? {}
-        : await response;
+        const result: WhisperTranscriptPayload = hasAsyncTranscript(response)
+            ? (await response.promise) ?? {}
+            : await response;
 
-    const text = result?.result || result?.text || '';
-    return text.trim();
+        const text = result?.result || result?.text || '';
+        return text.trim();
+    } finally {
+        endJob('transcribe');
+    }
 };
 
+/**
+ * whisper.cpp reads 16 kHz mono WAV only, while notes are recorded as AAC/m4a,
+ * so everything but WAV goes through the native transcoder first.
+ */
 export const prepareAudioForLocalWhisper = async (audioUri: string): Promise<string> => {
     const normalizedUri = audioUri.toLowerCase();
     const isWavInput =
@@ -308,8 +398,8 @@ export const prepareAudioForLocalWhisper = async (audioUri: string): Promise<str
         return audioUri;
     }
 
-    if (Platform.OS !== 'android') {
-        throw new Error('Local Whisper currently requires WAV input on this platform');
+    if (Platform.OS === 'web') {
+        throw new Error('Local Whisper is not supported in the browser');
     }
 
     const transcodeModule = resolveAudioTranscodeModule();
@@ -320,9 +410,19 @@ export const prepareAudioForLocalWhisper = async (audioUri: string): Promise<str
     return await transcodeModule.convertToWav(audioUri);
 };
 
+/**
+ * Streams microphone audio through Whisper. `onTranscript` receives the full
+ * transcript of the session so far (whisper.rn re-emits the accumulated text on
+ * every update), so callers must replace their buffer rather than append to it.
+ */
 export const startRealtimeDictation = async (
-    options: { language?: string, onUpdate?: (text: string) => void }
-): Promise<{ stop: () => Promise<void> }> => {
+    options: {
+        language?: string;
+        onTranscript?: (text: string) => void;
+        /** Fired when recognition stops on its own: max duration reached, or a native error. */
+        onEnd?: (error?: string) => void;
+    }
+): Promise<RealtimeDictationHandle> => {
     if (Platform.OS === 'web') {
         throw new Error('Local Whisper is not supported in the browser');
     }
@@ -332,25 +432,61 @@ export const startRealtimeDictation = async (
         throw new Error(`Local Whisper model "${status.selectedModel.label}" is not downloaded`);
     }
 
-    const context = await getReadyContext(status.fileUri);
-    const realtimeJob = await context.transcribeRealtime({
-        language: options.language,
-        realtimeAudioSec: 30, // Default window
-        realtimeAudioSliceSec: 25,
-        useVad: true,
-        vadMs: 2000,
-    });
+    beginJob('dictation');
 
-    realtimeJob.subscribe((event: any) => {
-        if (event.data?.result && options.onUpdate) {
-            options.onUpdate(event.data.result);
-        }
-    });
-
-    return {
-        stop: async () => {
-            await realtimeJob.stop();
-        }
+    let finished = false;
+    const finish = (error?: string) => {
+        if (finished) return;
+        finished = true;
+        endJob('dictation');
+        options.onEnd?.(error);
     };
-};
 
+    try {
+        const context = await getReadyContext(status.fileUri);
+        const realtimeJob = await context.transcribeRealtime({
+            language: options.language,
+            realtimeAudioSec: REALTIME_MAX_SEC,
+            realtimeAudioSliceSec: REALTIME_SLICE_SEC,
+            realtimeAudioMinSec: 1,
+            useVad: true,
+            vadMs: 2000,
+            audioSessionOnStartIos: {
+                category: 'PlayAndRecord',
+                options: ['MixWithOthers', 'DefaultToSpeaker'],
+                mode: 'Default',
+                active: true,
+            },
+            audioSessionOnStopIos: 'restore',
+        });
+
+        realtimeJob.subscribe((event) => {
+            if (event.code !== 0 && event.code !== undefined && event.error) {
+                finish(event.error);
+                return;
+            }
+
+            const text = event.data?.result ?? event.data?.text;
+            if (typeof text === 'string') {
+                options.onTranscript?.(text.trim());
+            }
+
+            if (event.isCapturing === false) {
+                finish();
+            }
+        });
+
+        return {
+            stop: async () => {
+                try {
+                    await realtimeJob.stop();
+                } finally {
+                    finish();
+                }
+            },
+        };
+    } catch (error) {
+        finish();
+        throw error;
+    }
+};

@@ -115,11 +115,11 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                         <View style={[styles.iconContainer, { backgroundColor: colors.warning + '15' }]}>
                             <MaterialIcons name="lock-outline" size={20} color={colors.warning} />
                         </View>
-                        <Text style={styles.title}>Transcription</Text>
+                        <Text style={styles.title}>{t('settings.ai.transcription', 'Transcription')}</Text>
                     </View>
                 </View>
                 <Text style={styles.guestText}>
-                    Create an account to enable transcription.
+                    {t('aux.createAccountTranscribe', 'Create an account to enable transcription.')}
                 </Text>
             </View>
         );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -16,6 +17,11 @@ interface MarkdownToolbarProps {
     onFormat: (type: MarkdownFormatType) => void;
     activeFormats?: MarkdownFormatType[];
     onColorPickerToggle?: (visible: boolean) => void;
+    /**
+     * Dictation runs on the on-device Whisper model, so the button is only shown
+     * where that handler exists and local models are enabled for the build.
+     */
+    showDictate?: boolean;
 }
 
 interface ToolbarButtonProps {
@@ -54,7 +60,8 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconNa
     );
 };
 
-export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle }) => {
+export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle, showDictate = false }) => {
+    const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -115,24 +122,19 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     iconName="format-list-bulleted"
                 />
 
-                <ToolbarButton
-                    isActive={isActive('dictate')}
-                    onPress={() => onFormat('dictate')}
-                    iconName="mic"
-                />
+                {showDictate && (
+                    <ToolbarButton
+                        isActive={isActive('dictate')}
+                        onPress={() => onFormat('dictate')}
+                        iconName="mic"
+                    />
+                )}
 
                 <View style={styles.spacer} />
 
-                {/* Headers */}
-                <ToolbarButton
-                    isActive={isActive('h2')}
-                    onPress={() => onFormat('h2')}
-                    label="H2"
-                />
-
-                <View style={styles.spacer} />
-
-                {/* Text Styles */}
+                {/* Text styles. Ordered before the headings so the actions used
+                    on almost every note stay reachable without scrolling the
+                    toolbar on a narrow phone. */}
                 <ToolbarButton
                     isActive={isActive('bold')}
                     onPress={() => onFormat('bold')}
@@ -157,8 +159,6 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     iconName="format-strikethrough"
                 />
 
-                <View style={styles.spacer} />
-
                 {/* Highlight */}
                 <TouchableOpacity
                     style={[styles.button, isHighlightActive && styles.activeButton]}
@@ -179,6 +179,27 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     ]} />
                 </TouchableOpacity>
 
+                <View style={styles.spacer} />
+
+                {/* Headings */}
+                <ToolbarButton
+                    isActive={isActive('h1')}
+                    onPress={() => onFormat('h1')}
+                    label="H1"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('h2')}
+                    onPress={() => onFormat('h2')}
+                    label="H2"
+                />
+
+                <ToolbarButton
+                    isActive={isActive('h3')}
+                    onPress={() => onFormat('h3')}
+                    label="H3"
+                />
+
             </ScrollView>
 
             <Modal
@@ -190,7 +211,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                 <TouchableWithoutFeedback onPress={() => setShowColorPicker(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={[styles.colorPickerContainer, { paddingBottom: Math.max(insets.bottom, 20) + spacing.l }]}>
-                            <Text style={styles.colorPickerTitle}>Highlight Color</Text>
+                            <Text style={styles.colorPickerTitle}>{t('aux.highlightColor', 'Highlight Color')}</Text>
                             <View style={styles.colorsGrid}>
                                 {highlightColors.map((color) => (
                                     <TouchableOpacity
@@ -207,7 +228,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                                             <MaterialIcons
                                                 name="check"
                                                 size={20}
-                                                color={color.name === 'white' ? colors.text : colors.text}
+                                                color={colors.text}
                                             />
                                         )}
                                     </TouchableOpacity>
@@ -227,7 +248,6 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: 'rgba(0,0,0,0.05)',
         paddingVertical: spacing.xs,
-        marginHorizontal: -spacing.m,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
@@ -243,7 +263,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         paddingHorizontal: spacing.m,
         alignItems: 'center',
         height: 44,

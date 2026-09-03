@@ -9,7 +9,10 @@ import com.facebook.react.uimanager.ViewManager
 
 class AudioTranscodePackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(AudioTranscodeModule(reactContext))
+        return listOf(
+            AudioTranscodeModule(reactContext),
+            DeviceCapabilitiesModule(reactContext),
+        )
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

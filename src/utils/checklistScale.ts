@@ -1,5 +1,5 @@
 const TASK_ITEM_HTML_REGEX = /<li\b[^>]*data-type=(['"])taskItem\1/gi;
-const TASK_ITEM_MARKDOWN_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/gm;
+const TASK_ITEM_MARKDOWN_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\](?:\s+|\s*$)/gm;
 
 export const countChecklistItems = (content: string): number => {
     if (!content) {

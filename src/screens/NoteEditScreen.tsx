@@ -78,6 +78,7 @@ import {
     setPrivateAIAllowed,
     getChecklistScaleLocks,
     setChecklistScaleLock,
+    getTranscriptionLanguage,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -87,6 +88,7 @@ import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
+import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
 import {
     appendPlainTextSnippetToRichContent,
     extractEmbeddedAudioPaths,
@@ -484,6 +486,18 @@ const appendDictationToTodoContent = (base: string, dictatedText: string): strin
     return appendSnippetToContent(normalizedBase, normalizedDictation);
 };
 
+/**
+ * Joins the text a note had when dictation started with the transcript Whisper
+ * reports. The transcript is always the full session text, so it replaces - never
+ * extends - whatever the previous update wrote.
+ */
+const composeDictatedContent = (baseText: string, transcript: string): string => {
+    const dictated = (transcript || '').trim();
+    if (!dictated) return baseText;
+    if (!baseText) return dictated;
+    return /\s$/.test(baseText) ? `${baseText}${dictated}` : `${baseText} ${dictated}`;
+};
+
 /** Returns an i18n key rather than English text so agent feedback follows the app language. */
 const buildAgentStatusKey = (mode?: string | null, action: 'created' | 'updated' = 'updated'): string => {
     const normalizedMode = (mode || '').toLowerCase();
@@ -514,25 +528,35 @@ const HeaderTitle = memo(({
     onChange: (t: string) => void;
     onFocus: () => void;
     inputRef?: React.RefObject<TextInput | null>;
-}) => (
-    <TextInput
-        ref={inputRef}
-        style={styles.titleInput}
-        placeholder="Title"
-        placeholderTextColor={colors.textMuted}
-        value={title}
-        onChangeText={onChange}
-        onFocus={onFocus}
-        maxLength={100}
-        multiline
-    />
-));
+}) => {
+    const { t } = useTranslation();
 
-const HeaderMeta = memo(({ dateStr, charCount }: { dateStr: string; charCount: number }) => (
-    <View style={styles.metaInfo}>
-        <Text style={styles.metaText}>{dateStr}  |  {charCount} characters</Text>
-    </View>
-));
+    return (
+        <TextInput
+            ref={inputRef}
+            style={styles.titleInput}
+            placeholder={t('edit.titlePlaceholder', 'Title')}
+            placeholderTextColor={colors.textMuted}
+            value={title}
+            onChangeText={onChange}
+            onFocus={onFocus}
+            maxLength={100}
+            multiline
+        />
+    );
+});
+
+const HeaderMeta = memo(({ dateStr, charCount }: { dateStr: string; charCount: number }) => {
+    const { t } = useTranslation();
+
+    return (
+        <View style={styles.metaInfo}>
+            <Text style={styles.metaText}>
+                {dateStr}  |  {t('edit.charactersCount', '{{count}} characters', { count: charCount })}
+            </Text>
+        </View>
+    );
+});
 
 const MemoizedImprovementChips = memo(({
     noteImprovements,
@@ -820,7 +844,7 @@ const subscribeNoteProcessingState = (
 };
 
 export const NoteEditScreen = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const AGENT_HISTORY_LIMIT = 5;
     // Outer safety net only. It must stay above the inner deadlines
     // (transcription + agent), otherwise it aborts work that is still healthy.
@@ -843,6 +867,11 @@ export const NoteEditScreen = () => {
     const [isRealtimeDictating, setIsRealtimeDictating] = useState(false);
     const [showLocalWhisperModal, setShowLocalWhisperModal] = useState(false);
     const realtimeDictationStopRef = useRef<(() => Promise<void>) | null>(null);
+    const dictationSessionRef = useRef<{
+        variantId: string;
+        baseText: string;
+        latestTranscript: string;
+    } | null>(null);
     const [allowPrivateAI, setAllowPrivateAI] = useState(false);
     const ICON_CHOICES = ['translate', 'spellcheck', 'bolt', 'lightbulb', 'auto-awesome', 'text-fields', 'chat', 'edit'];
     const normalizePrivacy = (value?: NotePrivacy): NotePrivacy => {
@@ -2293,10 +2322,6 @@ export const NoteEditScreen = () => {
                 currentHistory.index++;
             }
 
-            variantHistories.current[variantId] = {
-                history: newHistory,
-                index: currentHistory.index
-            };
             variantHistories.current[variantId] = {
                 history: newHistory,
                 index: currentHistory.index
@@ -4634,43 +4659,136 @@ export const NoteEditScreen = () => {
         showVoiceResultStatus('Copied transcript', selected?.id);
     }, [selectedRecordingForText, showVoiceResultStatus]);
 
+    /**
+     * Ends the current dictation session. Whisper re-emits the whole transcript on
+     * every update, so only the final one is written to the note.
+     */
+    const stopRealtimeDictation = useCallback(async (persist: boolean) => {
+        const stop = realtimeDictationStopRef.current;
+        const session = dictationSessionRef.current;
+        if (!stop && !session) {
+            return;
+        }
+
+        realtimeDictationStopRef.current = null;
+        dictationSessionRef.current = null;
+        setIsRealtimeDictating(false);
+
+        if (stop) {
+            await stop().catch(() => undefined);
+        }
+
+        if (persist && session?.latestTranscript) {
+            await setVariantContentWithOptions(
+                session.variantId,
+                composeDictatedContent(session.baseText, session.latestTranscript),
+                { persist: true },
+            );
+        }
+    }, [setVariantContentWithOptions]);
+
+    const startRealtimeDictationSession = useCallback(async () => {
+        const hasPermission = await AudioService.requestPermissions();
+        if (!hasPermission) {
+            Alert.alert(
+                t('common.errorTitle'),
+                t('edit.dictation.permissionDenied', 'Microphone access is required for dictation.'),
+            );
+            return;
+        }
+
+        const variantId = activeVariantIdRef.current;
+        const session = {
+            variantId,
+            baseText: resolveVariantContent(variantId) || '',
+            latestTranscript: '',
+        };
+        dictationSessionRef.current = session;
+        setIsRealtimeDictating(true);
+
+        try {
+            const storedLanguage = await getTranscriptionLanguage();
+            const job = await startRealtimeDictation({
+                language: storedLanguage,
+                onTranscript: (text) => {
+                    const current = dictationSessionRef.current;
+                    if (current !== session) return;
+                    session.latestTranscript = text;
+                    // Live preview only: the note is written once, when dictation stops.
+                    void setVariantContentWithOptions(
+                        session.variantId,
+                        composeDictatedContent(session.baseText, text),
+                        { persist: false, updateHistory: false },
+                    );
+                },
+                onEnd: (error) => {
+                    void stopRealtimeDictation(true);
+                    if (error) {
+                        Alert.alert(
+                            t('edit.dictation.errorTitle', 'Dictation Error'),
+                            error,
+                        );
+                    }
+                },
+            });
+            if (dictationSessionRef.current !== session) {
+                // Stopped while the engine was still starting up - do not leave the mic on.
+                void job.stop();
+                return;
+            }
+            realtimeDictationStopRef.current = job.stop;
+        } catch (e: any) {
+            dictationSessionRef.current = null;
+            setIsRealtimeDictating(false);
+            const msg = e?.message || '';
+            if (msg.includes('is not downloaded') || msg.includes('download')) {
+                setShowLocalWhisperModal(true);
+            } else {
+                Alert.alert(
+                    t('edit.dictation.errorTitle', 'Dictation Error'),
+                    msg || t('edit.dictation.startFailed', 'Failed to start dictation'),
+                );
+            }
+        }
+    }, [resolveVariantContent, setVariantContentWithOptions, stopRealtimeDictation, t]);
+
+    // The rich editor is memoised, so these have to keep a stable identity;
+    // inline arrows here would re-render the WebView host on every screen render.
+    const handleVisualSelectionChange = useCallback((selection: { start: number; end: number }) => {
+        visualSelectionRef.current = selection;
+    }, []);
+
+    const handleVisualEditorFocus = useCallback(() => {
+        visualEditorFocusedRef.current = true;
+        setIsEditing(true);
+    }, []);
+
+    const handleVisualEditorBlur = useCallback(() => {
+        visualEditorFocusedRef.current = false;
+    }, []);
+
     const handleFormat = useCallback(async (type: MarkdownFormatType) => {
         if (type === 'dictate') {
+            if (!LOCAL_MODELS_ENABLED) return;
+
             if (isRealtimeDictating) {
-                // Stop dictation
-                setIsRealtimeDictating(false);
-                if (realtimeDictationStopRef.current) {
-                    await realtimeDictationStopRef.current();
-                    realtimeDictationStopRef.current = null;
-                }
+                await stopRealtimeDictation(true);
             } else {
-                // Start dictation
-                setIsRealtimeDictating(true);
-                try {
-                    const job = await startRealtimeDictation({
-                        onUpdate: (text) => {
-                            // Append text to the current variant content
-                            const variantId = activeVariantIdRef.current;
-                            const current = resolveVariantContent(variantId) || '';
-                            const newText = current + (current && !current.endsWith(' ') ? ' ' : '') + text;
-                            setVariantContentWithOptions(variantId, newText, { persist: true });
-                        }
-                    });
-                    realtimeDictationStopRef.current = job.stop;
-                } catch (e: any) {
-                    setIsRealtimeDictating(false);
-                    const msg = e.message || '';
-                    if (msg.includes('is not downloaded') || msg.includes('download')) {
-                        setShowLocalWhisperModal(true);
-                    } else {
-                        Alert.alert('Dictation Error', msg || 'Failed to start dictation');
-                    }
-                }
+                await startRealtimeDictationSession();
             }
             return;
         }
         editorRef.current?.handleFormat(type);
-    }, [isRealtimeDictating, resolveVariantContent, setVariantContentWithOptions]);
+    }, [isRealtimeDictating, startRealtimeDictationSession, stopRealtimeDictation]);
+
+    // Leaving the screen must not leave the microphone and the Whisper job running.
+    useEffect(() => {
+        return () => {
+            void realtimeDictationStopRef.current?.();
+            realtimeDictationStopRef.current = null;
+            dictationSessionRef.current = null;
+        };
+    }, []);
 
     const handleCheckPress = useCallback(() => {
         setIsColorPickerVisible(false);
@@ -4980,7 +5098,7 @@ export const NoteEditScreen = () => {
 
     const renderTemplateWithPlaceholder = (template: string) => {
         if (!template.trim()) {
-            return <Text style={styles.promptPreviewPlaceholder}>Start typing prompt text</Text>;
+            return <Text style={styles.promptPreviewPlaceholder}>{t('edit.promptTextPlaceholder', 'Prompt text')}</Text>;
         }
 
         const normalized = ensureTemplateHasPlaceholder(template);
@@ -5028,14 +5146,14 @@ export const NoteEditScreen = () => {
 
     // Format date for display
     const dateStr = existingNote?.updated_at
-        ? new Date(existingNote.updated_at).toLocaleString('en-US', {
+        ? new Date(existingNote.updated_at).toLocaleString(i18n.language, {
             month: 'long',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
             hour12: false
         })
-        : new Date().toLocaleString('en-US', {
+        : new Date().toLocaleString(i18n.language, {
             month: 'long',
             day: 'numeric',
             hour: '2-digit',
@@ -5048,9 +5166,9 @@ export const NoteEditScreen = () => {
     const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only';
-    const micHintText = 'Hold: no agent';
+    const micHintText = t('edit.micHintHold', 'Hold: no agent');
     const floatingMicBottomOffset = editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible)
-        ? (keyboardVisibleState ? keyboardHeight : 0) + FLOATING_MIC_TOOLBAR_HEIGHT + FLOATING_MIC_KEYBOARD_GAP
+        ? (keyboardVisibleState ? keyboardHeight : insets.bottom) + FLOATING_MIC_TOOLBAR_HEIGHT + FLOATING_MIC_KEYBOARD_GAP
         : FLOATING_MIC_BASE_BOTTOM_OFFSET;
     // Reserve scroll room below the content so the last line can always be
     // scrolled into view. The editor WebView/TextInput stays full-height while the
@@ -5671,7 +5789,7 @@ export const NoteEditScreen = () => {
                                         style={styles.aiCloseButton}
                                         onPress={() => setShowAIModal(false)}
                                     >
-                                        <Text style={styles.aiCloseButtonText}>Cancel</Text>
+                                        <Text style={styles.aiCloseButtonText}>{t('common.cancel', 'Cancel')}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </TouchableWithoutFeedback>
@@ -5729,14 +5847,14 @@ export const NoteEditScreen = () => {
                                     </View>
                                     <TextInput
                                         style={styles.promptInput}
-                                        placeholder="Prompt name"
+                                        placeholder={t('edit.promptNamePlaceholder', 'Prompt name')}
                                         placeholderTextColor={colors.textMuted}
                                         value={newPromptTitle}
                                         onChangeText={setNewPromptTitle}
                                     />
                                     <TextInput
                                         style={[styles.promptInput, styles.promptTextarea]}
-                                        placeholder="Prompt text"
+                                        placeholder={t('edit.promptTextPlaceholder', 'Prompt text')}
                                         placeholderTextColor={colors.textMuted}
                                         value={newPromptTemplate}
                                         onChangeText={setNewPromptTemplate}
@@ -5753,7 +5871,7 @@ export const NoteEditScreen = () => {
                                             style={styles.promptCancel}
                                             onPress={closePromptBuilder}
                                         >
-                                            <Text style={styles.aiCloseButtonText}>Cancel</Text>
+                                            <Text style={styles.aiCloseButtonText}>{t('common.cancel', 'Cancel')}</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[
@@ -5841,7 +5959,7 @@ export const NoteEditScreen = () => {
                                     <View style={styles.menuItem}>
                                         <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={{ marginRight: 12 }} />
                                         <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>
-                                            Disabled for private notes
+                                            {t('edit.disabledPrivate', 'Disabled for private notes')}
                                         </Text>
                                     </View>
                                 </>
@@ -5933,7 +6051,7 @@ export const NoteEditScreen = () => {
                                 // Direct update for raw mode, bypassing auto-list logic
                                 handleContentChange(text);
                             }}
-                            placeholder="Start typing markdown..."
+                            placeholder={t('edit.placeholderMarkdown', 'Start typing markdown...')}
                             placeholderTextColor={colors.textMuted}
                             textAlignVertical="top"
                             autoCapitalize="sentences"
@@ -5948,22 +6066,13 @@ export const NoteEditScreen = () => {
                             lockedChecklistScaleFactor={activeVariantChecklistScaleFactor}
                             showToolbar={false}
                             contentBottomPadding={editorContentBottomPadding}
-                            onChange={(text: string) => {
-                                handleContentChange(text);
-                            }}
+                            onChange={handleContentChange}
                             onPlainTextChange={setVisualPlainText}
-                            onSelectionChange={(selection) => {
-                                visualSelectionRef.current = selection;
-                            }}
+                            onSelectionChange={handleVisualSelectionChange}
                             onActiveStylesChange={setActiveFormats}
-                            onFocus={() => {
-                                visualEditorFocusedRef.current = true;
-                                setIsEditing(true);
-                            }}
-                            onBlur={() => {
-                                visualEditorFocusedRef.current = false;
-                            }}
-                            placeholder="Start typing..."
+                            onFocus={handleVisualEditorFocus}
+                            onBlur={handleVisualEditorBlur}
+                            placeholder={t('edit.placeholderVisual', 'Start typing...')}
                             onAudioAction={handleAudioActionFromEditor}
                         />
                     )}
@@ -5975,12 +6084,13 @@ export const NoteEditScreen = () => {
                     pointerEvents="box-none"
                     style={[
                         styles.toolbarKeyboardDock,
-                        { bottom: keyboardVisibleState ? keyboardHeight : 0 },
+                        { bottom: keyboardVisibleState ? keyboardHeight : insets.bottom },
                     ]}
                 >
                     <View pointerEvents="auto" style={styles.toolbarKeyboardInner}>
                         <MarkdownToolbar
                             onFormat={handleFormat}
+                            showDictate={LOCAL_MODELS_ENABLED}
                             activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
                             onColorPickerToggle={(visible) => {
                                 setIsColorPickerVisible(visible);
@@ -6036,8 +6146,8 @@ export const NoteEditScreen = () => {
 
             <DeleteConfirmationDialog
                 visible={improvementToDelete !== null}
-                title="Delete Improvement?"
-                message="This version will be removed. You can always regenerate it later."
+                title={t('edit.deleteImprovementTitle', 'Delete Improvement?')}
+                message={t('edit.deleteImprovementDesc', 'This version will be removed. You can always regenerate it later.')}
                 onCancel={() => setImprovementToDelete(null)}
                 onConfirm={() => {
                     if (improvementToDelete) {
@@ -6049,16 +6159,16 @@ export const NoteEditScreen = () => {
 
             <DeleteConfirmationDialog
                 visible={recordingToDelete !== null}
-                title="Delete Recording?"
-                message="Are you sure you want to delete this recording?"
+                title={t('edit.deleteRecordingTitle', 'Delete Recording?')}
+                message={t('edit.deleteRecordingDesc', 'Are you sure you want to delete this recording?')}
                 onCancel={() => setRecordingToDelete(null)}
                 onConfirm={confirmDeleteRecording}
             />
 
             <DeleteConfirmationDialog
                 visible={isDeletingNote}
-                title="Delete Note"
-                message="Are you sure you want to delete this note?"
+                title={t('edit.deleteNote', 'Delete Note')}
+                message={t('edit.deleteNoteDesc', 'Are you sure you want to delete this note?')}
                 onCancel={() => setIsDeletingNote(false)}
                 onConfirm={confirmDeleteNote}
             />
@@ -6067,7 +6177,7 @@ export const NoteEditScreen = () => {
                 visible={errorModalVisible}
                 title={errorTitle}
                 message={errorMessage}
-                secondaryActionLabel={errorShowSettingsAction ? 'Open Settings' : undefined}
+                secondaryActionLabel={errorShowSettingsAction ? t('common.openSettings', 'Open Settings') : undefined}
                 onSecondaryAction={() => {
                     setErrorModalVisible(false);
                     setErrorTitle(undefined);
@@ -6083,8 +6193,8 @@ export const NoteEditScreen = () => {
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
-                title="Sign in required"
-                message="Transcription is available after you create an account."
+                title={t('voice.signInRequired', 'Sign in required')}
+                message={t('voice.transcriptionAuthMessage', 'Transcription is available after you create an account.')}
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
                     setShowTranscriptionAuthModal(false);

@@ -37,7 +37,11 @@
     "unavailable": "Недоступно",
     "failed": "Ошибка",
     "ok": "ОК",
-    "pro": "PRO"
+    "pro": "PRO",
+    "openSettings": "Открыть настройки",
+    "errorOccurred": "Произошла ошибка",
+    "permission": "Разрешение",
+    "unlock": "Разблокировать"
   },
   "notes": {
     "emptyStateMic": "Нажмите на микрофон, чтобы записать",
@@ -53,7 +57,8 @@
     "tapPencilToWrite": "Нажмите на карандаш, чтобы написать",
     "voiceRecording": "Голосовая заметка",
     "audioChip": "аудио",
-    "note": "Заметка"
+    "note": "Заметка",
+    "selectedCount": "Выбрано: {{count}}"
   },
   "settings": {
     "title": "Настройки",
@@ -182,7 +187,7 @@
       "passphraseObject": "пароля",
       "encryptedSyncObject": "шифрования",
       "derivingKeysSubtitle": "Создаем ключ и шифруем заметки.",
-      "vaultoVersion": "Vaulto v1.1.0",
+      "vaultoVersion": "Vaulto v{{version}}",
       "exportRecoveryCode": "Экспортировать ключ восстановления",
       "copyBtn": "Копировать",
       "disableBtn": "Отключить",
@@ -192,7 +197,25 @@
       "yesDisable": "Да, отключить",
       "setupSync": "Перейти в зашифрованный режим",
       "setupPassphrase": "Настроить пароль",
-      "enterPassphrase": "Введите секретную фразу"
+      "enterPassphrase": "Введите секретную фразу",
+      "autoTranscribeAuthMessage": "Автотранскрипция доступна после создания аккаунта.",
+      "securityAuthMessage": "Синхронизация и шифрование доступны после создания аккаунта.",
+      "providerProOnly": "{{provider}} доступен в Pro.",
+      "providerNeedsAccount": "Создайте аккаунт, чтобы использовать {{provider}}.",
+      "removeWhisperTitle": "Удалить модель?",
+      "removeWhisperDesc": "Модель Whisper {{model}} будет удалена с этого устройства. Чтобы снова пользоваться офлайн-транскрипцией, её придётся скачать заново.",
+      "removeLLMTitle": "Удалить LLM?",
+      "removeLLMDesc": "Модель LLM {{model}} будет удалена с этого устройства. Чтобы снова пользоваться офлайн-обработкой, её придётся скачать заново.",
+      "confirmDeleteFull": "Это навсегда удалит все локальные данные этого аккаунта.",
+      "encryptionDisabledTitle": "Шифрование отключено",
+      "minutesWarningText": "Вы израсходовали все минуты за месяц. Дальше будет использован пробный резерв.",
+      "minutesWarningTextLow": "Минуты транскрипции на этот месяц заканчиваются",
+      "saveRecoveryFirst": "Убедитесь, что вы сохранили код восстановления, чтобы открыть заметки на других устройствах.",
+      "signOutMessage": "Что сделать с вашими заметками на этом устройстве?",
+      "syncPendingMessage": "Сквозное шифрование отключено на этом устройстве. Однако заметки сейчас не удалось синхронизировать с сервером. Они будут автоматически обновлены до обычного текста, как только появится интернет.",
+      "unableDisableSync": "Не удалось отключить синхронизацию.",
+      "cloudSync": "Облачная синхронизация",
+      "failed": "Ошибка"
     },
     "recovery": {
       "title": "Код восстановления",
@@ -214,7 +237,19 @@
       "decodeFailed": "Не удалось декодировать данные изображения.",
       "errorProcessingImage": "Не удалось обработать изображение.",
       "scanQr": "Сканировать QR-код",
-      "pickQr": "Импортировать изображение"
+      "pickQr": "Импортировать изображение",
+      "noRecoveryCode": "Код восстановления не найден. Попробуйте разблокировать ещё раз."
+    },
+    "security": {
+      "localProtection": "Локальная защита",
+      "localProtectionDescription": "Заметки шифруются в локальном хранилище приложения ключом устройства.",
+      "optionalE2EE": "E2EE по желанию",
+      "optionalE2EEDescription": "Вы можете включить сквозное шифрование в настройках, если хотите, чтобы сервер не мог читать содержимое заметок.",
+      "standardDisclosure": "Обычная синхронизация не является zero-knowledge. Включите E2EE для максимальной приватности в облаке.",
+      "standardSync": "Обычная облачная синхронизация",
+      "standardSyncDescription": "Заметки используют обычную облачную синхронизацию. Vaulto технически может обрабатывать их содержимое для серверных функций и восстановления аккаунта.",
+      "syncOff": "Облачная синхронизация выключена",
+      "syncOffDescription": "Новые изменения остаются на этом устройстве, пока вы не включите синхронизацию."
     }
   },
   "languages": {
@@ -274,7 +309,8 @@
     "resetPasswordFailed": "Не удалось сбросить пароль",
     "sendResetEmailFailed": "Не удалось отправить письмо для сброса",
     "iAcceptThe": "Я принимаю",
-    "andThe": "и"
+    "andThe": "и",
+    "locallyStoredUnaffected": "Ваши локальные заметки останутся в безопасности."
   },
   "edit": {
     "visualEditor": "Визуальный редактор",
@@ -349,7 +385,33 @@
       "emptyText": "Введите текст, прежде чем просить улучшение.",
       "grammarPerfect": "Отлично! Ошибок не найдено.",
       "working": "Думаю…"
-    }
+    },
+    "dictation": {
+      "errorTitle": "Ошибка диктовки",
+      "permissionDenied": "Для диктовки нужен доступ к микрофону.",
+      "startFailed": "Не удалось запустить диктовку",
+      "modelTitle": "Офлайн-модель для диктовки",
+      "modelDescription": "Чтобы диктовать в реальном времени без интернета, нужно скачать модель распознавания речи.",
+      "recommended": "Рекомендуется",
+      "unsupportedDevice": "Не поддерживается на этом устройстве",
+      "notEnoughSpace": "Недостаточно свободного места",
+      "download": "Скачать",
+      "downloading": "Загрузка модели {{model}}...",
+      "cancelDownload": "Отменить загрузку",
+      "downloadFailed": "Не удалось скачать"
+    },
+    "titlePlaceholder": "Заголовок",
+    "charactersCount": "символов: {{count}}",
+    "placeholderVisual": "Начните писать...",
+    "placeholderMarkdown": "Начните писать markdown...",
+    "promptNamePlaceholder": "Название промпта",
+    "promptTextPlaceholder": "Текст промпта",
+    "deleteImprovementTitle": "Удалить улучшение?",
+    "deleteImprovementDesc": "Эта версия будет удалена. Её всегда можно создать заново.",
+    "deleteRecordingTitle": "Удалить запись?",
+    "deleteRecordingDesc": "Вы уверены, что хотите удалить эту запись?",
+    "deleteNoteDesc": "Вы уверены, что хотите удалить эту заметку?",
+    "micHintHold": "Зажать: без агента"
   },
   "voice": {
     "transcribeOn": "Транскрипция ВКЛ",
@@ -468,6 +530,14 @@
     "yearlyPlan": "Годовой план",
     "monthlyPlan": "Месячный план",
     "savePercentage": "ЭКОНОМИЯ {{percentage}}%",
-    "vaultoAiMinsMonth": "{{minutes}} минут Vaulto AI / месяц"
+    "vaultoAiMinsMonth": "{{minutes}} минут Vaulto AI / месяц",
+    "switchToVaultoAI": "Перейти на Vaulto AI",
+    "searchLanguage": "Поиск языка...",
+    "deleteNotesTitle": "Удалить заметки: {{count}}?",
+    "confirmAndDelete": "Да, удалить всё",
+    "confirmDeletion": "Подтвердите удаление",
+    "goBack": "Назад",
+    "somethingWentWrong": "Что-то пошло не так",
+    "unsyncedNotesWarn": "несинхронизированных заметок будут потеряны навсегда."
   }
 }
