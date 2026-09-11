@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.72] - 2026-09-11
+
+### Added
+- **Offline real-time dictation**: Local Whisper gains the turbo model, a streaming dictation wrapper, a download modal with progress, and a dictate button in the editor toolbar — speech-to-text works fully on-device.
+- **Editor toolbar**: H1/H3 headings exposed; text styles moved ahead of headings so they stay reachable on narrow screens.
+
+### Fixed
+- **Lossless markdown round-trips**: Emphasis follows CommonMark flanking rules, so `user_id`, `my_file.txt` and `2 * 3 * 4` are no longer mangled into italics; empty runs (`**`, `~~`, `==`) are literal text; `- []` no longer throws on open; nested lists keep their indentation in both directions; `&amp;lt;` is not double-decoded.
+- **AI improvements rendering**: AI-authored titles and variant chips no longer show raw markdown; the suggestion preview renders headings, lists, checkboxes, quotes, code and links; previously stored titles are conservatively healed.
+- **Editor reliability**: The editor no longer binds to stale onChange/onFocus callbacks; active-formatting state reaches the screen only when it changes.
+- **Editor typography**: Headings, blockquotes, code, links, rules and images are styled from the chosen base font size instead of the WebView defaults; toolbar and floating mic clear the Android navigation bar.
+- **E2EE recovery**: Mobile recovery flow is crash-safe.
+- **Localization**: All ten locales cover every key (aux.* namespace, reset-recovery keys, 29 previously missing keys); remaining hardcoded strings wired to i18n; note dates follow the app language; version row reads app.json.
+
 ## [1.0.71] - 2026-07-22
 
 ### Fixed
