@@ -23,7 +23,7 @@ import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Audio } from 'expo-av';
+import { Sound } from '../services/audioPlayback';
 import { captureRef } from 'react-native-view-shot';
 import { GestureHandlerRootView, ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1151,7 +1151,7 @@ export const NoteEditScreen = () => {
     const isMounted = useRef(true);
     const inlineEditorAudioRef = useRef<{
         path: string | null;
-        sound: Audio.Sound | null;
+        sound: Sound | null;
         duration: number;
         position: number;
         isPlaying: boolean;
@@ -2864,7 +2864,7 @@ export const NoteEditScreen = () => {
         }
 
         try {
-            const { sound, status } = await Audio.Sound.createAsync(
+            const { sound, status } = await Sound.createAsync(
                 { uri },
                 {
                     shouldPlay: false,

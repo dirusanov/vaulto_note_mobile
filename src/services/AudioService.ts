@@ -1,4 +1,12 @@
-import { Audio } from 'expo-av';
+import {
+    AudioModule,
+    RecordingPresets,
+    requestRecordingPermissionsAsync,
+    setAudioModeAsync,
+    type AudioRecorder,
+    type RecorderState,
+    type RecordingOptions,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { encrypt, decrypt } from '../crypto/encryption';
@@ -13,9 +21,54 @@ export interface AudioRecording {
     mimeType: string;
 }
 
+/**
+ * `AudioModule.AudioRecorder` expects the per-platform options already flattened
+ * (the same thing expo-audio's `useAudioRecorder` hook does before constructing it).
+ */
+function flattenRecordingOptions(options: RecordingOptions): Partial<RecordingOptions> {
+    const common = {
+        extension: options.extension,
+        sampleRate: options.sampleRate,
+        numberOfChannels: options.numberOfChannels,
+        bitRate: options.bitRate,
+        isMeteringEnabled: options.isMeteringEnabled ?? false,
+    };
+    if (Platform.OS === 'ios') {
+        return { ...common, ...options.ios };
+    }
+    if (Platform.OS === 'android') {
+        return { ...common, ...options.android };
+    }
+    return { ...common, ...options.web };
+}
+
 class AudioServiceClass {
-    private recording: Audio.Recording | null = null;
+    private recording: AudioRecorder | null = null;
     private recordingStartTime: number = 0;
+    private meteringTimer: ReturnType<typeof setInterval> | null = null;
+
+    private stopMetering(): void {
+        if (this.meteringTimer) {
+            clearInterval(this.meteringTimer);
+            this.meteringTimer = null;
+        }
+    }
+
+    private async releaseRecorder(recorder: AudioRecorder): Promise<void> {
+        this.stopMetering();
+        try {
+            if (recorder.isRecording) {
+                await recorder.stop();
+            }
+        } catch (error) {
+            console.warn('[AudioService] Failed to stop recorder during release:', error);
+        }
+        try {
+            recorder.release();
+        } catch {
+            // Already released
+        }
+    }
 
     private async encryptAudioPayload(payloadBase64: string): Promise<string> {
         return await encrypt(payloadBase64);
@@ -72,8 +125,8 @@ class AudioServiceClass {
     async requestPermissions(): Promise<boolean> {
         if (Platform.OS === 'web') return false;
         try {
-            const { status } = await Audio.requestPermissionsAsync();
-            return status === 'granted';
+            const { granted } = await requestRecordingPermissionsAsync();
+            return granted;
         } catch (error) {
             console.error('Error requesting audio permissions:', error);
             return false;
@@ -99,62 +152,43 @@ class AudioServiceClass {
             }
 
             // Set audio mode for recording
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
+            await setAudioModeAsync({
+                allowsRecording: true,
+                playsInSilentMode: true,
             });
 
             console.log('[V3] Creating audio recording...');
 
-            // Define recording options for AAC/m4a
-            const recordingOptions: Audio.RecordingOptions = {
+            // AAC/m4a, 44.1 kHz stereo @ 128 kbps – identical to the HIGH_QUALITY preset
+            const recordingOptions: RecordingOptions = {
+                ...RecordingPresets.HIGH_QUALITY,
                 isMeteringEnabled: true,
-                android: {
-                    extension: '.m4a',
-                    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-                    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-                    sampleRate: 44100,
-                    numberOfChannels: 2,
-                    bitRate: 128000,
-                },
-                ios: {
-                    extension: '.m4a',
-                    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-                    audioQuality: Audio.IOSAudioQuality.MAX,
-                    sampleRate: 44100,
-                    numberOfChannels: 2,
-                    bitRate: 128000,
-                    linearPCMBitDepth: 16,
-                    linearPCMIsBigEndian: false,
-                    linearPCMIsFloat: false,
-                },
-                web: {
-                    mimeType: 'audio/webm',
-                    bitsPerSecond: 128000,
-                },
             };
 
-            // Ensure any existing recording is unloaded before creating a new one
+            // Ensure any existing recording is released before creating a new one
             if (this.recording) {
-                try {
-                    console.log('[AudioService] Cleaning up dangling recording instance');
-                    await this.recording.stopAndUnloadAsync();
-                } catch (cleanupError) {
-                    console.warn('[AudioService] Failed to clean up dangling recording:', cleanupError);
-                }
+                console.log('[AudioService] Cleaning up dangling recording instance');
+                await this.releaseRecorder(this.recording);
                 this.recording = null;
             }
 
             // Create recording - it will use its own temp storage
-            const { recording } = await Audio.Recording.createAsync(
-                recordingOptions,
-                (status) => {
-                    if (onMeteringUpdate && status.isRecording && status.metering !== undefined) {
-                        onMeteringUpdate(status.metering);
+            const recording = new AudioModule.AudioRecorder(flattenRecordingOptions(recordingOptions));
+            await recording.prepareToRecordAsync();
+            recording.record();
+
+            if (onMeteringUpdate) {
+                this.meteringTimer = setInterval(() => {
+                    try {
+                        const status = recording.getStatus();
+                        if (status.isRecording && status.metering !== undefined) {
+                            onMeteringUpdate(status.metering);
+                        }
+                    } catch {
+                        this.stopMetering();
                     }
-                },
-                100 // Update interval in ms
-            );
+                }, 100);
+            }
 
             console.log('[V3] Recording created successfully');
             this.recording = recording;
@@ -175,8 +209,11 @@ class AudioServiceClass {
                 return null;
             }
 
-            await this.recording.stopAndUnloadAsync();
-            const uri = this.recording.getURI();
+            const recorder = this.recording;
+            this.stopMetering();
+            await recorder.stop();
+            const uri = recorder.uri;
+            recorder.release();
 
             if (!uri) {
                 return null;
@@ -204,7 +241,7 @@ class AudioServiceClass {
      */
     async pauseRecording(): Promise<void> {
         if (this.recording) {
-            await this.recording.pauseAsync();
+            this.recording.pause();
         }
     }
 
@@ -213,18 +250,18 @@ class AudioServiceClass {
      */
     async resumeRecording(): Promise<void> {
         if (this.recording) {
-            await this.recording.startAsync();
+            this.recording.record();
         }
     }
 
     /**
      * Get current recording status
      */
-    async getRecordingStatus(): Promise<Audio.RecordingStatus | null> {
+    async getRecordingStatus(): Promise<RecorderState | null> {
         if (!this.recording) {
             return null;
         }
-        return await this.recording.getStatusAsync();
+        return this.recording.getStatus();
     }
 
     /**
@@ -233,8 +270,11 @@ class AudioServiceClass {
     async cancelRecording(): Promise<void> {
         if (this.recording) {
             try {
-                await this.recording.stopAndUnloadAsync();
-                const uri = this.recording.getURI();
+                const recorder = this.recording;
+                this.stopMetering();
+                await recorder.stop();
+                const uri = recorder.uri;
+                recorder.release();
                 if (uri) {
                     await this.deleteAudioFile(uri);
                 }

@@ -124,7 +124,7 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
             <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setShowScanner(false)}>
                 <View style={styles.scannerOverlay}>
                     <CameraView
-                        style={StyleSheet.absoluteFillObject}
+                        style={StyleSheet.absoluteFill}
                         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
                         onBarcodeScanned={({ data }) => {
                             setCode(data);

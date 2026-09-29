@@ -6,7 +6,7 @@ import {
     TouchableOpacity,
     ActivityIndicator,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Sound } from '../services/audioPlayback';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import {
@@ -33,14 +33,14 @@ interface AudioPlayerProps {
 import { AudioService } from '../services/AudioService';
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, onDelete, autoPlay = false }) => {
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [sound, setSound] = useState<Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
     const [audioDuration, setAudioDuration] = useState(duration); // Local state for duration
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
     const [isLoading, setIsLoading] = useState(false);
     const [playableUri, setPlayableUri] = useState<string | null>(null);
-    const soundRef = useRef<Audio.Sound | null>(null);
+    const soundRef = useRef<Sound | null>(null);
     const autoPlayAttemptedRef = useRef<string | null>(null);
 
     useEffect(() => {
@@ -100,7 +100,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
         const checkDuration = async () => {
             if (audioDuration === 0 && playableUri) {
                 try {
-                    const { sound: tempSound, status } = await Audio.Sound.createAsync(
+                    const { sound: tempSound, status } = await Sound.createAsync(
                         { uri: playableUri },
                         { shouldPlay: false }
                     );
@@ -153,7 +153,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
         setIsLoading(true);
         setIsMissing(false);
         try {
-            const { sound: newSound } = await Audio.Sound.createAsync(
+            const { sound: newSound } = await Sound.createAsync(
                 { uri: playableUri },
                 { shouldPlay: true, rate: playbackSpeed },
                 onPlaybackStatusUpdate
