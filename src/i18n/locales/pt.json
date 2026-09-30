@@ -699,6 +699,8 @@
     "noNotes": "Ainda não há notas para pesquisar.",
     "emptyAnswer": "Nenhuma resposta recebida. Tente reformular a pergunta.",
     "failed": "Não foi possível obter uma resposta. Verifique sua conexão e tente novamente.",
-    "untitled": "Sem título"
+    "untitled": "Sem título",
+    "signInRequired": "Entre para perguntar à IA sobre suas notas.",
+    "signIn": "Entrar"
   }
 }

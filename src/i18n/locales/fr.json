@@ -699,6 +699,8 @@
     "noNotes": "Aucune note à rechercher pour l’instant.",
     "emptyAnswer": "Aucune réponse reçue. Essayez de reformuler la question.",
     "failed": "Impossible d’obtenir une réponse. Vérifiez votre connexion et réessayez.",
-    "untitled": "Sans titre"
+    "untitled": "Sans titre",
+    "signInRequired": "Connectez-vous pour interroger l’IA sur vos notes.",
+    "signIn": "Se connecter"
   }
 }

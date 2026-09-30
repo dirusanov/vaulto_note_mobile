@@ -699,6 +699,8 @@
     "noNotes": "There are no notes to search yet.",
     "emptyAnswer": "No answer came back. Try rephrasing the question.",
     "failed": "Could not get an answer. Check your connection and try again.",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "signInRequired": "Sign in to ask AI about your notes.",
+    "signIn": "Sign in"
   }
 }

@@ -699,6 +699,8 @@
     "noNotes": "Noch keine Notizen zum Durchsuchen.",
     "emptyAnswer": "Keine Antwort erhalten. Formuliere die Frage anders.",
     "failed": "Keine Antwort erhalten. Prüfe deine Verbindung und versuche es erneut.",
-    "untitled": "Ohne Titel"
+    "untitled": "Ohne Titel",
+    "signInRequired": "Melde dich an, um die KI zu deinen Notizen zu fragen.",
+    "signIn": "Anmelden"
   }
 }

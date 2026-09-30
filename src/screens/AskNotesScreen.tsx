@@ -24,14 +24,15 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, richContentToPlainText } from '../utils/richContent';
 import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
-import { getPrivateAIAllowed } from '../utils/storage';
+import { getAIProvider, getPrivateAIAllowed } from '../utils/storage';
+import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 
 type Message =
     | { id: string; role: 'user'; text: string }
     | { id: string; role: 'assistant'; text: string; sources: NoteSource[] }
-    | { id: string; role: 'error'; text: string };
+    | { id: string; role: 'error'; text: string; signIn?: boolean };
 
 /**
  * "Ask your notes": retrieval runs on the device over decrypted notes; only the
@@ -45,6 +46,7 @@ export const AskNotesScreen = () => {
     const route = useRoute<any>();
     // `notes` may be narrowed by the list's search box; the chat searches everything.
     const { notes, getAllNotes, isHydrated } = useNotesContext();
+    const { isAuthenticated, isGuest } = useAuth();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [busy, setBusy] = useState(false);
@@ -76,6 +78,16 @@ export const AskNotesScreen = () => {
         setMessages((prev) => [...prev, { id: `q-${stamp}`, role: 'user', text: question }]);
         setBusy(true);
         try {
+            // Vaulto AI answers signed-in users only (the server rejects guests).
+            if ((!isAuthenticated || isGuest) && (await getAIProvider()) === 'vaulto_ai') {
+                setMessages((prev) => [...prev, {
+                    id: `e-${stamp}`,
+                    role: 'error',
+                    text: t('ask.signInRequired', 'Sign in to ask AI about your notes.'),
+                    signIn: true,
+                }]);
+                return;
+            }
             const sources = buildNoteSources(searchable, question);
             if (sources.length === 0) {
                 setMessages((prev) => [...prev, {
@@ -106,7 +118,7 @@ export const AskNotesScreen = () => {
         } finally {
             setBusy(false);
         }
-    }, [busy, searchable, t]);
+    }, [busy, isAuthenticated, isGuest, searchable, t]);
 
     useEffect(() => {
         const initial = route.params?.question as string | undefined;
@@ -187,8 +199,17 @@ export const AskNotesScreen = () => {
                         if (message.role === 'error') {
                             return (
                                 <View key={message.id} style={styles.errorBubble}>
-                                    <MaterialIcons name="error-outline" size={18} color={colors.error} />
+                                    <MaterialIcons name={message.signIn ? 'lock-outline' : 'error-outline'} size={18} color={colors.error} />
                                     <Text style={styles.errorText}>{message.text}</Text>
+                                    {message.signIn && (
+                                        <TouchableOpacity
+                                            style={styles.signInButton}
+                                            onPress={() => navigation.navigate('SignIn')}
+                                            accessibilityRole="button"
+                                        >
+                                            <Text style={styles.signInText}>{t('ask.signIn', 'Sign in')}</Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             );
                         }
@@ -388,6 +409,19 @@ const styles = StyleSheet.create({
         flex: 1,
         color: colors.error,
         fontSize: 14,
+    },
+    signInButton: {
+        minHeight: 48,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.m,
+        marginVertical: -spacing.s,
+        borderRadius: 12,
+        backgroundColor: colors.primary,
+    },
+    signInText: {
+        color: colors.surface,
+        fontSize: 14,
+        fontWeight: '600',
     },
     thinking: {
         flexDirection: 'row',
