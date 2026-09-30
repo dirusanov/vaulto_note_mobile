@@ -80,7 +80,6 @@ const MODELS: Record<LocalWhisperModelKey, LocalWhisperModelDescriptor> = {
         filename: 'ggml-tiny.bin',
         url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
         power: 1,
-        recommended: true,
     },
     base: {
         key: 'base',

@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -16,7 +17,8 @@ interface UnlockingOverlayProps {
 const PROGRESS_WIDTH = 168;
 const PROGRESS_FILL_WIDTH = 64;
 
-export const UnlockingOverlay = ({ visible, title, subtitle, progress, progressLabel = 'Progress' }: UnlockingOverlayProps) => {
+export const UnlockingOverlay = ({ visible, title, subtitle, progress, progressLabel }: UnlockingOverlayProps) => {
+    const { t } = useTranslation();
     const pulse = useRef(new Animated.Value(0)).current;
     const glide = useRef(new Animated.Value(0)).current;
     const isDeterminate = typeof progress === 'number';
@@ -101,11 +103,11 @@ export const UnlockingOverlay = ({ visible, title, subtitle, progress, progressL
                             <MaterialCommunityIcons name="shield-lock-outline" size={30} color={colors.primary} />
                         </View>
                     </View>
-                    <Text style={styles.title}>{title || 'Unlocking notes'}</Text>
+                    <Text style={styles.title}>{title || t('settings.ui.unlockingNotesTitle', 'Unlocking notes')}</Text>
                     {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
                     {isDeterminate && (
                         <View style={styles.progressMeta}>
-                            <Text style={styles.progressMetaText}>{progressLabel}</Text>
+                            <Text style={styles.progressMetaText}>{progressLabel ?? t('common.progress', 'Progress')}</Text>
                             <Text style={styles.progressPercent}>{progressText}%</Text>
                         </View>
                     )}

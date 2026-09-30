@@ -63,7 +63,12 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                         <View style={styles.contentContainer}>
                             <View style={styles.header}>
                                 <Text style={styles.title}>{t("aux.textAppearance", "Text Appearance")}</Text>
-                                <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <TouchableOpacity
+                                    onPress={onClose}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('a11y.close', 'Close')}
+                                >
                                     <MaterialIcons name="close" size={24} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
@@ -80,6 +85,9 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                         style={[styles.sizeButton, fontSize <= MIN_FONT_SIZE && styles.disabledButton]}
                                         onPress={decreaseFontSize}
                                         disabled={fontSize <= MIN_FONT_SIZE}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={t('a11y.decreaseFontSize', 'Decrease font size')}
+                                        accessibilityState={{ disabled: fontSize <= MIN_FONT_SIZE }}
                                     >
                                         <MaterialIcons name="remove" size={24} color={fontSize <= MIN_FONT_SIZE ? colors.textMuted : colors.text} />
                                     </TouchableOpacity>
@@ -90,6 +98,9 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                         style={[styles.sizeButton, fontSize >= MAX_FONT_SIZE && styles.disabledButton]}
                                         onPress={increaseFontSize}
                                         disabled={fontSize >= MAX_FONT_SIZE}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={t('a11y.increaseFontSize', 'Increase font size')}
+                                        accessibilityState={{ disabled: fontSize >= MAX_FONT_SIZE }}
                                     >
                                         <MaterialIcons name="add" size={24} color={fontSize >= MAX_FONT_SIZE ? colors.textMuted : colors.text} />
                                     </TouchableOpacity>
@@ -106,10 +117,11 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                         <Text style={styles.sectionTitle}>{t("aux.autoScaleChecklists", "Auto-scale Checklists")}</Text>
                                     </View>
                                     <Text style={styles.sectionDescription}>
-                                        Automatically increase size of short checklists for better readability.
+                                        {t('aux.autoScaleDesc', 'Automatically increase size of short checklists for better readability.')}
                                     </Text>
                                 </View>
                                 <Switch
+                                    accessibilityLabel={t('aux.autoScaleChecklists', 'Auto-scale Checklists')}
                                     value={autoScalingEnabled}
                                     onValueChange={onAutoScalingChange}
                                     trackColor={{ false: colors.textMuted, true: colors.primary }}

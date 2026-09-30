@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { Note, NoteImprovement, NotePrivacy, StorageScope } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
+import { subscribeMasterKey } from '../crypto/e2ee';
 import {
     initDatabase,
     saveNoteLocal,
@@ -13,12 +14,14 @@ import {
     getNoteById,
     getVoiceRecordingsLocal,
     deleteVoiceRecordingLocal,
+    sanitizeLocalImprovementLabels,
 } from '../services/DatabaseService';
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
 import { AudioService } from '../services/AudioService';
 import { hasMeaningfulRichContent } from '../utils/richContent';
+import { sanitizeStepLabel } from '../i18n/variantLabels';
 
 export interface NoteAudio {
     filePath: string;
@@ -93,45 +96,6 @@ export const useNotes = () => {
         }
         return '';
     }, []);
-
-    const buildNumberedImprovementLabel = useCallback((baseLabel: string, index: number): string => {
-        if (baseLabel.endsWith(')')) {
-            return `${baseLabel.slice(0, -1)} ${index})`;
-        }
-        return `${baseLabel} ${index}`;
-    }, []);
-
-    const ensureUniqueImprovementLabel = useCallback(
-        (
-            label: string | null | undefined,
-            siblings: Array<Pick<NoteImprovement, 'id' | 'label'>> = [],
-            currentId?: string
-        ): string | undefined => {
-            const base = (label || '').trim();
-            if (!base) return undefined;
-
-            const usedLabels = new Set(
-                siblings
-                    .filter(imp => imp.id !== currentId)
-                    .map(imp => (imp.label || '').trim())
-                    .filter(Boolean)
-                    .map(value => value.toLowerCase())
-            );
-
-            if (!usedLabels.has(base.toLowerCase())) {
-                return base;
-            }
-
-            let suffix = 2;
-            let candidate = buildNumberedImprovementLabel(base, suffix);
-            while (usedLabels.has(candidate.toLowerCase())) {
-                suffix += 1;
-                candidate = buildNumberedImprovementLabel(base, suffix);
-            }
-            return candidate;
-        },
-        [buildNumberedImprovementLabel]
-    );
 
     const normalizeStorageScope = useCallback((scope?: StorageScope): StorageScope => {
         return scope === 'local_only' ? 'local_only' : 'sync';
@@ -323,6 +287,23 @@ export const useNotes = () => {
         return visibleMain;
     }, [buildNotesSignature, filterAndCleanupNotes, markHydrated, markInitialSyncComplete, userId]);
 
+    // The master key is restored asynchronously at startup (and after a JS
+    // reload). Notes read before that decrypt to nothing and are filtered out,
+    // so re-read as soon as the key becomes available.
+    useEffect(() => {
+        const unsubscribe = subscribeMasterKey((available) => {
+            if (!available) {
+                return;
+            }
+            if (suppressSyncRefreshRef.current) {
+                pendingSyncRefreshRef.current = true;
+                return;
+            }
+            void refreshFromLocal();
+        });
+        return unsubscribe;
+    }, [refreshFromLocal]);
+
     // Subscribe to SyncService updatess
     useEffect(() => {
         const unsubscribe = syncService.subscribe(() => {
@@ -350,6 +331,10 @@ export const useNotes = () => {
         lastBootstrapSyncAtRef.current = null;
 
         const bootstrap = async () => {
+            if (userId) {
+                // Older versions stored note text in the (unencrypted) label; drop it locally too.
+                await sanitizeLocalImprovementLabels(userId);
+            }
             await refreshFromLocal();
             if (cancelled || !userId) {
                 suppressSyncRefreshRef.current = false;
@@ -672,6 +657,9 @@ export const useNotes = () => {
         }
     };
 
+    /** Every visible note, regardless of an active list search (which narrows `notes`). */
+    const getAllNotes = useCallback((): Note[] => allNotesRef.current, []);
+
     const searchNotes = async (query: string) => {
         if (!userId) return;
         setLoading(true);
@@ -724,7 +712,7 @@ export const useNotes = () => {
                 label: params.label
             });
 
-            const uniqueLabel = ensureUniqueImprovementLabel(params.label, note.improvements || []);
+            const uniqueLabel = sanitizeStepLabel(params.label, params.optionId);
 
             const improvement = await buildLocalImprovement({
                 id,
@@ -757,7 +745,7 @@ export const useNotes = () => {
             syncService.scheduleAutoSync();
             return improvement;
         },
-        [buildLocalImprovement, ensureUniqueImprovementLabel, refreshFromLocal, userId]
+        [buildLocalImprovement, refreshFromLocal, userId]
     );
 
     const updateImprovement = useCallback(
@@ -824,11 +812,7 @@ export const useNotes = () => {
                 encrypted_title: encryptedTitle,
                 title: typeof updates.title === 'string' ? updates.title : improvement.title,
                 content: plainContent,
-                label: ensureUniqueImprovementLabel(
-                    updates.label ?? improvement.label,
-                    note.improvements || [],
-                    improvementId
-                ),
+                label: sanitizeStepLabel(updates.label ?? improvement.label, updates.optionId ?? improvement.option_id),
                 option_id: updates.optionId ?? improvement.option_id,
                 deleted: updates.deleted ?? improvement.deleted ?? false,
                 updated_at: new Date().toISOString(),
@@ -857,7 +841,7 @@ export const useNotes = () => {
             console.log('[useNotes] Improvement update complete');
             return updated;
         },
-        [ensureUniqueImprovementLabel, refreshFromLocal, userId]
+        [refreshFromLocal, userId]
     );
 
     const deleteImprovement = useCallback(
@@ -1153,6 +1137,7 @@ export const useNotes = () => {
         updateNote,
         deleteNote,
         searchNotes,
+        getAllNotes,
         syncNotes,
         attachAudioToNote,
         removeAudioFromNote,

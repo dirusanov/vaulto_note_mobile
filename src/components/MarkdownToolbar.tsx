@@ -29,13 +29,17 @@ interface ToolbarButtonProps {
     onPress: () => void;
     iconName?: keyof typeof MaterialIcons.glyphMap;
     label?: string;
+    accessibilityLabel: string;
     children?: React.ReactNode;
 }
 
-const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconName, label, children }) => {
+const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconName, label, accessibilityLabel, children }) => {
     return (
         <TouchableOpacity
             onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel}
+            accessibilityState={{ selected: isActive }}
             style={[styles.button, isActive && styles.activeButton]}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             activeOpacity={0.6}
@@ -87,6 +91,17 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
         || normalizeHighlightColorForCss(activeHighlightValue, colors.highlight.white);
     const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
 
+    const getHighlightColorLabel = (colorName: string) => {
+        switch (colorName) {
+            case 'yellow': return t('a11y.colorYellow', 'Yellow');
+            case 'green': return t('a11y.colorGreen', 'Green');
+            case 'blue': return t('a11y.colorBlue', 'Blue');
+            case 'red': return t('a11y.colorRed', 'Red');
+            case 'white': return t('a11y.noHighlight', 'No highlight');
+            default: return colorName;
+        }
+    };
+
     const handleHighlightPress = () => {
         setShowColorPicker(true);
     };
@@ -114,12 +129,14 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     isActive={isActive('todo')}
                     onPress={() => onFormat('todo')}
                     iconName="check-box"
+                    accessibilityLabel={t('a11y.checklist', 'Checklist')}
                 />
 
                 <ToolbarButton
                     isActive={isActive('list')}
                     onPress={() => onFormat('list')}
                     iconName="format-list-bulleted"
+                    accessibilityLabel={t('a11y.bulletList', 'Bulleted list')}
                 />
 
                 {showDictate && (
@@ -127,6 +144,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                         isActive={isActive('dictate')}
                         onPress={() => onFormat('dictate')}
                         iconName="mic"
+                        accessibilityLabel={t('a11y.dictate', 'Dictate')}
                     />
                 )}
 
@@ -139,30 +157,37 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     isActive={isActive('bold')}
                     onPress={() => onFormat('bold')}
                     iconName="format-bold"
+                    accessibilityLabel={t('a11y.bold', 'Bold')}
                 />
 
                 <ToolbarButton
                     isActive={isActive('italic')}
                     onPress={() => onFormat('italic')}
                     iconName="format-italic"
+                    accessibilityLabel={t('a11y.italic', 'Italic')}
                 />
 
                 <ToolbarButton
                     isActive={isActive('underline')}
                     onPress={() => onFormat('underline')}
                     iconName="format-underlined"
+                    accessibilityLabel={t('a11y.underline', 'Underline')}
                 />
 
                 <ToolbarButton
                     isActive={isActive('strikethrough')}
                     onPress={() => onFormat('strikethrough')}
                     iconName="format-strikethrough"
+                    accessibilityLabel={t('a11y.strikethrough', 'Strikethrough')}
                 />
 
                 {/* Highlight */}
                 <TouchableOpacity
                     style={[styles.button, isHighlightActive && styles.activeButton]}
                     onPress={handleHighlightPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('a11y.highlight', 'Highlight')}
+                    accessibilityState={{ selected: isHighlightActive }}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
                     <MaterialIcons
@@ -186,18 +211,21 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                     isActive={isActive('h1')}
                     onPress={() => onFormat('h1')}
                     label="H1"
+                    accessibilityLabel={t('a11y.heading', 'Heading {{level}}', { level: 1 })}
                 />
 
                 <ToolbarButton
                     isActive={isActive('h2')}
                     onPress={() => onFormat('h2')}
                     label="H2"
+                    accessibilityLabel={t('a11y.heading', 'Heading {{level}}', { level: 2 })}
                 />
 
                 <ToolbarButton
                     isActive={isActive('h3')}
                     onPress={() => onFormat('h3')}
                     label="H3"
+                    accessibilityLabel={t('a11y.heading', 'Heading {{level}}', { level: 3 })}
                 />
 
             </ScrollView>
@@ -223,6 +251,9 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                                         ]}
                                         onPress={() => applyHighlight(color.name)}
                                         activeOpacity={0.8}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={getHighlightColorLabel(color.name)}
+                                        accessibilityState={{ selected: activeHighlightEntry?.name === color.name }}
                                     >
                                         {activeHighlightEntry?.name === color.name && (
                                             <MaterialIcons

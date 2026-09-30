@@ -27,7 +27,10 @@ import {
     setTranscriptionEnabled,
     getTranscriptionLanguage,
     setTranscriptionLanguage,
+    getOnDeviceTranscription,
+    setOnDeviceTranscription,
 } from '../utils/storage';
+import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadModal';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { AgentModeVaultoGateModal } from '../components/AgentModeVaultoGateModal';
@@ -48,7 +51,7 @@ import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import * as Clipboard from 'expo-clipboard';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
-import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
+import { LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import {
     cancelLocalWhisperDownload,
     deleteLocalWhisperModel,
@@ -291,6 +294,10 @@ export const SettingsScreen = () => {
     const [showMinutesSheet, setShowMinutesSheet] = useState(false);
 
     const [showOpenAIKey, setShowOpenAIKey] = useState(false);
+    // "Custom AI" opened without a saved key only reveals its form; the
+    // provider switches once a connection test succeeds, so peeking at the
+    // tab can no longer leave the app pointed at an unconfigured endpoint.
+    const [customAIPending, setCustomAIPending] = useState(false);
     const [openAITestStatus, setOpenAITestStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
         type: 'idle',
         message: '',
@@ -305,6 +312,8 @@ export const SettingsScreen = () => {
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
     const [localWhisperStatus, setLocalWhisperStatus] = useState<Awaited<ReturnType<typeof getLocalWhisperModelStatus>> | null>(null);
+    const [onDeviceTranscription, setOnDeviceTranscriptionState] = useState(false);
+    const [showWhisperDownload, setShowWhisperDownload] = useState(false);
     const [localWhisperBusy, setLocalWhisperBusy] = useState(false);
     const [localWhisperProgress, setLocalWhisperProgress] = useState(0);
     const [localWhisperBytesLoaded, setLocalWhisperBytesLoaded] = useState(0);
@@ -371,6 +380,7 @@ export const SettingsScreen = () => {
     });
 
     const usingOpenAI = aiProvider === 'openai';
+    const showCustomAIConfig = usingOpenAI || customAIPending;
     const usingLocalWhisper = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_whisper' || (aiProvider as string) === 'local');
     const usingLocalLLM = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local');
     const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
@@ -382,7 +392,8 @@ export const SettingsScreen = () => {
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
-    const transcriptionAuthRequired = isGuestOrAnonymous && aiProvider === 'vaulto_ai';
+    const onDeviceTranscriptionActive = LOCAL_WHISPER_ENABLED && onDeviceTranscription && !!localWhisperStatus?.isDownloaded;
+    const transcriptionAuthRequired = isGuestOrAnonymous && aiProvider === 'vaulto_ai' && !onDeviceTranscriptionActive;
     const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
 
     useEffect(() => {
@@ -516,7 +527,6 @@ export const SettingsScreen = () => {
         }] : []),
     ];
 
-    const activeProvider = providerOptions.find((provider) => provider.key === aiProvider);
     const localWhisperModels = getAvailableLocalWhisperModels();
 
     const refreshLocalWhisperStatus = useCallback(async () => {
@@ -541,7 +551,18 @@ export const SettingsScreen = () => {
 
     useEffect(() => {
         loadPreferences();
+        void getOnDeviceTranscription().then(setOnDeviceTranscriptionState);
     }, []);
+
+    const updateOnDeviceTranscription = useCallback(async (enabled: boolean) => {
+        if (enabled && !localWhisperStatus?.isDownloaded) {
+            // The switch turns on once the model is on the phone.
+            setShowWhisperDownload(true);
+            return;
+        }
+        setOnDeviceTranscriptionState(enabled);
+        await setOnDeviceTranscription(enabled);
+    }, [localWhisperStatus?.isDownloaded]);
 
     useFocusEffect(
         useCallback(() => {
@@ -754,7 +775,7 @@ export const SettingsScreen = () => {
     }, [isAuthenticated, isGuest, preferencesReady]);
 
     const handleTestConnection = async () => {
-        if (!usingOpenAI) {
+        if (!showCustomAIConfig) {
             setOpenAITestStatus({ type: 'error', message: t("aux.selectOpenAICompatible") });
             return;
         }
@@ -776,6 +797,10 @@ export const SettingsScreen = () => {
 
         if (isConnected) {
             setOpenAITestStatus({ type: 'success', message: t("aux.connectionWorking") });
+            if (!usingOpenAI) {
+                setCustomAIPending(false);
+                await updateProvider('openai');
+            }
         } else {
             setOpenAITestStatus({ type: 'error', message: t("aux.connectionFailed") });
         }
@@ -997,6 +1022,8 @@ export const SettingsScreen = () => {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.back", "Back")}
                 >
                     <MaterialIcons name="arrow-back" size={22} color={colors.text} />
                 </TouchableOpacity>
@@ -1096,6 +1123,8 @@ export const SettingsScreen = () => {
                         <TouchableOpacity
                             onPress={() => setShowSecurityInfoModal(true)}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("a11y.helpSync", "About cloud sync")}
                         >
                             <MaterialIcons name="help-outline" size={18} color={colors.textSecondary} />
                         </TouchableOpacity>
@@ -1410,6 +1439,38 @@ export const SettingsScreen = () => {
                         />
                     </TouchableOpacity>
 
+                    {LOCAL_WHISPER_ENABLED && (
+                        <TouchableOpacity
+                            style={[styles.preferenceRow, { marginBottom: spacing.m }]}
+                            activeOpacity={0.85}
+                            onPress={() => setShowWhisperDownload(true)}
+                            accessibilityRole="button"
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                                <MaterialIcons
+                                    name="phonelink-lock"
+                                    size={24}
+                                    color={onDeviceTranscriptionActive ? colors.primary : colors.textSecondary}
+                                />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.preferenceTitle}>{t("settings.onDevice.title", "Transcribe on device")}</Text>
+                                    <Text style={styles.preferenceDescription}>
+                                        {onDeviceTranscriptionActive
+                                            ? t("settings.onDevice.active", "{{model}} model · offline, audio stays on the phone", { model: localWhisperStatus?.selectedModel.label ?? '' })
+                                            : t("settings.onDevice.desc", "Private and offline. Downloads a speech model once.")}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Switch
+                                value={onDeviceTranscriptionActive}
+                                onValueChange={(value) => { void updateOnDeviceTranscription(value); }}
+                                trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                thumbColor={colors.surface}
+                                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                            />
+                        </TouchableOpacity>
+                    )}
+
                     {showModelMissingWarning && (
                         <Animated.View style={[styles.inlineWarningContainer, { opacity: warningOpacity, marginHorizontal: spacing.m, marginBottom: spacing.m }]}>
                             <MaterialIcons name="error-outline" size={16} color={colors.warning} />
@@ -1433,8 +1494,8 @@ export const SettingsScreen = () => {
                                 <Text style={styles.preferenceTitle}>{t("settings.ui.advAISettings", "Advanced AI Settings")}</Text>
                                 <Text style={styles.preferenceDescription}>
                                     {LOCAL_MODELS_ENABLED
-                                        ? 'Local and Custom AI configurations'
-                                        : 'Custom AI configuration. Local models are temporarily unavailable.'}
+                                        ? t("settings.ui.advAISettingsDescLocal", "Local and custom AI configurations")
+                                        : t("settings.ui.advAISettingsDescCustom", "Custom AI configuration.")}
                                 </Text>
                             </View>
                         </View>
@@ -1449,7 +1510,9 @@ export const SettingsScreen = () => {
                                 {/* Top row: Vaulto AI + Custom AI */}
                                 <View style={{ flexDirection: 'row', gap: spacing.s }}>
                                     {providerOptions.filter(o => o.key !== 'local').map((option) => {
-                                        const isActive = option.key === aiProvider;
+                                        const isActive = customAIPending
+                                            ? option.key === 'openai'
+                                            : option.key === aiProvider;
                                         const isLocked = option.isLocked;
                                         return (
                                             <TouchableOpacity
@@ -1460,8 +1523,19 @@ export const SettingsScreen = () => {
                                                     isLocked && styles.compactProviderOptionLocked,
                                                     { flex: 1 }
                                                 ]}
-                                                onPress={() => updateProvider(option.key)}
-                                                disabled={activeProvider?.key === option.key && !isLocked}
+                                                onPress={() => {
+                                                    if (option.key === 'openai' && !isLocked && !apiKey.trim()) {
+                                                        setCustomAIPending(true);
+                                                        return;
+                                                    }
+                                                    setCustomAIPending(false);
+                                                    if (option.key !== aiProvider) {
+                                                        void updateProvider(option.key);
+                                                    }
+                                                }}
+                                                disabled={isActive && !isLocked}
+                                                accessibilityRole="button"
+                                                accessibilityState={{ selected: isActive }}
                                             >
                                                 {option.key === 'vaulto_ai' ? (
                                                     <Image
@@ -1503,7 +1577,7 @@ export const SettingsScreen = () => {
                             </View>
 
                             {/* Setup for Custom AI (OpenAI & Compatible) */}
-                            {usingOpenAI && (
+                            {showCustomAIConfig && (
                                 <View style={styles.openAIConfigCard}>
                                     {/* Header */}
                                     <View style={styles.openAIConfigHeader}>
@@ -1545,6 +1619,10 @@ export const SettingsScreen = () => {
                                             <TouchableOpacity
                                                 style={styles.openAIEyeButton}
                                                 onPress={() => setShowOpenAIKey(!showOpenAIKey)}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={showOpenAIKey
+                                                    ? t("a11y.hideApiKey", "Hide API key")
+                                                    : t("a11y.showApiKey", "Show API key")}
                                             >
                                                 <MaterialIcons
                                                     name={showOpenAIKey ? 'visibility' : 'visibility-off'}
@@ -1570,6 +1648,12 @@ export const SettingsScreen = () => {
                                                 {openAITestStatus.message}
                                             </Text>
                                         </View>
+                                    )}
+
+                                    {customAIPending && !usingOpenAI && (
+                                        <Text style={styles.openAIConfigSubtitle}>
+                                            {t("settings.ui.customAIPendingHint", "Vaulto AI stays active until the connection test succeeds.")}
+                                        </Text>
                                     )}
 
                                     {/* Test button */}
@@ -2038,6 +2122,19 @@ export const SettingsScreen = () => {
                     </Pressable>
                 </Pressable>
             </Modal>
+
+            <LocalWhisperDownloadModal
+                visible={showWhisperDownload}
+                onClose={() => setShowWhisperDownload(false)}
+                onDownloadComplete={() => {
+                    setShowWhisperDownload(false);
+                    void (async () => {
+                        await refreshLocalWhisperStatus();
+                        setOnDeviceTranscriptionState(true);
+                        await setOnDeviceTranscription(true);
+                    })();
+                }}
+            />
 
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}

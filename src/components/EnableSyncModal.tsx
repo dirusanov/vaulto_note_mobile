@@ -122,7 +122,9 @@ export const EnableSyncModal = ({
                 onEnabled?.();
             }
         } catch (e: any) {
-            const message = e?.message || (isChangeFlow ? 'Failed to change access key.' : 'Failed to enable sync.');
+            const message = e?.message || (isChangeFlow
+                ? t('aux.changeAccessKeyFailed', 'Failed to change access key.')
+                : t('aux.enableSyncFailed', 'Failed to enable sync.'));
             setError(message);
             onError?.(message);
         } finally {

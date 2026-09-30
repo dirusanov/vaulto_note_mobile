@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     View,
     Text,
@@ -33,6 +34,7 @@ interface AudioPlayerProps {
 import { AudioService } from '../services/AudioService';
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, onDelete, autoPlay = false }) => {
+    const { t } = useTranslation();
     const [sound, setSound] = useState<Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
@@ -306,6 +308,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
             {handleClose && (
                 <TouchableOpacity
                     onPress={handleClose}
+                    accessibilityRole="button"
+                    accessibilityLabel={onClose ? t('a11y.close', 'Close') : t('a11y.deleteRecording', 'Delete recording')}
                     style={[
                         styles.closeButton,
                         {
@@ -334,6 +338,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                     ]}
                     onPress={handlePlayPause}
                     disabled={isLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel={isPlaying ? t('a11y.pause', 'Pause') : t('a11y.play', 'Play')}
                     activeOpacity={0.88}
                 >
                     <View
@@ -384,6 +390,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                             <TouchableOpacity
                                 activeOpacity={1}
                                 onPress={handleSeek}
+                                accessibilityLabel={t('a11y.playbackPosition', 'Playback position')}
                                 onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
                                 style={[styles.progressTouchArea, { height: progressTouchAreaHeight, marginBottom: rowSpacing }]}
                             >

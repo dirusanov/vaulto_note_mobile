@@ -54,7 +54,8 @@
     "selectedCount": "{{count}} selecionadas",
     "resetRecoveryTitle": "O cofre criptografado foi redefinido",
     "resetRecoveryDescription": "Suas notas preservadas ficam apenas neste dispositivo e a sincronização está pausada. Escolha como recuperá-las em Configurações.",
-    "reviewRecovery": "Ver opções"
+    "reviewRecovery": "Ver opções",
+    "noSearchResults": "Nenhuma nota corresponde à sua pesquisa"
   },
   "settings": {
     "title": "Configurações",
@@ -200,7 +201,10 @@
       "syncPendingMessage": "A criptografia de ponta a ponta foi desativada neste dispositivo. Porém, suas notas não puderam ser sincronizadas com o servidor agora. Elas serão atualizadas automaticamente para texto simples assim que você tiver conexão com a internet.",
       "unableDisableSync": "Não foi possível desativar a sincronização.",
       "cloudSync": "Sincronização em Nuvem",
-      "failed": "Falhou"
+      "failed": "Falhou",
+      "advAISettingsDescCustom": "Configuração de IA personalizada.",
+      "advAISettingsDescLocal": "Configurações de IA locais e personalizadas",
+      "customAIPendingHint": "O Vaulto AI continua ativo até que o teste de conexão seja bem-sucedido."
     },
     "recovery": {
       "title": "Código de recuperação",
@@ -246,6 +250,11 @@
       "standardSyncDescription": "As notas usam a sincronização padrão na nuvem. Tecnicamente, a Vaulto pode processar o conteúdo para oferecer recursos do servidor e recuperação de conta.",
       "syncOff": "A sincronização na nuvem está desligada",
       "syncOffDescription": "As novas alterações ficam neste dispositivo até você ativar um modo de sincronização."
+    },
+    "onDevice": {
+      "title": "Transcrever no dispositivo",
+      "active": "Modelo {{model}} · offline, o áudio fica no telefone",
+      "desc": "Privado e offline. Baixa um modelo de fala uma vez."
     }
   },
   "languages": {
@@ -407,7 +416,75 @@
     "deleteRecordingTitle": "Excluir gravação?",
     "deleteRecordingDesc": "Tem certeza de que deseja excluir esta gravação?",
     "deleteNoteDesc": "Tem certeza de que deseja excluir esta nota?",
-    "micHintHold": "Segure: sem agente"
+    "micHintHold": "Segure: sem agente",
+    "presets": {
+      "grammar": {
+        "label": "Corrigir gramática",
+        "description": "Corrige ortografia e gramática"
+      },
+      "professional": {
+        "label": "Tom profissional",
+        "description": "Reescreve em tom profissional e formal"
+      },
+      "simplify": {
+        "label": "Simplificar texto",
+        "description": "Usa palavras simples e fáceis de entender"
+      },
+      "summarize": {
+        "label": "Resumir",
+        "description": "Mantém apenas os pontos mais importantes"
+      },
+      "structure": {
+        "label": "Estruturar",
+        "description": "Adiciona títulos e listas para facilitar a leitura"
+      }
+    },
+    "versions": {
+      "improveFrom": "Melhorar",
+      "thisVersion": "Esta versão",
+      "sheetTitle": "Versões",
+      "all": "Todas as versões",
+      "menuSection": "VERSÕES",
+      "compare": "Comparar com o original",
+      "compareTitle": "Alterações em relação ao original",
+      "legendRemoved": "removido",
+      "legendAdded": "adicionado",
+      "noDifferences": "Nenhuma diferença em relação ao original.",
+      "makeMain": "Usar como texto principal",
+      "makeMainConfirmTitle": "Usar esta versão como texto principal?",
+      "makeMainConfirmBody": "O original atual é mantido como uma versão separada, então nada se perde.",
+      "madeMain": "Esta versão agora é o texto principal",
+      "copyToNewNote": "Copiar para nova nota",
+      "copied": "Copiado para uma nova nota",
+      "deleted": "Versão excluída",
+      "undo": "Desfazer",
+      "kind": {
+        "checklist": "Checklist",
+        "list": "Lista",
+        "formatted": "Formatado",
+        "agent": "Agente de IA",
+        "previousOriginal": "Original anterior",
+        "customPrompt": "Prompt personalizado"
+      },
+      "rename": "Renomear",
+      "renameTitle": "Renomear versão",
+      "renamePlaceholder": "Nome da versão",
+      "swipeHint": "Deslize o texto para a esquerda ou direita para trocar de versão"
+    },
+    "tasks": {
+      "find": "Encontrar tarefas",
+      "title": "Tarefas nesta nota",
+      "finding": "Procurando tarefas…",
+      "retry": "Tentar novamente",
+      "none": "Nenhuma tarefa encontrada nesta nota.",
+      "inNote": "Já está na nota",
+      "addToCalendar": "Adicionar ao calendário",
+      "addToNote": "Adicionar à nota como checklist ({{count}})",
+      "calendarHint": "O botão do calendário abre seu app de calendário, onde você pode definir um lembrete.",
+      "failed": "Não foi possível procurar tarefas. Verifique sua conexão e tente novamente.",
+      "added": "Tarefas adicionadas à nota: {{count}}",
+      "calendarFailed": "Não foi possível abrir o calendário"
+    }
   },
   "voice": {
     "transcribeOn": "Transcrição ATIVADA",
@@ -427,7 +504,9 @@
     "finishError": "Não foi possível finalizar a gravação. Tente novamente.",
     "signInRequired": "É necessário fazer login",
     "transcriptionAuthMessage": "A transcrição fica disponível depois que você cria uma conta.",
-    "startError": "Não foi possível iniciar a gravação"
+    "startError": "Não foi possível iniciar a gravação",
+    "recordingStateLost": "O estado da gravação foi perdido. Tente novamente.",
+    "micPermissionDenied": "É necessário acesso ao microfone para gravar notas de voz. Você pode permitir nas configurações do sistema."
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -530,6 +609,96 @@
     "confirmDeletion": "Confirmar exclusão",
     "goBack": "Voltar",
     "somethingWentWrong": "Algo deu errado",
-    "unsyncedNotesWarn": "notas não sincronizadas serão perdidas para sempre."
+    "unsyncedNotesWarn": "notas não sincronizadas serão perdidas para sempre.",
+    "paywallUnavailableTitle": "Os planos não estão disponíveis no momento",
+    "paywallUnavailableDesc": "Não foi possível carregar as opções de assinatura. Verifique sua conexão e tente novamente.",
+    "paywallRetry": "Tentar novamente",
+    "transcriptionUnlimited": "Transcrição: ilimitada",
+    "transcriptionLeft": "Transcrição restante: {{time}}",
+    "trialBalance": "Saldo de avaliação",
+    "oneTimeTrialMinutes": "Minutos de avaliação únicos",
+    "usedAllMonthlyMinutes": "Você usou todos os minutos do mês",
+    "usedAllFreeMinutes": "Você usou todos os {{minutes}} minutos gratuitos",
+    "runningLowTranscription": "Seu tempo de transcrição está acabando",
+    "usageLimitTitle": "Limite de uso atingido",
+    "usageLimitDesc": "Você excedeu seus limites de uso. Tente novamente mais tarde ou faça upgrade do seu plano.",
+    "aiLimitTitle": "Limite de IA atingido",
+    "aiLimitDesc": "Você excedeu seu limite de tokens do Vaulto AI neste período. Tente novamente mais tarde.",
+    "trialExhaustedTitle": "Avaliação esgotada",
+    "trialExhaustedDesc": "Você usou todos os minutos de transcrição da avaliação. Assine o PRO para ganhar mais minutos e desbloquear todos os recursos!",
+    "transcriptionLimitTitle": "Limite de transcrição atingido",
+    "transcriptionLimitDescDate": "Você usou todos os minutos de transcrição PRO deste período. Seu limite será renovado em {{date}}.",
+    "transcriptionLimitDescNoDate": "Você usou todos os minutos de transcrição PRO deste período. Seu limite será renovado no início do próximo ciclo de cobrança.",
+    "maybeLater": "Talvez depois",
+    "privacyTitle": "Privacidade",
+    "disableEncryptionFailed": "Não foi possível desativar a criptografia.",
+    "changeAccessKeyFailed": "Não foi possível alterar a chave de acesso.",
+    "enableSyncFailed": "Não foi possível ativar a sincronização.",
+    "autoDetect": "Detecção automática",
+    "noLanguagesFound": "Nenhum idioma encontrado para “{{query}}”"
+  },
+  "a11y": {
+    "back": "Voltar",
+    "close": "Fechar",
+    "textAppearance": "Aparência do texto",
+    "improveWithAI": "Melhorar com IA",
+    "moreOptions": "Mais opções",
+    "done": "Concluir edição",
+    "undo": "Desfazer",
+    "redo": "Refazer",
+    "removeVersion": "Remover esta versão",
+    "recordVoice": "Gravar nota de voz",
+    "dictate": "Ditar",
+    "settings": "Configurações",
+    "newNote": "Nova nota",
+    "showApiKey": "Mostrar chave de API",
+    "hideApiKey": "Ocultar chave de API",
+    "helpSync": "Sobre a sincronização na nuvem",
+    "originalVersion": "Versão original",
+    "encrypted": "Criptografia de ponta a ponta",
+    "deleteRecording": "Excluir gravação",
+    "pauseRecording": "Pausar gravação",
+    "resumeRecording": "Retomar gravação",
+    "sendRecording": "Concluir e enviar gravação",
+    "cancelTask": "Cancelar tarefa",
+    "decreaseFontSize": "Diminuir fonte",
+    "increaseFontSize": "Aumentar fonte",
+    "clearSelection": "Limpar seleção",
+    "pin": "Fixar",
+    "unpin": "Desafixar",
+    "deleteSelected": "Excluir notas selecionadas",
+    "play": "Reproduzir",
+    "pause": "Pausar",
+    "playbackPosition": "Posição da reprodução",
+    "checklist": "Lista de tarefas",
+    "bulletList": "Lista com marcadores",
+    "bold": "Negrito",
+    "italic": "Itálico",
+    "underline": "Sublinhado",
+    "strikethrough": "Tachado",
+    "highlight": "Destacar",
+    "heading": "Título {{level}}",
+    "colorYellow": "Amarelo",
+    "colorGreen": "Verde",
+    "colorBlue": "Azul",
+    "colorRed": "Vermelho",
+    "noHighlight": "Sem destaque",
+    "allVersions": "Todas as versões"
+  },
+  "ask": {
+    "title": "Pergunte às suas notas",
+    "askAbout": "Perguntar à IA: “{{query}}”",
+    "privacyNote": "As notas são pesquisadas neste dispositivo; apenas os trechos relevantes são enviados à IA.",
+    "emptyTitle": "Pergunte qualquer coisa sobre suas notas",
+    "example1": "O que planejei para esta semana?",
+    "example2": "Resuma minhas notas sobre trabalho",
+    "example3": "Quais tarefas ainda estão abertas?",
+    "placeholder": "Faça uma pergunta…",
+    "send": "Perguntar",
+    "thinking": "Procurando nas suas notas…",
+    "noNotes": "Ainda não há notas para pesquisar.",
+    "emptyAnswer": "Nenhuma resposta recebida. Tente reformular a pergunta.",
+    "failed": "Não foi possível obter uma resposta. Verifique sua conexão e tente novamente.",
+    "untitled": "Sem título"
   }
 }

@@ -56,8 +56,8 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
 
     if (compact) {
         const label = isUnlimited
-            ? 'Transcription: Unlimited'
-            : `Transcription left: ${formatTimeMMSS(remainingSeconds)}`;
+            ? t('aux.transcriptionUnlimited', 'Transcription: Unlimited')
+            : t('aux.transcriptionLeft', 'Transcription left: {{time}}', { time: formatTimeMMSS(remainingSeconds) });
 
         return (
             <View style={styles.compactWrap}>
@@ -137,8 +137,8 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                         />
                     </View>
                     <View>
-                        <Text style={styles.title}>{isPro ? 'Transcription Balance' : 'Trial Balance'}</Text>
-                        <Text style={styles.subtitle}>{isPro ? 'Monthly Pro minutes' : 'One-time trial minutes'}</Text>
+                        <Text style={styles.title}>{isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance')}</Text>
+                        <Text style={styles.subtitle}>{isPro ? t('settings.ui.monthlyProMinutes', 'Monthly Pro minutes') : t('aux.oneTimeTrialMinutes', 'One-time trial minutes')}</Text>
                     </View>
                 </View>
             </View>
@@ -162,7 +162,9 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                     <View style={styles.warningBox}>
                         <MaterialIcons name="info-outline" size={18} color={colors.error} />
                         <Text style={styles.warningText}>
-                            {isPro ? "You've used all monthly minutes" : `You've used all ${Math.round(totalSeconds / 60)} free minutes`}
+                            {isPro
+                                ? t('aux.usedAllMonthlyMinutes', "You've used all monthly minutes")
+                                : t('aux.usedAllFreeMinutes', "You've used all {{minutes}} free minutes", { minutes: Math.round(totalSeconds / 60) })}
                         </Text>
                     </View>
                 </View>
@@ -172,7 +174,9 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                 <View style={styles.warningBox}>
                     <MaterialIcons name="warning-amber" size={18} color={colors.warning} />
                     <Text style={[styles.warningText, { color: colors.warning }]}>
-                        {isPro ? 'Running low on monthly transcription minutes' : 'Running low on transcription time'}
+                        {isPro
+                            ? t('settings.ui.minutesWarningTextLow', 'Running low on monthly transcription minutes')
+                            : t('aux.runningLowTranscription', 'Running low on transcription time')}
                     </Text>
                 </View>
             )}

@@ -48,8 +48,35 @@ export type KeyBundle = {
 
 let masterKey: Uint8Array | null = null;
 
+// Notes read while the key was still being restored come back empty and are
+// hidden; listeners let the list re-read local data once the key is in memory.
+type MasterKeyListener = (available: boolean) => void;
+const masterKeyListeners = new Set<MasterKeyListener>();
+
+const notifyMasterKeyListeners = () => {
+    const available = masterKey !== null;
+    masterKeyListeners.forEach((listener) => {
+        try {
+            listener(available);
+        } catch (error) {
+            console.warn('[e2ee] Master key listener failed:', error);
+        }
+    });
+};
+
+export const subscribeMasterKey = (listener: MasterKeyListener): (() => void) => {
+    masterKeyListeners.add(listener);
+    return () => {
+        masterKeyListeners.delete(listener);
+    };
+};
+
 export const setMasterKey = (key: Uint8Array | null) => {
+    const changed = masterKey !== key;
     masterKey = key;
+    if (changed) {
+        notifyMasterKeyListeners();
+    }
 };
 
 export const getMasterKey = () => masterKey;
@@ -59,7 +86,11 @@ export const hasMasterKey = () => masterKey !== null;
 export const keyIdFromMasterKey = (key: Uint8Array): string => bytesToHex(sha256(key));
 
 export const clearMasterKey = () => {
+    if (masterKey === null) {
+        return;
+    }
     masterKey = null;
+    notifyMasterKeyListeners();
 };
 
 // Recovery Code (Mnemonic) Helpers

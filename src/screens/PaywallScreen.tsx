@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export const PaywallScreen = () => {
     const { t } = useTranslation();
-    const { packages, purchasePackage, restorePurchases, isLoading, isPro } = useSubscription();
+    const { packages, purchasePackage, restorePurchases, reloadOfferings, isLoading, isPro } = useSubscription();
     const navigation = useNavigation();
     const { isAuthenticated, isGuest } = useAuth();
     const canPurchase = isAuthenticated && !isGuest;
@@ -44,7 +44,12 @@ export const PaywallScreen = () => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.mainContent}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={styles.closeButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.close", "Close")}
+                >
                     <MaterialIcons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
 
@@ -71,6 +76,26 @@ export const PaywallScreen = () => {
 
                     {isLoading ? (
                         <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+                    ) : packages.length === 0 ? (
+                        // Store unreachable or no offerings configured: say so instead of
+                        // leaving an empty gap with nothing to tap.
+                        <View style={styles.unavailableCard}>
+                            <MaterialIcons name="cloud-off" size={28} color={colors.textSecondary} />
+                            <Text style={styles.unavailableTitle}>
+                                {t("aux.paywallUnavailableTitle", "Plans are unavailable right now")}
+                            </Text>
+                            <Text style={styles.unavailableText}>
+                                {t("aux.paywallUnavailableDesc", "We couldn't load subscription options. Check your connection and try again.")}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.retryButton}
+                                onPress={() => { void reloadOfferings(); }}
+                                accessibilityRole="button"
+                            >
+                                <MaterialIcons name="refresh" size={18} color={colors.surface} />
+                                <Text style={styles.retryButtonText}>{t("aux.paywallRetry", "Try again")}</Text>
+                            </TouchableOpacity>
+                        </View>
                     ) : (
                         <View style={styles.packagesContainer}>
                             {packages.map((pack) => {
@@ -160,6 +185,44 @@ const FeatureItem = ({ text }: { text: string }) => (
 );
 
 const styles = StyleSheet.create({
+    unavailableCard: {
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 24,
+        paddingHorizontal: 16,
+        marginTop: 24,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+    },
+    unavailableTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+        textAlign: 'center',
+    },
+    unavailableText: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: colors.textSecondary,
+        textAlign: 'center',
+    },
+    retryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        backgroundColor: colors.primary,
+    },
+    retryButtonText: {
+        color: colors.surface,
+        fontSize: 15,
+        fontWeight: '600',
+    },
     container: {
         flex: 1,
         backgroundColor: colors.background,

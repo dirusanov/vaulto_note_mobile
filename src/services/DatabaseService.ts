@@ -5,6 +5,7 @@ import { decrypt, encrypt, getCryptoMode, isMasterCiphertext } from '../crypto/e
 import { hasMasterKey } from '../crypto/e2ee';
 
 import { AudioService } from './AudioService';
+import { sanitizeStepLabel } from '../i18n/variantLabels';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
 
@@ -806,7 +807,12 @@ const processImprovements = async (rawImprovements: any[], includeDeleted: boole
             const list = grouped.get(improvement.note_id) ?? [];
             list.push(improvement);
             grouped.set(improvement.note_id, list);
-        } catch (e) { console.error(`[DatabaseService] Failed to decrypt improvement ${imp.id}`, e); }
+        } catch (e: any) {
+            // Expected until the master key is restored; the list re-reads
+            // local data once it is (see subscribeMasterKey in useNotes).
+            if (e?.message === 'E2EE locked' || e?.message === 'Master key missing') continue;
+            console.error(`[DatabaseService] Failed to decrypt improvement ${imp.id}`, e);
+        }
     }
     return grouped;
 };
@@ -1223,6 +1229,34 @@ export const deleteVoiceRecordingLocal = async (userId: string, id: string): Pro
         });
         await purgeAudioFiles(paths, 'delete voice');
     } catch (e) {}
+};
+
+/**
+ * Rewrites locally stored improvement labels that are not step names (older app
+ * versions put a content-derived title there). Local only: the server applies the
+ * same rule, so nothing is marked dirty and no timestamps move. Idempotent.
+ */
+export const sanitizeLocalImprovementLabels = async (userId: string): Promise<number> => {
+    if (!userId || Platform.OS === 'web') return 0;
+    try {
+        return await withDbRetry('sanitize improvement labels', async (database) => {
+            const rows = await database.getAllAsync<{ id: string; label: string | null; option_id: string | null }>(
+                'SELECT id, label, option_id FROM note_improvements WHERE user_id = ? AND label IS NOT NULL',
+                [userId]
+            );
+            let changed = 0;
+            for (const row of rows) {
+                const next = sanitizeStepLabel(row.label, row.option_id) ?? null;
+                if (next === row.label) continue;
+                await database.runAsync('UPDATE note_improvements SET label = ? WHERE id = ? AND user_id = ?', [next, row.id, userId]);
+                changed += 1;
+            }
+            return changed;
+        });
+    } catch (e) {
+        console.warn('[DatabaseService] Failed to sanitize improvement labels', e);
+        return 0;
+    }
 };
 
 export const setActiveVariant = async (userId: string, parentNoteId: string, activeChildId: string | null): Promise<void> => {

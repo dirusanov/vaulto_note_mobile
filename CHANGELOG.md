@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.0.74] - 2026-09-30
+
+### Fixed
+- **Voice transcription**: Uploads failed with "Unsupported FormDataPart implementation" because SDK 57's `expo/fetch` cannot send React Native `{ uri }` file parts; audio is now sent as an `expo-file-system` `File` (Vaulto AI and custom OpenAI-compatible endpoints).
+- **Recording inside a note**: A plain tap on the in-note mic opened a recorder that never started; it now records immediately (tap and long-press only choose the mode).
+- **AI agent**: A voice note turned into a checklist no longer keeps the raw dictation above the list; titles in a different script than the note (e.g. a Russian title on an English note) are dropped in favour of one derived from the content.
+- **AI improvements**: Variant titles come from the first line/heading instead of gluing heading and list items together; blank lines from model Markdown no longer become empty paragraphs.
+- **Raw mode**: "Raw Markdown" shows and edits Markdown instead of editor HTML; "Copy Markdown" copies real Markdown; Markdown links round-trip.
+- **Checklists**: Ticking a checkbox while reading no longer switches the note into edit mode.
+- **E2EE startup**: The notes list re-reads local data once the master key is restored, so notes no longer disappear after a reload; expected "E2EE locked" is not logged as an error.
+- **Microphone permission**: The recorder panel waits for the permission answer and explains a denial.
+- **Custom AI**: Opening the Custom AI tab no longer switches the provider until a connection test succeeds.
+- **Paywall**: Shows a message and a retry button when plans cannot be loaded.
+- **Android release build**: `hermesCommand` pointed at `react-native/sdks/hermesc`, which React Native 0.86 no longer ships; release builds now use the `hermes-compiler` package.
+
+### Added
+- **Note versions**: Chips name the step that produced a version ("Summarize", "Make Professional → Summarize") instead of repeating the first words of the text; duplicates are numbered.
+- **Improve from Original or this version**: With a version open, the AI sheet asks which text to improve; the result is always saved as a new version, so an existing version is never overwritten.
+- **All versions sheet**: A list of every version with its step, title, time and preview, plus "Use as main text" (the old original is kept as "Previous original"), "Copy to new note" and delete.
+- **Compare with Original**: Word-level diff of the open version against the original.
+- **Swipe between versions** while reading a note.
+- **Ask your notes**: A chat that answers questions from your notes with numbered sources that open the note. Retrieval runs on the device over decrypted notes; only the best-matching excerpts go to the AI, and local-only notes stay out unless AI is allowed for them. Opened from the new ✨ dock button or "Ask AI" under a search.
+- **Find tasks**: The note menu extracts action items with dates resolved against today ("on Friday" → Fri, Oct 2), adds the chosen ones as a checklist (skipping ones already there) or opens each in the system calendar editor to set a reminder (`expo-calendar`, no calendar permission needed).
+- **Transcribe on device**: A Settings switch downloads a Whisper model once and then transcribes recordings (plain and Agent Mode) on the phone, offline, without the audio leaving it; real-time dictation in the editor toolbar is enabled. The all-local AI provider stays off.
+- **Search button** in the dock; the search bar used to appear only by scrolling a list of six or more notes. A search without results says so instead of "Tap the microphone to record".
+
+### Changed
+- **Versions row**: "Original" stays pinned at the left; deleting a version is instant with Undo instead of a confirmation dialog.
+- **One title per note**: Switching versions no longer changes the note title in the header or in the list.
+- **Privacy**: A version's synced `label` now holds only the step name, never a title derived from the (end-to-end encrypted) note text or a custom prompt's name. Existing labels are rewritten once on the device at startup (and on the server by migration `20260930_01_sanitize_labels`), and the server rejects anything else.
+- **Localization**: Remaining hardcoded strings (balances, AI presets, agent status, recorder chips, editor placeholder) are translated in all ten locales.
+- **Accessibility**: Icon-only buttons have screen-reader labels.
+- **Note cards**: Previews keep line breaks and checklist state; untitled notes use their first line as the title.
+
 ## [1.0.72] - 2026-09-11
 
 ### Added

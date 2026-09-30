@@ -27,14 +27,24 @@ export const SelectionActionPanel = ({
     return (
         <View style={styles.container}>
             <View style={styles.content}>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <TouchableOpacity
+                    onPress={onClose}
+                    style={styles.closeButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('a11y.clearSelection', 'Clear selection')}
+                >
                     <MaterialIcons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
 
                 <Text style={styles.countText}>{t('notes.selectedCount', '{{count}} selected', { count: selectedCount })}</Text>
 
                 <View style={styles.actions}>
-                    <TouchableOpacity onPress={allPinned ? onUnpin : onPin} style={styles.actionButton}>
+                    <TouchableOpacity
+                        onPress={allPinned ? onUnpin : onPin}
+                        style={styles.actionButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={allPinned ? t('a11y.unpin', 'Unpin') : t('a11y.pin', 'Pin')}
+                    >
                         <MaterialIcons
                             name="push-pin"
                             size={24}
@@ -42,7 +52,12 @@ export const SelectionActionPanel = ({
                         />
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                    <TouchableOpacity
+                        onPress={onDelete}
+                        style={styles.actionButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.deleteSelected', 'Delete selected notes')}
+                    >
                         <MaterialIcons name="delete" size={24} color={colors.text} />
                     </TouchableOpacity>
                 </View>

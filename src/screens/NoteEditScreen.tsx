@@ -18,6 +18,7 @@ import {
     Share,
     Animated,
     AppState,
+    Linking,
 } from 'react-native';
 import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
@@ -46,9 +47,22 @@ import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadMod
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
+import { VersionsSheet, VersionListItem } from '../components/VersionsSheet';
+import { TasksSheet, TaskSheetItem } from '../components/TasksSheet';
+import {
+    checklistTitlesFromMarkdown,
+    googleCalendarUrl,
+    isTaskInNote,
+    taskToCalendarEvent,
+    tasksToChecklistMarkdown,
+    type ExtractedTask,
+} from '../utils/taskExtraction';
+import { markdownToTiptapHtml } from '../utils/tiptapMarkdownAdapter';
+import { CompareVersionsModal } from '../components/CompareVersionsModal';
+import { UndoSnackbar } from '../components/UndoSnackbar';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
-import { transcribeAudio, processVoiceNote } from '../services/TranscriptionService';
+import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
 import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
 import { Note, NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
@@ -62,6 +76,7 @@ import {
     AIImprovementOption,
     DEFAULT_IMPROVEMENT_OPTIONS,
     ensureTemplateHasPlaceholder,
+    extractTasks,
 } from '../services/AIService';
 import {
     AIProvider,
@@ -88,17 +103,37 @@ import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage } from '../utils/errorMessage';
-import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
+import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import {
     appendPlainTextSnippetToRichContent,
+    deriveAutoTitleFromPlainText,
     extractEmbeddedAudioPaths,
     hasMeaningfulRichContent,
     isRichHtmlContent,
     removeAudioFromRichContent,
+    normalizeModelMarkdownForEditor,
     richContentToAgentMarkdown,
+    richContentToMarkdown,
     richContentToPlainText,
     stripAudioEmbedsFromRichContent,
+    titleMatchesContextScript,
 } from '../utils/richContent';
+import { getLocalizedPresetDescription, getLocalizedPresetLabel } from '../i18n/presetLabels';
+import { getVersionSwipeHintSeen, setVersionSwipeHintSeen } from '../utils/storage';
+import {
+    agentOptionIdForMode,
+    buildLineageLabel,
+    buildVariantDisplayLabels,
+    chipTextForLabel,
+    englishStepName,
+    isDerivedLabel,
+    markUserVariantName,
+    plainVariantTitle,
+    userVariantName,
+    PREVIOUS_ORIGINAL_OPTION_ID,
+    storedStepLabelOf,
+    variantIconFor,
+} from '../i18n/variantLabels';
 import {
     resolveChecklistScaleForContent,
 } from '../utils/checklistScale';
@@ -183,7 +218,13 @@ const normalizeAttachedAudioPath = (value?: string | null): string | null => {
 const deriveTitleFromText = (text: string): string => {
     // The source can be raw markdown from the model or editor HTML, and both used
     // to leak syntax ("**Итоги:**") into the title field, which renders literally.
-    const cleaned = sanitizeDisplayLabel(richContentToPlainText(text || ''));
+    // Only the first block: sanitizeDisplayLabel folds newlines into spaces, so
+    // a heading and the list under it used to merge into one long "title".
+    const firstLine = richContentToPlainText(text || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .find(Boolean) || '';
+    const cleaned = sanitizeDisplayLabel(firstLine);
 
     if (!cleaned) return '';
 
@@ -207,7 +248,6 @@ const RICH_TASK_ITEM_BLOCK_REGEX = /<li\b(?=[^>]*data-type=(["'])taskItem\1)[^>]
 const RICH_CHECKBOX_INPUT_TAG_REGEX = /<input\b(?=[^>]*type=(["'])checkbox\1)[^>]*>/i;
 const RICH_DATA_CHECKED_ATTR_REGEX = /data-checked=(["'])(true|false)\1/i;
 const RICH_BOOLEAN_CHECKED_ATTR_REGEX = /\schecked(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/i;
-const TODO_LABEL_REGEX = /(todo|task|checklist|to-do|список|дела|чеклист)/i;
 const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:[-*]\s*\[(?:[ xX])?\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
 
 const stripListMarker = (value: string): string =>
@@ -523,11 +563,14 @@ const HeaderTitle = memo(({
     onChange,
     onFocus,
     inputRef,
+    autoTitle,
 }: {
     title: string;
     onChange: (t: string) => void;
     onFocus: () => void;
     inputRef?: React.RefObject<TextInput | null>;
+    /** What the notes list shows for an untitled note; hinted here too. */
+    autoTitle?: string;
 }) => {
     const { t } = useTranslation();
 
@@ -535,7 +578,7 @@ const HeaderTitle = memo(({
         <TextInput
             ref={inputRef}
             style={styles.titleInput}
-            placeholder={t('edit.titlePlaceholder', 'Title')}
+            placeholder={autoTitle || t('edit.titlePlaceholder', 'Title')}
             placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={onChange}
@@ -562,15 +605,20 @@ const MemoizedImprovementChips = memo(({
     noteImprovements,
     activeVariantId,
     handleVariantSelect,
-    confirmDeleteImprovement,
+    onRequestDelete,
+    onOpenAllVersions,
     optionIcons,
+    displayLabels,
 }: {
     noteImprovements: any[],
     activeVariantId: string,
     handleVariantSelect: (id: string) => void,
-    confirmDeleteImprovement: (id: string) => void,
+    onRequestDelete: (id: string) => void,
+    onOpenAllVersions: () => void,
     /** option id -> Material icon, so a chip shows which action produced it. */
     optionIcons: Record<string, string>,
+    /** variant id -> localized step label ("Summarize", "Professional → Summarize"). */
+    displayLabels: Record<string, string>,
 }) => {
     const { t } = useTranslation();
     const scrollRef = useRef<any>(null);
@@ -581,6 +629,7 @@ const MemoizedImprovementChips = memo(({
     const revealedForRef = useRef<string | null>(null);
 
     const revealChip = useCallback((variantId: string, force = false) => {
+        if (variantId === 'original') return; // pinned outside the scroll row
         if (!force && revealedForRef.current === variantId) return;
 
         const layout = chipLayoutsRef.current[variantId];
@@ -629,14 +678,34 @@ const MemoizedImprovementChips = memo(({
     }, [selectedVariantId, handleVariantSelect]);
 
     if (noteImprovements.length === 0) return null;
+    const originalActive = selectedVariantId === 'original';
     return (
-        <View style={styles.variantContainer}>
+        <View style={[styles.variantContainer, styles.variantRow]}>
+            {/* Original stays pinned: it is the reference every version is read against. */}
+            <TouchableOpacity
+                style={[styles.variantChip, styles.variantOriginalChip, originalActive && styles.variantChipActive]}
+                onPress={() => selectVariant('original')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: originalActive }}
+                accessibilityLabel={t("a11y.originalVersion", "Original version")}
+            >
+                <MaterialIcons
+                    name="lock"
+                    size={14}
+                    color={originalActive ? colors.background : colors.textSecondary}
+                    style={styles.variantChipIcon}
+                />
+                <Text style={[styles.variantChipText, originalActive && styles.variantChipTextActive]}>
+                    {t("edit.original")}
+                </Text>
+            </TouchableOpacity>
             <GestureHandlerScrollView
                 ref={scrollRef}
                 horizontal
                 nestedScrollEnabled
                 directionalLockEnabled
                 showsHorizontalScrollIndicator={false}
+                style={styles.variantScroll}
                 contentContainerStyle={styles.variantScrollContent}
                 keyboardShouldPersistTaps="always"
                 onLayout={(event) => {
@@ -646,38 +715,11 @@ const MemoizedImprovementChips = memo(({
                     revealChip(selectedVariantId);
                 }}
             >
-                <TouchableOpacity
-                    style={[styles.variantChip, selectedVariantId === 'original' && styles.variantChipActive]}
-                    onPress={() => selectVariant('original')}
-                    onLayout={(event) => {
-                        const { x, width } = event.nativeEvent.layout;
-                        chipLayoutsRef.current.original = { x, width };
-                        revealChip(selectedVariantId);
-                    }}
-                >
-                    <MaterialIcons
-                        name="lock"
-                        size={14}
-                        color={selectedVariantId === 'original' ? colors.background : colors.textSecondary}
-                        style={styles.variantChipIcon}
-                    />
-                    <Text
-                        style={[
-                            styles.variantChipText,
-                            selectedVariantId === 'original' && styles.variantChipTextActive,
-                        ]}
-                    >
-                        {t("edit.original")}
-                    </Text>
-                </TouchableOpacity>
-
                 {noteImprovements.map((imp: any, index: number) => {
                     const isActive = selectedVariantId === imp.id;
-                    const chipIcon = (imp.option_id && optionIcons[imp.option_id]) || 'auto-awesome';
-                    // Labels stored before markdown was stripped at creation still
-                    // carry "**"/"##", so clean them on the way to the screen too.
-                    const chipLabel = sanitizeDisplayLabel(imp.label || imp.title || '')
-                        || `${t("edit.improvement")} ${index + 1}`;
+                    const chipIcon = variantIconFor(imp, optionIcons);
+                    const chipLabel = displayLabels[imp.id] || `${t("edit.improvement")} ${index + 1}`;
+                    const chipText = chipTextForLabel(chipLabel);
                     return (
                         <View
                             style={styles.variantChipWrapper}
@@ -691,9 +733,20 @@ const MemoizedImprovementChips = memo(({
                             <TouchableOpacity
                                 style={[styles.variantChip, isActive && styles.variantChipActive]}
                                 onPress={() => selectVariant(imp.id)}
-                                onLongPress={() => confirmDeleteImprovement(imp.id)}
+                                onLongPress={onOpenAllVersions}
                                 delayLongPress={400}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isActive }}
+                                accessibilityLabel={chipLabel}
                             >
+                                {isDerivedLabel(chipLabel) && (
+                                    // Made from another version, not from the original.
+                                    <MaterialIcons
+                                        name="subdirectory-arrow-right"
+                                        size={14}
+                                        color={isActive ? colors.background : colors.textSecondary}
+                                    />
+                                )}
                                 <MaterialIcons
                                     name={chipIcon as any}
                                     size={14}
@@ -707,17 +760,18 @@ const MemoizedImprovementChips = memo(({
                                         isActive && styles.variantChipTextActive,
                                     ]}
                                 >
-                                    {chipLabel}
+                                    {chipText}
                                 </Text>
                             </TouchableOpacity>
                             {/* Close affordance only on the active chip, like editor tabs.
-                                Inactive chips are deleted via long-press, which stops
-                                stray taps from destroying a variant. */}
+                                Deleting is undoable, and the full list offers it for any version. */}
                             {isActive && (
                                 <TouchableOpacity
                                     style={styles.variantDeleteButton}
-                                    onPress={() => confirmDeleteImprovement(imp.id)}
+                                    onPress={() => onRequestDelete(imp.id)}
                                     hitSlop={6}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t("a11y.removeVersion", "Remove this version")}
                                 >
                                     <MaterialIcons name="close" size={14} color={colors.textMuted} />
                                 </TouchableOpacity>
@@ -726,6 +780,17 @@ const MemoizedImprovementChips = memo(({
                     );
                 })}
             </GestureHandlerScrollView>
+            {noteImprovements.length >= 2 && (
+                <TouchableOpacity
+                    style={styles.variantAllButton}
+                    onPress={onOpenAllVersions}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.allVersions", "All versions")}
+                >
+                    <MaterialIcons name="view-list" size={18} color={colors.primary} />
+                    <Text style={styles.variantAllCount}>{noteImprovements.length + 1}</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 });
@@ -959,7 +1024,29 @@ export const NoteEditScreen = () => {
         const improvement = existingNote?.improvements?.find(i => i.id === initialVariantId);
         return improvement?.title || improvement?.label || existingNote?.title || '';
     });
-    const [improvementToDelete, setImprovementToDelete] = useState<string | null>(null);
+    const [showVersionsSheet, setShowVersionsSheet] = useState(false);
+    const [showCompareVersions, setShowCompareVersions] = useState(false);
+    const [tasksSheet, setTasksSheet] = useState<{ visible: boolean; loading: boolean; error: string | null; tasks: TaskSheetItem[] }>({
+        visible: false, loading: false, error: null, tasks: [],
+    });
+    // Which text a preset runs on while a version is open; results are always saved
+    // as a new version, so choosing "this version" never overwrites anything.
+    const [improveSource, setImproveSource] = useState<'original' | 'current'>('original');
+    // Deleting a version hides it at once and only deletes after the undo window.
+    const [hiddenVariantIds, setHiddenVariantIds] = useState<string[]>([]);
+    const hiddenVariantIdsRef = useRef<string[]>([]);
+    hiddenVariantIdsRef.current = hiddenVariantIds;
+    const [undoMessage, setUndoMessage] = useState<string | null>(null);
+    const [renameTarget, setRenameTarget] = useState<{ id: string; value: string } | null>(null);
+    const [showSwipeHint, setShowSwipeHint] = useState(false);
+    const pendingVariantDeleteRef = useRef<{ id: string; noteId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+    const visibleImprovements = useMemo(
+        () => noteImprovements.filter((imp: any) => !hiddenVariantIds.includes(imp.id)),
+        [hiddenVariantIds, noteImprovements]
+    );
+    // The note keeps one title; versions have their own only internally.
+    const [noteTitle, setNoteTitle] = useState<string>(existingNote?.title || '');
+    const noteTitleSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isDeletingNote, setIsDeletingNote] = useState<boolean>(false);
     const [recordingToDelete, setRecordingToDelete] = useState<{ id: string, path: string } | null>(null);
     const [content, setContent] = useState(() => {
@@ -1017,9 +1104,13 @@ export const NoteEditScreen = () => {
     // Export & Share Refs and Handlers
     const viewShotRef = useRef<View>(null);
 
+    // Copy/share/export use the note's title, the one the header shows, not the
+    // open version's internal title.
+    const exportTitle = activeVariantId === 'original' ? title : (noteTitle || title);
+
     const handleCopyPlainText = async () => {
         setShowMenu(false);
-        const fullText = `${title}\n\n${richContentToPlainText(content)}`;
+        const fullText = `${exportTitle}\n\n${richContentToPlainText(content)}`;
         const plainText = richContentToPlainText(fullText);
         await Clipboard.setStringAsync(plainText.trim());
         showToast(t("edit.textCopied"));
@@ -1027,14 +1118,20 @@ export const NoteEditScreen = () => {
 
     const handleCopyMarkdown = async () => {
         setShowMenu(false);
-        const contentWithoutAudio = isRichHtmlContent(content)
-            ? richContentToPlainText(content)
-            : content
-                .replace(/!\[audio\]\([^)]+\)/g, '')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
+        let markdown = editMode === 'raw' ? rawMarkdownRef.current : richContentToMarkdown(content);
+        if (editMode === 'visual' && editorRef.current && isRichHtmlContent(content)) {
+            try {
+                markdown = await editorRef.current.getMarkdown();
+            } catch (error) {
+                console.warn('Failed to serialize editor document, using HTML fallback:', error);
+            }
+        }
+        const contentWithoutAudio = markdown
+            .replace(/^\s*!\[audio\]\([^)]+\)\s*$/gm, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
 
-        const fullText = `${title ? '# ' + title + '\n\n' : ''}${contentWithoutAudio}`;
+        const fullText = `${exportTitle ? '# ' + exportTitle + '\n\n' : ''}${contentWithoutAudio}`;
         await Clipboard.setStringAsync(fullText);
         showToast(t("edit.markdownCopied"));
     };
@@ -1049,11 +1146,11 @@ export const NoteEditScreen = () => {
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
 
-        const fullText = `${title}\n\n${contentWithoutAudio}`;
+        const fullText = `${exportTitle}\n\n${contentWithoutAudio}`;
         try {
             await Share.share({
                 message: fullText,
-                title: title || t("notes.note", "Note"),
+                title: exportTitle || t("notes.note", "Note"),
             });
         } catch (error) {
             console.error('Error sharing note:', error);
@@ -1069,14 +1166,14 @@ export const NoteEditScreen = () => {
                 : new Date().toISOString().split('T')[0];
 
             // Allow basic latin, numbers, and cyrillic, replace others with underscore
-            const safeTitle = (title || 'note').replace(/[^a-z0-9а-яё]/gi, '_').toLowerCase();
+            const safeTitle = (exportTitle || 'note').replace(/[^a-z0-9а-яё]/gi, '_').toLowerCase();
             const filename = `${safeTitle}_${dateStr}.md`;
 
             const fileUri = `${FileSystem.documentDirectory}${filename} `;
             const exportBody = isRichHtmlContent(content)
                 ? richContentToPlainText(content)
                 : content;
-            const fullText = `${title ? '# ' + title + '\n\n' : ''}${exportBody} `;
+            const fullText = `${exportTitle ? '# ' + exportTitle + '\n\n' : ''}${exportBody} `;
 
             await FileSystem.writeAsStringAsync(fileUri, fullText, {
                 encoding: 'utf8',
@@ -1209,6 +1306,17 @@ export const NoteEditScreen = () => {
         }, {}),
         [aiOptions]
     );
+    const aiOptionsById = useMemo(
+        () => aiOptions.reduce<Record<string, AIImprovementOption>>((acc, option) => {
+            if (option.id) acc[option.id] = option;
+            return acc;
+        }, {}),
+        [aiOptions]
+    );
+    const variantDisplayLabels = useMemo(
+        () => buildVariantDisplayLabels(visibleImprovements, t, aiOptionsById, (index) => `${t("edit.improvement")} ${index + 1}`),
+        [aiOptionsById, t, visibleImprovements]
+    );
     const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
     const [showPromptBuilder, setShowPromptBuilder] = useState(false);
     const [newPromptTitle, setNewPromptTitle] = useState('');
@@ -1222,6 +1330,11 @@ export const NoteEditScreen = () => {
     const [selectedRecordingForText, setSelectedRecordingForText] = useState<VoiceRecording | null>(null);
     const [pendingMicInputMode, setPendingMicInputMode] = useState<MicInputMode>('agent');
     const [rawSelection, setRawSelection] = useState({ start: 0, end: 0 });
+    // Raw mode edits Markdown while notes are stored as editor HTML, so the
+    // text shown is kept separately; the ref holds the content it mirrors.
+    const [rawMarkdown, setRawMarkdown] = useState('');
+    const rawMarkdownRef = useRef('');
+    const rawSourceContentRef = useRef<string | null>(null);
     const pendingMicInputModeRef = useRef<MicInputMode>('agent');
     const micLongPressHandledRef = useRef(false);
     const visualSelectionRef = useRef<{ start: number; end: number } | null>(null);
@@ -1546,6 +1659,7 @@ export const NoteEditScreen = () => {
     const editorRef = useRef<RichTextEditorHandle>(null);
     const titleInputRef = useRef<TextInput>(null);
     const rawEditorRef = useRef<TextInput>(null);
+    const handleContentChangeRef = useRef<(text: string) => void>(() => undefined);
     const keyboardVisibleRef = useRef(false);
     const visualEditorFocusedRef = useRef(false);
     const visualKeyboardHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1723,6 +1837,40 @@ export const NoteEditScreen = () => {
 
         return sanitizedLatestContent;
     }, [activeVariantId, editMode]);
+
+    const showRawMarkdown = useCallback((markdown: string, sourceContent: string) => {
+        rawSourceContentRef.current = sourceContent;
+        rawMarkdownRef.current = markdown;
+        setRawMarkdown(markdown);
+    }, []);
+
+    const enterRawMode = useCallback(async () => {
+        setShowMenu(false);
+        setIsEditing(false);
+        if (editMode === 'raw') {
+            return;
+        }
+
+        const latestContent = await flushVisualEditorContent();
+        let markdown = richContentToMarkdown(latestContent);
+        if (isRichHtmlContent(latestContent) && editorRef.current) {
+            try {
+                markdown = await editorRef.current.getMarkdown();
+            } catch (error) {
+                console.warn('Failed to serialize editor document, using HTML fallback:', error);
+            }
+        }
+
+        showRawMarkdown(markdown, latestContent);
+        setEditMode('raw');
+    }, [editMode, flushVisualEditorContent, showRawMarkdown]);
+
+    const handleRawTextChange = useCallback((text: string) => {
+        rawSourceContentRef.current = stripAudioEmbedsFromRichContent(text);
+        rawMarkdownRef.current = text;
+        setRawMarkdown(text);
+        handleContentChangeRef.current(text);
+    }, []);
 
     const prepareEditorSnapshotForExit = useCallback(async () => {
         titleInputRef.current?.blur();
@@ -1925,10 +2073,13 @@ export const NoteEditScreen = () => {
     const resolveTaskTargetVariantId = useCallback((task: AgentQueueTask): string => {
         const baseTargetVariantId = task.targetVariantId || 'original';
         if (!task.followLatestDerivedVariant) {
-            return baseTargetVariantId;
+            return hiddenVariantIdsRef.current.includes(baseTargetVariantId) ? 'original' : baseTargetVariantId;
         }
 
-        return derivedVariantBySourceRef.current[baseTargetVariantId] || baseTargetVariantId;
+        const target = derivedVariantBySourceRef.current[baseTargetVariantId] || baseTargetVariantId;
+        // A version waiting out its undo window (or already deleted) must not receive
+        // dictation that would vanish with it; the original is the safe fallback.
+        return hiddenVariantIdsRef.current.includes(target) ? 'original' : target;
     }, []);
 
 
@@ -2123,7 +2274,7 @@ export const NoteEditScreen = () => {
 
             noteImprovements.forEach(imp => {
                 const contentValue = stripAudioEmbedsFromRichContent(imp.content ?? '');
-                const titleValue = stripStoredTitleMarkdown(imp.title || imp.label || '');
+                const titleValue = stripStoredTitleMarkdown(imp.title || '');
 
                 if (saved[imp.id] === undefined) {
                     drafts[imp.id] = contentValue;
@@ -2232,7 +2383,7 @@ export const NoteEditScreen = () => {
                     const improvementContent = stripAudioEmbedsFromRichContent(improvement.content || '');
                     const improvementTitle =
                         improvementTitleDraftsRef.current[correctActiveVariantId] ??
-                        (improvement.title || improvement.label || existingNote.title || '');
+                        (improvement.title || existingNote.title || '');
                     syncVisibleContent(improvementContent);
                     syncVisibleTitle(improvementTitle);
                     improvementDraftsRef.current[correctActiveVariantId] = improvementContent;
@@ -2419,9 +2570,8 @@ export const NoteEditScreen = () => {
 
     const isTodoImprovementVariant = useCallback((variantId: string, baseContent: string): boolean => {
         if (variantId === 'original') return false;
-        if (TODO_LIST_LINE_REGEX.test(baseContent || '')) return true;
-        const label = noteImprovements.find((imp) => imp.id === variantId)?.label || '';
-        return TODO_LABEL_REGEX.test(label);
+        if (TODO_LIST_LINE_REGEX.test(baseContent || '') || /data-type=(["'])taskItem\1/i.test(baseContent || '')) return true;
+        return noteImprovements.find((imp) => imp.id === variantId)?.option_id === 'agent_todo';
     }, [noteImprovements]);
 
     const buildInsertedTextForVariant = useCallback((variantId: string, baseContent: string, dictatedText: string): string => {
@@ -2602,34 +2752,6 @@ export const NoteEditScreen = () => {
     const saveNoteRef = useRef<(() => Promise<void>) | null>(null);
 
 
-
-    const handleDeleteImprovementVariant = useCallback(async (improvementId: string) => {
-        if (!localNoteId) return;
-        try {
-            await deleteImprovement(localNoteId, improvementId);
-            delete improvementDraftsRef.current[improvementId];
-            delete improvementSavedRef.current[improvementId];
-            delete improvementTitleDraftsRef.current[improvementId];
-            delete improvementTitleSavedRef.current[improvementId];
-
-            // If deleting active variant, switch to original
-            if (activeVariantId === improvementId) {
-                setActiveVariantId('original');
-                activeVariantIdRef.current = 'original';
-                syncVisibleTitle(existingNote?.title || '');
-                syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
-                // Set parent as active
-                await setActiveVariant(localNoteId, null);
-            }
-        } catch (error) {
-            console.error('Failed to delete improvement', error);
-            Alert.alert('Error', 'Failed to delete improvement');
-        }
-    }, [activeVariantId, deleteImprovement, existingNote?.content, existingNote?.title, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
-
-    const confirmDeleteImprovement = (improvementId: string) => {
-        setImprovementToDelete(improvementId);
-    };
 
     const handleUndo = () => {
         const variantHistory = variantHistories.current[activeVariantId];
@@ -3105,11 +3227,10 @@ export const NoteEditScreen = () => {
 
         if (editMode !== 'visual') {
             const variantId = activeVariantIdRef.current;
+            // rawSelection indexes the Markdown on screen, not the stored HTML.
             const nextContent = insertBlockAtSelection(
-                currentVariantContent,
-                isRichHtmlContent(currentVariantContent)
-                    ? buildAudioEmbedHtml({ path: targetPath, duration: recording.duration })
-                    : `![audio](${targetPath})`,
+                rawMarkdownRef.current,
+                `![audio](${targetPath})`,
                 rawSelection
             );
 
@@ -3166,8 +3287,8 @@ export const NoteEditScreen = () => {
                 updates.content = draft;
             }
             if (hasTitleChanges) {
+                // Only the title changes: `label` names the step and syncs unencrypted.
                 updates.title = draftTitle;
-                updates.label = buildAgentImprovementLabel(draftTitle, savedTitle) || undefined;
             }
             await updateImprovement(localNoteId, activeVariantId, updates);
             if (hasContentChanges) {
@@ -3349,6 +3470,55 @@ export const NoteEditScreen = () => {
         }
     }, [debouncedSave]);
 
+    const noteTitleRef = useRef(noteTitle);
+    noteTitleRef.current = noteTitle;
+    // updateNote is not memoized in useNotes; a ref keeps the callbacks below stable
+    // so their unmount-only cleanup does not fire on every provider render.
+    const updateNoteRef = useRef(updateNote);
+    updateNoteRef.current = updateNote;
+    /** Trimmed title this screen last wrote, to tell our own echo from a foreign rename. */
+    const noteTitleSavedByScreenRef = useRef<string | null>(null);
+
+    const flushNoteTitleSave = useCallback(() => {
+        if (!noteTitleSaveTimerRef.current) return;
+        clearTimeout(noteTitleSaveTimerRef.current);
+        noteTitleSaveTimerRef.current = null;
+        const noteId = localNoteIdRef.current;
+        if (!noteId) return;
+        const text = noteTitleRef.current;
+        lastSavedTitle.current = text;
+        noteTitleSavedByScreenRef.current = text.trim();
+        void updateNoteRef.current(noteId, { title: text }).catch((error: unknown) => {
+            console.error('Failed to save note title', error);
+        });
+    }, []);
+
+    /** Editing the header while a version is open renames the note itself. */
+    const handleNoteTitleEditOnVariant = useCallback((text: string) => {
+        setNoteTitle(text);
+        noteTitleRef.current = text;
+        if (text.trim()) titleLockRef.current = true;
+        if (noteTitleSaveTimerRef.current) clearTimeout(noteTitleSaveTimerRef.current);
+        noteTitleSaveTimerRef.current = setTimeout(flushNoteTitleSave, 600);
+    }, [flushNoteTitleSave]);
+
+    useEffect(() => {
+        if (activeVariantId === 'original') {
+            setNoteTitle(title);
+        }
+    }, [activeVariantId, title]);
+
+    useEffect(() => {
+        if (activeVariantId === 'original' || noteTitleSaveTimerRef.current) return;
+        const stored = existingNote?.title || '';
+        // Our own save comes back trimmed; adopting it would eat a trailing space
+        // (and characters typed meanwhile). Only a rename from elsewhere is applied.
+        if (stored.trim() === (noteTitleSavedByScreenRef.current ?? '') || stored.trim() === noteTitleRef.current.trim()) return;
+        setNoteTitle(stored);
+    }, [activeVariantId, existingNote?.title]);
+
+    useEffect(() => () => flushNoteTitleSave(), [flushNoteTitleSave]);
+
     const handleContentChange = useCallback((text: string) => {
         const sanitizedText = stripAudioEmbedsFromRichContent(text);
         const variantId = activeVariantIdRef.current;
@@ -3368,6 +3538,114 @@ export const NoteEditScreen = () => {
 
         updateHistory(currentTitle, sanitizedText, variantId);
     }, [debouncedSave, stageOriginalCreationAutoScale]);
+    handleContentChangeRef.current = handleContentChange;
+
+    const currentNoteMarkdown = useCallback(async (): Promise<string> => {
+        if (editMode === 'raw') return rawMarkdownRef.current;
+        return richContentToMarkdown(await flushVisualEditorContent());
+    }, [editMode, flushVisualEditorContent]);
+
+    // Bumped when a search starts or the sheet closes, so a late answer cannot reopen it.
+    const tasksRequestRef = useRef(0);
+    const closeTasksSheet = useCallback(() => {
+        tasksRequestRef.current += 1;
+        setTasksSheet((prev) => ({ ...prev, visible: false, loading: false }));
+    }, []);
+
+    const runFindTasks = useCallback(async () => {
+        const request = ++tasksRequestRef.current;
+        setTasksSheet({ visible: true, loading: true, error: null, tasks: [] });
+        try {
+            const markdown = (await currentNoteMarkdown()).replace(/^\s*!\[audio\]\([^)]+\)\s*$/gm, '').trim();
+            const found = markdown ? await extractTasks(markdown) : [];
+            if (request !== tasksRequestRef.current) return;
+            const existing = checklistTitlesFromMarkdown(markdown);
+            setTasksSheet({
+                visible: true,
+                loading: false,
+                error: null,
+                tasks: found.map((task) => ({ ...task, inNote: isTaskInNote(task, existing) })),
+            });
+        } catch (error) {
+            if (request !== tasksRequestRef.current) return;
+            if (getErrorMessage(error, '').toLowerCase().includes('usage limit')) {
+                // The limit modal takes over.
+                setTasksSheet((prev) => ({ ...prev, visible: false, loading: false }));
+                return;
+            }
+            setTasksSheet({
+                visible: true,
+                loading: false,
+                error: t('edit.tasks.failed', 'Could not look for tasks. Check your connection and try again.'),
+                tasks: [],
+            });
+        }
+    }, [currentNoteMarkdown, t]);
+
+    const handleFindTasks = () => {
+        setShowMenu(false);
+        void handleAiAccess(() => { void runFindTasks(); });
+    };
+
+    const formatTaskDue = useCallback((task: ExtractedTask): string => {
+        if (!task.date) return '';
+        const [year, month, day] = task.date.split('-').map(Number);
+        let label = task.date;
+        try {
+            label = new Date(year, month - 1, day).toLocaleDateString(i18n.language, { weekday: 'short', month: 'short', day: 'numeric' });
+        } catch {
+            // Intl without this locale: keep the ISO date
+        }
+        return task.time ? `${label}, ${task.time}` : label;
+    }, [i18n.language]);
+
+    const handleAddTasksToNote = useCallback(async (tasks: ExtractedTask[]) => {
+        if (tasks.length === 0) return;
+        const checklist = tasksToChecklistMarkdown(tasks, formatTaskDue);
+        const base = editMode === 'raw' ? currentContentRef.current : await flushVisualEditorContent();
+        const next = isRichHtmlContent(base) || !base.trim()
+            ? `${base}${markdownToTiptapHtml(checklist)}`
+            : `${base.replace(/\s+$/, '')}\n\n${checklist}`;
+        closeTasksSheet();
+        syncVisibleContent(next);
+        handleContentChange(next);
+        showToast(t('edit.tasks.added', 'Tasks added to the note: {{count}}', { count: tasks.length }));
+    }, [closeTasksSheet, editMode, flushVisualEditorContent, formatTaskDue, handleContentChange, syncVisibleContent, t]);
+
+    const handleAddTaskToCalendar = useCallback(async (task: ExtractedTask): Promise<boolean> => {
+        const event = taskToCalendarEvent(task);
+        const details = (noteTitle || title || '').trim();
+        try {
+            const Calendar = require('expo-calendar/legacy') as typeof import('expo-calendar/legacy');
+            const result = await Calendar.createEventInCalendarAsync({
+                title: event.title,
+                startDate: event.startDate,
+                endDate: event.endDate,
+                allDay: event.allDay,
+                notes: details || undefined,
+            });
+            return result?.action !== 'canceled';
+        } catch (error) {
+            // Builds without the native calendar module: the web editor still works.
+            console.warn('[Tasks] Native calendar unavailable, using web fallback:', getErrorMessage(error, ''));
+            try {
+                await Linking.openURL(googleCalendarUrl(event, details));
+                return true;
+            } catch {
+                showToast(t('edit.tasks.calendarFailed', 'Could not open the calendar'));
+                return false;
+            }
+        }
+    }, [noteTitle, t, title]);
+
+    // Content replaced from elsewhere while the raw view is open (variant
+    // switch, undo, inserted recording): re-derive the Markdown shown.
+    useEffect(() => {
+        if (editMode !== 'raw' || content === rawSourceContentRef.current) {
+            return;
+        }
+        showRawMarkdown(richContentToMarkdown(content), content);
+    }, [content, editMode, showRawMarkdown]);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
         if (variantId === activeVariantId) {
@@ -3409,7 +3687,11 @@ export const NoteEditScreen = () => {
         activeVariantIdRef.current = variantId;
         optimisticActiveVariant.current = variantId;
         if (variantId === 'original') {
-            syncVisibleTitle(existingNote?.title || '');
+            // noteTitleRef is current even when a just-flushed rename has not
+            // refreshed existingNote yet; the stale prop would undo the rename.
+            flushNoteTitleSave();
+            // Only reached from a version (same-id selects return early above).
+            syncVisibleTitle(noteTitleRef.current);
             syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
         } else {
             syncVisibleTitle(resolveImprovementVariantTitle(variantId));
@@ -3422,7 +3704,238 @@ export const NoteEditScreen = () => {
             }
         }
         setReparseTrigger(prev => prev + 1);
-    }, [activeVariantId, existingNote?.content, existingNote?.title, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
+    }, [activeVariantId, existingNote?.content, existingNote?.title, flushNoteTitleSave, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
+
+    // ---- Versions: undoable delete, promote, copy, swipe -------------------------
+
+    const finalizePendingVariantDelete = useCallback(() => {
+        const pending = pendingVariantDeleteRef.current;
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        pendingVariantDeleteRef.current = null;
+        setUndoMessage(null);
+        Object.keys(derivedVariantBySourceRef.current).forEach((source) => {
+            if (source === pending.id || derivedVariantBySourceRef.current[source] === pending.id) {
+                delete derivedVariantBySourceRef.current[source];
+            }
+        });
+        void deleteImprovement(pending.noteId, pending.id)
+            .then(() => {
+                delete improvementDraftsRef.current[pending.id];
+                delete improvementSavedRef.current[pending.id];
+                delete improvementTitleDraftsRef.current[pending.id];
+                delete improvementTitleSavedRef.current[pending.id];
+            })
+            .catch((error: unknown) => {
+                console.error('Failed to delete improvement', error);
+                setHiddenVariantIds(prev => prev.filter(id => id !== pending.id));
+            });
+    }, [deleteImprovement]);
+
+    // Leaving the note must not resurrect a version the user already removed.
+    useEffect(() => () => finalizePendingVariantDelete(), [finalizePendingVariantDelete]);
+
+    const requestDeleteVariant = useCallback(async (improvementId: string) => {
+        const noteId = localNoteIdRef.current;
+        if (!noteId) return;
+        // One undo at a time: an earlier pending delete becomes final now.
+        finalizePendingVariantDelete();
+        if (activeVariantIdRef.current === improvementId) {
+            await handleVariantSelect('original');
+        }
+        setHiddenVariantIds(prev => (prev.includes(improvementId) ? prev : [...prev, improvementId]));
+        const timer = setTimeout(finalizePendingVariantDelete, 5000);
+        pendingVariantDeleteRef.current = { id: improvementId, noteId, timer };
+        setUndoMessage(t('edit.versions.deleted', 'Version deleted'));
+    }, [finalizePendingVariantDelete, handleVariantSelect, t]);
+
+    const undoVariantDelete = useCallback(() => {
+        const pending = pendingVariantDeleteRef.current;
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        pendingVariantDeleteRef.current = null;
+        setUndoMessage(null);
+        setHiddenVariantIds(prev => prev.filter(id => id !== pending.id));
+    }, []);
+
+    const handleMakeVariantMain = useCallback((improvementId: string) => {
+        Alert.alert(
+            t('edit.versions.makeMainConfirmTitle', 'Use this version as the main text?'),
+            t('edit.versions.makeMainConfirmBody', 'The current original is kept as a separate version, so nothing is lost.'),
+            [
+                { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                {
+                    text: t('edit.versions.makeMain', 'Use as main text'),
+                    onPress: () => {
+                        void (async () => {
+                            const noteId = localNoteIdRef.current;
+                            if (!noteId) return;
+                            try {
+                                const versionContent = resolveVariantContent(improvementId);
+                                if (activeVariantIdRef.current !== 'original') {
+                                    await handleVariantSelect('original');
+                                }
+                                const previousContent = resolveVariantContent('original');
+                                if (areTextsEquivalent(previousContent, versionContent)) {
+                                    showToast(t('edit.versions.madeMain', 'This version is now the main text'));
+                                    return;
+                                }
+                                const previousTitle = currentTitleRef.current || existingNote?.title || '';
+                                const previous = await createImprovement(noteId, {
+                                    content: previousContent,
+                                    title: previousTitle,
+                                    label: englishStepName({ id: PREVIOUS_ORIGINAL_OPTION_ID }),
+                                    optionId: PREVIOUS_ORIGINAL_OPTION_ID,
+                                });
+                                improvementDraftsRef.current[previous.id] = previousContent;
+                                improvementSavedRef.current[previous.id] = previousContent;
+                                improvementTitleDraftsRef.current[previous.id] = previousTitle;
+                                improvementTitleSavedRef.current[previous.id] = previousTitle;
+                                await setVariantContentWithOptions('original', versionContent, {
+                                    persist: true,
+                                    updateHistory: true,
+                                });
+                                // The promoted text now is the original; keeping it as a
+                                // version too would just duplicate it. Hide it now and delete
+                                // it a moment later: the sync started by switching to the
+                                // original can still write the server copy back over an
+                                // immediate delete.
+                                finalizePendingVariantDelete();
+                                setHiddenVariantIds(prev => (prev.includes(improvementId) ? prev : [...prev, improvementId]));
+                                pendingVariantDeleteRef.current = {
+                                    id: improvementId,
+                                    noteId,
+                                    timer: setTimeout(finalizePendingVariantDelete, 3000),
+                                };
+                                setReparseTrigger(prev => prev + 1);
+                                showToast(t('edit.versions.madeMain', 'This version is now the main text'));
+                            } catch (error) {
+                                console.error('Failed to promote version', error);
+                                Alert.alert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
+                            }
+                        })();
+                    },
+                },
+            ]
+        );
+    }, [createImprovement, existingNote?.title, finalizePendingVariantDelete, handleVariantSelect, resolveVariantContent, setVariantContentWithOptions, showToast, t]);
+
+    const handleCopyVariantToNewNote = useCallback(async (improvementId: string) => {
+        try {
+            await createNote({
+                title: noteTitle || existingNote?.title || '',
+                content: resolveVariantContent(improvementId),
+                storage_scope: storageScope,
+                privacy,
+            });
+            showToast(t('edit.versions.copied', 'Copied to a new note'));
+        } catch (error) {
+            console.error('Failed to copy version to a new note', error);
+            Alert.alert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
+        }
+    }, [createNote, existingNote?.title, noteTitle, privacy, resolveVariantContent, showToast, storageScope, t]);
+
+    const variantOrder = useMemo(
+        () => ['original', ...visibleImprovements.map((imp: any) => imp.id)],
+        [visibleImprovements]
+    );
+
+    const switchVariantBySwipeRef = useRef<(direction: 1 | -1) => void>(() => undefined);
+
+    const openRenameVersion = useCallback((improvementId: string) => {
+        setRenameTarget({ id: improvementId, value: variantDisplayLabels[improvementId] || '' });
+    }, [variantDisplayLabels]);
+
+    const saveRenameVersion = useCallback(async () => {
+        const target = renameTarget;
+        setRenameTarget(null);
+        const noteId = localNoteIdRef.current;
+        if (!target || !noteId) return;
+        const improvement = noteImprovements.find((imp: any) => imp.id === target.id);
+        const aiTitle = plainVariantTitle(improvementTitleDraftsRef.current[target.id] ?? improvement?.title ?? '');
+        // An empty name goes back to the step label; the AI title is kept either way.
+        const nextTitle = target.value.trim()
+            ? markUserVariantName(target.value)
+            : (userVariantName(improvement?.title) ? aiTitle : (improvement?.title || ''));
+        try {
+            await updateImprovement(noteId, target.id, { title: nextTitle });
+            improvementTitleDraftsRef.current[target.id] = nextTitle;
+            improvementTitleSavedRef.current[target.id] = nextTitle;
+        } catch (error) {
+            console.error('Failed to rename version', error);
+            Alert.alert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
+        }
+    }, [noteImprovements, renameTarget, t, updateImprovement]);
+
+    // Swiping is invisible until someone tells you: show it once, the first time a
+    // note has versions.
+    useEffect(() => {
+        if (visibleImprovements.length === 0 || showSwipeHint) return;
+        let cancelled = false;
+        void getVersionSwipeHintSeen().then((seen) => {
+            if (!cancelled && !seen) setShowSwipeHint(true);
+        });
+        return () => { cancelled = true; };
+    }, [showSwipeHint, visibleImprovements.length]);
+
+    const dismissSwipeHint = useCallback(() => {
+        setShowSwipeHint(false);
+        void setVersionSwipeHintSeen();
+    }, []);
+
+    const openVersionsSheet = useCallback(() => {
+        Keyboard.dismiss();
+        setShowVersionsSheet(true);
+    }, []);
+
+    // A second swipe can arrive before the first switch lands (it saves first), so
+    // step from the version being switched to, not the one still on screen.
+    const swipeTargetRef = useRef<string | null>(null);
+    const switchVariantBySwipe = useCallback((direction: 1 | -1) => {
+        const from = swipeTargetRef.current ?? activeVariantIdRef.current;
+        const index = variantOrder.indexOf(from);
+        const next = variantOrder[(index < 0 ? variantOrder.indexOf(activeVariantIdRef.current) : index) + direction];
+        if (!next) return;
+        swipeTargetRef.current = next;
+        void Haptics.selectionAsync().catch(() => undefined);
+        if (showSwipeHint) dismissSwipeHint();
+        void handleVariantSelect(next).finally(() => {
+            if (swipeTargetRef.current === next) swipeTargetRef.current = null;
+        });
+    }, [dismissSwipeHint, handleVariantSelect, showSwipeHint, variantOrder]);
+    switchVariantBySwipeRef.current = switchVariantBySwipe;
+    // Stable identity for the memoized editor; reads the latest state via the ref.
+    const handleEditorHorizontalSwipe = useCallback((direction: 1 | -1) => {
+        switchVariantBySwipeRef.current(direction);
+    }, []);
+
+    const versionListItems = useMemo<VersionListItem[]>(() => {
+        if (!showVersionsSheet) return [];
+        const snippetOf = (rich: string) => richContentToPlainText(rich).replace(/\s+/g, ' ').trim().slice(0, 160);
+        const timeOf = (iso?: string) => {
+            if (!iso) return undefined;
+            const date = new Date(iso);
+            if (Number.isNaN(date.getTime())) return undefined;
+            return date.toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        };
+        return [
+            {
+                id: 'original',
+                label: t('edit.original', 'Original'),
+                icon: 'lock',
+                title: noteTitle || undefined,
+                snippet: snippetOf(resolveVariantContent('original')),
+            },
+            ...visibleImprovements.map((imp: any, index: number) => ({
+                id: imp.id,
+                label: variantDisplayLabels[imp.id] || `${t('edit.improvement')} ${index + 1}`,
+                icon: variantIconFor(imp, improvementOptionIcons),
+                title: sanitizeDisplayLabel(plainVariantTitle(imp.title)) || undefined,
+                snippet: snippetOf(resolveVariantContent(imp.id)),
+                timeLabel: timeOf(imp.created_at),
+            })),
+        ];
+    }, [i18n.language, improvementOptionIcons, noteTitle, resolveVariantContent, showVersionsSheet, t, variantDisplayLabels, visibleImprovements]);
 
     useEffect(() => {
         const unsubscribe = navigation.addListener('beforeRemove', (event) => {
@@ -3826,7 +4339,6 @@ export const NoteEditScreen = () => {
                                 } else {
                                     await updateImprovement(localNoteIdRef.current, taskVariantId, {
                                         title: explicitTitle,
-                                        label: buildAgentImprovementLabel(explicitTitle, explicitTitle) || undefined,
                                     });
                                     improvementTitleDraftsRef.current[taskVariantId] = explicitTitle;
                                     improvementTitleSavedRef.current[taskVariantId] = explicitTitle;
@@ -3848,7 +4360,11 @@ export const NoteEditScreen = () => {
                             continue;
                         }
 
-                        const suggestedTitleRaw = sanitizeDisplayLabel(agentResult.suggestedTitle || '');
+                        const agentTitle = sanitizeDisplayLabel(agentResult.suggestedTitle || '');
+                        const suggestedTitleRaw = titleMatchesContextScript(
+                            agentTitle,
+                            `${contextContent || ''}\n${normalizedTaskText || ''}`
+                        ) ? agentTitle : '';
                         const suggestedTitle = suggestedTitleRaw || deriveTitleFromText(
                             processedText || contextContent || originalText
                         );
@@ -3888,12 +4404,22 @@ export const NoteEditScreen = () => {
                             } else if (contentAction === 'none') {
                                 newText = commandBaseContent;
                             } else {
+                                const isListResult = agentResult.mode === 'todo' || agentResult.mode === 'list';
                                 const duplicatesExistingStructuredBlock =
-                                    (agentResult.mode === 'todo' || agentResult.mode === 'list') &&
+                                    isListResult &&
                                     contentAlreadyContainsStructuredListBlock(commandBaseContent, processedText);
+                                // A note created by voice already holds the raw dictation. When
+                                // that dictation is the whole note and the agent turns it into a
+                                // list, the list replaces it instead of repeating it underneath.
+                                const noteIsOnlyThisDictation =
+                                    isListResult &&
+                                    !!originalText &&
+                                    areTextsEquivalent(richContentToPlainText(commandBaseContent), originalText);
                                 newText = duplicatesExistingStructuredBlock
                                     ? commandBaseContent
-                                    : appendSnippetToContent(commandBaseContent, processedText);
+                                    : noteIsOnlyThisDictation
+                                        ? processedText
+                                        : appendSnippetToContent(commandBaseContent, processedText);
                             }
 
                             if (newText !== null && !areTextsEquivalent(newText, commandBaseContent)) {
@@ -3958,10 +4484,12 @@ export const NoteEditScreen = () => {
                                         currentTitleRef.current || title || (existingNote?.title || ''),
                                     );
                                     const improvementTitle = generatedLabel || (existingNote?.title || '');
+                                    const agentOptionId = agentOptionIdForMode(agentResult.mode);
                                     const improvement = await createImprovement(targetNoteId, {
                                         content: newText,
                                         title: improvementTitle,
-                                        label: generatedLabel || undefined,
+                                        label: englishStepName({ id: agentOptionId }),
+                                        optionId: agentOptionId,
                                     });
                                     derivedVariantBySourceRef.current[task.targetVariantId || 'original'] = improvement.id;
 
@@ -4006,7 +4534,6 @@ export const NoteEditScreen = () => {
                                     if (localNoteIdRef.current && nextVariantTitle) {
                                         await updateImprovement(localNoteIdRef.current, taskVariantId, {
                                             title: nextVariantTitle,
-                                            label: buildAgentImprovementLabel(nextVariantTitle, nextVariantTitle) || undefined,
                                         });
                                         improvementTitleDraftsRef.current[taskVariantId] = nextVariantTitle;
                                         improvementTitleSavedRef.current[taskVariantId] = nextVariantTitle;
@@ -4307,7 +4834,8 @@ export const NoteEditScreen = () => {
             const wasNewNoteCreation = !localNoteIdRef.current;
             const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
             const provider = await getAIProvider();
-            const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai';
+            const onDeviceTranscription = await isOnDeviceTranscriptionActive();
+            const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDeviceTranscription;
             const shouldUseAgentModeForThisRecording =
                 micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
@@ -4318,7 +4846,7 @@ export const NoteEditScreen = () => {
                     setShowTranscriptionAuthModal(true);
                 }
             }
-            if (shouldTranscribe) {
+            if (shouldTranscribe && !onDeviceTranscription) {
                 const consentGranted = await requestPrivateAIConsent();
                 if (!consentGranted) {
                     shouldTranscribe = false;
@@ -4758,7 +5286,14 @@ export const NoteEditScreen = () => {
         visualSelectionRef.current = selection;
     }, []);
 
+    // Tiptap refocuses the editor while applying a checkbox toggle, and that
+    // focus report can arrive after the idle-toggle signal below.
+    const ignoreEditorFocusUntilRef = useRef(0);
     const handleVisualEditorFocus = useCallback(() => {
+        if (Date.now() < ignoreEditorFocusUntilRef.current) {
+            editorRef.current?.blur();
+            return;
+        }
         visualEditorFocusedRef.current = true;
         setIsEditing(true);
     }, []);
@@ -4767,9 +5302,17 @@ export const NoteEditScreen = () => {
         visualEditorFocusedRef.current = false;
     }, []);
 
+    // Ticking a checkbox while reading is not a request to start editing.
+    const handleChecklistToggledWhileIdle = useCallback(() => {
+        ignoreEditorFocusUntilRef.current = Date.now() + 600;
+        visualEditorFocusedRef.current = false;
+        Keyboard.dismiss();
+        setIsEditing(false);
+    }, []);
+
     const handleFormat = useCallback(async (type: MarkdownFormatType) => {
         if (type === 'dictate') {
-            if (!LOCAL_MODELS_ENABLED) return;
+            if (!LOCAL_WHISPER_ENABLED) return;
 
             if (isRealtimeDictating) {
                 await stopRealtimeDictation(true);
@@ -4846,16 +5389,22 @@ export const NoteEditScreen = () => {
         setTrackedIsAIProcessing(true);
         setActiveImprovementTask({
             id: 'improvement-' + Date.now(),
-            text: option.label || t('edit.improvePreview.working'),
+            text: getLocalizedPresetLabel(option, t) || t('edit.improvePreview.working'),
             isTranscribing: false,
         });
-        const variantAtRequestStart = activeVariantIdRef.current;
+        // The version the preset runs on: the original unless the user chose the open version.
+        const variantAtRequestStart = activeVariantIdRef.current !== 'original' && improveSource === 'current'
+            ? activeVariantIdRef.current
+            : 'original';
         try {
             const consentGranted = await requestPrivateAIConsent();
             if (!consentGranted) {
                 return;
             }
-            const sourceText = richContentToPlainText(content).trim();
+            const sourceRichText = variantAtRequestStart === activeVariantIdRef.current
+                ? content
+                : resolveVariantContent(variantAtRequestStart);
+            const sourceText = richContentToPlainText(sourceRichText).trim();
             if (!sourceText) {
                 Alert.alert(t('edit.improvePreview.title'), t('edit.improvePreview.emptyText'));
                 return;
@@ -4894,6 +5443,7 @@ export const NoteEditScreen = () => {
         finalText: string,
         variantAtRequestStart: string,
     ) => {
+        finalText = normalizeModelMarkdownForEditor(finalText);
         setTrackedIsAIProcessing(true);
         try {
             // Wait for any pending creation to finish
@@ -4917,7 +5467,7 @@ export const NoteEditScreen = () => {
                 lastSavedTitle.current = title;
                 lastSavedContent.current = stripAudioEmbedsFromRichContent(content);
                 await handleCreatedNoteAutoScale(newNote.id, content);
-            } else if (variantAtRequestStart === 'original') {
+            } else if (activeVariantIdRef.current === 'original') {
                 await saveNote();
             } else {
                 await saveImprovementDraft();
@@ -4930,73 +5480,36 @@ export const NoteEditScreen = () => {
             // Check if we're on the original note or a child variant
             console.log('[NoteEditScreen] Applying improvement');
 
-            if (variantAtRequestStart === 'original') {
-                // Create new child variant from parent
-                console.log('[NoteEditScreen] Creating new improvement variant');
-                const improvementTitle = (deriveTitleFromText(finalText) || title || existingNote?.title || '').trim();
-                const improvementLabel = buildAgentImprovementLabel(improvementTitle, option.label || '');
-                const improvement = await createImprovement(targetNoteId, {
-                    content: finalText,
-                    title: improvementTitle,
-                    label: improvementLabel || undefined,
-                    optionId: option.id,
-                });
-                improvementDraftsRef.current[improvement.id] = finalText;
-                improvementSavedRef.current[improvement.id] = finalText;
-                improvementTitleDraftsRef.current[improvement.id] = improvementTitle;
-                improvementTitleSavedRef.current[improvement.id] = improvementTitle;
+            // Every accepted result becomes a new version; the source is never overwritten.
+            const improvementTitle = (deriveTitleFromText(finalText) || title || existingNote?.title || '').trim();
+            const sourceStepLabel = variantAtRequestStart === 'original'
+                ? ''
+                : storedStepLabelOf(noteImprovements.find((imp) => imp.id === variantAtRequestStart), aiOptionsById);
+            const improvementLabel = buildLineageLabel(sourceStepLabel, englishStepName(option));
+            const improvement = await createImprovement(targetNoteId, {
+                content: finalText,
+                title: improvementTitle,
+                label: improvementLabel || undefined,
+                optionId: option.id,
+            });
+            improvementDraftsRef.current[improvement.id] = finalText;
+            improvementSavedRef.current[improvement.id] = finalText;
+            improvementTitleDraftsRef.current[improvement.id] = improvementTitle;
+            improvementTitleSavedRef.current[improvement.id] = improvementTitle;
+            variantHistories.current[improvement.id] = {
+                history: [{ title: improvementTitle, content: finalText }],
+                index: 0
+            };
 
-                // Initialize history for new variant
-                variantHistories.current[improvement.id] = {
-                    history: [{ title: improvementTitle, content: finalText }],
-                    index: 0
-                };
-                // No need to call setHistoryUpdateCount because index 0 means no undo yet, which is correct for new "file"
-
-                const shouldSwitchToNewImprovement = activeVariantIdRef.current === 'original';
-                if (shouldSwitchToNewImprovement) {
-                    setActiveVariantId(improvement.id);
-                    activeVariantIdRef.current = improvement.id;
-                    optimisticActiveVariant.current = improvement.id;
-                    setTitle(improvementTitle);
-                    setContent(finalText);
-                    currentContentRef.current = finalText;
-                    setReparseTrigger(prev => prev + 1);
-                    // Persist active variant asynchronously after optimistic switch to avoid UI fallback flicker.
-                    await setActiveVariant(targetNoteId, improvement.id);
-                }
-            } else {
-                // Update existing child variant in-place (no new children from children)
-                console.log('[NoteEditScreen] Updating existing improvement in-place');
-                const variantTitleBase = activeVariantIdRef.current === variantAtRequestStart
-                    ? currentTitleRef.current
-                    : resolveImprovementVariantTitle(variantAtRequestStart);
-                const nextVariantTitle = (variantTitleBase || deriveTitleFromText(finalText)).trim();
-                const nextVariantLabel = buildAgentImprovementLabel(nextVariantTitle, option.label || '');
-                await updateImprovement(targetNoteId, variantAtRequestStart, {
-                    content: finalText,
-                    title: nextVariantTitle,
-                    label: nextVariantLabel || undefined,
-                    optionId: option.id,
-                });
-
-                console.log('[NoteEditScreen] Improvement updated successfully');
-
-                // Update refs and UI with new content
-                improvementDraftsRef.current[variantAtRequestStart] = finalText;
-                improvementSavedRef.current[variantAtRequestStart] = finalText;
-                improvementTitleDraftsRef.current[variantAtRequestStart] = nextVariantTitle;
-                improvementTitleSavedRef.current[variantAtRequestStart] = nextVariantTitle;
-                if (activeVariantIdRef.current === variantAtRequestStart) {
-                    setTitle(nextVariantTitle);
-                    setContent(finalText);
-                    currentContentRef.current = finalText;
-                }
-
-                // Update history for this variant
-                updateHistoryImmediate(nextVariantTitle, finalText, variantAtRequestStart);
-                setReparseTrigger(prev => prev + 1);
-            }
+            setActiveVariantId(improvement.id);
+            activeVariantIdRef.current = improvement.id;
+            optimisticActiveVariant.current = improvement.id;
+            setTitle(improvementTitle);
+            setContent(finalText);
+            currentContentRef.current = finalText;
+            setReparseTrigger(prev => prev + 1);
+            // Persist active variant asynchronously after optimistic switch to avoid UI fallback flicker.
+            await setActiveVariant(targetNoteId, improvement.id);
 
             // Refresh profile to update balance in UI after deduction
             refreshProfile?.().catch(() => {});
@@ -5162,6 +5675,13 @@ export const NoteEditScreen = () => {
         });
 
     const plainContent = editMode === 'visual' ? visualPlainText : richContentToPlainText(content);
+    // Same rule NoteCard uses for untitled notes.
+    const autoTitle = useMemo(() => deriveAutoTitleFromPlainText(plainContent), [plainContent]);
+    // With a version open, an untitled note still hints the title the list shows.
+    const originalAutoTitle = useMemo(
+        () => (activeVariantId === 'original' ? '' : deriveAutoTitleFromPlainText(richContentToPlainText(existingNote?.content || ''))),
+        [activeVariantId, existingNote?.content]
+    );
     const charCount = plainContent.replace(/\r?\n/g, '').length;
     const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
@@ -5457,10 +5977,11 @@ export const NoteEditScreen = () => {
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
-                title={title}
-                onChange={handleTitleChange}
+                title={activeVariantId === 'original' ? title : noteTitle}
+                onChange={activeVariantId === 'original' ? handleTitleChange : handleNoteTitleEditOnVariant}
                 onFocus={() => setIsEditing(true)}
                 inputRef={titleInputRef}
+                autoTitle={activeVariantId === 'original' ? autoTitle : originalAutoTitle}
             />
 
             <HeaderMeta
@@ -5469,30 +5990,54 @@ export const NoteEditScreen = () => {
             />
 
             <MemoizedImprovementChips
-                noteImprovements={noteImprovements}
+                noteImprovements={visibleImprovements}
                 activeVariantId={activeVariantId}
                 handleVariantSelect={handleVariantSelect}
-                confirmDeleteImprovement={confirmDeleteImprovement}
+                onRequestDelete={requestDeleteVariant}
+                onOpenAllVersions={openVersionsSheet}
                 optionIcons={improvementOptionIcons}
+                displayLabels={variantDisplayLabels}
             />
+            {showSwipeHint && visibleImprovements.length > 0 && (
+                <View style={styles.swipeHint}>
+                    <MaterialIcons name="swipe" size={16} color={colors.primary} />
+                    <Text style={styles.swipeHintText}>{t('edit.versions.swipeHint', 'Swipe the text left or right to switch versions')}</Text>
+                    <TouchableOpacity
+                        onPress={dismissSwipeHint}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.close', 'Close')}
+                    >
+                        <MaterialIcons name="close" size={16} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     ), [
         activeVariantId,
+        autoTitle,
         charCount,
-        confirmDeleteImprovement,
         dateStr,
+        handleNoteTitleEditOnVariant,
+        originalAutoTitle,
         handleTitleChange,
         handleVariantSelect,
         improvementOptionIcons,
-        noteImprovements,
+        noteTitle,
+        openVersionsSheet,
+        requestDeleteVariant,
+        dismissSwipeHint,
+        showSwipeHint,
         title,
+        variantDisplayLabels,
+        visibleImprovements,
     ]);
 
     return (
         <ScreenContainer>
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={t("a11y.back", "Back")}>
                     <MaterialIcons name="arrow-back" size={28} color={colors.text} />
                 </TouchableOpacity>
                 <View style={styles.headerRight}>
@@ -5500,14 +6045,17 @@ export const NoteEditScreen = () => {
                     <TouchableOpacity
                         onPress={() => setShowAppearanceModal(true)}
                         style={styles.iconButton}
+                        accessibilityRole="button" accessibilityLabel={t("a11y.textAppearance", "Text appearance")}
                     >
                         <MaterialIcons name="text-fields" size={24} color={colors.text} />
                     </TouchableOpacity>
                     {/* AI Improvement Button */}
                     <TouchableOpacity
-                        onPress={() => { void handleAiAccess(() => setShowAIModal(true)); }}
+                        onPress={() => { void handleAiAccess(() => { setImproveSource('original'); setShowAIModal(true); }); }}
                         style={[styles.iconButton, (!canUseAI || isAIProcessing) && styles.disabledIcon]}
                         disabled={isAIProcessing || !canUseAI}
+                        accessibilityRole="button" accessibilityLabel={t("a11y.improveWithAI", "Improve with AI")}
+                        accessibilityState={{ disabled: isAIProcessing || !canUseAI, busy: isAIProcessing }}
                     >
                         {isAIProcessing ? (
                             <ActivityIndicator size="small" color={colors.primary} />
@@ -5528,6 +6076,7 @@ export const NoteEditScreen = () => {
                                 setShowRecordingsList(true);
                             }}
                             style={styles.iconButton}
+                            accessibilityRole="button" accessibilityLabel={t("a11y.recordVoice", "Voice recordings")}
                         >
                             <MaterialIcons name="mic" size={24} color={colors.text} />
                         </TouchableOpacity>
@@ -5541,6 +6090,7 @@ export const NoteEditScreen = () => {
                             <TouchableOpacity
                                 onPress={handleUndo}
                                 style={styles.iconButton}
+                                accessibilityRole="button" accessibilityLabel={t("a11y.undo", "Undo")}
                                 disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === 0}
                             >
                                 <MaterialIcons
@@ -5552,6 +6102,7 @@ export const NoteEditScreen = () => {
                             <TouchableOpacity
                                 onPress={handleRedo}
                                 style={styles.iconButton}
+                                accessibilityRole="button" accessibilityLabel={t("a11y.redo", "Redo")}
                                 disabled={!variantHistories.current[activeVariantId] || variantHistories.current[activeVariantId].index === (variantHistories.current[activeVariantId].history.length - 1)}
                             >
                                 <MaterialIcons
@@ -5565,12 +6116,12 @@ export const NoteEditScreen = () => {
 
                     {isEditing ? (
                         <>
-                            <TouchableOpacity onPress={handleCheckPress} style={styles.iconButton}>
+                            <TouchableOpacity onPress={handleCheckPress} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={t("a11y.done", "Done editing")}>
                                 <MaterialIcons name="check" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </>
                     ) : (
-                        <TouchableOpacity onPress={() => setShowMenu(true)} style={styles.iconButton}>
+                        <TouchableOpacity onPress={() => setShowMenu(true)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={t("a11y.moreOptions", "More options")}>
                             <MaterialIcons name="more-vert" size={24} color={colors.text} />
                         </TouchableOpacity>
                     )}
@@ -5590,9 +6141,9 @@ export const NoteEditScreen = () => {
                             <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 16 }]}>
                                 <View style={styles.aiModalHeader}>
                                     <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]} numberOfLines={1}>
-                                        {improvementPreview?.option.label || t('edit.improvePreview.title')}
+                                        {getLocalizedPresetLabel(improvementPreview?.option, t) || t('edit.improvePreview.title')}
                                     </Text>
-                                    <TouchableOpacity onPress={handlePreviewDiscard} hitSlop={8}>
+                                    <TouchableOpacity onPress={handlePreviewDiscard} hitSlop={8} accessibilityRole="button" accessibilityLabel={t("a11y.close", "Close")}>
                                         <MaterialIcons name="close" size={22} color={colors.textSecondary} />
                                     </TouchableOpacity>
                                 </View>
@@ -5675,6 +6226,37 @@ export const NoteEditScreen = () => {
                                             </TouchableOpacity>
                                         </View>
                                     </View>
+
+                                    {activeVariantId !== 'original' && (
+                                        // With a version open, choose what the preset runs on. The
+                                        // result is always saved as a new version either way.
+                                        <View style={styles.improveSourceRow}>
+                                            <Text style={styles.improveSourceLabel}>{t('edit.versions.improveFrom', 'Improve')}</Text>
+                                            <View style={styles.improveSourceSegments}>
+                                                {(['original', 'current'] as const).map((source) => {
+                                                    const selected = improveSource === source;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={source}
+                                                            style={[styles.improveSourceSegment, selected && styles.improveSourceSegmentActive]}
+                                                            onPress={() => setImproveSource(source)}
+                                                            accessibilityRole="radio"
+                                                            accessibilityState={{ selected }}
+                                                        >
+                                                            <Text
+                                                                style={[styles.improveSourceSegmentText, selected && styles.improveSourceSegmentTextActive]}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {source === 'original'
+                                                                    ? t('edit.original', 'Original')
+                                                                    : (variantDisplayLabels[activeVariantId] || t('edit.versions.thisVersion', 'This version'))}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                    )}
 
                                     {/* Custom Instruction Box */}
                                     <View style={styles.customInstructionBox}>
@@ -5766,8 +6348,13 @@ export const NoteEditScreen = () => {
                                                                 <MaterialIcons name={item.icon as any} size={24} color={colors.primary} />
                                                             </View>
                                                             <View style={styles.aiOptionTextWrapper}>
-                                                                <Text style={styles.aiOptionLabel}>{item.label}</Text>
-                                                                {renderOptionPrompt(item.prompt)}
+                                                                <Text style={styles.aiOptionLabel}>{getLocalizedPresetLabel(item, t)}</Text>
+                                                                {(() => {
+                                                                    const description = getLocalizedPresetDescription(item, t);
+                                                                    return description != null
+                                                                        ? <Text style={styles.aiOptionPrompt} numberOfLines={1}>{description}</Text>
+                                                                        : renderOptionPrompt(item.prompt);
+                                                                })()}
                                                             </View>
                                                             {item.isCustom && (
                                                                 <TouchableOpacity
@@ -5909,7 +6496,7 @@ export const NoteEditScreen = () => {
                                 <Text style={[styles.menuItemText, editMode === 'visual' && { color: colors.primary, fontWeight: 'bold' }]}>{t("edit.visualEditor", "Visual Editor")}</Text>
                                 {editMode === 'visual' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => { setEditMode('raw'); setShowMenu(false); setIsEditing(false); }} style={styles.menuItem}>
+                            <TouchableOpacity onPress={() => { void enterRawMode(); }} style={styles.menuItem}>
                                 <MaterialIcons name="code" size={20} color={editMode === 'raw' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
                                 <Text style={[styles.menuItemText, editMode === 'raw' && { color: colors.primary, fontWeight: 'bold' }]}>{t("edit.rawMarkdown", "Raw Markdown")}</Text>
                                 {editMode === 'raw' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
@@ -5928,6 +6515,39 @@ export const NoteEditScreen = () => {
                                 <MaterialIcons name="code" size={20} color={colors.text} style={{ marginRight: 12 }} />
                                 <Text style={styles.menuItemText}>{t("edit.copyMarkdown", "Copy Markdown")}</Text>
                             </TouchableOpacity>
+
+                            <View style={styles.menuDivider} />
+                            <TouchableOpacity onPress={handleFindTasks} style={styles.menuItem}>
+                                <MaterialIcons name="task-alt" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                                <Text style={styles.menuItemText}>{t("edit.tasks.find", "Find tasks")}</Text>
+                            </TouchableOpacity>
+                            {visibleImprovements.length > 0 && (
+                                <>
+                                    <View style={styles.menuDivider} />
+                                    <View style={styles.menuSectionHeader}>
+                                        <Text style={styles.menuSectionTitle}>{t("edit.versions.menuSection", "VERSIONS")}</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => { setShowMenu(false); openVersionsSheet(); }}
+                                        style={styles.menuItem}
+                                    >
+                                        <MaterialIcons name="view-list" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <Text style={styles.menuItemText}>{t("edit.versions.all", "All versions")}</Text>
+                                    </TouchableOpacity>
+                                    {activeVariantId !== 'original' && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setShowMenu(false);
+                                                void flushVisualEditorContent().finally(() => setShowCompareVersions(true));
+                                            }}
+                                            style={styles.menuItem}
+                                        >
+                                            <MaterialIcons name="compare-arrows" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                            <Text style={styles.menuItemText}>{t("edit.versions.compare", "Compare with Original")}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </>
+                            )}
 
                             {canShareOrExport ? (
                                 <>
@@ -6043,14 +6663,12 @@ export const NoteEditScreen = () => {
                             ]}
                             multiline
                             onFocus={() => setIsEditing(true)}
-                            value={content}
+                            value={rawMarkdown}
                             onSelectionChange={(event) => {
                                 setRawSelection(event.nativeEvent.selection);
                             }}
-                            onChangeText={(text) => {
-                                // Direct update for raw mode, bypassing auto-list logic
-                                handleContentChange(text);
-                            }}
+                            // Direct update for raw mode, bypassing auto-list logic
+                            onChangeText={handleRawTextChange}
                             placeholder={t('edit.placeholderMarkdown', 'Start typing markdown...')}
                             placeholderTextColor={colors.textMuted}
                             textAlignVertical="top"
@@ -6072,6 +6690,8 @@ export const NoteEditScreen = () => {
                             onActiveStylesChange={setActiveFormats}
                             onFocus={handleVisualEditorFocus}
                             onBlur={handleVisualEditorBlur}
+                            onChecklistToggledWhileIdle={handleChecklistToggledWhileIdle}
+                            onHorizontalSwipe={handleEditorHorizontalSwipe}
                             placeholder={t('edit.placeholderVisual', 'Start typing...')}
                             onAudioAction={handleAudioActionFromEditor}
                         />
@@ -6090,7 +6710,7 @@ export const NoteEditScreen = () => {
                     <View pointerEvents="auto" style={styles.toolbarKeyboardInner}>
                         <MarkdownToolbar
                             onFormat={handleFormat}
-                            showDictate={LOCAL_MODELS_ENABLED}
+                            showDictate={LOCAL_WHISPER_ENABLED}
                             activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
                             onColorPickerToggle={(visible) => {
                                 setIsColorPickerVisible(visible);
@@ -6144,18 +6764,71 @@ export const NoteEditScreen = () => {
                 onCancel={() => setShowPrivacyWarning(false)}
             />
 
-            <DeleteConfirmationDialog
-                visible={improvementToDelete !== null}
-                title={t('edit.deleteImprovementTitle', 'Delete Improvement?')}
-                message={t('edit.deleteImprovementDesc', 'This version will be removed. You can always regenerate it later.')}
-                onCancel={() => setImprovementToDelete(null)}
-                onConfirm={() => {
-                    if (improvementToDelete) {
-                        handleDeleteImprovementVariant(improvementToDelete);
-                        setImprovementToDelete(null);
-                    }
-                }}
+            <TasksSheet
+                visible={tasksSheet.visible}
+                loading={tasksSheet.loading}
+                error={tasksSheet.error}
+                tasks={tasksSheet.tasks}
+                formatDue={formatTaskDue}
+                onClose={closeTasksSheet}
+                onRetry={() => { void runFindTasks(); }}
+                onAddToNote={(tasks) => { void handleAddTasksToNote(tasks); }}
+                onAddToCalendar={handleAddTaskToCalendar}
             />
+
+            <VersionsSheet
+                visible={showVersionsSheet}
+                items={versionListItems}
+                activeId={activeVariantId}
+                onClose={() => setShowVersionsSheet(false)}
+                onSelect={(id) => { void handleVariantSelect(id); }}
+                onDelete={(id) => { void requestDeleteVariant(id); }}
+                onMakeMain={handleMakeVariantMain}
+                onCopyToNewNote={(id) => { void handleCopyVariantToNewNote(id); }}
+                onRename={openRenameVersion}
+            />
+
+            <Modal
+                visible={renameTarget !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setRenameTarget(null)}
+            >
+                <View style={styles.renameOverlay}>
+                    <View style={styles.renameCard}>
+                        <Text style={styles.renameTitle}>{t('edit.versions.renameTitle', 'Rename version')}</Text>
+                        <TextInput
+                            value={renameTarget?.value ?? ''}
+                            onChangeText={(value) => setRenameTarget(prev => (prev ? { ...prev, value } : prev))}
+                            placeholder={t('edit.versions.renamePlaceholder', 'Version name')}
+                            placeholderTextColor={colors.textMuted}
+                            style={styles.renameInput}
+                            autoFocus
+                            maxLength={60}
+                            returnKeyType="done"
+                            onSubmitEditing={() => { void saveRenameVersion(); }}
+                        />
+                        <View style={styles.renameActions}>
+                            <TouchableOpacity onPress={() => setRenameTarget(null)} style={styles.renameButton}>
+                                <Text style={styles.renameCancelText}>{t('common.cancel', 'Cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => { void saveRenameVersion(); }} style={styles.renameButton}>
+                                <Text style={styles.renameSaveText}>{t('common.save', 'Save')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <CompareVersionsModal
+                visible={showCompareVersions}
+                versionLabel={variantDisplayLabels[activeVariantId] || ''}
+                originalText={showCompareVersions ? richContentToPlainText(resolveVariantContent('original')) : ''}
+                versionText={showCompareVersions ? richContentToPlainText(content) : ''}
+                onClose={() => setShowCompareVersions(false)}
+            />
+
+            <UndoSnackbar message={undoMessage} onUndo={undoVariantDelete} />
 
             <DeleteConfirmationDialog
                 visible={recordingToDelete !== null}
@@ -6226,7 +6899,10 @@ export const NoteEditScreen = () => {
 
             <VoiceRecorder
                 visible={showVoiceRecorder}
-                autoStart={micLongPressHandledRef.current}
+                // Tap and long-press only choose the mode (micMode); both start
+                // recording at once. Passing the long-press ref here left a plain
+                // tap with an idle panel whose every control was disabled.
+                autoStart
                 micMode={pendingMicInputMode}
                 isMainScreen={false}
                 onFinish={(rec, transcribe, agentEnabled) => {
@@ -6619,6 +7295,135 @@ const styles = StyleSheet.create({
     },
     variantContainer: {
         marginBottom: spacing.m,
+    },
+    variantRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    swipeHint: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        marginTop: -spacing.s,
+        marginBottom: spacing.m,
+        paddingVertical: 8,
+        paddingHorizontal: spacing.m,
+        borderRadius: 10,
+        backgroundColor: colors.primaryLight,
+    },
+    swipeHintText: {
+        flex: 1,
+        fontSize: 13,
+        color: colors.text,
+    },
+    renameOverlay: {
+        flex: 1,
+        backgroundColor: colors.overlay,
+        justifyContent: 'center',
+        padding: spacing.l,
+    },
+    renameCard: {
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        padding: spacing.m,
+    },
+    renameTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: spacing.m,
+    },
+    renameInput: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 10,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 10,
+        fontSize: 16,
+        color: colors.text,
+    },
+    renameActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: spacing.s,
+        marginTop: spacing.m,
+    },
+    renameButton: {
+        paddingVertical: 8,
+        paddingHorizontal: spacing.m,
+    },
+    renameCancelText: {
+        fontSize: 15,
+        color: colors.textSecondary,
+        fontWeight: '600',
+    },
+    renameSaveText: {
+        fontSize: 15,
+        color: colors.primary,
+        fontWeight: '700',
+    },
+    improveSourceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.m,
+        gap: spacing.s,
+    },
+    improveSourceLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    improveSourceSegments: {
+        flex: 1,
+        flexDirection: 'row',
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 10,
+        padding: 3,
+    },
+    improveSourceSegment: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 7,
+        paddingHorizontal: spacing.s,
+        borderRadius: 8,
+    },
+    improveSourceSegmentActive: {
+        backgroundColor: colors.surface,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 1,
+    },
+    improveSourceSegmentText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: colors.textSecondary,
+    },
+    improveSourceSegmentTextActive: {
+        color: colors.text,
+        fontWeight: '600',
+    },
+    variantOriginalChip: {
+        marginRight: spacing.xs,
+    },
+    variantScroll: {
+        flex: 1,
+    },
+    variantAllButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: spacing.xs,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 18,
+        backgroundColor: colors.primaryLight,
+    },
+    variantAllCount: {
+        marginLeft: 4,
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.primary,
     },
     variantScrollContent: {
         alignItems: 'center',

@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.72</string>
+    <string>1.0.74</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -33,7 +33,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>72</string>
+    <string>74</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
@@ -47,6 +47,10 @@
     </dict>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Vaulto Note adds tasks from your notes to your calendar when you ask it to.</string>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+    <string>Vaulto Note adds tasks from your notes to your calendar when you ask it to.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow Vaulto Note to access your microphone to record voice notes.</string>
     <key>RCTNewArchEnabled</key>

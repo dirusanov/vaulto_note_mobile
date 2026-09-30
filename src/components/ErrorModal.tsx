@@ -24,7 +24,7 @@ interface ErrorModalProps {
 
 export const ErrorModal: React.FC<ErrorModalProps> = ({
     visible,
-    title = 'Error',
+    title,
     message,
     onClose,
     secondaryActionLabel,
@@ -51,7 +51,7 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({
                                 />
                             </View>
 
-                            <Text style={styles.title}>{title}</Text>
+                            <Text style={styles.title}>{title ?? t('common.errorTitle', 'Error')}</Text>
 
                             <Text style={styles.message}>
                                 {message}

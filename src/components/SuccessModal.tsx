@@ -24,7 +24,7 @@ interface SuccessModalProps {
 
 export const SuccessModal: React.FC<SuccessModalProps> = ({
     visible,
-    title = 'Success',
+    title,
     message,
     iconName = 'check-circle-outline',
     iconColor = colors.success,
@@ -51,7 +51,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
                                 />
                             </View>
 
-                            <Text style={styles.title}>{title}</Text>
+                            <Text style={styles.title}>{title ?? t('common.successTitle', 'Success')}</Text>
 
                             <Text style={styles.message}>
                                 {message}

@@ -43,21 +43,21 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
         >
             <View style={styles.overlay}>
                 <View style={styles.modal}>
-                    <Text style={styles.title}>🔒 Privacy</Text>
+                    <Text style={styles.title}>🔒 {t('aux.privacyTitle', 'Privacy')}</Text>
 
                     <Text style={styles.message}>
-                        Audio recording will be sent to OpenAI server for
-                        transcription to text.
+                        {t('aux.privacyWarning', 'Audio recording will be sent to OpenAI server for transcription to text.')}
                     </Text>
 
                     <Text style={styles.message}>
-                        Please don't record confidential information
-                        if you don't trust OpenAI.
+                        {t('aux.privacyWarning2', "Please don't record confidential information if you don't trust OpenAI.")}
                     </Text>
 
                     <TouchableOpacity
                         style={styles.checkbox}
                         onPress={() => setDontShowAgain(!dontShowAgain)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: dontShowAgain }}
                     >
                         <View style={[
                             styles.checkboxBox,
@@ -66,7 +66,7 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
                             {dontShowAgain && <Text style={styles.checkmark}>✓</Text>}
                         </View>
                         <Text style={styles.checkboxLabel}>
-                            Don't show again
+                            {t('aux.dontShowAgain', "Don't show again")}
                         </Text>
                     </TouchableOpacity>
 

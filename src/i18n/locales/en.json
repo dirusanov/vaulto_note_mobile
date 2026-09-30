@@ -54,7 +54,8 @@
     "resetRecoveryDescription": "Your retained notes are local-only and sync is paused. Choose how to recover them in Settings.",
     "reviewRecovery": "Review options",
     "note": "Note",
-    "selectedCount": "{{count}} selected"
+    "selectedCount": "{{count}} selected",
+    "noSearchResults": "No notes match your search"
   },
   "settings": {
     "title": "Settings",
@@ -211,7 +212,10 @@
       "syncPendingMessage": "End-to-end encryption has been disabled on this device. However, your notes could not be synced to the server right now. They will be automatically updated to plain text as soon as you have an internet connection.",
       "unableDisableSync": "Unable to disable sync.",
       "cloudSync": "Cloud Sync",
-      "failed": "Failed"
+      "failed": "Failed",
+      "advAISettingsDescCustom": "Custom AI configuration.",
+      "advAISettingsDescLocal": "Local and custom AI configurations",
+      "customAIPendingHint": "Vaulto AI stays active until the connection test succeeds."
     },
     "recovery": {
       "title": "Recovery Code",
@@ -246,6 +250,11 @@
       "standardSyncDescription": "Notes use standard cloud sync. Vaulto can technically process their contents to provide server features and account recovery.",
       "syncOff": "Cloud sync is off",
       "syncOffDescription": "New changes stay on this device until you enable a sync mode."
+    },
+    "onDevice": {
+      "title": "Transcribe on device",
+      "active": "{{model}} model · offline, audio stays on the phone",
+      "desc": "Private and offline. Downloads a speech model once."
     }
   },
   "languages": {
@@ -407,7 +416,75 @@
     "deleteRecordingTitle": "Delete Recording?",
     "deleteRecordingDesc": "Are you sure you want to delete this recording?",
     "deleteNoteDesc": "Are you sure you want to delete this note?",
-    "micHintHold": "Hold: no agent"
+    "micHintHold": "Hold: no agent",
+    "presets": {
+      "grammar": {
+        "label": "Fix Grammar",
+        "description": "Fix spelling and grammar"
+      },
+      "professional": {
+        "label": "Make Professional",
+        "description": "Rewrite in a professional, business tone"
+      },
+      "simplify": {
+        "label": "Simplify Text",
+        "description": "Use simple, easy-to-understand words"
+      },
+      "summarize": {
+        "label": "Summarize",
+        "description": "Keep only the most important points"
+      },
+      "structure": {
+        "label": "Structure",
+        "description": "Add headings and lists for readability"
+      }
+    },
+    "versions": {
+      "improveFrom": "Improve",
+      "thisVersion": "This version",
+      "sheetTitle": "Versions",
+      "all": "All versions",
+      "menuSection": "VERSIONS",
+      "compare": "Compare with Original",
+      "compareTitle": "Changes vs Original",
+      "legendRemoved": "removed",
+      "legendAdded": "added",
+      "noDifferences": "No differences from the original.",
+      "makeMain": "Use as main text",
+      "makeMainConfirmTitle": "Use this version as the main text?",
+      "makeMainConfirmBody": "The current original is kept as a separate version, so nothing is lost.",
+      "madeMain": "This version is now the main text",
+      "copyToNewNote": "Copy to new note",
+      "copied": "Copied to a new note",
+      "deleted": "Version deleted",
+      "undo": "Undo",
+      "kind": {
+        "checklist": "Checklist",
+        "list": "List",
+        "formatted": "Formatted",
+        "agent": "AI Agent",
+        "previousOriginal": "Previous original",
+        "customPrompt": "Custom prompt"
+      },
+      "rename": "Rename",
+      "renameTitle": "Rename version",
+      "renamePlaceholder": "Version name",
+      "swipeHint": "Swipe the text left or right to switch versions"
+    },
+    "tasks": {
+      "find": "Find tasks",
+      "title": "Tasks in this note",
+      "finding": "Looking for tasks…",
+      "retry": "Try again",
+      "none": "No tasks found in this note.",
+      "inNote": "Already in the note",
+      "addToCalendar": "Add to calendar",
+      "addToNote": "Add to note as checklist ({{count}})",
+      "calendarHint": "The calendar button opens your calendar app, where you can set a reminder.",
+      "failed": "Could not look for tasks. Check your connection and try again.",
+      "added": "Tasks added to the note: {{count}}",
+      "calendarFailed": "Could not open the calendar"
+    }
   },
   "voice": {
     "transcribeOn": "Transcribe ON",
@@ -427,7 +504,9 @@
     "finishError": "Could not finish recording. Please try again.",
     "signInRequired": "Sign in required",
     "transcriptionAuthMessage": "Transcription is available after you create an account.",
-    "startError": "Could not start recording"
+    "startError": "Could not start recording",
+    "recordingStateLost": "The recording state was lost. Please try again.",
+    "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings."
   },
   "aux": {
     "emailVerified": "Email Verified!",
@@ -530,6 +609,96 @@
     "confirmDeletion": "Confirm Deletion",
     "goBack": "Go Back",
     "somethingWentWrong": "Something went wrong",
-    "unsyncedNotesWarn": "unsynced notes will be lost forever."
+    "unsyncedNotesWarn": "unsynced notes will be lost forever.",
+    "paywallUnavailableTitle": "Plans are unavailable right now",
+    "paywallUnavailableDesc": "We couldn't load subscription options. Check your connection and try again.",
+    "paywallRetry": "Try again",
+    "transcriptionUnlimited": "Transcription: Unlimited",
+    "transcriptionLeft": "Transcription left: {{time}}",
+    "trialBalance": "Trial Balance",
+    "oneTimeTrialMinutes": "One-time trial minutes",
+    "usedAllMonthlyMinutes": "You've used all monthly minutes",
+    "usedAllFreeMinutes": "You've used all {{minutes}} free minutes",
+    "runningLowTranscription": "Running low on transcription time",
+    "usageLimitTitle": "Usage Limit Reached",
+    "usageLimitDesc": "You have exceeded your usage limits. Please try again later or upgrade your plan.",
+    "aiLimitTitle": "AI Limit Reached",
+    "aiLimitDesc": "You have exceeded your Vaulto AI tokens limit for this period. Please try again later.",
+    "trialExhaustedTitle": "Trial Exhausted",
+    "trialExhaustedDesc": "You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!",
+    "transcriptionLimitTitle": "Transcription Limit Reached",
+    "transcriptionLimitDescDate": "You have used all your PRO transcription minutes for this period. Your limit will reset on {{date}}.",
+    "transcriptionLimitDescNoDate": "You have used all your PRO transcription minutes for this period. Your limit will reset at the start of your next billing cycle.",
+    "maybeLater": "Maybe Later",
+    "privacyTitle": "Privacy",
+    "disableEncryptionFailed": "Failed to disable encryption.",
+    "changeAccessKeyFailed": "Failed to change access key.",
+    "enableSyncFailed": "Failed to enable sync.",
+    "autoDetect": "Auto-Detect",
+    "noLanguagesFound": "No languages found for \"{{query}}\""
+  },
+  "a11y": {
+    "back": "Back",
+    "close": "Close",
+    "textAppearance": "Text appearance",
+    "improveWithAI": "Improve with AI",
+    "moreOptions": "More options",
+    "done": "Done editing",
+    "undo": "Undo",
+    "redo": "Redo",
+    "removeVersion": "Remove this version",
+    "recordVoice": "Record voice note",
+    "dictate": "Dictate",
+    "settings": "Settings",
+    "newNote": "New note",
+    "showApiKey": "Show API key",
+    "hideApiKey": "Hide API key",
+    "helpSync": "About cloud sync",
+    "originalVersion": "Original version",
+    "encrypted": "End-to-end encrypted",
+    "deleteRecording": "Delete recording",
+    "pauseRecording": "Pause recording",
+    "resumeRecording": "Resume recording",
+    "sendRecording": "Finish and send recording",
+    "cancelTask": "Cancel task",
+    "decreaseFontSize": "Decrease font size",
+    "increaseFontSize": "Increase font size",
+    "clearSelection": "Clear selection",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "deleteSelected": "Delete selected notes",
+    "play": "Play",
+    "pause": "Pause",
+    "playbackPosition": "Playback position",
+    "checklist": "Checklist",
+    "bulletList": "Bulleted list",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "highlight": "Highlight",
+    "heading": "Heading {{level}}",
+    "colorYellow": "Yellow",
+    "colorGreen": "Green",
+    "colorBlue": "Blue",
+    "colorRed": "Red",
+    "noHighlight": "No highlight",
+    "allVersions": "All versions"
+  },
+  "ask": {
+    "title": "Ask your notes",
+    "askAbout": "Ask AI: “{{query}}”",
+    "privacyNote": "Notes are searched on this device; only the matching excerpts are sent to AI.",
+    "emptyTitle": "Ask anything about your notes",
+    "example1": "What did I plan for this week?",
+    "example2": "Summarize my notes about work",
+    "example3": "Which tasks are still open?",
+    "placeholder": "Ask a question…",
+    "send": "Ask",
+    "thinking": "Looking through your notes…",
+    "noNotes": "There are no notes to search yet.",
+    "emptyAnswer": "No answer came back. Try rephrasing the question.",
+    "failed": "Could not get an answer. Check your connection and try again.",
+    "untitled": "Untitled"
   }
 }

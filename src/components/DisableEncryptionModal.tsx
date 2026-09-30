@@ -67,7 +67,7 @@ export const DisableEncryptionModal = ({ visible, onClose, onDisable }: DisableE
             onDisable?.(purged && syncSucceeded ? 'purged' : 'partial');
             onClose();
         } catch (e: any) {
-            setError(e?.message || 'Failed to disable encryption.');
+            setError(e?.message || t('aux.disableEncryptionFailed', 'Failed to disable encryption.'));
         } finally {
             setLoading(false);
         }

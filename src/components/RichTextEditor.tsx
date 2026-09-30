@@ -11,6 +11,7 @@ import React, {
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import {
     BridgeExtension,
+    PlaceholderBridge,
     RichText,
     TaskListBridge,
     TenTapStartKit,
@@ -36,6 +37,7 @@ import {
     buildAudioEmbedPreviewSrc,
     stripTransientAudioEmbedState,
 } from '../utils/audioEmbeds';
+import { tiptapDocumentToMarkdown } from '../utils/tiptapMarkdownAdapter';
 import {
     countChecklistItems,
     resolveChecklistScaleFactor,
@@ -62,6 +64,10 @@ interface RichTextEditorProps {
      */
     contentBottomPadding?: number;
     onAudioAction?: (payload: AudioEmbedControlPayload) => void;
+    /** A checklist box was ticked while the note was only being read. */
+    onChecklistToggledWhileIdle?: () => void;
+    /** Horizontal swipe while reading: 1 = next (swipe left), -1 = previous. */
+    onHorizontalSwipe?: (direction: 1 | -1) => void;
 }
 
 export interface RichTextEditorHandle {
@@ -71,6 +77,8 @@ export interface RichTextEditorHandle {
     insertAudioEmbed: (payload: InsertAudioEmbedPayload) => void;
     setAudioEmbedState: (payload: AudioEmbedRuntimeState) => void;
     flushPendingChanges: () => Promise<string>;
+    /** Current document as Markdown, serialized from the editor's own JSON. */
+    getMarkdown: () => Promise<string>;
     blur: () => void;
 }
 
@@ -502,6 +510,8 @@ true;
 `;
 
 const TASK_ITEM_REFOCUS_MESSAGE_TYPE = 'vaulto-task-item-refocus';
+const TASK_ITEM_TOGGLED_WHILE_IDLE_MESSAGE_TYPE = 'vaulto-task-item-toggled-idle';
+const HORIZONTAL_SWIPE_MESSAGE_TYPE = 'vaulto-horizontal-swipe';
 
 const getTaskItemRefocusJs = () => `
 (() => {
@@ -614,6 +624,83 @@ const getTaskItemRefocusJs = () => `
 
     maybeScheduleRefocus();
   }, true);
+
+  // Tiptap's checkbox handler focuses the editor to run its command, which
+  // popped the keyboard and switched a note being read into edit mode. A tap
+  // that starts while the editor is not focused is reported back so the host
+  // can drop focus again once the toggle has been applied.
+  let checkboxTapStartedIdle = false;
+  // The live DOM renders task items as plain <li> under the taskList <ul>;
+  // data-type="taskItem" only exists in the serialized HTML.
+  const RENDERED_TASK_ITEM_SELECTOR = 'ul[data-type="taskList"] > li';
+  const isEditorFocused = () => {
+    const active = document.activeElement;
+    return !!(active && active.closest && active.closest('.ProseMirror'));
+  };
+  const isTaskCheckbox = (target) => (
+    target instanceof HTMLInputElement
+    && target.type === 'checkbox'
+    && !!target.closest(RENDERED_TASK_ITEM_SELECTOR)
+  );
+  // The visible box is a styled span inside the item's <label>; the real
+  // input is hidden, so the tap itself lands on the label's children.
+  const isTaskCheckboxArea = (target) => (
+    target instanceof Element && !!target.closest(RENDERED_TASK_ITEM_SELECTOR + ' > label')
+  );
+  const rememberTapStart = (event) => {
+    if (isTaskCheckboxArea(event.target)) {
+      checkboxTapStartedIdle = !isEditorFocused();
+    }
+  };
+  document.addEventListener('touchstart', rememberTapStart, { capture: true, passive: true });
+  document.addEventListener('mousedown', rememberTapStart, true);
+  // A clear horizontal swipe while reading (editor not focused) is reported so
+  // the host can page between note versions; the WebView swallows native gestures.
+  let swipeStart = null;
+  // A drag inside something that scrolls sideways (wide code, tables) is that
+  // element's scroll, not a request to change version.
+  const isInsideHorizontalScroller = (target) => {
+    let node = target instanceof Element ? target : null;
+    while (node && !(node.classList && node.classList.contains('ProseMirror'))) {
+      if (node.tagName === 'PRE' || node.tagName === 'TABLE') return true;
+      if (node.scrollWidth > node.clientWidth + 2) return true;
+      node = node.parentElement;
+    }
+    return false;
+  };
+  document.addEventListener('touchstart', (event) => {
+    const touch = event.touches && event.touches[0];
+    swipeStart = touch && event.touches.length === 1 && !isEditorFocused() && !isInsideHorizontalScroller(event.target)
+      ? { x: touch.clientX, y: touch.clientY, t: Date.now() }
+      : null;
+  }, { capture: true, passive: true });
+  document.addEventListener('touchend', (event) => {
+    const start = swipeStart;
+    swipeStart = null;
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!start || !touch || isEditorFocused()) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 45 || Math.abs(dx) < Math.abs(dy) * 2 || Date.now() - start.t > 700) return;
+    const selection = window.getSelection && window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    window.ReactNativeWebView?.postMessage(JSON.stringify({
+      type: ${JSON.stringify(HORIZONTAL_SWIPE_MESSAGE_TYPE)},
+      payload: dx < 0 ? 1 : -1,
+    }));
+  }, { capture: true, passive: true });
+
+  document.addEventListener('change', (event) => {
+    if (!isTaskCheckbox(event.target) || !checkboxTapStartedIdle) {
+      return;
+    }
+    checkboxTapStartedIdle = false;
+    window.setTimeout(() => {
+      window.ReactNativeWebView?.postMessage(JSON.stringify({
+        type: ${JSON.stringify(TASK_ITEM_TOGGLED_WHILE_IDLE_MESSAGE_TYPE)},
+      }));
+    }, 0);
+  }, true);
 })();
 true;
 `;
@@ -637,12 +724,29 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         showToolbar = false,
         contentBottomPadding = 72,
         onAudioAction,
+        onChecklistToggledWhileIdle,
+        onHorizontalSwipe,
     } = props;
 
+    const onChecklistToggledWhileIdleRef = useRef(onChecklistToggledWhileIdle);
+    onChecklistToggledWhileIdleRef.current = onChecklistToggledWhileIdle;
+    const onHorizontalSwipeRef = useRef(onHorizontalSwipe);
+    onHorizontalSwipeRef.current = onHorizontalSwipe;
     const taskItemRefocusBridge = useMemo(() => (
         new BridgeExtension({
             forceName: 'vaultoTaskItemRefocusBridge',
-            onEditorMessage: (message: { type?: string }, editorBridge) => {
+            onEditorMessage: (message: { type?: string; payload?: unknown }, editorBridge) => {
+                if (message.type === HORIZONTAL_SWIPE_MESSAGE_TYPE) {
+                    const direction = message.payload === 1 ? 1 : -1;
+                    onHorizontalSwipeRef.current?.(direction);
+                    return true;
+                }
+                if (message.type === TASK_ITEM_TOGGLED_WHILE_IDLE_MESSAGE_TYPE) {
+                    editorBridge.blur();
+                    onChecklistToggledWhileIdleRef.current?.();
+                    return true;
+                }
+
                 if (message.type !== TASK_ITEM_REFOCUS_MESSAGE_TYPE) {
                     return false;
                 }
@@ -676,12 +780,24 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     if (initialTaskListCssRef.current === null) {
         initialTaskListCssRef.current = getChecklistCss(baseFontSize, contentChecklistScaleFactor);
     }
+    // The task-item script ships inside the page as well: injectJS only runs
+    // once the bridge reports ready, seconds after open, and a checkbox tapped
+    // before that still switched the note into edit mode. Its install flag
+    // keeps the later injectJS call from adding the listeners twice.
     const editorSourceHtml = useMemo(() => (
         injectEditorCssIntoSource(tentapEditorHtml, initialEditorCssRef.current || '')
+            .replace('</head>', `<script>${getTaskItemRefocusJs()}</script></head>`)
     ), []);
+    // The placeholder must be part of the initial extension config: tentap's
+    // runtime setPlaceholder only swaps the option without redrawing, so a
+    // fresh note kept showing tentap's built-in English "Write something ...".
+    const initialPlaceholderRef = useRef(placeholder || '');
     const editorBridgeExtensions = useMemo(() => (
         [
-            ...TenTapStartKit.filter((extension) => extension.name !== TaskListBridge.name),
+            ...TenTapStartKit.filter((extension) => (
+                extension.name !== TaskListBridge.name && extension.name !== PlaceholderBridge.name
+            )),
+            PlaceholderBridge.configureExtension({ placeholder: initialPlaceholderRef.current }),
             TaskListBridge.configureCSS(initialTaskListCssRef.current || ''),
             taskItemRefocusBridge,
             getAudioEmbedBridge(onAudioAction),
@@ -1082,6 +1198,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             `);
         },
         flushPendingChanges: () => flushPendingContent(),
+        getMarkdown: async () => tiptapDocumentToMarkdown(await editor.getJSON()),
         blur: () => {
             editor.blur();
         },
@@ -1147,7 +1264,9 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.onSelectionChange === next.onSelectionChange &&
     prev.onActiveStylesChange === next.onActiveStylesChange &&
     prev.onFocus === next.onFocus &&
-    prev.onBlur === next.onBlur
+    prev.onBlur === next.onBlur &&
+    prev.onChecklistToggledWhileIdle === next.onChecklistToggledWhileIdle &&
+    prev.onHorizontalSwipe === next.onHorizontalSwipe
 ));
 
 const styles = StyleSheet.create({

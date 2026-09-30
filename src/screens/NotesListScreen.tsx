@@ -281,6 +281,17 @@ export const NotesListScreen = () => {
         isSearchVisible.current = false;
     }, []);
 
+    const searchInputRef = useRef<TextInput>(null);
+    const openSearch = () => {
+        Animated.timing(searchBarHeight, {
+            toValue: 60,
+            duration: 180,
+            useNativeDriver: false,
+        }).start(() => searchInputRef.current?.focus());
+        isSearchVisible.current = true;
+        lastToggleTime.current = Date.now();
+    };
+
     const handleScroll = (event: any) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
         const diff = currentScrollY - lastScrollY.current;
@@ -417,6 +428,9 @@ export const NotesListScreen = () => {
                     style={styles.centerButton}
                     onPress={handleMicPress}
                     onLongPress={toggleDockLayout}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.recordVoice", "Record voice note")}
+                    accessibilityHint={t("common.holdToSwitch")}
                     delayLongPress={500}
                     activeOpacity={0.8}
                 >
@@ -431,6 +445,9 @@ export const NotesListScreen = () => {
                     style={styles.centerButton}
                     onPress={handleCreateNote}
                     onLongPress={toggleDockLayout}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.newNote", "New note")}
+                    accessibilityHint={t("common.holdToSwitch")}
                     delayLongPress={500}
                     activeOpacity={0.8}
                 >
@@ -449,6 +466,9 @@ export const NotesListScreen = () => {
                     style={styles.dockButton}
                     onPress={handleCreateNote}
                     onLongPress={toggleDockLayout}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.newNote", "New note")}
+                    accessibilityHint={t("common.holdToSwitch")}
                     delayLongPress={500}
                     activeOpacity={0.7}
                 >
@@ -461,6 +481,9 @@ export const NotesListScreen = () => {
                     style={styles.dockButton}
                     onPress={handleMicPress}
                     onLongPress={toggleDockLayout}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.recordVoice", "Record voice note")}
+                    accessibilityHint={t("common.holdToSwitch")}
                     delayLongPress={500}
                     activeOpacity={0.7}
                 >
@@ -561,6 +584,14 @@ export const NotesListScreen = () => {
                     <View style={styles.searchBar}>
                         <MaterialIcons name="search" size={20} color={colors.textTertiary} />
                         <TextInput
+                            ref={searchInputRef}
+                            onBlur={() => {
+                                // Few notes means no scroll gesture to hide it again.
+                                if (!searchQuery && notes.length < 6) {
+                                    Animated.timing(searchBarHeight, { toValue: 0, duration: 100, useNativeDriver: false }).start();
+                                    isSearchVisible.current = false;
+                                }
+                            }}
                             style={styles.searchInput}
                             placeholder={t("common.search")}
                             placeholderTextColor={colors.textTertiary}
@@ -568,10 +599,22 @@ export const NotesListScreen = () => {
                             onChangeText={handleSearch}
                         />
                         {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => handleSearch('')}>
+                            <TouchableOpacity
+                                onPress={() => handleSearch('')}
+                                accessibilityRole="button"
+                                accessibilityLabel={t("a11y.close", "Close")}
+                            >
                                 <MaterialIcons name="close" size={20} color={colors.textTertiary} />
                             </TouchableOpacity>
                         )}
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('AskNotes', searchQuery.trim() ? { question: searchQuery.trim() } : undefined)}
+                            style={styles.askButton}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("ask.title", "Ask your notes")}
+                        >
+                            <MaterialIcons name="auto-awesome" size={18} color={colors.primary} />
+                        </TouchableOpacity>
                     </View>
                 </Animated.View>
             )}
@@ -590,9 +633,24 @@ export const NotesListScreen = () => {
                     <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                 }
             >
+                {searchQuery.trim().length > 0 && !isSelectionMode && (
+                    <TouchableOpacity
+                        style={styles.askRow}
+                        onPress={() => navigation.navigate('AskNotes', { question: searchQuery.trim() })}
+                        accessibilityRole="button"
+                    >
+                        <MaterialIcons name="auto-awesome" size={18} color={colors.primary} />
+                        <Text style={styles.askRowText} numberOfLines={1}>
+                            {t("ask.askAbout", "Ask AI: “{{query}}”", { query: searchQuery.trim() })}
+                        </Text>
+                        <MaterialIcons name="chevron-right" size={20} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                )}
                 {canShowEmptyState ? (
                     <View style={styles.emptyContainer}>
-                        <EmptyState message={isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")} />
+                        <EmptyState message={searchQuery.trim()
+                            ? t("notes.noSearchResults", "No notes match your search")
+                            : isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")} />
                     </View>
                 ) : (
                     <View style={styles.masonryContainer}>
@@ -635,12 +693,34 @@ export const NotesListScreen = () => {
                                 style={styles.dockButton}
                                 onPress={handleSettingsPress}
                                 activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel={t("a11y.settings", "Settings")}
                             >
                                 <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
                             </TouchableOpacity>
 
+                            <TouchableOpacity
+                                style={styles.dockButton}
+                                onPress={() => navigation.navigate('AskNotes')}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel={t("ask.title", "Ask your notes")}
+                            >
+                                <MaterialIcons name="auto-awesome" size={22} color={colors.primary} />
+                            </TouchableOpacity>
+
                             {/* Center Primary Button */}
                             <PrimaryButton />
+
+                            <TouchableOpacity
+                                style={styles.dockButton}
+                                onPress={openSearch}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel={t("common.search")}
+                            >
+                                <MaterialIcons name="search" size={24} color={colors.textSecondary} />
+                            </TouchableOpacity>
 
                             {/* Right Secondary Button */}
                             <SecondaryButton />
@@ -714,6 +794,27 @@ export const NotesListScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    askButton: {
+        marginLeft: 8,
+        padding: 4,
+    },
+    askRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: 4,
+        marginBottom: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        backgroundColor: colors.primaryLight,
+    },
+    askRowText: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text,
+    },
     topBar: {
         paddingTop: spacing.s, // Slight padding to push search bar down a bit
         paddingHorizontal: spacing.m,
@@ -886,8 +987,9 @@ const styles = StyleSheet.create({
         borderRadius: 32,
         paddingTop: 8, // Push contents down for vertical centering
         paddingBottom: 4,
-        paddingHorizontal: spacing.xl,
-        width: Math.min(width * 0.85, 360),
+        paddingHorizontal: spacing.m,
+        // Five buttons (4 × 44 + the 88 centre) must fit a 360dp phone.
+        width: Math.min(width - spacing.l * 2, 360),
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.15,
@@ -904,7 +1006,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     dockButton: {
-        width: 48,
+        width: 44,
         height: 48,
         justifyContent: 'center',
         alignItems: 'center',

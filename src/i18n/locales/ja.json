@@ -54,7 +54,8 @@
     "selectedCount": "{{count}} 件を選択中",
     "resetRecoveryTitle": "暗号化ボールトがリセットされました",
     "resetRecoveryDescription": "残っているノートはこの端末のみに保存され、同期は一時停止しています。設定で復元方法を選んでください。",
-    "reviewRecovery": "オプションを見る"
+    "reviewRecovery": "オプションを見る",
+    "noSearchResults": "一致するノートはありません"
   },
   "settings": {
     "title": "設定",
@@ -200,7 +201,10 @@
       "syncPendingMessage": "この端末でエンドツーエンド暗号化を無効にしました。ただし、今はノートをサーバーに同期できませんでした。インターネットに接続すると自動的に平文へ更新されます。",
       "unableDisableSync": "同期を無効にできませんでした。",
       "cloudSync": "クラウド同期",
-      "failed": "失敗"
+      "failed": "失敗",
+      "advAISettingsDescCustom": "カスタム AI 設定。",
+      "advAISettingsDescLocal": "ローカルおよびカスタム AI 設定",
+      "customAIPendingHint": "接続テストが成功するまで Vaulto AI が引き続き使用されます。"
     },
     "recovery": {
       "title": "復元コード",
@@ -246,6 +250,11 @@
       "standardSyncDescription": "ノートは通常のクラウド同期を使用します。サーバー機能とアカウント復旧を提供するため、Vaulto は技術的に内容を処理できます。",
       "syncOff": "クラウド同期はオフです",
       "syncOffDescription": "同期モードを有効にするまで、新しい変更はこの端末に留まります。"
+    },
+    "onDevice": {
+      "title": "端末で文字起こし",
+      "active": "{{model}} モデル · オフライン、音声は端末から出ません",
+      "desc": "プライベートでオフライン。音声モデルを一度だけダウンロードします。"
     }
   },
   "languages": {
@@ -407,7 +416,75 @@
     "deleteRecordingTitle": "録音を削除しますか？",
     "deleteRecordingDesc": "この録音を削除してもよろしいですか？",
     "deleteNoteDesc": "このノートを削除してもよろしいですか？",
-    "micHintHold": "長押し：エージェント無し"
+    "micHintHold": "長押し：エージェント無し",
+    "presets": {
+      "grammar": {
+        "label": "文法を修正",
+        "description": "スペルと文法の誤りを修正"
+      },
+      "professional": {
+        "label": "ビジネス調にする",
+        "description": "ビジネスにふさわしい丁寧な文体に書き直す"
+      },
+      "simplify": {
+        "label": "やさしく書き直す",
+        "description": "わかりやすい簡単な言葉を使う"
+      },
+      "summarize": {
+        "label": "要約",
+        "description": "重要なポイントだけを残す"
+      },
+      "structure": {
+        "label": "構成を整える",
+        "description": "見出しやリストを加えて読みやすくする"
+      }
+    },
+    "versions": {
+      "improveFrom": "改善元",
+      "thisVersion": "このバージョン",
+      "sheetTitle": "バージョン",
+      "all": "すべてのバージョン",
+      "menuSection": "バージョン",
+      "compare": "オリジナルと比較",
+      "compareTitle": "オリジナルからの変更",
+      "legendRemoved": "削除",
+      "legendAdded": "追加",
+      "noDifferences": "オリジナルとの違いはありません。",
+      "makeMain": "メインのテキストにする",
+      "makeMainConfirmTitle": "このバージョンをメインのテキストにしますか？",
+      "makeMainConfirmBody": "現在のオリジナルは別のバージョンとして残るので、何も失われません。",
+      "madeMain": "このバージョンがメインのテキストになりました",
+      "copyToNewNote": "新しいメモにコピー",
+      "copied": "新しいメモにコピーしました",
+      "deleted": "バージョンを削除しました",
+      "undo": "元に戻す",
+      "kind": {
+        "checklist": "チェックリスト",
+        "list": "リスト",
+        "formatted": "整形済み",
+        "agent": "AIエージェント",
+        "previousOriginal": "以前のオリジナル",
+        "customPrompt": "カスタムプロンプト"
+      },
+      "rename": "名前を変更",
+      "renameTitle": "バージョン名を変更",
+      "renamePlaceholder": "バージョン名",
+      "swipeHint": "テキストを左右にスワイプしてバージョンを切り替え"
+    },
+    "tasks": {
+      "find": "タスクを探す",
+      "title": "このノートのタスク",
+      "finding": "タスクを探しています…",
+      "retry": "再試行",
+      "none": "このノートにタスクは見つかりませんでした。",
+      "inNote": "ノートに追加済み",
+      "addToCalendar": "カレンダーに追加",
+      "addToNote": "チェックリストとしてノートに追加（{{count}}）",
+      "calendarHint": "カレンダーボタンでカレンダーアプリが開き、リマインダーを設定できます。",
+      "failed": "タスクを探せませんでした。接続を確認して再試行してください。",
+      "added": "ノートに追加したタスク：{{count}}",
+      "calendarFailed": "カレンダーを開けませんでした"
+    }
   },
   "voice": {
     "transcribeOn": "文字起こし ON",
@@ -427,7 +504,9 @@
     "finishError": "録音を終了できませんでした。もう一度お試しください。",
     "signInRequired": "ログインが必要です",
     "transcriptionAuthMessage": "文字起こしはアカウント作成後にご利用いただけます。",
-    "startError": "録音を開始できませんでした"
+    "startError": "録音を開始できませんでした",
+    "recordingStateLost": "録音の状態が失われました。もう一度お試しください。",
+    "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -530,6 +609,96 @@
     "confirmDeletion": "削除の確認",
     "goBack": "戻る",
     "somethingWentWrong": "問題が発生しました",
-    "unsyncedNotesWarn": "件の未同期ノートは完全に失われます。"
+    "unsyncedNotesWarn": "件の未同期ノートは完全に失われます。",
+    "paywallUnavailableTitle": "現在プランを表示できません",
+    "paywallUnavailableDesc": "サブスクリプションを読み込めませんでした。接続を確認して、もう一度お試しください。",
+    "paywallRetry": "再試行",
+    "transcriptionUnlimited": "文字起こし：無制限",
+    "transcriptionLeft": "文字起こし残り：{{time}}",
+    "trialBalance": "トライアル残高",
+    "oneTimeTrialMinutes": "1回限りのトライアル時間",
+    "usedAllMonthlyMinutes": "今月の時間をすべて使い切りました",
+    "usedAllFreeMinutes": "無料の {{minutes}} 分をすべて使い切りました",
+    "runningLowTranscription": "文字起こしの残り時間がわずかです",
+    "usageLimitTitle": "利用上限に達しました",
+    "usageLimitDesc": "利用上限を超えました。しばらくしてから再度お試しいただくか、プランをアップグレードしてください。",
+    "aiLimitTitle": "AI の上限に達しました",
+    "aiLimitDesc": "この期間の Vaulto AI トークン上限を超えました。しばらくしてから再度お試しください。",
+    "trialExhaustedTitle": "トライアルを使い切りました",
+    "trialExhaustedDesc": "トライアルの文字起こし時間をすべて使い切りました。PRO にアップグレードすると、さらに多くの時間とすべての機能を利用できます。",
+    "transcriptionLimitTitle": "文字起こしの上限に達しました",
+    "transcriptionLimitDescDate": "この期間の PRO 文字起こし時間をすべて使い切りました。上限は {{date}} にリセットされます。",
+    "transcriptionLimitDescNoDate": "この期間の PRO 文字起こし時間をすべて使い切りました。上限は次の請求期間の開始時にリセットされます。",
+    "maybeLater": "あとで",
+    "privacyTitle": "プライバシー",
+    "disableEncryptionFailed": "暗号化を無効にできませんでした。",
+    "changeAccessKeyFailed": "アクセスキーを変更できませんでした。",
+    "enableSyncFailed": "同期を有効にできませんでした。",
+    "autoDetect": "自動検出",
+    "noLanguagesFound": "「{{query}}」に一致する言語はありません"
+  },
+  "a11y": {
+    "back": "戻る",
+    "close": "閉じる",
+    "textAppearance": "テキストの表示",
+    "improveWithAI": "AI で改善",
+    "moreOptions": "その他のオプション",
+    "done": "編集を完了",
+    "undo": "元に戻す",
+    "redo": "やり直す",
+    "removeVersion": "このバージョンを削除",
+    "recordVoice": "ボイスメモを録音",
+    "dictate": "音声入力",
+    "settings": "設定",
+    "newNote": "新規メモ",
+    "showApiKey": "API キーを表示",
+    "hideApiKey": "API キーを隠す",
+    "helpSync": "クラウド同期について",
+    "originalVersion": "元のバージョン",
+    "encrypted": "エンドツーエンド暗号化",
+    "deleteRecording": "録音を削除",
+    "pauseRecording": "録音を一時停止",
+    "resumeRecording": "録音を再開",
+    "sendRecording": "録音を終了して送信",
+    "cancelTask": "タスクをキャンセル",
+    "decreaseFontSize": "文字を小さく",
+    "increaseFontSize": "文字を大きく",
+    "clearSelection": "選択を解除",
+    "pin": "ピン留め",
+    "unpin": "ピン留めを解除",
+    "deleteSelected": "選択したメモを削除",
+    "play": "再生",
+    "pause": "一時停止",
+    "playbackPosition": "再生位置",
+    "checklist": "チェックリスト",
+    "bulletList": "箇条書き",
+    "bold": "太字",
+    "italic": "斜体",
+    "underline": "下線",
+    "strikethrough": "取り消し線",
+    "highlight": "ハイライト",
+    "heading": "見出し {{level}}",
+    "colorYellow": "黄",
+    "colorGreen": "緑",
+    "colorBlue": "青",
+    "colorRed": "赤",
+    "noHighlight": "ハイライトなし",
+    "allVersions": "すべてのバージョン"
+  },
+  "ask": {
+    "title": "ノートに質問",
+    "askAbout": "AI に質問：「{{query}}」",
+    "privacyNote": "検索はこの端末で行われ、関連する抜粋だけが AI に送信されます。",
+    "emptyTitle": "ノートについて何でも質問できます",
+    "example1": "今週は何を予定していた？",
+    "example2": "仕事のノートを要約して",
+    "example3": "まだ終わっていないタスクは？",
+    "placeholder": "質問を入力…",
+    "send": "質問",
+    "thinking": "ノートを検索中…",
+    "noNotes": "検索できるノートがまだありません。",
+    "emptyAnswer": "回答がありませんでした。質問を言い換えてみてください。",
+    "failed": "回答を取得できませんでした。接続を確認して再試行してください。",
+    "untitled": "無題"
   }
 }

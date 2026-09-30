@@ -6,10 +6,10 @@ import {
 } from './highlightColors';
 
 export interface BlockFormat {
-    type: 'bold' | 'italic' | 'strikethrough' | 'underline' | 'code' | 'highlight';
+    type: 'bold' | 'italic' | 'strikethrough' | 'underline' | 'code' | 'highlight' | 'link';
     start: number;
     end: number;
-    data?: string; // e.g., 'red', '#BAE1FF', 'rgb(186, 225, 255)'
+    data?: string; // highlight colour ('red', '#BAE1FF') or link href
 }
 
 export interface FormattedBlockData {
@@ -82,7 +82,10 @@ export const parseMarkdownToData = (text: string, depth: number = 0): FormattedB
     // but simplified flat parsing is often enough for standard usage.
 
     // Regex Logic: Match any of our supported tags.
-    const pattern = /(\*\*(?:[\s\S]*?)\*\*|~~(?:[\s\S]*?)~~|`[^`]*?`|_(?:[\s\S]*?)_|\*(?:[\s\S]*?)\*|==(?:[\s\S]*?)==|<u>(?:[\s\S]*?)<\/u>)/g;
+    // Links come first and only for explicit web/mail targets: the serializer
+    // writes [text](href) for every editor link, which used to come back as
+    // literal brackets, and `_` inside a URL must not be read as emphasis.
+    const pattern = /(\[[^\]\n]+\]\((?:https?:\/\/|mailto:)[^)\s]+\)|\*\*(?:[\s\S]*?)\*\*|~~(?:[\s\S]*?)~~|`[^`]*?`|_(?:[\s\S]*?)_|\*(?:[\s\S]*?)\*|==(?:[\s\S]*?)==|<u>(?:[\s\S]*?)<\/u>)/g;
 
     let plainText = '';
     const formats: BlockFormat[] = [];
@@ -106,7 +109,18 @@ export const parseMarkdownToData = (text: string, depth: number = 0): FormattedB
         let type: BlockFormat['type'] | null = null;
         let data: string | undefined = undefined;
 
-        if (chunk.startsWith('**')) {
+        if (chunk.startsWith('[')) {
+            if (text[match.index - 1] === '!') {
+                // ![alt](src) is an image reference, not a link.
+                addText(chunk);
+                lastIndex = pattern.lastIndex;
+                continue;
+            }
+            const labelEnd = chunk.lastIndexOf('](');
+            type = 'link';
+            innerRaw = chunk.slice(1, labelEnd);
+            data = chunk.slice(labelEnd + 2, -1);
+        } else if (chunk.startsWith('**')) {
             type = 'bold';
             innerRaw = chunk.slice(2, -2);
         } else if (chunk.startsWith('~~')) {
@@ -302,6 +316,7 @@ export const serializeBlockToMarkdown = (content: string, formats: BlockFormat[]
                 case 'strikethrough': result += '~~'; break;
                 case 'code': result += '`'; break;
                 case 'underline': result += '<u>'; break;
+                case 'link': result += '['; break;
                 case 'highlight':
                     result += '==';
                     if (f.data && f.data !== 'yellow') result += f.data + ':';
@@ -314,6 +329,7 @@ export const serializeBlockToMarkdown = (content: string, formats: BlockFormat[]
                 case 'strikethrough': result += '~~'; break;
                 case 'code': result += '`'; break;
                 case 'underline': result += '</u>'; break;
+                case 'link': result += `](${f.data || ''})`; break;
                 case 'highlight': result += '=='; break;
             }
         }
@@ -371,6 +387,7 @@ export const renderFormattedText = (
             if (f.type === 'strikethrough') style.push({ textDecorationLine: 'line-through' });
             if (f.type === 'underline') style.push({ textDecorationLine: 'underline' });
             if (f.type === 'code') style.push({ fontFamily: 'monospace', backgroundColor: '#f0f0f0' });
+            if (f.type === 'link') style.push({ color: '#0066FF', textDecorationLine: 'underline' });
             if (f.type === 'highlight') {
                 const highlightColor = normalizeHighlightColorForCss(f.data || 'yellow');
                 style.push({ backgroundColor: highlightColor });

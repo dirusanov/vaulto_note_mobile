@@ -54,7 +54,8 @@
     "selectedCount": "{{count}} محددة",
     "resetRecoveryTitle": "تمت إعادة تعيين الخزنة المشفّرة",
     "resetRecoveryDescription": "ملاحظاتك المحفوظة موجودة على هذا الجهاز فقط، والمزامنة متوقفة مؤقتًا. اختر طريقة استعادتها من الإعدادات.",
-    "reviewRecovery": "عرض الخيارات"
+    "reviewRecovery": "عرض الخيارات",
+    "noSearchResults": "لا توجد ملاحظات مطابقة لبحثك"
   },
   "settings": {
     "title": "الإعدادات",
@@ -200,7 +201,10 @@
       "syncPendingMessage": "تم تعطيل التشفير التام على هذا الجهاز. لكن تعذّرت مزامنة ملاحظاتك مع الخادم الآن. سيتم تحديثها تلقائيًا إلى نص عادي بمجرد توفر الإنترنت.",
       "unableDisableSync": "تعذّر تعطيل المزامنة.",
       "cloudSync": "المزامنة السحابية",
-      "failed": "فشل"
+      "failed": "فشل",
+      "advAISettingsDescCustom": "إعداد مخصّص للذكاء الاصطناعي.",
+      "advAISettingsDescLocal": "إعدادات الذكاء الاصطناعي المحلية والمخصّصة",
+      "customAIPendingHint": "يظل Vaulto AI نشطًا حتى ينجح اختبار الاتصال."
     },
     "recovery": {
       "title": "رمز الاسترداد",
@@ -246,6 +250,11 @@
       "standardSyncDescription": "تستخدم الملاحظات المزامنة السحابية العادية. يمكن لـ Vaulto تقنيًا معالجة محتواها لتوفير ميزات الخادم واستعادة الحساب.",
       "syncOff": "المزامنة السحابية متوقفة",
       "syncOffDescription": "تبقى التغييرات الجديدة على هذا الجهاز حتى تفعّل وضع المزامنة."
+    },
+    "onDevice": {
+      "title": "التفريغ على الجهاز",
+      "active": "نموذج {{model}} · دون اتصال، ويبقى الصوت على الهاتف",
+      "desc": "خاص ويعمل دون اتصال. يُنزَّل نموذج الكلام مرة واحدة."
     }
   },
   "languages": {
@@ -407,7 +416,75 @@
     "deleteRecordingTitle": "حذف التسجيل؟",
     "deleteRecordingDesc": "هل تريد بالتأكيد حذف هذا التسجيل؟",
     "deleteNoteDesc": "هل تريد بالتأكيد حذف هذه الملاحظة؟",
-    "micHintHold": "اضغط مطولاً: بدون وكيل"
+    "micHintHold": "اضغط مطولاً: بدون وكيل",
+    "presets": {
+      "grammar": {
+        "label": "تصحيح القواعد",
+        "description": "تصحيح الإملاء والقواعد"
+      },
+      "professional": {
+        "label": "صياغة احترافية",
+        "description": "إعادة الصياغة بأسلوب مهني ورسمي"
+      },
+      "simplify": {
+        "label": "تبسيط النص",
+        "description": "استخدام كلمات بسيطة وسهلة الفهم"
+      },
+      "summarize": {
+        "label": "تلخيص",
+        "description": "الإبقاء على أهم النقاط فقط"
+      },
+      "structure": {
+        "label": "تنظيم",
+        "description": "إضافة عناوين وقوائم لتسهيل القراءة"
+      }
+    },
+    "versions": {
+      "improveFrom": "تحسين",
+      "thisVersion": "هذه النسخة",
+      "sheetTitle": "النسخ",
+      "all": "كل النسخ",
+      "menuSection": "النسخ",
+      "compare": "مقارنة بالأصل",
+      "compareTitle": "التغييرات مقارنة بالأصل",
+      "legendRemoved": "محذوف",
+      "legendAdded": "مضاف",
+      "noDifferences": "لا توجد اختلافات عن الأصل.",
+      "makeMain": "استخدام كنص رئيسي",
+      "makeMainConfirmTitle": "هل تريد استخدام هذه النسخة كنص رئيسي؟",
+      "makeMainConfirmBody": "يُحتفظ بالأصل الحالي كنسخة منفصلة، فلن يضيع شيء.",
+      "madeMain": "أصبحت هذه النسخة النص الرئيسي",
+      "copyToNewNote": "نسخ إلى ملاحظة جديدة",
+      "copied": "تم النسخ إلى ملاحظة جديدة",
+      "deleted": "تم حذف النسخة",
+      "undo": "تراجع",
+      "kind": {
+        "checklist": "قائمة مهام",
+        "list": "قائمة",
+        "formatted": "منسّق",
+        "agent": "وكيل الذكاء الاصطناعي",
+        "previousOriginal": "الأصل السابق",
+        "customPrompt": "موجّه مخصص"
+      },
+      "rename": "إعادة تسمية",
+      "renameTitle": "إعادة تسمية النسخة",
+      "renamePlaceholder": "اسم النسخة",
+      "swipeHint": "اسحب النص يسارًا أو يمينًا للتبديل بين النسخ"
+    },
+    "tasks": {
+      "find": "البحث عن المهام",
+      "title": "المهام في هذه الملاحظة",
+      "finding": "جارٍ البحث عن المهام…",
+      "retry": "إعادة المحاولة",
+      "none": "لم يتم العثور على مهام في هذه الملاحظة.",
+      "inNote": "موجودة في الملاحظة بالفعل",
+      "addToCalendar": "إضافة إلى التقويم",
+      "addToNote": "إضافة إلى الملاحظة كقائمة ({{count}})",
+      "calendarHint": "يفتح زر التقويم تطبيق التقويم، حيث يمكنك ضبط تذكير.",
+      "failed": "تعذّر البحث عن المهام. تحقق من الاتصال وحاول مرة أخرى.",
+      "added": "المهام المضافة إلى الملاحظة: {{count}}",
+      "calendarFailed": "تعذّر فتح التقويم"
+    }
   },
   "voice": {
     "transcribeOn": "النسخ الصوتي مفعّل",
@@ -427,7 +504,9 @@
     "finishError": "تعذّر إنهاء التسجيل. يُرجى المحاولة مرة أخرى.",
     "signInRequired": "يلزم تسجيل الدخول",
     "transcriptionAuthMessage": "يتوفر النسخ الصوتي بعد إنشاء حساب.",
-    "startError": "تعذّر بدء التسجيل"
+    "startError": "تعذّر بدء التسجيل",
+    "recordingStateLost": "فُقدت حالة التسجيل. يُرجى المحاولة مرة أخرى.",
+    "micPermissionDenied": "يلزم الوصول إلى الميكروفون لتسجيل الملاحظات الصوتية. يمكنك السماح بذلك من إعدادات النظام."
   },
   "aux": {
     "emailVerified": "تم التحقق من البريد الإلكتروني!",
@@ -530,6 +609,96 @@
     "confirmDeletion": "تأكيد الحذف",
     "goBack": "رجوع",
     "somethingWentWrong": "حدث خطأ ما",
-    "unsyncedNotesWarn": "ملاحظة غير متزامنة ستُفقد نهائيًا."
+    "unsyncedNotesWarn": "ملاحظة غير متزامنة ستُفقد نهائيًا.",
+    "paywallUnavailableTitle": "الخطط غير متاحة حاليًا",
+    "paywallUnavailableDesc": "تعذّر تحميل خيارات الاشتراك. تحقّق من اتصالك وحاول مرة أخرى.",
+    "paywallRetry": "إعادة المحاولة",
+    "transcriptionUnlimited": "التفريغ النصي: غير محدود",
+    "transcriptionLeft": "المتبقي من التفريغ النصي: {{time}}",
+    "trialBalance": "رصيد الفترة التجريبية",
+    "oneTimeTrialMinutes": "دقائق تجريبية لمرة واحدة",
+    "usedAllMonthlyMinutes": "لقد استخدمت كل دقائق هذا الشهر",
+    "usedAllFreeMinutes": "لقد استخدمت كل الدقائق المجانية ({{minutes}})",
+    "runningLowTranscription": "وقت التفريغ النصي يوشك على النفاد",
+    "usageLimitTitle": "تم بلوغ حد الاستخدام",
+    "usageLimitDesc": "لقد تجاوزت حدود الاستخدام. حاول مرة أخرى لاحقًا أو قم بترقية خطتك.",
+    "aiLimitTitle": "تم بلوغ حد الذكاء الاصطناعي",
+    "aiLimitDesc": "لقد تجاوزت حد رموز Vaulto AI لهذه الفترة. يُرجى المحاولة لاحقًا.",
+    "trialExhaustedTitle": "انتهت الفترة التجريبية",
+    "trialExhaustedDesc": "لقد استخدمت كل دقائق التفريغ النصي التجريبية. رقِّ إلى PRO للحصول على مزيد من الدقائق وفتح جميع الميزات!",
+    "transcriptionLimitTitle": "تم بلوغ حد التفريغ النصي",
+    "transcriptionLimitDescDate": "لقد استخدمت كل دقائق التفريغ النصي في PRO لهذه الفترة. سيُعاد ضبط الحد في {{date}}.",
+    "transcriptionLimitDescNoDate": "لقد استخدمت كل دقائق التفريغ النصي في PRO لهذه الفترة. سيُعاد ضبط الحد في بداية دورة الفوترة التالية.",
+    "maybeLater": "ربما لاحقًا",
+    "privacyTitle": "الخصوصية",
+    "disableEncryptionFailed": "تعذّر تعطيل التشفير.",
+    "changeAccessKeyFailed": "تعذّر تغيير مفتاح الوصول.",
+    "enableSyncFailed": "تعذّر تفعيل المزامنة.",
+    "autoDetect": "اكتشاف تلقائي",
+    "noLanguagesFound": "لم يتم العثور على لغات تطابق \"{{query}}\""
+  },
+  "a11y": {
+    "back": "رجوع",
+    "close": "إغلاق",
+    "textAppearance": "مظهر النص",
+    "improveWithAI": "التحسين بالذكاء الاصطناعي",
+    "moreOptions": "خيارات إضافية",
+    "done": "إنهاء التحرير",
+    "undo": "تراجع",
+    "redo": "إعادة",
+    "removeVersion": "إزالة هذا الإصدار",
+    "recordVoice": "تسجيل ملاحظة صوتية",
+    "dictate": "إملاء",
+    "settings": "الإعدادات",
+    "newNote": "ملاحظة جديدة",
+    "showApiKey": "إظهار مفتاح API",
+    "hideApiKey": "إخفاء مفتاح API",
+    "helpSync": "حول المزامنة السحابية",
+    "originalVersion": "النسخة الأصلية",
+    "encrypted": "مشفّر تشفيرًا تامًّا بين الطرفين",
+    "deleteRecording": "حذف التسجيل",
+    "pauseRecording": "إيقاف التسجيل مؤقتًا",
+    "resumeRecording": "استئناف التسجيل",
+    "sendRecording": "إنهاء التسجيل وإرساله",
+    "cancelTask": "إلغاء المهمة",
+    "decreaseFontSize": "تصغير حجم الخط",
+    "increaseFontSize": "تكبير حجم الخط",
+    "clearSelection": "إلغاء التحديد",
+    "pin": "تثبيت",
+    "unpin": "إلغاء التثبيت",
+    "deleteSelected": "حذف الملاحظات المحددة",
+    "play": "تشغيل",
+    "pause": "إيقاف مؤقت",
+    "playbackPosition": "موضع التشغيل",
+    "checklist": "قائمة مهام",
+    "bulletList": "قائمة نقطية",
+    "bold": "غامق",
+    "italic": "مائل",
+    "underline": "تسطير",
+    "strikethrough": "يتوسطه خط",
+    "highlight": "تمييز",
+    "heading": "عنوان {{level}}",
+    "colorYellow": "أصفر",
+    "colorGreen": "أخضر",
+    "colorBlue": "أزرق",
+    "colorRed": "أحمر",
+    "noHighlight": "بدون تمييز",
+    "allVersions": "كل النسخ"
+  },
+  "ask": {
+    "title": "اسأل ملاحظاتك",
+    "askAbout": "اسأل الذكاء الاصطناعي: «{{query}}»",
+    "privacyNote": "يتم البحث في الملاحظات على هذا الجهاز؛ تُرسل المقتطفات المطابقة فقط إلى الذكاء الاصطناعي.",
+    "emptyTitle": "اسأل أي شيء عن ملاحظاتك",
+    "example1": "ماذا خططت لهذا الأسبوع؟",
+    "example2": "لخّص ملاحظاتي عن العمل",
+    "example3": "ما المهام التي لم تُنجز بعد؟",
+    "placeholder": "اطرح سؤالاً…",
+    "send": "اسأل",
+    "thinking": "جارٍ البحث في ملاحظاتك…",
+    "noNotes": "لا توجد ملاحظات للبحث بعد.",
+    "emptyAnswer": "لم تصل أي إجابة. حاول إعادة صياغة السؤال.",
+    "failed": "تعذّر الحصول على إجابة. تحقق من الاتصال وحاول مرة أخرى.",
+    "untitled": "بدون عنوان"
   }
 }

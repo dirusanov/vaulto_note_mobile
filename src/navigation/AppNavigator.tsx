@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NotesListScreen } from '../screens/NotesListScreen';
 import { NoteEditScreen } from '../screens/NoteEditScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { AskNotesScreen } from '../screens/AskNotesScreen';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { colors } from '../theme/colors';
 
@@ -79,6 +80,13 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
             <Stack.Screen
                 name="Settings"
                 component={SettingsScreen}
+                options={{
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="AskNotes"
+                component={AskNotesScreen}
                 options={{
                     headerShown: false,
                 }}

@@ -54,7 +54,8 @@
     "selectedCount": "{{count}} ausgewählt",
     "resetRecoveryTitle": "Verschlüsselter Tresor wurde zurückgesetzt",
     "resetRecoveryDescription": "Deine erhaltenen Notizen bleiben nur auf diesem Gerät, die Synchronisierung ist pausiert. Wähle in den Einstellungen, wie du sie wiederherstellst.",
-    "reviewRecovery": "Optionen ansehen"
+    "reviewRecovery": "Optionen ansehen",
+    "noSearchResults": "Keine Notizen passen zu deiner Suche"
   },
   "settings": {
     "title": "Einstellungen",
@@ -200,7 +201,10 @@
       "syncPendingMessage": "Die Ende-zu-Ende-Verschlüsselung wurde auf diesem Gerät deaktiviert. Deine Notizen konnten jedoch gerade nicht mit dem Server synchronisiert werden. Sie werden automatisch in Klartext umgewandelt, sobald du eine Internetverbindung hast.",
       "unableDisableSync": "Synchronisierung konnte nicht deaktiviert werden.",
       "cloudSync": "Cloud-Synchronisierung",
-      "failed": "Fehlgeschlagen"
+      "failed": "Fehlgeschlagen",
+      "advAISettingsDescCustom": "Eigene KI-Konfiguration.",
+      "advAISettingsDescLocal": "Lokale und eigene KI-Konfigurationen",
+      "customAIPendingHint": "Vaulto AI bleibt aktiv, bis der Verbindungstest erfolgreich ist."
     },
     "recovery": {
       "title": "Wiederherstellungscode",
@@ -246,6 +250,11 @@
       "standardSyncDescription": "Die Notizen nutzen die normale Cloud-Synchronisierung. Vaulto kann ihre Inhalte technisch verarbeiten, um Serverfunktionen und die Kontowiederherstellung bereitzustellen.",
       "syncOff": "Cloud-Synchronisierung ist aus",
       "syncOffDescription": "Neue Änderungen bleiben auf diesem Gerät, bis du einen Synchronisierungsmodus aktivierst."
+    },
+    "onDevice": {
+      "title": "Auf dem Gerät transkribieren",
+      "active": "Modell {{model}} · offline, Audio bleibt auf dem Telefon",
+      "desc": "Privat und offline. Lädt einmalig ein Sprachmodell herunter."
     }
   },
   "languages": {
@@ -407,7 +416,75 @@
     "deleteRecordingTitle": "Aufnahme löschen?",
     "deleteRecordingDesc": "Möchtest du diese Aufnahme wirklich löschen?",
     "deleteNoteDesc": "Möchtest du diese Notiz wirklich löschen?",
-    "micHintHold": "Halten: ohne Agent"
+    "micHintHold": "Halten: ohne Agent",
+    "presets": {
+      "grammar": {
+        "label": "Grammatik korrigieren",
+        "description": "Rechtschreibung und Grammatik korrigieren"
+      },
+      "professional": {
+        "label": "Professioneller formulieren",
+        "description": "In einem professionellen, geschäftlichen Ton umschreiben"
+      },
+      "simplify": {
+        "label": "Text vereinfachen",
+        "description": "Einfache, leicht verständliche Wörter verwenden"
+      },
+      "summarize": {
+        "label": "Zusammenfassen",
+        "description": "Nur die wichtigsten Punkte behalten"
+      },
+      "structure": {
+        "label": "Strukturieren",
+        "description": "Überschriften und Listen für bessere Lesbarkeit hinzufügen"
+      }
+    },
+    "versions": {
+      "improveFrom": "Verbessern",
+      "thisVersion": "Diese Version",
+      "sheetTitle": "Versionen",
+      "all": "Alle Versionen",
+      "menuSection": "VERSIONEN",
+      "compare": "Mit Original vergleichen",
+      "compareTitle": "Änderungen gegenüber dem Original",
+      "legendRemoved": "entfernt",
+      "legendAdded": "hinzugefügt",
+      "noDifferences": "Keine Unterschiede zum Original.",
+      "makeMain": "Als Haupttext verwenden",
+      "makeMainConfirmTitle": "Diese Version als Haupttext verwenden?",
+      "makeMainConfirmBody": "Das aktuelle Original bleibt als eigene Version erhalten, es geht nichts verloren.",
+      "madeMain": "Diese Version ist jetzt der Haupttext",
+      "copyToNewNote": "In neue Notiz kopieren",
+      "copied": "In neue Notiz kopiert",
+      "deleted": "Version gelöscht",
+      "undo": "Rückgängig",
+      "kind": {
+        "checklist": "Checkliste",
+        "list": "Liste",
+        "formatted": "Formatiert",
+        "agent": "KI-Agent",
+        "previousOriginal": "Früheres Original",
+        "customPrompt": "Eigener Prompt"
+      },
+      "rename": "Umbenennen",
+      "renameTitle": "Version umbenennen",
+      "renamePlaceholder": "Name der Version",
+      "swipeHint": "Wische über den Text nach links oder rechts, um die Version zu wechseln"
+    },
+    "tasks": {
+      "find": "Aufgaben finden",
+      "title": "Aufgaben in dieser Notiz",
+      "finding": "Suche nach Aufgaben…",
+      "retry": "Erneut versuchen",
+      "none": "Keine Aufgaben in dieser Notiz gefunden.",
+      "inNote": "Schon in der Notiz",
+      "addToCalendar": "Zum Kalender hinzufügen",
+      "addToNote": "Als Checkliste zur Notiz hinzufügen ({{count}})",
+      "calendarHint": "Die Kalender-Taste öffnet deine Kalender-App, dort kannst du eine Erinnerung setzen.",
+      "failed": "Aufgaben konnten nicht gesucht werden. Prüfe deine Verbindung und versuche es erneut.",
+      "added": "Zur Notiz hinzugefügte Aufgaben: {{count}}",
+      "calendarFailed": "Kalender konnte nicht geöffnet werden"
+    }
   },
   "voice": {
     "transcribeOn": "Transkription AN",
@@ -427,7 +504,9 @@
     "finishError": "Aufnahme konnte nicht beendet werden. Bitte versuchen Sie es erneut.",
     "signInRequired": "Anmeldung erforderlich",
     "transcriptionAuthMessage": "Die Transkription ist verfügbar, nachdem Sie ein Konto erstellt haben.",
-    "startError": "Aufnahme konnte nicht gestartet werden"
+    "startError": "Aufnahme konnte nicht gestartet werden",
+    "recordingStateLost": "Der Aufnahmestatus ging verloren. Bitte versuche es erneut.",
+    "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden."
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -530,6 +609,96 @@
     "confirmDeletion": "Löschen bestätigen",
     "goBack": "Zurück",
     "somethingWentWrong": "Etwas ist schiefgelaufen",
-    "unsyncedNotesWarn": "nicht synchronisierte Notizen gehen unwiderruflich verloren."
+    "unsyncedNotesWarn": "nicht synchronisierte Notizen gehen unwiderruflich verloren.",
+    "paywallUnavailableTitle": "Tarife sind gerade nicht verfügbar",
+    "paywallUnavailableDesc": "Die Abo-Optionen konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.",
+    "paywallRetry": "Erneut versuchen",
+    "transcriptionUnlimited": "Transkription: unbegrenzt",
+    "transcriptionLeft": "Verbleibende Transkription: {{time}}",
+    "trialBalance": "Testguthaben",
+    "oneTimeTrialMinutes": "Einmalige Testminuten",
+    "usedAllMonthlyMinutes": "Du hast alle Monatsminuten verbraucht",
+    "usedAllFreeMinutes": "Du hast alle {{minutes}} Gratisminuten verbraucht",
+    "runningLowTranscription": "Dein Transkriptionsguthaben wird knapp",
+    "usageLimitTitle": "Nutzungslimit erreicht",
+    "usageLimitDesc": "Du hast deine Nutzungslimits überschritten. Versuche es später erneut oder wechsle zu einem höheren Tarif.",
+    "aiLimitTitle": "KI-Limit erreicht",
+    "aiLimitDesc": "Du hast dein Vaulto-AI-Tokenlimit für diesen Zeitraum überschritten. Bitte versuche es später erneut.",
+    "trialExhaustedTitle": "Testzeitraum aufgebraucht",
+    "trialExhaustedDesc": "Du hast alle Test-Transkriptionsminuten verbraucht. Wechsle zu PRO, um mehr Minuten und alle Funktionen zu erhalten!",
+    "transcriptionLimitTitle": "Transkriptionslimit erreicht",
+    "transcriptionLimitDescDate": "Du hast alle PRO-Transkriptionsminuten für diesen Zeitraum verbraucht. Dein Limit wird am {{date}} zurückgesetzt.",
+    "transcriptionLimitDescNoDate": "Du hast alle PRO-Transkriptionsminuten für diesen Zeitraum verbraucht. Dein Limit wird zu Beginn deines nächsten Abrechnungszeitraums zurückgesetzt.",
+    "maybeLater": "Vielleicht später",
+    "privacyTitle": "Datenschutz",
+    "disableEncryptionFailed": "Verschlüsselung konnte nicht deaktiviert werden.",
+    "changeAccessKeyFailed": "Zugangsschlüssel konnte nicht geändert werden.",
+    "enableSyncFailed": "Synchronisierung konnte nicht aktiviert werden.",
+    "autoDetect": "Automatisch erkennen",
+    "noLanguagesFound": "Keine Sprachen für „{{query}}“ gefunden"
+  },
+  "a11y": {
+    "back": "Zurück",
+    "close": "Schließen",
+    "textAppearance": "Textdarstellung",
+    "improveWithAI": "Mit KI verbessern",
+    "moreOptions": "Weitere Optionen",
+    "done": "Bearbeitung beenden",
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
+    "removeVersion": "Diese Version entfernen",
+    "recordVoice": "Sprachnotiz aufnehmen",
+    "dictate": "Diktieren",
+    "settings": "Einstellungen",
+    "newNote": "Neue Notiz",
+    "showApiKey": "API-Schlüssel anzeigen",
+    "hideApiKey": "API-Schlüssel ausblenden",
+    "helpSync": "Über die Cloud-Synchronisierung",
+    "originalVersion": "Originalversion",
+    "encrypted": "Ende-zu-Ende-verschlüsselt",
+    "deleteRecording": "Aufnahme löschen",
+    "pauseRecording": "Aufnahme pausieren",
+    "resumeRecording": "Aufnahme fortsetzen",
+    "sendRecording": "Aufnahme beenden und senden",
+    "cancelTask": "Aufgabe abbrechen",
+    "decreaseFontSize": "Schrift verkleinern",
+    "increaseFontSize": "Schrift vergrößern",
+    "clearSelection": "Auswahl aufheben",
+    "pin": "Anheften",
+    "unpin": "Lösen",
+    "deleteSelected": "Ausgewählte Notizen löschen",
+    "play": "Abspielen",
+    "pause": "Pausieren",
+    "playbackPosition": "Wiedergabeposition",
+    "checklist": "Checkliste",
+    "bulletList": "Aufzählung",
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "underline": "Unterstrichen",
+    "strikethrough": "Durchgestrichen",
+    "highlight": "Hervorheben",
+    "heading": "Überschrift {{level}}",
+    "colorYellow": "Gelb",
+    "colorGreen": "Grün",
+    "colorBlue": "Blau",
+    "colorRed": "Rot",
+    "noHighlight": "Keine Hervorhebung",
+    "allVersions": "Alle Versionen"
+  },
+  "ask": {
+    "title": "Notizen fragen",
+    "askAbout": "KI fragen: „{{query}}“",
+    "privacyNote": "Die Suche läuft auf diesem Gerät; nur passende Ausschnitte werden an die KI gesendet.",
+    "emptyTitle": "Frag alles über deine Notizen",
+    "example1": "Was hatte ich diese Woche geplant?",
+    "example2": "Fasse meine Arbeitsnotizen zusammen",
+    "example3": "Welche Aufgaben sind noch offen?",
+    "placeholder": "Stell eine Frage…",
+    "send": "Fragen",
+    "thinking": "Durchsuche deine Notizen…",
+    "noNotes": "Noch keine Notizen zum Durchsuchen.",
+    "emptyAnswer": "Keine Antwort erhalten. Formuliere die Frage anders.",
+    "failed": "Keine Antwort erhalten. Prüfe deine Verbindung und versuche es erneut.",
+    "untitled": "Ohne Titel"
   }
 }

@@ -116,6 +116,10 @@ const getMarksForRange = (formats: BlockFormat[], start: number, end: number): T
                 return { type: 'strike' };
             }
 
+            if (format.type === 'link') {
+                return { type: 'link', attrs: { href: format.data || '' } };
+            }
+
             return { type: format.type };
         });
 

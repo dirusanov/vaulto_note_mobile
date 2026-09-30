@@ -23,6 +23,7 @@ import {
     setTranscriptionEnabled
 } from '../utils/storage';
 import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
+import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
@@ -62,7 +63,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [isPaused, setIsPaused] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const [isStartPending, setIsStartPending] = useState(false);
+    // With autoStart the panel stays hidden until the microphone permission is
+    // settled, instead of showing a live-looking 0:00 recorder behind the
+    // system permission dialog.
+    const [permissionSettled, setPermissionSettled] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
+    const [onDeviceTranscription, setOnDeviceTranscription] = useState(false);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [aiProvider, setAiProvider] = useState<AIProvider>('vaulto_ai');
     const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
@@ -105,7 +111,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             agentModeToggleTouchedRef.current = false;
 
             getAIProvider().then(async (provider) => {
-                const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai';
+                const onDevice = await isOnDeviceTranscriptionActive();
+                setOnDeviceTranscription(onDevice);
+                const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDevice;
                 if (isUserTranscriptionRestricted) {
                     setTranscribe(false);
                     return;
@@ -134,6 +142,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsPaused(false);
             setIsStopping(false);
             setIsStartPending(false);
+            setPermissionSettled(false);
             setDuration(0);
             setShowModelMissingWarning(false);
             warningOpacity.setValue(0);
@@ -151,7 +160,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
 
     const handleTranscriptionToggle = async (value: boolean) => {
-        if ((!isAuthenticated || isGuest) && aiProvider === 'vaulto_ai' && value) {
+        if ((!isAuthenticated || isGuest) && aiProvider === 'vaulto_ai' && !onDeviceTranscription && value) {
             setShowTranscriptionAuthModal(true);
             setTranscribe(false);
             return;
@@ -297,7 +306,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         void AudioService.cancelRecording().catch(() => undefined);
 
         Alert.alert(
-            'Recording interrupted',
+            t("voice.recordingInterrupted", "Recording interrupted"),
             message,
             [
                 {
@@ -352,7 +361,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
                     if (!status || isDoneRecording || !canRecord) {
                         promptRecordingInterruption(
-                            'The recording stopped unexpectedly before it could be sent. Please try again.'
+                            t("voice.recordingInterruptedDesc", "The recording stopped unexpectedly before it could be sent. Please try again.")
                         );
                     }
                 } catch (error) {
@@ -360,7 +369,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         return;
                     }
                     console.warn('[VoiceRecorder] Failed to read recording status', error);
-                    promptRecordingInterruption('The recording state was lost. Please try again.');
+                    promptRecordingInterruption(t("voice.recordingStateLost", "The recording state was lost. Please try again."));
                 }
             })();
         }, 1200);
@@ -408,6 +417,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             voiceSamples.current = 0;
             maxDurationHandledRef.current = false;
             interruptionHandledRef.current = false;
+            const granted = await AudioService.requestPermissions();
+            setPermissionSettled(true);
+            if (!granted) {
+                Alert.alert(t("common.permission", "Permission"), t("voice.micPermissionDenied"));
+                onCancel();
+                return;
+            }
             await AudioService.startRecording((level) => {
                 currentMetering.current = level;
                 meteringSamples.current += 1;
@@ -514,7 +530,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     return (
         <Modal
-            visible={visible}
+            visible={visible && (!autoStart || isRecording || permissionSettled)}
             animationType="slide"
             transparent
             onRequestClose={handleCancel}
@@ -531,6 +547,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             ]}
                             onPress={() => handleTranscriptionToggle(!transcribe)}
                             activeOpacity={0.7}
+                            accessibilityRole="switch"
+                            accessibilityLabel={t("common.transcribe", "Transcribe")}
+                            accessibilityState={{ checked: transcribe }}
                         >
                             <MaterialIcons
                                 name="mic"
@@ -542,7 +561,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 isMainScreen && styles.badgeLabelLarge,
                                 { color: transcribe ? 'white' : colors.textSecondary }
                             ]}>
-                                {t("common.transcribe", "Transcribe")} {transcribe ? 'ON' : 'OFF'}
+                                {transcribe ? t("voice.transcribeOn", "Transcribe ON") : t("voice.transcribeOff", "Transcribe OFF")}
                             </Text>
                         </TouchableOpacity>
 
@@ -554,6 +573,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             ]}
                             onPress={() => handleAgentModeToggle(!agentModeEnabled)}
                             activeOpacity={0.7}
+                            accessibilityRole="switch"
+                            accessibilityLabel={t("settings.ai.agentMode", "Agent Mode")}
+                            accessibilityState={{ checked: effectiveAgentEnabled }}
                         >
                             <MaterialIcons
                                 name="smart-toy"
@@ -586,6 +608,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={styles.cancelButtonCompact}
                             onPress={handleCancel}
                             disabled={isStopping}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("a11y.deleteRecording", "Delete recording")}
                         >
                             <MaterialIcons name="delete-outline" size={isMainScreen ? 36 : 26} color={colors.textTertiary} />
                         </TouchableOpacity>
@@ -615,6 +639,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={styles.pauseButtonCompact}
                             onPress={handlePauseResume}
                             disabled={!isRecording || isStopping}
+                            accessibilityRole="button"
+                            accessibilityLabel={isPaused
+                                ? t("a11y.resumeRecording", "Resume recording")
+                                : t("a11y.pauseRecording", "Pause recording")}
                         >
                             <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={isMainScreen ? 36 : 26} color={colors.textSecondary} />
                         </TouchableOpacity>
@@ -627,6 +655,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             ]}
                             onPress={handleStopRecording}
                             disabled={isStopping || !isRecording}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("a11y.sendRecording", "Finish and send recording")}
                         >
                             <MaterialIcons name="send" size={isMainScreen ? 30 : 20} color="white" />
                         </TouchableOpacity>

@@ -275,6 +275,232 @@ export const richContentToAgentMarkdown = (content: string): string => {
     return normalizeAgentTextWhitespace(normalized);
 };
 
+// Private-use sentinels: underline has no Markdown syntax, so the adapter keeps
+// it as literal <u>...</u>, which the blanket tag strip below would eat.
+const UNDERLINE_OPEN_TOKEN = '\uE000';
+const UNDERLINE_CLOSE_TOKEN = '\uE001';
+
+const convertInlineMarksToMarkdown = (html: string): string =>
+    html
+        .replace(/<a\b[^>]*\bhref=(["'])([^"']*)\1[^>]*>([\s\S]*?)<\/a>/gi, (_match, _quote, href: string, text: string) => (
+            href ? `[${text}](${href})` : text
+        ))
+        .replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
+        .replace(/<mark\b[^>]*>([\s\S]*?)<\/mark>/gi, '==$1==')
+        .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**')
+        .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, '_$2_')
+        .replace(/<(s|del|strike)\b[^>]*>([\s\S]*?)<\/\1>/gi, '~~$2~~')
+        .replace(/<u\b[^>]*>/gi, UNDERLINE_OPEN_TOKEN)
+        .replace(/<\/u>/gi, UNDERLINE_CLOSE_TOKEN);
+
+/**
+ * Stored rich HTML as Markdown in the adapter's dialect (one line per block, an
+ * empty line per empty paragraph). The live editor serializes its own document
+ * more precisely; this is the fallback for when it is not mounted, e.g. while
+ * the raw view is open or when copying a note.
+ */
+export const richContentToMarkdown = (content: string): string => {
+    if (!content) {
+        return '';
+    }
+
+    const sanitizedContent = stripAudioEmbedsFromRichContent(content);
+    if (!isRichHtmlContent(sanitizedContent)) {
+        return sanitizedContent.trim();
+    }
+
+    let normalized = sanitizedContent
+        .replace(/<img\b[^>]*>/gi, (match) => {
+            const audio = getAudioEmbedAttributesFromHtml(match);
+            return audio?.path ? `<p>![audio](${audio.path})</p>` : '';
+        })
+        .replace(/<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '');
+
+    normalized = convertInlineMarksToMarkdown(normalized)
+        .replace(/<h([1-6])\b[^>]*>/gi, (_match, level: string) => `${'#'.repeat(Number(level))} `)
+        .replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, (_match, inner: string) => (
+            inner
+                .replace(/<p\b[^>]*>/gi, '> ')
+                .replace(/<\/p>/gi, '\n')
+        ));
+
+    normalized = convertListItemsToMarkdown(normalized);
+
+    normalized = decodeHtmlEntities(
+        normalized
+            // An empty paragraph is one empty line, not its <br> plus its close.
+            .replace(/<p\b[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/(p|div|h[1-6])>/gi, '\n')
+            .replace(/<\/(ul|ol)>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+    );
+
+    return normalized
+        .split(UNDERLINE_OPEN_TOKEN).join('<u>')
+        .split(UNDERLINE_CLOSE_TOKEN).join('</u>')
+        .replace(/\u00a0/g, ' ')
+        // A list is closed right after its last item's line break.
+        .replace(/\n\n(?=\s*(?:[-*]\s|\d+[.)]\s))/g, '\n')
+        .replace(/[ \t]+$/gm, '')
+        .replace(/\n+$/, '')
+        .replace(/^\n+/, '');
+};
+
+/**
+ * Short multi-line preview for note cards: keeps line structure and shows
+ * checklist state instead of folding everything into one run-on sentence.
+ */
+export const richContentToPreviewText = (content: string, maxLines: number = 8, maxLength: number = 220): string => {
+    const markdown = richContentToMarkdown(content);
+    const lines: string[] = [];
+    let length = 0;
+
+    for (const rawLine of markdown.split('\n')) {
+        if (lines.length >= maxLines || length >= maxLength) {
+            break;
+        }
+        if (/^\s*!\[(?:audio|processing)\]\([^)]*\)\s*$/i.test(rawLine)) {
+            continue;
+        }
+
+        const indent = (rawLine.match(/^\s*/)?.[0].length || 0) >= 2 ? '  ' : '';
+        const task = rawLine.match(/^\s*[-*]\s*\[([ xX]?)\]\s*(.*)$/);
+        const bullet = task ? null : rawLine.match(/^\s*[-*+]\s+(.*)$/);
+        const ordered = task || bullet ? null : rawLine.match(/^\s*(\d+[.)])\s+(.*)$/);
+        const body = task?.[2] ?? bullet?.[1] ?? ordered?.[2] ?? rawLine.replace(/^\s*(?:#{1,6}\s+|>\s?)/, '');
+        const text = stripMarkdownSyntax(body).replace(/<\/?u>/gi, '').replace(/\s+/g, ' ').trim();
+        if (!text) {
+            continue;
+        }
+
+        const marker = task
+            ? (task[1].trim() ? '☑ ' : '☐ ')
+            : bullet
+                ? '• '
+                : ordered
+                    ? `${ordered[1]} `
+                    : '';
+        const line = `${indent}${marker}${text}`;
+        lines.push(line);
+        length += line.length;
+    }
+
+    const preview = lines.join('\n');
+    return preview.length > maxLength ? `${preview.slice(0, maxLength).trimEnd()}…` : preview;
+};
+
+/**
+ * Title shown for an untitled note: the first words of its first line, so a
+ * heading like "Weekend plan" does not borrow words from the list below it.
+ */
+export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number = 3): string => {
+    const firstLine = (plainText || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .find(Boolean) || '';
+
+    return firstLine
+        .split(/\s+/)
+        .filter((token) => token && !/^[-*_•☐☑]+$/.test(token))
+        .slice(0, maxWords)
+        .join(' ');
+};
+
+const SCRIPT_RANGES: Array<[string, RegExp]> = [
+    ['latin', /[A-Za-z\u00c0-\u024f]/],
+    ['cyrillic', /[\u0400-\u04ff]/],
+    ['greek', /[\u0370-\u03ff]/],
+    ['arabic', /[\u0600-\u06ff]/],
+    ['hebrew', /[\u0590-\u05ff]/],
+    ['devanagari', /[\u0900-\u097f]/],
+    ['kana', /[\u3040-\u30ff]/],
+    ['han', /[\u3400-\u4dbf\u4e00-\u9fff]/],
+    ['hangul', /[\uac00-\ud7af]/],
+];
+
+const scriptsIn = (text: string): Set<string> => {
+    const found = new Set<string>();
+    for (const char of text || '') {
+        for (const [name, regex] of SCRIPT_RANGES) {
+            if (regex.test(char)) {
+                found.add(name);
+                break;
+            }
+        }
+    }
+    return found;
+};
+
+/**
+ * True when every writing system used by `title` also appears in `context`.
+ * The agent is told to keep the note's language but occasionally answers an
+ * English checklist with a Russian title; such a title is dropped so the
+ * caller falls back to one derived from the content itself.
+ */
+export const titleMatchesContextScript = (title: string, context: string): boolean => {
+    const titleScripts = scriptsIn(title);
+    if (titleScripts.size === 0) {
+        return true;
+    }
+    const contextScripts = scriptsIn(context);
+    if (contextScripts.size === 0) {
+        return true;
+    }
+    for (const script of titleScripts) {
+        if (!contextScripts.has(script)) {
+            return false;
+        }
+    }
+    return true;
+};
+
+const STRUCTURAL_MARKDOWN_LINE_REGEX = /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>)/;
+
+/**
+ * Model output is CommonMark, where a blank line merely separates blocks. The
+ * editor adapter maps every blank line to an empty paragraph, so a heading
+ * followed by "\n\n" rendered with a visible gap the preview did not have.
+ * Blank lines next to headings, list items and quotes are dropped; a single
+ * blank line between two plain paragraphs is kept as their separator.
+ */
+export const normalizeModelMarkdownForEditor = (markdown: string): string => {
+    if (!markdown || isRichHtmlContent(markdown)) {
+        return markdown || '';
+    }
+
+    const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+    const result: string[] = [];
+    let insideFence = false;
+
+    lines.forEach((line, index) => {
+        if (/^\s*```/.test(line)) {
+            insideFence = !insideFence;
+        }
+
+        if (insideFence || line.trim() !== '') {
+            result.push(line);
+            return;
+        }
+
+        const previous = result[result.length - 1];
+        const next = lines.slice(index + 1).find((candidate) => candidate.trim() !== '');
+        if (previous === undefined || next === undefined || previous.trim() === '') {
+            return;
+        }
+
+        if (STRUCTURAL_MARKDOWN_LINE_REGEX.test(previous) || STRUCTURAL_MARKDOWN_LINE_REGEX.test(next)) {
+            return;
+        }
+
+        result.push('');
+    });
+
+    return result.join('\n');
+};
+
 export const hasMeaningfulRichContent = (content: string): boolean => {
     const sanitizedContent = stripAudioEmbedsFromRichContent(content);
 

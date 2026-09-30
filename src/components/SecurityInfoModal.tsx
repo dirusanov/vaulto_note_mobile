@@ -42,7 +42,12 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({
                             <Text style={styles.title}>{t("aux.securityPrivacy", "Security & Privacy")}</Text>
                             <Text style={styles.subtitle}>{t("aux.howWeProtect", "How we protect your data")}</Text>
                         </View>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeButton}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('a11y.close', 'Close')}
+                        >
                             <MaterialIcons name="close" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>

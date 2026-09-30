@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -51,6 +52,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     tasks = [],
     onCancelTask,
 }) => {
+    const { t } = useTranslation();
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -72,7 +74,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
 
     if (!visible || tasks.length === 0) return null;
 
-    const filteredTasks = tasks.filter(t => !t.isTranscribing);
+    const filteredTasks = tasks.filter(task => !task.isTranscribing);
 
     return (
         <Animated.View style={[styles.wrapper, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
@@ -86,7 +88,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                         <AIAnimatedIcon />
                         <View style={styles.textContainer}>
                             <Text style={styles.title} numberOfLines={1}>
-                                AI Agent working...
+                                {t('aux.aiWorking', 'AI Agent working...')}
                             </Text>
                             {!!task.text && (
                                 <Text style={styles.subtitle} numberOfLines={2}>
@@ -97,7 +99,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                         {!!onCancelTask && (
                             <TouchableOpacity
                                 accessibilityRole="button"
-                                accessibilityLabel="Cancel task"
+                                accessibilityLabel={t('a11y.cancelTask', 'Cancel task')}
                                 onPress={() => onCancelTask(task.id)}
                                 activeOpacity={0.7}
                                 style={styles.taskCancelButton}

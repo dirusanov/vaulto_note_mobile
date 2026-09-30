@@ -132,7 +132,13 @@ check(
 );
 
 // --- HTML -> markdown handed to the AI --------------------------------------
-const { richContentToAgentMarkdown } = require('../.test-build/md/utils/richContent');
+const {
+    richContentToAgentMarkdown,
+    richContentToMarkdown,
+    richContentToPreviewText,
+    normalizeModelMarkdownForEditor,
+    titleMatchesContextScript,
+} = require('../.test-build/md/utils/richContent');
 
 check(
     'nested bullets keep indentation for the AI',
@@ -169,6 +175,85 @@ check(
     richContentToAgentMarkdown('<p>Intro</p><ul><li><p>One</p></li></ul><p>Outro</p>'),
     'Intro\n\n- One\nOutro'
 );
+
+// --- raw view / copy: editor HTML back to Markdown --------------------------
+const EDITOR_NOTE_HTML = '<p>user_id and my_file.txt</p>'
+    + '<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>Milk</p></div></li>'
+    + '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Bread</p></div></li></ul>'
+    + '<p><strong>Bold</strong> and <em>italic</em></p><ul><li><p>One</p></li><li><p>Two</p></li></ul>';
+check(
+    'rich html becomes markdown, not tags',
+    richContentToMarkdown(EDITOR_NOTE_HTML),
+    'user_id and my_file.txt\n- [x] Milk\n- [ ] Bread\n**Bold** and _italic_\n- One\n- Two'
+);
+check(
+    'markdown from rich html round-trips to the same html',
+    markdownToTiptapHtml(richContentToMarkdown(EDITOR_NOTE_HTML)),
+    '<p>user_id and my_file.txt</p><ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Milk</p></li><li data-type="taskItem" data-checked="false"><p>Bread</p></li></ul><p><strong>Bold</strong> and <em>italic</em></p><ul><li><p>One</p></li><li><p>Two</p></li></ul>'
+);
+check(
+    'heading and one empty paragraph',
+    richContentToMarkdown('<h2>Title</h2><p><br></p><p>Body</p>'),
+    '## Title\n\nBody'
+);
+check(
+    'underline and highlight keep adapter syntax',
+    richContentToMarkdown('<p><u>u</u> <mark>m</mark></p>'),
+    '<u>u</u> ==m=='
+);
+check('plain markdown passes through', richContentToMarkdown('- [ ] task'), '- [ ] task');
+
+// --- AI output: CommonMark blank lines are not empty paragraphs --------------
+check(
+    'blank lines around headings and lists are dropped',
+    normalizeModelMarkdownForEditor('## Title\n\n\n**List:**\n\n- a\n- b\n\nOne.\n\nTwo.\n'),
+    '## Title\n**List:**\n- a\n- b\nOne.\n\nTwo.'
+);
+check(
+    'code fences keep their blank lines',
+    normalizeModelMarkdownForEditor('```\na\n\nb\n```'),
+    '```\na\n\nb\n```'
+);
+check('html results are left alone', normalizeModelMarkdownForEditor('<p>x</p>'), '<p>x</p>');
+
+// --- note card preview ------------------------------------------------------
+check(
+    'card preview keeps lines and checklist state',
+    richContentToPreviewText(EDITOR_NOTE_HTML),
+    'user_id and my_file.txt\n☑ Milk\n☐ Bread\nBold and italic\n• One\n• Two'
+);
+check(
+    'card preview is capped',
+    richContentToPreviewText('a\nb\nc\nd', 2),
+    'a\nb'
+);
+
+// --- links ------------------------------------------------------------------
+check(
+    'markdown link becomes an editor link',
+    markdownToTiptapHtml('see [docs](https://x.com/a_b) now'),
+    '<p>see <a href="https://x.com/a_b">docs</a> now</p>'
+);
+check(
+    'formatted link label',
+    markdownToTiptapHtml('[**bold**](https://x.com)'),
+    '<p><a href="https://x.com"><strong>bold</strong></a></p>'
+);
+check(
+    'link survives html -> markdown -> html',
+    markdownToTiptapHtml(richContentToMarkdown('<p>a <a href="https://x.com/p?q=1">link</a></p>')),
+    '<p>a <a href="https://x.com/p?q=1">link</a></p>'
+);
+check('image syntax is not a link', types('![alt](https://x.com/i.png)'), []);
+check('non-web target stays literal', plain('[x](javascript:alert(1))'), '[x](javascript:alert(1))');
+check('link label in plain text', stripMarkdownSyntax('go [here](https://x.com)'), 'go here');
+
+// --- agent title language guard ----------------------------------------------
+check('russian title on english note is rejected', titleMatchesContextScript('Список дел', 'Buy milk and call the dentist'), false);
+check('english title on english note is kept', titleMatchesContextScript('Weekly Checklist', 'Buy milk'), true);
+check('russian title on russian note is kept', titleMatchesContextScript('Покупки', 'Купить молоко'), true);
+check('mixed note allows either script', titleMatchesContextScript('Milk list', 'Купить milk'), true);
+check('digits-only title is kept', titleMatchesContextScript('2026', 'anything'), true);
 
 if (failures > 0) {
     console.error(`\n${failures} test(s) failed`);

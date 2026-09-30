@@ -8,9 +8,12 @@ import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 
 // TODO: Replace with your actual RevenueCat API keys in .env
+// RevenueCat Test Store key: lets dev builds (emulators without Play billing)
+// load offerings and run purchases. Never used in release builds.
+const DEV_TEST_STORE_KEY = __DEV__ ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY : undefined;
 const API_KEYS = {
-    apple: process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY || 'appl_placeholder',
-    google: process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || 'goog_placeholder',
+    apple: DEV_TEST_STORE_KEY || process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY || 'appl_placeholder',
+    google: DEV_TEST_STORE_KEY || process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || 'goog_placeholder',
 };
 
 export interface MergedPackage {
@@ -38,6 +41,8 @@ interface SubscriptionContextType {
     packages: MergedPackage[];
     purchasePackage: (pack: MergedPackage) => Promise<boolean>;
     restorePurchases: () => Promise<void>;
+    /** Re-fetches store offerings, e.g. from the paywall after a failed load. */
+    reloadOfferings: () => Promise<void>;
     isLoading: boolean;
 }
 
@@ -335,6 +340,15 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
     };
 
+    const reloadOfferings = async () => {
+        setIsLoading(true);
+        try {
+            await loadOfferings();
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const purchasePackage = async (pack: MergedPackage) => {
         try {
             if (!isAuthenticated || isGuest || !userId) {
@@ -419,6 +433,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 packages,
                 purchasePackage,
                 restorePurchases,
+                reloadOfferings,
                 isLoading,
             }}
         >

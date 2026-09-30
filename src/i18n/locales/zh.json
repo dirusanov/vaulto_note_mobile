@@ -54,7 +54,8 @@
     "selectedCount": "已选择 {{count}} 项",
     "resetRecoveryTitle": "加密保险库已重置",
     "resetRecoveryDescription": "保留的笔记仅存在本机，同步已暂停。请在设置中选择恢复方式。",
-    "reviewRecovery": "查看选项"
+    "reviewRecovery": "查看选项",
+    "noSearchResults": "没有匹配的笔记"
   },
   "settings": {
     "title": "设置",
@@ -200,7 +201,10 @@
       "syncPendingMessage": "本机已关闭端到端加密。但你的笔记暂时无法同步到服务器，联网后会自动更新为普通文本。",
       "unableDisableSync": "无法关闭同步。",
       "cloudSync": "云同步",
-      "failed": "失败"
+      "failed": "失败",
+      "advAISettingsDescCustom": "自定义 AI 配置。",
+      "advAISettingsDescLocal": "本地和自定义 AI 配置",
+      "customAIPendingHint": "在连接测试成功之前，Vaulto AI 将保持启用。"
     },
     "recovery": {
       "title": "恢复密钥",
@@ -246,6 +250,11 @@
       "standardSyncDescription": "笔记使用普通云同步。为提供服务器功能和账户恢复，Vaulto 在技术上可以处理其内容。",
       "syncOff": "云同步已关闭",
       "syncOffDescription": "在你启用同步模式之前，新的修改只保留在本机。"
+    },
+    "onDevice": {
+      "title": "在设备上转写",
+      "active": "{{model}} 模型 · 离线，音频不离开手机",
+      "desc": "私密且可离线使用。只需下载一次语音模型。"
     }
   },
   "languages": {
@@ -407,7 +416,75 @@
     "deleteRecordingTitle": "删除录音？",
     "deleteRecordingDesc": "确定要删除这段录音吗？",
     "deleteNoteDesc": "确定要删除这条笔记吗？",
-    "micHintHold": "长按：不用智能体"
+    "micHintHold": "长按：不用智能体",
+    "presets": {
+      "grammar": {
+        "label": "修正语法",
+        "description": "修正拼写和语法错误"
+      },
+      "professional": {
+        "label": "改为专业语气",
+        "description": "以专业、正式的语气重写"
+      },
+      "simplify": {
+        "label": "简化文本",
+        "description": "使用简单易懂的词语"
+      },
+      "summarize": {
+        "label": "总结",
+        "description": "只保留最重要的要点"
+      },
+      "structure": {
+        "label": "整理结构",
+        "description": "添加标题和列表，提升可读性"
+      }
+    },
+    "versions": {
+      "improveFrom": "改进",
+      "thisVersion": "此版本",
+      "sheetTitle": "版本",
+      "all": "所有版本",
+      "menuSection": "版本",
+      "compare": "与原文比较",
+      "compareTitle": "相对原文的更改",
+      "legendRemoved": "已删除",
+      "legendAdded": "已添加",
+      "noDifferences": "与原文没有差异。",
+      "makeMain": "设为主文本",
+      "makeMainConfirmTitle": "将此版本设为主文本？",
+      "makeMainConfirmBody": "当前原文会作为单独的版本保留，不会丢失任何内容。",
+      "madeMain": "此版本现在是主文本",
+      "copyToNewNote": "复制到新笔记",
+      "copied": "已复制到新笔记",
+      "deleted": "版本已删除",
+      "undo": "撤销",
+      "kind": {
+        "checklist": "清单",
+        "list": "列表",
+        "formatted": "已排版",
+        "agent": "AI 助手",
+        "previousOriginal": "之前的原文",
+        "customPrompt": "自定义提示"
+      },
+      "rename": "重命名",
+      "renameTitle": "重命名版本",
+      "renamePlaceholder": "版本名称",
+      "swipeHint": "在文本上左右滑动即可切换版本"
+    },
+    "tasks": {
+      "find": "查找任务",
+      "title": "本笔记中的任务",
+      "finding": "正在查找任务…",
+      "retry": "重试",
+      "none": "此笔记中没有找到任务。",
+      "inNote": "已在笔记中",
+      "addToCalendar": "添加到日历",
+      "addToNote": "作为清单添加到笔记（{{count}}）",
+      "calendarHint": "日历按钮会打开你的日历应用，可在其中设置提醒。",
+      "failed": "无法查找任务。请检查网络后重试。",
+      "added": "已添加到笔记的任务：{{count}}",
+      "calendarFailed": "无法打开日历"
+    }
   },
   "voice": {
     "transcribeOn": "转录已开启",
@@ -427,7 +504,9 @@
     "finishError": "无法完成录音，请重试。",
     "signInRequired": "需要登录",
     "transcriptionAuthMessage": "创建账户后即可使用转录功能。",
-    "startError": "无法开始录音"
+    "startError": "无法开始录音",
+    "recordingStateLost": "录音状态已丢失，请重试。",
+    "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -530,6 +609,96 @@
     "confirmDeletion": "确认删除",
     "goBack": "返回",
     "somethingWentWrong": "出了点问题",
-    "unsyncedNotesWarn": "条未同步的笔记将永久丢失。"
+    "unsyncedNotesWarn": "条未同步的笔记将永久丢失。",
+    "paywallUnavailableTitle": "暂时无法获取订阅方案",
+    "paywallUnavailableDesc": "无法加载订阅选项。请检查网络连接后重试。",
+    "paywallRetry": "重试",
+    "transcriptionUnlimited": "转写：无限制",
+    "transcriptionLeft": "剩余转写时长：{{time}}",
+    "trialBalance": "试用余额",
+    "oneTimeTrialMinutes": "一次性试用分钟数",
+    "usedAllMonthlyMinutes": "本月分钟数已用完",
+    "usedAllFreeMinutes": "{{minutes}} 分钟免费时长已全部用完",
+    "runningLowTranscription": "转写时长即将用完",
+    "usageLimitTitle": "已达到使用上限",
+    "usageLimitDesc": "你已超出使用上限。请稍后再试或升级你的方案。",
+    "aiLimitTitle": "已达到 AI 使用上限",
+    "aiLimitDesc": "你已超出本周期的 Vaulto AI 令牌上限。请稍后再试。",
+    "trialExhaustedTitle": "试用额度已用完",
+    "trialExhaustedDesc": "你的试用转写分钟数已全部用完。升级到 PRO 即可获得更多分钟数并解锁全部功能！",
+    "transcriptionLimitTitle": "已达到转写上限",
+    "transcriptionLimitDescDate": "你已用完本周期的全部 PRO 转写分钟数。额度将于 {{date}} 重置。",
+    "transcriptionLimitDescNoDate": "你已用完本周期的全部 PRO 转写分钟数。额度将在下一个计费周期开始时重置。",
+    "maybeLater": "以后再说",
+    "privacyTitle": "隐私",
+    "disableEncryptionFailed": "无法关闭加密。",
+    "changeAccessKeyFailed": "无法更改访问密钥。",
+    "enableSyncFailed": "无法开启同步。",
+    "autoDetect": "自动检测",
+    "noLanguagesFound": "未找到与“{{query}}”匹配的语言"
+  },
+  "a11y": {
+    "back": "返回",
+    "close": "关闭",
+    "textAppearance": "文本外观",
+    "improveWithAI": "用 AI 改进",
+    "moreOptions": "更多选项",
+    "done": "完成编辑",
+    "undo": "撤销",
+    "redo": "重做",
+    "removeVersion": "删除此版本",
+    "recordVoice": "录制语音笔记",
+    "dictate": "听写",
+    "settings": "设置",
+    "newNote": "新建笔记",
+    "showApiKey": "显示 API 密钥",
+    "hideApiKey": "隐藏 API 密钥",
+    "helpSync": "关于云同步",
+    "originalVersion": "原始版本",
+    "encrypted": "端到端加密",
+    "deleteRecording": "删除录音",
+    "pauseRecording": "暂停录音",
+    "resumeRecording": "继续录音",
+    "sendRecording": "结束并发送录音",
+    "cancelTask": "取消任务",
+    "decreaseFontSize": "减小字号",
+    "increaseFontSize": "增大字号",
+    "clearSelection": "取消选择",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "deleteSelected": "删除所选笔记",
+    "play": "播放",
+    "pause": "暂停",
+    "playbackPosition": "播放进度",
+    "checklist": "待办清单",
+    "bulletList": "项目符号列表",
+    "bold": "粗体",
+    "italic": "斜体",
+    "underline": "下划线",
+    "strikethrough": "删除线",
+    "highlight": "高亮",
+    "heading": "{{level}} 级标题",
+    "colorYellow": "黄色",
+    "colorGreen": "绿色",
+    "colorBlue": "蓝色",
+    "colorRed": "红色",
+    "noHighlight": "无高亮",
+    "allVersions": "所有版本"
+  },
+  "ask": {
+    "title": "询问笔记",
+    "askAbout": "问 AI：“{{query}}”",
+    "privacyNote": "笔记在本设备上检索，只有相关片段会发送给 AI。",
+    "emptyTitle": "关于你的笔记，尽管提问",
+    "example1": "我这周计划了什么？",
+    "example2": "总结我的工作笔记",
+    "example3": "哪些任务还没完成？",
+    "placeholder": "输入问题…",
+    "send": "提问",
+    "thinking": "正在查找笔记…",
+    "noNotes": "还没有可搜索的笔记。",
+    "emptyAnswer": "没有收到回答。请换个说法再试。",
+    "failed": "无法获取回答。请检查网络后重试。",
+    "untitled": "无标题"
   }
 }

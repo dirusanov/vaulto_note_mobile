@@ -20,6 +20,7 @@ interface NotesContextType {
     updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
     searchNotes: (query: string) => Promise<void>;
+    getAllNotes: () => Note[];
     attachAudioToNote: (id: string, audio: NoteAudio) => Promise<Note>;
     removeAudioFromNote: (id: string) => Promise<Note>;
     createImprovement: (noteId: string, params: { content: string; title?: string; label?: string; optionId?: string }) => Promise<NoteImprovement>;

@@ -5,10 +5,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
+import { deriveAutoTitleFromPlainText, hasMeaningfulRichContent, richContentToPlainText, richContentToPreviewText } from '../utils/richContent';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { useEncryption } from '../context/EncryptionContext';
 import { isMasterCiphertext } from '../crypto/encryption';
+import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
 
 interface NoteCardProps {
     note: Note;
@@ -23,7 +24,10 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const { mode } = useEncryption();
     const activeChild = note.improvements?.find(imp => imp.is_active);
     // AI-written titles can still carry markdown; a card renders plain text.
-    const activeChildTitle = stripStoredTitleMarkdown(activeChild?.title || activeChild?.label || '');
+    // A name the user gave a version labels that version, not the note.
+    const activeChildTitle = userVariantName(activeChild?.title)
+        ? ''
+        : stripStoredTitleMarkdown(plainVariantTitle(activeChild?.title));
     let content = note.content || '';
     const storageScope = note.storage_scope ?? 'sync';
     
@@ -47,31 +51,25 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const plainContent = richContentToPlainText(content);
 
     const buildTitle = () => {
-        if (activeChildTitle) return activeChildTitle;
+        // The note keeps one title across its versions; a version's own title
+        // is only used when the note has none.
         if (note.title && note.title.trim().length > 0) return stripStoredTitleMarkdown(note.title);
+        if (activeChildTitle) return activeChildTitle;
 
-        const cleanedTokens = plainContent
-            .replace(/\s+/g, ' ')
-            .trim()
-            .split(' ')
-            .map(token => token.trim())
-            .filter(token => {
-                if (!token) return false;
-                if (/^[-*_]+$/.test(token)) return false; // Separators/Bullets
-                return true;
-            });
-
-        if (cleanedTokens.length === 0) return '';
-        return cleanedTokens.slice(0, 3).join(' ');
+        return deriveAutoTitleFromPlainText(plainContent);
     };
 
     // Extract title
     const title = buildTitle();
 
-    // Prepare preview text
-    const previewString = plainContent.length > 120
-        ? plainContent.substring(0, 120).replace(/\n/g, ' ') + '...'
-        : plainContent.replace(/\n/g, ' ');
+    // Line breaks and checklist state survive, so a list reads as a list.
+    const fullPreview = richContentToPreviewText(content);
+    // An untitled note's title is its first line; don't print that line twice.
+    const hasStoredTitle = !!activeChildTitle || !!note.title?.trim();
+    const [firstPreviewLine, ...restPreviewLines] = fullPreview.split('\n');
+    const previewString = !hasStoredTitle && title && firstPreviewLine?.trim() === title
+        ? restPreviewLines.join('\n')
+        : fullPreview;
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -147,7 +145,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
                     )}
                     {!!isEncrypted && (
-                        <MaterialIcons name="lock" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                        <MaterialIcons name="lock" size={14} color={colors.primary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.encrypted", "End-to-end encrypted")} />
                     )}
                     {storageScope === 'local_only' && (
                         <MaterialIcons name="smartphone" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />

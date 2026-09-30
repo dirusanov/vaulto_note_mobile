@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Modal,
     View,
@@ -13,7 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
 import { onLimitReached } from '../utils/limitEvents';
 
@@ -24,9 +24,14 @@ export const LimitModal: React.FC = () => {
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState<CurrentPeriodUsage | null>(null);
+    // Several screens mount this modal; only the one on top may answer, or they stack.
+    const isFocused = useIsFocused();
+    const isFocusedRef = useRef(isFocused);
+    isFocusedRef.current = isFocused;
 
     useEffect(() => {
         const unsubscribe = onLimitReached.subscribe(() => {
+            if (!isFocusedRef.current) return;
             setVisible(true);
             fetchUsage();
         });
@@ -54,8 +59,8 @@ export const LimitModal: React.FC = () => {
         (navigation as any).navigate('Paywall');
     };
 
-    let title = 'Usage Limit Reached';
-    let message = 'You have exceeded your usage limits. Please try again later or upgrade your plan.';
+    let title = t('aux.usageLimitTitle', 'Usage Limit Reached');
+    let message = t('aux.usageLimitDesc', 'You have exceeded your usage limits. Please try again later or upgrade your plan.');
     let iconName: keyof typeof MaterialIcons.glyphMap = 'warning-amber';
     let isTrial = false;
 
@@ -66,20 +71,21 @@ export const LimitModal: React.FC = () => {
         const llmEmpty = usage.limits.llm_remaining_tokens <= 0;
 
         if (llmEmpty) {
-            title = 'AI Limit Reached';
-            message = 'You have exceeded your Vaulto AI tokens limit for this period. Please try again later.';
+            title = t('aux.aiLimitTitle', 'AI Limit Reached');
+            message = t('aux.aiLimitDesc', 'You have exceeded your Vaulto AI tokens limit for this period. Please try again later.');
             iconName = 'auto-awesome';
         } else if (isFree && transEmptyTrial) {
-            title = 'Trial Exhausted';
-            message = 'You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!';
+            title = t('aux.trialExhaustedTitle', 'Trial Exhausted');
+            message = t('aux.trialExhaustedDesc', 'You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!');
             iconName = 'stars';
             isTrial = true;
         } else if (!isFree && transEmptyPro) {
-            title = 'Transcription Limit Reached';
-            const resetDate = usage.subscription_next_refill_at
-                ? new Date(usage.subscription_next_refill_at).toLocaleDateString()
-                : 'your next billing cycle';
-            message = `You have used all your PRO transcription minutes for this period. Your limit will reset on ${resetDate}.`;
+            title = t('aux.transcriptionLimitTitle', 'Transcription Limit Reached');
+            message = usage.subscription_next_refill_at
+                ? t('aux.transcriptionLimitDescDate', 'You have used all your PRO transcription minutes for this period. Your limit will reset on {{date}}.', {
+                    date: new Date(usage.subscription_next_refill_at).toLocaleDateString(),
+                })
+                : t('aux.transcriptionLimitDescNoDate', 'You have used all your PRO transcription minutes for this period. Your limit will reset at the start of your next billing cycle.');
             iconName = 'mic-off';
         }
     }
@@ -117,7 +123,7 @@ export const LimitModal: React.FC = () => {
 
                             <View style={styles.actionsRow}>
                                 <TouchableOpacity onPress={handleClose} activeOpacity={0.8} style={styles.cancelButton}>
-                                    <Text style={styles.cancelText}>{isTrial ? 'Maybe Later' : 'Close'}</Text>
+                                    <Text style={styles.cancelText}>{isTrial ? t('aux.maybeLater', 'Maybe Later') : t('common.close', 'Close')}</Text>
                                 </TouchableOpacity>
 
                                 {isTrial && (

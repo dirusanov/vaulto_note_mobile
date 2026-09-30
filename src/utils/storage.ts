@@ -64,6 +64,7 @@ const PRIVATE_AI_ALLOWED_KEY = 'vaulto_private_ai_allowed_v1';
 const LOCAL_WHISPER_MODEL_KEY = 'vaulto_local_whisper_model_v1';
 const TRANSCRIPTION_LANGUAGE_KEY = 'vaulto_transcription_language_v1';
 const LOCAL_LLM_MODEL_KEY = 'vaulto_local_llm_model_v1';
+const VERSION_SWIPE_HINT_SEEN_KEY = 'vaulto_version_swipe_hint_seen_v1';
 // NOTE: legacy App Lock keys may still exist on user devices, but the feature was removed.
 
 // Helper for SecureStore with web fallback (since SecureStore doesn't support web)
@@ -876,6 +877,25 @@ export const setTranscriptionEnabled = async (enabled: boolean): Promise<void> =
     }
 };
 
+const ON_DEVICE_TRANSCRIPTION_KEY = 'vaulto_on_device_transcription';
+
+/** Transcribe recordings with the downloaded Whisper model instead of the cloud. */
+export const getOnDeviceTranscription = async (): Promise<boolean> => {
+    try {
+        return (await AsyncStorage.getItem(ON_DEVICE_TRANSCRIPTION_KEY)) === 'true';
+    } catch {
+        return false;
+    }
+};
+
+export const setOnDeviceTranscription = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(ON_DEVICE_TRANSCRIPTION_KEY, enabled ? 'true' : 'false');
+    } catch (e) {
+        console.error('Failed to save on-device transcription setting', e);
+    }
+};
+
 export const getTranscriptionLanguage = async (): Promise<TranscriptionLanguage> => {
     try {
         const value = await AsyncStorage.getItem(TRANSCRIPTION_LANGUAGE_KEY);
@@ -994,5 +1014,23 @@ export const hasPendingDecryptSync = async (userId: string): Promise<boolean> =>
         return val === '1';
     } catch (e) {
         return false;
+    }
+};
+
+
+/** One-time "swipe the text to switch versions" hint. */
+export const getVersionSwipeHintSeen = async (): Promise<boolean> => {
+    try {
+        return (await AsyncStorage.getItem(VERSION_SWIPE_HINT_SEEN_KEY)) === '1';
+    } catch {
+        return true;
+    }
+};
+
+export const setVersionSwipeHintSeen = async (): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(VERSION_SWIPE_HINT_SEEN_KEY, '1');
+    } catch {
+        // Not worth surfacing: the hint may simply show once more.
     }
 };

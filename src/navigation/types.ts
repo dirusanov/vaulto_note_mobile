@@ -11,4 +11,5 @@ export type RootStackParamList = {
         initialPrivacy?: 'normal' | 'hidden';
     };
     Settings: undefined;
+    AskNotes: { question?: string } | undefined;
 };

@@ -3,6 +3,7 @@
  */
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
+import { File as ExpoFile } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { API_URL, AUTH_API_URL } from '../utils/env';
 import {
@@ -12,12 +13,14 @@ import {
     getOpenAIApiKey,
     getOpenAIBaseUrl,
     getTranscriptionLanguage,
+    getOnDeviceTranscription,
 } from '../utils/storage';
+import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
 import { isRichHtmlContent, richContentToAgentMarkdown } from '../utils/richContent';
 import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
-import { prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
+import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -214,13 +217,19 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
     }
 }
 
+/**
+ * Since SDK 57 the global fetch is expo/fetch, which cannot serialise React
+ * Native's `{ uri, name, type }` file parts and rejects the whole request with
+ * "Unsupported FormDataPart implementation". A File from expo-file-system
+ * exposes `bytes()`, which it can stream as a proper multipart part.
+ */
+const appendAudioFilePart = (formData: FormData, audioUri: string) => {
+    formData.append('file', new ExpoFile(audioUri) as unknown as Blob, 'audio.m4a');
+};
+
 const buildBackendTranscriptionFormData = (audioUri: string, language?: string): FormData => {
     const formData = new FormData();
-    formData.append('file', {
-        uri: audioUri,
-        type: 'audio/m4a',
-        name: 'audio.m4a',
-    } as any);
+    appendAudioFilePart(formData, audioUri);
     if (language) {
         formData.append('language', language);
     }
@@ -442,6 +451,19 @@ const formatAgentRequestError = (error: unknown): string => {
 };
 
 /**
+ * Recordings are transcribed by the downloaded Whisper model; audio never leaves the
+ * device. Same rule as the Settings switch: without the model file it is off.
+ */
+export async function isOnDeviceTranscriptionActive(): Promise<boolean> {
+    if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web' || !(await getOnDeviceTranscription())) return false;
+    try {
+        return (await getLocalWhisperModelStatus()).isDownloaded;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Transcribe audio file using OpenAI Whisper API
  */
 export async function transcribeAudio(
@@ -449,6 +471,9 @@ export async function transcribeAudio(
     language?: string
 ): Promise<TranscriptionResult> {
     const selectedLanguage = language || await resolvePreferredTranscriptionLanguage();
+    if (await isOnDeviceTranscriptionActive()) {
+        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+    }
     const provider = await getAIProvider();
     if (provider === 'vaulto_ai') {
         return transcribeViaBackend(audioUri, selectedLanguage);
@@ -496,14 +521,7 @@ export async function transcribeAudio(
             // Create form data
             const formData = new FormData();
 
-            // For React Native / Expo, we need to use a special format for file uploads
-            const file = {
-                uri: audioUri,
-                type: 'audio/m4a', // Changed from audio/mp4
-                name: 'audio.m4a',
-            } as any;
-
-            formData.append('file', file);
+            appendAudioFilePart(formData, audioUri);
             formData.append('model', 'whisper-1');
             if (selectedLanguage) {
                 formData.append('language', selectedLanguage);

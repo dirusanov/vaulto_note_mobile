@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { buildTaskExtractionPrompt, parseExtractedTasks, type ExtractedTask } from '../utils/taskExtraction';
 import { API_URL } from '../utils/env';
 import { getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel, storage } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL, modelSupportsTemperature } from '../utils/openaiCompat';
@@ -304,4 +305,87 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
     }
 
     return data.text as string;
+}
+
+const ASK_NOTES_INSTRUCTION = [
+    "You answer questions using ONLY the user's own notes given as numbered excerpts.",
+    'Cite the excerpts you rely on inline as [1], [2] (use the numbers given).',
+    'Reasonable inferences from the notes are fine (a grocery list answers "what should I buy?"; unchecked checklist items are open tasks).',
+    'Lead with the answer itself. Only if nothing in the notes is relevant, say so in one short sentence instead of guessing.',
+    'Write the whole answer in the language of the Question line, even when the notes are in another language (translate what you take from them). Be concise; use short Markdown lists for several items.',
+    'Never invent facts, dates or names that are not in the notes.',
+].join(' ');
+
+/**
+ * One instruction over one text, routed to the configured provider. Used by the
+ * note-level helpers below (Ask your notes, Find tasks).
+ */
+async function runInstruction(instruction: string, text: string, { json = false }: { json?: boolean } = {}): Promise<string> {
+    const provider = await getAIProvider();
+
+    if (provider === 'local_llm' || provider === 'local') {
+        return (await generateWithLocalLLM(`${instruction}\n\n${text}`, {})).trim();
+    }
+
+    if (provider === 'vaulto_ai') {
+        const token = await storage.getToken();
+        if (!token) throw new Error('Sign in required to use Vaulto AI.');
+        const response = await fetch(BACKEND_IMPROVE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'Idempotency-Key': await generateUUID(),
+            },
+            body: JSON.stringify({ text, prompt: instruction, json_mode: json }),
+        });
+        if (response.status === 403) {
+            const { onLimitReached } = await import('../utils/limitEvents');
+            onLimitReached.emit();
+            throw new Error('Usage limit reached');
+        }
+        if (!response.ok) {
+            throw new Error(`LLM API error: ${response.status} - ${await response.text()}`);
+        }
+        const data = await response.json();
+        if (!data.text) throw new Error('LLM returned empty response');
+        return (data.text as string).trim();
+    }
+
+    const apiKey = await getOpenAIApiKey();
+    if (!apiKey) throw new Error('API key not found');
+    const baseUrl = await getOpenAIBaseUrl();
+    const model = await getOpenAIModel();
+    const body: any = {
+        model,
+        messages: [
+            { role: 'system', content: instruction },
+            { role: 'user', content: text },
+        ],
+    };
+    if (modelSupportsTemperature(model)) body.temperature = 0.2;
+    const response = await fetch(buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/chat/completions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+        throw new Error(`API Error: ${response.status} - ${await response.text()}`);
+    }
+    const data = await response.json();
+    return (data.choices?.[0]?.message?.content || '').trim();
+}
+
+/**
+ * Answers a question from note excerpts retrieved on the device. Only the given
+ * excerpts leave the device; routing follows the configured AI provider.
+ */
+export async function answerFromNotes(question: string, sourcesText: string): Promise<string> {
+    return runInstruction(`${ASK_NOTES_INSTRUCTION}\n\nQuestion: ${question.trim()}`, `Notes:\n${sourcesText}`);
+}
+
+/** Action items of one note, with dates resolved against the device's today. */
+export async function extractTasks(noteMarkdown: string, now: Date = new Date()): Promise<ExtractedTask[]> {
+    const raw = await runInstruction(buildTaskExtractionPrompt(now), noteMarkdown, { json: true });
+    return parseExtractedTasks(raw);
 }

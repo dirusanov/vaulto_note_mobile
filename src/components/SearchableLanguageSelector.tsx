@@ -128,17 +128,24 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Language names stay as-is; only the "auto" entry is app UI copy.
+    const getLanguageLabel = (lang: LanguageOption) =>
+        lang.key === 'auto' ? t('aux.autoDetect', 'Auto-Detect') : lang.label;
+
     const selectedLanguageLabel = useMemo(() => {
-        return WHISPER_LANGUAGES.find(l => l.key === value)?.label || 'Auto-Detect';
-    }, [value]);
+        const selected = WHISPER_LANGUAGES.find(l => l.key === value);
+        return selected ? getLanguageLabel(selected) : t('aux.autoDetect', 'Auto-Detect');
+    }, [value, t]);
 
     const filteredLanguages = useMemo(() => {
         if (!searchQuery) return WHISPER_LANGUAGES;
         const lowerQuery = searchQuery.toLowerCase();
         return WHISPER_LANGUAGES.filter(
-            lang => lang.label.toLowerCase().includes(lowerQuery) || lang.key.toLowerCase().includes(lowerQuery)
+            lang => lang.label.toLowerCase().includes(lowerQuery)
+                || getLanguageLabel(lang).toLowerCase().includes(lowerQuery)
+                || lang.key.toLowerCase().includes(lowerQuery)
         );
-    }, [searchQuery]);
+    }, [searchQuery, t]);
 
     const handleSelect = (key: string) => {
         onChange(key as TranscriptionLanguage);
@@ -165,7 +172,12 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
             >
                 <SafeAreaView style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+                        <TouchableOpacity
+                            style={styles.closeButton}
+                            onPress={() => setModalVisible(false)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('a11y.close', 'Close')}
+                        >
                             <MaterialIcons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={styles.modalTitle}>{t("aux.selectLanguage", "Select Language")}</Text>
@@ -198,7 +210,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                                 >
                                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
                                          <Text style={[styles.languageText, isSelected && styles.languageTextActive]}>
-                                             {item.label}
+                                             {getLanguageLabel(item)}
                                          </Text>
                                     </View>
                                     {isSelected && <MaterialIcons name="check" size={20} color={colors.primary} />}
@@ -207,7 +219,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                         }}
                         ListEmptyComponent={
                             <View style={styles.emptyContainer}>
-                                <Text style={styles.emptyText}>No languages found for "{searchQuery}"</Text>
+                                <Text style={styles.emptyText}>{t('aux.noLanguagesFound', 'No languages found for "{{query}}"', { query: searchQuery })}</Text>
                             </View>
                         }
                     />
