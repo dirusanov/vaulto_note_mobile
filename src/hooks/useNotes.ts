@@ -8,7 +8,6 @@ import {
     saveNoteLocal,
     getNotesLocal,
     deleteNoteLocal,
-    searchNotesLocal,
     saveImprovementLocal,
     setActiveVariant as setActiveVariantDB,
     getNoteById,
@@ -20,7 +19,9 @@ import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
 import { AudioService } from '../services/AudioService';
-import { hasMeaningfulRichContent } from '../utils/richContent';
+import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
+import { listSearchTerms, matchesListQuery } from '../utils/noteSearch';
+import { plainVariantTitle } from '../i18n/variantLabels';
 import { sanitizeStepLabel } from '../i18n/variantLabels';
 
 export interface NoteAudio {
@@ -261,6 +262,30 @@ export const useNotes = () => {
         [shouldSyncNote, userId]
     );
 
+    // Active list search. Notes are encrypted at rest, so searching the database would
+    // decrypt every note on every keystroke; the decrypted notes are already in memory.
+    const searchTermsRef = useRef<string[]>([]);
+    const searchTextCacheRef = useRef(new WeakMap<Note, string>());
+
+    const searchableText = useCallback((note: Note): string => {
+        const cached = searchTextCacheRef.current.get(note);
+        if (cached !== undefined) return cached;
+        const parts = [note.title || '', richContentToPlainText(note.content || ''), note.transcription || ''];
+        for (const imp of note.improvements || []) {
+            if (imp.deleted) continue;
+            parts.push(plainVariantTitle(imp.title) || '', richContentToPlainText(imp.content || ''));
+        }
+        const text = parts.join('\n');
+        searchTextCacheRef.current.set(note, text);
+        return text;
+    }, []);
+
+    const applyListSearch = useCallback((list: Note[]): Note[] => {
+        const terms = searchTermsRef.current;
+        if (terms.length === 0) return list;
+        return list.filter((note) => matchesListQuery(searchableText(note), terms));
+    }, [searchableText]);
+
     const refreshFromLocal = useCallback(async () => {
         if (!userId) {
             setNotes([]);
@@ -281,11 +306,12 @@ export const useNotes = () => {
         notesRef.current = visibleMain;
         notesSignatureRef.current = nextSignature;
         if (nextSignature !== prevSignature) {
-            setNotes(visibleMain);
+            // A background refresh must not drop an active list search.
+            setNotes(applyListSearch(visibleMain));
         }
         markHydrated();
         return visibleMain;
-    }, [buildNotesSignature, filterAndCleanupNotes, markHydrated, markInitialSyncComplete, userId]);
+    }, [applyListSearch, buildNotesSignature, filterAndCleanupNotes, markHydrated, markInitialSyncComplete, userId]);
 
     // The master key is restored asynchronously at startup (and after a JS
     // reload). Notes read before that decrypt to nothing and are filtered out,
@@ -662,21 +688,8 @@ export const useNotes = () => {
 
     const searchNotes = async (query: string) => {
         if (!userId) return;
-        setLoading(true);
-        try {
-            const results = await searchNotesLocal(userId, query);
-            const filtered = results.filter(note => {
-                if (note.deleted || note.pending_delete || isEmptyNote(note)) return false;
-                const privacy = normalizePrivacy(note.privacy);
-                return privacy === 'normal';
-            });
-            setNotes(filtered);
-        } catch (err) {
-            console.error('[useNotes] Search failed', err);
-            setError('Search failed');
-        } finally {
-            setLoading(false);
-        }
+        searchTermsRef.current = listSearchTerms(query);
+        setNotes(applyListSearch(allNotesRef.current));
     };
 
     const attachAudioToNote = async (id: string, audio: NoteAudio) => {

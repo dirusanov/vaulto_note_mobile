@@ -546,6 +546,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 { backgroundColor: transcribe ? colors.primary : colors.surface },
                             ]}
                             onPress={() => handleTranscriptionToggle(!transcribe)}
+                            hitSlop={{ top: 4, bottom: 4 }}
                             activeOpacity={0.7}
                             accessibilityRole="switch"
                             accessibilityLabel={t("common.transcribe", "Transcribe")}
@@ -572,6 +573,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 { backgroundColor: effectiveAgentEnabled ? colors.primary : colors.surface },
                             ]}
                             onPress={() => handleAgentModeToggle(!agentModeEnabled)}
+                            hitSlop={{ top: 4, bottom: 4 }}
                             activeOpacity={0.7}
                             accessibilityRole="switch"
                             accessibilityLabel={t("settings.ai.agentMode", "Agent Mode")}
@@ -712,6 +714,7 @@ const styles = StyleSheet.create({
     badgeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
+        minHeight: 40,
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
@@ -755,7 +758,8 @@ const styles = StyleSheet.create({
         borderRadius: 44,
     },
     cancelButtonCompact: {
-        padding: spacing.s,
+        width: 48,
+        height: 48,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -800,14 +804,15 @@ const styles = StyleSheet.create({
         borderRadius: 2.5,
     },
     pauseButtonCompact: {
-        padding: spacing.s,
+        width: 48,
+        height: 48,
         justifyContent: 'center',
         alignItems: 'center',
     },
     finishButtonCompact: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',

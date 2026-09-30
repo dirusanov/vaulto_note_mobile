@@ -894,18 +894,6 @@ const processNotes = async (
     return { notes: sorted, hasStuckE2EE };
 };
 
-export const searchNotesLocal = async (userId: string, query: string): Promise<Note[]> => {
-    const allNotes = await getNotesLocal(userId);
-    if (!query) return allNotes;
-    const lowerQuery = query.toLowerCase();
-    return allNotes.filter(note =>
-        (note.title?.toLowerCase().includes(lowerQuery)) ||
-        (note.content?.toLowerCase().includes(lowerQuery)) ||
-        (note.transcription?.toLowerCase().includes(lowerQuery)) ||
-        (note.improvements?.some(imp => imp.content?.toLowerCase().includes(lowerQuery)))
-    );
-};
-
 export const getNoteById = async (userId: string, id: string): Promise<Note | null> => {
     if (Platform.OS === 'web') {
         const allNotes = await getNotesLocal(userId);

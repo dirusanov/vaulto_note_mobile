@@ -24,7 +24,9 @@
 - **Ask your notes**: A chat that answers questions from your notes with numbered sources that open the note. Retrieval runs on the device over decrypted notes; only the best-matching excerpts go to the AI, and local-only notes stay out unless AI is allowed for them. Opened from the new ✨ dock button or "Ask AI" under a search.
 - **Find tasks**: The note menu extracts action items with dates resolved against today ("on Friday" → Fri, Oct 2), adds the chosen ones as a checklist (skipping ones already there) or opens each in the system calendar editor to set a reminder (`expo-calendar`, no calendar permission needed).
 - **Transcribe on device**: A Settings switch downloads a Whisper model once and then transcribes recordings (plain and Agent Mode) on the phone, offline, without the audio leaving it; real-time dictation in the editor toolbar is enabled. The all-local AI provider stays off.
-- **Search button** in the dock; the search bar used to appear only by scrolling a list of six or more notes. A search without results says so instead of "Tap the microphone to record".
+- **Home screen layout**: The bottom bar keeps three actions (✨ Ask, record, new note) with room between them; search is a bar at the top with Settings beside it, always visible (it used to appear only by scrolling a list of six or more notes). A search without results says so instead of "Tap the microphone to record".
+- **Faster, smarter search**: The list searches the already-decrypted notes in memory instead of decrypting every note from the database on each keystroke; it matches plain text rather than HTML markup (no hits on tags, `&` works), every word in any order, inflected forms and ё/е, including versions. A background sync no longer resets an active search.
+- **Touch targets**: Editor header buttons, sheet close buttons, version chips and actions, recorder controls, search bar buttons and the chat are at least 48dp (chips 40dp plus slop).
 
 ### Changed
 - **Versions row**: "Original" stays pinned at the left; deleting a version is instant with Undo instead of a confirmation dialog.

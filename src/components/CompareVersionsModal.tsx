@@ -31,7 +31,7 @@ export const CompareVersionsModal = ({ visible, versionLabel, originalText, vers
                 <View style={styles.header}>
                     <TouchableOpacity
                         onPress={onClose}
-                        hitSlop={8}
+                        style={styles.closeButton}
                         accessibilityRole="button"
                         accessibilityLabel={t('a11y.close', 'Close')}
                     >
@@ -78,6 +78,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.m,
         paddingBottom: spacing.s,
         gap: spacing.m,
+    },
+    closeButton: {
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: -12,
     },
     headerText: {
         flex: 1,

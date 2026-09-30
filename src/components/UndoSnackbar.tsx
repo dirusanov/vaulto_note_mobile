@@ -24,7 +24,7 @@ export const UndoSnackbar = ({ message, onUndo }: UndoSnackbarProps) => {
         >
             <View style={styles.bar}>
                 <Text style={styles.message} numberOfLines={2}>{message}</Text>
-                <TouchableOpacity onPress={onUndo} hitSlop={8} accessibilityRole="button">
+                <TouchableOpacity onPress={onUndo} style={styles.undoButton} accessibilityRole="button">
                     <Text style={styles.undo}>{t('edit.versions.undo', 'Undo')}</Text>
                 </TouchableOpacity>
             </View>
@@ -51,6 +51,14 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: spacing.m,
         gap: spacing.m,
+    },
+    // 48dp tall while the bar itself stays slim.
+    undoButton: {
+        minHeight: 48,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.s,
+        marginVertical: -12,
+        marginRight: -spacing.s,
     },
     message: {
         flex: 1,

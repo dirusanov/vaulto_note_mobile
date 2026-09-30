@@ -65,7 +65,7 @@ export const TasksSheet = ({
                                 <Text style={styles.title}>{t('edit.tasks.title', 'Tasks in this note')}</Text>
                                 <TouchableOpacity
                                     onPress={onClose}
-                                    hitSlop={8}
+                                    style={styles.closeButton}
                                     accessibilityRole="button"
                                     accessibilityLabel={t('a11y.close', 'Close')}
                                 >
@@ -125,7 +125,6 @@ export const TasksSheet = ({
                                                     <TouchableOpacity
                                                         style={styles.calendarButton}
                                                         onPress={() => { void addToCalendar(task); }}
-                                                        hitSlop={6}
                                                         accessibilityRole="button"
                                                         accessibilityLabel={t('edit.tasks.addToCalendar', 'Add to calendar')}
                                                     >
@@ -206,7 +205,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         borderRadius: 12,
-        paddingVertical: spacing.s,
+        minHeight: 56,
+        paddingVertical: spacing.xs,
         paddingHorizontal: spacing.s,
     },
     rowMain: {
@@ -228,8 +228,18 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
     },
     calendarButton: {
-        padding: 6,
-        marginLeft: spacing.xs,
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: -spacing.s,
+    },
+    closeButton: {
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: -12,
     },
     primaryButton: {
         flexDirection: 'row',

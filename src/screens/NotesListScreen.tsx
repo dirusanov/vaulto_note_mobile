@@ -26,6 +26,8 @@ import { hasMeaningfulRichContent } from '../utils/richContent';
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
 
+const SEARCH_BAR_HEIGHT = 60;
+
 export const NotesListScreen = () => {
     const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -67,9 +69,11 @@ export const NotesListScreen = () => {
     const [isMicPrimary, setIsMicPrimary] = useState(true);
 
     // Search Bar Animation
-    const searchBarHeight = useRef(new Animated.Value(0)).current;
+    // The search bar (with settings) is shown at the top and slides away while
+    // scrolling down through the list, back on scrolling up.
+    const searchBarHeight = useRef(new Animated.Value(SEARCH_BAR_HEIGHT)).current;
     const lastScrollY = useRef(0);
-    const isSearchVisible = useRef(false);
+    const isSearchVisible = useRef(true);
     const scrollAccumulator = useRef(0);
     const lastToggleTime = useRef(0); // Cooldown to prevent rapid toggling
 
@@ -277,20 +281,9 @@ export const NotesListScreen = () => {
 
     // Reset search bar on mount
     useEffect(() => {
-        searchBarHeight.setValue(0);
-        isSearchVisible.current = false;
-    }, []);
-
-    const searchInputRef = useRef<TextInput>(null);
-    const openSearch = () => {
-        Animated.timing(searchBarHeight, {
-            toValue: 60,
-            duration: 180,
-            useNativeDriver: false,
-        }).start(() => searchInputRef.current?.focus());
+        searchBarHeight.setValue(SEARCH_BAR_HEIGHT);
         isSearchVisible.current = true;
-        lastToggleTime.current = Date.now();
-    };
+    }, []);
 
     const handleScroll = (event: any) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -339,7 +332,7 @@ export const NotesListScreen = () => {
         // Show search bar when accumulated downward scroll (negative) exceeds threshold
         if (scrollAccumulator.current < -toggleThreshold && !isSearchVisible.current) {
             Animated.timing(searchBarHeight, {
-                toValue: 60,
+                toValue: SEARCH_BAR_HEIGHT,
                 duration: 180,
                 useNativeDriver: false,
             }).start();
@@ -580,18 +573,10 @@ export const NotesListScreen = () => {
                 </View>
             )}
             {!isSelectionMode && (
-                <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, 60], outputRange: [0, 1] }) }]}>
+                <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, SEARCH_BAR_HEIGHT], outputRange: [0, 1] }) }]}>
                     <View style={styles.searchBar}>
                         <MaterialIcons name="search" size={20} color={colors.textTertiary} />
                         <TextInput
-                            ref={searchInputRef}
-                            onBlur={() => {
-                                // Few notes means no scroll gesture to hide it again.
-                                if (!searchQuery && notes.length < 6) {
-                                    Animated.timing(searchBarHeight, { toValue: 0, duration: 100, useNativeDriver: false }).start();
-                                    isSearchVisible.current = false;
-                                }
-                            }}
                             style={styles.searchInput}
                             placeholder={t("common.search")}
                             placeholderTextColor={colors.textTertiary}
@@ -601,6 +586,7 @@ export const NotesListScreen = () => {
                         {searchQuery.length > 0 && (
                             <TouchableOpacity
                                 onPress={() => handleSearch('')}
+                                style={styles.searchBarButton}
                                 accessibilityRole="button"
                                 accessibilityLabel={t("a11y.close", "Close")}
                             >
@@ -608,12 +594,12 @@ export const NotesListScreen = () => {
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
-                            onPress={() => navigation.navigate('AskNotes', searchQuery.trim() ? { question: searchQuery.trim() } : undefined)}
-                            style={styles.askButton}
+                            onPress={handleSettingsPress}
+                            style={styles.searchBarButton}
                             accessibilityRole="button"
-                            accessibilityLabel={t("ask.title", "Ask your notes")}
+                            accessibilityLabel={t("a11y.settings", "Settings")}
                         >
-                            <MaterialIcons name="auto-awesome" size={18} color={colors.primary} />
+                            <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
@@ -688,17 +674,6 @@ export const NotesListScreen = () => {
                 <View style={styles.dockContainer} key={dockInstanceKey} pointerEvents="box-none">
                     <View style={styles.dock}>
                         <View style={styles.dockButtonRow}>
-                            {/* Settings Button (Left) */}
-                            <TouchableOpacity
-                                style={styles.dockButton}
-                                onPress={handleSettingsPress}
-                                activeOpacity={0.7}
-                                accessibilityRole="button"
-                                accessibilityLabel={t("a11y.settings", "Settings")}
-                            >
-                                <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
-                            </TouchableOpacity>
-
                             <TouchableOpacity
                                 style={styles.dockButton}
                                 onPress={() => navigation.navigate('AskNotes')}
@@ -706,21 +681,11 @@ export const NotesListScreen = () => {
                                 accessibilityRole="button"
                                 accessibilityLabel={t("ask.title", "Ask your notes")}
                             >
-                                <MaterialIcons name="auto-awesome" size={22} color={colors.primary} />
+                                <MaterialIcons name="auto-awesome" size={24} color={colors.primary} />
                             </TouchableOpacity>
 
                             {/* Center Primary Button */}
                             <PrimaryButton />
-
-                            <TouchableOpacity
-                                style={styles.dockButton}
-                                onPress={openSearch}
-                                activeOpacity={0.7}
-                                accessibilityRole="button"
-                                accessibilityLabel={t("common.search")}
-                            >
-                                <MaterialIcons name="search" size={24} color={colors.textSecondary} />
-                            </TouchableOpacity>
 
                             {/* Right Secondary Button */}
                             <SecondaryButton />
@@ -794,9 +759,11 @@ export const NotesListScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    askButton: {
-        marginLeft: 8,
-        padding: 4,
+    searchBarButton: {
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     askRow: {
         flexDirection: 'row',
@@ -804,6 +771,7 @@ const styles = StyleSheet.create({
         gap: 8,
         marginHorizontal: 4,
         marginBottom: 12,
+        minHeight: 48,
         paddingVertical: 12,
         paddingHorizontal: 14,
         borderRadius: 14,
@@ -950,11 +918,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.surface,
         borderRadius: 12,
-        paddingHorizontal: spacing.m,
+        paddingLeft: spacing.m,
+        paddingRight: spacing.xs,
         height: 56, // Increased for better usability on mobile
     },
     searchInput: {
         flex: 1,
+        height: 48,
         marginLeft: spacing.s,
         color: colors.text,
         fontSize: 16,
@@ -987,9 +957,9 @@ const styles = StyleSheet.create({
         borderRadius: 32,
         paddingTop: 8, // Push contents down for vertical centering
         paddingBottom: 4,
-        paddingHorizontal: spacing.m,
-        // Five buttons (4 × 44 + the 88 centre) must fit a 360dp phone.
-        width: Math.min(width - spacing.l * 2, 360),
+        paddingHorizontal: spacing.l,
+        // Three actions: the thumb reaches all of them, with room between each.
+        width: Math.min(width - spacing.l * 2, 320),
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.15,
@@ -1006,7 +976,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     dockButton: {
-        width: 44,
+        width: 48,
         height: 48,
         justifyContent: 'center',
         alignItems: 'center',

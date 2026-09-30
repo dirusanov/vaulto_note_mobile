@@ -52,7 +52,7 @@ export const VersionsSheet = ({
                                 <Text style={styles.title}>{t('edit.versions.sheetTitle', 'Versions')}</Text>
                                 <TouchableOpacity
                                     onPress={close}
-                                    hitSlop={8}
+                                    style={styles.closeButton}
                                     accessibilityRole="button"
                                     accessibilityLabel={t('a11y.close', 'Close')}
                                 >
@@ -93,7 +93,6 @@ export const VersionsSheet = ({
                                                 <TouchableOpacity
                                                     style={styles.moreButton}
                                                     onPress={() => setExpandedId(expanded ? null : item.id)}
-                                                    hitSlop={6}
                                                     accessibilityRole="button"
                                                     accessibilityLabel={t('a11y.moreOptions', 'More options')}
                                                 >
@@ -234,8 +233,17 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     moreButton: {
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    closeButton: {
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: -12,
     },
     actions: {
         width: '100%',
@@ -250,9 +258,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 10,
+        minHeight: 44,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,

@@ -44,3 +44,15 @@ test('sources are numbered, budgeted and formatted for the model', () => {
     assert.equal(sources[0].index, 1);
     assert.ok(formatSourcesForModel(sources).startsWith('[1] Trip\nBook the hotel'));
 });
+
+test('list search matches every word, in any order and inflection, not markup', () => {
+    const { listSearchTerms, matchesListQuery } = require('../.test-build/search/noteSearch');
+    const text = 'Встреча с командой\nЗапуск переносим на четверг. Tom & Jerry ёлка';
+    assert.ok(matchesListQuery(text, listSearchTerms('четверг запуска')));
+    assert.ok(matchesListQuery(text, listSearchTerms('Tom Jerry')));
+    assert.ok(matchesListQuery(text, listSearchTerms('елка')));
+    assert.ok(!matchesListQuery(text, listSearchTerms('четверг пятница')));
+    assert.ok(!matchesListQuery(text, listSearchTerms('strong')));
+    assert.ok(matchesListQuery(text, listSearchTerms('   ')));
+    assert.deepEqual(listSearchTerms('Meetings meetings'), ['meetin']);
+});

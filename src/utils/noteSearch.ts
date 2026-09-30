@@ -129,3 +129,22 @@ export const buildNoteSources = (
 
 export const formatSourcesForModel = (sources: NoteSource[]): string =>
     sources.map((source) => `[${source.index}] ${source.title || 'Untitled'}\n${source.excerpt}`).join('\n\n---\n\n');
+
+const normalizeForMatch = (text: string): string => (text || '').toLowerCase().replace(/ё/g, 'е');
+
+/**
+ * Query words the list search looks for. A long word loses its last two letters so
+ * inflected forms still match ("запуска" finds "запуск", "meetings" finds "meeting").
+ */
+export const listSearchTerms = (query: string): string[] =>
+    Array.from(new Set(tokenize(query).map((word) => (word.length >= 6 ? word.slice(0, -2) : word))));
+
+/**
+ * The list search: every query word must occur somewhere in the note (title, text,
+ * versions), in any order. Runs over decrypted plain text, never markup.
+ */
+export const matchesListQuery = (haystack: string, terms: string[]): boolean => {
+    if (terms.length === 0) return true;
+    const text = normalizeForMatch(haystack);
+    return terms.every((term) => text.includes(term));
+};

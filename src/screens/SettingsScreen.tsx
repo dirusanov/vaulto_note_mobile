@@ -2419,9 +2419,9 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     backButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
+        width: 48,
+        height: 48,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: colors.border,
         alignItems: 'center',

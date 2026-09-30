@@ -141,6 +141,9 @@ import { buildAudioEmbedHtml } from '../utils/audioEmbeds';
 import { sanitizeDisplayLabel, stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 
+// Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
+const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
+
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
 const CUSTOM_AI_UNIVERSAL_ERROR = 'Unable to connect to your Custom AI provider. Check provider API key and provider settings.';
@@ -685,6 +688,7 @@ const MemoizedImprovementChips = memo(({
             <TouchableOpacity
                 style={[styles.variantChip, styles.variantOriginalChip, originalActive && styles.variantChipActive]}
                 onPress={() => selectVariant('original')}
+                hitSlop={CHIP_HIT_SLOP}
                 accessibilityRole="button"
                 accessibilityState={{ selected: originalActive }}
                 accessibilityLabel={t("a11y.originalVersion", "Original version")}
@@ -733,6 +737,7 @@ const MemoizedImprovementChips = memo(({
                             <TouchableOpacity
                                 style={[styles.variantChip, isActive && styles.variantChipActive]}
                                 onPress={() => selectVariant(imp.id)}
+                                hitSlop={CHIP_HIT_SLOP}
                                 onLongPress={onOpenAllVersions}
                                 delayLongPress={400}
                                 accessibilityRole="button"
@@ -784,6 +789,7 @@ const MemoizedImprovementChips = memo(({
                 <TouchableOpacity
                     style={styles.variantAllButton}
                     onPress={onOpenAllVersions}
+                    hitSlop={CHIP_HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel={t("a11y.allVersions", "All versions")}
                 >
@@ -6004,11 +6010,11 @@ export const NoteEditScreen = () => {
                     <Text style={styles.swipeHintText}>{t('edit.versions.swipeHint', 'Swipe the text left or right to switch versions')}</Text>
                     <TouchableOpacity
                         onPress={dismissSwipeHint}
-                        hitSlop={8}
+                        style={styles.swipeHintClose}
                         accessibilityRole="button"
                         accessibilityLabel={t('a11y.close', 'Close')}
                     >
-                        <MaterialIcons name="close" size={16} color={colors.textSecondary} />
+                        <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
             )}
@@ -6037,7 +6043,7 @@ export const NoteEditScreen = () => {
         <ScreenContainer>
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={t("a11y.back", "Back")}>
+                <TouchableOpacity onPress={handleBack} style={[styles.iconButton, styles.headerEdgeLeft]} accessibilityRole="button" accessibilityLabel={t("a11y.back", "Back")}>
                     <MaterialIcons name="arrow-back" size={28} color={colors.text} />
                 </TouchableOpacity>
                 <View style={styles.headerRight}>
@@ -7151,26 +7157,33 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: spacing.m,
+        paddingVertical: spacing.s,
         marginBottom: spacing.xs,
         marginTop: 0,
     },
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: spacing.m,
+        paddingVertical: spacing.s,
         marginBottom: spacing.xs,
         marginTop: 0,
     },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.m,
+        gap: spacing.s,
+        // Icons line up with the text edge while their 48dp boxes overhang it.
+        marginRight: -12,
     },
+    headerEdgeLeft: {
+        marginLeft: -12,
+    },
+    // 48dp: the Android minimum touch target (Apple asks for 44pt).
     iconButton: {
-        padding: spacing.xs,
-        minWidth: 40,
+        width: 48,
+        height: 48,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     disabledIcon: {
         opacity: 0.3,
@@ -7311,6 +7324,14 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         backgroundColor: colors.primaryLight,
     },
+    swipeHintClose: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: -8,
+        marginRight: -12,
+    },
     swipeHintText: {
         flex: 1,
         fontSize: 13,
@@ -7414,9 +7435,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginLeft: spacing.xs,
+        minHeight: 40,
         paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 18,
+        paddingHorizontal: 12,
+        borderRadius: 20,
         backgroundColor: colors.primaryLight,
     },
     variantAllCount: {
@@ -7439,7 +7461,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: 18,
+        borderRadius: 20,
+        minHeight: 40,
         paddingVertical: 6,
         paddingHorizontal: spacing.m,
         backgroundColor: colors.surface,

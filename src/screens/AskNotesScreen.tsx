@@ -202,6 +202,7 @@ export const AskNotesScreen = () => {
                                                 key={source.id}
                                                 style={styles.sourceChip}
                                                 onPress={() => navigation.navigate('NoteEdit', { noteId: source.id })}
+                                                hitSlop={{ top: 6, bottom: 6 }}
                                                 accessibilityRole="link"
                                             >
                                                 <Text style={styles.sourceIndex}>{source.index}</Text>
@@ -260,7 +261,11 @@ const styles = StyleSheet.create({
         gap: spacing.s,
     },
     iconButton: {
-        padding: spacing.xs,
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: -spacing.s,
     },
     headerText: {
         flex: 1,
@@ -301,6 +306,8 @@ const styles = StyleSheet.create({
         marginBottom: spacing.s,
     },
     example: {
+        minHeight: 48,
+        justifyContent: 'center',
         paddingVertical: 10,
         paddingHorizontal: spacing.m,
         borderRadius: 20,
@@ -344,20 +351,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         maxWidth: '100%',
+        minHeight: 36,
         gap: 6,
-        paddingVertical: 5,
-        paddingLeft: 5,
-        paddingRight: 10,
-        borderRadius: 14,
+        paddingVertical: 6,
+        paddingLeft: 8,
+        paddingRight: 12,
+        borderRadius: 18,
         backgroundColor: colors.backgroundSecondary,
     },
     sourceIndex: {
-        minWidth: 18,
-        height: 18,
-        borderRadius: 9,
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
         textAlign: 'center',
-        fontSize: 11,
-        lineHeight: 18,
+        fontSize: 12,
+        lineHeight: 20,
         fontWeight: '700',
         color: colors.surface,
         backgroundColor: colors.primary,
@@ -400,8 +408,8 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         maxHeight: 120,
-        minHeight: 44,
-        borderRadius: 22,
+        minHeight: 48,
+        borderRadius: 24,
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
@@ -411,9 +419,9 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.primary,
