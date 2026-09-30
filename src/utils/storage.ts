@@ -896,6 +896,37 @@ export const setOnDeviceTranscription = async (enabled: boolean): Promise<void> 
     }
 };
 
+const ON_DEVICE_OFFER_SHOWN_KEY = 'vaulto_on_device_offer_shown_v1';
+const RECORDINGS_COUNT_KEY = 'vaulto_recordings_count_v1';
+
+/** The one-time "transcribe free on the phone" suggestion was shown. */
+export const getOnDeviceOfferShown = async (): Promise<boolean> => {
+    try {
+        return (await AsyncStorage.getItem(ON_DEVICE_OFFER_SHOWN_KEY)) === 'true';
+    } catch {
+        return true;
+    }
+};
+
+export const setOnDeviceOfferShown = async (): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(ON_DEVICE_OFFER_SHOWN_KEY, 'true');
+    } catch {
+        // best effort
+    }
+};
+
+/** Counts finished recordings; returns the new total. */
+export const incrementRecordingsCount = async (): Promise<number> => {
+    try {
+        const next = (Number(await AsyncStorage.getItem(RECORDINGS_COUNT_KEY)) || 0) + 1;
+        await AsyncStorage.setItem(RECORDINGS_COUNT_KEY, String(next));
+        return next;
+    } catch {
+        return 0;
+    }
+};
+
 export const getTranscriptionLanguage = async (): Promise<TranscriptionLanguage> => {
     try {
         const value = await AsyncStorage.getItem(TRANSCRIPTION_LANGUAGE_KEY);

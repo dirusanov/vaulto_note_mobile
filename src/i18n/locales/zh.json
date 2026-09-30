@@ -395,8 +395,8 @@
       "errorTitle": "听写错误",
       "permissionDenied": "听写需要访问麦克风。",
       "startFailed": "无法启动听写",
-      "modelTitle": "离线听写模型",
-      "modelDescription": "若要在没有网络连接的情况下实时听写，需要下载语音识别模型。",
+      "modelTitle": "手机上的语音模型",
+      "modelDescription": "下载一次，即可在手机上把录音和实时听写转成文字——免费、离线，音频不会离开手机。模型越大越准确。",
       "recommended": "推荐",
       "unsupportedDevice": "此设备不支持",
       "notEnoughSpace": "存储空间不足",
@@ -512,6 +512,17 @@
       "modelDownload": "下载模型",
       "modelReady": "语音模型已就绪",
       "shareDisabled": "受保护的笔记不可用"
+    },
+    "onDeviceOffer": {
+      "later": "以后再说",
+      "signIn": "登录",
+      "turnOn": "开启",
+      "download": "下载",
+      "guestTitle": "无需账户即可获得文字",
+      "guestDesc": "这段录音已保存为音频。下载一次语音模型，之后的录音就能直接在手机上转成文字——免费、离线、无需注册。",
+      "suggestTitle": "在手机上免费转写",
+      "suggestDesc": "下载一次语音模型：录音直接在手机上转成文字，免费且离线，音频不会离开手机。",
+      "enabled": "现在录音会在这部手机上转写"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "无法更改访问密钥。",
     "enableSyncFailed": "无法开启同步。",
     "autoDetect": "自动检测",
-    "noLanguagesFound": "未找到与“{{query}}”匹配的语言"
+    "noLanguagesFound": "未找到与“{{query}}”匹配的语言",
+    "onDeviceFree": "在这部手机上免费转写"
   },
   "a11y": {
     "back": "返回",

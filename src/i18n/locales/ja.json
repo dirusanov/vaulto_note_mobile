@@ -395,8 +395,8 @@
       "errorTitle": "音声入力エラー",
       "permissionDenied": "音声入力にはマイクへのアクセスが必要です。",
       "startFailed": "音声入力を開始できませんでした",
-      "modelTitle": "オフライン音声入力モデル",
-      "modelDescription": "インターネットに接続せずにリアルタイム音声入力を使うには、音声認識モデルをダウンロードする必要があります。",
+      "modelTitle": "端末上の音声モデル",
+      "modelDescription": "一度ダウンロードすれば、録音とリアルタイム音声入力を端末上でテキストにできます。無料・オフラインで、音声は端末から出ません。大きいモデルほど正確です。",
       "recommended": "推奨",
       "unsupportedDevice": "このデバイスでは利用できません",
       "notEnoughSpace": "空き容量が足りません",
@@ -512,6 +512,17 @@
       "modelDownload": "モデルをダウンロード",
       "modelReady": "音声モデルの準備ができました",
       "shareDisabled": "保護されたノートでは使用できません"
+    },
+    "onDeviceOffer": {
+      "later": "今はしない",
+      "signIn": "サインイン",
+      "turnOn": "オンにする",
+      "download": "ダウンロード",
+      "guestTitle": "アカウントなしでテキスト化",
+      "guestDesc": "この録音は音声として保存されました。音声モデルを一度ダウンロードすると、次の録音から端末上でテキストになります。無料・オフライン・登録不要です。",
+      "suggestTitle": "端末で無料の文字起こし",
+      "suggestDesc": "音声モデルを一度ダウンロードすると、録音が端末上でテキストになります。無料でオフライン、音声は端末から出ません。",
+      "enabled": "録音はこの端末で文字起こしされるようになりました"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "アクセスキーを変更できませんでした。",
     "enableSyncFailed": "同期を有効にできませんでした。",
     "autoDetect": "自動検出",
-    "noLanguagesFound": "「{{query}}」に一致する言語はありません"
+    "noLanguagesFound": "「{{query}}」に一致する言語はありません",
+    "onDeviceFree": "この端末で無料で文字起こし"
   },
   "a11y": {
     "back": "戻る",

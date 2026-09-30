@@ -395,8 +395,8 @@
       "errorTitle": "Error de dictado",
       "permissionDenied": "Se necesita acceso al micrófono para dictar.",
       "startFailed": "No se pudo iniciar el dictado",
-      "modelTitle": "Modelo de dictado sin conexión",
-      "modelDescription": "Para dictar en tiempo real sin conexión a internet, debes descargar un modelo de reconocimiento de voz.",
+      "modelTitle": "Modelo de voz en tu teléfono",
+      "modelDescription": "Descárgalo una vez para convertir grabaciones y dictado en vivo en texto en el propio teléfono: gratis, sin conexión y sin que el audio salga de él. Los modelos más grandes son más precisos.",
       "recommended": "Recomendado",
       "unsupportedDevice": "No compatible con este dispositivo",
       "notEnoughSpace": "No hay suficiente espacio libre",
@@ -512,6 +512,17 @@
       "modelDownload": "Descargar modelo",
       "modelReady": "Modelo de voz listo",
       "shareDisabled": "Desactivado en notas protegidas"
+    },
+    "onDeviceOffer": {
+      "later": "Ahora no",
+      "signIn": "Iniciar sesión",
+      "turnOn": "Activar",
+      "download": "Descargar",
+      "guestTitle": "Texto sin cuenta",
+      "guestDesc": "Esta grabación se guardó como audio. Descarga una vez el modelo de voz y tus próximas grabaciones se convertirán en texto en el propio teléfono: gratis, sin conexión y sin registrarte.",
+      "suggestTitle": "Transcribe gratis en tu teléfono",
+      "suggestDesc": "Descarga una vez el modelo de voz: las grabaciones se convierten en texto en el propio teléfono, gratis y sin conexión, y el audio nunca sale de él.",
+      "enabled": "Ahora las grabaciones se transcriben en este teléfono"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "No se pudo cambiar la clave de acceso.",
     "enableSyncFailed": "No se pudo activar la sincronización.",
     "autoDetect": "Detección automática",
-    "noLanguagesFound": "No se encontraron idiomas para «{{query}}»"
+    "noLanguagesFound": "No se encontraron idiomas para «{{query}}»",
+    "onDeviceFree": "Transcribir gratis en este teléfono"
   },
   "a11y": {
     "back": "Atrás",

@@ -16,6 +16,10 @@ import { typography } from '../theme/typography';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
 import { onLimitReached } from '../utils/limitEvents';
+import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { setOnDeviceTranscription } from '../utils/storage';
+import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
+import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
 
 export const LimitModal: React.FC = () => {
     const { t } = useTranslation();
@@ -24,6 +28,8 @@ export const LimitModal: React.FC = () => {
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState<CurrentPeriodUsage | null>(null);
+    const [onDeviceActive, setOnDeviceActive] = useState(true);
+    const [showWhisperDownload, setShowWhisperDownload] = useState(false);
     // Several screens mount this modal; only the one on top may answer, or they stack.
     const isFocused = useIsFocused();
     const isFocusedRef = useRef(isFocused);
@@ -34,6 +40,7 @@ export const LimitModal: React.FC = () => {
             if (!isFocusedRef.current) return;
             setVisible(true);
             fetchUsage();
+            void isOnDeviceTranscriptionActive().then(setOnDeviceActive).catch(() => setOnDeviceActive(true));
         });
         return unsubscribe;
     }, []);
@@ -63,6 +70,7 @@ export const LimitModal: React.FC = () => {
     let message = t('aux.usageLimitDesc', 'You have exceeded your usage limits. Please try again later or upgrade your plan.');
     let iconName: keyof typeof MaterialIcons.glyphMap = 'warning-amber';
     let isTrial = false;
+    let isTranscriptionLimit = false;
 
     if (usage) {
         const isFree = (usage.plan || '').trim().toLowerCase() !== 'pro';
@@ -79,6 +87,7 @@ export const LimitModal: React.FC = () => {
             message = t('aux.trialExhaustedDesc', 'You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!');
             iconName = 'stars';
             isTrial = true;
+            isTranscriptionLimit = true;
         } else if (!isFree && transEmptyPro) {
             title = t('aux.transcriptionLimitTitle', 'Transcription Limit Reached');
             message = usage.subscription_next_refill_at
@@ -87,12 +96,29 @@ export const LimitModal: React.FC = () => {
                 })
                 : t('aux.transcriptionLimitDescNoDate', 'You have used all your PRO transcription minutes for this period. Your limit will reset at the start of your next billing cycle.');
             iconName = 'mic-off';
+            isTranscriptionLimit = true;
         }
     }
 
-    if (!visible) return null;
+    // Out of transcription minutes is not a dead end: the phone can transcribe for free.
+    const offerOnDevice = LOCAL_WHISPER_ENABLED && isTranscriptionLimit && !onDeviceActive && !loading;
+
+    const whisperModal = (
+        <LocalWhisperDownloadModal
+            visible={showWhisperDownload}
+            onClose={() => setShowWhisperDownload(false)}
+            onDownloadComplete={() => {
+                setShowWhisperDownload(false);
+                void setOnDeviceTranscription(true);
+            }}
+        />
+    );
+
+    if (!visible) return whisperModal;
 
     return (
+        <>
+        {whisperModal}
         <Modal
             visible={visible}
             transparent
@@ -132,15 +158,43 @@ export const LimitModal: React.FC = () => {
                                     </TouchableOpacity>
                                 )}
                             </View>
+                            {offerOnDevice && (
+                                <TouchableOpacity
+                                    onPress={() => { setVisible(false); setShowWhisperDownload(true); }}
+                                    activeOpacity={0.85}
+                                    style={styles.onDeviceButton}
+                                    accessibilityRole="button"
+                                >
+                                    <MaterialIcons name="phonelink-lock" size={18} color={colors.primary} />
+                                    <Text style={styles.onDeviceText}>{t('aux.onDeviceFree', 'Transcribe free on this phone')}</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </TouchableWithoutFeedback>
                 </View>
             </TouchableWithoutFeedback>
         </Modal>
+        </>
     );
 };
 
 const styles = StyleSheet.create({
+    onDeviceButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        alignSelf: 'stretch',
+        minHeight: 48,
+        marginTop: spacing.m,
+        borderRadius: 14,
+        backgroundColor: colors.primaryLight,
+    },
+    onDeviceText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.primary,
+    },
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.38)',

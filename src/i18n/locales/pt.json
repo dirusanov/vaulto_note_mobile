@@ -395,8 +395,8 @@
       "errorTitle": "Erro de ditado",
       "permissionDenied": "É necessário acesso ao microfone para ditar.",
       "startFailed": "Não foi possível iniciar o ditado",
-      "modelTitle": "Modelo de ditado off-line",
-      "modelDescription": "Para ditar em tempo real sem conexão com a internet, é preciso baixar um modelo de reconhecimento de fala.",
+      "modelTitle": "Modelo de fala no seu telefone",
+      "modelDescription": "Baixe uma vez para transformar gravações e ditado ao vivo em texto no próprio telefone — grátis, offline e sem o áudio sair dele. Modelos maiores são mais precisos.",
       "recommended": "Recomendado",
       "unsupportedDevice": "Não compatível com este dispositivo",
       "notEnoughSpace": "Espaço livre insuficiente",
@@ -512,6 +512,17 @@
       "modelDownload": "Baixar modelo",
       "modelReady": "Modelo de fala pronto",
       "shareDisabled": "Desativado em notas protegidas"
+    },
+    "onDeviceOffer": {
+      "later": "Agora não",
+      "signIn": "Entrar",
+      "turnOn": "Ativar",
+      "download": "Baixar",
+      "guestTitle": "Texto sem conta",
+      "guestDesc": "Esta gravação foi salva como áudio. Baixe o modelo de fala uma vez e suas próximas gravações viram texto no próprio telefone — grátis, offline e sem cadastro.",
+      "suggestTitle": "Transcreva grátis no seu telefone",
+      "suggestDesc": "Baixe o modelo de fala uma vez: as gravações viram texto no próprio telefone, grátis e offline, e o áudio nunca sai dele.",
+      "enabled": "Agora as gravações são transcritas neste telefone"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "Não foi possível alterar a chave de acesso.",
     "enableSyncFailed": "Não foi possível ativar a sincronização.",
     "autoDetect": "Detecção automática",
-    "noLanguagesFound": "Nenhum idioma encontrado para “{{query}}”"
+    "noLanguagesFound": "Nenhum idioma encontrado para “{{query}}”",
+    "onDeviceFree": "Transcrever grátis neste telefone"
   },
   "a11y": {
     "back": "Voltar",

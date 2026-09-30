@@ -395,8 +395,8 @@
       "errorTitle": "Dictation Error",
       "permissionDenied": "Microphone access is required for dictation.",
       "startFailed": "Failed to start dictation",
-      "modelTitle": "Offline Dictation Model",
-      "modelDescription": "To use real-time dictation offline without an internet connection, you need to download a speech recognition model.",
+      "modelTitle": "Speech model on your phone",
+      "modelDescription": "Download once to turn recordings and live dictation into text right on the phone — free, offline, and the audio never leaves it. Larger models are more accurate.",
       "recommended": "Recommended",
       "unsupportedDevice": "Not supported on this device",
       "notEnoughSpace": "Not enough free space",
@@ -512,6 +512,17 @@
       "modelDownload": "Download model",
       "modelReady": "Speech model ready",
       "shareDisabled": "Off for protected notes"
+    },
+    "onDeviceOffer": {
+      "later": "Not now",
+      "signIn": "Sign in",
+      "turnOn": "Turn on",
+      "download": "Download",
+      "guestTitle": "Get text without an account",
+      "guestDesc": "This recording is saved as audio. Download the speech model once and your next recordings turn into text right on the phone — free, offline, no sign-in.",
+      "suggestTitle": "Transcribe for free on your phone",
+      "suggestDesc": "Download the speech model once: recordings turn into text right on the phone, free and offline, and the audio never leaves it.",
+      "enabled": "Recordings are now transcribed on this phone"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "Failed to change access key.",
     "enableSyncFailed": "Failed to enable sync.",
     "autoDetect": "Auto-Detect",
-    "noLanguagesFound": "No languages found for \"{{query}}\""
+    "noLanguagesFound": "No languages found for \"{{query}}\"",
+    "onDeviceFree": "Transcribe free on this phone"
   },
   "a11y": {
     "back": "Back",

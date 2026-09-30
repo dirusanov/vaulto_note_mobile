@@ -118,13 +118,13 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                 <View style={styles.container}>
                     <View style={styles.header}>
                         <MaterialIcons name="cloud-download" size={32} color={colors.primary} />
-                        <Text style={styles.title}>{t('edit.dictation.modelTitle', 'Offline Dictation Model')}</Text>
+                        <Text style={styles.title}>{t('edit.dictation.modelTitle', 'Speech model on your phone')}</Text>
                     </View>
                     
                     {!isDownloading ? (
                         <>
                             <Text style={styles.description}>
-                                {t('edit.dictation.modelDescription', 'To use real-time dictation offline without an internet connection, you need to download a speech recognition model.')}
+                                {t('edit.dictation.modelDescription', 'Download once to turn recordings and live dictation into text right on the phone — free, offline, and the audio never leaves it. Larger models are more accurate.')}
                             </Text>
 
                             <View style={styles.modelList}>

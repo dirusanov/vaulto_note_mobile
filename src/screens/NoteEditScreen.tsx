@@ -42,7 +42,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { VoiceRecorder } from '../components/VoiceRecorder';
-import { startRealtimeDictation } from '../services/LocalWhisperService';
+import { getLocalWhisperModelStatus, startRealtimeDictation } from '../services/LocalWhisperService';
 import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadModal';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
@@ -93,6 +93,10 @@ import {
     getChecklistScaleLocks,
     setChecklistScaleLock,
     getTranscriptionLanguage,
+    getOnDeviceOfferShown,
+    setOnDeviceOfferShown,
+    incrementRecordingsCount,
+    setOnDeviceTranscription,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -1657,7 +1661,51 @@ export const NoteEditScreen = () => {
         }
     }, [accountEncrypted, applyProtection, confirm, isAuthenticated, isGuest, storageScope, t]);
 
-    const [whisperModalForTranscription, setWhisperModalForTranscription] = useState(false);
+    // Why the model download was opened: live dictation (start it afterwards), a
+    // protected recording, or turning on free on-device transcription.
+    const [whisperModalPurpose, setWhisperModalPurpose] = useState<'dictate' | 'protected' | 'enable'>('dictate');
+    // Free on-device transcription, offered where it helps: a guest who cannot use
+    // the cloud, and once to everyone after a few recordings.
+    const onDeviceOfferedRef = useRef(false);
+    const offerOnDeviceTranscription = useCallback(async (reason: 'guest' | 'suggest') => {
+        if (!LOCAL_WHISPER_ENABLED || onDeviceOfferedRef.current) return;
+        if (await isOnDeviceTranscriptionActive()) return;
+        if (reason === 'suggest') {
+            if (await getOnDeviceOfferShown()) return;
+            await setOnDeviceOfferShown();
+        }
+        onDeviceOfferedRef.current = true;
+        const modelReady = (await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
+        const enable = () => {
+            if (modelReady) {
+                void setOnDeviceTranscription(true);
+                showToast(t('edit.onDeviceOffer.enabled', 'Recordings are now transcribed on this phone'));
+                return;
+            }
+            setWhisperModalPurpose('enable');
+            setShowLocalWhisperModal(true);
+        };
+        const buttons: any[] = [
+            { text: t('edit.onDeviceOffer.later', 'Not now'), style: 'cancel' },
+        ];
+        if (reason === 'guest') {
+            buttons.push({ text: t('edit.onDeviceOffer.signIn', 'Sign in'), onPress: () => navigation.navigate('SignIn') });
+        }
+        buttons.push({
+            text: modelReady ? t('edit.onDeviceOffer.turnOn', 'Turn on') : t('edit.onDeviceOffer.download', 'Download'),
+            onPress: enable,
+        });
+        Alert.alert(
+            reason === 'guest'
+                ? t('edit.onDeviceOffer.guestTitle', 'Get text without an account')
+                : t('edit.onDeviceOffer.suggestTitle', 'Transcribe for free on your phone'),
+            reason === 'guest'
+                ? t('edit.onDeviceOffer.guestDesc', 'This recording is saved as audio. Download the speech model once and your next recordings turn into text right on the phone — free, offline, no sign-in.')
+                : t('edit.onDeviceOffer.suggestDesc', 'Download the speech model once: recordings turn into text right on the phone, free and offline, and the audio never leaves it.'),
+            buttons,
+        );
+    }, [navigation, t]);
+
     const promptOnDeviceModelForProtected = useCallback(() => {
         Alert.alert(
             t('edit.protected.modelTitle', 'Recording saved without text'),
@@ -1667,7 +1715,7 @@ export const NoteEditScreen = () => {
                 {
                     text: t('edit.protected.modelDownload', 'Download model'),
                     onPress: () => {
-                        setWhisperModalForTranscription(true);
+                        setWhisperModalPurpose('protected');
                         setShowLocalWhisperModal(true);
                     },
                 },
@@ -4887,7 +4935,10 @@ export const NoteEditScreen = () => {
             if (isUserTranscriptionRestricted && shouldTranscribe) {
                 // Anonymous users can't transcribe; keep audio flow intact.
                 shouldTranscribe = false;
-                if (micMode === 'force_text') {
+                // Offer the free on-device route instead of only asking to sign in.
+                if (LOCAL_WHISPER_ENABLED) {
+                    setTimeout(() => { void offerOnDeviceTranscription('guest'); }, 900);
+                } else if (micMode === 'force_text') {
                     setShowTranscriptionAuthModal(true);
                 }
             }
@@ -4931,6 +4982,13 @@ export const NoteEditScreen = () => {
             // Refresh profile to update balance in UI after deduction
             if (isTranscriptionSuccess) {
                 refreshProfile?.().catch(() => {});
+                if (!onDeviceTranscription && !protectedNote) {
+                    void incrementRecordingsCount().then((count) => {
+                        if (count >= 3) {
+                            setTimeout(() => { void offerOnDeviceTranscription('suggest'); }, 1500);
+                        }
+                    });
+                }
             }
 
             const shouldBypassAgentForThisRecording = micMode === 'force_text';
@@ -7010,12 +7068,18 @@ export const NoteEditScreen = () => {
 
             <LocalWhisperDownloadModal
                 visible={showLocalWhisperModal}
-                onClose={() => { setShowLocalWhisperModal(false); setWhisperModalForTranscription(false); }}
+                onClose={() => { setShowLocalWhisperModal(false); setWhisperModalPurpose('dictate'); }}
                 onDownloadComplete={() => {
                     setShowLocalWhisperModal(false);
-                    if (whisperModalForTranscription) {
+                    if (whisperModalPurpose === 'enable') {
+                        setWhisperModalPurpose('dictate');
+                        void setOnDeviceTranscription(true);
+                        showToast(t('edit.onDeviceOffer.enabled', 'Recordings are now transcribed on this phone'));
+                        return;
+                    }
+                    if (whisperModalPurpose === 'protected') {
                         // Opened for a protected recording: nothing to start.
-                        setWhisperModalForTranscription(false);
+                        setWhisperModalPurpose('dictate');
                         showToast(t('edit.protected.modelReady', 'Speech model ready'));
                         return;
                     }

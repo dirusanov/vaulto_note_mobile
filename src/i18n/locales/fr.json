@@ -395,8 +395,8 @@
       "errorTitle": "Erreur de dictée",
       "permissionDenied": "L'accès au microphone est nécessaire pour la dictée.",
       "startFailed": "Impossible de démarrer la dictée",
-      "modelTitle": "Modèle de dictée hors ligne",
-      "modelDescription": "Pour dicter en temps réel sans connexion Internet, vous devez télécharger un modèle de reconnaissance vocale.",
+      "modelTitle": "Modèle vocal sur votre téléphone",
+      "modelDescription": "Téléchargez-le une fois pour transformer enregistrements et dictée en direct en texte directement sur le téléphone : gratuit, hors ligne, et l’audio ne le quitte jamais. Les grands modèles sont plus précis.",
       "recommended": "Recommandé",
       "unsupportedDevice": "Non pris en charge sur cet appareil",
       "notEnoughSpace": "Espace libre insuffisant",
@@ -512,6 +512,17 @@
       "modelDownload": "Télécharger le modèle",
       "modelReady": "Modèle vocal prêt",
       "shareDisabled": "Désactivé pour les notes protégées"
+    },
+    "onDeviceOffer": {
+      "later": "Pas maintenant",
+      "signIn": "Se connecter",
+      "turnOn": "Activer",
+      "download": "Télécharger",
+      "guestTitle": "Du texte sans compte",
+      "guestDesc": "Cet enregistrement est sauvegardé en audio. Téléchargez une fois le modèle vocal et vos prochains enregistrements deviendront du texte directement sur le téléphone : gratuit, hors ligne, sans inscription.",
+      "suggestTitle": "Transcription gratuite sur votre téléphone",
+      "suggestDesc": "Téléchargez une fois le modèle vocal : les enregistrements deviennent du texte directement sur le téléphone, gratuitement et hors ligne, et l’audio ne le quitte jamais.",
+      "enabled": "Les enregistrements sont désormais transcrits sur ce téléphone"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "Impossible de modifier la clé d'accès.",
     "enableSyncFailed": "Impossible d'activer la synchronisation.",
     "autoDetect": "Détection automatique",
-    "noLanguagesFound": "Aucune langue trouvée pour « {{query}} »"
+    "noLanguagesFound": "Aucune langue trouvée pour « {{query}} »",
+    "onDeviceFree": "Transcrire gratuitement sur ce téléphone"
   },
   "a11y": {
     "back": "Retour",

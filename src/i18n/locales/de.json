@@ -395,8 +395,8 @@
       "errorTitle": "Diktierfehler",
       "permissionDenied": "Für das Diktat wird Zugriff auf das Mikrofon benötigt.",
       "startFailed": "Diktat konnte nicht gestartet werden",
-      "modelTitle": "Offline-Modell für das Diktat",
-      "modelDescription": "Für das Echtzeit-Diktat ohne Internetverbindung muss ein Spracherkennungsmodell heruntergeladen werden.",
+      "modelTitle": "Sprachmodell auf deinem Telefon",
+      "modelDescription": "Einmal herunterladen, um Aufnahmen und Live-Diktat direkt auf dem Telefon in Text zu verwandeln – kostenlos, offline, und das Audio verlässt es nie. Größere Modelle sind genauer.",
       "recommended": "Empfohlen",
       "unsupportedDevice": "Auf diesem Gerät nicht unterstützt",
       "notEnoughSpace": "Nicht genügend freier Speicher",
@@ -512,6 +512,17 @@
       "modelDownload": "Modell herunterladen",
       "modelReady": "Sprachmodell bereit",
       "shareDisabled": "Für geschützte Notizen aus"
+    },
+    "onDeviceOffer": {
+      "later": "Nicht jetzt",
+      "signIn": "Anmelden",
+      "turnOn": "Einschalten",
+      "download": "Herunterladen",
+      "guestTitle": "Text ohne Konto",
+      "guestDesc": "Diese Aufnahme ist als Audio gespeichert. Lade das Sprachmodell einmal herunter, dann werden deine nächsten Aufnahmen direkt auf dem Telefon zu Text – kostenlos, offline, ohne Anmeldung.",
+      "suggestTitle": "Kostenlos auf dem Telefon transkribieren",
+      "suggestDesc": "Lade das Sprachmodell einmal herunter: Aufnahmen werden direkt auf dem Telefon zu Text, kostenlos und offline, und das Audio verlässt es nie.",
+      "enabled": "Aufnahmen werden jetzt auf diesem Telefon transkribiert"
     }
   },
   "voice": {
@@ -663,7 +674,8 @@
     "changeAccessKeyFailed": "Zugangsschlüssel konnte nicht geändert werden.",
     "enableSyncFailed": "Synchronisierung konnte nicht aktiviert werden.",
     "autoDetect": "Automatisch erkennen",
-    "noLanguagesFound": "Keine Sprachen für „{{query}}“ gefunden"
+    "noLanguagesFound": "Keine Sprachen für „{{query}}“ gefunden",
+    "onDeviceFree": "Kostenlos auf diesem Telefon transkribieren"
   },
   "a11y": {
     "back": "Zurück",
