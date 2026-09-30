@@ -114,7 +114,8 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             reset_archived INTEGER DEFAULT 0,
             privacy TEXT DEFAULT 'normal',
             pending_server_delete INTEGER DEFAULT 0,
-            version INTEGER DEFAULT 0
+            version INTEGER DEFAULT 0,
+            is_protected INTEGER DEFAULT 0
         );
     `);
 
@@ -173,6 +174,14 @@ const openDb = async (): Promise<SQLite.SQLiteDatabase> => {
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN reset_archived INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync("ALTER TABLE notes ADD COLUMN privacy TEXT DEFAULT 'normal';"); } catch (e) {}
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN pending_server_delete INTEGER DEFAULT 0;'); } catch (e) {}
+    try { await database.runAsync('ALTER TABLE notes ADD COLUMN is_protected INTEGER DEFAULT 0;'); } catch (e) {}
+    // "Local-only" notes became protected notes with sync turned off: they keep
+    // never leaving the device, and now also never reach cloud AI.
+    try {
+        await database.runAsync(
+            "UPDATE notes SET is_protected = 1 WHERE storage_scope = 'local_only' AND COALESCE(reset_archived, 0) = 0 AND COALESCE(is_protected, 0) = 0;"
+        );
+    } catch (e) {}
 
     // USER ID MIGRATION
     try {
@@ -542,8 +551,9 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                 `INSERT INTO notes (
                     id, user_id, encrypted_title, encrypted_content, created_at, updated_at,
                     audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
-                    storage_scope, reset_archived, privacy, pending_server_delete, version, audio_synced, audio_remote, audio_sha256
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    storage_scope, reset_archived, privacy, pending_server_delete, version, audio_synced, audio_remote, audio_sha256,
+                    is_protected
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     user_id=excluded.user_id,
                     encrypted_title=excluded.encrypted_title,
@@ -563,6 +573,7 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                     privacy=excluded.privacy,
                     pending_server_delete=excluded.pending_server_delete,
                     version=excluded.version,
+                    is_protected=excluded.is_protected,
                     -- A different recording invalidates the upload state no matter
                     -- what the caller passed (UI paths just spread the old note).
                     audio_synced=CASE WHEN excluded.audio_file_path IS notes.audio_file_path THEN excluded.audio_synced ELSE 0 END,
@@ -576,7 +587,8 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
                     encryptedTranscription || null, note.has_audio ? 1 : 0, note.is_pinned ? 1 : 0,
                     note.synced ?? 1, isDirty, isDeleted, isActive, storageScope, note.reset_archived ? 1 : 0, privacy, pendingServerDelete,
                     note.version ?? 0,
-                    note.audio_synced ?? 0, note.audio_remote ?? 0, note.audio_sha256 ?? null
+                    note.audio_synced ?? 0, note.audio_remote ?? 0, note.audio_sha256 ?? null,
+                    note.is_protected ? 1 : 0
                 ]
             )
         ));
@@ -828,6 +840,7 @@ const processNotes = async (
             ...n,
             has_audio: !!n.has_audio,
             is_pinned: !!n.is_pinned,
+            is_protected: !!n.is_protected,
             synced: n.synced ?? 1,
             dirty: !!n.dirty,
             deleted: !!n.deleted,

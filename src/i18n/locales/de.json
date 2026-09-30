@@ -484,6 +484,34 @@
       "failed": "Aufgaben konnten nicht gesucht werden. Prüfe deine Verbindung und versuche es erneut.",
       "added": "Zur Notiz hinzugefügte Aufgaben: {{count}}",
       "calendarFailed": "Kalender konnte nicht geöffnet werden"
+    },
+    "protected": {
+      "protectNote": "Notiz schützen",
+      "protect": "Schützen",
+      "protectTitle": "Diese Notiz schützen?",
+      "protectDesc": "Der Text verlässt dieses Telefon nie unverschlüsselt: KI-Funktionen und die Sprach-Transkription in der Cloud sind für diese Notiz aus. Sprache wird auf dem Telefon transkribiert.",
+      "protectNoE2ee": "Die Ende-zu-Ende-Verschlüsselung ist aus. Deshalb wird die Notiz vom Server und deinen anderen Geräten entfernt und bleibt auf diesem Telefon, bis du die Verschlüsselung einschaltest.",
+      "unprotect": "Schutz entfernen",
+      "unprotectTitle": "Schutz entfernen?",
+      "unprotectDesc": "Die Notiz wird wieder wie jede andere synchronisiert, und KI-Funktionen können ihren Text an den Server senden.",
+      "syncOn": "Synchronisierung: an",
+      "syncOffLabel": "Synchronisierung: aus",
+      "hintLocal": "Nur auf diesem Telefon",
+      "hintEncrypted": "Ende-zu-Ende-verschlüsselt",
+      "hintWaiting": "Wartet auf Ende-zu-Ende-Verschlüsselung",
+      "syncOffTitle": "Nur auf diesem Telefon behalten?",
+      "syncOffDesc": "Die Notiz wird vom Server und deinen anderen Geräten entfernt. Geht dieses Telefon verloren oder wird die App gelöscht, ist die Notiz für immer weg – es gibt nirgends eine Kopie.",
+      "syncOff": "Synchronisierung ausschalten",
+      "syncWaitsTitle": "Synchronisierung wartet auf Verschlüsselung",
+      "syncWaitsE2ee": "Geschützte Notizen werden nur Ende-zu-Ende-verschlüsselt synchronisiert. Schalte die Verschlüsselung unter Einstellungen → Cloud-Synchronisierung ein, dann wird die Notiz synchronisiert.",
+      "syncWaitsSignIn": "Ohne Konto bleiben Notizen auf diesem Telefon. Melde dich an und schalte die Ende-zu-Ende-Verschlüsselung ein, um zu synchronisieren.",
+      "aiBlockedTitle": "Geschützte Notiz",
+      "aiBlockedDesc": "KI-Funktionen senden den Text an einen Server, deshalb sind sie für geschützte Notizen aus. Entferne den Schutz, um sie zu nutzen.",
+      "modelTitle": "Aufnahme ohne Text gespeichert",
+      "modelDesc": "Geschützte Notizen werden nur auf dem Telefon transkribiert. Lade das Sprachmodell einmal herunter, um Text aus Aufnahmen zu erhalten.",
+      "modelDownload": "Modell herunterladen",
+      "modelReady": "Sprachmodell bereit",
+      "shareDisabled": "Für geschützte Notizen aus"
     }
   },
   "voice": {
@@ -683,7 +711,9 @@
     "colorBlue": "Blau",
     "colorRed": "Rot",
     "noHighlight": "Keine Hervorhebung",
-    "allVersions": "Alle Versionen"
+    "allVersions": "Alle Versionen",
+    "protected": "Geschützte Notiz",
+    "onThisPhoneOnly": "Nur auf diesem Telefon"
   },
   "ask": {
     "title": "Notizen fragen",

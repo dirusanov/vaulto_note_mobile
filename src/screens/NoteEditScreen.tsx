@@ -62,7 +62,8 @@ import { CompareVersionsModal } from '../components/CompareVersionsModal';
 import { UndoSnackbar } from '../components/UndoSnackbar';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
-import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
+import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive, ON_DEVICE_MODEL_REQUIRED } from '../services/TranscriptionService';
+import { getCryptoMode } from '../crypto/encryption';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
 import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
 import { Note, NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
@@ -87,8 +88,6 @@ import {
     setFontSize,
     getAutoScalingEnabled,
     setAutoScalingEnabled,
-    getLocalOnlyWarningDismissed,
-    setLocalOnlyWarningDismissed,
     getPrivateAIAllowed,
     setPrivateAIAllowed,
     getChecklistScaleLocks,
@@ -932,7 +931,7 @@ export const NoteEditScreen = () => {
         updateImprovement,
         deleteImprovement,
         setActiveVariant,
-        updateNoteStorageScope,
+        updateNoteProtection,
     } = useNotesContext();
     const { isAuthenticated, isGuest, userId, refreshProfile } = useAuth();
     const [isRealtimeDictating, setIsRealtimeDictating] = useState(false);
@@ -1007,6 +1006,12 @@ export const NoteEditScreen = () => {
     const [privacy, setPrivacy] = useState<NotePrivacy>(
         route.params?.initialPrivacy ?? existingNote?.privacy ?? 'normal'
     );
+    // Protected: the note never leaves the device unencrypted (no cloud AI, no
+    // cloud transcription, sync only end-to-end encrypted). A ref keeps async
+    // save/record paths from reading a stale value.
+    const [isProtected, setIsProtected] = useState<boolean>(!!existingNote?.is_protected);
+    const isProtectedRef = useRef(isProtected);
+    isProtectedRef.current = isProtected;
 
     // Refresh recordings when list modal opens
 
@@ -1093,7 +1098,7 @@ export const NoteEditScreen = () => {
 
     const isPrivateContent = (): boolean => {
         const effectiveScope = normalizeScope(existingNote?.storage_scope ?? storageScope);
-        return effectiveScope === 'local_only';
+        return effectiveScope === 'local_only' || isProtectedRef.current;
     };
 
     const ensurePrivateShareAllowed = (): boolean => {
@@ -1286,6 +1291,7 @@ export const NoteEditScreen = () => {
         if (existingNote) {
             setStorageScope(normalizeScope(existingNote.storage_scope));
             setPrivacy(normalizePrivacy(existingNote.privacy));
+            setIsProtected(!!existingNote.is_protected);
             return;
         }
 
@@ -1295,7 +1301,7 @@ export const NoteEditScreen = () => {
             setPrivacy(nextPrivacy);
             setStorageScope(nextScope);
         }
-    }, [existingNote?.id, existingNote?.privacy, existingNote?.storage_scope, route.params?.initialPrivacy, route.params?.initialStorageScope]);
+    }, [existingNote?.id, existingNote?.privacy, existingNote?.storage_scope, existingNote?.is_protected, route.params?.initialPrivacy, route.params?.initialStorageScope]);
 
     // Force re-render on history update to show undo/redo arrows
 
@@ -1475,6 +1481,16 @@ export const NoteEditScreen = () => {
     }, [currentAIProvider]);
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
+        const onDeviceProvider = currentAIProvider === 'local_llm' || currentAIProvider === 'local';
+        if (isProtectedRef.current && !onDeviceProvider) {
+            // No "allow once": the promise of a protected note is that its text
+            // never reaches a server unencrypted.
+            Alert.alert(
+                t('edit.protected.aiBlockedTitle', 'Protected note'),
+                t('edit.protected.aiBlockedDesc', 'AI features send the text to a server, so they are off for protected notes. Remove protection to use them.'),
+            );
+            return false;
+        }
         const isPrivate = normalizeScope(storageScope) === 'local_only';
         if (
             !isPrivate ||
@@ -1578,69 +1594,86 @@ export const NoteEditScreen = () => {
 
 
 
-    const confirmLocalOnlyWarning = useCallback(async (): Promise<boolean> => {
-        const dismissed = await getLocalOnlyWarningDismissed();
-        if (dismissed) {
-            return true;
-        }
-
-        return await new Promise<boolean>((resolve) => {
-            Alert.alert(
-                t('edit.localOnlyWarningTitle'),
-                t('edit.localOnlyWarningDesc'),
-                [
-                    { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-                    {
-                        text: t('edit.doNotShowAgain'),
-                        onPress: async () => {
-                            await setLocalOnlyWarningDismissed(true);
-                            resolve(true);
-                        },
-                    },
-                    { text: t('edit.iUnderstand'), onPress: () => resolve(true) },
-                ]
-            );
-        });
-    }, []);
-
-    const applyStorageScope = useCallback(async (nextScope: StorageScope) => {
-        const normalizedScope = normalizeScope(nextScope);
-
-        if (normalizedScope === 'local_only') {
-            const warningAccepted = await confirmLocalOnlyWarning();
-            if (!warningAccepted) return;
-            if (existingNote && normalizeScope(existingNote.storage_scope) === 'sync') {
-                const confirmed = await new Promise<boolean>((resolve) => {
-                    Alert.alert(
-                        t('edit.moveLocalOnlyTitle'),
-                        t('edit.moveLocalOnlyDesc'),
-                        [
-                            { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-                            { text: t('edit.moveBtn'), style: 'destructive', onPress: () => resolve(true) },
-                        ]
-                    );
-                });
-                if (!confirmed) return;
-            }
-        } else if (normalizeScope(storageScope) === 'local_only') {
-            const confirmed = await new Promise<boolean>((resolve) => {
-                Alert.alert(
-                    t('edit.enableSyncNoteTitle'),
-                    t('edit.enableSyncNoteDesc'),
-                    [
-                        { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-                        { text: t('edit.enableSyncBtn'), onPress: () => resolve(true) },
-                    ]
-                );
-            });
-            if (!confirmed) return;
-        }
-
+    // After the protection change the local note is re-read; mirror it now so the
+    // menu and the AI gates do not wait for that round trip.
+    const applyProtection = useCallback(async (next: { isProtected: boolean; sync: boolean }) => {
+        setIsProtected(next.isProtected);
+        isProtectedRef.current = next.isProtected;
+        setStorageScope(next.sync ? 'sync' : 'local_only');
         if (localNoteId) {
-            await updateNoteStorageScope(localNoteId, normalizedScope);
+            await updateNoteProtection(localNoteId, next);
         }
-        setStorageScope(normalizedScope);
-    }, [confirmLocalOnlyWarning, existingNote, localNoteId, storageScope, updateNoteStorageScope]);
+    }, [localNoteId, updateNoteProtection]);
+
+    const confirm = useCallback((title: string, message: string, action: string, destructive = false) =>
+        new Promise<boolean>((resolve) => {
+            Alert.alert(title, message, [
+                { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                { text: action, style: destructive ? 'destructive' : 'default', onPress: () => resolve(true) },
+            ], { cancelable: true, onDismiss: () => resolve(false) });
+        }), [t]);
+
+    const accountEncrypted = isAuthenticated && !isGuest && getCryptoMode() === 'e2ee';
+
+    const handleProtectNote = useCallback(async () => {
+        const signedIn = isAuthenticated && !isGuest;
+        const lines = [t('edit.protected.protectDesc', 'The text never leaves this phone unencrypted: AI features and cloud voice transcription are turned off for this note. Voice is transcribed on the phone.')];
+        if (signedIn && !accountEncrypted && localNoteId) {
+            lines.push(t('edit.protected.protectNoE2ee', 'End-to-end encryption is off, so the note is removed from the server and your other devices and stays on this phone until you turn encryption on.'));
+        }
+        const ok = await confirm(t('edit.protected.protectTitle', 'Protect this note?'), lines.join('\n\n'), t('edit.protected.protect', 'Protect'));
+        if (ok) await applyProtection({ isProtected: true, sync: true });
+    }, [accountEncrypted, applyProtection, confirm, isAuthenticated, isGuest, localNoteId, t]);
+
+    const handleUnprotectNote = useCallback(async () => {
+        const ok = await confirm(
+            t('edit.protected.unprotectTitle', 'Remove protection?'),
+            t('edit.protected.unprotectDesc', 'The note syncs like any other note again, and AI features can send its text to the server.'),
+            t('edit.protected.unprotect', 'Remove protection'),
+        );
+        if (ok) await applyProtection({ isProtected: false, sync: true });
+    }, [applyProtection, confirm, t]);
+
+    const handleProtectedSyncToggle = useCallback(async () => {
+        const syncOn = normalizeScope(storageScope) === 'sync';
+        if (syncOn) {
+            const ok = await confirm(
+                t('edit.protected.syncOffTitle', 'Keep only on this phone?'),
+                t('edit.protected.syncOffDesc', 'The note is removed from the server and your other devices. If this phone is lost or the app is deleted, the note is gone for good — there is no copy anywhere.'),
+                t('edit.protected.syncOff', 'Turn off sync'),
+                true,
+            );
+            if (ok) await applyProtection({ isProtected: true, sync: false });
+            return;
+        }
+        await applyProtection({ isProtected: true, sync: true });
+        if (!accountEncrypted) {
+            Alert.alert(
+                t('edit.protected.syncWaitsTitle', 'Sync waits for encryption'),
+                isAuthenticated && !isGuest
+                    ? t('edit.protected.syncWaitsE2ee', 'Protected notes sync only end-to-end encrypted. Turn on encryption in Settings → Cloud Sync and the note syncs.')
+                    : t('edit.protected.syncWaitsSignIn', 'Without an account notes stay on this phone. Sign in and turn on end-to-end encryption to sync.'),
+            );
+        }
+    }, [accountEncrypted, applyProtection, confirm, isAuthenticated, isGuest, storageScope, t]);
+
+    const [whisperModalForTranscription, setWhisperModalForTranscription] = useState(false);
+    const promptOnDeviceModelForProtected = useCallback(() => {
+        Alert.alert(
+            t('edit.protected.modelTitle', 'Recording saved without text'),
+            t('edit.protected.modelDesc', 'Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.'),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('edit.protected.modelDownload', 'Download model'),
+                    onPress: () => {
+                        setWhisperModalForTranscription(true);
+                        setShowLocalWhisperModal(true);
+                    },
+                },
+            ],
+        );
+    }, [t]);
 
     // Text Appearance State
     const [fontSize, setFontSizeState] = useState(16);
@@ -3375,6 +3408,7 @@ export const NoteEditScreen = () => {
                     content: currentContent,
                     has_audio: hasAudio, // Explicitly sync has_audio state
                     storage_scope: storageScope,
+                    is_protected: isProtectedRef.current,
                     privacy,
                 });
             } else {
@@ -3387,6 +3421,7 @@ export const NoteEditScreen = () => {
                         title: currentTitle,
                         content: currentContent,
                         storage_scope: storageScope,
+                        is_protected: isProtectedRef.current,
                         privacy,
                         // Note: createNote signature takes audio object, not has_audio flag directly.
                         // But if we have no audio object here, it defaults to false.
@@ -3420,6 +3455,7 @@ export const NoteEditScreen = () => {
                             content: latestContent,
                             has_audio: hasAudio,
                             storage_scope: storageScope,
+                            is_protected: isProtectedRef.current,
                             privacy,
                         });
                         // Update "last saved" to the LATEST values we just pushed
@@ -3832,6 +3868,7 @@ export const NoteEditScreen = () => {
                 title: noteTitle || existingNote?.title || '',
                 content: resolveVariantContent(improvementId),
                 storage_scope: storageScope,
+                is_protected: isProtectedRef.current,
                 privacy,
             });
             showToast(t('edit.versions.copied', 'Copied to a new note'));
@@ -4841,9 +4878,11 @@ export const NoteEditScreen = () => {
             const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
             const provider = await getAIProvider();
             const onDeviceTranscription = await isOnDeviceTranscriptionActive();
-            const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDeviceTranscription;
+            const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDeviceTranscription && !isProtectedRef.current;
+            const protectedNote = isProtectedRef.current;
+            // The agent sends the text to the server: never for a protected note.
             const shouldUseAgentModeForThisRecording =
-                micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
+                !protectedNote && micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
             if (isUserTranscriptionRestricted && shouldTranscribe) {
                 // Anonymous users can't transcribe; keep audio flow intact.
@@ -4852,7 +4891,7 @@ export const NoteEditScreen = () => {
                     setShowTranscriptionAuthModal(true);
                 }
             }
-            if (shouldTranscribe && !onDeviceTranscription) {
+            if (shouldTranscribe && !onDeviceTranscription && !protectedNote) {
                 const consentGranted = await requestPrivateAIConsent();
                 if (!consentGranted) {
                     shouldTranscribe = false;
@@ -4874,7 +4913,10 @@ export const NoteEditScreen = () => {
                     transcription = { success: false, text: '', error: 'Transcription disabled' };
                 } else {
                     setTrackedIsTranscribing(true);
-                    transcription = await transcribeAudio(recording.uri);
+                    transcription = await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote });
+                    if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
+                        promptOnDeviceModelForProtected();
+                    }
                 }
             } catch (err) {
                 console.error('[NoteEditScreen] Transcription unexpected error:', err);
@@ -4920,7 +4962,9 @@ export const NoteEditScreen = () => {
                     rawErrorLower.includes('quota') ||
                     rawErrorLower.includes('trial') ||
                     rawErrorLower === 'transcription disabled' ||
-                    errorMsgLower === 'transcription disabled';
+                    errorMsgLower === 'transcription disabled' ||
+                    // Protected note without the on-device model: its own prompt explains.
+                    transcription.error === ON_DEVICE_MODEL_REQUIRED;
 
                 if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
@@ -4958,6 +5002,7 @@ export const NoteEditScreen = () => {
                             transcription: recordingTranscription,
                         },
                         storage_scope: storageScope,
+                        is_protected: isProtectedRef.current,
                         privacy,
                     });
                     setLocalNoteId(newNote.id);
@@ -5112,7 +5157,7 @@ export const NoteEditScreen = () => {
             if (!consentGranted) {
                 return;
             }
-            const transcription = await transcribeAudio(recording.uri);
+            const transcription = await transcribeAudio(recording.uri, undefined, { onDeviceOnly: isProtectedRef.current });
             await AudioService.deleteAudioFile(recording.uri);
 
             if (transcription.success && transcription.text) {
@@ -5463,6 +5508,7 @@ export const NoteEditScreen = () => {
                     title,
                     content: content,
                     storage_scope: storageScope,
+                    is_protected: isProtectedRef.current,
                     privacy,
                 });
                 targetNoteId = newNote.id;
@@ -5691,7 +5737,7 @@ export const NoteEditScreen = () => {
     const charCount = plainContent.replace(/\r?\n/g, '').length;
     const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
-    const canShareOrExport = effectiveStorageScope !== 'local_only';
+    const canShareOrExport = effectiveStorageScope !== 'local_only' && !isProtected;
     const micHintText = t('edit.micHintHold', 'Hold: no agent');
     const floatingMicBottomOffset = editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible)
         ? (keyboardVisibleState ? keyboardHeight : insets.bottom) + FLOATING_MIC_TOOLBAR_HEIGHT + FLOATING_MIC_KEYBOARD_GAP
@@ -6058,7 +6104,7 @@ export const NoteEditScreen = () => {
                     {/* AI Improvement Button */}
                     <TouchableOpacity
                         onPress={() => { void handleAiAccess(() => { setImproveSource('original'); setShowAIModal(true); }); }}
-                        style={[styles.iconButton, (!canUseAI || isAIProcessing) && styles.disabledIcon]}
+                        style={[styles.iconButton, (!canUseAI || isAIProcessing || isProtected) && styles.disabledIcon]}
                         disabled={isAIProcessing || !canUseAI}
                         accessibilityRole="button" accessibilityLabel={t("a11y.improveWithAI", "Improve with AI")}
                         accessibilityState={{ disabled: isAIProcessing || !canUseAI, busy: isAIProcessing }}
@@ -6522,11 +6568,15 @@ export const NoteEditScreen = () => {
                                 <Text style={styles.menuItemText}>{t("edit.copyMarkdown", "Copy Markdown")}</Text>
                             </TouchableOpacity>
 
-                            <View style={styles.menuDivider} />
-                            <TouchableOpacity onPress={handleFindTasks} style={styles.menuItem}>
-                                <MaterialIcons name="task-alt" size={20} color={colors.primary} style={{ marginRight: 12 }} />
-                                <Text style={styles.menuItemText}>{t("edit.tasks.find", "Find tasks")}</Text>
-                            </TouchableOpacity>
+                            {!isProtected && (
+                                <>
+                                    <View style={styles.menuDivider} />
+                                    <TouchableOpacity onPress={handleFindTasks} style={styles.menuItem}>
+                                        <MaterialIcons name="task-alt" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                                        <Text style={styles.menuItemText}>{t("edit.tasks.find", "Find tasks")}</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
                             {visibleImprovements.length > 0 && (
                                 <>
                                     <View style={styles.menuDivider} />
@@ -6585,7 +6635,9 @@ export const NoteEditScreen = () => {
                                     <View style={styles.menuItem}>
                                         <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={{ marginRight: 12 }} />
                                         <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>
-                                            {t('edit.disabledPrivate', 'Disabled for private notes')}
+                                            {isProtected
+                                                ? t('edit.protected.shareDisabled', 'Off for protected notes')
+                                                : t('edit.disabledPrivate', 'Disabled for private notes')}
                                         </Text>
                                     </View>
                                 </>
@@ -6599,22 +6651,50 @@ export const NoteEditScreen = () => {
                             <TouchableOpacity
                                 onPress={() => {
                                     setShowMenu(false);
-                                    void applyStorageScope(
-                                        effectiveStorageScope === 'local_only' ? 'sync' : 'local_only'
-                                    );
+                                    void (isProtected ? handleUnprotectNote() : handleProtectNote());
                                 }}
                                 style={styles.menuItem}
                             >
                                 <MaterialIcons
-                                    name={effectiveStorageScope === 'local_only' ? 'cloud-upload' : 'smartphone'}
+                                    name={isProtected ? 'remove-moderator' : 'shield'}
                                     size={20}
-                                    color={colors.text}
+                                    color={isProtected ? colors.text : colors.primary}
                                     style={{ marginRight: 12 }}
                                 />
                                 <Text style={styles.menuItemText}>
-                                    {effectiveStorageScope === 'local_only' ? t('settings.ui.makeSync', 'Make Sync') : t('settings.ui.makeLocalOnly', 'Make Local-Only')}
+                                    {isProtected ? t('edit.protected.unprotect', 'Remove protection') : t('edit.protected.protectNote', 'Protect note')}
                                 </Text>
                             </TouchableOpacity>
+                            {isProtected && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setShowMenu(false);
+                                        void handleProtectedSyncToggle();
+                                    }}
+                                    style={styles.menuItem}
+                                >
+                                    <MaterialIcons
+                                        name={effectiveStorageScope === 'sync' ? (accountEncrypted ? 'cloud-done' : 'cloud-queue') : 'cloud-off'}
+                                        size={20}
+                                        color={colors.text}
+                                        style={{ marginRight: 12 }}
+                                    />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.menuItemText}>
+                                            {effectiveStorageScope === 'sync'
+                                                ? t('edit.protected.syncOn', 'Sync: on')
+                                                : t('edit.protected.syncOffLabel', 'Sync: off')}
+                                        </Text>
+                                        <Text style={styles.menuItemHint}>
+                                            {effectiveStorageScope !== 'sync'
+                                                ? t('edit.protected.hintLocal', 'Only on this phone')
+                                                : accountEncrypted
+                                                    ? t('edit.protected.hintEncrypted', 'End-to-end encrypted')
+                                                    : t('edit.protected.hintWaiting', 'Waits for end-to-end encryption')}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
                             <View style={styles.menuDivider} />
 
                             <TouchableOpacity onPress={handleDelete} style={styles.menuItem}>
@@ -6930,9 +7010,15 @@ export const NoteEditScreen = () => {
 
             <LocalWhisperDownloadModal
                 visible={showLocalWhisperModal}
-                onClose={() => setShowLocalWhisperModal(false)}
+                onClose={() => { setShowLocalWhisperModal(false); setWhisperModalForTranscription(false); }}
                 onDownloadComplete={() => {
                     setShowLocalWhisperModal(false);
+                    if (whisperModalForTranscription) {
+                        // Opened for a protected recording: nothing to start.
+                        setWhisperModalForTranscription(false);
+                        showToast(t('edit.protected.modelReady', 'Speech model ready'));
+                        return;
+                    }
                     handleFormat('dictate'); // Auto-start after download
                 }}
             />
@@ -7230,6 +7316,11 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: colors.border,
         marginVertical: 4,
+    },
+    menuItemHint: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginTop: 2,
     },
     menuItemText: {
         fontSize: 16,

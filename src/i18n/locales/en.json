@@ -484,6 +484,34 @@
       "failed": "Could not look for tasks. Check your connection and try again.",
       "added": "Tasks added to the note: {{count}}",
       "calendarFailed": "Could not open the calendar"
+    },
+    "protected": {
+      "protectNote": "Protect note",
+      "protect": "Protect",
+      "protectTitle": "Protect this note?",
+      "protectDesc": "The text never leaves this phone unencrypted: AI features and cloud voice transcription are turned off for this note. Voice is transcribed on the phone.",
+      "protectNoE2ee": "End-to-end encryption is off, so the note is removed from the server and your other devices and stays on this phone until you turn encryption on.",
+      "unprotect": "Remove protection",
+      "unprotectTitle": "Remove protection?",
+      "unprotectDesc": "The note syncs like any other note again, and AI features can send its text to the server.",
+      "syncOn": "Sync: on",
+      "syncOffLabel": "Sync: off",
+      "hintLocal": "Only on this phone",
+      "hintEncrypted": "End-to-end encrypted",
+      "hintWaiting": "Waits for end-to-end encryption",
+      "syncOffTitle": "Keep only on this phone?",
+      "syncOffDesc": "The note is removed from the server and your other devices. If this phone is lost or the app is deleted, the note is gone for good — there is no copy anywhere.",
+      "syncOff": "Turn off sync",
+      "syncWaitsTitle": "Sync waits for encryption",
+      "syncWaitsE2ee": "Protected notes sync only end-to-end encrypted. Turn on encryption in Settings → Cloud Sync and the note syncs.",
+      "syncWaitsSignIn": "Without an account notes stay on this phone. Sign in and turn on end-to-end encryption to sync.",
+      "aiBlockedTitle": "Protected note",
+      "aiBlockedDesc": "AI features send the text to a server, so they are off for protected notes. Remove protection to use them.",
+      "modelTitle": "Recording saved without text",
+      "modelDesc": "Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.",
+      "modelDownload": "Download model",
+      "modelReady": "Speech model ready",
+      "shareDisabled": "Off for protected notes"
     }
   },
   "voice": {
@@ -683,7 +711,9 @@
     "colorBlue": "Blue",
     "colorRed": "Red",
     "noHighlight": "No highlight",
-    "allVersions": "All versions"
+    "allVersions": "All versions",
+    "protected": "Protected note",
+    "onThisPhoneOnly": "Only on this phone"
   },
   "ask": {
     "title": "Ask your notes",

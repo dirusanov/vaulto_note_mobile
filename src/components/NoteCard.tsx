@@ -144,11 +144,13 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     {!!hasAudio && (
                         <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
                     )}
-                    {!!isEncrypted && (
+                    {note.is_protected ? (
+                        <MaterialIcons name="shield" size={14} color={colors.primary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.protected", "Protected note")} />
+                    ) : !!isEncrypted && (
                         <MaterialIcons name="lock" size={14} color={colors.primary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.encrypted", "End-to-end encrypted")} />
                     )}
                     {storageScope === 'local_only' && (
-                        <MaterialIcons name="smartphone" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
+                        <MaterialIcons name="smartphone" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.onThisPhoneOnly", "Only on this phone")} />
                     )}
                     {!!note.is_pinned && (
                         <MaterialIcons name="push-pin" size={14} color={colors.primary} style={{ marginLeft: 4 }} />

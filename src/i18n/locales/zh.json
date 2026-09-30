@@ -484,6 +484,34 @@
       "failed": "无法查找任务。请检查网络后重试。",
       "added": "已添加到笔记的任务：{{count}}",
       "calendarFailed": "无法打开日历"
+    },
+    "protected": {
+      "protectNote": "保护笔记",
+      "protect": "保护",
+      "protectTitle": "保护这条笔记？",
+      "protectDesc": "文本绝不会以未加密的形式离开这部手机：此笔记的 AI 功能和云端语音转写将关闭，语音在手机上转写。",
+      "protectNoE2ee": "端到端加密未开启，因此这条笔记会从服务器和你的其他设备上删除，只保留在这部手机上，直到你开启加密。",
+      "unprotect": "取消保护",
+      "unprotectTitle": "取消保护？",
+      "unprotectDesc": "这条笔记将像其他笔记一样同步，AI 功能也可以把它的文本发送到服务器。",
+      "syncOn": "同步：开",
+      "syncOffLabel": "同步：关",
+      "hintLocal": "仅在这部手机上",
+      "hintEncrypted": "端到端加密",
+      "hintWaiting": "等待端到端加密",
+      "syncOffTitle": "仅保存在这部手机上？",
+      "syncOffDesc": "这条笔记会从服务器和你的其他设备上删除。如果手机丢失或应用被删除，笔记将永久丢失——任何地方都没有副本。",
+      "syncOff": "关闭同步",
+      "syncWaitsTitle": "同步等待加密",
+      "syncWaitsE2ee": "受保护的笔记只通过端到端加密同步。在“设置 → 云同步”中开启加密后，笔记即会同步。",
+      "syncWaitsSignIn": "没有账户时，笔记只保存在这部手机上。登录并开启端到端加密即可同步。",
+      "aiBlockedTitle": "受保护的笔记",
+      "aiBlockedDesc": "AI 功能会把文本发送到服务器，因此受保护的笔记不能使用。取消保护后即可使用。",
+      "modelTitle": "录音已保存，但没有文字",
+      "modelDesc": "受保护的笔记只在手机上转写。下载一次语音模型，即可从录音中获取文字。",
+      "modelDownload": "下载模型",
+      "modelReady": "语音模型已就绪",
+      "shareDisabled": "受保护的笔记不可用"
     }
   },
   "voice": {
@@ -683,7 +711,9 @@
     "colorBlue": "蓝色",
     "colorRed": "红色",
     "noHighlight": "无高亮",
-    "allVersions": "所有版本"
+    "allVersions": "所有版本",
+    "protected": "受保护的笔记",
+    "onThisPhoneOnly": "仅在这部手机上"
   },
   "ask": {
     "title": "询问笔记",

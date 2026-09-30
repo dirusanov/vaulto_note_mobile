@@ -60,6 +60,8 @@ export const AskNotesScreen = () => {
 
     const searchable = useMemo<SearchableNote[]>(() => (getAllNotes().length > 0 ? getAllNotes() : notes || [])
         .filter((note: any) => !note.deleted && !note.pending_delete && note.privacy !== 'hidden')
+        // Protected notes never reach the AI; legacy local-only ones only with consent.
+        .filter((note: any) => !note.is_protected)
         .filter((note: any) => privateAllowed || note.storage_scope !== 'local_only')
         .map((note: any) => {
             const active = (note.improvements || []).find((imp: any) => imp.is_active && !imp.deleted);

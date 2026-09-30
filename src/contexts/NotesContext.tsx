@@ -16,6 +16,7 @@ interface NotesContextType {
         audio?: NoteAudio;
         storage_scope?: StorageScope;
         privacy?: NotePrivacy;
+        is_protected?: boolean;
     }) => Promise<Note>;
     updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
@@ -37,6 +38,7 @@ interface NotesContextType {
     batchUnpinNotes: (ids: string[]) => Promise<void>;
     batchDeleteNotes: (ids: string[]) => Promise<void>;
     updateNoteStorageScope: (id: string, storageScope: StorageScope) => Promise<void>;
+    updateNoteProtection: (id: string, next: { isProtected: boolean; sync: boolean }) => Promise<void>;
     updateNotePrivacy: (id: string, privacy: NotePrivacy) => Promise<void>;
     // decrypt removed – decryption is handled inside useNotes hook
 }

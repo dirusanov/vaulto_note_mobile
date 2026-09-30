@@ -45,6 +45,9 @@ export interface Note {
     audio_remote?: number;
     audio_sha256?: string | null;
     is_pinned?: boolean;
+    // Protected notes never leave the device unencrypted: no cloud AI, no cloud
+    // transcription, and they sync only end-to-end encrypted (or not at all).
+    is_protected?: boolean;
     storage_scope?: StorageScope;
     // Local-only copy retained after another device reset the encrypted vault.
     // It never participates in sync until the user explicitly recovers it.
@@ -86,6 +89,7 @@ export interface SyncChangeRequest {
     client_updated_at: string;
     is_active?: boolean;
     is_pinned?: boolean;
+    is_protected?: boolean;
     last_variant_id?: string | null;
     pending_server_delete?: boolean;
     enc_epoch?: number;
@@ -136,6 +140,7 @@ export interface ServerNote {
     last_variant_id?: string | null;
     is_active?: boolean;
     is_pinned?: boolean;
+    is_protected?: boolean;
     server_seq?: number;
     enc_epoch?: number;
     transcription_ciphertext?: string | null;

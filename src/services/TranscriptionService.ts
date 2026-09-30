@@ -466,11 +466,22 @@ export async function isOnDeviceTranscriptionActive(): Promise<boolean> {
 /**
  * Transcribe audio file using OpenAI Whisper API
  */
+export const ON_DEVICE_MODEL_REQUIRED = 'on_device_model_required';
+
 export async function transcribeAudio(
     audioUri: string,
-    language?: string
+    language?: string,
+    options: { onDeviceOnly?: boolean } = {},
 ): Promise<TranscriptionResult> {
     const selectedLanguage = language || await resolvePreferredTranscriptionLanguage();
+    if (options.onDeviceOnly) {
+        // Protected notes: the audio never leaves the device, whatever the settings.
+        const status = await getLocalWhisperModelStatus().catch(() => null);
+        if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web' || !status?.isDownloaded) {
+            return { text: '', success: false, error: ON_DEVICE_MODEL_REQUIRED };
+        }
+        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+    }
     if (await isOnDeviceTranscriptionActive()) {
         return transcribeViaLocalWhisper(audioUri, selectedLanguage);
     }

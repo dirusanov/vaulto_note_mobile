@@ -484,6 +484,34 @@
       "failed": "Impossible de chercher les tâches. Vérifiez votre connexion et réessayez.",
       "added": "Tâches ajoutées à la note : {{count}}",
       "calendarFailed": "Impossible d’ouvrir le calendrier"
+    },
+    "protected": {
+      "protectNote": "Protéger la note",
+      "protect": "Protéger",
+      "protectTitle": "Protéger cette note ?",
+      "protectDesc": "Le texte ne quitte jamais ce téléphone en clair : les fonctions d’IA et la transcription vocale dans le cloud sont désactivées pour cette note. La voix est transcrite sur le téléphone.",
+      "protectNoE2ee": "Le chiffrement de bout en bout est désactivé : la note est supprimée du serveur et de vos autres appareils et reste sur ce téléphone jusqu’à ce que vous activiez le chiffrement.",
+      "unprotect": "Retirer la protection",
+      "unprotectTitle": "Retirer la protection ?",
+      "unprotectDesc": "La note se synchronise de nouveau comme les autres et les fonctions d’IA peuvent envoyer son texte au serveur.",
+      "syncOn": "Synchronisation : activée",
+      "syncOffLabel": "Synchronisation : désactivée",
+      "hintLocal": "Uniquement sur ce téléphone",
+      "hintEncrypted": "Chiffré de bout en bout",
+      "hintWaiting": "En attente du chiffrement de bout en bout",
+      "syncOffTitle": "Garder uniquement sur ce téléphone ?",
+      "syncOffDesc": "La note est supprimée du serveur et de vos autres appareils. Si ce téléphone est perdu ou l’app supprimée, la note disparaît définitivement : il n’en existe aucune copie.",
+      "syncOff": "Désactiver la synchronisation",
+      "syncWaitsTitle": "La synchronisation attend le chiffrement",
+      "syncWaitsE2ee": "Les notes protégées ne se synchronisent qu’avec le chiffrement de bout en bout. Activez-le dans Réglages → Synchronisation cloud et la note se synchronisera.",
+      "syncWaitsSignIn": "Sans compte, les notes restent sur ce téléphone. Connectez-vous et activez le chiffrement de bout en bout pour synchroniser.",
+      "aiBlockedTitle": "Note protégée",
+      "aiBlockedDesc": "Les fonctions d’IA envoient le texte à un serveur ; elles sont donc désactivées pour les notes protégées. Retirez la protection pour les utiliser.",
+      "modelTitle": "Enregistrement sauvegardé sans texte",
+      "modelDesc": "Les notes protégées sont transcrites uniquement sur le téléphone. Téléchargez une fois le modèle vocal pour obtenir le texte des enregistrements.",
+      "modelDownload": "Télécharger le modèle",
+      "modelReady": "Modèle vocal prêt",
+      "shareDisabled": "Désactivé pour les notes protégées"
     }
   },
   "voice": {
@@ -683,7 +711,9 @@
     "colorBlue": "Bleu",
     "colorRed": "Rouge",
     "noHighlight": "Aucun surlignage",
-    "allVersions": "Toutes les versions"
+    "allVersions": "Toutes les versions",
+    "protected": "Note protégée",
+    "onThisPhoneOnly": "Uniquement sur ce téléphone"
   },
   "ask": {
     "title": "Interroger vos notes",

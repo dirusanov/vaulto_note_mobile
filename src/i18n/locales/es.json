@@ -484,6 +484,34 @@
       "failed": "No se pudieron buscar tareas. Revisa tu conexión e inténtalo de nuevo.",
       "added": "Tareas añadidas a la nota: {{count}}",
       "calendarFailed": "No se pudo abrir el calendario"
+    },
+    "protected": {
+      "protectNote": "Proteger nota",
+      "protect": "Proteger",
+      "protectTitle": "¿Proteger esta nota?",
+      "protectDesc": "El texto nunca sale de este teléfono sin cifrar: las funciones de IA y la transcripción de voz en la nube se desactivan para esta nota. La voz se transcribe en el teléfono.",
+      "protectNoE2ee": "El cifrado de extremo a extremo está desactivado, así que la nota se elimina del servidor y de tus otros dispositivos y se queda en este teléfono hasta que actives el cifrado.",
+      "unprotect": "Quitar protección",
+      "unprotectTitle": "¿Quitar la protección?",
+      "unprotectDesc": "La nota vuelve a sincronizarse como cualquier otra y las funciones de IA pueden enviar su texto al servidor.",
+      "syncOn": "Sincronización: activada",
+      "syncOffLabel": "Sincronización: desactivada",
+      "hintLocal": "Solo en este teléfono",
+      "hintEncrypted": "Cifrado de extremo a extremo",
+      "hintWaiting": "Espera al cifrado de extremo a extremo",
+      "syncOffTitle": "¿Guardar solo en este teléfono?",
+      "syncOffDesc": "La nota se elimina del servidor y de tus otros dispositivos. Si pierdes el teléfono o borras la app, la nota desaparece para siempre: no hay copia en ningún sitio.",
+      "syncOff": "Desactivar sincronización",
+      "syncWaitsTitle": "La sincronización espera al cifrado",
+      "syncWaitsE2ee": "Las notas protegidas solo se sincronizan con cifrado de extremo a extremo. Actívalo en Ajustes → Sincronización en la nube y la nota se sincronizará.",
+      "syncWaitsSignIn": "Sin cuenta, las notas se quedan en este teléfono. Inicia sesión y activa el cifrado de extremo a extremo para sincronizar.",
+      "aiBlockedTitle": "Nota protegida",
+      "aiBlockedDesc": "Las funciones de IA envían el texto a un servidor, por eso están desactivadas en las notas protegidas. Quita la protección para usarlas.",
+      "modelTitle": "Grabación guardada sin texto",
+      "modelDesc": "Las notas protegidas solo se transcriben en el teléfono. Descarga una vez el modelo de voz para obtener texto de las grabaciones.",
+      "modelDownload": "Descargar modelo",
+      "modelReady": "Modelo de voz listo",
+      "shareDisabled": "Desactivado en notas protegidas"
     }
   },
   "voice": {
@@ -683,7 +711,9 @@
     "colorBlue": "Azul",
     "colorRed": "Rojo",
     "noHighlight": "Sin resaltado",
-    "allVersions": "Todas las versiones"
+    "allVersions": "Todas las versiones",
+    "protected": "Nota protegida",
+    "onThisPhoneOnly": "Solo en este teléfono"
   },
   "ask": {
     "title": "Pregunta a tus notas",

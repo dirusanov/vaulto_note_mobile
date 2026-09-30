@@ -75,7 +75,11 @@ type SyncEncryptionConflict = {
 
 const shouldSyncNote = (note: Note): boolean => {
     const storageScope = note.storage_scope ?? 'sync';
-    return storageScope === 'sync';
+    if (storageScope !== 'sync') return false;
+    // Without end-to-end encryption the sync payload is plaintext, so a protected
+    // note (text, versions, audio) stays on the device until E2EE is on.
+    if (note.is_protected && getCryptoMode() !== 'e2ee') return false;
+    return true;
 };
 
 const getErrorMessage = (error: unknown): string => {
@@ -596,6 +600,7 @@ class SyncService {
                     client_updated_at: note.updated_at || new Date().toISOString(),
                     is_active: note.is_active,
                     is_pinned: note.is_pinned ?? false,
+                    is_protected: !!note.is_protected,
                     last_variant_id: null,
                     enc_epoch: outgoingEncEpoch,
                     transcription_ciphertext: transcriptionToSync,
@@ -1470,6 +1475,7 @@ class SyncService {
                 audio_synced: serverRemovedAudio ? 0 : existing?.audio_synced ?? 0,
                 audio_sha256: serverRemovedAudio ? null : serverNote.audio_sha256 ?? existing?.audio_sha256 ?? null,
                 is_pinned: serverNote.is_pinned ?? existing?.is_pinned ?? false,
+                is_protected: serverNote.is_protected ?? existing?.is_protected ?? false,
                 synced: 1,
                 dirty: false,
                 deleted: false,

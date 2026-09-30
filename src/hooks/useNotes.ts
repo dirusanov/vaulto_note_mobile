@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { Note, NoteImprovement, NotePrivacy, StorageScope } from '../api/notes';
 import { encrypt } from '../crypto/encryption';
 import { subscribeMasterKey } from '../crypto/e2ee';
+import { getCryptoMode } from '../crypto/encryption';
 import {
     initDatabase,
     saveNoteLocal,
@@ -109,7 +110,9 @@ export const useNotes = () => {
 
     const shouldSyncNote = useCallback((note: Partial<Note>): boolean => {
         const scope = normalizeStorageScope(note.storage_scope);
-        return scope === 'sync';
+        if (scope !== 'sync') return false;
+        // Same rule as SyncService: protected notes sync only end-to-end encrypted.
+        return !note.is_protected || getCryptoMode() === 'e2ee';
     }, [normalizeStorageScope]);
 
     const isEmptyNote = useCallback(
@@ -163,6 +166,7 @@ export const useNotes = () => {
             dirty?: boolean;
             storage_scope?: StorageScope;
             privacy?: NotePrivacy;
+            is_protected?: boolean;
         }) => {
             if (!userId) throw new Error('Cannot save note without user ID');
 
@@ -175,6 +179,7 @@ export const useNotes = () => {
                 dirty = true,
                 storage_scope,
                 privacy,
+                is_protected = false,
             } = params;
             const normalizedPrivacy = normalizePrivacy(privacy);
             const normalizedScope = normalizeStorageScope(storage_scope);
@@ -182,7 +187,7 @@ export const useNotes = () => {
             const encryptedContent = await encrypt(content);
             const encryptedTranscription = transcription ? await encrypt(transcription) : undefined;
             const now = new Date().toISOString();
-            const syncAllowed = normalizedScope === 'sync';
+            const syncAllowed = shouldSyncNote({ storage_scope: normalizedScope, is_protected });
             const localNote: Note = {
                 id,
                 encrypted_title: encryptedTitle,
@@ -203,12 +208,13 @@ export const useNotes = () => {
                 is_active: true, // New parent notes are active by default
                 storage_scope: normalizedScope,
                 privacy: normalizedPrivacy,
+                is_protected,
                 pending_server_delete: false,
             };
             await saveNoteLocal(userId, localNote);
             return localNote;
         },
-        [normalizePrivacy, normalizeStorageScope, userId]
+        [normalizePrivacy, normalizeStorageScope, shouldSyncNote, userId]
     );
 
     const buildLocalImprovement = useCallback(
@@ -221,10 +227,12 @@ export const useNotes = () => {
             optionId?: string;
             storage_scope?: StorageScope;
             privacy?: NotePrivacy;
+            // The parent's flag: a protected note's versions follow the same rule.
+            is_protected?: boolean;
         }): Promise<NoteImprovement> => {
             if (!userId) throw new Error('Cannot save improvement without user ID');
 
-            const { id, noteId, content, title, label, optionId, storage_scope, privacy } = params;
+            const { id, noteId, content, title, label, optionId, storage_scope, privacy, is_protected } = params;
             let encryptedContent = await encrypt(content);
             let encryptedTitle = title ? await encrypt(title) : undefined;
 
@@ -237,6 +245,7 @@ export const useNotes = () => {
             const improvementSyncAllowed = shouldSyncNote({
                 storage_scope: storage_scope ?? 'sync',
                 privacy: privacy ?? 'normal',
+                is_protected,
             });
             const improvement: NoteImprovement = {
                 id,
@@ -481,8 +490,9 @@ export const useNotes = () => {
         audio?: NoteAudio;
         storage_scope?: StorageScope;
         privacy?: NotePrivacy;
+        is_protected?: boolean;
     }) => {
-        const { title, content, audio, storage_scope, privacy } = data;
+        const { title, content, audio, storage_scope, privacy, is_protected } = data;
         const titleToUse = buildTitle(title);
         const contentToUse = content || '';
         const isEmpty = !titleToUse.trim() && !hasMeaningfulRichContent(contentToUse) && !audio;
@@ -504,6 +514,7 @@ export const useNotes = () => {
                 transcription: audio?.transcription,
                 storage_scope: storage_scope ?? 'sync',
                 privacy: privacy ?? 'normal',
+                is_protected: !!is_protected,
             });
             await refreshFromLocal();
 
@@ -586,6 +597,7 @@ export const useNotes = () => {
             const dirtyFlag = shouldSyncNote({
                 storage_scope: nextScope,
                 privacy: nextPrivacy,
+                is_protected: updates.is_protected ?? existing.is_protected,
             }) || pendingServerDelete;
 
             const encryptedTitle = await encrypt(titleToUse);
@@ -736,6 +748,7 @@ export const useNotes = () => {
                 optionId: params.optionId,
                 storage_scope: note.storage_scope,
                 privacy: note.privacy,
+                is_protected: note.is_protected,
             });
 
             if (!improvement) throw new Error('Failed to build local improvement');
@@ -1077,6 +1090,48 @@ export const useNotes = () => {
         [normalizePrivacy, normalizeStorageScope, refreshFromLocal, shouldSyncNote, userId]
     );
 
+    /**
+     * Protect a note (it never leaves the device unencrypted) and choose whether it
+     * syncs. When the note stops being syncable — sync turned off, or protected on
+     * an account without end-to-end encryption — its server copy is deleted while
+     * the local one stays.
+     */
+    const updateNoteProtection = useCallback(
+        async (id: string, next: { isProtected: boolean; sync: boolean }) => {
+            if (!userId) return;
+            const existing = allNotesRef.current.find((n) => n.id === id);
+            if (!existing) {
+                throw new Error('Note not found');
+            }
+            const candidate: Note = {
+                ...existing,
+                is_protected: next.isProtected,
+                storage_scope: next.sync ? 'sync' : 'local_only',
+            };
+            const wasSyncable = shouldSyncNote(existing);
+            const willSync = shouldSyncNote(candidate);
+            const hasServerVersion = (existing.synced === 1) || (existing.version ?? 0) > 0;
+            const pendingServerDelete = wasSyncable && !willSync && hasServerVersion;
+
+            const updated: Note = {
+                ...candidate,
+                privacy: normalizePrivacy(existing.privacy),
+                // Turning sync back on cancels a server delete that has not gone out yet.
+                pending_server_delete: willSync ? false : (pendingServerDelete || !!existing.pending_server_delete),
+                updated_at: new Date().toISOString(),
+                synced: 0,
+                dirty: willSync || pendingServerDelete,
+            };
+
+            await saveNoteLocal(userId, updated);
+            await refreshFromLocal();
+            if (updated.dirty) {
+                syncService.scheduleAutoSync();
+            }
+        },
+        [normalizePrivacy, refreshFromLocal, shouldSyncNote, userId]
+    );
+
     const updateNotePrivacy = useCallback(
         async (id: string, privacy: NotePrivacy) => {
             if (!userId) return;
@@ -1164,6 +1219,7 @@ export const useNotes = () => {
         batchUnpinNotes,
         batchDeleteNotes,
         updateNoteStorageScope,
+        updateNoteProtection,
         updateNotePrivacy,
     };
 };

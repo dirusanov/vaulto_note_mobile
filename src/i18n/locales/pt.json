@@ -484,6 +484,34 @@
       "failed": "Não foi possível procurar tarefas. Verifique sua conexão e tente novamente.",
       "added": "Tarefas adicionadas à nota: {{count}}",
       "calendarFailed": "Não foi possível abrir o calendário"
+    },
+    "protected": {
+      "protectNote": "Proteger nota",
+      "protect": "Proteger",
+      "protectTitle": "Proteger esta nota?",
+      "protectDesc": "O texto nunca sai deste telefone sem criptografia: os recursos de IA e a transcrição de voz na nuvem ficam desativados para esta nota. A voz é transcrita no telefone.",
+      "protectNoE2ee": "A criptografia de ponta a ponta está desativada, então a nota é removida do servidor e dos seus outros dispositivos e fica neste telefone até você ativar a criptografia.",
+      "unprotect": "Remover proteção",
+      "unprotectTitle": "Remover a proteção?",
+      "unprotectDesc": "A nota volta a sincronizar como qualquer outra, e os recursos de IA podem enviar o texto dela ao servidor.",
+      "syncOn": "Sincronização: ativada",
+      "syncOffLabel": "Sincronização: desativada",
+      "hintLocal": "Somente neste telefone",
+      "hintEncrypted": "Criptografia de ponta a ponta",
+      "hintWaiting": "Aguardando criptografia de ponta a ponta",
+      "syncOffTitle": "Manter somente neste telefone?",
+      "syncOffDesc": "A nota é removida do servidor e dos seus outros dispositivos. Se este telefone for perdido ou o app for excluído, a nota se perde para sempre — não existe cópia em lugar nenhum.",
+      "syncOff": "Desativar sincronização",
+      "syncWaitsTitle": "A sincronização aguarda a criptografia",
+      "syncWaitsE2ee": "Notas protegidas sincronizam somente com criptografia de ponta a ponta. Ative-a em Ajustes → Sincronização na nuvem e a nota será sincronizada.",
+      "syncWaitsSignIn": "Sem conta, as notas ficam neste telefone. Entre e ative a criptografia de ponta a ponta para sincronizar.",
+      "aiBlockedTitle": "Nota protegida",
+      "aiBlockedDesc": "Os recursos de IA enviam o texto a um servidor, por isso ficam desativados em notas protegidas. Remova a proteção para usá-los.",
+      "modelTitle": "Gravação salva sem texto",
+      "modelDesc": "Notas protegidas são transcritas somente no telefone. Baixe o modelo de fala uma vez para obter texto das gravações.",
+      "modelDownload": "Baixar modelo",
+      "modelReady": "Modelo de fala pronto",
+      "shareDisabled": "Desativado em notas protegidas"
     }
   },
   "voice": {
@@ -683,7 +711,9 @@
     "colorBlue": "Azul",
     "colorRed": "Vermelho",
     "noHighlight": "Sem destaque",
-    "allVersions": "Todas as versões"
+    "allVersions": "Todas as versões",
+    "protected": "Nota protegida",
+    "onThisPhoneOnly": "Somente neste telefone"
   },
   "ask": {
     "title": "Pergunte às suas notas",
