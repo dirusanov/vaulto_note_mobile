@@ -393,20 +393,27 @@ export const richContentToPreviewText = (content: string, maxLines: number = 8, 
 };
 
 /**
- * Title shown for an untitled note: the first words of its first line, so a
- * heading like "Weekend plan" does not borrow words from the list below it.
+ * Title shown for an untitled note, taken from its first line so a heading
+ * like "Weekend plan" does not borrow words from the list below it. A short
+ * first sentence is used whole; a longer one is cut to its first words with
+ * an ellipsis, so the title never reads as a finished phrase ("Ship v2 is").
  */
-export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number = 3): string => {
+export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number = 6): string => {
     const firstLine = (plainText || '')
         .split('\n')
         .map((line) => line.trim())
         .find(Boolean) || '';
-
-    return firstLine
+    const sentence = firstLine.split(/(?<=[.!?。！？])\s|[:;]\s/)[0].replace(/[.!?。！？:;,]+$/, '');
+    const words = sentence
         .split(/\s+/)
-        .filter((token) => token && !/^[-*_•☐☑]+$/.test(token))
-        .slice(0, maxWords)
-        .join(' ');
+        .filter((token) => token && !/^[-*_•☐☑]+$/.test(token));
+
+    if (words.length <= maxWords) {
+        const title = words.join(' ');
+        // Scripts without spaces (Chinese, Japanese) arrive as one long token.
+        return title.length > 40 ? `${title.slice(0, 24).trimEnd()}…` : title;
+    }
+    return `${words.slice(0, Math.min(4, maxWords)).join(' ').replace(/[,;:]+$/, '')}…`;
 };
 
 const SCRIPT_RANGES: Array<[string, RegExp]> = [

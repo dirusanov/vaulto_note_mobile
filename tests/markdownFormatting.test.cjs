@@ -138,6 +138,7 @@ const {
     richContentToPreviewText,
     normalizeModelMarkdownForEditor,
     titleMatchesContextScript,
+    deriveAutoTitleFromPlainText,
 } = require('../.test-build/md/utils/richContent');
 
 check(
@@ -254,6 +255,16 @@ check('english title on english note is kept', titleMatchesContextScript('Weekly
 check('russian title on russian note is kept', titleMatchesContextScript('Покупки', 'Купить молоко'), true);
 check('mixed note allows either script', titleMatchesContextScript('Milk list', 'Купить milk'), true);
 check('digits-only title is kept', titleMatchesContextScript('2026', 'anything'), true);
+
+// --- auto title for untitled notes --------------------------------------------
+check('short heading used whole', deriveAutoTitleFromPlainText('Weekend plan\n- milk'), 'Weekend plan');
+check('short first sentence used whole', deriveAutoTitleFromPlainText('Call the dentist tomorrow. Then gym.'), 'Call the dentist tomorrow');
+check('six-word sentence used whole', deriveAutoTitleFromPlainText('Ship v2 is planned for Thursday. Dima owns QA.'), 'Ship v2 is planned for Thursday');
+check('long sentence cut with ellipsis', deriveAutoTitleFromPlainText('Marketing needs an additional week before the release'), 'Marketing needs an additional…');
+check('bullet marker skipped', deriveAutoTitleFromPlainText('• Buy milk'), 'Buy milk');
+check('russian', deriveAutoTitleFromPlainText('Купить хлеб, молоко и кофе'), 'Купить хлеб, молоко и кофе');
+check('cjk long line truncated', deriveAutoTitleFromPlainText('明天上午十点和团队开会讨论第二版的发布计划以及测试安排还有市场推广的时间表需要确认'), '明天上午十点和团队开会讨论第二版的发布计划以及测…');
+check('empty', deriveAutoTitleFromPlainText(''), '');
 
 if (failures > 0) {
     console.error(`\n${failures} test(s) failed`);

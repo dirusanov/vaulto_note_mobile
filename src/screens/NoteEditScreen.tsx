@@ -696,7 +696,7 @@ const MemoizedImprovementChips = memo(({
                 accessibilityLabel={t("a11y.originalVersion", "Original version")}
             >
                 <MaterialIcons
-                    name="lock"
+                    name="article"
                     size={14}
                     color={originalActive ? colors.background : colors.textSecondary}
                     style={styles.variantChipIcon}
@@ -4030,7 +4030,7 @@ export const NoteEditScreen = () => {
             {
                 id: 'original',
                 label: t('edit.original', 'Original'),
-                icon: 'lock',
+                icon: 'article',
                 title: noteTitle || undefined,
                 snippet: snippetOf(resolveVariantContent('original')),
             },

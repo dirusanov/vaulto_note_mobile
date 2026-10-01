@@ -7,6 +7,10 @@
 - Guest Settings showed the previous account's encryption controls in the cloud-sync card.
 - Selection mode header buttons are 48dp.
 - Unlock banner says "secret phrase" like the unlock dialog (ru, fr said "password").
+- Untitled notes: the auto title is the whole first sentence when it is short (up to 6 words), otherwise its first words with "…" — no more "Ship v2 is". Card titles get two lines.
+- "Find tasks" also picks up planned work with a deadline or an owner ("v2 ships on Thursday").
+- Versions: the Original chip uses a document icon (the lock read as "encrypted"); the version name is not repeated as its title; row actions are one equal-width 48dp column.
+- Russian notes-chat example is gender-neutral.
 
 ### Changed
 - **First-launch empty list**: a short welcome (voice to text, AI tidy-up, private by default) instead of a single line.

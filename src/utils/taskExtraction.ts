@@ -37,10 +37,11 @@ export const localDateString = (date: Date): string =>
 
 export const buildTaskExtractionPrompt = (now: Date): string => [
     'Extract the actionable tasks (to-dos, commitments, things to buy, call, send, book or prepare) from the note.',
+    'Planned work with a deadline or an owner is a task too ("v2 ships on Thursday" → "Ship v2" on that date; "Anna owns QA" → "QA (Anna)").',
     `Today is ${WEEKDAYS[now.getDay()]}, ${localDateString(now)}. Resolve relative dates ("tomorrow", "on Thursday", "next week") to YYYY-MM-DD; a weekday means its next occurrence.`,
     'Return JSON only: {"tasks":[{"title":"...","date":"YYYY-MM-DD" or null,"time":"HH:MM" or null}]}.',
     'Titles: short imperative phrases in the language of the note, without the date. One task per action.',
-    'Skip items already marked done ([x]), plain facts and ideas without an action. No tasks → {"tasks":[]}.',
+    'Skip items already marked done ([x]), and facts or ideas that nobody has to act on. No tasks → {"tasks":[]}.',
     `At most ${MAX_TASKS} tasks. Never invent tasks, dates or times that are not in the note.`,
 ].join(' ');
 

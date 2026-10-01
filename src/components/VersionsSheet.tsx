@@ -71,7 +71,7 @@ export const VersionsSheet = ({
                                                 onPress={() => { close(); onSelect(item.id); }}
                                                 accessibilityRole="button"
                                                 accessibilityState={{ selected: isActive }}
-                                                accessibilityLabel={[item.label, item.title].filter(Boolean).join(', ')}
+                                                accessibilityLabel={[item.label, item.title !== item.label ? item.title : ''].filter(Boolean).join(', ')}
                                             >
                                                 <View style={[styles.iconBadge, isActive && styles.iconBadgeActive]}>
                                                     <MaterialIcons
@@ -85,7 +85,7 @@ export const VersionsSheet = ({
                                                         <Text style={styles.rowLabel} numberOfLines={1}>{item.label}</Text>
                                                         {item.timeLabel ? <Text style={styles.rowTime}>{item.timeLabel}</Text> : null}
                                                     </View>
-                                                    {item.title ? <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text> : null}
+                                                    {item.title && item.title.trim().toLowerCase() !== item.label.trim().toLowerCase() ? <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text> : null}
                                                     {item.snippet ? <Text style={styles.rowSnippet} numberOfLines={2}>{item.snippet}</Text> : null}
                                                 </View>
                                             </TouchableOpacity>
@@ -246,9 +246,8 @@ const styles = StyleSheet.create({
         marginRight: -12,
     },
     actions: {
+        // One equal-width column: translated labels are too long to sit side by side.
         width: '100%',
-        flexDirection: 'row',
-        flexWrap: 'wrap',
         gap: spacing.s,
         paddingLeft: 40,
         paddingRight: spacing.s,
@@ -258,7 +257,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        minHeight: 44,
+        minHeight: 48,
         paddingVertical: 10,
         paddingHorizontal: 14,
         borderRadius: 12,
