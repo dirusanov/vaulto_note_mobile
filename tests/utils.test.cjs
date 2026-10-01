@@ -149,3 +149,12 @@ test('an unusable error falls back to the caller-supplied message', () => {
     assert.equal(getErrorMessage({ message: '   ' }, 'Could not save'), 'Could not save');
     assert.equal(getErrorMessage(undefined), 'Something went wrong');
 });
+
+test('whisper silence hallucinations are dropped, real speech kept', () => {
+    const { stripWhisperHallucinations } = require('../.test-build/utils/whisperText');
+    assert.equal(stripWhisperHallucinations('Купить молоко. Продолжение следует...'), 'Купить молоко.');
+    assert.equal(stripWhisperHallucinations('Субтитры сделал DimaTorzok'), '');
+    assert.equal(stripWhisperHallucinations('Call Anna tomorrow. Thanks for watching!'), 'Call Anna tomorrow.');
+    assert.equal(stripWhisperHallucinations('[Music]'), '');
+    assert.equal(stripWhisperHallucinations('Позвонить стоматологу завтра в десять'), 'Позвонить стоматологу завтра в десять');
+});

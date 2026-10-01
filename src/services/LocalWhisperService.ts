@@ -1,4 +1,5 @@
 import { AppState, NativeModules, Platform } from 'react-native';
+import { stripWhisperHallucinations } from '../utils/whisperText';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
 import { canDeviceRunModel, describeDeviceMemory } from './DeviceCapabilities';
@@ -376,7 +377,7 @@ export const transcribeWithLocalWhisper = async (
             : await response;
 
         const text = result?.result || result?.text || '';
-        return text.trim();
+        return stripWhisperHallucinations(text);
     } finally {
         endJob('transcribe');
     }
@@ -467,7 +468,7 @@ export const startRealtimeDictation = async (
 
             const text = event.data?.result ?? event.data?.text;
             if (typeof text === 'string') {
-                options.onTranscript?.(text.trim());
+                options.onTranscript?.(stripWhisperHallucinations(text));
             }
 
             if (event.isCapturing === false) {

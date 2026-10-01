@@ -5360,6 +5360,12 @@ export const NoteEditScreen = () => {
             latestTranscript: '',
         };
         dictationSessionRef.current = session;
+        // Record the text as it was before dictating, so Undo can take the
+        // dictated words back out (dictation writes once, when it stops).
+        const history = variantHistories.current[variantId];
+        if (!history || history.history[history.index]?.content !== session.baseText) {
+            updateHistoryImmediate(currentTitleRef.current, session.baseText, variantId);
+        }
         setIsRealtimeDictating(true);
 
         try {

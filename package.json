@@ -1,6 +1,6 @@
 {
   "name": "vaulto-note-mobile",
-  "version": "1.0.75",
+  "version": "1.0.76",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -12,7 +12,7 @@
     "test:encryption-state": "tsc --ignoreConfig src/services/encryptionState.ts --target ES2020 --module commonjs --outDir .test-build --skipLibCheck --esModuleInterop && node tests/encryptionState.test.cjs",
     "test:formatting": "tsc --ignoreConfig src/utils/markdownUtils.tsx src/utils/tiptapMarkdownAdapter.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/md --skipLibCheck --esModuleInterop && node tests/markdownFormatting.test.cjs",
     "test:e2ee": "tsc --ignoreConfig src/crypto/e2ee.ts --target ES2020 --module commonjs --outDir .test-build/crypto --skipLibCheck --esModuleInterop && node tests/e2eeCrypto.test.cjs",
-    "test:utils": "tsc --ignoreConfig src/utils/checklistScale.ts src/utils/openaiCompat.ts src/utils/errorMessage.ts --target ES2020 --module commonjs --outDir .test-build/utils --skipLibCheck --esModuleInterop && node tests/utils.test.cjs",
+    "test:utils": "tsc --ignoreConfig src/utils/checklistScale.ts src/utils/openaiCompat.ts src/utils/errorMessage.ts src/utils/whisperText.ts --target ES2020 --module commonjs --outDir .test-build/utils --skipLibCheck --esModuleInterop && node tests/utils.test.cjs",
     "test:versions": "tsc --ignoreConfig src/i18n/variantLabels.ts src/utils/textDiff.ts --target ES2020 --module commonjs --outDir .test-build/versions --skipLibCheck --esModuleInterop && node --test tests/versions.test.cjs",
     "test:search": "tsc --ignoreConfig src/utils/noteSearch.ts --target ES2020 --module commonjs --outDir .test-build/search --skipLibCheck --esModuleInterop && node --test tests/noteSearch.test.cjs",
     "test:tasks": "tsc --ignoreConfig src/utils/taskExtraction.ts --target ES2020 --module commonjs --outDir .test-build/tasks --skipLibCheck --esModuleInterop && node --test tests/taskExtraction.test.cjs"

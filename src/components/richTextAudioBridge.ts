@@ -151,7 +151,12 @@ const buildAudioEmbedRuntimeJs = () => `
     const playbackSpeed = typeof payload.playbackSpeed === 'number' && Number.isFinite(payload.playbackSpeed) ? payload.playbackSpeed : 1;
     const isPlaying = !!payload.isPlaying;
     const isLoading = !!payload.isLoading;
-    const iconText = isLoading ? '...' : (isPlaying ? '||' : '>');
+    // Drawn shapes, not text: a ">" glyph looked like a typo, not a play button.
+    const iconSvg = isLoading
+      ? '<circle cx="78" cy="88" r="6" fill="#FFFFFF"/><circle cx="94" cy="88" r="6" fill="#FFFFFF"/><circle cx="110" cy="88" r="6" fill="#FFFFFF"/>'
+      : (isPlaying
+        ? '<rect x="79" y="70" width="11" height="36" rx="3" fill="#FFFFFF"/><rect x="98" y="70" width="11" height="36" rx="3" fill="#FFFFFF"/>'
+        : '<path d="M84 68 L84 108 Q84 113 89 110 L116 92 Q120 88 116 84 L89 66 Q84 63 84 68 Z" fill="#FFFFFF"/>');
     const speedText = String(playbackSpeed).replace(/\\.0$/, '') + 'x';
     const remaining = Math.max(0, duration - position);
     const progressKnobX = PROGRESS_START + progressWidth;
@@ -175,7 +180,7 @@ const buildAudioEmbedRuntimeJs = () => `
       '<rect x="8" y="10" width="664" height="156" rx="32" fill="${AUDIO_PREVIEW_CARD_BACKGROUND}" stroke="${AUDIO_PREVIEW_CARD_BORDER}" stroke-width="2"/>' +
       '<circle cx="94" cy="88" r="52" fill="${AUDIO_PREVIEW_ACCENT_SOFT}"/>' +
       '<circle cx="94" cy="88" r="45" fill="${AUDIO_PREVIEW_ACCENT}"/>' +
-      '<text x="94" y="99" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#FFFFFF">' + escapeXml(iconText) + '</text>' +
+      iconSvg +
       waveBars +
       '<rect x="' + SPEED_START + '" y="' + SPEED_TOP + '" width="' + (SPEED_END - SPEED_START) + '" height="' + (SPEED_BOTTOM - SPEED_TOP) + '" rx="19" fill="${AUDIO_PREVIEW_SPEED_BACKGROUND}" stroke="${AUDIO_PREVIEW_SPEED_BORDER}" stroke-width="2"/>' +
       '<text x="' + Math.round((SPEED_START + SPEED_END) / 2) + '" y="94" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="${AUDIO_PREVIEW_TEXT}">' + escapeXml(speedText) + '</text>' +

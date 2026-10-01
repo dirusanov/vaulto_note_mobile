@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.76] - 2026-10-01
+
+### Changed
+- **R8 code shrinking and obfuscation** in release builds, plus resource shrinking (Google Play flagged 2% obfuscation). The arm64 APK went from 230 MB to 115 MB. A minified release build was checked on the emulator: sign-in, E2EE unlock, sync, cloud AI, Whisper download and live dictation, voice recording and the editor.
+- **On-device model memory**: the LLM weights are released after 90 s without a request, not only when the app goes to the background.
+
+### Fixed
+- **Live dictation could not be undone**: the text before dictating is now recorded, so Undo takes the dictated words back out.
+- **Whisper "hearing" subtitles in silence**: typical hallucinations ("Продолжение следует…", "Субтитры сделал …", "Thanks for watching", "[Music]") are dropped from on-device transcripts and dictation.
+- **Inline audio player**: drawn play/pause icons instead of ">" and "||" text.
+
 ## [1.0.75] - 2026-10-01
 
 ### Added
