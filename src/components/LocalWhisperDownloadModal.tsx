@@ -10,10 +10,12 @@ import {
     LocalWhisperModelDescriptor,
     LocalWhisperModelKey,
     getAvailableLocalWhisperModels,
+    getLocalWhisperModelStatus,
     canFitLocalWhisperModel,
     isLocalWhisperModelSupportedByDevice,
 } from '../services/LocalWhisperService';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
+import { formatModelSize } from './OnDeviceModelSection';
 
 /** Why a model cannot be downloaded on this device, if it cannot. */
 type ModelBlocker = 'memory' | 'space' | null;
@@ -33,15 +35,17 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
     const [progress, setProgress] = useState(0);
     const [bytesLoaded, setBytesLoaded] = useState(0);
     const [bytesTotal, setBytesTotal] = useState(0);
+    const [downloaded, setDownloaded] = useState<Partial<Record<LocalWhisperModelKey, boolean>>>({});
 
     useEffect(() => {
         if (!visible) return;
 
-        const available = getAvailableLocalWhisperModels();
+        // Large is left out: Turbo is as accurate at a fifth of the size.
+        const available = getAvailableLocalWhisperModels()
+            .filter((model) => model.key !== 'large')
+            .sort((a, b) => a.sizeBytes - b.sizeBytes);
         setModels(available);
-        getLocalWhisperModelKey().then(key => {
-            if (key) setSelectedModelKey(key as LocalWhisperModelKey);
-        });
+        const storedKeyPromise = getLocalWhisperModelKey();
 
         // A model the device cannot hold must not start a multi-gigabyte download.
         let cancelled = false;
@@ -55,15 +59,29 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                 }
                 return [model.key, null] as const;
             }));
-            if (!cancelled) {
-                setBlockers(Object.fromEntries(entries) as Partial<Record<LocalWhisperModelKey, ModelBlocker>>);
-            }
+            const onPhone = await Promise.all(available.map(async (model) =>
+                [model.key, (await getLocalWhisperModelStatus(model.key)).isDownloaded] as const));
+            if (cancelled) return;
+            const blockerMap = Object.fromEntries(entries) as Partial<Record<LocalWhisperModelKey, ModelBlocker>>;
+            setBlockers(blockerMap);
+            setDownloaded(Object.fromEntries(onPhone));
+            // Start on the stored model if it suits this phone, else the best one that does.
+            const stored = (await storedKeyPromise) as LocalWhisperModelKey | '';
+            const usable = (key: LocalWhisperModelKey) => available.some((m) => m.key === key) && !blockerMap[key];
+            const preferred = (['turbo', 'base', 'tiny'] as LocalWhisperModelKey[]).find(usable);
+            setSelectedModelKey(stored && usable(stored) ? stored : (preferred ?? 'tiny'));
         })();
 
         return () => { cancelled = true; };
     }, [visible]);
 
     const handleDownload = async () => {
+        if (downloaded[selectedModelKey]) {
+            // Already on the phone: just use it.
+            await setLocalWhisperModelKey(selectedModelKey);
+            onDownloadComplete();
+            return;
+        }
         setIsDownloading(true);
         setProgress(0);
         setBytesLoaded(0);
@@ -142,17 +160,35 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                                             onPress={() => setSelectedModelKey(model.key)}
                                             disabled={blocker !== null}
                                         >
+                                            <MaterialIcons
+                                                name={selectedModelKey === model.key ? 'radio-button-checked' : 'radio-button-unchecked'}
+                                                size={22}
+                                                color={selectedModelKey === model.key ? colors.primary : colors.textTertiary}
+                                            />
                                             <View style={styles.modelOptionContent}>
-                                                <Text style={[styles.modelName, selectedModelKey === model.key && styles.modelNameSelected]}>
-                                                    {model.label}
-                                                    {model.recommended && ` (${t('edit.dictation.recommended', 'Recommended')})`}
-                                                </Text>
+                                                <View style={styles.modelNameLine}>
+                                                    <Text style={[styles.modelName, selectedModelKey === model.key && styles.modelNameSelected]}>
+                                                        {model.label}
+                                                    </Text>
+                                                    {model.key === 'turbo' && blocker === null && (
+                                                        <View style={styles.tag}>
+                                                            <Text style={styles.tagText}>{t('localModels.recommended', 'Recommended')}</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
                                                 <Text style={styles.modelSize}>
-                                                    {blockerLabel ? `${model.sizeLabel} - ${blockerLabel}` : model.sizeLabel}
+                                                    {formatModelSize(model.sizeBytes, t)} · {blockerLabel ?? ({
+                                                        tiny: t('localModels.whisperTiny', 'Fastest, basic accuracy'),
+                                                        base: t('localModels.whisperBase', 'Fast, more accurate than Tiny'),
+                                                        turbo: t('localModels.whisperTurbo', 'Most accurate, a bit slower'),
+                                                    } as Record<string, string>)[model.key] ?? ''}
                                                 </Text>
                                             </View>
-                                            {selectedModelKey === model.key && blocker === null && (
-                                                <MaterialIcons name="check-circle" size={24} color={colors.primary} />
+                                            {downloaded[model.key] && (
+                                                <View style={styles.onPhone}>
+                                                    <MaterialIcons name="check-circle" size={18} color={colors.success} />
+                                                    <Text style={styles.onPhoneText}>{t('localModels.onPhone', 'On phone')}</Text>
+                                                </View>
                                             )}
                                         </TouchableOpacity>
                                     );
@@ -169,7 +205,10 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                                     disabled={selectedBlocker !== null}
                                 >
                                     <Text style={styles.buttonDownloadText}>
-                                        {describeBlocker(selectedBlocker) || t('edit.dictation.download', 'Download')}
+                                        {describeBlocker(selectedBlocker)
+                                            || (downloaded[selectedModelKey]
+                                                ? t('localModels.useModel', 'Use this model')
+                                                : t('localModels.downloadSize', 'Download · {{size}}', { size: formatModelSize(selectedModel?.sizeBytes ?? 0, t) }))}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -186,7 +225,10 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
 
                             <View style={styles.progressStats}>
                                 <Text style={styles.progressStatText}>
-                                    {Math.round(bytesLoaded / 1024 / 1024)} MB / {Math.round((bytesTotal || selectedModel?.sizeBytes || 0) / 1024 / 1024)} MB
+                                    {t('localModels.progressShort', '{{loaded}} of {{total}}', {
+                                        loaded: formatModelSize(bytesLoaded, t),
+                                        total: formatModelSize(bytesTotal || selectedModel?.sizeBytes || 0, t),
+                                    })}
                                 </Text>
                                 <Text style={styles.progressStatText}>{Math.round(progress * 100)}%</Text>
                             </View>
@@ -246,8 +288,10 @@ const styles = StyleSheet.create({
     modelOption: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
+        gap: 12,
+        minHeight: 64,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: colors.border,
@@ -263,10 +307,37 @@ const styles = StyleSheet.create({
     modelOptionContent: {
         flex: 1,
     },
+    modelNameLine: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 2,
+    },
+    tag: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 8,
+        backgroundColor: colors.primary,
+    },
+    tagText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: colors.surface,
+    },
+    onPhone: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    onPhoneText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.success,
+    },
     modelName: {
         ...typography.subtitle,
         color: colors.text,
-        marginBottom: 4,
     },
     modelNameSelected: {
         color: colors.primary,

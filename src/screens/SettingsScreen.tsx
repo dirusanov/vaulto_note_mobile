@@ -32,6 +32,8 @@ import {
     setOnDeviceTranscription,
 } from '../utils/storage';
 import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadModal';
+import { OnDeviceModelSection, OnDeviceModelState, OnDeviceModelOption, formatModelSize } from '../components/OnDeviceModelSection';
+import { hasRoomForModel } from '../services/modelDownload';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { AgentModeVaultoGateModal } from '../components/AgentModeVaultoGateModal';
@@ -61,6 +63,8 @@ import {
     getLocalWhisperModelStatus,
     LocalWhisperModelKey,
     setSelectedLocalWhisperModel,
+    isLocalWhisperModelSupportedByDevice,
+    canFitLocalWhisperModel,
 } from '../services/LocalWhisperService';
 import {
     cancelLocalLLMDownload,
@@ -71,6 +75,8 @@ import {
     isLocalLLMRuntimeAvailable,
     LocalLLMModelKey,
     setSelectedLocalLLMModel,
+    isLocalLLMModelSupportedByDevice,
+    getRecommendedLocalLLMModelKey,
 } from '../services/LocalLLMService';
 import { SearchableLanguageSelector } from '../components/SearchableLanguageSelector';
 import { RecoveryCodeModal } from '../components/RecoveryCodeModal';
@@ -309,6 +315,12 @@ export const SettingsScreen = () => {
     const [showDisableEncryptionModal, setShowDisableEncryptionModal] = useState(false);
     const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
     const [showLocalWhisperDeleteConfirm, setShowLocalWhisperDeleteConfirm] = useState(false);
+    // Every model's state (on the phone? fits this phone?), not only the selected one.
+    const [whisperModelStates, setWhisperModelStates] = useState<Record<string, OnDeviceModelState>>({});
+    const [llmModelStates, setLLMModelStates] = useState<Record<string, OnDeviceModelState>>({});
+    const [recommendedLLMKey, setRecommendedLLMKey] = useState<string | null>(null);
+    const [whisperDeleteKey, setWhisperDeleteKey] = useState<string | null>(null);
+    const [llmDeleteKey, setLLMDeleteKey] = useState<string | null>(null);
     const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
@@ -397,12 +409,40 @@ export const SettingsScreen = () => {
     const transcriptionAuthRequired = isGuestOrAnonymous && aiProvider === 'vaulto_ai' && !onDeviceTranscriptionActive;
     const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
 
-    useEffect(() => {
-        if ((usingOpenAI || usingLocalWhisper || usingLocalLLM || aiProvider === ('local' as any)) && agentModeEnabled) {
-            setAgentModeEnabledState(false);
-            void setAgentModeEnabled(false);
-        }
-    }, [usingLocalWhisper, usingOpenAI, usingLocalLLM, agentModeEnabled, aiProvider]);
+    // The agent runs on the server, so it is unavailable with Custom AI and on-device
+    // AI. That is shown, not stored: the user's choice comes back with Vaulto AI.
+    const agentUnavailable = usingOpenAI || usingLocalWhisper || usingLocalLLM || aiProvider === ('local' as any);
+
+    // What each on-device model is for, in plain words. Whisper Large is left out
+    // unless already on the phone: Turbo matches it at a fifth of the size.
+    const whisperModelOptions: OnDeviceModelOption[] = getAvailableLocalWhisperModels()
+        .filter((m) => m.key !== 'large' || whisperModelStates.large?.downloaded || localWhisperStatus?.selectedModel.key === 'large')
+        .sort((a, b) => a.sizeBytes - b.sizeBytes)
+        .map((m) => ({
+            key: m.key,
+            label: m.label,
+            sizeBytes: m.sizeBytes,
+            recommended: m.key === 'turbo' ? whisperModelStates.turbo?.available !== false : m.key === 'base' && whisperModelStates.turbo?.available === false,
+            description: {
+                tiny: t('localModels.whisperTiny', 'Fastest, basic accuracy'),
+                base: t('localModels.whisperBase', 'Fast, more accurate than Tiny'),
+                turbo: t('localModels.whisperTurbo', 'Most accurate, a bit slower'),
+                large: t('localModels.whisperLarge', 'Largest; Turbo is as accurate'),
+            }[m.key] ?? '',
+        }));
+    const llmModelOptions: OnDeviceModelOption[] = getAvailableLocalLLMModels()
+        .sort((a, b) => a.sizeBytes - b.sizeBytes)
+        .map((m) => ({
+            key: m.key,
+            label: m.label,
+            sizeBytes: m.sizeBytes,
+            recommended: m.key === recommendedLLMKey,
+            description: {
+                'qwen3.5-0.8b': t('localModels.llm08', 'For older phones, simple edits'),
+                'qwen3.5-2b': t('localModels.llm2', 'Fast, good for short notes'),
+                'qwen3.5-4b': t('localModels.llm4', 'Best answers, needs 6 GB+ RAM'),
+            }[m.key] ?? '',
+        }));
 
     const openManageSubscription = useCallback(async () => {
         const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
@@ -528,7 +568,46 @@ export const SettingsScreen = () => {
         }] : []),
     ];
 
-    const localWhisperModels = getAvailableLocalWhisperModels();
+
+    const refreshModelStates = useCallback(async () => {
+        const describe = async (
+            key: string,
+            isDownloaded: Promise<boolean>,
+            supported: Promise<boolean>,
+            fits: Promise<boolean>,
+        ): Promise<[string, OnDeviceModelState]> => {
+            const [downloaded, ok, room] = await Promise.all([isDownloaded, supported, fits]);
+            return [key, {
+                downloaded,
+                available: ok && room,
+                unavailableReason: !ok
+                    ? t('localModels.notEnoughMemory', 'Needs more memory than this phone has')
+                    : t('localModels.notEnoughSpace', 'Not enough free space'),
+            }];
+        };
+        try {
+            const [whisperEntries, llmEntries, recommended] = await Promise.all([
+                Promise.all(getAvailableLocalWhisperModels().map((m) => describe(
+                    m.key,
+                    getLocalWhisperModelStatus(m.key).then((st) => st.isDownloaded),
+                    isLocalWhisperModelSupportedByDevice(m.key),
+                    canFitLocalWhisperModel(m.key),
+                ))),
+                Promise.all(getAvailableLocalLLMModels().map((m) => describe(
+                    m.key,
+                    getLocalLLMModelStatus(m.key).then((st) => st.isDownloaded),
+                    isLocalLLMModelSupportedByDevice(m.key),
+                    hasRoomForModel(m.sizeBytes),
+                ))),
+                getRecommendedLocalLLMModelKey(),
+            ]);
+            setWhisperModelStates(Object.fromEntries(whisperEntries));
+            setLLMModelStates(Object.fromEntries(llmEntries));
+            setRecommendedLLMKey(recommended);
+        } catch (error) {
+            console.warn('Failed to read on-device model states', error);
+        }
+    }, [t]);
 
     const refreshLocalWhisperStatus = useCallback(async () => {
         try {
@@ -569,7 +648,8 @@ export const SettingsScreen = () => {
         useCallback(() => {
             refreshLocalWhisperStatus();
             refreshLocalLLMStatus();
-        }, [refreshLocalWhisperStatus, refreshLocalLLMStatus])
+            void refreshModelStates();
+        }, [refreshLocalWhisperStatus, refreshLocalLLMStatus, refreshModelStates])
     );
 
     const refreshCurrentPeriodUsage = useCallback(async () => {
@@ -656,10 +736,8 @@ export const SettingsScreen = () => {
         setAiProviderState(provider);
         try {
             await setAIProvider(provider);
-            if (provider === 'openai' || provider === 'local_whisper' || provider === 'local_llm' || provider === 'local') {
-                setAgentModeEnabledState(false);
-                await setAgentModeEnabled(false);
-            }
+            // The agent is unavailable with these providers; that is shown via
+            // agentUnavailable, not stored, so it comes back with Vaulto AI.
 
             // If switching to local and no whisper model, disable transcription
             if (provider === 'local' || provider === 'local_whisper') {
@@ -684,9 +762,7 @@ export const SettingsScreen = () => {
     }, []);
 
     const toggleAgentMode = async (value: boolean) => {
-        if (usingOpenAI || usingLocalWhisper || usingLocalLLM || aiProvider === ('local' as any)) {
-            setAgentModeEnabledState(false);
-            await setAgentModeEnabled(false);
+        if (agentUnavailable) {
             setShowAgentVaultoGate(true);
             return;
         }
@@ -824,8 +900,16 @@ export const SettingsScreen = () => {
         }
     }, [aiProvider]);
 
-    const handleDownloadLocalWhisper = useCallback(async () => {
-        const modelKey = (localWhisperStatus?.selectedModel.key || 'tiny') as LocalWhisperModelKey;
+    const handleDownloadLocalWhisper = useCallback(async (key?: string) => {
+        const modelKey = (key || localWhisperStatus?.selectedModel.key || 'tiny') as LocalWhisperModelKey;
+        // The downloaded model becomes the one in use; a cancelled or failed
+        // download hands it back to the model that was working before.
+        // Read fresh: the status captured by this callback can predate a download that just finished.
+        const current = await getLocalWhisperModelStatus().catch(() => null);
+        const previous = current?.isDownloaded ? current.selectedModel.key : null;
+        let completed = false;
+        await setSelectedLocalWhisperModel(modelKey);
+        setLocalWhisperStatus(await getLocalWhisperModelStatus(modelKey));
         setLocalWhisperBusy(true);
         setIsDownloadingLocalWhisper(true);
         setLocalWhisperProgress(0);
@@ -838,6 +922,7 @@ export const SettingsScreen = () => {
                 setLocalWhisperBytesTotal(total);
             });
             setLocalWhisperStatus(status);
+            completed = true;
             
             if (aiProvider === 'local' || aiProvider === 'local_whisper') {
                 setTranscriptionEnabledState(true);
@@ -850,13 +935,18 @@ export const SettingsScreen = () => {
                 Alert.alert(t("aux.downloadFailed"), error?.message || t("aux.unableDownloadWhisper"));
             }
         } finally {
+            if (!completed && previous && previous !== modelKey) {
+                await setSelectedLocalWhisperModel(previous as LocalWhisperModelKey);
+                setLocalWhisperStatus(await getLocalWhisperModelStatus(previous));
+            }
             setLocalWhisperBusy(false);
             setIsDownloadingLocalWhisper(false);
             setLocalWhisperProgress(0);
             setLocalWhisperBytesLoaded(0);
             setLocalWhisperBytesTotal(0);
+            void refreshModelStates();
         }
-    }, [localWhisperStatus?.selectedModel.key, aiProvider]);
+    }, [localWhisperStatus?.selectedModel.key, aiProvider, whisperDeleteKey, refreshModelStates]);
 
     const handleCancelLocalWhisper = useCallback(async () => {
         await cancelLocalWhisperDownload();
@@ -866,20 +956,22 @@ export const SettingsScreen = () => {
         setLocalWhisperBusy(true);
         setShowLocalWhisperDeleteConfirm(false);
         try {
-            await deleteLocalWhisperModel(localWhisperStatus?.selectedModel.key);
+            const target = whisperDeleteKey || localWhisperStatus?.selectedModel.key;
+            await deleteLocalWhisperModel(target);
             const status = await getLocalWhisperModelStatus();
             setLocalWhisperStatus(status);
             
-            if (aiProvider === 'local' || aiProvider === 'local_whisper') {
+            if ((aiProvider === 'local' || aiProvider === 'local_whisper') && !status.isDownloaded) {
                 setTranscriptionEnabledState(false);
                 await setTranscriptionEnabled(false);
             }
+            void refreshModelStates();
         } catch (error: any) {
             Alert.alert('Delete failed', error?.message || 'Unable to remove the local Whisper model.');
         } finally {
             setLocalWhisperBusy(false);
         }
-    }, [localWhisperStatus?.selectedModel.key, aiProvider]);
+    }, [localWhisperStatus?.selectedModel.key, aiProvider, whisperDeleteKey, refreshModelStates]);
 
     const handleSelectLocalLLMModel = useCallback(async (key: LocalLLMModelKey) => {
         setLocalLLMBusy(true);
@@ -893,16 +985,18 @@ export const SettingsScreen = () => {
         }
     }, [refreshLocalLLMStatus]);
 
-    const handleDownloadLocalLLM = useCallback(async () => {
+    const handleDownloadLocalLLM = useCallback(async (key?: string) => {
         if (!localLLMStatus) return;
+        const targetKey = (key || localLLMStatus.selectedModel.key) as LocalLLMModelKey;
+        const target = getAvailableLocalLLMModels().find((m) => m.key === targetKey) ?? localLLMStatus.selectedModel;
         // Gigabytes: confirm first, and warn when it would go over mobile data.
         const net = await NetInfo.fetch().catch(() => null);
         const cellular = net?.type === 'cellular';
         const proceed = await new Promise<boolean>((resolve) => {
             Alert.alert(
-                t('localAI.downloadTitle', 'Download {{model}}?', { model: localLLMStatus.selectedModel.label }),
+                t('localAI.downloadTitle', 'Download {{model}}?', { model: target.label }),
                 [
-                    t('localAI.downloadDesc', 'The model is {{size}}. It is downloaded once; after that AI works on this phone without internet and nothing is sent anywhere.', { size: localLLMStatus.selectedModel.sizeLabel }),
+                    t('localAI.downloadDesc', 'The model is {{size}}. It is downloaded once; after that AI works on this phone without internet and nothing is sent anywhere.', { size: formatModelSize(target.sizeBytes, t) }),
                     cellular ? t('localAI.downloadCellular', 'You are on mobile data — Wi-Fi is recommended.') : '',
                 ].filter(Boolean).join('\n\n'),
                 [
@@ -913,17 +1007,25 @@ export const SettingsScreen = () => {
             );
         });
         if (!proceed) return;
+        // The downloaded model becomes the one in use; a cancelled or failed
+        // download hands it back to the model that was working before.
+        const currentLLM = await getLocalLLMModelStatus().catch(() => null);
+        const previousLLM = currentLLM?.isDownloaded ? currentLLM.selectedModel.key : null;
+        let llmCompleted = false;
+        await setSelectedLocalLLMModel(targetKey);
+        setLocalLLMStatus(await getLocalLLMModelStatus(targetKey));
         setLocalLLMBusy(true);
         setIsDownloadingLocalLLM(true);
         setLocalLLMProgress(0);
         setLocalLLMBytesLoaded(0);
         setLocalLLMBytesTotal(0);
         try {
-            await downloadLocalLLMModel(localLLMStatus.selectedModel.key, (progress, loaded, total) => {
+            await downloadLocalLLMModel(targetKey, (progress, loaded, total) => {
                 setLocalLLMProgress(progress);
                 setLocalLLMBytesLoaded(loaded);
                 setLocalLLMBytesTotal(total);
             });
+            llmCompleted = true;
             await refreshLocalLLMStatus();
         } catch (error: any) {
             if (error?.message && error.message.toLowerCase().includes('cancel')) {
@@ -932,13 +1034,18 @@ export const SettingsScreen = () => {
                 Alert.alert('Download failed', error?.message || 'Unable to download the local LLM model.');
             }
         } finally {
+            if (!llmCompleted && previousLLM && previousLLM !== targetKey) {
+                await setSelectedLocalLLMModel(previousLLM as LocalLLMModelKey);
+            }
+            await refreshLocalLLMStatus();
             setLocalLLMBusy(false);
             setIsDownloadingLocalLLM(false);
             setLocalLLMProgress(0);
             setLocalLLMBytesLoaded(0);
             setLocalLLMBytesTotal(0);
+            void refreshModelStates();
         }
-    }, [localLLMStatus, refreshLocalLLMStatus, t]);
+    }, [localLLMStatus, refreshLocalLLMStatus, refreshModelStates, t]);
 
     const handleCancelLocalLLM = useCallback(async () => {
         await cancelLocalLLMDownload();
@@ -948,14 +1055,15 @@ export const SettingsScreen = () => {
         setLocalLLMBusy(true);
         setShowLocalLLMDeleteConfirm(false);
         try {
-            await deleteLocalLLMModel(localLLMStatus?.selectedModel.key);
+            await deleteLocalLLMModel(llmDeleteKey || localLLMStatus?.selectedModel.key);
             await refreshLocalLLMStatus();
+            void refreshModelStates();
         } catch (error: any) {
             Alert.alert('Delete failed', error?.message || 'Unable to remove the local LLM model.');
         } finally {
             setLocalLLMBusy(false);
         }
-    }, [localLLMStatus?.selectedModel.key, refreshLocalLLMStatus]);
+    }, [localLLMStatus?.selectedModel.key, refreshLocalLLMStatus, llmDeleteKey, refreshModelStates]);
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
@@ -1413,7 +1521,7 @@ export const SettingsScreen = () => {
                             </View>
                         </View>
                         <Switch
-                            value={isGuestOrAnonymous || usingOpenAI || usingLocalWhisper ? false : agentModeEnabled}
+                            value={isGuestOrAnonymous || agentUnavailable ? false : agentModeEnabled}
                             onValueChange={(value) => {
                                 toggleAgentMode(value);
                             }}
@@ -1694,312 +1802,62 @@ export const SettingsScreen = () => {
                             )}
 
                     {LOCAL_MODELS_ENABLED && usingLocalWhisper && (
-                        <View style={[styles.openAIConfigCard, { padding: 8, gap: 10, borderBottomLeftRadius: usingLocalLLM ? 0 : spacing.m, borderBottomRightRadius: usingLocalLLM ? 0 : spacing.m }]}>
-                            {/* Compact Header row: Label + Language */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                        Voice
-                                    </Text>
-                                    <View style={{ 
-                                        flexDirection: 'row', 
-                                        alignItems: 'center', 
-                                        gap: 4, 
-                                        backgroundColor: localWhisperStatus?.isDownloaded ? colors.success + '15' : colors.backgroundSecondary, 
-                                        paddingHorizontal: 6, 
-                                        paddingVertical: 2, 
-                                        borderRadius: 8 
-                                    }}>
-                                        <View style={{ 
-                                            width: 5, 
-                                            height: 5, 
-                                            borderRadius: 2.5, 
-                                            backgroundColor: localWhisperStatus?.isDownloaded ? colors.success : colors.textTertiary 
-                                        }} />
-                                        <Text style={{ 
-                                            fontSize: 8, 
-                                            fontWeight: '800', 
-                                            color: localWhisperStatus?.isDownloaded ? colors.success : colors.textSecondary, 
-                                            textTransform: 'uppercase' 
-                                        }}>
-                                            {localWhisperStatus?.isDownloaded ? 'Active' : 'Not ready'}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <MaterialIcons name="translate" size={12} color={colors.textSecondary} />
+                        <OnDeviceModelSection
+                            icon="graphic-eq"
+                            title={t('localModels.voiceTitle', 'Speech to text')}
+                            subtitle={t('localModels.voiceSubtitle', 'Whisper · recordings and dictation, offline')}
+                            models={whisperModelOptions}
+                            states={whisperModelStates}
+                            selectedKey={localWhisperStatus?.selectedModel.key}
+                            download={isDownloadingLocalWhisper ? {
+                                key: localWhisperStatus?.selectedModel.key ?? '',
+                                progress: localWhisperProgress,
+                                loadedBytes: localWhisperBytesLoaded,
+                                totalBytes: localWhisperBytesTotal,
+                            } : null}
+                            busy={localWhisperBusy}
+                            headerAccessory={(
+                                <View style={styles.modelLanguageRow}>
+                                    <MaterialIcons name="translate" size={18} color={colors.textSecondary} />
+                                    <Text style={styles.modelLanguageLabel}>{t('localModels.language', 'Speech language')}</Text>
                                     <SearchableLanguageSelector
                                         value={transcriptionLanguage}
                                         onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
                                     />
                                 </View>
-                            </View>
-
-                            {/* Model selector row */}
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-                                {localWhisperModels.sort((a, b) => (a as any).power - (b as any).power).map((model) => {
-                                    const isSelected = model.key === localWhisperStatus?.selectedModel.key;
-                                    return (
-                                        <TouchableOpacity
-                                            key={model.key}
-                                            style={[
-                                                styles.localWhisperModelPill,
-                                                isSelected && styles.localWhisperModelPillActive,
-                                                { minWidth: 70, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 }
-                                            ]}
-                                            onPress={() => { void handleSelectLocalWhisperModel(model.key); }}
-                                            disabled={localWhisperBusy}
-                                        >
-                                            <Text style={[
-                                                styles.localWhisperModelText,
-                                                isSelected && styles.localWhisperModelTextActive,
-                                                { fontSize: 12, marginBottom: 2 }
-                                            ]}>
-                                                {model.label}
-                                            </Text>
-                                            {/* Power Dots */}
-                                            <View style={{ flexDirection: 'row', gap: 2 }}>
-                                                {[1, 2, 3, 4].map(dot => (
-                                                    <View 
-                                                        key={dot}
-                                                        style={{
-                                                            width: 3,
-                                                            height: 3,
-                                                            borderRadius: 1.5,
-                                                            backgroundColor: dot <= (model as any).power ? (isSelected ? colors.primary : colors.textSecondary) : (colors.border),
-                                                            opacity: dot <= (model as any).power ? 1 : 0.3
-                                                        }}
-                                                    />
-                                                ))}
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {/* Actions */}
-                            <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'center' }}>
-                                {!localWhisperStatus?.isDownloaded && (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.openAITestButton, 
-                                            { flex: 1, height: 36, minHeight: 0, paddingVertical: 0, paddingHorizontal: 4 },
-                                            isDownloadingLocalWhisper ? { backgroundColor: colors.error } : { backgroundColor: colors.primary }
-                                        ]}
-                                        onPress={() => {
-                                            if (isDownloadingLocalWhisper) {
-                                                void handleCancelLocalWhisper();
-                                            } else {
-                                                void handleDownloadLocalWhisper();
-                                            }
-                                        }}
-                                        disabled={localWhisperBusy && !isDownloadingLocalWhisper}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                            {isDownloadingLocalWhisper ? (
-                                                <>
-                                                    <MaterialIcons name="close" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.cancelBtn', 'Cancel')}</Text>
-                                                </>
-                                            ) : localWhisperBusy ? (
-                                                <ActivityIndicator size="small" color={colors.surface} />
-                                            ) : (
-                                                <>
-                                                    <MaterialIcons name="download" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.downloadBtn', 'Download')}</Text>
-                                                </>
-                                            )}
-                                        </View>
-                                    </TouchableOpacity>
-                                )}
-
-                                {localWhisperStatus?.isDownloaded && (
-                                    <TouchableOpacity
-                                        style={[styles.localWhisperDeleteButton, { height: 36, minHeight: 36, paddingVertical: 0 }]}
-                                        onPress={() => { setShowLocalWhisperDeleteConfirm(true); }}
-                                        disabled={localWhisperBusy}
-                                    >
-                                        {localWhisperBusy ? (
-                                            <ActivityIndicator size="small" color={colors.error} />
-                                        ) : (
-                                            <>
-                                                <MaterialIcons name="delete-outline" size={16} color={colors.error} />
-                                                <Text style={[styles.localWhisperDeleteText, { fontSize: 12 }]}>{t('settings.ui.deleteBtn', 'Delete')}</Text>
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-
-                            {/* Download progress */}
-                            {localWhisperBusy && localWhisperBytesTotal > 0 && (
-                                <View style={{ marginTop: 2, alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary, fontWeight: '700' }}>
-                                        {Math.round(localWhisperBytesLoaded / 1024 / 1024)} MB / ~{Math.round(localWhisperBytesTotal / 1024 / 1024)} MB ({Math.round(localWhisperProgress * 100)}%)
-                                    </Text>
-                                </View>
                             )}
-                        </View>
-                    )}
-
-                    {LOCAL_MODELS_ENABLED && usingLocalWhisper && usingLocalLLM && (
-                        <View style={{ height: 1, backgroundColor: colors.backgroundSecondary, marginHorizontal: 8 }} />
+                            onSelect={(key) => { void handleSelectLocalWhisperModel(key as LocalWhisperModelKey).then(refreshModelStates); }}
+                            onDownload={(key) => { void handleDownloadLocalWhisper(key); }}
+                            onCancelDownload={() => { void handleCancelLocalWhisper(); }}
+                            onDelete={(key) => { setWhisperDeleteKey(key); setShowLocalWhisperDeleteConfirm(true); }}
+                        />
                     )}
 
                     {LOCAL_MODELS_ENABLED && usingLocalLLM && (
-                        <View style={[styles.openAIConfigCard, { padding: 8, gap: 10, borderTopLeftRadius: usingLocalWhisper ? 0 : spacing.m, borderTopRightRadius: usingLocalWhisper ? 0 : spacing.m }]}>
-                            {/* Header row */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 }}>
-                                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                    Reasoning
+                        <OnDeviceModelSection
+                            icon="auto-awesome"
+                            title={t('localModels.aiTitle', 'AI on this phone')}
+                            subtitle={t('localModels.aiSubtitle', 'Qwen3.5 · edits, notes chat and tasks, offline')}
+                            models={llmModelOptions}
+                            states={llmModelStates}
+                            selectedKey={localLLMStatus?.selectedModel.key}
+                            download={isDownloadingLocalLLM ? {
+                                key: localLLMStatus?.selectedModel.key ?? '',
+                                progress: localLLMProgress,
+                                loadedBytes: localLLMBytesLoaded,
+                                totalBytes: localLLMBytesTotal,
+                            } : null}
+                            busy={localLLMBusy}
+                            headerAccessory={!localLLMRuntimeAvailable ? (
+                                <Text style={styles.modelWarning}>
+                                    {t('localModels.runtimeMissing', 'This build of the app cannot run on-device AI. Update the app to use it.')}
                                 </Text>
-                                <View style={{ 
-                                    flexDirection: 'row', 
-                                    alignItems: 'center', 
-                                    gap: 4, 
-                                    backgroundColor: localLLMStatus?.isDownloaded && localLLMRuntimeAvailable
-                                        ? colors.success + '15'
-                                        : localLLMStatus?.isDownloaded
-                                            ? colors.warning + '15'
-                                            : colors.backgroundSecondary,
-                                    paddingHorizontal: 6, 
-                                    paddingVertical: 2, 
-                                    borderRadius: 8 
-                                }}>
-                                    <View style={{ 
-                                        width: 5, 
-                                        height: 5, 
-                                        borderRadius: 2.5, 
-                                        backgroundColor: localLLMStatus?.isDownloaded
-                                            ? (localLLMRuntimeAvailable ? colors.success : colors.warning)
-                                            : colors.textTertiary
-                                    }} />
-                                    <Text style={{ 
-                                        fontSize: 8, 
-                                        fontWeight: '800', 
-                                        color: localLLMStatus?.isDownloaded
-                                            ? (localLLMRuntimeAvailable ? colors.success : colors.warning)
-                                            : colors.textSecondary,
-                                        textTransform: 'uppercase' 
-                                    }}>
-                                        {localLLMStatus?.isDownloaded
-                                            ? (localLLMRuntimeAvailable ? 'Ready' : 'Runtime missing')
-                                            : 'Not ready'}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {localLLMStatus?.isDownloaded && !localLLMRuntimeAvailable && (
-                                <Text style={{ color: colors.warning, fontSize: 11, lineHeight: 16, paddingHorizontal: 4 }}>
-                                    Model is downloaded, but this app build does not include Local LLM runtime yet. Rebuild the app after installing native LLM support.
-                                </Text>
-                            )}
-
-                            {/* Model selector row */}
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-                                {getAvailableLocalLLMModels().sort((a, b) => (a as any).power - (b as any).power).map((model) => {
-                                    const isSelected = model.key === localLLMStatus?.selectedModel.key;
-                                    return (
-                                        <TouchableOpacity
-                                            key={model.key}
-                                            style={[
-                                                styles.localWhisperModelPill,
-                                                isSelected && styles.localWhisperModelPillActive,
-                                                { minWidth: 75, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12 }
-                                            ]}
-                                            onPress={() => { void handleSelectLocalLLMModel(model.key); }}
-                                            disabled={localLLMBusy}
-                                        >
-                                            <Text style={[
-                                                styles.localWhisperModelText,
-                                                isSelected && styles.localWhisperModelTextActive,
-                                                { fontSize: 11, marginBottom: 2 }
-                                            ]}>
-                                                {model.label}
-                                            </Text>
-                                            {/* Power Dots */}
-                                            <View style={{ flexDirection: 'row', gap: 2 }}>
-                                                {[1, 2, 3, 4].map(dot => (
-                                                    <View 
-                                                        key={dot}
-                                                        style={{
-                                                            width: 3,
-                                                            height: 3,
-                                                            borderRadius: 1.5,
-                                                            backgroundColor: dot <= (model as any).power ? (isSelected ? colors.primary : colors.textSecondary) : (colors.border),
-                                                            opacity: dot <= (model as any).power ? 1 : 0.3
-                                                        }}
-                                                    />
-                                                ))}
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {/* Actions */}
-                            <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'center' }}>
-                                {!localLLMStatus?.isDownloaded && (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.openAITestButton, 
-                                            { flex: 1, height: 36, minHeight: 0, paddingVertical: 0, paddingHorizontal: 4 },
-                                            isDownloadingLocalLLM ? { backgroundColor: colors.error } : { backgroundColor: colors.primary }
-                                        ]}
-                                        onPress={() => {
-                                            if (isDownloadingLocalLLM) {
-                                                void handleCancelLocalLLM();
-                                            } else {
-                                                void handleDownloadLocalLLM();
-                                            }
-                                        }}
-                                        disabled={localLLMBusy && !isDownloadingLocalLLM}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                            {isDownloadingLocalLLM ? (
-                                                <>
-                                                    <MaterialIcons name="close" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.cancelBtn', 'Cancel')}</Text>
-                                                </>
-                                            ) : localLLMBusy ? (
-                                                <ActivityIndicator size="small" color={colors.surface} />
-                                            ) : (
-                                                <>
-                                                    <MaterialIcons name="download" size={14} color={colors.surface} />
-                                                    <Text style={[styles.openAITestButtonText, { fontSize: 12 }]}>{t('settings.ui.downloadBtn', 'Download')}</Text>
-                                                </>
-                                            )}
-                                        </View>
-                                    </TouchableOpacity>
-                                )}
-
-                                {localLLMStatus?.isDownloaded && (
-                                    <TouchableOpacity
-                                        style={[styles.localWhisperDeleteButton, { height: 36, minHeight: 36, paddingVertical: 0 }]}
-                                        onPress={() => { setShowLocalLLMDeleteConfirm(true); }}
-                                        disabled={localLLMBusy}
-                                    >
-                                        {localLLMBusy ? (
-                                            <ActivityIndicator size="small" color={colors.error} />
-                                        ) : (
-                                            <>
-                                                <MaterialIcons name="delete-outline" size={16} color={colors.error} />
-                                                <Text style={[styles.localWhisperDeleteText, { fontSize: 12 }]}>{t('settings.ui.deleteBtn', 'Delete')}</Text>
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-
-                            {/* Download progress */}
-                            {localLLMBusy && localLLMBytesTotal > 0 && (
-                                <View style={{ marginTop: 2, alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 10, color: colors.primary, fontWeight: '700' }}>
-                                        {Math.round(localLLMBytesLoaded / 1024 / 1024)} MB / ~{Math.round(localLLMBytesTotal / 1024 / 1024)} MB ({Math.round(localLLMProgress * 100)}%)
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
+                            ) : undefined}
+                            onSelect={(key) => { void handleSelectLocalLLMModel(key as LocalLLMModelKey).then(refreshModelStates); }}
+                            onDownload={(key) => { void handleDownloadLocalLLM(key); }}
+                            onCancelDownload={() => { void handleCancelLocalLLM(); }}
+                            onDelete={(key) => { setLLMDeleteKey(key); setShowLocalLLMDeleteConfirm(true); }}
+                        />
                     )}
 
                         </View>
@@ -2214,7 +2072,7 @@ export const SettingsScreen = () => {
                 message={t(
                     'settings.ui.removeWhisperDesc',
                     'The {{model}} Whisper model will be deleted from this device. You will need to download it again to use offline transcription.',
-                    { model: localWhisperStatus?.selectedModel.label || 'local' }
+                    { model: getAvailableLocalWhisperModels().find((m) => m.key === whisperDeleteKey)?.label || localWhisperStatus?.selectedModel.label || 'local' }
                 )}
                 onConfirm={handleDeleteLocalWhisper}
                 onCancel={() => setShowLocalWhisperDeleteConfirm(false)}
@@ -2226,7 +2084,7 @@ export const SettingsScreen = () => {
                 message={t(
                     'settings.ui.removeLLMDesc',
                     'The {{model}} LLM model will be deleted from this device. You will need to download it again to use offline reasoning.',
-                    { model: localLLMStatus?.selectedModel.label || 'local' }
+                    { model: getAvailableLocalLLMModels().find((m) => m.key === llmDeleteKey)?.label || localLLMStatus?.selectedModel.label || 'local' }
                 )}
                 onConfirm={handleDeleteLocalLLM}
                 onCancel={() => setShowLocalLLMDeleteConfirm(false)}
@@ -2375,6 +2233,22 @@ export const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    modelLanguageRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        minHeight: 44,
+    },
+    modelWarning: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.warning,
+    },
+    modelLanguageLabel: {
+        flex: 1,
+        fontSize: 14,
+        color: colors.text,
+    },
     languageModalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',

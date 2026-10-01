@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.78] - 2026-10-02
+
+### Changed
+- **On-device models screen redesigned**: one card per kind ("Speech to text" — Whisper, "AI on this phone" — Qwen3.5) with a clear status (Ready · works offline / Downloading · N% / Not downloaded); each model is a full-width row with its size, what it is good for, a "Recommended" tag picked for this phone, an "On phone" mark, and a 48dp download or delete button. Downloads show a progress bar with "X of Y · N%" and Cancel. Text is 13–16 px instead of 8–10 px, and every label is translated. Models that do not fit the phone say why. Whisper Large is hidden (Turbo is as accurate at a fifth of the size).
+- **Speech model dialog** uses the same language: radio rows with size and description, "On phone" for downloaded models, "Use this model" instead of re-downloading, and it starts on the best model that fits the phone.
+
+### Fixed
+- **Agent Mode turned itself off**: choosing Custom AI or on-device AI stored "agent off", so it stayed off after switching back to Vaulto AI. Unavailability is now shown, not stored; the stored value is reset once to the default (on).
+- A cancelled or failed model download no longer leaves the unfinished model selected; the previous working model is restored.
+
 ## [1.0.77] - 2026-10-01
 
 ### Fixed

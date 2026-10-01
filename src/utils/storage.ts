@@ -741,8 +741,17 @@ export const getLegacySelfHostedApiKey = async (): Promise<string | null> => {
 // Agent Mode
 const AGENT_MODE_KEY = 'vaulto_agent_mode_enabled';
 
+// Before 1.0.78 choosing Custom AI or on-device AI silently stored "agent off"
+// (it was meant as "unavailable"), so the agent stayed off after switching back.
+// That stored value is reset once to the default; real choices are kept after.
+const AGENT_MODE_RESET_KEY = 'vaulto_agent_mode_reset_v2';
+
 export const getAgentModeEnabled = async (): Promise<boolean> => {
     try {
+        if ((await AsyncStorage.getItem(AGENT_MODE_RESET_KEY)) !== 'done') {
+            await AsyncStorage.multiSet([[AGENT_MODE_RESET_KEY, 'done'], [AGENT_MODE_KEY, 'true']]);
+            return true;
+        }
         const value = await AsyncStorage.getItem(AGENT_MODE_KEY);
         // Default to true if not set
         return value === null ? true : value === 'true';

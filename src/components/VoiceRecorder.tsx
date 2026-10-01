@@ -213,12 +213,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setAgentModeEnabledState(false);
             return;
         }
-        if ((aiProvider === 'openai' || aiProvider === 'local_whisper') && value) {
+        if ((aiProvider === 'openai' || aiProvider === 'local_whisper' || aiProvider === 'local' || aiProvider === 'local_llm') && value) {
+            // Unavailable with this provider: say so, without overwriting the saved choice.
             setAgentModeEnabledState(false);
-            setAgentModeEnabled(false);
-            if (aiProvider === 'openai') {
-                setShowAgentVaultoGate(true);
-            }
+            setShowAgentVaultoGate(true);
             return;
         }
         setAgentModeEnabledState(value);
