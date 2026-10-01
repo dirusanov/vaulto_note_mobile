@@ -85,8 +85,12 @@ const styles = StyleSheet.create({
         minHeight: 60,
     },
     closeButton: {
-        marginRight: spacing.s,
-        padding: spacing.s,
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: -spacing.s,
+        marginRight: spacing.xs,
     },
     countText: {
         flex: 1,
@@ -96,12 +100,12 @@ const styles = StyleSheet.create({
     },
     actions: {
         flexDirection: 'row',
-        gap: spacing.m,
+        gap: spacing.s,
+        marginRight: -spacing.s,
     },
     actionButton: {
-        padding: spacing.s,
-        minWidth: 44,
-        minHeight: 44,
+        width: 48,
+        height: 48,
         alignItems: 'center',
         justifyContent: 'center',
     },

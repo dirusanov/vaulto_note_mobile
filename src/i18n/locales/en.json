@@ -55,7 +55,9 @@
     "reviewRecovery": "Review options",
     "note": "Note",
     "selectedCount": "{{count}} selected",
-    "noSearchResults": "No notes match your search"
+    "noSearchResults": "No notes match your search",
+    "keptLockedTitle": "Account notes kept on this phone: {{count}}",
+    "keptLockedText": "They are encrypted. Sign in to your account to open them."
   },
   "settings": {
     "title": "Settings",
@@ -100,7 +102,7 @@
       "account": "Account",
       "signInTitle": "Sign in",
       "signInDesc": "Sync notes & access AI features",
-      "signInBtn": "Sign In / Create Account",
+      "signInBtn": "Sign in or create an account",
       "security": "Security",
       "sync": "Sync",
       "unlock": "Unlock",
@@ -612,7 +614,7 @@
     "signOutPrivacyWarn": "Privacy warning",
     "signOutPrivacyDesc": "If you keep notes on this device, anyone with access to this phone can read them while you are signed out.",
     "keepOnDevice": "Keep on Device",
-    "deleteFromDevice": "DELETE FROM DEVICE",
+    "deleteFromDevice": "Delete from device",
     "textAppearance": "Text Appearance",
     "fontSize": "Font Size",
     "autoScaleChecklists": "Auto-scale Checklists",
@@ -788,5 +790,14 @@
     "useModel": "Use this model",
     "downloadSize": "Download · {{size}}",
     "progressShort": "{{loaded}} of {{total}}"
+  },
+  "welcome": {
+    "title": "Your notes will live here",
+    "voiceTitle": "Speak, get text",
+    "voiceText": "Recordings turn into text, even without internet.",
+    "aiTitle": "AI tidies it up",
+    "aiText": "Improve the text, find tasks, ask about your notes.",
+    "privacyTitle": "Private by default",
+    "privacyText": "Notes are stored encrypted; sync can be end-to-end encrypted."
   }
 }

@@ -34,6 +34,8 @@ export interface NoteAudio {
 export const useNotes = () => {
     const { isAuthenticated, userId } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
+    // Notes kept on the device that cannot be read without signing in / unlocking.
+    const [lockedCount, setLockedCount] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isHydrated, setIsHydrated] = useState(false);
@@ -131,6 +133,10 @@ export const useNotes = () => {
             const main: Note[] = [];
             for (const note of source) {
                 if (note.deleted || note.pending_delete) {
+                    continue;
+                }
+                // Undecryptable right now: hidden until the key is back (see Note.locked).
+                if (note.locked) {
                     continue;
                 }
                 const privacy = normalizePrivacy(note.privacy);
@@ -307,6 +313,7 @@ export const useNotes = () => {
         }
 
         const localNotes = await getNotesLocal(userId);
+        setLockedCount(localNotes.filter((n) => n.locked && !n.deleted && !n.pending_delete).length);
         const visibleMain = await filterAndCleanupNotes(localNotes);
 
         const nextSignature = buildNotesSignature(visibleMain);
@@ -1206,6 +1213,7 @@ export const useNotes = () => {
         deleteNote,
         searchNotes,
         getAllNotes,
+        lockedCount,
         syncNotes,
         attachAudioToNote,
         removeAudioFromNote,

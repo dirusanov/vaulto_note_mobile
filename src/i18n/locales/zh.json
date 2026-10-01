@@ -55,7 +55,9 @@
     "resetRecoveryTitle": "加密保险库已重置",
     "resetRecoveryDescription": "保留的笔记仅存在本机，同步已暂停。请在设置中选择恢复方式。",
     "reviewRecovery": "查看选项",
-    "noSearchResults": "没有匹配的笔记"
+    "noSearchResults": "没有匹配的笔记",
+    "keptLockedTitle": "保留在这部手机上的账户笔记：{{count}}",
+    "keptLockedText": "它们已加密。登录账户即可打开。"
   },
   "settings": {
     "title": "设置",
@@ -89,7 +91,7 @@
       "account": "账户",
       "signInTitle": "登录",
       "signInDesc": "同步笔记和访问AI功能",
-      "signInBtn": "登录 / 注册",
+      "signInBtn": "登录或注册账户",
       "security": "安全",
       "sync": "同步",
       "unlock": "解锁",
@@ -788,5 +790,14 @@
     "useModel": "使用此模型",
     "downloadSize": "下载 · {{size}}",
     "progressShort": "{{loaded}} / {{total}}"
+  },
+  "welcome": {
+    "title": "你的笔记会出现在这里",
+    "voiceTitle": "开口说，得到文字",
+    "voiceText": "录音会转成文字，即使没有网络。",
+    "aiTitle": "AI 帮你整理",
+    "aiText": "改写文字、找出任务、回答关于笔记的问题。",
+    "privacyTitle": "默认私密",
+    "privacyText": "笔记加密存储；同步可采用端到端加密。"
   }
 }

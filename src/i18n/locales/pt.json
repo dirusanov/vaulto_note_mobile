@@ -55,7 +55,9 @@
     "resetRecoveryTitle": "O cofre criptografado foi redefinido",
     "resetRecoveryDescription": "Suas notas preservadas ficam apenas neste dispositivo e a sincronização está pausada. Escolha como recuperá-las em Configurações.",
     "reviewRecovery": "Ver opções",
-    "noSearchResults": "Nenhuma nota corresponde à sua pesquisa"
+    "noSearchResults": "Nenhuma nota corresponde à sua pesquisa",
+    "keptLockedTitle": "Notas da conta mantidas neste telefone: {{count}}",
+    "keptLockedText": "Estão criptografadas. Entre na conta para abri-las."
   },
   "settings": {
     "title": "Configurações",
@@ -89,7 +91,7 @@
       "account": "Conta",
       "signInTitle": "Entrar",
       "signInDesc": "Sincronizar notas e recursos IA",
-      "signInBtn": "Entrar / Criar",
+      "signInBtn": "Entrar ou criar conta",
       "security": "Segurança",
       "sync": "Sincronizar",
       "unlock": "Desbloquear",
@@ -612,7 +614,7 @@
     "signOutPrivacyWarn": "Aviso de privacidade",
     "signOutPrivacyDesc": "Se você mantiver as notas neste dispositivo, qualquer pessoa com acesso ao aparelho poderá lê-las enquanto você estiver desconectado.",
     "keepOnDevice": "Manter no dispositivo",
-    "deleteFromDevice": "EXCLUIR DO DISPOSITIVO",
+    "deleteFromDevice": "Excluir do dispositivo",
     "textAppearance": "Aparência do texto",
     "fontSize": "Tamanho da fonte",
     "autoScaleChecklists": "Ajustar listas automaticamente",
@@ -788,5 +790,14 @@
     "useModel": "Usar este modelo",
     "downloadSize": "Baixar · {{size}}",
     "progressShort": "{{loaded}} de {{total}}"
+  },
+  "welcome": {
+    "title": "Suas notas ficarão aqui",
+    "voiceTitle": "Fale e tenha texto",
+    "voiceText": "As gravações viram texto, mesmo sem internet.",
+    "aiTitle": "A IA organiza",
+    "aiText": "Melhora o texto, encontra tarefas e responde sobre suas notas.",
+    "privacyTitle": "Privado por padrão",
+    "privacyText": "As notas são guardadas criptografadas; a sincronização pode ter criptografia de ponta a ponta."
   }
 }

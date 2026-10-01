@@ -1306,7 +1306,8 @@ export const SettingsScreen = () => {
                         </View>
                     )}
 
-                    {(!hasConfiguredKey) ? (
+                    {/* A guest has no vault: encryption controls left by a previous account do not apply. */}
+                    {(!hasConfiguredKey || isGuestOrAnonymous) ? (
                         <>
                             <View style={styles.securityRowMinimal}>
                                 <View style={styles.securityRowLeft}>

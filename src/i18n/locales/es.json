@@ -55,7 +55,9 @@
     "resetRecoveryTitle": "El almacén cifrado se restableció",
     "resetRecoveryDescription": "Tus notas conservadas son solo locales y la sincronización está en pausa. Elige cómo recuperarlas en Ajustes.",
     "reviewRecovery": "Ver opciones",
-    "noSearchResults": "Ninguna nota coincide con la búsqueda"
+    "noSearchResults": "Ninguna nota coincide con la búsqueda",
+    "keptLockedTitle": "Notas de la cuenta guardadas en este teléfono: {{count}}",
+    "keptLockedText": "Están cifradas. Inicia sesión para abrirlas."
   },
   "settings": {
     "title": "Ajustes",
@@ -89,7 +91,7 @@
       "account": "Cuenta",
       "signInTitle": "Iniciar sesión",
       "signInDesc": "Sincroniza notas y usa IA",
-      "signInBtn": "Iniciar sesión / Crear",
+      "signInBtn": "Iniciar sesión o crear cuenta",
       "security": "Seguridad",
       "sync": "Sincronizar",
       "unlock": "Desbloquear",
@@ -612,7 +614,7 @@
     "signOutPrivacyWarn": "Advertencia de privacidad",
     "signOutPrivacyDesc": "Si dejas notas en el dispositivo, cualquiera podría leerlas.",
     "keepOnDevice": "Mantener en el dispositivo",
-    "deleteFromDevice": "ELIMINAR DEL DISPOSITIVO",
+    "deleteFromDevice": "Eliminar del dispositivo",
     "textAppearance": "Apariencia del texto",
     "fontSize": "Tamaño de fuente",
     "autoScaleChecklists": "Autoescalar listas",
@@ -788,5 +790,14 @@
     "useModel": "Usar este modelo",
     "downloadSize": "Descargar · {{size}}",
     "progressShort": "{{loaded}} de {{total}}"
+  },
+  "welcome": {
+    "title": "Aquí vivirán tus notas",
+    "voiceTitle": "Habla y obtén texto",
+    "voiceText": "Las grabaciones se convierten en texto, incluso sin internet.",
+    "aiTitle": "La IA lo ordena",
+    "aiText": "Mejora el texto, encuentra tareas y responde sobre tus notas.",
+    "privacyTitle": "Privado por defecto",
+    "privacyText": "Las notas se guardan cifradas; la sincronización puede tener cifrado de extremo a extremo."
   }
 }

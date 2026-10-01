@@ -55,7 +55,9 @@
     "resetRecoveryTitle": "Verschlüsselter Tresor wurde zurückgesetzt",
     "resetRecoveryDescription": "Deine erhaltenen Notizen bleiben nur auf diesem Gerät, die Synchronisierung ist pausiert. Wähle in den Einstellungen, wie du sie wiederherstellst.",
     "reviewRecovery": "Optionen ansehen",
-    "noSearchResults": "Keine Notizen passen zu deiner Suche"
+    "noSearchResults": "Keine Notizen passen zu deiner Suche",
+    "keptLockedTitle": "Konto-Notizen auf diesem Telefon behalten: {{count}}",
+    "keptLockedText": "Sie sind verschlüsselt. Melde dich an, um sie zu öffnen."
   },
   "settings": {
     "title": "Einstellungen",
@@ -89,7 +91,7 @@
       "account": "Konto",
       "signInTitle": "Anmelden",
       "signInDesc": "Notizen syncen & KI nutzen",
-      "signInBtn": "Anmelden / Erstellen",
+      "signInBtn": "Anmelden oder Konto erstellen",
       "security": "Sicherheit",
       "sync": "Synchronisieren",
       "unlock": "Entsperren",
@@ -612,7 +614,7 @@
     "signOutPrivacyWarn": "Datenschutzhinweis",
     "signOutPrivacyDesc": "Wenn du Notizen auf diesem Gerät behältst, kann sie jeder mit Zugriff auf dieses Telefon lesen, während du abgemeldet bist.",
     "keepOnDevice": "Auf dem Gerät behalten",
-    "deleteFromDevice": "VOM GERÄT LÖSCHEN",
+    "deleteFromDevice": "Vom Gerät löschen",
     "textAppearance": "Textdarstellung",
     "fontSize": "Schriftgröße",
     "autoScaleChecklists": "Checklisten automatisch skalieren",
@@ -788,5 +790,14 @@
     "useModel": "Dieses Modell verwenden",
     "downloadSize": "Herunterladen · {{size}}",
     "progressShort": "{{loaded}} von {{total}}"
+  },
+  "welcome": {
+    "title": "Hier leben deine Notizen",
+    "voiceTitle": "Sprechen, Text erhalten",
+    "voiceText": "Aufnahmen werden zu Text, auch ohne Internet.",
+    "aiTitle": "Die KI räumt auf",
+    "aiText": "Verbessert Text, findet Aufgaben, beantwortet Fragen zu deinen Notizen.",
+    "privacyTitle": "Standardmäßig privat",
+    "privacyText": "Notizen werden verschlüsselt gespeichert; die Synchronisierung kann Ende-zu-Ende-verschlüsselt sein."
   }
 }

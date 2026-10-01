@@ -49,6 +49,7 @@ export const NotesListScreen = () => {
         batchPinNotes,
         batchUnpinNotes,
         batchDeleteNotes,
+        lockedCount,
     } = useNotesContext();
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -506,6 +507,34 @@ export const NotesListScreen = () => {
             ) : (
                 <View style={styles.topBar} />
             )}
+            {/* Signed out but notes were kept: they are on the phone, just not readable yet. */}
+            {!signedIn && lockedCount > 0 && !isSelectionMode && (
+                <View style={styles.lockBanner}>
+                    <View style={styles.lockBannerHeader}>
+                        <View style={styles.lockBannerIcon}>
+                            <MaterialIcons name="lock" size={20} color={colors.primary} />
+                        </View>
+                        <View style={styles.lockBannerTextWrap}>
+                            <Text style={styles.lockBannerTitle}>
+                                {t('notes.keptLockedTitle', 'Account notes kept on this phone: {{count}}', { count: lockedCount })}
+                            </Text>
+                            <Text style={styles.lockBannerText}>
+                                {t('notes.keptLockedText', 'They are encrypted. Sign in to your account to open them.')}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.lockActionsRow}>
+                        <TouchableOpacity
+                            style={styles.lockActionPrimary}
+                            onPress={() => navigation.navigate('SignIn')}
+                            activeOpacity={0.85}
+                        >
+                            <MaterialIcons name="login" size={16} color={colors.surface} />
+                            <Text style={styles.lockActionPrimaryText}>{t('auth.signIn', 'Sign In')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
             {shouldShowResetRecoveryBanner && (
                 <View style={styles.lockBanner}>
                     <View style={styles.lockBannerHeader}>
@@ -646,9 +675,13 @@ export const NotesListScreen = () => {
                 )}
                 {canShowEmptyState ? (
                     <View style={styles.emptyContainer}>
-                        <EmptyState message={searchQuery.trim()
-                            ? t("notes.noSearchResults", "No notes match your search")
-                            : isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")} />
+                        <EmptyState
+                            // The intro is for a first launch, not for someone whose notes are kept locked.
+                            variant={searchQuery.trim() ? 'search' : (lockedCount > 0 ? 'plain' : 'welcome')}
+                            message={searchQuery.trim()
+                                ? t("notes.noSearchResults", "No notes match your search")
+                                : isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")}
+                        />
                     </View>
                 ) : (
                     <View style={styles.masonryContainer}>

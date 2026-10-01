@@ -875,13 +875,13 @@ const processNotes = async (
                     void withDbRetry(`mark note ${n.id} dirty`, (database) =>
                         database.runAsync('UPDATE notes SET dirty = 1, synced = 0 WHERE id = ?', [n.id])
                     ).catch(() => {});
-                    return { ...baseNote, title: '', content: '', transcription: undefined };
+                    return { ...baseNote, title: '', content: '', transcription: undefined, locked: true };
                 }
             }
 
             // Case 2: E2EE locked (user hasn't entered passphrase yet)
             if (isLocked && currentMode === 'e2ee') {
-                return { ...baseNote, title: '', content: '', transcription: undefined } as any;
+                return { ...baseNote, title: '', content: '', transcription: undefined, locked: true } as any;
             }
 
             // Case 3: Genuine decryption error (corrupted data)

@@ -578,7 +578,12 @@ class SyncService {
 
                 const shouldDelete = !!note.deleted || !!note.pending_delete || !!note.pending_server_delete;
 
-                // Skip notes that failed decryption — never send '[Encrypted]' to server
+                // Skip notes that failed decryption — never send '[Encrypted]', and never
+                // send a locked note (no key here): its empty text would wipe the server copy.
+                if (note.locked) {
+                    console.warn(`[SyncService] Skipping locked note ${note.id} — no key to read it on this device`);
+                    continue;
+                }
                 if (!shouldDelete && (note.content === '[Encrypted]' || note.title === '[Encrypted]' || note.transcription === '[Encrypted]')) {
                     console.warn(`[SyncService] Skipping note ${note.id} with placeholder content — decryption may have failed`);
                     continue;

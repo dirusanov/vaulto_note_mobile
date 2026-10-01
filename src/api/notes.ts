@@ -48,6 +48,12 @@ export interface Note {
     // Protected notes never leave the device unencrypted: no cloud AI, no cloud
     // transcription, and they sync only end-to-end encrypted (or not at all).
     is_protected?: boolean;
+    /**
+     * Set when the note cannot be decrypted right now (no key on this device yet,
+     * e.g. signed out or before unlocking). Such notes are hidden and untouchable
+     * until the key is back, so an empty-looking copy can never be deleted.
+     */
+    locked?: boolean;
     storage_scope?: StorageScope;
     // Local-only copy retained after another device reset the encrypted vault.
     // It never participates in sync until the user explicitly recovers it.

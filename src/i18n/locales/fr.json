@@ -43,7 +43,7 @@
     "emptyStateMic": "Appuyez sur le micro pour enregistrer",
     "emptyStateEdit": "Appuyez sur le crayon pour écrire",
     "syncLocked": "Synchronisation verrouillée",
-    "unlockToRestore": "Saisissez votre mot de passe pour les afficher sur cet appareil.",
+    "unlockToRestore": "Saisissez votre phrase secrète pour les afficher sur cet appareil.",
     "tapMicToRecord": "Appuyez sur le micro pour enregistrer",
     "tapPencilToWrite": "Appuyez sur le crayon pour écrire",
     "voiceRecording": "Note vocale",
@@ -55,7 +55,9 @@
     "resetRecoveryTitle": "Le coffre chiffré a été réinitialisé",
     "resetRecoveryDescription": "Vos notes conservées restent uniquement sur cet appareil et la synchronisation est en pause. Choisissez comment les récupérer dans les Réglages.",
     "reviewRecovery": "Voir les options",
-    "noSearchResults": "Aucune note ne correspond à votre recherche"
+    "noSearchResults": "Aucune note ne correspond à votre recherche",
+    "keptLockedTitle": "Notes du compte conservées sur ce téléphone : {{count}}",
+    "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir."
   },
   "settings": {
     "title": "Paramètres",
@@ -89,7 +91,7 @@
       "account": "Compte",
       "signInTitle": "Se connecter",
       "signInDesc": "Synchronisez et utilisez l'IA",
-      "signInBtn": "Connexion / Créer",
+      "signInBtn": "Se connecter ou créer un compte",
       "security": "Sécurité",
       "sync": "Synchronisation",
       "unlock": "Déverrouiller",
@@ -612,7 +614,7 @@
     "signOutPrivacyWarn": "Avertissement de confidentialité",
     "signOutPrivacyDesc": "Si vous conservez les notes sur cet appareil, toute personne y ayant accès pourra les lire pendant votre déconnexion.",
     "keepOnDevice": "Garder sur l'appareil",
-    "deleteFromDevice": "SUPPRIMER DE L'APPAREIL",
+    "deleteFromDevice": "Supprimer de l'appareil",
     "textAppearance": "Apparence du texte",
     "fontSize": "Taille du texte",
     "autoScaleChecklists": "Adapter les checklists",
@@ -788,5 +790,14 @@
     "useModel": "Utiliser ce modèle",
     "downloadSize": "Télécharger · {{size}}",
     "progressShort": "{{loaded}} sur {{total}}"
+  },
+  "welcome": {
+    "title": "Vos notes vivront ici",
+    "voiceTitle": "Parlez, obtenez du texte",
+    "voiceText": "Les enregistrements deviennent du texte, même sans internet.",
+    "aiTitle": "L’IA met de l’ordre",
+    "aiText": "Améliore le texte, trouve les tâches, répond sur vos notes.",
+    "privacyTitle": "Privé par défaut",
+    "privacyText": "Les notes sont stockées chiffrées ; la synchronisation peut être chiffrée de bout en bout."
   }
 }

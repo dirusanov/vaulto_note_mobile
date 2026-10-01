@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.80] - 2026-10-02
+
+### Fixed
+- **Data loss after "Keep on this phone" sign-out**: account notes that cannot be decrypted without the account were shown to the guest as empty "Voice note" cards (when they had audio); deleting one synced and deleted the real note on the next sign-in. Undecryptable notes are now marked `locked`, hidden from the list, search and notes chat, and never pushed. A banner ("Account notes kept on this phone: N") explains them and offers Sign in.
+- Guest Settings showed the previous account's encryption controls in the cloud-sync card.
+- Selection mode header buttons are 48dp.
+- Unlock banner says "secret phrase" like the unlock dialog (ru, fr said "password").
+
+### Changed
+- **First-launch empty list**: a short welcome (voice to text, AI tidy-up, private by default) instead of a single line.
+
 ## [1.0.79] - 2026-10-02
 
 ### Changed
