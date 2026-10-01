@@ -169,6 +169,18 @@ export const releaseLocalLLMContext = async (): Promise<void> => withContextLock
 });
 
 // Holding gigabytes of weights in a backgrounded app is what gets it killed.
+// The weights take up to ~3 GB of RAM. Keep them only while AI is in use: an idle
+// minute or two frees the memory for other apps, and reloading takes seconds.
+const IDLE_RELEASE_MS = 90_000;
+let idleReleaseTimer: ReturnType<typeof setTimeout> | null = null;
+const scheduleIdleRelease = () => {
+    if (idleReleaseTimer) clearTimeout(idleReleaseTimer);
+    idleReleaseTimer = setTimeout(() => {
+        idleReleaseTimer = null;
+        void releaseLocalLLMContext();
+    }, IDLE_RELEASE_MS);
+};
+
 AppState.addEventListener('change', (state) => {
     if (state === 'background') {
         void releaseLocalLLMContext();
@@ -329,6 +341,10 @@ export const generateWithLocalLLM = async (
         throw new Error('Local LLM runtime is not included in this build. Install a build with LLM support or switch to Custom AI/Vaulto AI for text improvements.');
     }
 
+    if (idleReleaseTimer) {
+        clearTimeout(idleReleaseTimer);
+        idleReleaseTimer = null;
+    }
     return withContextLock(async () => {
         const context = await getReadyContext(status.fileUri);
         await context.clearCache?.(true).catch(() => undefined);
@@ -382,5 +398,5 @@ export const generateWithLocalLLM = async (
         }
 
         return text;
-    });
+    }).finally(scheduleIdleRelease);
 };
