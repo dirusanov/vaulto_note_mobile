@@ -184,6 +184,13 @@ const GRAMMAR_RESPONSE_SCHEMA = {
     required: ['is_correct', 'fixed_text'],
 };
 
+/**
+ * Output budget for the on-device model: enough to rewrite the whole note (about
+ * three characters per token), within the 4096-token context shared with the input.
+ */
+const localOutputTokens = (input: string): number =>
+    Math.max(384, Math.min(1792, Math.ceil(input.length / 3) + 192));
+
 export async function improveText(text: string, option: AIImprovementOption): Promise<string> {
     if (!option) throw new Error('Invalid option');
 
@@ -196,6 +203,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
         const promptForModel = buildPromptForRequest(option.prompt, text);
         return generateWithLocalLLM(promptForModel, {
             jsonSchema: optionExpectsJson(option) ? GRAMMAR_RESPONSE_SCHEMA : undefined,
+            maxTokens: localOutputTokens(text),
         });
     }
 
@@ -320,11 +328,19 @@ const ASK_NOTES_INSTRUCTION = [
  * One instruction over one text, routed to the configured provider. Used by the
  * note-level helpers below (Ask your notes, Find tasks).
  */
-async function runInstruction(instruction: string, text: string, { json = false }: { json?: boolean } = {}): Promise<string> {
+async function runInstruction(
+    instruction: string,
+    text: string,
+    { json = false, jsonSchema, maxTokens }: { json?: boolean; jsonSchema?: object; maxTokens?: number } = {},
+): Promise<string> {
     const provider = await getAIProvider();
 
     if (provider === 'local_llm' || provider === 'local') {
-        return (await generateWithLocalLLM(`${instruction}\n\n${text}`, {})).trim();
+        // Small models are kept to the shape by constrained sampling, not by asking.
+        return (await generateWithLocalLLM(`${instruction}\n\n${text}`, {
+            jsonSchema: json ? jsonSchema : undefined,
+            maxTokens: maxTokens ?? 512,
+        })).trim();
     }
 
     if (provider === 'vaulto_ai') {
@@ -384,8 +400,38 @@ export async function answerFromNotes(question: string, sourcesText: string): Pr
     return runInstruction(`${ASK_NOTES_INSTRUCTION}\n\nQuestion: ${question.trim()}`, `Notes:\n${sourcesText}`);
 }
 
+const TASKS_RESPONSE_SCHEMA = {
+    type: 'object',
+    properties: {
+        tasks: {
+            type: 'array',
+            maxItems: 15,
+            items: {
+                type: 'object',
+                properties: {
+                    title: { type: 'string' },
+                    date: { type: ['string', 'null'] },
+                    time: { type: ['string', 'null'] },
+                },
+                required: ['title', 'date', 'time'],
+            },
+        },
+    },
+    required: ['tasks'],
+};
+
+/** Whether AI runs on this phone (nothing is sent anywhere). */
+export async function isOnDeviceAI(): Promise<boolean> {
+    const provider = await getAIProvider();
+    return provider === 'local_llm' || provider === 'local';
+}
+
 /** Action items of one note, with dates resolved against the device's today. */
 export async function extractTasks(noteMarkdown: string, now: Date = new Date()): Promise<ExtractedTask[]> {
-    const raw = await runInstruction(buildTaskExtractionPrompt(now), noteMarkdown, { json: true });
+    const raw = await runInstruction(buildTaskExtractionPrompt(now), noteMarkdown, {
+        json: true,
+        jsonSchema: TASKS_RESPONSE_SCHEMA,
+        maxTokens: 768,
+    });
     return parseExtractedTasks(raw);
 }

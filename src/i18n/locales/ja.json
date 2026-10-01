@@ -743,6 +743,16 @@
     "failed": "回答を取得できませんでした。接続を確認して再試行してください。",
     "untitled": "無題",
     "signInRequired": "ノートについて AI に質問するにはサインインしてください。",
-    "signIn": "サインイン"
+    "signIn": "サインイン",
+    "privacyNoteLocal": "すべてこの端末上でオフライン動作し、何も送信されません。"
+  },
+  "localAI": {
+    "modelMissingTitle": "AI モデルをダウンロード",
+    "modelMissingDesc": "端末上の AI にはモデル（{{model}}、{{size}}）が必要です。「設定 → AI モデル」で一度ダウンロードすれば、以後はすべてオフラインで動作します。",
+    "openSettings": "設定を開く",
+    "downloadTitle": "{{model}} をダウンロードしますか？",
+    "downloadDesc": "モデルのサイズは {{size}} です。一度ダウンロードすれば、AI はインターネットなしでこの端末上で動作し、何も送信されません。",
+    "downloadCellular": "モバイルデータ通信中です。Wi-Fi をおすすめします。",
+    "download": "ダウンロード"
   }
 }

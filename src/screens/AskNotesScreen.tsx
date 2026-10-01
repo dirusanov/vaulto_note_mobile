@@ -19,7 +19,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { LimitModal } from '../components/LimitModal';
 import { useNotesContext } from '../contexts/NotesContext';
-import { answerFromNotes } from '../services/AIService';
+import { answerFromNotes, isOnDeviceAI } from '../services/AIService';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, richContentToPlainText } from '../utils/richContent';
@@ -51,26 +51,29 @@ export const AskNotesScreen = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [busy, setBusy] = useState(false);
     const [privateAllowed, setPrivateAllowed] = useState(false);
+    const [onDeviceAI, setOnDeviceAI] = useState(false);
     const scrollRef = useRef<ScrollView>(null);
     const initialAskedRef = useRef(false);
 
     useEffect(() => {
         void getPrivateAIAllowed().then(setPrivateAllowed).catch(() => setPrivateAllowed(false));
+        void isOnDeviceAI().then(setOnDeviceAI).catch(() => setOnDeviceAI(false));
     }, []);
 
-    const searchable = useMemo<SearchableNote[]>(() => (getAllNotes().length > 0 ? getAllNotes() : notes || [])
+    // Every readable note, tagged with what may limit sending it to a cloud AI.
+    const allSearchable = useMemo<(SearchableNote & { cloudAllowed: boolean })[]>(() => (getAllNotes().length > 0 ? getAllNotes() : notes || [])
         .filter((note: any) => !note.deleted && !note.pending_delete && note.privacy !== 'hidden')
-        // Protected notes never reach the AI; legacy local-only ones only with consent.
-        .filter((note: any) => !note.is_protected)
-        .filter((note: any) => privateAllowed || note.storage_scope !== 'local_only')
         .map((note: any) => {
             const active = (note.improvements || []).find((imp: any) => imp.is_active && !imp.deleted);
             const text = richContentToPlainText(active?.content ?? note.content ?? '');
             // Same title the note card shows.
             const title = stripStoredTitleMarkdown(note.title || '').trim() || deriveAutoTitleFromPlainText(text);
-            return { id: note.id, title, text, updatedAt: note.updated_at };
+            // Protected notes never reach a cloud AI; legacy local-only ones only with consent.
+            const cloudAllowed = !note.is_protected && (privateAllowed || note.storage_scope !== 'local_only');
+            return { id: note.id, title, text, updatedAt: note.updated_at, cloudAllowed };
         })
         .filter((note) => note.text.trim().length > 0), [getAllNotes, notes, privateAllowed]);
+    const searchable = useMemo(() => allSearchable.filter((note) => note.cloudAllowed), [allSearchable]);
 
     const ask = useCallback(async (raw: string) => {
         const question = raw.trim();
@@ -90,7 +93,12 @@ export const AskNotesScreen = () => {
                 }]);
                 return;
             }
-            const sources = buildNoteSources(searchable, question);
+            // On-device AI sees every note (nothing leaves the phone) but has a
+            // smaller context, so it gets fewer, shorter excerpts.
+            const onDevice = await isOnDeviceAI();
+            const sources = onDevice
+                ? buildNoteSources(allSearchable, question, { limit: 4, perNoteChars: 900, totalChars: 3200 })
+                : buildNoteSources(searchable, question);
             if (sources.length === 0) {
                 setMessages((prev) => [...prev, {
                     id: `a-${stamp}`,
@@ -120,16 +128,16 @@ export const AskNotesScreen = () => {
         } finally {
             setBusy(false);
         }
-    }, [busy, isAuthenticated, isGuest, searchable, t]);
+    }, [allSearchable, busy, isAuthenticated, isGuest, searchable, t]);
 
     useEffect(() => {
         const initial = route.params?.question as string | undefined;
         // Wait for the local notes to load, or the question would find nothing.
-        if (initial && !initialAskedRef.current && (isHydrated || searchable.length > 0)) {
+        if (initial && !initialAskedRef.current && (isHydrated || allSearchable.length > 0)) {
             initialAskedRef.current = true;
             void ask(initial);
         }
-    }, [ask, isHydrated, route.params?.question, searchable.length]);
+    }, [allSearchable.length, ask, isHydrated, route.params?.question]);
 
     useEffect(() => {
         const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
@@ -156,7 +164,9 @@ export const AskNotesScreen = () => {
                 <View style={styles.headerText}>
                     <Text style={styles.title}>{t('ask.title', 'Ask your notes')}</Text>
                     <Text style={styles.subtitle} numberOfLines={2}>
-                        {t('ask.privacyNote', 'Notes are searched on this device; only the matching excerpts are sent to AI.')}
+                        {onDeviceAI
+                            ? t('ask.privacyNoteLocal', 'Runs entirely on this phone, offline — nothing is sent anywhere.')
+                            : t('ask.privacyNote', 'Notes are searched on this device; only the matching excerpts are sent to AI.')}
                     </Text>
                 </View>
             </View>

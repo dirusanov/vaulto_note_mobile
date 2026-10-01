@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.75] - 2026-10-01
+
+### Added
+- **Fully offline AI ("Local" provider)**: Whisper for voice plus an on-device language model for AI edits, the notes chat and Find tasks — nothing leaves the phone and everything works without internet. Models are Qwen3.5 (0.8B ~530 MB, 2B ~1.3 GB, 4B ~2.7 GB, replacing Phi-2/TinyLlama/Gemma 2/Mistral 7B); the default follows the phone's memory (4B from ~6 GB). Context grows to 4096 tokens, rewrites get an output budget sized to the note, tasks use schema-constrained JSON, and the model is told to keep the note's language and never add details. Tested offline on a 6 GB emulator: 2B answers in ~4–6 s, 4B in ~15 s with cloud-like quality.
+- **Private AI for protected notes**: with on-device AI, protected notes can use AI features and the notes chat, since their text stays on the phone.
+- Downloading a model asks first, shows its size and warns on mobile data; AI features explain when the model is not downloaded yet.
+
+### Fixed
+- **Signed out after a lost token refresh**: refresh tokens rotate on use; when a phone lost the rotation response it kept the old token and was signed out at the next refresh (seen in production). The server now recovers when the token issued in its place was never used, and the app routes every refresh through one shared, de-duplicated path that keeps a session someone else just refreshed.
+- **Notes chat**: free source slots are filled with recent notes, so answers can use notes that share no word with the question (a grocery list for "what should I buy?").
+- **Touch targets**: sign-in screen, passphrase dialog, AI provider and model buttons, unlock banner — at least 44–48dp.
+
 ## [1.0.74] - 2026-09-30
 
 ### Fixed

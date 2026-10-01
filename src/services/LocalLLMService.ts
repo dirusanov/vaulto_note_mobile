@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { AppState, NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { getLocalLLMModelKey, setLocalLLMModelKey } from '../utils/storage';
-import { canDeviceRunModel, describeDeviceMemory, getInferenceThreadCount } from './DeviceCapabilities';
+import { canDeviceRunModel, describeDeviceMemory, getDeviceCapabilities, getInferenceThreadCount } from './DeviceCapabilities';
 import {
     createMutex,
     downloadModelFile,
@@ -11,7 +11,9 @@ import {
     ModelDownloadProgress,
 } from './modelDownload';
 
-export type LocalLLMModelKey = 'phi-2' | 'tinyllama' | 'gemma-2b' | 'mistral-7b';
+export type LocalLLMModelKey = 'qwen3.5-0.8b' | 'qwen3.5-2b' | 'qwen3.5-4b';
+
+const DEFAULT_MODEL_KEY: LocalLLMModelKey = 'qwen3.5-2b';
 
 export interface LocalLLMModelDescriptor {
     key: LocalLLMModelKey;
@@ -52,53 +54,38 @@ type LlamaModule = {
     ) => Promise<LlamaContext>;
 };
 
+// Qwen3.5 (2026): multilingual instruction models that handle Russian and the other
+// app languages well at phone sizes. Q4_K_M keeps quality while fitting in RAM.
+// Phi-2 / TinyLlama / Gemma 2 / Mistral 7B were dropped: English-centric or too big.
 const MODELS: Record<LocalLLMModelKey, LocalLLMModelDescriptor> = {
-    'phi-2': {
-        key: 'phi-2',
-        label: 'Phi-2',
-        sizeLabel: '~1.7 GB',
-        sizeBytes: 1789239136,
-        filename: 'phi-2.gguf',
-        url: 'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf',
+    'qwen3.5-0.8b': {
+        key: 'qwen3.5-0.8b',
+        label: 'Qwen3.5 0.8B',
+        sizeLabel: '~530 MB',
+        sizeBytes: 532517120,
+        filename: 'qwen3.5-0.8b-q4_k_m.gguf',
+        url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf',
+        power: 1,
+    },
+    'qwen3.5-2b': {
+        key: 'qwen3.5-2b',
+        label: 'Qwen3.5 2B',
+        sizeLabel: '~1.3 GB',
+        sizeBytes: 1280835840,
+        filename: 'qwen3.5-2b-q4_k_m.gguf',
+        url: 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf',
         power: 2,
         recommended: true,
     },
-    'tinyllama': {
-        key: 'tinyllama',
-        label: 'TinyLlama',
-        sizeLabel: '~638 MB',
-        sizeBytes: 668788096,
-        filename: 'tinyllama.gguf',
-        url: 'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
-        power: 1,
-    },
-    'gemma-2b': {
-        key: 'gemma-2b',
-        label: 'Gemma 2B',
-        sizeLabel: '~1.6 GB',
-        sizeBytes: 1708582752,
-        filename: 'gemma-2b.gguf',
-        // TheBloke never published a Gemma GGUF - that repository 404s for every user.
-        url: 'https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf',
-        power: 3,
-    },
-    'mistral-7b': {
-        key: 'mistral-7b',
-        label: 'Mistral 7B',
-        sizeLabel: '~4.1 GB',
-        sizeBytes: 4368439584,
-        filename: 'mistral-7b.gguf',
-        url: 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf',
+    'qwen3.5-4b': {
+        key: 'qwen3.5-4b',
+        label: 'Qwen3.5 4B',
+        sizeLabel: '~2.7 GB',
+        sizeBytes: 2740937888,
+        filename: 'qwen3.5-4b-q4_k_m.gguf',
+        url: 'https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf',
         power: 4,
     },
-};
-
-/** Older builds stored every model under a `.bin` name; they are migrated on first use. */
-const LEGACY_FILENAMES: Record<LocalLLMModelKey, string> = {
-    'phi-2': 'phi-2.bin',
-    'tinyllama': 'tinyllama.bin',
-    'gemma-2b': 'gemma-2b.bin',
-    'mistral-7b': 'mistral-7b.bin',
 };
 
 const baseDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? null;
@@ -158,7 +145,8 @@ const getReadyContext = async (modelUri: string): Promise<LlamaContext> => {
         model: modelUri,
         use_mmap: true,
         use_mlock: false,
-        n_ctx: 2048,
+        // Room for a note (or the chat's excerpts) plus a full rewrite of it.
+        n_ctx: 4096,
         n_batch: Platform.OS === 'ios' ? 512 : 256,
         n_threads: await getInferenceThreadCount(),
         n_parallel: 1,
@@ -199,26 +187,32 @@ const ensureModelsDir = async () => {
 };
 
 const getDescriptor = (key: string): LocalLLMModelDescriptor => {
-    return MODELS[(key as LocalLLMModelKey)] || MODELS['phi-2'];
+    // A key stored by an older build (phi-2, tinyllama…) falls back to the default.
+    return MODELS[(key as LocalLLMModelKey)] || MODELS[DEFAULT_MODEL_KEY];
+};
+
+/**
+ * The model to use when the user has not picked one: 4B where memory allows (its
+ * answers are close to the cloud models), 2B on mid-range phones, 0.8B below.
+ */
+export const getRecommendedLocalLLMModelKey = async (): Promise<LocalLLMModelKey> => {
+    const { totalMemoryBytes } = await getDeviceCapabilities();
+    if (!totalMemoryBytes) return DEFAULT_MODEL_KEY;
+    if (totalMemoryBytes >= 5.5e9) return 'qwen3.5-4b';
+    if (totalMemoryBytes >= 3.2e9) return 'qwen3.5-2b';
+    return 'qwen3.5-0.8b';
+};
+
+const resolveModelKey = async (key?: string): Promise<string> => {
+    const stored = key || await getLocalLLMModelKey();
+    return stored && MODELS[stored as LocalLLMModelKey] ? stored : getRecommendedLocalLLMModelKey();
 };
 
 const getFileUriForModel = async (key?: string) => {
-    const resolvedKey = key || await getLocalLLMModelKey();
+    const resolvedKey = await resolveModelKey(key);
     const model = getDescriptor(resolvedKey);
     await ensureModelsDir();
     const fileUri = `${MODELS_DIR}${model.filename}`;
-
-    // Rename weights downloaded by older builds instead of re-downloading gigabytes.
-    const legacyUri = `${MODELS_DIR}${LEGACY_FILENAMES[model.key]}`;
-    if (legacyUri !== fileUri) {
-        const [current, legacy] = await Promise.all([
-            FileSystem.getInfoAsync(fileUri),
-            FileSystem.getInfoAsync(legacyUri),
-        ]);
-        if (!current.exists && legacy.exists) {
-            await FileSystem.moveAsync({ from: legacyUri, to: fileUri }).catch(() => undefined);
-        }
-    }
 
     return { model, fileUri };
 };
@@ -228,7 +222,7 @@ export const getAvailableLocalLLMModels = (): LocalLLMModelDescriptor[] => {
 };
 
 export const getSelectedLocalLLMModel = async (): Promise<LocalLLMModelDescriptor> => {
-    return getDescriptor(await getLocalLLMModelKey());
+    return getDescriptor(await resolveModelKey());
 };
 
 export const setSelectedLocalLLMModel = async (key: LocalLLMModelKey): Promise<void> => {
@@ -339,7 +333,14 @@ export const generateWithLocalLLM = async (
         const context = await getReadyContext(status.fileUri);
         await context.clearCache?.(true).catch(() => undefined);
 
-        const systemInstruction = 'You are a concise writing assistant. Follow the user instruction exactly and return only the requested output without commentary.';
+        // Small models translate and embellish unless told not to, so the rules
+        // that larger cloud models follow implicitly are spelled out here.
+        const systemInstruction = [
+            'You are a careful writing assistant working on the user\'s private notes.',
+            'Follow the instruction exactly and return only the requested output, without commentary.',
+            'Write in the same language as the note; keep words in other languages as they are. Never translate unless asked.',
+            'Never add facts, names, numbers, events or details that are not in the note.',
+        ].join(' ');
 
         // Small local models do not reliably follow a "return JSON" instruction, so the
         // schema is enforced by constrained sampling instead of trusting the prompt.

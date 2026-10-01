@@ -103,7 +103,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             getAIProvider().then(provider => {
                 if (provider) {
                     setAiProvider(provider);
-                    if (provider === 'openai' || provider === 'local_whisper') {
+                    // The agent runs on the server: unavailable with Custom AI and on-device AI.
+                    if (provider === 'openai' || provider === 'local_whisper' || provider === 'local' || provider === 'local_llm') {
                         setAgentModeEnabledState(false);
                     }
                 }

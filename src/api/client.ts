@@ -1,5 +1,6 @@
 import axios from 'axios';
-import { API_URL, AUTH_API_URL } from '../utils/env';
+import { refreshSession } from './tokenRefresh';
+import { API_URL } from '../utils/env';
 import { storage } from '../utils/storage';
 import { onUnauthorized } from '../utils/authEvents';
 
@@ -26,80 +27,20 @@ const resolveFinalUrl = (request?: { url?: string; baseURL?: string }) => {
     }
 };
 
-let refreshPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
 let unauthorizedEmitted = false;
-let lastRefreshFailureWasInvalid = false;
 
-const isInvalidRefreshStatus = (status?: number): boolean => {
-    return status === 400 || status === 401 || status === 403;
-};
 
 type RefreshAttemptResult =
     | { kind: 'success'; tokens: { accessToken: string; refreshToken: string } }
     | { kind: 'invalid_refresh' }
     | { kind: 'transient_failure' };
 
-const refreshAccessToken = async (): Promise<{ accessToken: string; refreshToken: string } | null> => {
-    if (refreshPromise) {
-        return refreshPromise;
-    }
-
-    refreshPromise = (async () => {
-        lastRefreshFailureWasInvalid = false;
-        const refreshToken = await storage.getRefreshToken();
-        if (!refreshToken) {
-            console.log('[client] No refresh token available');
-            lastRefreshFailureWasInvalid = true;
-            return null;
-        }
-
-        try {
-            const refreshResponse = await axios.post(`${AUTH_API_URL}/auth/refresh`, {
-                refresh_token: refreshToken,
-            });
-
-            const { access_token, refresh_token } = refreshResponse.data;
-            await storage.setToken(access_token);
-            await storage.setRefreshToken(refresh_token);
-            unauthorizedEmitted = false;
-            console.log('[client] Token refresh successful');
-
-            return {
-                accessToken: access_token,
-                refreshToken: refresh_token,
-            };
-        } catch (refreshError) {
-            console.error('[client] Refresh failed:', refreshError);
-            if (axios.isAxiosError(refreshError)) {
-                lastRefreshFailureWasInvalid = isInvalidRefreshStatus(refreshError.response?.status);
-            } else {
-                lastRefreshFailureWasInvalid = false;
-            }
-            return null;
-        } finally {
-            refreshPromise = null;
-        }
-    })();
-
-    return refreshPromise;
-};
-
 const refreshAccessTokenSafely = async (): Promise<RefreshAttemptResult> => {
-    const refreshToken = await storage.getRefreshToken();
-    if (!refreshToken) {
-        return { kind: 'invalid_refresh' };
-    }
-
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-        return { kind: 'success', tokens: refreshed };
-    }
-
-    if (lastRefreshFailureWasInvalid) {
-        return { kind: 'invalid_refresh' };
-    }
-
-    return { kind: 'transient_failure' };
+    // Shared with every other client: refresh tokens are single-use.
+    const result = await refreshSession();
+    if (result.kind !== 'success') return result;
+    unauthorizedEmitted = false;
+    return { kind: 'success', tokens: { accessToken: result.accessToken, refreshToken: result.refreshToken } };
 };
 
 const emitUnauthorizedOnce = async () => {

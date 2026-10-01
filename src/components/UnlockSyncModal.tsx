@@ -308,8 +308,10 @@ const styles = StyleSheet.create({
     },
     revealRow: {
         alignSelf: 'flex-end',
-        paddingVertical: spacing.xs,
-        marginBottom: spacing.m,
+        minHeight: 44,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.xs,
+        marginBottom: spacing.s,
     },
     revealText: {
         ...typography.captionBold,
@@ -348,6 +350,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: spacing.xs,
         width: '100%',
+        minHeight: 48,
         paddingVertical: spacing.s,
         backgroundColor: colors.surface,
         borderRadius: 12,
@@ -373,6 +376,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: spacing.xs,
         width: '100%',
+        minHeight: 48,
         paddingVertical: spacing.s,
         backgroundColor: colors.primary + '08',
         borderRadius: 12,

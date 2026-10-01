@@ -743,6 +743,16 @@
     "failed": "Keine Antwort erhalten. Prüfe deine Verbindung und versuche es erneut.",
     "untitled": "Ohne Titel",
     "signInRequired": "Melde dich an, um die KI zu deinen Notizen zu fragen.",
-    "signIn": "Anmelden"
+    "signIn": "Anmelden",
+    "privacyNoteLocal": "Läuft komplett auf diesem Telefon, offline – nichts wird gesendet."
+  },
+  "localAI": {
+    "modelMissingTitle": "KI-Modell herunterladen",
+    "modelMissingDesc": "Die KI auf dem Gerät braucht ihr Modell ({{model}}, {{size}}) auf dem Telefon. Lade es einmal unter Einstellungen → KI-Modell herunter; danach funktioniert alles offline.",
+    "openSettings": "Einstellungen öffnen",
+    "downloadTitle": "{{model}} herunterladen?",
+    "downloadDesc": "Das Modell ist {{size}} groß. Es wird einmal heruntergeladen; danach arbeitet die KI auf diesem Telefon ohne Internet und nichts wird gesendet.",
+    "downloadCellular": "Du nutzt mobile Daten – WLAN wird empfohlen.",
+    "download": "Herunterladen"
   }
 }

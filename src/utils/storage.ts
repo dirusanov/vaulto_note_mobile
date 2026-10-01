@@ -657,10 +657,11 @@ export const setLocalWhisperModelKey = async (modelKey: string): Promise<void> =
 
 export const getLocalLLMModelKey = async (): Promise<string> => {
     try {
-        return (await AsyncStorage.getItem(LOCAL_LLM_MODEL_KEY)) || 'phi-2';
+        // Empty: the LLM service picks a model that suits the device's memory.
+        return (await AsyncStorage.getItem(LOCAL_LLM_MODEL_KEY)) || '';
     } catch (e) {
         console.error('Failed to get local LLM model key', e);
-        return 'phi-2';
+        return '';
     }
 };
 

@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { File as ExpoFile } from 'expo-file-system';
 import { Platform } from 'react-native';
-import { API_URL, AUTH_API_URL } from '../utils/env';
+import { API_URL } from '../utils/env';
 import {
     storage,
     getAgentModeEnabled,
@@ -20,6 +20,7 @@ import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/open
 import { isRichHtmlContent, richContentToAgentMarkdown } from '../utils/richContent';
 import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
+import { refreshSession } from '../api/tokenRefresh';
 import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 
 const MAX_RETRIES = 3;
@@ -106,7 +107,6 @@ const normalizeAgentContextContent = (content?: string): string | undefined => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let transcriptionRefreshPromise: Promise<string | null> | null = null;
 let transcriptionUnauthorizedEmitted = false;
 
 const extractErrorText = (payload: unknown): string | undefined => {
@@ -125,10 +125,6 @@ const extractErrorText = (payload: unknown): string | undefined => {
     return undefined;
 };
 
-const isInvalidRefreshStatus = (status?: number): boolean => {
-    return status === 400 || status === 401 || status === 403;
-};
-
 const emitTranscriptionUnauthorizedOnce = async () => {
     if (transcriptionUnauthorizedEmitted) {
         return;
@@ -140,46 +136,16 @@ const emitTranscriptionUnauthorizedOnce = async () => {
 };
 
 const refreshTranscriptionAccessToken = async (): Promise<string | null> => {
-    if (transcriptionRefreshPromise) {
-        return transcriptionRefreshPromise;
+    // Shared with the API clients: refresh tokens are single-use.
+    const result = await refreshSession();
+    if (result.kind === 'success') {
+        transcriptionUnauthorizedEmitted = false;
+        return result.accessToken;
     }
-
-    transcriptionRefreshPromise = (async () => {
-        const refreshToken = await storage.getRefreshToken();
-        if (!refreshToken) {
-            await emitTranscriptionUnauthorizedOnce();
-            return null;
-        }
-
-        try {
-            const refreshResponse = await axios.post(`${AUTH_API_URL}/auth/refresh`, {
-                refresh_token: refreshToken,
-            });
-
-            const { access_token, refresh_token } = refreshResponse.data ?? {};
-            if (!access_token || !refresh_token) {
-                throw new Error('Refresh response did not include tokens');
-            }
-
-            await storage.setToken(access_token);
-            await storage.setRefreshToken(refresh_token);
-            transcriptionUnauthorizedEmitted = false;
-            return access_token;
-        } catch (refreshError) {
-            if (axios.isAxiosError(refreshError) && isInvalidRefreshStatus(refreshError.response?.status)) {
-                await emitTranscriptionUnauthorizedOnce();
-            }
-            console.warn(
-                '[Transcription] Token refresh failed:',
-                refreshError instanceof Error ? refreshError.message : refreshError,
-            );
-            return null;
-        } finally {
-            transcriptionRefreshPromise = null;
-        }
-    })();
-
-    return transcriptionRefreshPromise;
+    if (result.kind === 'invalid_refresh') {
+        await emitTranscriptionUnauthorizedOnce();
+    }
+    return null;
 };
 
 const isAbortError = (error: unknown): boolean => {

@@ -858,6 +858,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: spacing.xs,
         backgroundColor: colors.primary,
+        minHeight: 48,
         paddingHorizontal: spacing.m,
         paddingVertical: spacing.s + 2,
         borderRadius: 12,
@@ -874,6 +875,8 @@ const styles = StyleSheet.create({
         marginTop: spacing.m,
     },
     lockActionSecondary: {
+        minHeight: 48,
+        justifyContent: 'center',
         paddingHorizontal: spacing.m,
         paddingVertical: spacing.s + 2,
         borderRadius: 12,

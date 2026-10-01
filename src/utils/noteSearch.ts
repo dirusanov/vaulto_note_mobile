@@ -58,9 +58,8 @@ const countStemHits = (tokens: string[], term: string): number => {
 };
 
 /**
- * Notes ordered by relevance to the question. With no usable terms (or no match
- * at all) the most recently updated notes are returned, so broad questions like
- * "what did I do this week?" still get context.
+ * Notes ordered by relevance to the question, then the most recent others up to
+ * `limit`, so broad questions ("what did I do this week?") still get context.
  */
 export const rankNotesForQuestion = (notes: SearchableNote[], question: string, limit = 6): RankedNote[] => {
     const terms = queryTerms(question);
@@ -84,10 +83,13 @@ export const rankNotesForQuestion = (notes: SearchableNote[], question: string, 
         return { id: note.id, score };
     });
     const matched = scored.filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score);
-    if (matched.length === 0) {
-        return byRecency.slice(0, limit).map((note) => ({ id: note.id, score: 0 }));
-    }
-    return matched.slice(0, limit);
+    // Word matching misses notes that answer without sharing a word (a grocery list
+    // for "what should I buy?"), so free slots go to the most recent other notes.
+    const matchedIds = new Set(matched.map((entry) => entry.id));
+    const fill = byRecency
+        .filter((note) => !matchedIds.has(note.id))
+        .map((note) => ({ id: note.id, score: 0 }));
+    return [...matched, ...fill].slice(0, limit);
 };
 
 /** The part of a note around its first match, so long notes still contribute the relevant bit. */

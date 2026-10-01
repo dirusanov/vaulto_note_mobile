@@ -65,7 +65,7 @@ import { AudioService, AudioRecording } from '../services/AudioService';
 import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive, ON_DEVICE_MODEL_REQUIRED } from '../services/TranscriptionService';
 import { getCryptoMode } from '../crypto/encryption';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
-import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
+import { getLocalLLMModelStatus, isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
 import { Note, NotePrivacy, StorageScope, VoiceRecording } from '../api/notes';
 import * as Haptics from 'expo-haptics';
 
@@ -1573,6 +1573,24 @@ export const NoteEditScreen = () => {
                 'This build includes local Whisper, but not local LLM execution. Text improvements require a build with LLM support, or you can switch to Custom AI/Vaulto AI.'
             );
             return;
+        }
+
+        if (needsLocalLLMRuntime) {
+            const llmStatus = await getLocalLLMModelStatus().catch(() => null);
+            if (!llmStatus?.isDownloaded) {
+                Alert.alert(
+                    t('localAI.modelMissingTitle', 'Download the AI model'),
+                    t('localAI.modelMissingDesc', 'On-device AI needs its model ({{model}}, {{size}}) on the phone. Download it once in Settings → AI Model; after that everything works offline.', {
+                        model: llmStatus?.selectedModel.label ?? 'Qwen3.5',
+                        size: llmStatus?.selectedModel.sizeLabel ?? '',
+                    }),
+                    [
+                        { text: t('common.cancel'), style: 'cancel' },
+                        { text: t('localAI.openSettings', 'Open Settings'), onPress: () => navigation.navigate('Settings') },
+                    ],
+                );
+                return;
+            }
         }
 
         if (isGuest && !isLocalAiProvider) {
@@ -4929,8 +4947,9 @@ export const NoteEditScreen = () => {
             const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDeviceTranscription && !isProtectedRef.current;
             const protectedNote = isProtectedRef.current;
             // The agent sends the text to the server: never for a protected note.
+            const onDeviceProvider = provider === 'local' || provider === 'local_llm' || provider === 'local_whisper';
             const shouldUseAgentModeForThisRecording =
-                !protectedNote && micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
+                !protectedNote && !onDeviceProvider && micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
             let shouldTranscribe = transcribe;
             if (isUserTranscriptionRestricted && shouldTranscribe) {
                 // Anonymous users can't transcribe; keep audio flow intact.

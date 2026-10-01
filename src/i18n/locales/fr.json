@@ -743,6 +743,16 @@
     "failed": "Impossible d’obtenir une réponse. Vérifiez votre connexion et réessayez.",
     "untitled": "Sans titre",
     "signInRequired": "Connectez-vous pour interroger l’IA sur vos notes.",
-    "signIn": "Se connecter"
+    "signIn": "Se connecter",
+    "privacyNoteLocal": "Fonctionne entièrement sur ce téléphone, hors ligne — rien n’est envoyé."
+  },
+  "localAI": {
+    "modelMissingTitle": "Téléchargez le modèle d’IA",
+    "modelMissingDesc": "L’IA sur l’appareil a besoin de son modèle ({{model}}, {{size}}) sur le téléphone. Téléchargez-le une fois dans Réglages → Modèle d’IA ; ensuite tout fonctionne hors ligne.",
+    "openSettings": "Ouvrir les réglages",
+    "downloadTitle": "Télécharger {{model}} ?",
+    "downloadDesc": "Le modèle fait {{size}}. Il est téléchargé une seule fois ; ensuite l’IA fonctionne sur ce téléphone sans internet et rien n’est envoyé.",
+    "downloadCellular": "Vous êtes en données mobiles — le Wi-Fi est recommandé.",
+    "download": "Télécharger"
   }
 }

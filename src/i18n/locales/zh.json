@@ -743,6 +743,16 @@
     "failed": "无法获取回答。请检查网络后重试。",
     "untitled": "无标题",
     "signInRequired": "登录后即可向 AI 询问你的笔记。",
-    "signIn": "登录"
+    "signIn": "登录",
+    "privacyNoteLocal": "完全在这部手机上离线运行——不会发送任何内容。"
+  },
+  "localAI": {
+    "modelMissingTitle": "下载 AI 模型",
+    "modelMissingDesc": "设备端 AI 需要在手机上安装模型（{{model}}，{{size}}）。在“设置 → AI 模型”中下载一次，之后即可完全离线使用。",
+    "openSettings": "打开设置",
+    "downloadTitle": "下载 {{model}}？",
+    "downloadDesc": "模型大小为 {{size}}。只需下载一次，之后 AI 在这部手机上无需联网即可运行，不会发送任何内容。",
+    "downloadCellular": "你正在使用移动数据——建议使用 Wi-Fi。",
+    "download": "下载"
   }
 }

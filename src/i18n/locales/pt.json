@@ -743,6 +743,16 @@
     "failed": "Não foi possível obter uma resposta. Verifique sua conexão e tente novamente.",
     "untitled": "Sem título",
     "signInRequired": "Entre para perguntar à IA sobre suas notas.",
-    "signIn": "Entrar"
+    "signIn": "Entrar",
+    "privacyNoteLocal": "Funciona inteiramente neste telefone, offline — nada é enviado."
+  },
+  "localAI": {
+    "modelMissingTitle": "Baixe o modelo de IA",
+    "modelMissingDesc": "A IA no dispositivo precisa do modelo ({{model}}, {{size}}) no telefone. Baixe uma vez em Ajustes → Modelo de IA; depois tudo funciona offline.",
+    "openSettings": "Abrir ajustes",
+    "downloadTitle": "Baixar {{model}}?",
+    "downloadDesc": "O modelo tem {{size}}. Ele é baixado uma vez; depois a IA funciona neste telefone sem internet e nada é enviado.",
+    "downloadCellular": "Você está usando dados móveis — recomenda-se Wi-Fi.",
+    "download": "Baixar"
   }
 }

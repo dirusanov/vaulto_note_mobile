@@ -25,6 +25,11 @@ test('ranking finds inflected Russian and English matches', () => {
     assert.equal(rankNotesForQuestion(notes, 'do I need to buy coffee')[0].id, 'a');
 });
 
+test('matches come first, then recent notes fill the free slots', () => {
+    assert.deepEqual(rankNotesForQuestion(notes, 'hotel booking in lisbon').map((r) => r.id), ['c', 'b', 'a']);
+    assert.deepEqual(rankNotesForQuestion(notes, 'do I need to buy coffee', 2).map((r) => r.id), ['a', 'c']);
+});
+
 test('broad questions fall back to the most recent notes', () => {
     assert.deepEqual(rankNotesForQuestion(notes, 'what did I do?').map((r) => r.id), ['c', 'b', 'a']);
     assert.deepEqual(rankNotesForQuestion(notes, 'zebra quantum', 2).map((r) => r.id), ['c', 'b']);

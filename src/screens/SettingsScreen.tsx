@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import appConfig from '../../app.json';
@@ -894,6 +895,24 @@ export const SettingsScreen = () => {
 
     const handleDownloadLocalLLM = useCallback(async () => {
         if (!localLLMStatus) return;
+        // Gigabytes: confirm first, and warn when it would go over mobile data.
+        const net = await NetInfo.fetch().catch(() => null);
+        const cellular = net?.type === 'cellular';
+        const proceed = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+                t('localAI.downloadTitle', 'Download {{model}}?', { model: localLLMStatus.selectedModel.label }),
+                [
+                    t('localAI.downloadDesc', 'The model is {{size}}. It is downloaded once; after that AI works on this phone without internet and nothing is sent anywhere.', { size: localLLMStatus.selectedModel.sizeLabel }),
+                    cellular ? t('localAI.downloadCellular', 'You are on mobile data — Wi-Fi is recommended.') : '',
+                ].filter(Boolean).join('\n\n'),
+                [
+                    { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                    { text: t('localAI.download', 'Download'), onPress: () => resolve(true) },
+                ],
+                { cancelable: true, onDismiss: () => resolve(false) },
+            );
+        });
+        if (!proceed) return;
         setLocalLLMBusy(true);
         setIsDownloadingLocalLLM(true);
         setLocalLLMProgress(0);
@@ -919,7 +938,7 @@ export const SettingsScreen = () => {
             setLocalLLMBytesLoaded(0);
             setLocalLLMBytesTotal(0);
         }
-    }, [localLLMStatus, refreshLocalLLMStatus]);
+    }, [localLLMStatus, refreshLocalLLMStatus, t]);
 
     const handleCancelLocalLLM = useCallback(async () => {
         await cancelLocalLLMDownload();
@@ -2545,10 +2564,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        minHeight: 48,
         paddingVertical: 8,
         paddingHorizontal: 8,
         backgroundColor: colors.backgroundSecondary,
-        borderRadius: 10,
+        borderRadius: 12,
         gap: 4,
         borderWidth: 1,
         borderColor: 'transparent',
@@ -3623,6 +3643,7 @@ const styles = StyleSheet.create({
         color: colors.surface,
     },
     localWhisperModelPill: {
+        minHeight: 44,
         paddingHorizontal: spacing.m,
         paddingVertical: 8,
         borderRadius: 20,

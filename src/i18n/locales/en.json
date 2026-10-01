@@ -743,6 +743,16 @@
     "failed": "Could not get an answer. Check your connection and try again.",
     "untitled": "Untitled",
     "signInRequired": "Sign in to ask AI about your notes.",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "privacyNoteLocal": "Runs entirely on this phone, offline — nothing is sent anywhere."
+  },
+  "localAI": {
+    "modelMissingTitle": "Download the AI model",
+    "modelMissingDesc": "On-device AI needs its model ({{model}}, {{size}}) on the phone. Download it once in Settings → AI Model; after that everything works offline.",
+    "openSettings": "Open Settings",
+    "downloadTitle": "Download {{model}}?",
+    "downloadDesc": "The model is {{size}}. It is downloaded once; after that AI works on this phone without internet and nothing is sent anywhere.",
+    "downloadCellular": "You are on mobile data — Wi-Fi is recommended.",
+    "download": "Download"
   }
 }

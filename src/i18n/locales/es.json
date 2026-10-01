@@ -743,6 +743,16 @@
     "failed": "No se pudo obtener una respuesta. Revisa tu conexión e inténtalo de nuevo.",
     "untitled": "Sin título",
     "signInRequired": "Inicia sesión para preguntar a la IA sobre tus notas.",
-    "signIn": "Iniciar sesión"
+    "signIn": "Iniciar sesión",
+    "privacyNoteLocal": "Funciona por completo en este teléfono, sin conexión: no se envía nada."
+  },
+  "localAI": {
+    "modelMissingTitle": "Descarga el modelo de IA",
+    "modelMissingDesc": "La IA en el dispositivo necesita su modelo ({{model}}, {{size}}) en el teléfono. Descárgalo una vez en Ajustes → Modelo de IA; después todo funciona sin conexión.",
+    "openSettings": "Abrir ajustes",
+    "downloadTitle": "¿Descargar {{model}}?",
+    "downloadDesc": "El modelo ocupa {{size}}. Se descarga una vez; después la IA funciona en este teléfono sin internet y no se envía nada.",
+    "downloadCellular": "Estás usando datos móviles: se recomienda Wi-Fi.",
+    "download": "Descargar"
   }
 }
