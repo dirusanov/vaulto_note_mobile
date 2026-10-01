@@ -14,7 +14,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "410966204325-40c97o6c5cdfp2vk01pdflh7p3u82sul.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "410966204325-r74l70dc2ma9etmtba1ebvft7i5kbfu4.apps.googleusercontent.com",
         "EXPO_PUBLIC_GATEWAY_API_BASE_URL": "https://api.vaultonote.com",
         "EXPO_PUBLIC_AUTH_API_BASE_URL": "https://auth.vaultonote.com",
         "EXPO_PUBLIC_AUTH_AUDIENCE": "vaulto_note_mobile",

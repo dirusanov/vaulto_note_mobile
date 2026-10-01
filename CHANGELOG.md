@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.77] - 2026-10-01
+
+### Fixed
+- **Google sign-in failed** ("unauthorized_client"): the app requested the server auth code for one OAuth client of the Google Cloud project while the auth server exchanges codes as another. The app now uses the client the server exchanges with. The server also stopped logging the client secret and one-time codes.
+
 ## [1.0.76] - 2026-10-01
 
 ### Changed

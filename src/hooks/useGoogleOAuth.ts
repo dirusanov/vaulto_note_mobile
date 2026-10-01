@@ -12,7 +12,10 @@ export const useGoogleOAuth = () => {
         const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
 
         GoogleSignin.configure({
-            webClientId: webClientId, // Required for backend to verify the token
+            // Must be the OAuth client the auth server exchanges the code with
+            // (GOOGLE_CLIENT_ID there); a code issued for any other client of the
+            // project is refused by Google with "unauthorized_client".
+            webClientId: webClientId,
             offlineAccess: true,      // Required to get a Refresh Token (serverAuthCode)
             scopes: ['profile', 'email'],
         });
