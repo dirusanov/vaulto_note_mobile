@@ -54,7 +54,7 @@ import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import * as Clipboard from 'expo-clipboard';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
-import { LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { CUSTOM_AI_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import {
     cancelLocalWhisperDownload,
     deleteLocalWhisperModel,
@@ -1621,7 +1621,9 @@ export const SettingsScreen = () => {
                                 <Text style={styles.preferenceTitle}>{t("settings.ui.advAISettings", "Advanced AI Settings")}</Text>
                                 <Text style={styles.preferenceDescription}>
                                     {LOCAL_MODELS_ENABLED
-                                        ? t("settings.ui.advAISettingsDescLocal", "Local and custom AI configurations")
+                                        ? (CUSTOM_AI_ENABLED
+                                            ? t("settings.ui.advAISettingsDescLocal", "Local and custom AI configurations")
+                                            : t("settings.ui.advAISettingsDescOnDevice", "Cloud or on this phone, offline"))
                                         : t("settings.ui.advAISettingsDescCustom", "Custom AI configuration.")}
                                 </Text>
                             </View>
@@ -1634,9 +1636,9 @@ export const SettingsScreen = () => {
                             {/* Compact Provider Selector Inside */}
 
                             <View style={[styles.compactProviderSelector, { flexDirection: 'column' }]}>
-                                {/* Top row: Vaulto AI + Custom AI */}
+                                {/* Top row: Vaulto AI (+ Custom AI for those who already use it) + On device */}
                                 <View style={{ flexDirection: 'row', gap: spacing.s }}>
-                                    {providerOptions.filter(o => o.key !== 'local').map((option) => {
+                                    {providerOptions.filter(o => o.key !== 'local' && (o.key !== 'openai' || CUSTOM_AI_ENABLED)).map((option) => {
                                         const isActive = customAIPending
                                             ? option.key === 'openai'
                                             : option.key === aiProvider;
@@ -1684,23 +1686,23 @@ export const SettingsScreen = () => {
                                             </TouchableOpacity>
                                         );
                                     })}
+                                    {LOCAL_MODELS_ENABLED && (
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.compactProviderOption,
+                                                usingLocal && styles.compactProviderOptionActive,
+                                                { flex: 1 }
+                                            ]}
+                                            onPress={() => updateProvider('local')}
+                                        >
+                                            <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
+                                            <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
+                                                {t('settings.ui.onDeviceProvider', 'On this phone')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
 
-                                {LOCAL_MODELS_ENABLED && (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.compactProviderOption,
-                                            usingLocal && styles.compactProviderOptionActive,
-                                            { paddingHorizontal: spacing.m, flex: 1 }
-                                        ]}
-                                        onPress={() => updateProvider('local')}
-                                    >
-                                        <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
-                                        <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
-                                            Local
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
                             </View>
 
                             {/* Setup for Custom AI (OpenAI & Compatible) */}
@@ -1878,7 +1880,8 @@ export const SettingsScreen = () => {
                     )}
 
                     <View style={{ alignItems: 'center', gap: spacing.s, opacity: 0.7 }}>
-                        <View style={{ flexDirection: 'row', gap: spacing.l }}>
+                        {/* Wraps: the two links do not fit on one line in every language. */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: spacing.l, rowGap: spacing.xs, paddingHorizontal: spacing.m }}>
                             <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>
                                 <Text style={styles.legalLink}>{t("settings.ui.privacy", "Privacy Policy")}</Text>
                             </TouchableOpacity>

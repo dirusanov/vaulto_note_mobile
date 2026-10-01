@@ -134,7 +134,8 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        // Opaque: Android draws the elevation shadow through a translucent fill as a grey box.
+        backgroundColor: colors.surface,
         paddingVertical: spacing.s,
         paddingHorizontal: spacing.m,
         borderRadius: 20,

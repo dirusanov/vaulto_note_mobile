@@ -204,7 +204,9 @@
       "failed": "失败",
       "advAISettingsDescCustom": "自定义 AI 配置。",
       "advAISettingsDescLocal": "本地和自定义 AI 配置",
-      "customAIPendingHint": "在连接测试成功之前，Vaulto AI 将保持启用。"
+      "customAIPendingHint": "在连接测试成功之前，Vaulto AI 将保持启用。",
+      "advAISettingsDescOnDevice": "云端，或在这部手机上离线运行",
+      "onDeviceProvider": "在手机上"
     },
     "recovery": {
       "title": "恢复密钥",
@@ -725,7 +727,8 @@
     "noHighlight": "无高亮",
     "allVersions": "所有版本",
     "protected": "受保护的笔记",
-    "onThisPhoneOnly": "仅在这部手机上"
+    "onThisPhoneOnly": "仅在这部手机上",
+    "accountSettings": "账户和设置"
   },
   "ask": {
     "title": "询问笔记",

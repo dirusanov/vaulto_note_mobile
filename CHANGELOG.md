@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.79] - 2026-10-02
+
+### Changed
+- **Custom AI hidden** (CUSTOM_AI_ENABLED=false): on-device AI covers the private/offline case, so AI is "Vaulto AI" or "On this phone" in one row. A stored Custom AI (or legacy self-hosted) choice falls back to Vaulto AI; the code stays for a one-line return.
+- **Search bar**: an account avatar (initial, or a person icon for guests) replaces the gear, as in Keep/Gmail — the gear read as "search settings".
+- **Editor mic button**: a small sparkle badge shows the agent is on, instead of curved 8 px "HOLD: NO AGENT" text (the long-press hint is kept for screen readers).
+- **Home dock**: the tiny "Hold to switch" caption under the mic is gone.
+
+### Fixed
+- Note dates follow the app language (were in the device language: "Sep 30" on a Russian UI).
+- Model sizes use the locale's decimal mark ("2,7 ГБ").
+- AI preset descriptions readable (were near-invisible grey) and allowed two lines; the sheet's Cancel is 48dp.
+- The "AI is working" pill had a grey box behind it on Android (shadow through a translucent fill).
+- Settings: legal links wrap instead of running into the screen edges.
+- Russian: chat title "Вопросы по заметкам".
+
 ## [1.0.78] - 2026-10-02
 
 ### Changed

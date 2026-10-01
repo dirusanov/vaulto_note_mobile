@@ -6,6 +6,10 @@ export const LOCAL_MODELS_ENABLED = true;
 // provider, including the cloud ones.
 export const LOCAL_WHISPER_ENABLED = true;
 
+// Custom AI (own OpenAI-compatible key or server). Hidden while on-device AI covers
+// the private/offline case; the code stays so it can return with one switch.
+export const CUSTOM_AI_ENABLED = false;
+
 export const isLocalAIProvider = (value: string | null | undefined): boolean => {
     return value === 'local' || value === 'local_whisper' || value === 'local_llm';
 };

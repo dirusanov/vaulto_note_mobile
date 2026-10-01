@@ -204,7 +204,9 @@
       "failed": "Falhou",
       "advAISettingsDescCustom": "Configuração de IA personalizada.",
       "advAISettingsDescLocal": "Configurações de IA locais e personalizadas",
-      "customAIPendingHint": "O Vaulto AI continua ativo até que o teste de conexão seja bem-sucedido."
+      "customAIPendingHint": "O Vaulto AI continua ativo até que o teste de conexão seja bem-sucedido.",
+      "advAISettingsDescOnDevice": "Na nuvem ou neste telefone, offline",
+      "onDeviceProvider": "No telefone"
     },
     "recovery": {
       "title": "Código de recuperação",
@@ -725,7 +727,8 @@
     "noHighlight": "Sem destaque",
     "allVersions": "Todas as versões",
     "protected": "Nota protegida",
-    "onThisPhoneOnly": "Somente neste telefone"
+    "onThisPhoneOnly": "Somente neste telefone",
+    "accountSettings": "Conta e ajustes"
   },
   "ask": {
     "title": "Pergunte às suas notas",

@@ -32,7 +32,13 @@ export const NotesListScreen = () => {
     const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { userId, isAuthenticated, isGuest } = useAuth();
+    const { userId, isAuthenticated, isGuest, user } = useAuth();
+    // Account avatar in the search bar (as in Keep/Gmail): the initial of the name
+    // or e-mail when signed in, a person icon for guests.
+    const signedIn = isAuthenticated && !isGuest;
+    const avatarInitial = signedIn
+        ? ((user?.full_name || user?.email || '').trim().charAt(0).toUpperCase() || null)
+        : null;
     const { syncLocked, resetRecoveryPending } = useEncryption();
     const {
         notes,
@@ -597,9 +603,15 @@ export const NotesListScreen = () => {
                             onPress={handleSettingsPress}
                             style={styles.searchBarButton}
                             accessibilityRole="button"
-                            accessibilityLabel={t("a11y.settings", "Settings")}
+                            accessibilityLabel={t("a11y.accountSettings", "Account and settings")}
                         >
-                            <MaterialIcons name="settings" size={24} color={colors.textSecondary} />
+                            <View style={[styles.avatar, !avatarInitial && styles.avatarGuest]}>
+                                {avatarInitial ? (
+                                    <Text style={styles.avatarText}>{avatarInitial}</Text>
+                                ) : (
+                                    <MaterialIcons name="person" size={20} color={colors.textSecondary} />
+                                )}
+                            </View>
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
@@ -690,7 +702,6 @@ export const NotesListScreen = () => {
                             {/* Right Secondary Button */}
                             <SecondaryButton />
                         </View>
-                        <Text style={styles.hintText}>{t("common.holdToSwitch")}</Text>
                     </View>
                 </View>
             )}
@@ -759,6 +770,22 @@ export const NotesListScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    avatar: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.primary,
+    },
+    avatarGuest: {
+        backgroundColor: colors.backgroundSecondary,
+    },
+    avatarText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: colors.surface,
+    },
     searchBarButton: {
         width: 48,
         height: 48,
@@ -1007,13 +1034,5 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.4,
         shadowRadius: 12,
         elevation: 8,
-    },
-    hintText: {
-        ...typography.caption,
-        color: colors.text,
-        marginTop: -8, // Pull text up more to avoid bottom overflow
-        marginBottom: 2,
-        opacity: 0.75,
-        fontSize: 9, // Reduced size
     },
 });

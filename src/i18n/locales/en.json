@@ -215,7 +215,9 @@
       "failed": "Failed",
       "advAISettingsDescCustom": "Custom AI configuration.",
       "advAISettingsDescLocal": "Local and custom AI configurations",
-      "customAIPendingHint": "Vaulto AI stays active until the connection test succeeds."
+      "customAIPendingHint": "Vaulto AI stays active until the connection test succeeds.",
+      "advAISettingsDescOnDevice": "Cloud or on this phone, offline",
+      "onDeviceProvider": "On this phone"
     },
     "recovery": {
       "title": "Recovery Code",
@@ -416,7 +418,7 @@
     "deleteRecordingTitle": "Delete Recording?",
     "deleteRecordingDesc": "Are you sure you want to delete this recording?",
     "deleteNoteDesc": "Are you sure you want to delete this note?",
-    "micHintHold": "Hold: no agent",
+    "micHintHold": "Hold to record without the AI agent",
     "presets": {
       "grammar": {
         "label": "Fix Grammar",
@@ -725,7 +727,8 @@
     "noHighlight": "No highlight",
     "allVersions": "All versions",
     "protected": "Protected note",
-    "onThisPhoneOnly": "Only on this phone"
+    "onThisPhoneOnly": "Only on this phone",
+    "accountSettings": "Account and settings"
   },
   "ask": {
     "title": "Ask your notes",

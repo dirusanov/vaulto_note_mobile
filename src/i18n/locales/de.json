@@ -204,7 +204,9 @@
       "failed": "Fehlgeschlagen",
       "advAISettingsDescCustom": "Eigene KI-Konfiguration.",
       "advAISettingsDescLocal": "Lokale und eigene KI-Konfigurationen",
-      "customAIPendingHint": "Vaulto AI bleibt aktiv, bis der Verbindungstest erfolgreich ist."
+      "customAIPendingHint": "Vaulto AI bleibt aktiv, bis der Verbindungstest erfolgreich ist.",
+      "advAISettingsDescOnDevice": "In der Cloud oder auf diesem Telefon, offline",
+      "onDeviceProvider": "Auf dem Telefon"
     },
     "recovery": {
       "title": "Wiederherstellungscode",
@@ -725,7 +727,8 @@
     "noHighlight": "Keine Hervorhebung",
     "allVersions": "Alle Versionen",
     "protected": "Geschützte Notiz",
-    "onThisPhoneOnly": "Nur auf diesem Telefon"
+    "onThisPhoneOnly": "Nur auf diesem Telefon",
+    "accountSettings": "Konto und Einstellungen"
   },
   "ask": {
     "title": "Notizen fragen",

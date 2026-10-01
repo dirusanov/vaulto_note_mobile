@@ -215,7 +215,9 @@
       "failed": "Ошибка",
       "advAISettingsDescCustom": "Собственная конфигурация ИИ.",
       "advAISettingsDescLocal": "Локальные и собственные конфигурации ИИ",
-      "customAIPendingHint": "Vaulto AI остаётся активным, пока проверка подключения не пройдёт успешно."
+      "customAIPendingHint": "Vaulto AI остаётся активным, пока проверка подключения не пройдёт успешно.",
+      "advAISettingsDescOnDevice": "В облаке или на телефоне, без интернета",
+      "onDeviceProvider": "На телефоне"
     },
     "recovery": {
       "title": "Код восстановления",
@@ -416,7 +418,7 @@
     "deleteRecordingTitle": "Удалить запись?",
     "deleteRecordingDesc": "Вы уверены, что хотите удалить эту запись?",
     "deleteNoteDesc": "Вы уверены, что хотите удалить эту заметку?",
-    "micHintHold": "Зажать: без агента",
+    "micHintHold": "Удерживайте, чтобы записать без ИИ-агента",
     "presets": {
       "grammar": {
         "label": "Исправить ошибки",
@@ -725,10 +727,11 @@
     "noHighlight": "Без выделения",
     "allVersions": "Все версии",
     "protected": "Защищённая заметка",
-    "onThisPhoneOnly": "Только на этом телефоне"
+    "onThisPhoneOnly": "Только на этом телефоне",
+    "accountSettings": "Аккаунт и настройки"
   },
   "ask": {
-    "title": "Спросить заметки",
+    "title": "Вопросы по заметкам",
     "askAbout": "Спросить ИИ: «{{query}}»",
     "privacyNote": "Поиск по заметкам идёт на устройстве; ИИ получает только подходящие фрагменты.",
     "emptyTitle": "Спросите что угодно о своих заметках",

@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 import { UserProfile } from '../api/auth';
 import { KeyBundle } from '../crypto/e2ee';
-import { isLocalAIProvider, LOCAL_MODELS_ENABLED } from './featureFlags';
+import { CUSTOM_AI_ENABLED, isLocalAIProvider, LOCAL_MODELS_ENABLED } from './featureFlags';
 import { DEFAULT_OPENAI_CHAT_MODEL } from './openaiCompat';
 
 // NOTE: Legacy provider "selfhosted" was removed. It is migrated to "openai".
@@ -593,6 +593,11 @@ export const setOpenAIModel = async (model: string): Promise<void> => {
 export const getAIProvider = async (): Promise<AIProvider> => {
     try {
         const value = await AsyncStorage.getItem(AI_PROVIDER_KEY);
+        if (value === 'openai' && !CUSTOM_AI_ENABLED) {
+            // Custom AI is hidden: a stored choice falls back to Vaulto AI.
+            await AsyncStorage.setItem(AI_PROVIDER_KEY, 'vaulto_ai');
+            return 'vaulto_ai';
+        }
         if (value === 'openai' || value === 'vaulto_ai') {
             return value;
         }
@@ -616,9 +621,10 @@ export const getAIProvider = async (): Promise<AIProvider> => {
             return 'vaulto_ai';
         }
         if (value === 'selfhosted') {
-            // Migrate legacy self-hosted to OpenAI-compatible.
-            await AsyncStorage.setItem(AI_PROVIDER_KEY, 'openai');
-            return 'openai';
+            // Migrate legacy self-hosted to OpenAI-compatible (Vaulto AI while Custom AI is hidden).
+            const migrated: AIProvider = CUSTOM_AI_ENABLED ? 'openai' : 'vaulto_ai';
+            await AsyncStorage.setItem(AI_PROVIDER_KEY, migrated);
+            return migrated;
         }
         // Fallback or migration: mapping 'local' to 'vaulto_ai' logic could go here, but for now default to 'vaulto_ai'
         return 'vaulto_ai';
@@ -631,7 +637,9 @@ export const getAIProvider = async (): Promise<AIProvider> => {
 export const setAIProvider = async (provider: AIProvider): Promise<void> => {
     try {
         const providerToStore: AIProvider =
-            !LOCAL_MODELS_ENABLED && isLocalAIProvider(provider) ? 'vaulto_ai' : provider;
+            (!LOCAL_MODELS_ENABLED && isLocalAIProvider(provider)) || (!CUSTOM_AI_ENABLED && provider === 'openai')
+                ? 'vaulto_ai'
+                : provider;
         await AsyncStorage.setItem(AI_PROVIDER_KEY, providerToStore);
     } catch (e) {
         console.error('Failed to set AI provider', e);

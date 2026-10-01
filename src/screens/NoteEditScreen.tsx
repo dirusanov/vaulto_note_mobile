@@ -20,7 +20,6 @@ import {
     AppState,
     Linking,
 } from 'react-native';
-import Svg, { Path, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -6487,7 +6486,7 @@ export const NoteEditScreen = () => {
                                                                 {(() => {
                                                                     const description = getLocalizedPresetDescription(item, t);
                                                                     return description != null
-                                                                        ? <Text style={styles.aiOptionPrompt} numberOfLines={1}>{description}</Text>
+                                                                        ? <Text style={styles.aiOptionPrompt} numberOfLines={2}>{description}</Text>
                                                                         : renderOptionPrompt(item.prompt);
                                                                 })()}
                                                             </View>
@@ -6897,31 +6896,23 @@ export const NoteEditScreen = () => {
             {
                 !showVoiceRecorder && (
                     <View style={[styles.micFloatingContainer, { bottom: floatingMicBottomOffset }]}>
-                        {agentModeIndicatorEnabled && (
-                            <View style={{ position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center', pointerEvents: 'none', top: -32 }}>
-                                <Svg height="120" width="120" viewBox="0 0 120 120">
-                                    <Defs>
-                                        <Path
-                                            id="micCurve"
-                                            d="M 20,60 A 40,40 0 0 0 100,60"
-                                        />
-                                    </Defs>
-                                    <SvgText fill={colors.textSecondary} fontSize="8" fontWeight="bold" textAnchor="middle" letterSpacing={2}>
-                                        <TextPath href="#micCurve" startOffset="50%">
-                                            {micHintText.toUpperCase()}
-                                        </TextPath>
-                                    </SvgText>
-                                </Svg>
-                            </View>
-                        )}
                         <TouchableOpacity
                             style={styles.micButton}
                             onPress={handleMicPress}
                             onLongPress={handleMicLongPress}
                             delayLongPress={250}
                             activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("a11y.recordVoice", "Record voice note")}
+                            accessibilityHint={agentModeIndicatorEnabled ? micHintText : undefined}
                         >
                             <MaterialIcons name="mic" size={28} color="white" />
+                            {/* The agent is on: a small badge instead of curved 8px text. */}
+                            {agentModeIndicatorEnabled && (
+                                <View style={styles.micAgentBadge} pointerEvents="none">
+                                    <MaterialIcons name="auto-awesome" size={12} color={colors.primary} />
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 )
@@ -7683,6 +7674,19 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     // micHintBubble and micHintText removed
+    micAgentBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+        borderWidth: 1.5,
+        borderColor: colors.primaryLight,
+    },
     micButton: {
         width: 56,
         height: 56,
@@ -7860,7 +7864,8 @@ const styles = StyleSheet.create({
     },
     aiOptionPrompt: {
         ...typography.caption,
-        color: colors.textMuted,
+        // textMuted was too faint to read on white.
+        color: colors.textSecondary,
     },
     aiReorderItem: {
         paddingVertical: spacing.s,
@@ -7870,6 +7875,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     aiCloseButton: {
+        minHeight: 48,
+        justifyContent: 'center',
         marginTop: spacing.m,
         paddingTop: spacing.s,
         borderTopWidth: 1,

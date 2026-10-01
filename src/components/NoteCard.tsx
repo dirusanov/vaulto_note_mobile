@@ -20,7 +20,9 @@ interface NoteCardProps {
 }
 
 export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    // Dates follow the app language, not the device's.
+    const dateLocale = i18n.language || undefined;
     const { mode } = useEncryption();
     const activeChild = note.improvements?.find(imp => imp.is_active);
     // AI-written titles can still carry markdown; a card renders plain text.
@@ -83,18 +85,18 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
         const isThisYear = date.getFullYear() === now.getFullYear();
 
         if (isToday) {
-            return date.toLocaleTimeString(undefined, {
+            return date.toLocaleTimeString(dateLocale, {
                 hour: '2-digit',
                 minute: '2-digit',
                 hour12: false
             });
         } else if (isThisYear) {
-            return date.toLocaleDateString(undefined, {
+            return date.toLocaleDateString(dateLocale, {
                 day: 'numeric',
                 month: 'short'
             });
         } else {
-            return date.toLocaleDateString(undefined, {
+            return date.toLocaleDateString(dateLocale, {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric'

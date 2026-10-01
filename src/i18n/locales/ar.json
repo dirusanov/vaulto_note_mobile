@@ -204,7 +204,9 @@
       "failed": "فشل",
       "advAISettingsDescCustom": "إعداد مخصّص للذكاء الاصطناعي.",
       "advAISettingsDescLocal": "إعدادات الذكاء الاصطناعي المحلية والمخصّصة",
-      "customAIPendingHint": "يظل Vaulto AI نشطًا حتى ينجح اختبار الاتصال."
+      "customAIPendingHint": "يظل Vaulto AI نشطًا حتى ينجح اختبار الاتصال.",
+      "advAISettingsDescOnDevice": "في السحابة أو على هذا الهاتف دون اتصال",
+      "onDeviceProvider": "على الهاتف"
     },
     "recovery": {
       "title": "رمز الاسترداد",
@@ -725,7 +727,8 @@
     "noHighlight": "بدون تمييز",
     "allVersions": "كل النسخ",
     "protected": "ملاحظة محمية",
-    "onThisPhoneOnly": "على هذا الهاتف فقط"
+    "onThisPhoneOnly": "على هذا الهاتف فقط",
+    "accountSettings": "الحساب والإعدادات"
   },
   "ask": {
     "title": "اسأل ملاحظاتك",

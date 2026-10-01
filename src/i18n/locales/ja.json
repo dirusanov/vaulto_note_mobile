@@ -204,7 +204,9 @@
       "failed": "失敗",
       "advAISettingsDescCustom": "カスタム AI 設定。",
       "advAISettingsDescLocal": "ローカルおよびカスタム AI 設定",
-      "customAIPendingHint": "接続テストが成功するまで Vaulto AI が引き続き使用されます。"
+      "customAIPendingHint": "接続テストが成功するまで Vaulto AI が引き続き使用されます。",
+      "advAISettingsDescOnDevice": "クラウド、またはこの端末上でオフライン",
+      "onDeviceProvider": "この端末で"
     },
     "recovery": {
       "title": "復元コード",
@@ -725,7 +727,8 @@
     "noHighlight": "ハイライトなし",
     "allVersions": "すべてのバージョン",
     "protected": "保護されたノート",
-    "onThisPhoneOnly": "この端末のみ"
+    "onThisPhoneOnly": "この端末のみ",
+    "accountSettings": "アカウントと設定"
   },
   "ask": {
     "title": "ノートに質問",

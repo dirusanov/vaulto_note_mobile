@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
+import i18next, { type TFunction } from 'i18next';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 
@@ -48,7 +48,14 @@ interface Props {
 
 export const formatModelSize = (bytes: number, t: TFunction): string => {
     if (bytes >= 1e9) {
-        return t('localModels.gb', '{{value}} GB', { value: (bytes / 1e9).toFixed(1).replace(/\.0$/, '') });
+        // Locale-aware decimal mark: "2.7 GB", "2,7 ГБ".
+        let value: string;
+        try {
+            value = (bytes / 1e9).toLocaleString(i18next.language || undefined, { maximumFractionDigits: 1 });
+        } catch {
+            value = (bytes / 1e9).toFixed(1).replace(/\.0$/, '');
+        }
+        return t('localModels.gb', '{{value}} GB', { value });
     }
     return t('localModels.mb', '{{value}} MB', { value: Math.max(1, Math.round(bytes / 1e6)) });
 };
