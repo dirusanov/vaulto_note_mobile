@@ -1169,9 +1169,13 @@ export const SettingsScreen = () => {
                                 </View>
                                 <View style={styles.userInfoText}>
                                     {user.full_name && (
-                                        <Text style={styles.userName}>{user.full_name}</Text>
+                                        <Text style={styles.userName} numberOfLines={1}>{user.full_name}</Text>
                                     )}
-                                    <Text style={user.full_name ? styles.userEmail : styles.userEmailPrimary}>
+                                    <Text
+                                        style={user.full_name ? styles.userEmail : styles.userEmailPrimary}
+                                        numberOfLines={1}
+                                        ellipsizeMode="middle"
+                                    >
                                         {user.email || t('settings.account.signIn', 'Signed in')}
                                     </Text>
                                 </View>

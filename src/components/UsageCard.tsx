@@ -25,7 +25,6 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     if (aiProvider !== 'vaulto_ai') return null;
     if (!user) return null;
 
-    console.log('[UsageCard] Rendering for user:', user.email || 'Guest');
     const totalSeconds = user.transcription_total_seconds ?? 1800;
     const usedSeconds = user.transcription_total_used_seconds ?? 0;
     console.log('[UsageCard] Credits:', totalSeconds, 'Used:', usedSeconds, 'Remaining:', user.transcription_remaining_seconds);

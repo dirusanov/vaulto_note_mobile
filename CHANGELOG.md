@@ -11,6 +11,7 @@
 - "Find tasks" also picks up planned work with a deadline or an owner ("v2 ships on Thursday").
 - Versions: the Original chip uses a document icon (the lock read as "encrypted"); the version name is not repeated as its title; row actions are one equal-width 48dp column.
 - Russian notes-chat example is gender-neutral.
+- Settings: a long email stays on one line (ellipsis in the middle); the account email is no longer written to the log on every render.
 
 ### Changed
 - **First-launch empty list**: a short welcome (voice to text, AI tidy-up, private by default) instead of a single line.
