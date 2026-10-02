@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "تذكيرات المهام",
     "digestChannel": "ملخص الأسبوع",
-    "reminderBody": "تذكير من ملاحظتك"
+    "reminderBody": "تذكير من ملاحظتك",
+    "protectedReminder": "تذكير من ملاحظة محمية"
   },
   "digest": {
     "title": "أسبوعك في الملاحظات",

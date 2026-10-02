@@ -3757,7 +3757,9 @@ export const NoteEditScreen = () => {
     // tapping it opens this note. Works offline, nothing leaves the phone.
     const handleRemindTask = useCallback(async (task: ExtractedTask): Promise<{ ok: boolean; message?: string }> => {
         if (!task.date) return { ok: false };
-        const result = await scheduleTaskReminder({ title: task.title, date: task.date, time: task.time, noteId: localNoteIdRef.current });
+        // A protected note's text must not appear on the lock screen.
+        const reminderTitle = isProtectedRef.current ? t('notify.protectedReminder', 'Reminder from a protected note') : task.title;
+        const result = await scheduleTaskReminder({ title: reminderTitle, date: task.date, time: task.time, noteId: localNoteIdRef.current });
         if ('id' in result) {
             haptics.success();
             const when = result.at.toLocaleString(i18n.language, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

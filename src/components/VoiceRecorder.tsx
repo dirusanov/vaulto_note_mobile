@@ -84,6 +84,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     // Meeting mode: up to an hour, transcribed as is (no agent), then summarised.
     const [meetingMode, setMeetingMode] = useState(false);
     const meetingSegmentsRef = useRef<string[]>([]);
+    // Once a meeting has finished parts, it cannot be turned back into a note.
+    const [meetingLocked, setMeetingLocked] = useState(false);
     const segmentStartRef = useRef(0);
     const rollingRef = useRef(false);
     const effectiveAgentEnabled = agentModeEnabled && aiProvider === 'vaulto_ai' && !meetingMode;
@@ -303,6 +305,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (interruptionHandledRef.current) {
             return;
         }
+        // A meeting already has finished parts: save them instead of losing them.
+        if (meetingSegmentsRef.current.length > 0) {
+            interruptionHandledRef.current = true;
+            void finishMeeting(null);
+            return;
+        }
         interruptionHandledRef.current = true;
         setIsRecording(false);
         setIsPaused(false);
@@ -419,9 +427,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         rollingRef.current = true;
         void (async () => {
             try {
-                const finished = await AudioService.rollSegment();
-                if (finished) meetingSegmentsRef.current.push(finished);
+                const { uri: finished, restarted } = await AudioService.rollSegment();
+                if (finished) {
+                    meetingSegmentsRef.current.push(finished);
+                    setMeetingLocked(true);
+                }
                 segmentStartRef.current = duration;
+                if (!restarted) {
+                    // The microphone could not continue: keep what was recorded.
+                    rollingRef.current = false;
+                    void finishMeeting(null);
+                    return;
+                }
             } catch (error) {
                 console.warn('[VoiceRecorder] Could not start the next meeting segment', error);
             } finally {
@@ -450,6 +467,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             interruptionHandledRef.current = false;
             meetingSegmentsRef.current = [];
             segmentStartRef.current = 0;
+            setMeetingLocked(false);
             const granted = await AudioService.requestPermissions();
             setPermissionSettled(true);
             if (!granted) {
@@ -480,6 +498,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (!isRecording || isStopping) {
             return;
         }
+        while (rollingRef.current) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
         try {
             if (isPaused) {
                 await AudioService.resumeRecording();
@@ -492,6 +513,28 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
     };
 
+    /** Joins the meeting's parts (plus the last one, if any) and hands them on. */
+    const finishMeeting = async (last: AudioRecording | null) => {
+        const segments = [...meetingSegmentsRef.current, ...(last?.uri ? [last.uri] : [])];
+        meetingSegmentsRef.current = [];
+        setIsRecording(false);
+        setIsPaused(false);
+        if (segments.length === 0) {
+            onCancel();
+            return;
+        }
+        let uri = segments[0];
+        try {
+            uri = segments.length > 1 ? await AudioService.concatSegments(segments) : segments[0];
+        } catch (error) {
+            // Joining failed: every part is still transcribed; the card plays the first.
+            console.warn('[VoiceRecorder] Could not join meeting parts', error);
+        }
+        const totalSeconds = last?.duration || duration;
+        recordingStartAtRef.current = null;
+        onFinish({ uri, duration: totalSeconds, mimeType: 'audio/m4a', meeting: true, segments }, true, false);
+    };
+
     const handleStopRecording = async () => {
         if (!isRecording || isStopping || isStartPending) {
             return;
@@ -502,15 +545,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             while (rollingRef.current) {
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }
-            let recording = await AudioService.stopRecording();
+            if (meetingMode || meetingSegmentsRef.current.length > 0) {
+                // A last part a few milliseconds old may fail to stop; the earlier
+                // parts are kept either way.
+                const last = await AudioService.stopRecording().catch(() => null);
+                setIsRecording(false);
+                setIsPaused(false);
+                await finishMeeting(last);
+                return;
+            }
+            const recording = await AudioService.stopRecording();
             setIsRecording(false);
             setIsPaused(false);
-            if (recording && meetingMode) {
-                const segments = [...meetingSegmentsRef.current, recording.uri];
-                meetingSegmentsRef.current = [];
-                const joined = segments.length > 1 ? await AudioService.concatSegments(segments) : recording.uri;
-                recording = { ...recording, uri: joined, meeting: true, segments };
-            }
             if (!recording) {
                 interruptionHandledRef.current = true;
                 Alert.alert(
@@ -556,6 +602,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (isStopping) {
             return;
         }
+        while (rollingRef.current) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
         try {
             if (isRecording) {
                 await AudioService.cancelRecording();
@@ -595,9 +644,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                     meetingMode ? styles.badgeToggleOn : styles.badgeToggleOff,
                                 ]}
                                 onPress={() => {
+                                    if (meetingLocked) return;
                                     haptics.selection();
                                     setMeetingMode((prev) => !prev);
                                 }}
+                                disabled={meetingLocked}
                                 hitSlop={{ top: 4, bottom: 4 }}
                                 activeOpacity={0.7}
                                 accessibilityRole="switch"

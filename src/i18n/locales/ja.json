@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "タスクのリマインダー",
     "digestChannel": "週のまとめ",
-    "reminderBody": "ノートからのリマインダー"
+    "reminderBody": "ノートからのリマインダー",
+    "protectedReminder": "保護されたノートからのリマインダー"
   },
   "digest": {
     "title": "今週のノート",

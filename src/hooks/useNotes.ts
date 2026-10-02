@@ -682,6 +682,15 @@ export const useNotes = () => {
                 duration: recording.duration,
                 transcription: recording.transcription,
             })),
+            improvements: (existing.improvements || [])
+                .filter((imp) => !imp.deleted && hasMeaningfulRichContent(imp.content || ''))
+                .map((imp) => ({
+                    title: imp.title,
+                    content: imp.content || '',
+                    label: imp.label ?? undefined,
+                    option_id: imp.option_id ?? undefined,
+                    is_active: !!imp.is_active,
+                })),
             deleted_at: new Date().toISOString(),
         };
         try {
@@ -699,43 +708,6 @@ export const useNotes = () => {
     const listTrash = useCallback(async (): Promise<TrashEntry[]> => (
         userId ? getTrashEntries(userId) : []
     ), [userId]);
-
-    /** Brings a trashed note back as a new note, with its recordings. */
-    const restoreFromTrash = useCallback(async (id: string): Promise<string | null> => {
-        if (!userId) return null;
-        const entry = (await getTrashEntries(userId)).find((item) => item.id === id);
-        if (!entry) return null;
-        const [first, ...others] = entry.recordings;
-        const mainAudio = first ?? (entry.audio_file_path
-            ? { file_path: entry.audio_file_path, duration: entry.audio_duration ?? 0 }
-            : null);
-        const restored = await createNote({
-            title: entry.title,
-            content: entry.content,
-            audio: mainAudio ? {
-                filePath: mainAudio.file_path,
-                duration: mainAudio.duration,
-                transcription: (mainAudio as { transcription?: string }).transcription,
-            } : undefined,
-            storage_scope: entry.storage_scope as StorageScope | undefined,
-            privacy: entry.privacy as NotePrivacy | undefined,
-            is_protected: entry.is_protected,
-        });
-        for (const recording of others) {
-            await saveVoiceRecordingLocal(userId, {
-                id: await generateUUID(),
-                note_id: restored.id,
-                file_path: recording.file_path,
-                duration: recording.duration,
-                transcription: recording.transcription,
-                created_at: new Date().toISOString(),
-            });
-        }
-        await removeTrashEntry(userId, id);
-        return restored.id;
-    // createNote is recreated each render; the latest one is what we want.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userId]);
 
     const deleteFromTrash = useCallback(async (ids?: string[]) => {
         if (!userId) return 0;
@@ -1267,6 +1239,59 @@ export const useNotes = () => {
         },
         [normalizePrivacy, normalizeStorageScope, refreshFromLocal, shouldSyncNote, userId]
     );
+
+    /** Brings a trashed note back as a new note, with its recordings and AI versions. */
+    const restoringRef = useRef<Set<string>>(new Set());
+    const restoreFromTrash = useCallback(async (id: string): Promise<string | null> => {
+        if (!userId || restoringRef.current.has(id)) return null;
+        // Two quick taps must not create two notes sharing the same audio files.
+        restoringRef.current.add(id);
+        try {
+            const entry = (await getTrashEntries(userId)).find((item) => item.id === id);
+            if (!entry) return null;
+            const mainRecording = entry.recordings[0];
+            const mainAudio = mainRecording
+                ? { filePath: mainRecording.file_path, duration: mainRecording.duration, transcription: mainRecording.transcription }
+                : (entry.audio_file_path ? { filePath: entry.audio_file_path, duration: entry.audio_duration ?? 0 } : undefined);
+            const restored = await createNote({
+                title: entry.title,
+                content: entry.content,
+                audio: mainAudio,
+                storage_scope: entry.storage_scope as StorageScope | undefined,
+                privacy: entry.privacy as NotePrivacy | undefined,
+                is_protected: entry.is_protected,
+            });
+            // Every recording gets its row back, so it shows in the recordings list.
+            for (const recording of entry.recordings) {
+                await saveVoiceRecordingLocal(userId, {
+                    id: await generateUUID(),
+                    note_id: restored.id,
+                    file_path: recording.file_path,
+                    duration: recording.duration,
+                    transcription: recording.transcription,
+                    created_at: new Date().toISOString(),
+                });
+            }
+            let activeId: string | null = null;
+            for (const version of entry.improvements || []) {
+                const created = await createImprovement(restored.id, {
+                    content: version.content,
+                    title: version.title,
+                    label: version.label,
+                    optionId: version.option_id,
+                });
+                if (version.is_active) activeId = created.id;
+            }
+            if (activeId) await setActiveVariant(restored.id, activeId);
+            await removeTrashEntry(userId, id);
+            await refreshFromLocal();
+            return restored.id;
+        } finally {
+            restoringRef.current.delete(id);
+        }
+    // createNote is recreated each render; the latest one is what we want.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId, createImprovement, setActiveVariant]);
 
     return {
         notes,

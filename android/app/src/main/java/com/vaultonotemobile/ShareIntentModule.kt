@@ -20,12 +20,28 @@ import java.io.File
  * for a short time, so it is copied into the app cache right away.
  */
 object ShareIntentStore {
-    private var pending: Map<String, String?>? = null
+    @Volatile private var pending: Map<String, String?>? = null
     var reactContext: ReactApplicationContext? = null
 
     fun capture(context: Context, intent: Intent?) {
         if (intent == null || intent.action != Intent.ACTION_SEND) return
+        // Reopened from Recents after the process died: Android replays the
+        // original SEND intent, which was already imported.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
         val type = intent.type ?: return
+        // Consume the intent so a rotation or relaunch does not import it twice.
+        intent.action = null
+        if (type.startsWith("audio/")) {
+            @Suppress("DEPRECATION")
+            val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            // Copying a large file must not block the UI thread (ANR).
+            Thread {
+                val path = copyToCache(context, uri) ?: return@Thread
+                pending = mapOf("kind" to "audio", "path" to path, "mimeType" to type, "name" to displayName(context, uri))
+                emit()
+            }.start()
+            return
+        }
         val payload: Map<String, String?>? = when {
             type.startsWith("text/") -> {
                 val text = intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -35,22 +51,14 @@ object ShareIntentStore {
                     "subject" to intent.getStringExtra(Intent.EXTRA_SUBJECT),
                 )
             }
-            type.startsWith("audio/") -> {
-                @Suppress("DEPRECATION")
-                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-                copyToCache(context, uri)?.let { path ->
-                    mapOf("kind" to "audio", "path" to path, "mimeType" to type, "name" to displayName(context, uri))
-                }
-            }
             else -> null
         }
-        // Consume the intent so a rotation or relaunch does not import it twice.
-        intent.action = null
         if (payload == null) return
         pending = payload
         emit()
     }
 
+    @Synchronized
     fun take(): Map<String, String?>? {
         val value = pending
         pending = null

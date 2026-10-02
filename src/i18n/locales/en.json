@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "Task reminders",
     "digestChannel": "Weekly summary",
-    "reminderBody": "Reminder from your note"
+    "reminderBody": "Reminder from your note",
+    "protectedReminder": "Reminder from a protected note"
   },
   "digest": {
     "title": "Your week in notes",

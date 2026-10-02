@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "काम के रिमाइंडर",
     "digestChannel": "साप्ताहिक सारांश",
-    "reminderBody": "आपके नोट से रिमाइंडर"
+    "reminderBody": "आपके नोट से रिमाइंडर",
+    "protectedReminder": "सुरक्षित नोट से रिमाइंडर"
   },
   "digest": {
     "title": "नोट्स में आपका हफ़्ता",

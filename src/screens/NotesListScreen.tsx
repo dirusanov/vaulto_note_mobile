@@ -246,8 +246,12 @@ export const NotesListScreen = () => {
     const route = useRoute<any>();
     const startRecordingAt: number | undefined = route.params?.startRecordingAt;
     useEffect(() => {
-        if (startRecordingAt) setIsVoiceRecorderVisible(true);
-    }, [startRecordingAt]);
+        if (!startRecordingAt) return;
+        setIsVoiceRecorderVisible(true);
+        // Consumed: a remount (theme change restores navigation state) must not
+        // start the microphone again.
+        navigation.setParams({ startRecordingAt: undefined });
+    }, [navigation, startRecordingAt]);
 
     const handleCreateNote = () => {
         navigation.navigate('NoteEdit');

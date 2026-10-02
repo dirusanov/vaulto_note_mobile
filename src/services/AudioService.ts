@@ -271,19 +271,26 @@ class AudioServiceClass {
      * new one with the same settings; returns the finished segment's file.
      * The gap is a few milliseconds.
      */
-    async rollSegment(): Promise<string | null> {
-        if (!this.recording) return null;
+    async rollSegment(): Promise<{ uri: string | null; restarted: boolean }> {
+        if (!this.recording) return { uri: null, restarted: false };
         const recorder = this.recording;
         this.stopMetering();
         await recorder.stop();
-        const uri = recorder.uri;
+        const uri = recorder.uri ?? null;
         recorder.release();
         this.recording = null;
         const startedAt = this.recordingStartTime;
-        await this.startRecording(this.lastMeteringCallback, this.lastRecordingMode);
+        try {
+            await this.startRecording(this.lastMeteringCallback, this.lastRecordingMode);
+        } catch (error) {
+            // The finished segment is still good: hand it back so the meeting
+            // can be saved with what was recorded so far.
+            console.warn('[AudioService] Could not start the next segment', error);
+            return { uri, restarted: false };
+        }
         // The caller tracks the total length; keep the original start for it.
         this.recordingStartTime = startedAt;
-        return uri ?? null;
+        return { uri, restarted: true };
     }
 
     /** Joins meeting segments into one .m4a (Android); returns the first file elsewhere. */

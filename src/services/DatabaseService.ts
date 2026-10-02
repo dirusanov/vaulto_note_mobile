@@ -951,10 +951,22 @@ export const wipeLocalDatabase = async (): Promise<void> => {
         const audioPaths = await withDbRetry('wipe (collect)', async (database) => {
             const notes = await database.getAllAsync<{ audio_file_path: string | null }>("SELECT audio_file_path FROM notes WHERE audio_file_path IS NOT NULL AND audio_file_path != ''");
             const voice = await database.getAllAsync<{ file_path: string }>("SELECT file_path FROM voice_recordings WHERE file_path IS NOT NULL AND file_path != ''");
-            return [...notes.map(r => r.audio_file_path), ...voice.map(r => r.file_path)];
+            // Trashed notes keep their recordings on disk: erase those too.
+            const trashRows = await database.getAllAsync<{ payload: string }>('SELECT payload FROM trash');
+            const trashPaths: Array<string | null | undefined> = [];
+            for (const row of trashRows) {
+                try {
+                    const entry = JSON.parse(await decrypt(row.payload)) as TrashEntry;
+                    trashPaths.push(...trashAudioPaths(entry));
+                } catch {
+                    // Unreadable with the current key; its row is removed below.
+                }
+            }
+            return [...notes.map(r => r.audio_file_path), ...voice.map(r => r.file_path), ...trashPaths];
         });
         await purgeAudioFiles(audioPaths, 'wipe');
         await withDbRetry('wipe (delete)', async (database) => {
+            await database.runAsync('DELETE FROM trash;');
             await database.runAsync('DELETE FROM voice_recordings;');
             await database.runAsync('DELETE FROM note_improvements;');
             await database.runAsync('DELETE FROM notes;');
@@ -1324,6 +1336,7 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
                 await database.runAsync("UPDATE notes SET user_id = ? WHERE user_id = ? AND storage_scope = 'local_only'", [toUserId, fromUserId]);
                 await database.runAsync("UPDATE note_improvements SET user_id = ?, dirty = 1, synced = 0 WHERE user_id = ?", [toUserId, fromUserId]);
                 await database.runAsync("UPDATE voice_recordings SET user_id = ? WHERE user_id = ?", [toUserId, fromUserId]);
+                await database.runAsync("UPDATE trash SET user_id = ? WHERE user_id = ?", [toUserId, fromUserId]);
             })
         ));
     } catch (e) {}
@@ -1349,6 +1362,8 @@ export interface TrashEntry {
     audio_file_path?: string | null;
     audio_duration?: number | null;
     recordings: TrashedRecording[];
+    /** AI versions (meeting notes, rewrites), restored with the note. */
+    improvements?: Array<{ title?: string; content: string; label?: string; option_id?: string; is_active?: boolean }>;
     deleted_at: string;
 }
 

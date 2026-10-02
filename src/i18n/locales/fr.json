@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "Rappels de tâches",
     "digestChannel": "Résumé de la semaine",
-    "reminderBody": "Rappel de votre note"
+    "reminderBody": "Rappel de votre note",
+    "protectedReminder": "Rappel d’une note protégée"
   },
   "digest": {
     "title": "Votre semaine en notes",

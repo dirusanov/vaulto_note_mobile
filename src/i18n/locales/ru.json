@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "Напоминания о задачах",
     "digestChannel": "Итоги недели",
-    "reminderBody": "Напоминание из заметки"
+    "reminderBody": "Напоминание из заметки",
+    "protectedReminder": "Напоминание из защищённой заметки"
   },
   "digest": {
     "title": "Ваша неделя в заметках",

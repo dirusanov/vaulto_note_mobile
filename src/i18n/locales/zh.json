@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "任务提醒",
     "digestChannel": "每周总结",
-    "reminderBody": "来自笔记的提醒"
+    "reminderBody": "来自笔记的提醒",
+    "protectedReminder": "来自受保护笔记的提醒"
   },
   "digest": {
     "title": "你这一周的笔记",

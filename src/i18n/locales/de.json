@@ -925,7 +925,8 @@
   "notify": {
     "remindersChannel": "Aufgaben-Erinnerungen",
     "digestChannel": "Wochenrückblick",
-    "reminderBody": "Erinnerung aus deiner Notiz"
+    "reminderBody": "Erinnerung aus deiner Notiz",
+    "protectedReminder": "Erinnerung aus einer geschützten Notiz"
   },
   "digest": {
     "title": "Deine Woche in Notizen",
