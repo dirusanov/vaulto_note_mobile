@@ -265,6 +265,7 @@ check('bullet marker skipped', deriveAutoTitleFromPlainText('• Buy milk'), 'Bu
 check('russian', deriveAutoTitleFromPlainText('Купить хлеб, молоко и кофе'), 'Купить хлеб, молоко и кофе');
 check('cjk long line truncated', deriveAutoTitleFromPlainText('明天上午十点和团队开会讨论第二版的发布计划以及测试安排还有市场推广的时间表需要确认'), '明天上午十点和团队开会讨论第二版的发布计划以及测…');
 check('empty', deriveAutoTitleFromPlainText(''), '');
+check('hashtags left out of the title', deriveAutoTitleFromPlainText('Подготовить отчёт к пятнице #работа'), 'Подготовить отчёт к пятнице');
 
 if (failures > 0) {
     console.error(`\n${failures} test(s) failed`);

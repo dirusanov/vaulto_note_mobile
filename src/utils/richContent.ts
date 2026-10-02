@@ -406,7 +406,8 @@ export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number
     const sentence = firstLine.split(/(?<=[.!?。！？])\s|[:;]\s/)[0].replace(/[.!?。！？:;,]+$/, '');
     const words = sentence
         .split(/\s+/)
-        .filter((token) => token && !/^[-*_•☐☑]+$/.test(token));
+        // List markers and #tags are not part of a title.
+        .filter((token) => token && !/^[-*_•☐☑]+$/.test(token) && !/^#[\p{L}\p{N}]/u.test(token));
 
     if (words.length <= maxWords) {
         const title = words.join(' ');

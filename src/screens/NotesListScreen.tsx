@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -21,7 +21,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
-import { hasMeaningfulRichContent } from '../utils/richContent';
+import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
+import { countTags, hasTag } from '../utils/tags';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
@@ -60,7 +61,9 @@ export const NotesListScreen = () => {
         batchUnpinNotes,
         batchDeleteNotes,
         lockedCount,
+        getAllNotes,
     } = useNotesContext();
+    const [activeTag, setActiveTag] = useState<string | null>(null);
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
@@ -418,11 +421,27 @@ export const NotesListScreen = () => {
         return hasTitle || hasContent || hasAudio;
     });
 
+    // Tags come from #hashtags in the notes (all notes, not just the search hits).
+    const notePlainText = (n: typeof notes[number]) => {
+        const activeChild = n.improvements?.find(imp => imp.is_active);
+        return `${n.title || ''}\n${richContentToPlainText(activeChild?.content || n.content || '')}`;
+    };
+    const allTags = useMemo(
+        () => countTags(getAllNotes().filter(n => !n.deleted).map(notePlainText)),
+        // Recomputed whenever the visible notes change (edits, sync, deletes).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [notes],
+    );
+    useEffect(() => {
+        if (activeTag && !allTags.some(item => item.tag === activeTag)) setActiveTag(null);
+    }, [activeTag, allTags]);
+    const tagFilteredNotes = activeTag ? filteredNotes.filter(n => hasTag(notePlainText(n), activeTag)) : filteredNotes;
+
     const canShowEmptyState = !!userId && !loading && filteredNotes.length === 0;
 
     // Split notes into two columns for masonry layout
     // Sort pinned notes first
-    const sortedNotes = [...filteredNotes].sort((a, b) => {
+    const sortedNotes = [...tagFilteredNotes].sort((a, b) => {
         // Pinned notes come first
         if (a.is_pinned && !b.is_pinned) return -1;
         if (!a.is_pinned && b.is_pinned) return 1;
@@ -708,6 +727,37 @@ export const NotesListScreen = () => {
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
+            )}
+            {/* Tag filter: one tap narrows the list to a #tag, like Keep's labels. */}
+            {!isSelectionMode && allTags.length > 0 && (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.tagRow}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {allTags.slice(0, 30).map(({ tag, count }) => {
+                        const selected = activeTag === tag;
+                        return (
+                            <TouchableOpacity
+                                key={tag}
+                                style={[styles.tagChip, selected && styles.tagChipActive]}
+                                onPress={() => {
+                                    haptics.selection();
+                                    setActiveTag(selected ? null : tag);
+                                }}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected }}
+                            >
+                                <Text style={[styles.tagChipText, selected && styles.tagChipTextActive]}>
+                                    #{tag}
+                                </Text>
+                                <Text style={[styles.tagChipCount, selected && styles.tagChipTextActive]}>{count}</Text>
+                                {selected && <MaterialIcons name="close" size={14} color={colors.onPrimary} />}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
             )}
 
             </View>
@@ -1070,6 +1120,38 @@ const styles = createStyles(() => ({
         width: '100%',
         maxWidth: 1200,
         alignSelf: 'center',
+    },
+    tagRow: {
+        gap: spacing.xs,
+        paddingHorizontal: spacing.m,
+        paddingBottom: spacing.s,
+    },
+    tagChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 36,
+        paddingHorizontal: 12,
+        borderRadius: 18,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    tagChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    tagChipText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text,
+    },
+    tagChipCount: {
+        fontSize: 12,
+        color: colors.textTertiary,
+    },
+    tagChipTextActive: {
+        color: colors.onPrimary,
     },
     headerColumn: {
         width: '100%',

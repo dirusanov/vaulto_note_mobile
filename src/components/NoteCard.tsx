@@ -12,6 +12,7 @@ import { isMasterCiphertext } from '../crypto/encryption';
 import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
 import { createStyles } from '../theme/createStyles';
 import { textAlignFor } from '../i18n/direction';
+import { splitTags } from '../utils/tags';
 import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
@@ -192,7 +193,11 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         ]}
                         numberOfLines={titleIsCutFirstLine ? 8 : 6}
                     >
-                        {previewString}
+                        {splitTags(previewString).map((part, index) => (
+                            part.tag
+                                ? <Text key={index} style={styles.tagText}>{part.text}</Text>
+                                : part.text
+                        ))}
                     </Text>
                 )}
             </View>
@@ -275,6 +280,9 @@ const styles = createStyles(() => ({
         fontSize: 14,
         lineHeight: 20,
         color: colors.textSecondary,
+    },
+    tagText: {
+        color: colors.primary,
     },
     // Untitled note shown as its text: a touch larger and in the text colour.
     previewLead: {
