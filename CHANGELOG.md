@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.86] - 2026-10-02
+
+### Fixed
+- Meeting mode: cancel or pause during a part switch stopped the microphone correctly; a failure to continue, a last part that fails to stop, a failed join or an interruption now keeps the parts already recorded instead of losing the meeting; the Meeting chip locks once parts exist.
+- After using the widget's record button, a theme change could open the recorder again.
+- Trash: restoring brings back AI versions (e.g. meeting notes) and every recording; a double tap no longer creates two copies; "sign out and erase" also erases the trash and its recordings; a guest's trash moves to the account on sign-in; empty drafts no longer land in the trash.
+- Share to Vaulto: large audio files are copied in the background (no freeze); reopening the app from Recents no longer imports the same share twice.
+- Reminders from protected notes show a generic title on the lock screen.
+
 ## [1.0.85] - 2026-10-02
 
 ### Added
