@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.83] - 2026-10-02
+
+### Added
+- **Tablet layouts**: the notes grid has 3 columns on tablets and 4 in wide landscape; the editor, settings, notes chat, paywall and sign-in screens keep a readable centred column; bottom sheets and the recorder bar stay phone-width.
+
+### Fixed
+- Layout survives rotation: sizes are read live instead of once at start (Android 16 ignores the portrait lock on large screens, so tablets rotate).
+
 ## [1.0.82] - 2026-10-02
 
 ### Added
