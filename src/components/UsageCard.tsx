@@ -153,7 +153,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             <View style={styles.statsRow}>
                 <Text style={styles.statsLabel}>{t("settings.ui.used", "Used")}</Text>
                 <Text style={styles.statsValue}>
-                    {formatTimeMMSS(usedSeconds)} / {formatTimeMMSS(totalSeconds)}
+                    {`\u2066${formatTimeMMSS(usedSeconds)} / ${formatTimeMMSS(totalSeconds)}\u2069`}
                 </Text>
             </View>
 

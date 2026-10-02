@@ -537,10 +537,6 @@
     }
   },
   "voice": {
-    "transcribeOn": "Transcrição ATIVADA",
-    "transcribeOff": "Transcrição DESATIVADA",
-    "aiAgentOn": "Agente de IA ATIVADO",
-    "aiAgentOff": "Agente de IA DESATIVADO",
     "modelNotDownloaded": "Modelo não baixado. Verifique as configurações.",
     "recordingInterrupted": "Gravação interrompida",
     "recordingInterruptedDesc": "A gravação parou inesperadamente antes de poder ser enviada. Tente novamente.",
@@ -556,7 +552,9 @@
     "transcriptionAuthMessage": "A transcrição fica disponível depois que você cria uma conta.",
     "startError": "Não foi possível iniciar a gravação",
     "recordingStateLost": "O estado da gravação foi perdido. Tente novamente.",
-    "micPermissionDenied": "É necessário acesso ao microfone para gravar notas de voz. Você pode permitir nas configurações do sistema."
+    "micPermissionDenied": "É necessário acesso ao microfone para gravar notas de voz. Você pode permitir nas configurações do sistema.",
+    "chipTranscribe": "Para texto",
+    "chipAgent": "Agente"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",

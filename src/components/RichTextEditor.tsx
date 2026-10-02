@@ -385,6 +385,17 @@ const getEditorCss = (
     color: ${colors.textTertiary} !important;
   }
 
+  /* Each paragraph takes its direction from its own text, so Arabic lines
+     read right-to-left next to Latin ones in the same note. */
+  .ProseMirror p,
+  .ProseMirror h1,
+  .ProseMirror h2,
+  .ProseMirror h3,
+  .ProseMirror blockquote {
+    unicode-bidi: plaintext;
+    text-align: start;
+  }
+
   /* Highlight fills stay pastel in both themes, so their text stays dark. */
   .ProseMirror mark {
     color: #1A1A1A;

@@ -20,6 +20,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
+import { rtlFlip } from '../i18n/direction';
 
 export const ForgotPasswordScreen = () => {
     const { t } = useTranslation();
@@ -58,7 +59,7 @@ export const ForgotPasswordScreen = () => {
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
                     >
-                        <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+                        <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>
 
                     <View style={styles.header}>

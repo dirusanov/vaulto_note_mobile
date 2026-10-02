@@ -19,6 +19,7 @@ import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
+import { rtlFlip } from '../i18n/direction';
 
 type LegalParams = {
     legalToken?: string;
@@ -95,7 +96,7 @@ export const LegalAcceptanceScreen = () => {
                     onPress={() => navigation.navigate('SignIn')}
                     activeOpacity={0.8}
                 >
-                    <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+                    <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
 
                 <View style={styles.content}>

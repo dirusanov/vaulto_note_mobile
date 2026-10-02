@@ -537,10 +537,6 @@
     }
   },
   "voice": {
-    "transcribeOn": "Transcribe ON",
-    "transcribeOff": "Transcribe OFF",
-    "aiAgentOn": "AI Agent ON",
-    "aiAgentOff": "AI Agent OFF",
     "modelNotDownloaded": "Model not downloaded. Check Settings.",
     "recordingInterrupted": "Recording interrupted",
     "recordingInterruptedDesc": "The recording stopped unexpectedly before it could be sent. Please try again.",
@@ -556,7 +552,9 @@
     "transcriptionAuthMessage": "Transcription is available after you create an account.",
     "startError": "Could not start recording",
     "recordingStateLost": "The recording state was lost. Please try again.",
-    "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings."
+    "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings.",
+    "chipTranscribe": "To text",
+    "chipAgent": "Agent"
   },
   "aux": {
     "emailVerified": "Email Verified!",

@@ -29,6 +29,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
+import { rtlFlip } from '../i18n/direction';
 
 type Message =
     | { id: string; role: 'user'; text: string }
@@ -161,7 +162,7 @@ export const AskNotesScreen = () => {
                     accessibilityRole="button"
                     accessibilityLabel={t('a11y.back', 'Back')}
                 >
-                    <MaterialIcons name="arrow-back" size={26} color={colors.text} />
+                    <MaterialIcons name="arrow-back" size={26} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
                 <View style={styles.headerText}>
                     <Text style={styles.title}>{t('ask.title', 'Ask your notes')}</Text>
@@ -338,6 +339,7 @@ const styles = createStyles(() => ({
         fontSize: 17,
         fontWeight: '600',
         color: colors.text,
+        textAlign: 'center',
         marginBottom: spacing.s,
     },
     example: {
@@ -353,6 +355,7 @@ const styles = createStyles(() => ({
     exampleText: {
         fontSize: 14,
         color: colors.text,
+        textAlign: 'center',
     },
     userBubble: {
         alignSelf: 'flex-end',

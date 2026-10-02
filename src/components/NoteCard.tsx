@@ -11,6 +11,7 @@ import { useEncryption } from '../context/EncryptionContext';
 import { isMasterCiphertext } from '../crypto/encryption';
 import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
 import { createStyles } from '../theme/createStyles';
+import { textAlignFor } from '../i18n/direction';
 
 interface NoteCardProps {
     note: Note;
@@ -134,11 +135,11 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 </View>
             )}
             <View style={styles.content}>
-                <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle, isSelectionMode && { paddingRight: 28 }]} numberOfLines={2}>
+                <Text style={[styles.title, textAlignFor(title), (!title && hasAudio) && styles.placeholderTitle, isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
                     {title || (hasAudio ? t("notes.voiceRecording") : ' ')}
                 </Text>
                 {(!isEmpty && previewString && previewString !== title) && (
-                    <Text style={styles.preview} numberOfLines={6}>{previewString}</Text>
+                    <Text style={[styles.preview, textAlignFor(previewString)]} numberOfLines={6}>{previewString}</Text>
                 )}
                 {(isEmpty && hasAudio) && (
                     <View style={{ marginTop: spacing.xs, alignSelf: 'flex-start' }}>

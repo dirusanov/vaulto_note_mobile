@@ -537,10 +537,6 @@
     }
   },
   "voice": {
-    "transcribeOn": "Transkription AN",
-    "transcribeOff": "Transkription AUS",
-    "aiAgentOn": "KI-Agent AN",
-    "aiAgentOff": "KI-Agent AUS",
     "modelNotDownloaded": "Modell nicht heruntergeladen. Überprüfen Sie die Einstellungen.",
     "recordingInterrupted": "Aufnahme unterbrochen",
     "recordingInterruptedDesc": "Die Aufnahme wurde unerwartet beendet, bevor sie gesendet werden konnte. Bitte versuchen Sie es erneut.",
@@ -556,7 +552,9 @@
     "transcriptionAuthMessage": "Die Transkription ist verfügbar, nachdem Sie ein Konto erstellt haben.",
     "startError": "Aufnahme konnte nicht gestartet werden",
     "recordingStateLost": "Der Aufnahmestatus ging verloren. Bitte versuche es erneut.",
-    "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden."
+    "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden.",
+    "chipTranscribe": "Als Text",
+    "chipAgent": "Agent"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",

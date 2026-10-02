@@ -537,10 +537,6 @@
     }
   },
   "voice": {
-    "transcribeOn": "Transcription ACTIVÉE",
-    "transcribeOff": "Transcription DÉSACTIVÉE",
-    "aiAgentOn": "Agent IA ACTIVÉ",
-    "aiAgentOff": "Agent IA DÉSACTIVÉ",
     "modelNotDownloaded": "Modèle non téléchargé. Vérifiez les paramètres.",
     "recordingInterrupted": "Enregistrement interrompu",
     "recordingInterruptedDesc": "L'enregistrement s'est arrêté de façon inattendue avant de pouvoir être envoyé. Veuillez réessayer.",
@@ -556,7 +552,9 @@
     "transcriptionAuthMessage": "La transcription est disponible après la création d'un compte.",
     "startError": "Impossible de démarrer l'enregistrement",
     "recordingStateLost": "L'état de l'enregistrement a été perdu. Veuillez réessayer.",
-    "micPermissionDenied": "L'accès au microphone est nécessaire pour enregistrer des notes vocales. Vous pouvez l'autoriser dans les réglages du système."
+    "micPermissionDenied": "L'accès au microphone est nécessaire pour enregistrer des notes vocales. Vous pouvez l'autoriser dans les réglages du système.",
+    "chipTranscribe": "En texte",
+    "chipAgent": "Agent"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",

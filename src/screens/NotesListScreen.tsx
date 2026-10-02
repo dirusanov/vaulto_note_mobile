@@ -24,6 +24,7 @@ import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { hasMeaningfulRichContent } from '../utils/richContent';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
+import { rtlFlip } from '../i18n/direction';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
@@ -570,7 +571,7 @@ export const NotesListScreen = () => {
                             onPress={() => navigation.navigate('SignIn')}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="login" size={16} color={colors.onPrimary} />
+                            <MaterialIcons name="login" size={16} color={colors.onPrimary} style={rtlFlip} />
                             <Text style={styles.lockActionPrimaryText}>{t('auth.signIn', 'Sign In')}</Text>
                         </TouchableOpacity>
                     </View>
@@ -711,7 +712,7 @@ export const NotesListScreen = () => {
                         <Text style={styles.askRowText} numberOfLines={1}>
                             {t("ask.askAbout", "Ask AI: “{{query}}”", { query: searchQuery.trim() })}
                         </Text>
-                        <MaterialIcons name="chevron-right" size={20} color={colors.textTertiary} />
+                        <MaterialIcons name="chevron-right" size={20} color={colors.textTertiary} style={rtlFlip} />
                     </TouchableOpacity>
                 )}
                 {canShowEmptyState ? (

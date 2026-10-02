@@ -82,7 +82,9 @@ import { SearchableLanguageSelector } from '../components/SearchableLanguageSele
 import { RecoveryCodeModal } from '../components/RecoveryCodeModal';
 import { createStyles } from '../theme/createStyles';
 import { useTheme } from '../theme/ThemeContext';
+import { applyLayoutDirection } from '../i18n/direction';
 import { haptics } from '../utils/haptics';
+import { rtlFlip } from '../i18n/direction';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -198,7 +200,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                         <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
                         <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>{t('settings.ui.subscriptionDetails')}</Text>
                     </View>
-                    <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} />
+                    <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} style={rtlFlip} />
                 </TouchableOpacity>
                 {canManageSubscription && (
                     <TouchableOpacity
@@ -237,7 +239,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                         {t('settings.pro.subtitle')}
                     </Text>
                 </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
             </TouchableOpacity>
         </View>
     );
@@ -267,6 +269,8 @@ export const SettingsScreen = () => {
         await i18n.changeLanguage(lang);
         await AsyncStorage.setItem('user_language', lang);
         setShowAppLanguageModal(false);
+        // Arabic flips the whole layout; that takes one quick reload.
+        await applyLayoutDirection(lang);
     };
     const { signOut, isAuthenticated, isGuest, user, userId, refreshProfile } = useAuth();
     const {
@@ -1157,7 +1161,7 @@ export const SettingsScreen = () => {
                     accessibilityRole="button"
                     accessibilityLabel={t("a11y.back", "Back")}
                 >
-                    <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+                    <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
                 <Text style={styles.title}>{t('settings.ui.settingsHeader', 'Settings')}</Text>
             </View>
@@ -1245,7 +1249,7 @@ export const SettingsScreen = () => {
                                 </Text>
                             </View>
                         </View>
-                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
                     </TouchableOpacity>
                     <View style={styles.themeDivider} />
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
@@ -1280,7 +1284,7 @@ export const SettingsScreen = () => {
                                     />
                                     <Text
                                         style={[styles.themeSegmentText, selected && styles.themeSegmentTextActive]}
-                                        numberOfLines={1}
+                                        numberOfLines={2}
                                     >
                                         {option.label}
                                     </Text>
@@ -1925,7 +1929,7 @@ export const SettingsScreen = () => {
                             style={styles.signOutButton}
                             onPress={handleSignOut}
                         >
-                            <MaterialIcons name="logout" size={18} color={colors.error} />
+                            <MaterialIcons name="logout" size={18} color={colors.error} style={rtlFlip} />
                             <Text style={styles.signOutText}>{t("settings.account.signOut", "Sign Out")}</Text>
                         </TouchableOpacity>
                     )}
@@ -2017,7 +2021,7 @@ export const SettingsScreen = () => {
                             <View style={styles.minutesUsageStatsRow}>
                                 <Text style={styles.minutesUsageStatsLabel}>{t('settings.ui.used', 'Used')}</Text>
                                 <Text style={styles.minutesUsageStatsValue}>
-                                    {formatTimeMMSS(subscriptionUsedSeconds)} / {formatTimeMMSS(subscriptionTotalSeconds)}
+                                    {`\u2066${formatTimeMMSS(subscriptionUsedSeconds)} / ${formatTimeMMSS(subscriptionTotalSeconds)}\u2069`}
                                 </Text>
                             </View>
 
@@ -2948,6 +2952,7 @@ const styles = createStyles(() => ({
     },
     themeSegmentText: {
         fontSize: 13,
+        textAlign: 'center',
         fontWeight: '500',
         color: colors.textSecondary,
     },

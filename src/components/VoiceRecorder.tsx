@@ -30,6 +30,7 @@ import { SignInRequiredModal } from './SignInRequiredModal';
 import { AgentModeVaultoGateModal } from './AgentModeVaultoGateModal';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
+import { rtlFlip } from '../i18n/direction';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -545,7 +546,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={[
                                 styles.badgeToggle,
                                 isMainScreen && styles.badgeToggleLarge,
-                                { backgroundColor: transcribe ? colors.primary : colors.surface },
+                                transcribe ? styles.badgeToggleOn : styles.badgeToggleOff,
                             ]}
                             onPress={() => handleTranscriptionToggle(!transcribe)}
                             hitSlop={{ top: 4, bottom: 4 }}
@@ -555,16 +556,19 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             accessibilityState={{ checked: transcribe }}
                         >
                             <MaterialIcons
-                                name="mic"
+                                name={transcribe ? 'check' : 'mic'}
                                 size={isMainScreen ? 18 : 14}
-                                color={transcribe ? 'white' : colors.textSecondary}
+                                color={transcribe ? colors.onPrimary : colors.textSecondary}
                             />
-                            <Text style={[
-                                styles.badgeLabel,
-                                isMainScreen && styles.badgeLabelLarge,
-                                { color: transcribe ? 'white' : colors.textSecondary }
-                            ]}>
-                                {transcribe ? t("voice.transcribeOn", "Transcribe ON") : t("voice.transcribeOff", "Transcribe OFF")}
+                            <Text
+                                style={[
+                                    styles.badgeLabel,
+                                    isMainScreen && styles.badgeLabelLarge,
+                                    { color: transcribe ? colors.onPrimary : colors.textSecondary },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {t("voice.chipTranscribe", "To text")}
                             </Text>
                         </TouchableOpacity>
 
@@ -572,7 +576,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             style={[
                                 styles.badgeToggle,
                                 isMainScreen && styles.badgeToggleLarge,
-                                { backgroundColor: effectiveAgentEnabled ? colors.primary : colors.surface },
+                                effectiveAgentEnabled ? styles.badgeToggleOn : styles.badgeToggleOff,
                             ]}
                             onPress={() => handleAgentModeToggle(!agentModeEnabled)}
                             hitSlop={{ top: 4, bottom: 4 }}
@@ -582,16 +586,19 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             accessibilityState={{ checked: effectiveAgentEnabled }}
                         >
                             <MaterialIcons
-                                name="smart-toy"
+                                name={effectiveAgentEnabled ? 'check' : 'smart-toy'}
                                 size={isMainScreen ? 18 : 14}
-                                color={effectiveAgentEnabled ? 'white' : colors.textSecondary}
+                                color={effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary}
                             />
-                            <Text style={[
-                                styles.badgeLabel,
-                                isMainScreen && styles.badgeLabelLarge,
-                                { color: effectiveAgentEnabled ? 'white' : colors.textSecondary }
-                            ]}>
-                                {effectiveAgentEnabled ? t("voice.aiAgentOn") : t("voice.aiAgentOff")}
+                            <Text
+                                style={[
+                                    styles.badgeLabel,
+                                    isMainScreen && styles.badgeLabelLarge,
+                                    { color: effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {t("voice.chipAgent", "Agent")}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -662,7 +669,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             accessibilityRole="button"
                             accessibilityLabel={t("a11y.sendRecording", "Finish and send recording")}
                         >
-                            <MaterialIcons name="send" size={isMainScreen ? 30 : 20} color="white" />
+                            <MaterialIcons name="send" size={isMainScreen ? 30 : 20} color="white" style={rtlFlip} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -716,7 +723,9 @@ const styles = createStyles(() => ({
     badgeToggle: {
         flexDirection: 'row',
         alignItems: 'center',
-        minHeight: 40,
+        flexShrink: 1,
+        maxWidth: '48%',
+        minHeight: 44,
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
@@ -726,6 +735,16 @@ const styles = createStyles(() => ({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+    },
+    badgeToggleOn: {
+        backgroundColor: colors.primary,
+        borderWidth: 1,
+        borderColor: colors.primary,
+    },
+    badgeToggleOff: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     badgeToggleLarge: {
         paddingHorizontal: 20,

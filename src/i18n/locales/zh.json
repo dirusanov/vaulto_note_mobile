@@ -537,10 +537,6 @@
     }
   },
   "voice": {
-    "transcribeOn": "转录已开启",
-    "transcribeOff": "转录已关闭",
-    "aiAgentOn": "AI 助手已开启",
-    "aiAgentOff": "AI 助手已关闭",
     "modelNotDownloaded": "模型尚未下载，请检查设置。",
     "recordingInterrupted": "录音已中断",
     "recordingInterruptedDesc": "录音在发送前意外停止，请重试。",
@@ -556,7 +552,9 @@
     "transcriptionAuthMessage": "创建账户后即可使用转录功能。",
     "startError": "无法开始录音",
     "recordingStateLost": "录音状态已丢失，请重试。",
-    "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。"
+    "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。",
+    "chipTranscribe": "转文字",
+    "chipAgent": "智能体"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",

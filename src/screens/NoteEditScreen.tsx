@@ -143,6 +143,7 @@ import { sanitizeDisplayLabel, stripStoredTitleMarkdown } from '../utils/markdow
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
+import { rtlFlip } from '../i18n/direction';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
 const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
@@ -6177,7 +6178,7 @@ export const NoteEditScreen = () => {
 
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={[styles.iconButton, styles.headerEdgeLeft]} accessibilityRole="button" accessibilityLabel={t("a11y.back", "Back")}>
-                    <MaterialIcons name="arrow-back" size={28} color={colors.text} />
+                    <MaterialIcons name="arrow-back" size={28} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
                 <View style={styles.headerRight}>
                     {/* Text Appearance Button */}
@@ -6442,7 +6443,7 @@ export const NoteEditScreen = () => {
                                                     disabled={!customInstruction.trim() || isAIProcessing}
                                                 >
                                                     <Text style={styles.runCustomButtonText}>{t("edit.applyInstruction", "Apply Instruction")}</Text>
-                                                    <MaterialIcons name="arrow-forward" size={16} color="white" />
+                                                    <MaterialIcons name="arrow-forward" size={16} color="white" style={rtlFlip} />
                                                 </TouchableOpacity>
                                             </View>
                                         )}

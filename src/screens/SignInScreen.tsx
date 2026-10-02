@@ -26,6 +26,7 @@ import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
 import { authApi, LoginResult } from '../api/auth';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { createStyles } from '../theme/createStyles';
+import { rtlFlip } from '../i18n/direction';
 
 export const SignInScreen = () => {
     const { t } = useTranslation();
@@ -98,7 +99,7 @@ export const SignInScreen = () => {
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
                     >
-                        <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+                        <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>
 
                     <View style={styles.content}>

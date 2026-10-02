@@ -537,10 +537,6 @@
     }
   },
   "voice": {
-    "transcribeOn": "文字起こし ON",
-    "transcribeOff": "文字起こし OFF",
-    "aiAgentOn": "AIエージェント ON",
-    "aiAgentOff": "AIエージェント OFF",
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",
     "recordingInterrupted": "録音が中断されました",
     "recordingInterruptedDesc": "送信前に録音が予期せず停止しました。もう一度お試しください。",
@@ -556,7 +552,9 @@
     "transcriptionAuthMessage": "文字起こしはアカウント作成後にご利用いただけます。",
     "startError": "録音を開始できませんでした",
     "recordingStateLost": "録音の状態が失われました。もう一度お試しください。",
-    "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。"
+    "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。",
+    "chipTranscribe": "文字起こし",
+    "chipAgent": "エージェント"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
