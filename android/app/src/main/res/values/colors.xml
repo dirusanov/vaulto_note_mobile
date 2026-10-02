@@ -3,4 +3,9 @@
   <color name="iconBackground">#ffffff</color>
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#ffffff</color>
+  <color name="widget_surface">#FFFFFF</color>
+  <color name="widget_text">#1A1A1A</color>
+  <color name="widget_primary">#0066FF</color>
+  <color name="widget_secondary">#EEF4FF</color>
+  <color name="widget_icon">#0066FF</color>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="widget_record">Sprachnotiz aufnehmen</string>
+  <string name="widget_new">Notiz schreiben</string>
+  <string name="widget_ask">Zu Notizen fragen</string>
+  <string name="widget_description">Aufnehmen, schreiben und fragen mit einem Tipp</string>
+  <string name="tile_record">Vaulto: Aufnahme</string>
+</resources>

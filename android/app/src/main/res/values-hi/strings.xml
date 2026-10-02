@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="widget_record">वॉइस नोट रिकॉर्ड करें</string>
+  <string name="widget_new">नोट लिखें</string>
+  <string name="widget_ask">नोट्स के बारे में पूछें</string>
+  <string name="widget_description">एक टैप में रिकॉर्ड करें, लिखें और पूछें</string>
+  <string name="tile_record">Vaulto: रिकॉर्ड</string>
+</resources>

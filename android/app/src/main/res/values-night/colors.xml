@@ -1,3 +1,8 @@
 <resources>
   <color name="splashscreen_background">#0F1113</color>
+  <color name="widget_surface">#181B1F</color>
+  <color name="widget_text">#ECEEF1</color>
+  <color name="widget_primary">#3D8BFF</color>
+  <color name="widget_secondary">#252A30</color>
+  <color name="widget_icon">#66A3FF</color>
 </resources>

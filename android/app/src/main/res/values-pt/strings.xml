@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="widget_record">Gravar nota de voz</string>
+  <string name="widget_new">Escrever nota</string>
+  <string name="widget_ask">Perguntar sobre as notas</string>
+  <string name="widget_description">Grave, escreva e pergunte com um toque</string>
+  <string name="tile_record">Vaulto: gravar</string>
+</resources>

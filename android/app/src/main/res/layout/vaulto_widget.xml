@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="8dp">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:text="@string/app_name"
+        android:textColor="@color/widget_text"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <ImageView
+        android:id="@+id/widget_ask"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_button_secondary"
+        android:contentDescription="@string/widget_ask"
+        android:padding="12dp"
+        android:src="@drawable/ic_widget_ask" />
+
+    <ImageView
+        android:id="@+id/widget_new"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_button_secondary"
+        android:contentDescription="@string/widget_new"
+        android:padding="12dp"
+        android:src="@drawable/ic_widget_edit" />
+
+    <ImageView
+        android:id="@+id/widget_record"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_button_primary"
+        android:contentDescription="@string/widget_record"
+        android:padding="14dp"
+        android:src="@drawable/ic_widget_mic" />
+</LinearLayout>

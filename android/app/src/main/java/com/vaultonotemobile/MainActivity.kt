@@ -1,6 +1,7 @@
 package com.vaultonotemobile
 import expo.modules.splashscreen.SplashScreenManager
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 
@@ -21,6 +22,15 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
+    // "Share -> Vaulto" that cold-started the app.
+    ShareIntentStore.capture(applicationContext, intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    // "Share -> Vaulto" while the app is already running.
+    ShareIntentStore.capture(applicationContext, intent)
   }
 
   /**

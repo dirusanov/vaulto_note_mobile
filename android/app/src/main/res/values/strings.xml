@@ -2,4 +2,9 @@
   <string name="app_name">Vaulto Note</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="widget_record">Record a voice note</string>
+  <string name="widget_new">Write a note</string>
+  <string name="widget_ask">Ask about notes</string>
+  <string name="widget_description">Record, write and ask in one tap</string>
+  <string name="tile_record">Vaulto: record</string>
 </resources>

@@ -14,7 +14,7 @@ import { typography } from '../theme/typography';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
 import { useEncryption } from '../context/EncryptionContext';
-import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useFocusEffect, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -238,6 +238,13 @@ export const NotesListScreen = () => {
     const handleMicPress = () => {
         setIsVoiceRecorderVisible(true);
     };
+
+    // Widget / Quick Settings tile: vaultonote://record lands here with a stamp.
+    const route = useRoute<any>();
+    const startRecordingAt: number | undefined = route.params?.startRecordingAt;
+    useEffect(() => {
+        if (startRecordingAt) setIsVoiceRecorderVisible(true);
+    }, [startRecordingAt]);
 
     const handleCreateNote = () => {
         navigation.navigate('NoteEdit');

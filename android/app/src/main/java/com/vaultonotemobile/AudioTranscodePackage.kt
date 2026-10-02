@@ -12,6 +12,7 @@ class AudioTranscodePackage : ReactPackage {
         return listOf(
             AudioTranscodeModule(reactContext),
             DeviceCapabilitiesModule(reactContext),
+            ShareIntentModule(reactContext),
         )
     }
 
