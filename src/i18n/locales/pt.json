@@ -58,7 +58,9 @@
     "noSearchResults": "Nenhuma nota corresponde à sua pesquisa",
     "keptLockedTitle": "Notas da conta mantidas neste telefone: {{count}}",
     "keptLockedText": "Estão criptografadas. Entre na conta para abri-las.",
-    "deletedCount": "Notas excluídas: {{count}}"
+    "deletedCount": "Notas excluídas: {{count}}",
+    "offlineSync": "Sem conexão. As alterações são salvas e serão sincronizadas depois.",
+    "offline": "Sem conexão. As notas e os recursos no telefone continuam funcionando."
   },
   "settings": {
     "title": "Configurações",
@@ -534,6 +536,13 @@
       "suggestTitle": "Transcreva grátis no seu telefone",
       "suggestDesc": "Baixe o modelo de fala uma vez: as gravações viram texto no próprio telefone, grátis e offline, e o áudio nunca sai dele.",
       "enabled": "Agora as gravações são transcritas neste telefone"
+    },
+    "recordings": {
+      "addText": "Inserir texto",
+      "inNote": "Na nota",
+      "add": "Inserir",
+      "transcribe": "Transcrever",
+      "view": "Ver"
     }
   },
   "voice": {
@@ -684,7 +693,8 @@
     "enableSyncFailed": "Não foi possível ativar a sincronização.",
     "autoDetect": "Detecção automática",
     "noLanguagesFound": "Nenhum idioma encontrado para “{{query}}”",
-    "onDeviceFree": "Transcrever grátis neste telefone"
+    "onDeviceFree": "Transcrever grátis neste telefone",
+    "perMonth": "{{price}} por mês"
   },
   "a11y": {
     "back": "Voltar",
@@ -754,7 +764,9 @@
     "untitled": "Sem título",
     "signInRequired": "Entre para perguntar à IA sobre suas notas.",
     "signIn": "Entrar",
-    "privacyNoteLocal": "Funciona inteiramente neste telefone, offline — nada é enviado."
+    "privacyNoteLocal": "Funciona inteiramente neste telefone, offline — nada é enviado.",
+    "offlineHint": "A IA no telefone funciona sem internet.",
+    "setUpOnDevice": "Configurar"
   },
   "localAI": {
     "modelMissingTitle": "Baixe o modelo de IA",
@@ -804,5 +816,33 @@
     "aiText": "Melhora o texto, encontra tarefas e responde sobre suas notas.",
     "privacyTitle": "Privado por padrão",
     "privacyText": "As notas são guardadas criptografadas; a sincronização pode ter criptografia de ponta a ponta."
+  },
+  "errors": {
+    "offline": "Sem conexão com a internet. Verifique sua rede e tente novamente.",
+    "serverUnavailable": "O servidor está temporariamente indisponível. Suas notas estão seguras; tente em um minuto.",
+    "timeout": "A solicitação demorou demais. Verifique sua conexão e tente novamente."
+  },
+  "alerts": {
+    "shareUnavailable": "Não é possível compartilhar neste dispositivo.",
+    "captureFailed": "Não foi possível criar a imagem.",
+    "insertAudioFailed": "Não foi possível adicionar o player à nota.",
+    "noTranscriptTitle": "Ainda sem texto",
+    "noTranscriptText": "Esta gravação ainda não foi transcrita.",
+    "deleteFailed": "Não foi possível excluir",
+    "selectFailed": "Não foi possível selecionar",
+    "downloadFailed": "Falha no download",
+    "whisperDeleteFailed": "Não foi possível remover o modelo de fala.",
+    "llmSelectFailed": "Não foi possível selecionar o modelo de IA.",
+    "llmDownloadFailed": "Não foi possível baixar o modelo de IA.",
+    "llmDeleteFailed": "Não foi possível remover o modelo de IA.",
+    "localLlmUnavailableTitle": "IA no telefone indisponível",
+    "localLlmUnavailableText": "Esta versão do app não executa IA no telefone. Atualize o app ou escolha Vaulto AI nas configurações.",
+    "aiLockedTitle": "Entre para usar a IA",
+    "aiLockedText": "A IA na nuvem fica disponível após entrar. A IA no telefone funciona sem conta.",
+    "deletePromptTitle": "Excluir este prompt?",
+    "deletePromptText": "Ele será removido da sua lista.",
+    "recordingsEmpty": "Ainda não há gravações.",
+    "promptIcon": "Ícone",
+    "promptHelper": "Escreva {text} onde o texto da nota deve entrar."
   }
 }

@@ -58,7 +58,9 @@
     "noSearchResults": "No notes match your search",
     "keptLockedTitle": "Account notes kept on this phone: {{count}}",
     "keptLockedText": "They are encrypted. Sign in to your account to open them.",
-    "deletedCount": "Notes deleted: {{count}}"
+    "deletedCount": "Notes deleted: {{count}}",
+    "offlineSync": "Offline. Changes are saved and will sync later.",
+    "offline": "Offline. Notes and on-device features still work."
   },
   "settings": {
     "title": "Settings",
@@ -534,6 +536,13 @@
       "suggestTitle": "Transcribe for free on your phone",
       "suggestDesc": "Download the speech model once: recordings turn into text right on the phone, free and offline, and the audio never leaves it.",
       "enabled": "Recordings are now transcribed on this phone"
+    },
+    "recordings": {
+      "addText": "Add text",
+      "inNote": "In note",
+      "add": "Add",
+      "transcribe": "Transcribe",
+      "view": "View"
     }
   },
   "voice": {
@@ -684,7 +693,8 @@
     "enableSyncFailed": "Failed to enable sync.",
     "autoDetect": "Auto-Detect",
     "noLanguagesFound": "No languages found for \"{{query}}\"",
-    "onDeviceFree": "Transcribe free on this phone"
+    "onDeviceFree": "Transcribe free on this phone",
+    "perMonth": "{{price}} / month"
   },
   "a11y": {
     "back": "Back",
@@ -754,7 +764,9 @@
     "untitled": "Untitled",
     "signInRequired": "Sign in to ask AI about your notes.",
     "signIn": "Sign in",
-    "privacyNoteLocal": "Runs entirely on this phone, offline — nothing is sent anywhere."
+    "privacyNoteLocal": "Runs entirely on this phone, offline — nothing is sent anywhere.",
+    "offlineHint": "AI on this phone works without internet.",
+    "setUpOnDevice": "Set up"
   },
   "localAI": {
     "modelMissingTitle": "Download the AI model",
@@ -804,5 +816,33 @@
     "aiText": "Improve the text, find tasks, ask about your notes.",
     "privacyTitle": "Private by default",
     "privacyText": "Notes are stored encrypted; sync can be end-to-end encrypted."
+  },
+  "errors": {
+    "offline": "No internet connection. Check your network and try again.",
+    "serverUnavailable": "The server is temporarily unavailable. Your notes are safe; try again in a minute.",
+    "timeout": "The request took too long. Check your connection and try again."
+  },
+  "alerts": {
+    "shareUnavailable": "Sharing is not available on this device.",
+    "captureFailed": "Could not create the image.",
+    "insertAudioFailed": "Could not add the audio player to the note.",
+    "noTranscriptTitle": "No text yet",
+    "noTranscriptText": "This recording has not been transcribed yet.",
+    "deleteFailed": "Could not delete",
+    "selectFailed": "Could not select",
+    "downloadFailed": "Download failed",
+    "whisperDeleteFailed": "Could not remove the speech model.",
+    "llmSelectFailed": "Could not select the AI model.",
+    "llmDownloadFailed": "Could not download the AI model.",
+    "llmDeleteFailed": "Could not remove the AI model.",
+    "localLlmUnavailableTitle": "On-device AI is unavailable",
+    "localLlmUnavailableText": "This version of the app cannot run AI on the phone. Update the app or switch to Vaulto AI in Settings.",
+    "aiLockedTitle": "Sign in to use AI",
+    "aiLockedText": "Cloud AI features are available after signing in. On-device AI works without an account.",
+    "deletePromptTitle": "Delete this prompt?",
+    "deletePromptText": "It will be removed from your list.",
+    "recordingsEmpty": "No recordings yet.",
+    "promptIcon": "Icon",
+    "promptHelper": "Write {text} where the note text should go."
   }
 }

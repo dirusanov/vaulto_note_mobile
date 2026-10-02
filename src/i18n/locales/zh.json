@@ -58,7 +58,9 @@
     "noSearchResults": "没有匹配的笔记",
     "keptLockedTitle": "保留在这部手机上的账户笔记：{{count}}",
     "keptLockedText": "它们已加密。登录账户即可打开。",
-    "deletedCount": "已删除笔记：{{count}}"
+    "deletedCount": "已删除笔记：{{count}}",
+    "offlineSync": "离线。更改已保存，稍后会同步。",
+    "offline": "离线。笔记和手机上的功能仍可使用。"
   },
   "settings": {
     "title": "设置",
@@ -534,6 +536,13 @@
       "suggestTitle": "在手机上免费转写",
       "suggestDesc": "下载一次语音模型：录音直接在手机上转成文字，免费且离线，音频不会离开手机。",
       "enabled": "现在录音会在这部手机上转写"
+    },
+    "recordings": {
+      "addText": "插入文字",
+      "inNote": "已在笔记中",
+      "add": "插入",
+      "transcribe": "转文字",
+      "view": "查看"
     }
   },
   "voice": {
@@ -684,7 +693,8 @@
     "enableSyncFailed": "无法开启同步。",
     "autoDetect": "自动检测",
     "noLanguagesFound": "未找到与“{{query}}”匹配的语言",
-    "onDeviceFree": "在这部手机上免费转写"
+    "onDeviceFree": "在这部手机上免费转写",
+    "perMonth": "每月 {{price}}"
   },
   "a11y": {
     "back": "返回",
@@ -754,7 +764,9 @@
     "untitled": "无标题",
     "signInRequired": "登录后即可向 AI 询问你的笔记。",
     "signIn": "登录",
-    "privacyNoteLocal": "完全在这部手机上离线运行——不会发送任何内容。"
+    "privacyNoteLocal": "完全在这部手机上离线运行——不会发送任何内容。",
+    "offlineHint": "手机上的 AI 无需联网即可使用。",
+    "setUpOnDevice": "去设置"
   },
   "localAI": {
     "modelMissingTitle": "下载 AI 模型",
@@ -804,5 +816,33 @@
     "aiText": "改写文字、找出任务、回答关于笔记的问题。",
     "privacyTitle": "默认私密",
     "privacyText": "笔记加密存储；同步可采用端到端加密。"
+  },
+  "errors": {
+    "offline": "没有网络连接。请检查网络后重试。",
+    "serverUnavailable": "服务器暂时不可用。你的笔记是安全的，请稍后再试。",
+    "timeout": "请求耗时过长。请检查网络后重试。"
+  },
+  "alerts": {
+    "shareUnavailable": "此设备无法分享。",
+    "captureFailed": "无法生成图片。",
+    "insertAudioFailed": "无法将音频播放器添加到笔记。",
+    "noTranscriptTitle": "暂无文字",
+    "noTranscriptText": "这段录音还没有转成文字。",
+    "deleteFailed": "无法删除",
+    "selectFailed": "无法选择",
+    "downloadFailed": "下载失败",
+    "whisperDeleteFailed": "无法移除语音模型。",
+    "llmSelectFailed": "无法选择 AI 模型。",
+    "llmDownloadFailed": "无法下载 AI 模型。",
+    "llmDeleteFailed": "无法移除 AI 模型。",
+    "localLlmUnavailableTitle": "手机上的 AI 不可用",
+    "localLlmUnavailableText": "此版本的应用无法在手机上运行 AI。请更新应用，或在设置中选择 Vaulto AI。",
+    "aiLockedTitle": "登录后即可使用 AI",
+    "aiLockedText": "登录后可使用云端 AI。手机上的 AI 无需账号。",
+    "deletePromptTitle": "删除此提示词？",
+    "deletePromptText": "它将从列表中移除。",
+    "recordingsEmpty": "还没有录音。",
+    "promptIcon": "图标",
+    "promptHelper": "在需要插入笔记文字的位置写 {text}。"
   }
 }

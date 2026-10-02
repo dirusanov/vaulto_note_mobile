@@ -25,6 +25,7 @@ import { hasMeaningfulRichContent } from '../utils/richContent';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
+import { useNetInfo } from '@react-native-community/netinfo';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
@@ -39,6 +40,9 @@ export const NotesListScreen = () => {
     // Account avatar in the search bar (as in Keep/Gmail): the initial of the name
     // or e-mail when signed in, a person icon for guests.
     const signedIn = isAuthenticated && !isGuest;
+    const netInfo = useNetInfo();
+    // `null` means not known yet; only a definite "no" shows the offline note.
+    const isOffline = netInfo.isConnected === false;
     const avatarInitial = signedIn
         ? ((user?.full_name || user?.email || '').trim().charAt(0).toUpperCase() || null)
         : null;
@@ -549,6 +553,17 @@ export const NotesListScreen = () => {
             ) : (
                 <View style={styles.topBar} />
             )}
+            {/* Offline: say that nothing is lost, sync just waits for the network. */}
+            {isOffline && !isSelectionMode && (
+                <View style={styles.offlinePill} accessibilityLiveRegion="polite">
+                    <MaterialIcons name="cloud-off" size={16} color={colors.textSecondary} />
+                    <Text style={styles.offlineText} numberOfLines={2}>
+                        {signedIn
+                            ? t('notes.offlineSync', 'Offline. Changes are saved and will sync later.')
+                            : t('notes.offline', 'Offline. Notes and on-device features still work.')}
+                    </Text>
+                </View>
+            )}
             {/* Signed out but notes were kept: they are on the phone, just not readable yet. */}
             {!signedIn && lockedCount > 0 && !isSelectionMode && (
                 <View style={styles.lockBanner}>
@@ -901,6 +916,22 @@ const styles = createStyles(() => ({
     topActions: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    offlinePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        marginHorizontal: spacing.m,
+        marginBottom: spacing.m,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 10,
+        borderRadius: 14,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    offlineText: {
+        flex: 1,
+        fontSize: 13,
+        color: colors.textSecondary,
     },
     lockBanner: {
         marginHorizontal: spacing.m,

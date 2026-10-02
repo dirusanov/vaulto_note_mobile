@@ -25,7 +25,7 @@ import { deriveAutoTitleFromPlainText, richContentToPlainText } from '../utils/r
 import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
 import { getAIProvider, getPrivateAIAllowed } from '../utils/storage';
 import { useAuth } from '../hooks/useAuth';
-import { getErrorMessage } from '../utils/errorMessage';
+import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
@@ -34,7 +34,7 @@ import { rtlFlip } from '../i18n/direction';
 type Message =
     | { id: string; role: 'user'; text: string }
     | { id: string; role: 'assistant'; text: string; sources: NoteSource[] }
-    | { id: string; role: 'error'; text: string; signIn?: boolean };
+    | { id: string; role: 'error'; text: string; signIn?: boolean; offline?: boolean };
 
 /**
  * "Ask your notes": retrieval runs on the device over decrypted notes; only the
@@ -123,10 +123,13 @@ export const AskNotesScreen = () => {
         } catch (error) {
             // The limit modal explains a used-up quota; no raw error bubble on top of it.
             if (getErrorMessage(error, '').toLowerCase().includes('usage limit')) return;
+            // Offline with cloud AI: point to the on-device model, which needs no network.
+            const offline = isNetworkError(error) && !(await isOnDeviceAI().catch(() => false));
             setMessages((prev) => [...prev, {
                 id: `e-${stamp}`,
                 role: 'error',
                 text: getErrorMessage(error, t('ask.failed', 'Could not get an answer. Check your connection and try again.')),
+                offline,
             }]);
         } finally {
             setBusy(false);
@@ -215,7 +218,21 @@ export const AskNotesScreen = () => {
                             return (
                                 <View key={message.id} style={styles.errorBubble}>
                                     <MaterialIcons name={message.signIn ? 'lock-outline' : 'error-outline'} size={18} color={colors.error} />
-                                    <Text style={styles.errorText}>{message.text}</Text>
+                                    <Text style={styles.errorText}>
+                                        {message.text}
+                                        {message.offline ? (
+                                            <Text style={styles.errorHint}>{`\n${t('ask.offlineHint', 'AI on this phone works without internet.')}`}</Text>
+                                        ) : null}
+                                    </Text>
+                                    {message.offline && (
+                                        <TouchableOpacity
+                                            style={styles.signInButton}
+                                            onPress={() => navigation.navigate('Settings')}
+                                            accessibilityRole="button"
+                                        >
+                                            <Text style={styles.signInText}>{t('ask.setUpOnDevice', 'Set up')}</Text>
+                                        </TouchableOpacity>
+                                    )}
                                     {message.signIn && (
                                         <TouchableOpacity
                                             style={styles.signInButton}
@@ -421,6 +438,9 @@ const styles = createStyles(() => ({
         padding: spacing.m,
         borderRadius: 12,
         backgroundColor: colors.errorLight,
+    },
+    errorHint: {
+        color: colors.textSecondary,
     },
     errorText: {
         flex: 1,

@@ -58,7 +58,9 @@
     "noSearchResults": "Ninguna nota coincide con la búsqueda",
     "keptLockedTitle": "Notas de la cuenta guardadas en este teléfono: {{count}}",
     "keptLockedText": "Están cifradas. Inicia sesión para abrirlas.",
-    "deletedCount": "Notas eliminadas: {{count}}"
+    "deletedCount": "Notas eliminadas: {{count}}",
+    "offlineSync": "Sin conexión. Los cambios se guardan y se sincronizarán después.",
+    "offline": "Sin conexión. Las notas y las funciones en el teléfono siguen funcionando."
   },
   "settings": {
     "title": "Ajustes",
@@ -534,6 +536,13 @@
       "suggestTitle": "Transcribe gratis en tu teléfono",
       "suggestDesc": "Descarga una vez el modelo de voz: las grabaciones se convierten en texto en el propio teléfono, gratis y sin conexión, y el audio nunca sale de él.",
       "enabled": "Ahora las grabaciones se transcriben en este teléfono"
+    },
+    "recordings": {
+      "addText": "Añadir texto",
+      "inNote": "En la nota",
+      "add": "Añadir",
+      "transcribe": "Transcribir",
+      "view": "Ver"
     }
   },
   "voice": {
@@ -684,7 +693,8 @@
     "enableSyncFailed": "No se pudo activar la sincronización.",
     "autoDetect": "Detección automática",
     "noLanguagesFound": "No se encontraron idiomas para «{{query}}»",
-    "onDeviceFree": "Transcribir gratis en este teléfono"
+    "onDeviceFree": "Transcribir gratis en este teléfono",
+    "perMonth": "{{price}} al mes"
   },
   "a11y": {
     "back": "Atrás",
@@ -754,7 +764,9 @@
     "untitled": "Sin título",
     "signInRequired": "Inicia sesión para preguntar a la IA sobre tus notas.",
     "signIn": "Iniciar sesión",
-    "privacyNoteLocal": "Funciona por completo en este teléfono, sin conexión: no se envía nada."
+    "privacyNoteLocal": "Funciona por completo en este teléfono, sin conexión: no se envía nada.",
+    "offlineHint": "La IA en el teléfono funciona sin internet.",
+    "setUpOnDevice": "Configurar"
   },
   "localAI": {
     "modelMissingTitle": "Descarga el modelo de IA",
@@ -804,5 +816,33 @@
     "aiText": "Mejora el texto, encuentra tareas y responde sobre tus notas.",
     "privacyTitle": "Privado por defecto",
     "privacyText": "Las notas se guardan cifradas; la sincronización puede tener cifrado de extremo a extremo."
+  },
+  "errors": {
+    "offline": "Sin conexión a internet. Revisa tu red e inténtalo de nuevo.",
+    "serverUnavailable": "El servidor no está disponible por ahora. Tus notas están a salvo; inténtalo en un minuto.",
+    "timeout": "La solicitud tardó demasiado. Revisa tu conexión e inténtalo de nuevo."
+  },
+  "alerts": {
+    "shareUnavailable": "No se puede compartir en este dispositivo.",
+    "captureFailed": "No se pudo crear la imagen.",
+    "insertAudioFailed": "No se pudo añadir el reproductor a la nota.",
+    "noTranscriptTitle": "Aún no hay texto",
+    "noTranscriptText": "Esta grabación todavía no se ha transcrito.",
+    "deleteFailed": "No se pudo eliminar",
+    "selectFailed": "No se pudo seleccionar",
+    "downloadFailed": "Error en la descarga",
+    "whisperDeleteFailed": "No se pudo eliminar el modelo de voz.",
+    "llmSelectFailed": "No se pudo seleccionar el modelo de IA.",
+    "llmDownloadFailed": "No se pudo descargar el modelo de IA.",
+    "llmDeleteFailed": "No se pudo eliminar el modelo de IA.",
+    "localLlmUnavailableTitle": "La IA en el teléfono no está disponible",
+    "localLlmUnavailableText": "Esta versión de la app no puede ejecutar IA en el teléfono. Actualiza la app o elige Vaulto AI en Ajustes.",
+    "aiLockedTitle": "Inicia sesión para usar la IA",
+    "aiLockedText": "La IA en la nube está disponible tras iniciar sesión. La IA en el teléfono funciona sin cuenta.",
+    "deletePromptTitle": "¿Eliminar este prompt?",
+    "deletePromptText": "Se quitará de tu lista.",
+    "recordingsEmpty": "Aún no hay grabaciones.",
+    "promptIcon": "Icono",
+    "promptHelper": "Escribe {text} donde debe ir el texto de la nota."
   }
 }

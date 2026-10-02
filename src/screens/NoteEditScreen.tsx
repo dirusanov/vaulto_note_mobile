@@ -1204,7 +1204,7 @@ export const NoteEditScreen = () => {
                     UTI: 'net.daringfireball.markdown', // Helping iOS identify it as markdown
                 });
             } else {
-                Alert.alert('Error', 'Sharing is not available');
+                Alert.alert(t('common.errorTitle', 'Error'), t('alerts.shareUnavailable', 'Sharing is not available on this device.'));
             }
         } catch (error) {
             console.error('Error exporting markdown:', error);
@@ -1229,10 +1229,10 @@ export const NoteEditScreen = () => {
                         dialogTitle: 'Share Note as Image',
                     });
                 } else {
-                    Alert.alert('Error', 'Sharing is not available on this device');
+                    Alert.alert(t('common.errorTitle', 'Error'), t('alerts.shareUnavailable', 'Sharing is not available on this device.'));
                 }
             } else {
-                Alert.alert('Error', 'Could not capture view');
+                Alert.alert(t('common.errorTitle', 'Error'), t('alerts.captureFailed', 'Could not create the image.'));
             }
         } catch (error) {
             console.error('Error exporting image:', error);
@@ -1572,8 +1572,8 @@ export const NoteEditScreen = () => {
 
         if (needsLocalLLMRuntime && !isLocalLLMRuntimeAvailable()) {
             Alert.alert(
-                'Local LLM unavailable',
-                'This build includes local Whisper, but not local LLM execution. Text improvements require a build with LLM support, or you can switch to Custom AI/Vaulto AI.'
+                t('alerts.localLlmUnavailableTitle', 'On-device AI is unavailable'),
+                t('alerts.localLlmUnavailableText', 'This version of the app cannot run AI on the phone. Update the app or switch to Vaulto AI in Settings.'),
             );
             return;
         }
@@ -1598,12 +1598,12 @@ export const NoteEditScreen = () => {
 
         if (isGuest && !isLocalAiProvider) {
             Alert.alert(
-                'AI Features Locked',
-                'AI features are available only for signed-in users.',
+                t('alerts.aiLockedTitle', 'Sign in to use AI'),
+                t('alerts.aiLockedText', 'Cloud AI features are available after signing in. On-device AI works without an account.'),
                 [
-                    { text: 'Cancel', style: 'cancel' },
+                    { text: t('common.cancel', 'Cancel'), style: 'cancel' },
                     {
-                        text: 'Sign In',
+                        text: t('ask.signIn', 'Sign in'),
                         onPress: () => navigation.navigate('SignIn')
                     }
                 ]
@@ -3355,7 +3355,7 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        Alert.alert('Error', 'Could not insert the audio player into the note.');
+        Alert.alert(t('common.errorTitle', 'Error'), t('alerts.insertAudioFailed', 'Could not add the audio player to the note.'));
     }, [
         buildInsertedTextForVariant,
         closeRecordingsList,
@@ -5293,7 +5293,7 @@ export const NoteEditScreen = () => {
         const selected = selectedRecordingForText;
         const recognizedText = selected?.transcription?.trim() || '';
         if (!selected || !recognizedText) {
-            Alert.alert('No recognized text', 'This recording has no saved transcript yet.');
+            Alert.alert(t('alerts.noTranscriptTitle', 'No text yet'), t('alerts.noTranscriptText', 'This recording has not been transcribed yet.'));
             return;
         }
 
@@ -5313,7 +5313,7 @@ export const NoteEditScreen = () => {
         const selected = selectedRecordingForText;
         const recognizedText = selected?.transcription?.trim() || '';
         if (!recognizedText) {
-            Alert.alert('No recognized text', 'This recording has no saved transcript yet.');
+            Alert.alert(t('alerts.noTranscriptTitle', 'No text yet'), t('alerts.noTranscriptText', 'This recording has not been transcribed yet.'));
             return;
         }
         await Clipboard.setStringAsync(recognizedText);
@@ -5706,12 +5706,12 @@ export const NoteEditScreen = () => {
 
     const handleDeletePrompt = (id: string) => {
         Alert.alert(
-            'Delete Prompt',
-            'Are you sure you want to delete this prompt?',
+            t('alerts.deletePromptTitle', 'Delete this prompt?'),
+            t('alerts.deletePromptText', 'It will be removed from your list.'),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('common.cancel', 'Cancel'), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('common.delete', 'Delete'),
                     style: 'destructive',
                     onPress: async () => {
                         const updated = aiOptions.filter(opt => opt.id !== id);
@@ -6542,10 +6542,10 @@ export const NoteEditScreen = () => {
                                 <View style={[styles.promptBuilderContent, { paddingBottom: insets.bottom + spacing.m }]}>
                                     <Text style={styles.aiModalTitle}>{t("edit.newPrompt", "New Prompt")}</Text>
                                     <Text style={styles.promptHelper}>
-                                        Use {'{text}'} to indicate where to insert note text.
+                                        {t('alerts.promptHelper', 'Write {text} where the note text should go.')}
                                     </Text>
                                     <View>
-                                        <Text style={styles.promptHelper}>Icon</Text>
+                                        <Text style={styles.promptHelper}>{t('alerts.promptIcon', 'Icon')}</Text>
                                         <ScrollView
                                             horizontal
                                             showsHorizontalScrollIndicator={false}
@@ -6608,7 +6608,7 @@ export const NoteEditScreen = () => {
                                             disabled={!newPromptTitle.trim() || !newPromptTemplate.trim()}
                                             onPress={handleCreatePrompt}
                                         >
-                                            <Text style={styles.savePromptText}>Save</Text>
+                                            <Text style={styles.savePromptText}>{t('common.save', 'Save')}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -7141,7 +7141,7 @@ export const NoteEditScreen = () => {
 
                                     {voiceRecordings.length === 0 ? (
                                         <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: spacing.m }}>
-                                            No recordings yet.
+                                            {t('alerts.recordingsEmpty', 'No recordings yet.')}
                                         </Text>
                                     ) : (
                                         voiceRecordings.map((rec) => {
@@ -7150,8 +7150,8 @@ export const NoteEditScreen = () => {
                                             const hasRecognizedText = !!rec.transcription?.trim();
                                             const isInsertActionDisabled = !hasRecognizedText && isAttachedToNote;
                                             const insertActionLabel = hasRecognizedText
-                                                ? 'Add text'
-                                                : (isAttachedToNote ? 'In note' : 'Add');
+                                                ? t('edit.recordings.addText', 'Add text')
+                                                : (isAttachedToNote ? t('edit.recordings.inNote', 'In note') : t('edit.recordings.add', 'Add'));
                                             const insertActionIcon = hasRecognizedText ? 'notes' : 'add';
                                             // Decoupled from transcriptionEnabled per user request
                                             const canTranscribeThisRecording = true;
@@ -7173,7 +7173,8 @@ export const NoteEditScreen = () => {
                                                         void handlePreviewRecording(rec);
                                                     }}
                                                 >
-                                                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                                                    {/* Actions wrap under the duration when they do not fit beside it. */}
+                                                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', rowGap: spacing.s }}>
                                                         <View style={[
                                                             styles.recordingIconContainer,
                                                             isPlaying && { backgroundColor: colors.primary + '10' }
@@ -7185,12 +7186,12 @@ export const NoteEditScreen = () => {
                                                             />
                                                         </View>
 
-                                                        <View style={{ flex: 1, marginRight: spacing.s }}>
-                                                            <Text style={[styles.recordingTitle, isPlaying && { color: colors.primary }]}>
+                                                        <View style={{ flex: 1, minWidth: 110, marginRight: spacing.s }}>
+                                                            <Text style={[styles.recordingTitle, isPlaying && { color: colors.primary }]} numberOfLines={1}>
                                                                 {formatDuration(rec.duration)}
                                                             </Text>
                                                             <Text style={styles.recordingSubtitle} numberOfLines={1}>
-                                                                {new Date(rec.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                {new Date(rec.created_at).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' })}
                                                             </Text>
                                                         </View>
 
@@ -7221,7 +7222,7 @@ export const NoteEditScreen = () => {
                                                                     ) : (
                                                                         <>
                                                                             <MaterialIcons name="auto-awesome" size={12} color={colors.primary} />
-                                                                            <Text style={styles.recordingActionChipText}>AI</Text>
+                                                                            <Text style={styles.recordingActionChipText}>{t('edit.recordings.transcribe', 'Transcribe')}</Text>
                                                                         </>
                                                                     )}
                                                                 </TouchableOpacity>
@@ -7233,13 +7234,15 @@ export const NoteEditScreen = () => {
                                                                     onPress={() => openRecordingTextView(rec)}
                                                                 >
                                                                     <MaterialIcons name="visibility" size={14} color={colors.textSecondary} />
-                                                                    <Text style={[styles.recordingActionChipText, { color: colors.textSecondary }]}>View</Text>
+                                                                    <Text style={[styles.recordingActionChipText, { color: colors.textSecondary }]}>{t('edit.recordings.view', 'View')}</Text>
                                                                 </TouchableOpacity>
                                                             )}
 
                                                             <TouchableOpacity
-                                                                style={{ padding: 6 }}
+                                                                style={styles.recordingDeleteIcon}
                                                                 onPress={() => handleDeleteRecording(rec.id, rec.file_path)}
+                                                                accessibilityRole="button"
+                                                                accessibilityLabel={t('common.delete', 'Delete')}
                                                             >
                                                                 <MaterialIcons name="delete-outline" size={18} color={colors.error} />
                                                             </TouchableOpacity>
@@ -7296,7 +7299,7 @@ export const NoteEditScreen = () => {
                                         void handleCopySelectedRecordingText();
                                     }}
                                 >
-                                    <Text style={styles.recordingSecondaryText}>Copy</Text>
+                                    <Text style={styles.recordingSecondaryText}>{t('common.copy', 'Copy')}</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -8192,16 +8195,22 @@ const styles = createStyles(() => ({
     recordingActionChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.primary + '10',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
+        backgroundColor: colors.primaryLight,
+        minHeight: 40,
+        paddingHorizontal: 12,
+        borderRadius: 12,
         gap: 4,
     },
     recordingActionChipText: {
         ...typography.captionBold,
         color: colors.primary,
-        fontSize: 10,
+        fontSize: 13,
+    },
+    recordingDeleteIcon: {
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     recordingDeleteButton: {
         padding: spacing.s,

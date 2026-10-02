@@ -22,7 +22,7 @@ const {
     normalizeOpenAIBaseUrl,
 } = require('../.test-build/utils/openaiCompat.js');
 
-const { getErrorMessage } = require('../.test-build/utils/errorMessage.js');
+const { getErrorMessage, isNetworkError } = require('../.test-build/utils/errorMessage.js');
 
 // --- checklist scaling ------------------------------------------------------
 
@@ -139,8 +139,12 @@ test('a tunnel outage tells the user their note is safe', () => {
 });
 
 test('transport failures are translated into something actionable', () => {
-    assert.match(getErrorMessage('Network Error'), /Check internet connection/);
-    assert.match(getErrorMessage('timeout of 30000ms exceeded'), /timed out/);
+    assert.match(getErrorMessage('Network Error'), /No internet connection/);
+    assert.match(getErrorMessage('fetch failed: java.net.UnknownHostException: Unable to resolve host "api.vaultonote.com"'), /No internet connection/);
+    assert.match(getErrorMessage('timeout of 30000ms exceeded'), /took too long/);
+    assert.match(getErrorMessage({ message: 'Request failed with status code 502', response: { status: 502, data: {} } }), /temporarily unavailable/);
+    assert.equal(isNetworkError({ message: 'Network Error' }), true);
+    assert.equal(isNetworkError({ message: 'Network Error', response: { status: 500 } }), false);
 });
 
 test('an unusable error falls back to the caller-supplied message', () => {

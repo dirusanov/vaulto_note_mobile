@@ -44,6 +44,7 @@ import {
     rebasedClientTimestamp,
     shouldPauseForEncryptionState,
 } from './encryptionState';
+import { isNetworkError } from '../utils/errorMessage';
 
 
 // Numeric monotonic cursor (server_seq). New key so stale ISO timestamps from
@@ -925,7 +926,12 @@ class SyncService {
             }
 
         } catch (e) {
-            console.error('[SyncService] Sync failed', e);
+            if (isNetworkError(e)) {
+                // Offline is expected; the next sync retries.
+                console.warn('[SyncService] Sync skipped: offline');
+            } else {
+                console.error('[SyncService] Sync failed', e);
+            }
             if (throwOnError) throw e;
         } finally {
             this.isSyncing = false;

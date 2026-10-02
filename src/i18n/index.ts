@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { applyLayoutDirection } from './direction';
+import { setErrorMessageTranslator } from '../utils/errorMessage';
 
 import en from './locales/en.json';
 import ru from './locales/ru.json';
@@ -56,6 +57,7 @@ const initI18n = async () => {
         escapeValue: false,
       },
     });
+  setErrorMessageTranslator((key, fallback) => i18n.t(key, { defaultValue: fallback }));
   void applyLayoutDirection(savedLanguage);
 };
 

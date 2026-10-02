@@ -207,7 +207,12 @@ const buildAudioPreviewSvg = (payload: AudioPreviewPayload): string => {
     const progressWidth = Math.round(progressTrackWidth * progressRatio);
     const progressKnobX = AUDIO_PREVIEW_PROGRESS_START + progressWidth;
     const remaining = Math.max(0, duration - position);
-    const iconText = isLoading ? '...' : (isPlaying ? '||' : '>');
+    // Same drawn icons as the editor runtime (richTextAudioBridge), not text glyphs.
+    const iconSvg = isLoading
+        ? '<circle cx="78" cy="88" r="6" fill="#FFFFFF"/><circle cx="94" cy="88" r="6" fill="#FFFFFF"/><circle cx="110" cy="88" r="6" fill="#FFFFFF"/>'
+        : (isPlaying
+            ? '<rect x="79" y="70" width="11" height="36" rx="3" fill="#FFFFFF"/><rect x="98" y="70" width="11" height="36" rx="3" fill="#FFFFFF"/>'
+            : '<path d="M84 68 L84 108 Q84 113 89 110 L116 92 Q120 88 116 84 L89 66 Q84 63 84 68 Z" fill="#FFFFFF"/>');
     const speedText = `${String(playbackSpeed).replace(/\.0$/, '')}x`;
     const waveStartX = 198;
     const waveBaseY = 58;
@@ -230,7 +235,7 @@ const buildAudioPreviewSvg = (payload: AudioPreviewPayload): string => {
 <rect x="8" y="10" width="664" height="156" rx="32" fill="${AUDIO_PREVIEW_CARD_BACKGROUND}" stroke="${AUDIO_PREVIEW_CARD_BORDER}" stroke-width="2"/>
 <circle cx="94" cy="88" r="52" fill="${AUDIO_PREVIEW_ACCENT_SOFT}"/>
 <circle cx="94" cy="88" r="45" fill="${AUDIO_PREVIEW_ACCENT}"/>
-<text x="94" y="99" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#FFFFFF">${escapeHtml(iconText)}</text>
+${iconSvg}
 ${waveBars}
 <rect x="${AUDIO_PREVIEW_SPEED_START}" y="${AUDIO_PREVIEW_SPEED_TOP}" width="${AUDIO_PREVIEW_SPEED_END - AUDIO_PREVIEW_SPEED_START}" height="${AUDIO_PREVIEW_SPEED_BOTTOM - AUDIO_PREVIEW_SPEED_TOP}" rx="19" fill="${AUDIO_PREVIEW_SPEED_BACKGROUND}" stroke="${AUDIO_PREVIEW_SPEED_BORDER}" stroke-width="2"/>
 <text x="${Math.round((AUDIO_PREVIEW_SPEED_START + AUDIO_PREVIEW_SPEED_END) / 2)}" y="94" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="${AUDIO_PREVIEW_TEXT}">${escapeHtml(speedText)}</text>

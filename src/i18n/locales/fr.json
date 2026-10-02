@@ -58,7 +58,9 @@
     "noSearchResults": "Aucune note ne correspond à votre recherche",
     "keptLockedTitle": "Notes du compte conservées sur ce téléphone : {{count}}",
     "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir.",
-    "deletedCount": "Notes supprimées : {{count}}"
+    "deletedCount": "Notes supprimées : {{count}}",
+    "offlineSync": "Hors ligne. Les modifications sont enregistrées et seront synchronisées plus tard.",
+    "offline": "Hors ligne. Les notes et les fonctions sur le téléphone restent disponibles."
   },
   "settings": {
     "title": "Paramètres",
@@ -534,6 +536,13 @@
       "suggestTitle": "Transcription gratuite sur votre téléphone",
       "suggestDesc": "Téléchargez une fois le modèle vocal : les enregistrements deviennent du texte directement sur le téléphone, gratuitement et hors ligne, et l’audio ne le quitte jamais.",
       "enabled": "Les enregistrements sont désormais transcrits sur ce téléphone"
+    },
+    "recordings": {
+      "addText": "Ajouter le texte",
+      "inNote": "Dans la note",
+      "add": "Ajouter",
+      "transcribe": "Transcrire",
+      "view": "Voir"
     }
   },
   "voice": {
@@ -684,7 +693,8 @@
     "enableSyncFailed": "Impossible d'activer la synchronisation.",
     "autoDetect": "Détection automatique",
     "noLanguagesFound": "Aucune langue trouvée pour « {{query}} »",
-    "onDeviceFree": "Transcrire gratuitement sur ce téléphone"
+    "onDeviceFree": "Transcrire gratuitement sur ce téléphone",
+    "perMonth": "{{price}} par mois"
   },
   "a11y": {
     "back": "Retour",
@@ -754,7 +764,9 @@
     "untitled": "Sans titre",
     "signInRequired": "Connectez-vous pour interroger l’IA sur vos notes.",
     "signIn": "Se connecter",
-    "privacyNoteLocal": "Fonctionne entièrement sur ce téléphone, hors ligne — rien n’est envoyé."
+    "privacyNoteLocal": "Fonctionne entièrement sur ce téléphone, hors ligne — rien n’est envoyé.",
+    "offlineHint": "L’IA sur le téléphone fonctionne sans internet.",
+    "setUpOnDevice": "Configurer"
   },
   "localAI": {
     "modelMissingTitle": "Téléchargez le modèle d’IA",
@@ -804,5 +816,33 @@
     "aiText": "Améliore le texte, trouve les tâches, répond sur vos notes.",
     "privacyTitle": "Privé par défaut",
     "privacyText": "Les notes sont stockées chiffrées ; la synchronisation peut être chiffrée de bout en bout."
+  },
+  "errors": {
+    "offline": "Pas de connexion internet. Vérifiez votre réseau et réessayez.",
+    "serverUnavailable": "Le serveur est momentanément indisponible. Vos notes sont en sécurité ; réessayez dans une minute.",
+    "timeout": "La requête a pris trop de temps. Vérifiez votre connexion et réessayez."
+  },
+  "alerts": {
+    "shareUnavailable": "Le partage n’est pas disponible sur cet appareil.",
+    "captureFailed": "Impossible de créer l’image.",
+    "insertAudioFailed": "Impossible d’ajouter le lecteur audio à la note.",
+    "noTranscriptTitle": "Pas encore de texte",
+    "noTranscriptText": "Cet enregistrement n’a pas encore été transcrit.",
+    "deleteFailed": "Suppression impossible",
+    "selectFailed": "Sélection impossible",
+    "downloadFailed": "Échec du téléchargement",
+    "whisperDeleteFailed": "Impossible de supprimer le modèle vocal.",
+    "llmSelectFailed": "Impossible de sélectionner le modèle d’IA.",
+    "llmDownloadFailed": "Impossible de télécharger le modèle d’IA.",
+    "llmDeleteFailed": "Impossible de supprimer le modèle d’IA.",
+    "localLlmUnavailableTitle": "IA sur le téléphone indisponible",
+    "localLlmUnavailableText": "Cette version de l’app ne peut pas exécuter l’IA sur le téléphone. Mettez l’app à jour ou choisissez Vaulto AI dans les réglages.",
+    "aiLockedTitle": "Connectez-vous pour utiliser l’IA",
+    "aiLockedText": "L’IA dans le cloud est disponible après connexion. L’IA sur le téléphone fonctionne sans compte.",
+    "deletePromptTitle": "Supprimer ce prompt ?",
+    "deletePromptText": "Il sera retiré de votre liste.",
+    "recordingsEmpty": "Aucun enregistrement pour l’instant.",
+    "promptIcon": "Icône",
+    "promptHelper": "Écrivez {text} là où le texte de la note doit aller."
   }
 }

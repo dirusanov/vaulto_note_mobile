@@ -82,6 +82,7 @@ import { SearchableLanguageSelector } from '../components/SearchableLanguageSele
 import { RecoveryCodeModal } from '../components/RecoveryCodeModal';
 import { createStyles } from '../theme/createStyles';
 import { useTheme } from '../theme/ThemeContext';
+import { getErrorMessage } from '../utils/errorMessage';
 import { applyLayoutDirection } from '../i18n/direction';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
@@ -976,7 +977,7 @@ export const SettingsScreen = () => {
             }
             void refreshModelStates();
         } catch (error: any) {
-            Alert.alert('Delete failed', error?.message || 'Unable to remove the local Whisper model.');
+            Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
         } finally {
             setLocalWhisperBusy(false);
         }
@@ -988,7 +989,7 @@ export const SettingsScreen = () => {
             await setSelectedLocalLLMModel(key);
             await refreshLocalLLMStatus();
         } catch (error: any) {
-            Alert.alert('Selection failed', error?.message || 'Unable to select the local LLM model.');
+            Alert.alert(t('alerts.selectFailed', 'Could not select'), getErrorMessage(error, t('alerts.llmSelectFailed', 'Could not select the AI model.')));
         } finally {
             setLocalLLMBusy(false);
         }
@@ -1040,7 +1041,7 @@ export const SettingsScreen = () => {
             if (error?.message && error.message.toLowerCase().includes('cancel')) {
                 // Ignore cancel errors
             } else {
-                Alert.alert('Download failed', error?.message || 'Unable to download the local LLM model.');
+                Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('alerts.llmDownloadFailed', 'Could not download the AI model.')));
             }
         } finally {
             if (!llmCompleted && previousLLM && previousLLM !== targetKey) {
@@ -1068,7 +1069,7 @@ export const SettingsScreen = () => {
             await refreshLocalLLMStatus();
             void refreshModelStates();
         } catch (error: any) {
-            Alert.alert('Delete failed', error?.message || 'Unable to remove the local LLM model.');
+            Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.llmDeleteFailed', 'Could not remove the AI model.')));
         } finally {
             setLocalLLMBusy(false);
         }

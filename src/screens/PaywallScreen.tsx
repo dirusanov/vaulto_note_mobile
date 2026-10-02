@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,8 @@ import { colors } from '../theme/colors';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { createStyles } from '../theme/createStyles';
+import { CUSTOM_AI_ENABLED } from '../utils/featureFlags';
+import { haptics } from '../utils/haptics';
 
 export const PaywallScreen = () => {
     const { t } = useTranslation();
@@ -29,6 +31,20 @@ export const PaywallScreen = () => {
             savingsPercentage = Math.round((1 - (yearlyPack.product.price / monthlyCostForYear)) * 100);
         }
     }
+
+    const isYearly = (pack: MergedPackage) => {
+        const id = pack.identifier.toLowerCase();
+        return id.includes('annual') || id.includes('yearly');
+    };
+    // The yearly plan is preselected, as in most subscription apps; the big
+    // button below buys whatever is selected.
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    useEffect(() => {
+        if (!selectedId && packages.length > 0) {
+            setSelectedId((yearlyPack ?? packages[0]).identifier);
+        }
+    }, [packages, selectedId, yearlyPack]);
+    const selectedPack = packages.find((pack) => pack.identifier === selectedId) ?? null;
 
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
@@ -72,7 +88,7 @@ export const PaywallScreen = () => {
                     <View style={styles.featuresList}>
                         <FeatureItem text={t("aux.unlimitedCloudSync")} />
                         <FeatureItem text={t("aux.minsMonthTranscription", { minutes: transcriptionMinutes })} />
-                        <FeatureItem text={t("aux.customApiKeyServer")} />
+                        {CUSTOM_AI_ENABLED && <FeatureItem text={t("aux.customApiKeyServer")} />}
                     </View>
 
                     {isLoading ? (
@@ -110,42 +126,55 @@ export const PaywallScreen = () => {
                                 );
                                 
                                 const price = product.priceString;
-                                const isBestValue = pack.identifier.toLowerCase().includes('annual') || pack.identifier.toLowerCase().includes('yearly');
+                                const isBestValue = isYearly(pack);
+                                const selected = pack.identifier === selectedId;
+                                const perMonth = isBestValue ? product.pricePerMonthString : null;
                                 const minutesToDisplay = backendPlan?.transcription_minutes || transcriptionMinutes;
                                 const minutesLabel = minutesToDisplay ? `${minutesToDisplay} Vaulto AI minutes / month` : null;
 
                                 return (
                                     <TouchableOpacity
                                         key={pack.identifier}
-                                        style={[styles.planCard, isBestValue && styles.planCardBest]}
-                                        onPress={() => handlePurchase(pack)}
+                                        style={[styles.planCard, selected && styles.planCardBest]}
+                                        onPress={() => {
+                                            if (!selected) haptics.selection();
+                                            setSelectedId(pack.identifier);
+                                        }}
                                         activeOpacity={0.9}
-                                        disabled={!canPurchase || isLoading}
+                                        disabled={isLoading}
+                                        accessibilityRole="radio"
+                                        accessibilityState={{ selected }}
                                     >
                                         <View style={styles.planHeader}>
-                                            <Text style={[styles.planTitle, isBestValue && styles.planTitleBest]}>{title}</Text>
+                                            <View style={styles.planTitleRow}>
+                                                <MaterialIcons
+                                                    name={selected ? 'radio-button-checked' : 'radio-button-unchecked'}
+                                                    size={22}
+                                                    color={selected ? colors.primary : colors.textTertiary}
+                                                />
+                                                <Text style={[styles.planTitle, selected && styles.planTitleBest]}>{title}</Text>
+                                            </View>
                                             <View style={styles.badgesContainer}>
                                                 {isBestValue && savingsPercentage > 0 && (
                                                     <View style={[styles.badge, styles.savingsBadge]}>
                                                         <Text style={styles.badgeText}>{t("aux.savePercentage", { percentage: savingsPercentage })}</Text>
                                                     </View>
                                                 )}
-                                                {isBestValue && (
-                                                    <View style={styles.badge}>
-                                                        <Text style={styles.badgeText}>{t("aux.bestValue")}</Text>
-                                                    </View>
-                                                )}
                                             </View>
                                         </View>
-                                        <Text style={[styles.planPrice, isBestValue && styles.planPriceBest]}>{price}</Text>
+                                        <View style={styles.planPriceRow}>
+                                            <Text style={[styles.planPrice, selected && styles.planPriceBest]}>{price}</Text>
+                                            {perMonth ? (
+                                                <Text style={styles.planPerMonth}>
+                                                    {t("aux.perMonth", { price: perMonth, defaultValue: '{{price}} / month' })}
+                                                </Text>
+                                            ) : null}
+                                        </View>
                                         {minutesLabel ? (
-                                            <Text style={[styles.planMinutes, isBestValue && styles.planMinutesBest]}>
+                                            <Text style={[styles.planMinutes, selected && styles.planMinutesBest]}>
                                                 {t("aux.vaultoAiMinsMonth", { minutes: minutesToDisplay })}
                                             </Text>
                                         ) : null}
-                                        <Text style={[styles.planSubtext, isBestValue && styles.planSubtextBest]}>
-                                            {product.description}
-                                        </Text>
                                     </TouchableOpacity>
                                 );
                             })}
@@ -154,6 +183,16 @@ export const PaywallScreen = () => {
                 </View>
 
                 <View style={styles.footer}>
+                    {selectedPack && (
+                        <TouchableOpacity
+                            style={[styles.ctaButton, isLoading && { opacity: 0.6 }]}
+                            onPress={() => { haptics.light(); void handlePurchase(selectedPack); }}
+                            disabled={isLoading}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.ctaText}>{t("auth.continue", "Continue")}</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                         onPress={() => {
                             if (!canPurchase) {
@@ -256,7 +295,7 @@ const styles = createStyles(() => ({
         width: 80,
         height: 80,
         borderRadius: 20,
-        backgroundColor: colors.surface,
+        backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
@@ -325,6 +364,36 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         marginBottom: 4,
     },
+    planTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 1,
+    },
+    planPriceRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginLeft: 30,
+    },
+    planPerMonth: {
+        fontSize: 14,
+        color: colors.textSecondary,
+    },
+    ctaButton: {
+        alignSelf: 'stretch',
+        minHeight: 56,
+        borderRadius: 16,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    ctaText: {
+        color: colors.onPrimary,
+        fontSize: 17,
+        fontWeight: '700',
+    },
     planTitle: {
         fontSize: 15,
         fontWeight: '600',
@@ -367,6 +436,7 @@ const styles = createStyles(() => ({
         fontWeight: '700',
         color: colors.text,
         marginBottom: 4,
+        marginLeft: 30,
     },
     planMinutesBest: {
         color: colors.primary,

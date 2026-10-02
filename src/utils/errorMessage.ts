@@ -1,4 +1,47 @@
+type Translate = (key: string, fallback: string) => string;
+let translate: Translate = (_key, fallback) => fallback;
+
+/** Lets the app localise the messages below without this file importing i18n. */
+export const setErrorMessageTranslator = (fn: Translate) => {
+    translate = fn;
+};
+
+const NETWORK_PATTERN = /network error|network request failed|fetch failed|unknownhost|unable to resolve host|no address associated|enotfound|econnrefused|econnreset|failed to connect|internet connection appears to be offline/i;
+const TIMEOUT_PATTERN = /timeout|timed out/i;
+const SERVER_DOWN_PATTERN = /status code 50[234]|\b50[234]\b.*(bad gateway|unavailable|gateway timeout)/i;
+
+const messageOf = (error: unknown): string => {
+    if (typeof error === 'string') return error;
+    const message = (error as any)?.message;
+    return typeof message === 'string' ? message : '';
+};
+
+/** True when the request never reached the server (offline, DNS, refused). */
+export const isNetworkError = (error: unknown): boolean => {
+    if ((error as any)?.response) return false;
+    return NETWORK_PATTERN.test(messageOf(error));
+};
+
+/** Plain-language text for transport-level failures, or null for anything else. */
+const describeTransportFailure = (error: unknown): string | null => {
+    const status = (error as any)?.response?.status;
+    const message = messageOf(error);
+    if (isNetworkError(error)) {
+        return translate('errors.offline', 'No internet connection. Check your network and try again.');
+    }
+    if (status === 502 || status === 503 || status === 504 || SERVER_DOWN_PATTERN.test(message)) {
+        return translate('errors.serverUnavailable', 'The server is temporarily unavailable. Your notes are safe; try again in a minute.');
+    }
+    if (!(error as any)?.response && TIMEOUT_PATTERN.test(message) && !/\{/.test(message)) {
+        return translate('errors.timeout', 'The request took too long. Check your connection and try again.');
+    }
+    return null;
+};
+
 export const getErrorMessage = (error: unknown, fallback = 'Something went wrong'): string => {
+    const transport = describeTransportFailure(error);
+    if (transport) return transport;
+
     if (typeof error === 'string') {
         // Check if error matches any specific patterns
         const parsed = parseStringError(error);
