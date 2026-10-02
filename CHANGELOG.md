@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.81] - 2026-10-02
+
+### Added
+- **Dark theme**: System / Light / Dark in Settings, applied instantly without a restart (the open screen stays put). Editor, audio card, status bar and navigation follow; iOS now follows the system appearance.
+- **Undo for deletes**: deleting from the list needs no confirmation; notes leave at once and an "Undo" bar stays for 5 seconds before anything is erased.
+- **Haptics** on record start/stop, selecting notes, delete, copy, sending a question, adding tasks, plan and theme choice.
+- **Animations**: cards sink slightly under the finger; the list animates when notes are added, removed or filtered.
+- **Arabic right-to-left**: the whole layout mirrors (one quick reload on switching); directional icons flip; note text aligns by its own script in cards and in the editor.
+- **Offline note** on the list: "Offline. Changes are saved and will sync later."
+
+### Changed
+- **Paywall**: selectable plans with the yearly one preselected, monthly equivalent price, one "Continue" button; the hidden Custom AI is no longer listed as a benefit.
+- **Recorder toggles**: "To text" / "Agent" with a check mark and filled state instead of "Transcribe ON / AI Agent OFF".
+- **Errors**: no internet, timeouts and 502/503 read as plain sentences in the app language (was "java.net.UnknownHostException…"); the notes chat suggests on-device AI when offline.
+
+### Fixed
+- Large system fonts (checked at 1.3× and 1.8×): recorder toggles no longer run off screen, theme options wrap, chat empty state stays centred.
+- Recordings sheet: translated actions ("Add", "AI", "View" were English), dates in the app language, larger targets, actions wrap under the duration.
+- Audio card showed a ">" character instead of a play icon before the first tap.
+- Remaining English alerts (sharing, model download/delete, prompts, AI sign-in) are translated.
+- Unlock banner wording; selection checkmark no longer covers the card title.
+
 ## [1.0.80] - 2026-10-02
 
 ### Fixed
