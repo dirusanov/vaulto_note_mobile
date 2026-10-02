@@ -566,7 +566,8 @@
     "recordingStateLost": "Se perdió el estado de la grabación. Inténtalo de nuevo.",
     "micPermissionDenied": "Se necesita acceso al micrófono para grabar notas de voz. Puedes permitirlo en los ajustes del sistema.",
     "chipTranscribe": "A texto",
-    "chipAgent": "Agente"
+    "chipAgent": "Agente",
+    "savedOffline": "Sin internet: la grabación se guardó. Puedes transcribirla después."
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -805,7 +806,7 @@
     "whisperLarge": "La más grande; Turbo es igual de precisa",
     "llm08": "Para teléfonos antiguos, ediciones simples",
     "llm2": "Rápida, buena para notas cortas",
-    "llm4": "Mejores respuestas, necesita 6 GB+ de RAM",
+    "llm4": "Mejores respuestas, necesita 8 GB+ de RAM",
     "runtimeMissing": "Esta versión de la app no puede ejecutar IA en el dispositivo. Actualiza la app.",
     "useModel": "Usar este modelo",
     "downloadSize": "Descargar · {{size}}",

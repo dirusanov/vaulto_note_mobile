@@ -12,6 +12,21 @@ import { isMasterCiphertext } from '../crypto/encryption';
 import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
 import { createStyles } from '../theme/createStyles';
 import { textAlignFor } from '../i18n/direction';
+import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
+
+const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
+
+/** Length of the first audio card embedded in the note, if any. */
+const embeddedAudioDuration = (content: string): number | undefined => {
+    const tag = content.match(/<img\b[^>]*>/i)?.[0];
+    return tag ? getAudioEmbedAttributesFromHtml(tag)?.duration ?? undefined : undefined;
+};
+
+const formatVoiceDuration = (seconds?: number | null): string => {
+    if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '';
+    const total = Math.round(seconds);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
 
 interface NoteCardProps {
     note: Note;
@@ -71,6 +86,13 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // An untitled note's title is its first line; don't print that line twice.
     const hasStoredTitle = !!activeChildTitle || !!note.title?.trim();
     const [firstPreviewLine, ...restPreviewLines] = fullPreview.split('\n');
+    // An auto title that is only the start of the first line ("Tomorrow at 10…",
+    // or its first sentence) would be repeated by the preview: show just the
+    // text, as Keep does.
+    const firstLineText = (firstPreviewLine || '').trim();
+    const titleStem = (title || '').replace(/…$/, '').trim();
+    const titleIsCutFirstLine = !hasStoredTitle && !!titleStem
+        && firstLineText !== title && firstLineText.startsWith(titleStem);
     const previewString = !hasStoredTitle && title && firstPreviewLine?.trim() === title
         ? restPreviewLines.join('\n')
         : fullPreview;
@@ -107,6 +129,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     };
 
     const isEmpty = !title && !hasMeaningfulRichContent(content);
+    const isVoiceOnly = !title && !!hasAudio;
+    const voiceDuration = isVoiceOnly ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
 
     // The card sinks slightly under the finger, like Keep and Apple Notes.
     const pressScale = useRef(new Animated.Value(1)).current;
@@ -135,19 +159,41 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 </View>
             )}
             <View style={styles.content}>
-                <Text style={[styles.title, textAlignFor(title), (!title && hasAudio) && styles.placeholderTitle, isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
-                    {title || (hasAudio ? t("notes.voiceRecording") : ' ')}
-                </Text>
-                {(!isEmpty && previewString && previewString !== title) && (
-                    <Text style={[styles.preview, textAlignFor(previewString)]} numberOfLines={6}>{previewString}</Text>
-                )}
-                {(isEmpty && hasAudio) && (
-                    <View style={{ marginTop: spacing.xs, alignSelf: 'flex-start' }}>
-                        <View style={[styles.audioChip, { transform: [] }]}>
-                            <MaterialIcons name="headset" size={12} color={colors.textSecondary} style={{ marginRight: 2 }} />
-                            <Text style={styles.audioChipText}>{t("notes.audioChip")}</Text>
+                {isVoiceOnly ? (
+                    // A recording without text yet: show it as audio (icon, wave,
+                    // length) instead of a placeholder title in any language.
+                    <View
+                        style={[styles.voiceRow, isSelectionMode && { paddingEnd: 28 }]}
+                        accessible
+                        accessibilityLabel={[t("notes.voiceRecording"), voiceDuration].filter(Boolean).join(', ')}
+                    >
+                        <View style={styles.voiceIcon}>
+                            <MaterialIcons name="mic" size={18} color={colors.primary} />
                         </View>
+                        <View style={styles.voiceWave}>
+                            {VOICE_WAVE.map((height, index) => (
+                                <View key={index} style={[styles.voiceBar, { height }]} />
+                            ))}
+                        </View>
+                        {voiceDuration ? <Text style={styles.voiceDuration}>{voiceDuration}</Text> : null}
                     </View>
+                ) : titleIsCutFirstLine ? null : (
+                    <Text style={[styles.title, textAlignFor(title), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
+                        {title || ' '}
+                    </Text>
+                )}
+                {(!isEmpty && previewString && previewString !== title) && (
+                    <Text
+                        style={[
+                            styles.preview,
+                            titleIsCutFirstLine && styles.previewLead,
+                            textAlignFor(previewString),
+                            titleIsCutFirstLine && isSelectionMode && { paddingEnd: 28 },
+                        ]}
+                        numberOfLines={titleIsCutFirstLine ? 8 : 6}
+                    >
+                        {previewString}
+                    </Text>
                 )}
             </View>
             <View style={styles.footer}>
@@ -155,7 +201,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     {formatDate(note.updated_at || note.created_at || '')}
                 </Text>
                 <View style={styles.iconsRow}>
-                    {!!hasAudio && (
+                    {!!hasAudio && !isVoiceOnly && (
                         <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
                     )}
                     {note.is_protected ? (
@@ -230,6 +276,12 @@ const styles = createStyles(() => ({
         lineHeight: 20,
         color: colors.textSecondary,
     },
+    // Untitled note shown as its text: a touch larger and in the text colour.
+    previewLead: {
+        fontSize: 15,
+        lineHeight: 21,
+        color: colors.text,
+    },
     footer: {
         paddingHorizontal: spacing.m,
         paddingBottom: spacing.m,
@@ -246,31 +298,37 @@ const styles = createStyles(() => ({
         color: colors.textTertiary,
         fontWeight: '500',
     },
-    placeholderTitle: {
-        color: colors.textSecondary,
-        fontStyle: 'italic',
-    },
-    audioPreviewLabel: {
-        fontSize: 14,
-        color: colors.primary,
-        fontWeight: '500',
-        marginTop: spacing.xs,
-    },
-    audioChip: {
-        backgroundColor: colors.background,
-        borderColor: colors.border,
-        borderWidth: 1,
-        borderRadius: 4,
-        paddingHorizontal: 4,
-        paddingVertical: 1,
+    voiceRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        // Push down to align with text baseline better
-        transform: [{ translateY: 5 }],
+        gap: spacing.s,
+        paddingVertical: 2,
     },
-    audioChipText: {
-        fontSize: 11,
-        color: colors.textSecondary,
-        fontWeight: '500',
+    voiceIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.primaryLight,
+    },
+    voiceWave: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        height: 22,
+        overflow: 'hidden',
+    },
+    voiceBar: {
+        width: 3,
+        borderRadius: 2,
+        backgroundColor: colors.textTertiary,
+    },
+    voiceDuration: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.text,
+        fontVariant: ['tabular-nums'],
     },
 }));

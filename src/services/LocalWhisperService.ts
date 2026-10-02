@@ -3,6 +3,7 @@ import { stripWhisperHallucinations } from '../utils/whisperText';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
 import { canDeviceRunModel, describeDeviceMemory } from './DeviceCapabilities';
+import { releaseLocalLLMContext } from './LocalLLMService';
 import {
     createMutex,
     downloadModelFile,
@@ -201,6 +202,7 @@ const beginJob = (kind: 'transcribe' | 'dictation') => {
 const endJob = (kind: 'transcribe' | 'dictation') => {
     if (activeJob === kind) {
         activeJob = null;
+        scheduleWhisperIdleRelease();
     }
 };
 
@@ -232,6 +234,27 @@ const getReadyContext = async (modelUri: string): Promise<WhisperRnContext> => w
     activeModelUri = modelUri;
     return context;
 });
+
+/**
+ * The speech model and the AI model together do not fit in a 6 GB phone (the
+ * system kills the app). Before loading Whisper, drop the AI model; it reloads
+ * in seconds. Done outside this module's lock so the two never wait on each other.
+ */
+const makeRoomForWhisper = async (modelUri: string) => {
+    if (activeContext && activeModelUri === modelUri) return;
+    await releaseLocalLLMContext().catch(() => undefined);
+};
+
+// Like the AI model: free the weights after a quiet minute, not only on background.
+const WHISPER_IDLE_RELEASE_MS = 60_000;
+let whisperIdleTimer: ReturnType<typeof setTimeout> | null = null;
+const scheduleWhisperIdleRelease = () => {
+    if (whisperIdleTimer) clearTimeout(whisperIdleTimer);
+    whisperIdleTimer = setTimeout(() => {
+        whisperIdleTimer = null;
+        void releaseLocalWhisperContext();
+    }, WHISPER_IDLE_RELEASE_MS);
+};
 
 /** Frees the native context and its weights (0.5-3 GB of RAM). Safe to call at any time. */
 export const releaseLocalWhisperContext = async (): Promise<void> => withContextLock(async () => {
@@ -364,6 +387,7 @@ export const transcribeWithLocalWhisper = async (
         throw new Error(`Local Whisper model "${status.selectedModel.label}" is not downloaded`);
     }
 
+    await makeRoomForWhisper(status.fileUri);
     beginJob('transcribe');
     try {
         const context = await getReadyContext(status.fileUri);
@@ -432,6 +456,7 @@ export const startRealtimeDictation = async (
         throw new Error(`Local Whisper model "${status.selectedModel.label}" is not downloaded`);
     }
 
+    await makeRoomForWhisper(status.fileUri);
     beginJob('dictation');
 
     let finished = false;

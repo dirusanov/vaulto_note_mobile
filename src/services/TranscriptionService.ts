@@ -22,6 +22,8 @@ import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
 import { refreshSession } from '../api/tokenRefresh';
 import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
+import { isDeviceOffline } from '../utils/connectivity';
+import { getEffectiveAIProvider } from './effectiveProvider';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -420,13 +422,21 @@ const formatAgentRequestError = (error: unknown): string => {
  * Recordings are transcribed by the downloaded Whisper model; audio never leaves the
  * device. Same rule as the Settings switch: without the model file it is off.
  */
+/**
+ * Whether the next transcription runs on this phone: the user turned it on, or
+ * there is no internet and the speech model is already downloaded (so a
+ * recording made offline is still transcribed instead of waiting for a server).
+ */
 export async function isOnDeviceTranscriptionActive(): Promise<boolean> {
-    if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web' || !(await getOnDeviceTranscription())) return false;
+    if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web') return false;
+    let downloaded = false;
     try {
-        return (await getLocalWhisperModelStatus()).isDownloaded;
+        downloaded = (await getLocalWhisperModelStatus()).isDownloaded;
     } catch {
         return false;
     }
+    if (!downloaded) return false;
+    return (await getOnDeviceTranscription()) || (await isDeviceOffline());
 }
 
 /**
@@ -696,7 +706,7 @@ export async function processVoiceNote(
     recentMessages: string[] = []
 ): Promise<VoiceNoteResult> {
     const [provider, agentModeEnabled] = await Promise.all([
-        getAIProvider(),
+        getEffectiveAIProvider(),
         getAgentModeEnabled(),
     ]);
     console.log('[VoiceAgent] Provider:', provider, 'Agent mode enabled:', agentModeEnabled);

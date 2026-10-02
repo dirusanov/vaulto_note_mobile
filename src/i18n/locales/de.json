@@ -566,7 +566,8 @@
     "recordingStateLost": "Der Aufnahmestatus ging verloren. Bitte versuche es erneut.",
     "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden.",
     "chipTranscribe": "Als Text",
-    "chipAgent": "Agent"
+    "chipAgent": "Agent",
+    "savedOffline": "Kein Internet: Die Aufnahme ist gespeichert. Du kannst sie später transkribieren."
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -805,7 +806,7 @@
     "whisperLarge": "Am größten; Turbo ist genauso genau",
     "llm08": "Für ältere Telefone, einfache Bearbeitungen",
     "llm2": "Schnell, gut für kurze Notizen",
-    "llm4": "Beste Antworten, braucht 6 GB+ RAM",
+    "llm4": "Beste Antworten, braucht 8 GB+ RAM",
     "runtimeMissing": "Diese App-Version kann keine KI auf dem Gerät ausführen. Aktualisiere die App.",
     "useModel": "Dieses Modell verwenden",
     "downloadSize": "Herunterladen · {{size}}",

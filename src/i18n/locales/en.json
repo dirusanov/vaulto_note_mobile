@@ -566,7 +566,8 @@
     "recordingStateLost": "The recording state was lost. Please try again.",
     "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings.",
     "chipTranscribe": "To text",
-    "chipAgent": "Agent"
+    "chipAgent": "Agent",
+    "savedOffline": "No internet: the recording is saved. You can transcribe it later."
   },
   "aux": {
     "emailVerified": "Email Verified!",
@@ -805,7 +806,7 @@
     "whisperLarge": "Largest; Turbo is as accurate",
     "llm08": "For older phones, simple edits",
     "llm2": "Fast, good for short notes",
-    "llm4": "Best answers, needs 6 GB+ RAM",
+    "llm4": "Best answers, needs 8 GB+ RAM",
     "runtimeMissing": "This build of the app cannot run on-device AI. Update the app to use it.",
     "useModel": "Use this model",
     "downloadSize": "Download · {{size}}",

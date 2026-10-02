@@ -804,13 +804,13 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     if (initialTaskListCssRef.current === null) {
         initialTaskListCssRef.current = getChecklistCss(baseFontSize, contentChecklistScaleFactor);
     }
-    // The task-item script ships inside the page as well: injectJS only runs
+    // The task-item and audio-card scripts ship inside the page as well: injectJS only runs
     // once the bridge reports ready, seconds after open, and a checkbox tapped
     // before that still switched the note into edit mode. Its install flag
     // keeps the later injectJS call from adding the listeners twice.
     const editorSourceHtml = useMemo(() => (
         injectEditorCssIntoSource(tentapEditorHtml, initialEditorCssRef.current || '')
-            .replace('</head>', `<script>${getTaskItemRefocusJs()}</script></head>`)
+            .replace('</head>', `<script>${getTaskItemRefocusJs()}</script><script>${getAudioEmbedRuntimeJs()}</script></head>`)
     ), []);
     // The placeholder must be part of the initial extension config: tentap's
     // runtime setPlaceholder only swaps the option without redrawing, so a

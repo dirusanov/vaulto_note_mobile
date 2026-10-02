@@ -566,7 +566,8 @@
     "recordingStateLost": "L'état de l'enregistrement a été perdu. Veuillez réessayer.",
     "micPermissionDenied": "L'accès au microphone est nécessaire pour enregistrer des notes vocales. Vous pouvez l'autoriser dans les réglages du système.",
     "chipTranscribe": "En texte",
-    "chipAgent": "Agent"
+    "chipAgent": "Agent",
+    "savedOffline": "Pas d’internet : l’enregistrement est sauvegardé. Vous pourrez le transcrire plus tard."
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -805,7 +806,7 @@
     "whisperLarge": "La plus grande ; Turbo est aussi précise",
     "llm08": "Pour les anciens téléphones, retouches simples",
     "llm2": "Rapide, idéale pour les notes courtes",
-    "llm4": "Meilleures réponses, nécessite 6 Go+ de RAM",
+    "llm4": "Meilleures réponses, nécessite 8 Go+ de RAM",
     "runtimeMissing": "Cette version de l’app ne peut pas exécuter l’IA sur l’appareil. Mettez l’app à jour.",
     "useModel": "Utiliser ce modèle",
     "downloadSize": "Télécharger · {{size}}",

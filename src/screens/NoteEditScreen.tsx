@@ -81,7 +81,6 @@ import {
     AIProvider,
     getAgentModeEnabled,
     getTranscriptionEnabled,
-    getAIProvider,
     getFontSize,
     setFontSize,
     getAutoScalingEnabled,
@@ -103,7 +102,7 @@ import { TranscriptionIndicator } from '../components/TranscriptionIndicator';
 import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
-import { getErrorMessage } from '../utils/errorMessage';
+import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import {
     appendPlainTextSnippetToRichContent,
@@ -144,6 +143,10 @@ import { MarkdownPreview } from '../components/MarkdownPreview';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
+import { getEffectiveAIProvider } from '../services/effectiveProvider';
+import { getAIProvider } from '../utils/storage';
+import { isDeviceOffline } from '../utils/connectivity';
+import NetInfo from '@react-native-community/netinfo';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
 const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
@@ -1487,8 +1490,20 @@ export const NoteEditScreen = () => {
         return false;
     }, [currentAIProvider]);
 
+    // Offline, a cloud choice falls back to the on-device model; keep the
+    // provider the editor reasons about in step with the network.
+    useEffect(() => {
+        const unsubscribe = NetInfo.addEventListener(() => {
+            void getEffectiveAIProvider().then(setCurrentAIProvider).catch(() => undefined);
+        });
+        return unsubscribe;
+    }, []);
+
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
-        const onDeviceProvider = currentAIProvider === 'local_llm' || currentAIProvider === 'local';
+        // Protected notes go by the stored choice, never the offline fallback:
+        // if the network came back mid-request the text would reach the server.
+        const storedProvider = await getAIProvider();
+        const onDeviceProvider = storedProvider === 'local_llm' || storedProvider === 'local';
         if (isProtectedRef.current && !onDeviceProvider) {
             // No "allow once": the promise of a protected note is that its text
             // never reaches a server unencrypted.
@@ -1773,6 +1788,29 @@ export const NoteEditScreen = () => {
     const visualKeyboardHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [visualPlainText, setVisualPlainText] = useState(() => richContentToPlainText(content));
     const embeddedAudioPaths = useMemo(() => extractEmbeddedAudioPaths(content), [content]);
+
+    // Markdown round-trips drop an audio card's length, so a card could read
+    // 0:00 until played. Fill it from the recordings stored for this note.
+    useEffect(() => {
+        if (!appearanceReady || !noteViewReady || embeddedAudioPaths.length === 0) return;
+        const durations = new Map<string, number>();
+        voiceRecordings.forEach((rec) => {
+            const path = normalizeAttachedAudioPath(rec.file_path);
+            if (path && rec.duration > 0) durations.set(path, rec.duration);
+        });
+        const mainPath = normalizeAttachedAudioPath(existingNote?.audio_file_path);
+        if (mainPath && existingNote?.audio_duration && !durations.has(mainPath)) {
+            durations.set(mainPath, existingNote.audio_duration);
+        }
+        const push = () => embeddedAudioPaths.forEach((path) => {
+            const duration = durations.get(normalizeAttachedAudioPath(path) || '');
+            if (duration) editorRef.current?.setAudioEmbedState({ path, duration });
+        });
+        push();
+        // The page may still be loading on open; repeat once it has settled.
+        const timer = setTimeout(push, 1200);
+        return () => clearTimeout(timer);
+    }, [appearanceReady, noteViewReady, embeddedAudioPaths, voiceRecordings, existingNote?.audio_file_path, existingNote?.audio_duration]);
 
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
@@ -2505,7 +2543,7 @@ export const NoteEditScreen = () => {
 
     useEffect(() => {
         const loadSettings = async () => {
-            const provider = await getAIProvider();
+            const provider = await getEffectiveAIProvider();
             if ((!isAuthenticated || isGuest) && provider !== 'local_whisper') {
                 setTranscriptionEnabled(false);
                 return;
@@ -3222,7 +3260,9 @@ export const NoteEditScreen = () => {
 
         const nextContent = insertBlockAtSelection(
             currentVariantContent,
-            isRichHtmlContent(currentVariantContent)
+            // An empty new note is not HTML yet; the markdown form would lose the
+            // duration and the card would read 0:00, so use the HTML card there too.
+            isRichHtmlContent(currentVariantContent) || (!currentVariantContent.trim() && editMode !== 'raw')
                 ? buildAudioEmbedHtml({ path: targetPath, duration })
                 : `![audio](${targetPath})`,
             {
@@ -3235,7 +3275,7 @@ export const NoteEditScreen = () => {
             persist: true,
             updateHistory: true,
         });
-    }, [resolveVariantContent, setVariantContentWithOptions]);
+    }, [editMode, resolveVariantContent, setVariantContentWithOptions]);
 
     const removeAudioEmbedsForRecording = useCallback(async (filePath: string): Promise<boolean> => {
         const targetPath = normalizeAttachedAudioPath(filePath);
@@ -4856,7 +4896,7 @@ export const NoteEditScreen = () => {
             void (async () => {
                 const [enabled, provider] = await Promise.all([
                     shouldUseAgentModeGlobally(),
-                    getAIProvider(),
+                    getEffectiveAIProvider(),
                 ]);
                 if (active) {
                     setAgentModeIndicatorEnabled(enabled);
@@ -4947,14 +4987,17 @@ export const NoteEditScreen = () => {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
             const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
-            const provider = await getAIProvider();
+            const provider = await getEffectiveAIProvider();
             const onDeviceTranscription = await isOnDeviceTranscriptionActive();
             const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDeviceTranscription && !isProtectedRef.current;
             const protectedNote = isProtectedRef.current;
             // The agent sends the text to the server: never for a protected note.
             const onDeviceProvider = provider === 'local' || provider === 'local_llm' || provider === 'local_whisper';
+            // The agent runs on the server; offline the transcript is inserted as is.
             const shouldUseAgentModeForThisRecording =
-                !protectedNote && !onDeviceProvider && micMode !== 'force_text' && await shouldUseAgentModeGlobally(agentModeEnabled);
+                !protectedNote && !onDeviceProvider && micMode !== 'force_text'
+                && await shouldUseAgentModeGlobally(agentModeEnabled)
+                && !(await isDeviceOffline());
             let shouldTranscribe = transcribe;
             if (isUserTranscriptionRestricted && shouldTranscribe) {
                 // Anonymous users can't transcribe; keep audio flow intact.
@@ -4970,6 +5013,16 @@ export const NoteEditScreen = () => {
                 const consentGranted = await requestPrivateAIConsent();
                 if (!consentGranted) {
                     shouldTranscribe = false;
+                }
+            }
+            // Offline with cloud transcription: do not make the user wait for a
+            // request that can only time out (up to 90 s on a weak network) -
+            // save the recording right away and say it can be transcribed later.
+            let skippedOffline = false;
+            if (shouldTranscribe && !onDeviceTranscription && !protectedNote) {
+                if (await isDeviceOffline()) {
+                    shouldTranscribe = false;
+                    skippedOffline = true;
                 }
             }
 
@@ -5048,7 +5101,10 @@ export const NoteEditScreen = () => {
                     // Protected note without the on-device model: its own prompt explains.
                     transcription.error === ON_DEVICE_MODEL_REQUIRED;
 
-                if (isAuthOrQuotaError) {
+                if (skippedOffline || isNetworkError(transcription.error)) {
+                    // Not an error from the user's point of view: the audio is kept.
+                    showToast(t('voice.savedOffline', 'No internet: the recording is saved. You can transcribe it later.'), 3500);
+                } else if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
                     console.log('[Transparency] Transcription skipped due to auth/guest status');
                 } else if (errorMsg) {
@@ -5191,6 +5247,12 @@ export const NoteEditScreen = () => {
                     if (!insertedPlainTextEarly) {
                         registerTranscribedInsertion(transcribedText);
                     }
+                    // Keep the voice itself next to its transcript (as Keep does), so
+                    // a note recorded offline or without the agent still shows the
+                    // recording. Hold-to-dictate stays text only.
+                    if (micMode !== 'force_text') {
+                        await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
+                    }
                     const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
                     setRecordingOutcomeStatus(voiceId, status);
                     showVoiceResultStatus(status, voiceId);
@@ -5225,7 +5287,7 @@ export const NoteEditScreen = () => {
 
         // Show local loading state if needed, or re-use isTranscribing but that shows a global spinner
         // Let's use isAIProcessing to block interaction while transcribing instruction
-        const provider = await getAIProvider();
+        const provider = await getEffectiveAIProvider();
         if ((!isAuthenticated || isGuest) && provider === 'vaulto_ai') {
             setShowTranscriptionAuthModal(true);
             await AudioService.deleteAudioFile(recording.uri).catch(() => undefined);
@@ -5274,7 +5336,7 @@ export const NoteEditScreen = () => {
     };
 
     const handleVoiceInstructionStart = async () => {
-        const provider = await getAIProvider();
+        const provider = await getEffectiveAIProvider();
         if ((!isAuthenticated || isGuest) && provider === 'vaulto_ai') {
             setShowTranscriptionAuthModal(true);
             return;
@@ -5923,7 +5985,7 @@ export const NoteEditScreen = () => {
             || voiceRecordings.find((rec) => rec.id === playingRecordingId)
             || voiceRecordings[0];
         if (!targetRecording) return;
-        const provider = await getAIProvider();
+        const provider = await getEffectiveAIProvider();
         if ((!isAuthenticated || isGuest) && provider !== 'local_whisper') {
             setShowTranscriptionAuthModal(true);
             return;
@@ -7429,6 +7491,7 @@ const styles = createStyles(() => ({
     },
     toastContent: {
         backgroundColor: colors.text, // High contrast
+        maxWidth: '88%',
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
@@ -7444,6 +7507,7 @@ const styles = createStyles(() => ({
         elevation: 5,
     },
     toastText: {
+        flexShrink: 1,
         color: colors.background,
         fontSize: 14,
         fontWeight: '600',

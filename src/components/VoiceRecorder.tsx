@@ -14,7 +14,6 @@ import { typography } from '../theme/typography';
 import { AudioService, AudioRecording, MAX_RECORDING_DURATION_MS } from '../services/AudioService';
 import {
     AIProvider,
-    getAIProvider,
     getAgentModeEnabled,
     getTranscriptionEnabled,
     setAIProvider,
@@ -31,6 +30,7 @@ import { AgentModeVaultoGateModal } from './AgentModeVaultoGateModal';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
+import { getEffectiveAIProvider } from '../services/effectiveProvider';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -102,7 +102,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     setAgentModeEnabledState(enabled);
                 }
             });
-            getAIProvider().then(provider => {
+            getEffectiveAIProvider().then(provider => {
                 if (provider) {
                     setAiProvider(provider);
                     // The agent runs on the server: unavailable with Custom AI and on-device AI.
@@ -113,7 +113,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             });
             agentModeToggleTouchedRef.current = false;
 
-            getAIProvider().then(async (provider) => {
+            getEffectiveAIProvider().then(async (provider) => {
                 const onDevice = await isOnDeviceTranscriptionActive();
                 setOnDeviceTranscription(onDevice);
                 const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDevice;

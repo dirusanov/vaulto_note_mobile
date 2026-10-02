@@ -566,7 +566,8 @@
     "recordingStateLost": "録音の状態が失われました。もう一度お試しください。",
     "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。",
     "chipTranscribe": "文字起こし",
-    "chipAgent": "エージェント"
+    "chipAgent": "エージェント",
+    "savedOffline": "インターネットに接続されていません。録音は保存されました。後で文字起こしできます。"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -805,7 +806,7 @@
     "whisperLarge": "最大サイズ。Turbo も同等の精度",
     "llm08": "古い端末向け、簡単な編集",
     "llm2": "高速、短いノートに最適",
-    "llm4": "最良の回答、6 GB 以上のメモリが必要",
+    "llm4": "最良の回答、8 GB 以上のメモリが必要",
     "runtimeMissing": "このバージョンのアプリは端末上で AI を実行できません。アプリを更新してください。",
     "useModel": "このモデルを使う",
     "downloadSize": "ダウンロード · {{size}}",

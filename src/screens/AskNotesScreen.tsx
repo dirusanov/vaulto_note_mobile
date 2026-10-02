@@ -23,13 +23,14 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, richContentToPlainText } from '../utils/richContent';
 import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
-import { getAIProvider, getPrivateAIAllowed } from '../utils/storage';
+import { getPrivateAIAllowed } from '../utils/storage';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
+import { getEffectiveAIProvider } from '../services/effectiveProvider';
 
 type Message =
     | { id: string; role: 'user'; text: string }
@@ -87,7 +88,7 @@ export const AskNotesScreen = () => {
         setBusy(true);
         try {
             // Vaulto AI answers signed-in users only (the server rejects guests).
-            if ((!isAuthenticated || isGuest) && (await getAIProvider()) === 'vaulto_ai') {
+            if ((!isAuthenticated || isGuest) && (await getEffectiveAIProvider()) === 'vaulto_ai') {
                 setMessages((prev) => [...prev, {
                     id: `e-${stamp}`,
                     role: 'error',
@@ -111,7 +112,9 @@ export const AskNotesScreen = () => {
                 }]);
                 return;
             }
-            const answer = await answerFromNotes(question, formatSourcesForModel(sources));
+            // Sources picked for on-device AI may include protected notes: keep the
+            // answer on the phone even if the network returns meanwhile.
+            const answer = await answerFromNotes(question, formatSourcesForModel(sources), { onDeviceOnly: onDevice });
             // Only list the notes the answer actually cites; fall back to all used.
             const cited = sources.filter((source) => answer.includes(`[${source.index}]`));
             setMessages((prev) => [...prev, {

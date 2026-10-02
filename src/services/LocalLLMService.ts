@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AppState, NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { getLocalLLMModelKey, setLocalLLMModelKey } from '../utils/storage';
 import { canDeviceRunModel, describeDeviceMemory, getDeviceCapabilities, getInferenceThreadCount } from './DeviceCapabilities';
+import { releaseLocalWhisperContext } from './LocalWhisperService';
 import {
     createMutex,
     downloadModelFile,
@@ -210,7 +211,8 @@ const getDescriptor = (key: string): LocalLLMModelDescriptor => {
 export const getRecommendedLocalLLMModelKey = async (): Promise<LocalLLMModelKey> => {
     const { totalMemoryBytes } = await getDeviceCapabilities();
     if (!totalMemoryBytes) return DEFAULT_MODEL_KEY;
-    if (totalMemoryBytes >= 5.5e9) return 'qwen3.5-4b';
+    // 4B needs ~3 GB resident: recommend it from 8 GB phones (they report ~7.3-7.7 GB).
+    if (totalMemoryBytes >= 7e9) return 'qwen3.5-4b';
     if (totalMemoryBytes >= 3.2e9) return 'qwen3.5-2b';
     return 'qwen3.5-0.8b';
 };
@@ -344,6 +346,11 @@ export const generateWithLocalLLM = async (
     if (idleReleaseTimer) {
         clearTimeout(idleReleaseTimer);
         idleReleaseTimer = null;
+    }
+    // Both models at once get the app killed on 6 GB phones: drop the speech
+    // model first (outside our lock, so the two modules never wait on each other).
+    if (!activeContext || activeModelUri !== status.fileUri) {
+        await releaseLocalWhisperContext().catch(() => undefined);
     }
     return withContextLock(async () => {
         const context = await getReadyContext(status.fileUri);

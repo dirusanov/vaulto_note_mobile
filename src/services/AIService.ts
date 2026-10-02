@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTaskExtractionPrompt, parseExtractedTasks, type ExtractedTask } from '../utils/taskExtraction';
 import { API_URL } from '../utils/env';
-import { getAIProvider, getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel, storage } from '../utils/storage';
+import { getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel, storage } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL, modelSupportsTemperature } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
 import { generateWithLocalLLM } from './LocalLLMService';
+import { getEffectiveAIProvider } from './effectiveProvider';
 
 const BACKEND_IMPROVE_URL = `${API_URL}/ai/improve`;
 const AI_PROMPTS_STORAGE_KEY = 'vaulto_ai_prompts_v1';
@@ -171,18 +172,12 @@ const buildPromptForRequest = (template: string, text: string): string => {
 export const optionExpectsJson = (option: AIImprovementOption): boolean =>
     option.responseFormat === 'json' || option.id === 'grammar';
 
-/**
- * Shape the grammar check must answer with. Hosted models follow the prompt, but
- * a 1-2B local model needs the schema enforced during sampling or it replies in prose.
- */
-const GRAMMAR_RESPONSE_SCHEMA = {
-    type: 'object',
-    properties: {
-        is_correct: { type: 'boolean' },
-        fixed_text: { type: 'string' },
-    },
-    required: ['is_correct', 'fixed_text'],
-};
+/** On-device grammar check: plain corrected text, compared with the input afterwards. */
+const LOCAL_GRAMMAR_INSTRUCTION = [
+    'Correct the spelling and grammar mistakes in the text below, including words misheard by speech recognition (for example merged words or wrong endings).',
+    'Keep the language, the meaning, the wording and the line breaks; change only what is wrong.',
+    'Reply with the corrected text only, without quotes or comments.',
+].join(' ');
 
 /**
  * Output budget for the on-device model: enough to rewrite the whole note (about
@@ -194,15 +189,27 @@ const localOutputTokens = (input: string): number =>
 export async function improveText(text: string, option: AIImprovementOption): Promise<string> {
     if (!option) throw new Error('Invalid option');
 
-    const provider = await getAIProvider();
+    const provider = await getEffectiveAIProvider();
     if (provider === 'vaulto_ai') {
         return improveViaBackend(text, option);
     }
     
     if (provider === 'local_llm' || provider === 'local') {
         const promptForModel = buildPromptForRequest(option.prompt, text);
+        if (optionExpectsJson(option)) {
+            // The hosted grammar prompt asks for {"is_correct", "fixed_text"} with an
+            // empty text when "correct"; a small model takes that exit and copies
+            // the note. Ask it for the corrected text only and judge the change
+            // here; the caller still receives the usual JSON shape.
+            const raw = await generateWithLocalLLM(`${LOCAL_GRAMMAR_INSTRUCTION}\n\n${text}`, {
+                maxTokens: localOutputTokens(text),
+            });
+            const fixed = raw.replace(/^```\w*\n?|```$/g, '').trim();
+            const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
+            const unchanged = !fixed || squash(fixed) === squash(text);
+            return JSON.stringify({ is_correct: unchanged, fixed_text: unchanged ? text : fixed });
+        }
         return generateWithLocalLLM(promptForModel, {
-            jsonSchema: optionExpectsJson(option) ? GRAMMAR_RESPONSE_SCHEMA : undefined,
             maxTokens: localOutputTokens(text),
         });
     }
@@ -331,9 +338,10 @@ const ASK_NOTES_INSTRUCTION = [
 async function runInstruction(
     instruction: string,
     text: string,
-    { json = false, jsonSchema, maxTokens }: { json?: boolean; jsonSchema?: object; maxTokens?: number } = {},
+    { json = false, jsonSchema, maxTokens, onDeviceOnly = false }: { json?: boolean; jsonSchema?: object; maxTokens?: number; onDeviceOnly?: boolean } = {},
 ): Promise<string> {
-    const provider = await getAIProvider();
+    // onDeviceOnly: the caller already decided this text may not leave the phone.
+    const provider = onDeviceOnly ? 'local' : await getEffectiveAIProvider();
 
     if (provider === 'local_llm' || provider === 'local') {
         // Small models are kept to the shape by constrained sampling, not by asking.
@@ -396,8 +404,14 @@ async function runInstruction(
  * Answers a question from note excerpts retrieved on the device. Only the given
  * excerpts leave the device; routing follows the configured AI provider.
  */
-export async function answerFromNotes(question: string, sourcesText: string): Promise<string> {
-    return runInstruction(`${ASK_NOTES_INSTRUCTION}\n\nQuestion: ${question.trim()}`, `Notes:\n${sourcesText}`);
+export async function answerFromNotes(
+    question: string,
+    sourcesText: string,
+    options: { onDeviceOnly?: boolean } = {},
+): Promise<string> {
+    return runInstruction(`${ASK_NOTES_INSTRUCTION}\n\nQuestion: ${question.trim()}`, `Notes:\n${sourcesText}`, {
+        onDeviceOnly: options.onDeviceOnly,
+    });
 }
 
 const TASKS_RESPONSE_SCHEMA = {
@@ -422,7 +436,7 @@ const TASKS_RESPONSE_SCHEMA = {
 
 /** Whether AI runs on this phone (nothing is sent anywhere). */
 export async function isOnDeviceAI(): Promise<boolean> {
-    const provider = await getAIProvider();
+    const provider = await getEffectiveAIProvider();
     return provider === 'local_llm' || provider === 'local';
 }
 

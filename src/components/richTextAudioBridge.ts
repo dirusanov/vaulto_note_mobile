@@ -75,6 +75,11 @@ const AUDIO_EMBED_CSS = `
     outline: 2px solid #4A6FA5;
     outline-offset: 1px;
   }
+
+  /* Only show the selection ring while editing, not on a note being read. */
+  .ProseMirror:not(:focus) img[src*="${AUDIO_PREVIEW_MARKER}"].ProseMirror-selectednode {
+    outline: none;
+  }
 `;
 
 const buildAudioEmbedRuntimeJs = () => `
@@ -238,6 +243,16 @@ const buildAudioEmbedRuntimeJs = () => `
       });
     },
   };
+
+  // The audio card is a control, not text: stop ProseMirror from selecting it
+  // and focusing the editor (which switched the note into edit mode and ate
+  // the first tap). The click below still fires and plays.
+  document.addEventListener('mousedown', (event) => {
+    if (getAudioImage(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
 
   document.addEventListener('click', (event) => {
     const image = getAudioImage(event.target);

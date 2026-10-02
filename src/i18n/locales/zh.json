@@ -566,7 +566,8 @@
     "recordingStateLost": "录音状态已丢失，请重试。",
     "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。",
     "chipTranscribe": "转文字",
-    "chipAgent": "智能体"
+    "chipAgent": "智能体",
+    "savedOffline": "没有网络：录音已保存，稍后可以转成文字。"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -805,7 +806,7 @@
     "whisperLarge": "最大；Turbo 同样准确",
     "llm08": "适合旧手机，简单改写",
     "llm2": "较快，适合短笔记",
-    "llm4": "回答最好，需要 6 GB 以上内存",
+    "llm4": "回答最好，需要 8 GB 以上内存",
     "runtimeMissing": "此版本的应用无法在设备上运行 AI。请更新应用。",
     "useModel": "使用此模型",
     "downloadSize": "下载 · {{size}}",
