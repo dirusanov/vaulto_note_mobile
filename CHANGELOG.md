@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.85] - 2026-10-02
+
+### Added
+- **Share to Vaulto** (Android): text and links shared from any app become a new note (the subject, if any, is the title); audio files are transcribed and kept as a playable card.
+- **Quick Settings tile** "Vaulto: record" and a **home-screen widget** (record / write / ask), light and dark, localized.
+- **Trash**: deleted notes stay 30 days and can be restored with their recordings (Settings → Notes → Trash); delete for good or empty the trash. The undo bar now says "Moved to trash".
+- **Tags**: #hashtags in the text become tags, with a filter row above the list; tags are highlighted in cards. They live in the note text, so they are encrypted and synced with it.
+- **Meeting mode**: a "Meeting" chip in the recorder records up to 60 minutes in parts, transcribes each part, then writes a "Meeting · <date>" version with summary, key points, decisions, an action checklist and open questions. A "Meeting Notes" preset is in the AI menu for any note.
+- **Task reminders**: a bell next to each dated task in "Find tasks" sets a notification at its time (9:00 when only a date is known); tapping it opens the note. Works offline.
+- **Weekly summary** (Settings → Notes): a Sunday 18:00 notification opens the notes chat with a summary of the last 7 days.
+- **Export / import**: export every note as Markdown files in a ZIP (protected notes are never exported in plain text); import .md/.txt files, a ZIP, or a Google Keep Takeout (checklists kept, labels become tags).
+
+### Fixed
+- Untitled notes always show their text in the card (single-line notes could show an empty card or a bold made-up title).
+- Editor toasts are translated; error toasts show an error icon.
+- An offline session could switch Agent Mode off for good.
+
 ## [1.0.84] - 2026-10-02
 
 ### Changed
