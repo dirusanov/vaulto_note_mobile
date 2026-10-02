@@ -1,13 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, Animated, Dimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Animated, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DeleteConfirmationDialogProps {
     visible: boolean;
@@ -124,7 +123,7 @@ const styles = createStyles(() => ({
         backgroundColor: 'rgba(0, 0, 0, 0.6)', // Darker overlay for more focus
     },
     dialogContainer: {
-        width: SCREEN_WIDTH * 0.88,
+        width: '88%',
         maxWidth: 360,
     },
     dialog: {

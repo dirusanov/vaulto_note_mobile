@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -27,7 +27,6 @@ import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 import { useNetInfo } from '@react-native-community/netinfo';
 
-const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
 
 const SEARCH_BAR_HEIGHT = 60;
@@ -40,6 +39,10 @@ export const NotesListScreen = () => {
     // Account avatar in the search bar (as in Keep/Gmail): the initial of the name
     // or e-mail when signed in, a person icon for guests.
     const signedIn = isAuthenticated && !isGuest;
+    // Live window size: tablets rotate (Android 16 ignores the portrait lock
+    // on large screens), so nothing may be measured once at import time.
+    const { width: windowWidth, height: screenHeight } = useWindowDimensions();
+    const columnCount = windowWidth >= 1100 ? 4 : windowWidth >= 700 ? 3 : 2;
     const netInfo = useNetInfo();
     // `null` means not known yet; only a definite "no" shows the offline note.
     const isOffline = netInfo.isConnected === false;
@@ -321,7 +324,6 @@ export const NotesListScreen = () => {
     }, [isRefreshing, syncNotes]);
 
 
-    const { height: screenHeight } = Dimensions.get('window');
 
     // Reset search bar on mount
     useEffect(() => {
@@ -453,14 +455,10 @@ export const NotesListScreen = () => {
     }
     prevListKeyRef.current = listKey;
 
-    const leftColumnNotes: typeof sortedNotes = [];
-    const rightColumnNotes: typeof sortedNotes = [];
+    // Masonry columns: two on phones, three or four on tablets.
+    const noteColumns: (typeof sortedNotes)[] = Array.from({ length: columnCount }, () => []);
     orderedNotes.forEach((note, index) => {
-        if (index % 2 === 0) {
-            leftColumnNotes.push(note);
-        } else {
-            rightColumnNotes.push(note);
-        }
+        noteColumns[index % columnCount].push(note);
     });
 
     // Check if all selected notes are pinned
@@ -553,6 +551,8 @@ export const NotesListScreen = () => {
             ) : (
                 <View style={styles.topBar} />
             )}
+            {/* Banners and search keep a readable width on tablets. */}
+            <View style={styles.headerColumn}>
             {/* Offline: say that nothing is lost, sync just waits for the network. */}
             {isOffline && !isSelectionMode && (
                 <View style={styles.offlinePill} accessibilityLiveRegion="polite">
@@ -703,6 +703,8 @@ export const NotesListScreen = () => {
                 </Animated.View>
             )}
 
+            </View>
+
             <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={[
@@ -742,30 +744,20 @@ export const NotesListScreen = () => {
                     </View>
                 ) : (
                     <View style={styles.masonryContainer}>
-                        <View style={styles.column}>
-                            {leftColumnNotes.map(note => (
-                                <NoteCard
-                                    key={note.id}
-                                    note={note}
-                                    onPress={() => handleNotePress(note)}
-                                    onLongPress={() => handleNoteLongPress(note)}
-                                    isSelectionMode={isSelectionMode}
-                                    isSelected={selectedNoteIds.has(note.id)}
-                                />
-                            ))}
-                        </View>
-                        <View style={styles.column}>
-                            {rightColumnNotes.map(note => (
-                                <NoteCard
-                                    key={note.id}
-                                    note={note}
-                                    onPress={() => handleNotePress(note)}
-                                    onLongPress={() => handleNoteLongPress(note)}
-                                    isSelectionMode={isSelectionMode}
-                                    isSelected={selectedNoteIds.has(note.id)}
-                                />
-                            ))}
-                        </View>
+                        {noteColumns.map((columnNotes, columnIndex) => (
+                            <View key={columnIndex} style={styles.column}>
+                                {columnNotes.map(note => (
+                                    <NoteCard
+                                        key={note.id}
+                                        note={note}
+                                        onPress={() => handleNotePress(note)}
+                                        onLongPress={() => handleNoteLongPress(note)}
+                                        isSelectionMode={isSelectionMode}
+                                        isSelected={selectedNoteIds.has(note.id)}
+                                    />
+                                ))}
+                            </View>
+                        ))}
                     </View>
                 )}
                 <View style={{ height: 120 }} pointerEvents="none" />
@@ -1068,6 +1060,14 @@ const styles = createStyles(() => ({
     masonryContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        width: '100%',
+        maxWidth: 1200,
+        alignSelf: 'center',
+    },
+    headerColumn: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
     },
     column: {
         flex: 1,
@@ -1095,7 +1095,8 @@ const styles = createStyles(() => ({
         paddingBottom: 4,
         paddingHorizontal: spacing.l,
         // Three actions: the thumb reaches all of them, with room between each.
-        width: Math.min(width - spacing.l * 2, 320),
+        width: 320,
+        maxWidth: '86%',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.15,

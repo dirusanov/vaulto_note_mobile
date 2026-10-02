@@ -162,6 +162,9 @@ const styles = createStyles(() => ({
         alignSelf: 'flex-start',
     },
     content: {
+        width: '100%',
+        maxWidth: 520,
+        alignSelf: 'center',
         flex: 1,
         justifyContent: 'center',
         paddingHorizontal: spacing.m,

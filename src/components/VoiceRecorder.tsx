@@ -711,6 +711,8 @@ const styles = createStyles(() => ({
         backgroundColor: 'transparent',
         alignItems: 'center',
         width: '100%',
+        maxWidth: 560,
+        alignSelf: 'center',
     },
     togglesRow: {
         flexDirection: 'row',

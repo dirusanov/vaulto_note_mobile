@@ -268,6 +268,9 @@ const styles = createStyles(() => ({
         backgroundColor: colors.background,
     },
     mainContent: {
+        width: '100%',
+        maxWidth: 520,
+        alignSelf: 'center',
         flex: 1,
         paddingHorizontal: 24,
         paddingBottom: 24,

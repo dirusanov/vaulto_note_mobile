@@ -6813,7 +6813,8 @@ export const NoteEditScreen = () => {
                 <View
                     ref={viewShotRef}
                     collapsable={false}
-                    style={{ flex: 1, backgroundColor: colors.background }}
+                    // A readable column on tablets; phones are narrower than the cap.
+                    style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', backgroundColor: colors.background }}
                 >
                     {editorHeader}
 
@@ -7735,6 +7736,9 @@ const styles = createStyles(() => ({
     aiModalContent: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         padding: spacing.l,
         maxHeight: '82%',
@@ -7910,6 +7914,9 @@ const styles = createStyles(() => ({
     promptBuilderContent: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         padding: spacing.m,
         gap: spacing.m,
@@ -8310,6 +8317,9 @@ const styles = createStyles(() => ({
     recordingTextModalContent: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         padding: spacing.l,
         maxHeight: '80%',

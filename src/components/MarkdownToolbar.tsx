@@ -338,6 +338,9 @@ const styles = createStyles(() => ({
     colorPickerContainer: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         padding: spacing.l,
         paddingBottom: Platform.OS === 'ios' ? 40 : spacing.l,

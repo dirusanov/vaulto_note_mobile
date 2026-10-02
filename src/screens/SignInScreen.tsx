@@ -216,6 +216,9 @@ const styles = createStyles(() => ({
         paddingBottom: spacing.xxl,
     },
     scrollContent: {
+        width: '100%',
+        maxWidth: 520,
+        alignSelf: 'center',
         flexGrow: 1,
     },
     title: {

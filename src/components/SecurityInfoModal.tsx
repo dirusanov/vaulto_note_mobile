@@ -149,6 +149,9 @@ const styles = createStyles(() => ({
     container: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         maxHeight: '85%',
         paddingBottom: spacing.xxl, // Safe area

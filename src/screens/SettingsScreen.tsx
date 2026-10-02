@@ -2446,6 +2446,9 @@ const styles = createStyles(() => ({
         fontSize: 11,
     },
     scrollContent: {
+        width: '100%',
+        maxWidth: 680,
+        alignSelf: 'center',
         paddingVertical: spacing.s,
         paddingHorizontal: spacing.m,
         gap: spacing.m,
@@ -2460,6 +2463,9 @@ const styles = createStyles(() => ({
         // Removed heavy shadow for flatness/compactness
     },
     topBar: {
+        width: '100%',
+        maxWidth: 680,
+        alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
@@ -2603,6 +2609,9 @@ const styles = createStyles(() => ({
     minutesSheet: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         paddingHorizontal: spacing.l,
         paddingTop: spacing.s,

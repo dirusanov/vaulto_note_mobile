@@ -155,6 +155,9 @@ const styles = createStyles(() => ({
     sheet: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 20,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 20,
         paddingTop: spacing.m,
         maxHeight: '80%',

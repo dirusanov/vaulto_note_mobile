@@ -167,6 +167,9 @@ export const EmailVerificationScreen = () => {
 
 const styles = createStyles(() => ({
     content: {
+        width: '100%',
+        maxWidth: 520,
+        alignSelf: 'center',
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',

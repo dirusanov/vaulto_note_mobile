@@ -146,6 +146,9 @@ const styles = createStyles(() => ({
     contentContainer: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        width: '100%',
+        maxWidth: 640,
+        alignSelf: 'center',
         borderTopRightRadius: 24,
         padding: spacing.l,
         paddingBottom: spacing.xl + 20, // Extra padding for bottom safe area

@@ -308,6 +308,9 @@ export const AskNotesScreen = () => {
 
 const styles = createStyles(() => ({
     header: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: spacing.s,
@@ -334,6 +337,9 @@ const styles = createStyles(() => ({
         marginTop: 2,
     },
     messages: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         paddingVertical: spacing.m,
         gap: spacing.m,
         flexGrow: 1,
@@ -471,6 +477,9 @@ const styles = createStyles(() => ({
         color: colors.textSecondary,
     },
     inputBar: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'flex-end',
         gap: spacing.s,
