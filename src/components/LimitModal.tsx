@@ -4,7 +4,6 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     TouchableWithoutFeedback,
     ActivityIndicator,
@@ -20,6 +19,7 @@ import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { setOnDeviceTranscription } from '../utils/storage';
 import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
+import { createStyles } from '../theme/createStyles';
 
 export const LimitModal: React.FC = () => {
     const { t } = useTranslation();
@@ -178,7 +178,7 @@ export const LimitModal: React.FC = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     onDeviceButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -273,6 +273,6 @@ const styles = StyleSheet.create({
     },
     primaryText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
     },
-});
+}));

@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, Pressable, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface SecurityInfoModalProps {
     visible: boolean;
@@ -139,7 +140,7 @@ export const SecurityInfoModal: React.FC<SecurityInfoModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontWeight: '600',
     },
-});
+}));

@@ -1,7 +1,8 @@
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, StyleProp, TextStyle } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface ButtonProps {
     title: string;
@@ -75,7 +76,7 @@ export const Button = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     button: {
         height: 50,
         borderRadius: 12,
@@ -96,4 +97,4 @@ const styles = StyleSheet.create({
     text: {
         ...typography.button,
     },
-});
+}));

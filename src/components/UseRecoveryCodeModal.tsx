@@ -23,6 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import jpeg from 'jpeg-js';
 import jsQR from 'jsqr';
+import { createStyles } from '../theme/createStyles';
 
 interface UseRecoveryCodeModalProps {
     visible: boolean;
@@ -219,7 +220,7 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -314,4 +315,4 @@ const styles = StyleSheet.create({
     scannerCancelButton: {
         width: '80%',
     },
-});
+}));

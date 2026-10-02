@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import type { ExtractedTask } from '../utils/taskExtraction';
+import { createStyles } from '../theme/createStyles';
 
 export interface TaskSheetItem extends ExtractedTask {
     /** Already a checklist item in the note. */
@@ -144,7 +145,7 @@ export const TasksSheet = ({
                                         onPress={() => onAddToNote(chosen)}
                                         accessibilityRole="button"
                                     >
-                                        <MaterialIcons name="playlist-add-check" size={20} color={colors.surface} />
+                                        <MaterialIcons name="playlist-add-check" size={20} color={colors.onPrimary} />
                                         <Text style={styles.primaryButtonText}>
                                             {t('edit.tasks.addToNote', 'Add to note as checklist ({{count}})', { count: chosen.length })}
                                         </Text>
@@ -162,7 +163,7 @@ export const TasksSheet = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: colors.overlay,
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
     primaryButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     secondaryButton: {
         paddingVertical: 10,
@@ -278,4 +279,4 @@ const styles = StyleSheet.create({
         color: colors.textTertiary,
         textAlign: 'center',
     },
-});
+}));

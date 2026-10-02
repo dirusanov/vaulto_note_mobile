@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors } from '../theme/colors';
@@ -10,6 +10,7 @@ import { authApi } from '../api/auth';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
+import { createStyles } from '../theme/createStyles';
 
 export const EmailVerificationScreen = () => {
     const { t } = useTranslation();
@@ -164,7 +165,7 @@ export const EmailVerificationScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     content: {
         flex: 1,
         alignItems: 'center',
@@ -228,4 +229,4 @@ const styles = StyleSheet.create({
         ...typography.button,
         color: colors.primary,
     },
-});
+}));

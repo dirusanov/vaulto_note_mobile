@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     Modal,
     Animated,
@@ -29,6 +28,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
 import { SignInRequiredModal } from './SignInRequiredModal';
 import { AgentModeVaultoGateModal } from './AgentModeVaultoGateModal';
+import { createStyles } from '../theme/createStyles';
+import { haptics } from '../utils/haptics';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -409,6 +410,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (isStartPending || isStopping || isRecording) {
             return;
         }
+        haptics.medium();
         setIsStartPending(true);
         try {
             currentMetering.current = -160;
@@ -462,6 +464,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (!isRecording || isStopping || isStartPending) {
             return;
         }
+        haptics.medium();
         setIsStopping(true);
         try {
             const recording = await AudioService.stopRecording();
@@ -689,7 +692,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'transparent',
@@ -842,4 +845,4 @@ const styles = StyleSheet.create({
         color: colors.warning,
         fontSize: 13,
     },
-});
+}));

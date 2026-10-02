@@ -1,4 +1,4 @@
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme, onColorSchemeChange } from '../theme/colors';
 
 export const AUDIO_EMBED_NODE_NAME = 'vaultoAudioEmbed';
 export const AUDIO_EMBED_ATTR = 'data-audio-player';
@@ -19,17 +19,50 @@ export const AUDIO_PREVIEW_SPEED_START = 544;
 export const AUDIO_PREVIEW_SPEED_END = 648;
 export const AUDIO_PREVIEW_SPEED_TOP = 66;
 export const AUDIO_PREVIEW_SPEED_BOTTOM = 110;
-export const AUDIO_PREVIEW_CARD_BACKGROUND = colors.surface;
-export const AUDIO_PREVIEW_CARD_BORDER = colors.border;
-export const AUDIO_PREVIEW_ACCENT = colors.primary;
-export const AUDIO_PREVIEW_ACCENT_SOFT = '#DCE8FF';
-export const AUDIO_PREVIEW_TRACK = '#E8F0FF';
-export const AUDIO_PREVIEW_TEXT = colors.text;
-export const AUDIO_PREVIEW_SUBTEXT = colors.textSecondary;
-export const AUDIO_PREVIEW_SPEED_BACKGROUND = '#F2F5F8';
-export const AUDIO_PREVIEW_SPEED_BORDER = '#DCE3EC';
-export const AUDIO_PREVIEW_WAVE_IDLE = '#DCE3EC';
-export const AUDIO_PREVIEW_WAVE_LOADING = '#D7DFEA';
+// Colours of the in-note audio card. They are `let` so they follow the theme:
+// importers read the live binding each time they build the card.
+type AudioPreviewPalette = {
+    cardBackground: string; cardBorder: string; accent: string; accentSoft: string; track: string;
+    text: string; subtext: string; speedBackground: string; speedBorder: string; waveIdle: string; waveLoading: string;
+};
+const audioPreviewPalette = (): AudioPreviewPalette => (isDarkScheme()
+    ? {
+        cardBackground: colors.surface, cardBorder: colors.border, accent: colors.primary,
+        accentSoft: 'rgba(61, 139, 255, 0.22)', track: '#26344D', text: colors.text, subtext: colors.textSecondary,
+        speedBackground: '#23272C', speedBorder: '#3A4047', waveIdle: '#3A4047', waveLoading: '#30353B',
+    }
+    : {
+        cardBackground: colors.surface, cardBorder: colors.border, accent: colors.primary,
+        accentSoft: '#DCE8FF', track: '#E8F0FF', text: colors.text, subtext: colors.textSecondary,
+        speedBackground: '#F2F5F8', speedBorder: '#DCE3EC', waveIdle: '#DCE3EC', waveLoading: '#D7DFEA',
+    });
+export let AUDIO_PREVIEW_CARD_BACKGROUND = '';
+export let AUDIO_PREVIEW_CARD_BORDER = '';
+export let AUDIO_PREVIEW_ACCENT = '';
+export let AUDIO_PREVIEW_ACCENT_SOFT = '';
+export let AUDIO_PREVIEW_TRACK = '';
+export let AUDIO_PREVIEW_TEXT = '';
+export let AUDIO_PREVIEW_SUBTEXT = '';
+export let AUDIO_PREVIEW_SPEED_BACKGROUND = '';
+export let AUDIO_PREVIEW_SPEED_BORDER = '';
+export let AUDIO_PREVIEW_WAVE_IDLE = '';
+export let AUDIO_PREVIEW_WAVE_LOADING = '';
+const applyAudioPreviewPalette = () => {
+    const palette = audioPreviewPalette();
+    AUDIO_PREVIEW_CARD_BACKGROUND = palette.cardBackground;
+    AUDIO_PREVIEW_CARD_BORDER = palette.cardBorder;
+    AUDIO_PREVIEW_ACCENT = palette.accent;
+    AUDIO_PREVIEW_ACCENT_SOFT = palette.accentSoft;
+    AUDIO_PREVIEW_TRACK = palette.track;
+    AUDIO_PREVIEW_TEXT = palette.text;
+    AUDIO_PREVIEW_SUBTEXT = palette.subtext;
+    AUDIO_PREVIEW_SPEED_BACKGROUND = palette.speedBackground;
+    AUDIO_PREVIEW_SPEED_BORDER = palette.speedBorder;
+    AUDIO_PREVIEW_WAVE_IDLE = palette.waveIdle;
+    AUDIO_PREVIEW_WAVE_LOADING = palette.waveLoading;
+};
+applyAudioPreviewPalette();
+onColorSchemeChange(applyAudioPreviewPalette);
 export const AUDIO_PREVIEW_WAVE_HEIGHTS = [16, 30, 22, 36, 18, 28, 14, 32, 24, 38, 18, 30, 16, 36, 20, 28, 14, 22];
 
 export const AUDIO_EMBED_BLOCK_REGEX = /<div\b[^>]*data-audio-player=(["'])true\1[^>]*><\/div>/gi;

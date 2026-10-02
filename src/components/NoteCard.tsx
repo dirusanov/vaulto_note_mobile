@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
 import { colors } from '../theme/colors';
@@ -10,6 +10,7 @@ import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { useEncryption } from '../context/EncryptionContext';
 import { isMasterCiphertext } from '../crypto/encryption';
 import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
+import { createStyles } from '../theme/createStyles';
 
 interface NoteCardProps {
     note: Note;
@@ -106,24 +107,34 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 
     const isEmpty = !title && !hasMeaningfulRichContent(content);
 
+    // The card sinks slightly under the finger, like Keep and Apple Notes.
+    const pressScale = useRef(new Animated.Value(1)).current;
+    const animatePress = (toValue: number) => {
+        Animated.spring(pressScale, { toValue, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+    };
+
     return (
-        <TouchableOpacity
-            style={[styles.card, isSelected && styles.selectedCard]}
+        <Pressable
             onPress={onPress}
             onLongPress={onLongPress}
-            activeOpacity={0.9}
+            delayLongPress={350}
+            onPressIn={() => animatePress(0.97)}
+            onPressOut={() => animatePress(1)}
+            accessibilityRole="button"
+            accessibilityState={isSelectionMode ? { selected: isSelected } : undefined}
         >
+        <Animated.View style={[styles.card, isSelected && styles.selectedCard, { transform: [{ scale: pressScale }] }]}>
             {isSelectionMode && (
                 <View style={styles.selectionIndicator}>
                     <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
                         {isSelected && (
-                            <MaterialIcons name="check" size={16} color={colors.background} />
+                            <MaterialIcons name="check" size={16} color={colors.onPrimary} />
                         )}
                     </View>
                 </View>
             )}
             <View style={styles.content}>
-                <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle]} numberOfLines={2}>
+                <Text style={[styles.title, (!title && hasAudio) && styles.placeholderTitle, isSelectionMode && { paddingRight: 28 }]} numberOfLines={2}>
                     {title || (hasAudio ? t("notes.voiceRecording") : ' ')}
                 </Text>
                 {(!isEmpty && previewString && previewString !== title) && (
@@ -159,11 +170,12 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     )}
                 </View>
             </View>
-        </TouchableOpacity>
+        </Animated.View>
+        </Pressable>
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     card: {
         backgroundColor: colors.surface,
         borderRadius: 16,
@@ -260,4 +272,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontWeight: '500',
     },
-});
+}));

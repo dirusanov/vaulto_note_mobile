@@ -1,10 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Modal, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface UnlockingOverlayProps {
     visible: boolean;
@@ -124,7 +125,7 @@ export const UnlockingOverlay = ({ visible, title, subtitle, progress, progressL
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.35)',
@@ -211,4 +212,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
         opacity: 0.9,
     },
-});
+}));

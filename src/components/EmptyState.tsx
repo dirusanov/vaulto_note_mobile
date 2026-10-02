@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface EmptyStateProps {
     message: string;
@@ -78,7 +79,7 @@ export const EmptyState = ({ message, variant = 'plain' }: EmptyStateProps) => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
         justifyContent: 'center',
@@ -155,4 +156,4 @@ const styles = StyleSheet.create({
         color: colors.primary,
         textAlign: 'center',
     },
-});
+}));

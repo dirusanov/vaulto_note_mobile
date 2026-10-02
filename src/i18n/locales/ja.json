@@ -57,7 +57,8 @@
     "reviewRecovery": "オプションを見る",
     "noSearchResults": "一致するノートはありません",
     "keptLockedTitle": "この端末に残っているアカウントのノート：{{count}}",
-    "keptLockedText": "暗号化されています。開くにはアカウントにサインインしてください。"
+    "keptLockedText": "暗号化されています。開くにはアカウントにサインインしてください。",
+    "deletedCount": "削除したノート：{{count}}"
   },
   "settings": {
     "title": "設定",
@@ -259,6 +260,12 @@
       "title": "端末で文字起こし",
       "active": "{{model}} モデル · オフライン、音声は端末から出ません",
       "desc": "プライベートでオフライン。音声モデルを一度だけダウンロードします。"
+    },
+    "theme": {
+      "title": "テーマ",
+      "system": "システム",
+      "light": "ライト",
+      "dark": "ダーク"
     }
   },
   "languages": {

@@ -22,6 +22,7 @@ import { TextInput } from './TextInput';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { syncService } from '../services/SyncService';
 import { UnlockingOverlay } from './UnlockingOverlay';
+import { createStyles } from '../theme/createStyles';
 
 interface EnableSyncModalProps {
     visible: boolean;
@@ -244,7 +245,7 @@ export const EnableSyncModal = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     avoider: {
         flex: 1,
     },
@@ -338,4 +339,4 @@ const styles = StyleSheet.create({
     actionButton: {
         flex: 1,
     },
-});
+}));

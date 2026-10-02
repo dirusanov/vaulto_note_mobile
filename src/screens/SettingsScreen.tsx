@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import appConfig from '../../app.json';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useAuth } from '../hooks/useAuth';
@@ -80,6 +80,9 @@ import {
 } from '../services/LocalLLMService';
 import { SearchableLanguageSelector } from '../components/SearchableLanguageSelector';
 import { RecoveryCodeModal } from '../components/RecoveryCodeModal';
+import { createStyles } from '../theme/createStyles';
+import { useTheme } from '../theme/ThemeContext';
+import { haptics } from '../utils/haptics';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -223,8 +226,9 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
                     <ProIcon
                         size={22}
                         containerSize={40}
-                        backgroundColor="#FFF7E6"
+                        backgroundColor={colors.warningLight}
                         borderColor="#FCD34D"
+                        tintColor={null}
                     />
                 </View>
                 <View style={styles.premiumUpgradeCopy}>
@@ -245,6 +249,7 @@ export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { t, i18n } = useTranslation();
     const [showAppLanguageModal, setShowAppLanguageModal] = useState(false);
+    const { preference: themePreference, setPreference: setThemePreference } = useTheme();
     const appLanguages = [
         { key: 'en', label: 'English' },
         { key: 'ru', label: 'Русский' },
@@ -1242,6 +1247,47 @@ export const SettingsScreen = () => {
                         </View>
                         <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
+                    <View style={styles.themeDivider} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                        <MaterialIcons name="contrast" size={24} color={colors.textSecondary} />
+                        <Text style={styles.preferenceTitle}>{t('settings.theme.title', 'Theme')}</Text>
+                    </View>
+                    <View style={styles.themeSegments} accessibilityRole="radiogroup">
+                        {([
+                            { key: 'system', icon: 'brightness-auto', label: t('settings.theme.system', 'System') },
+                            { key: 'light', icon: 'light-mode', label: t('settings.theme.light', 'Light') },
+                            { key: 'dark', icon: 'dark-mode', label: t('settings.theme.dark', 'Dark') },
+                        ] as const).map((option) => {
+                            const selected = themePreference === option.key;
+                            return (
+                                <TouchableOpacity
+                                    key={option.key}
+                                    style={[styles.themeSegment, selected && styles.themeSegmentActive]}
+                                    onPress={() => {
+                                        if (!selected) {
+                                            haptics.selection();
+                                            setThemePreference(option.key);
+                                        }
+                                    }}
+                                    accessibilityRole="radio"
+                                    accessibilityState={{ selected }}
+                                    accessibilityLabel={option.label}
+                                >
+                                    <MaterialIcons
+                                        name={option.icon}
+                                        size={18}
+                                        color={selected ? colors.primary : colors.textSecondary}
+                                    />
+                                    <Text
+                                        style={[styles.themeSegmentText, selected && styles.themeSegmentTextActive]}
+                                        numberOfLines={1}
+                                    >
+                                        {option.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
                 </View>
 
                 {/* Cloud Sync */}
@@ -1328,7 +1374,7 @@ export const SettingsScreen = () => {
                                         }}
                                         disabled={showUnlockingOverlay || resetRecoveryPending}
                                         trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                        thumbColor={colors.surface}
+                                        thumbColor={colors.onPrimary}
                                         style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                                     />
                                 </View>
@@ -1429,7 +1475,7 @@ export const SettingsScreen = () => {
                                                     }}
                                                     disabled={showUnlockingOverlay}
                                                     trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                                    thumbColor={colors.surface}
+                                                    thumbColor={colors.onPrimary}
                                                     style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                                                 />
                                             )}
@@ -1532,7 +1578,7 @@ export const SettingsScreen = () => {
                             }}
                             disabled={isGuestOrAnonymous}
                             trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                            thumbColor={colors.surface}
+                            thumbColor={colors.onPrimary}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                         />
                     </TouchableOpacity>
@@ -1566,7 +1612,7 @@ export const SettingsScreen = () => {
                             onValueChange={toggleTranscription}
                             disabled={transcriptionAuthRequired}
                             trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                            thumbColor={colors.surface}
+                            thumbColor={colors.onPrimary}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                         />
                     </TouchableOpacity>
@@ -1597,7 +1643,7 @@ export const SettingsScreen = () => {
                                 value={onDeviceTranscriptionActive}
                                 onValueChange={(value) => { void updateOnDeviceTranscription(value); }}
                                 trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                thumbColor={colors.surface}
+                                thumbColor={colors.onPrimary}
                                 style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                             />
                         </TouchableOpacity>
@@ -1677,12 +1723,12 @@ export const SettingsScreen = () => {
                                                         style={{
                                                             width: 14,
                                                             height: 14,
-                                                            tintColor: isActive ? colors.surface : colors.textSecondary,
+                                                            tintColor: isActive ? colors.onPrimary : colors.textSecondary,
                                                         }}
                                                         resizeMode="contain"
                                                     />
                                                 ) : (
-                                                    <MaterialIcons name={option.icon as any} size={14} color={isActive ? colors.surface : colors.textSecondary} />
+                                                    <MaterialIcons name={option.icon as any} size={14} color={isActive ? colors.onPrimary : colors.textSecondary} />
                                                 )}
                                                 <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]} numberOfLines={1}>
                                                     {option.title.replace(' Compatible', '').replace(' Hosted', '')}
@@ -1700,7 +1746,7 @@ export const SettingsScreen = () => {
                                             ]}
                                             onPress={() => updateProvider('local')}
                                         >
-                                            <MaterialIcons name="memory" size={14} color={usingLocal ? colors.surface : colors.textSecondary} />
+                                            <MaterialIcons name="memory" size={14} color={usingLocal ? colors.onPrimary : colors.textSecondary} />
                                             <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
                                                 {t('settings.ui.onDeviceProvider', 'On this phone')}
                                             </Text>
@@ -1797,10 +1843,10 @@ export const SettingsScreen = () => {
                                         disabled={testingConnection}
                                     >
                                         {testingConnection ? (
-                                            <ActivityIndicator size="small" color={colors.surface} />
+                                            <ActivityIndicator size="small" color={colors.onPrimary} />
                                         ) : (
                                             <>
-                                                <MaterialIcons name="wifi-tethering" size={16} color={colors.surface} />
+                                                <MaterialIcons name="wifi-tethering" size={16} color={colors.onPrimary} />
                                                 <Text style={styles.openAITestButtonText}>{t("settings.ui.testConnection", "Test Connection")}</Text>
                                             </>
                                         )}
@@ -2240,7 +2286,7 @@ export const SettingsScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     modelLanguageRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2417,7 +2463,7 @@ const styles = StyleSheet.create({
     },
     userAvatarText: {
         ...typography.h3,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 18,
         fontWeight: '700',
     },
@@ -2468,7 +2514,7 @@ const styles = StyleSheet.create({
         flexShrink: 1,
     },
     compactProviderTextActive: {
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     compactConfigBox: {
         backgroundColor: colors.backgroundSecondary,
@@ -2751,7 +2797,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#FFF9C4', // Light cheerful yellow
+        backgroundColor: colors.warningLight,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -2870,6 +2916,45 @@ const styles = StyleSheet.create({
         ...typography.caption,
         color: colors.textSecondary,
     },
+    themeDivider: {
+        height: 1,
+        backgroundColor: colors.border,
+        marginVertical: spacing.m,
+    },
+    themeSegments: {
+        flexDirection: 'row',
+        gap: spacing.xs,
+        marginTop: spacing.s,
+        padding: 4,
+        borderRadius: 14,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    themeSegment: {
+        flex: 1,
+        minHeight: 48,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        paddingHorizontal: 4,
+    },
+    themeSegmentActive: {
+        backgroundColor: isDarkScheme() ? '#353B43' : colors.surface,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 1,
+    },
+    themeSegmentText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: colors.textSecondary,
+    },
+    themeSegmentTextActive: {
+        color: colors.text,
+        fontWeight: '600',
+    },
     timeoutRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -2887,7 +2972,7 @@ const styles = StyleSheet.create({
     },
     timeoutChipActive: {
         borderColor: colors.primary,
-        backgroundColor: '#EEF4FF',
+        backgroundColor: colors.primaryLight,
     },
     timeoutChipText: {
         ...typography.caption,
@@ -2916,7 +3001,7 @@ const styles = StyleSheet.create({
     },
     providerPillActive: {
         borderColor: colors.primary,
-        backgroundColor: '#EEF4FF',
+        backgroundColor: colors.primaryLight,
         shadowColor: colors.cardShadow,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.15,
@@ -3174,7 +3259,7 @@ const styles = StyleSheet.create({
     },
     testActionText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     labelSpacing: {
         marginTop: spacing.s,
@@ -3332,7 +3417,7 @@ const styles = StyleSheet.create({
     },
     smallButtonText: {
         ...typography.caption,
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     iconButton: {
         padding: spacing.s,
@@ -3452,7 +3537,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     openAIModeButtonTextActive: {
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     openAIInputGroup: {
         gap: spacing.xs,
@@ -3522,7 +3607,7 @@ const styles = StyleSheet.create({
         ...typography.button,
         fontSize: 14,
         fontWeight: '600',
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     localWhisperModelPill: {
         minHeight: 44,
@@ -3584,4 +3669,4 @@ const styles = StyleSheet.create({
         color: colors.warning,
         fontSize: 13,
     },
-});
+}));

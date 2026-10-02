@@ -1,10 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import i18next, { type TFunction } from 'i18next';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { createStyles } from '../theme/createStyles';
 
 export interface OnDeviceModelOption {
     key: string;
@@ -201,7 +202,7 @@ export const OnDeviceModelSection = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     // Sits inside the settings card, so a soft panel instead of a second border.
     card: {
         backgroundColor: colors.backgroundSecondary,
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
     tagText: {
         fontSize: 11,
         fontWeight: '700',
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     meta: {
         fontSize: 13,
@@ -381,4 +382,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: colors.error,
     },
-});
+}));

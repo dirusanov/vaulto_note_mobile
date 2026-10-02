@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     ActivityIndicator,
 } from 'react-native';
@@ -32,6 +31,7 @@ interface AudioPlayerProps {
 }
 
 import { AudioService } from '../services/AudioService';
+import { createStyles } from '../theme/createStyles';
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, onClose, onDelete, autoPlay = false }) => {
     const { t } = useTranslation();
@@ -353,12 +353,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                         ]}
                     >
                         {isLoading ? (
-                            <ActivityIndicator size="small" color={colors.surface} />
+                            <ActivityIndicator size="small" color={colors.onPrimary} />
                         ) : (
                             <MaterialIcons
                                 name={isPlaying ? "pause" : "play-arrow"}
                                 size={playIconSize}
-                                color={colors.surface}
+                                color={colors.onPrimary}
                             />
                         )}
                     </View>
@@ -441,7 +441,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         width: '100%',
         alignSelf: 'stretch',
@@ -542,4 +542,4 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         zIndex: 1,
     },
-});
+}));

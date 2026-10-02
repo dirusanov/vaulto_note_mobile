@@ -4,7 +4,6 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     TouchableWithoutFeedback,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface SuccessModalProps {
     visible: boolean;
@@ -72,7 +72,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 16,
     },
-});
+}));

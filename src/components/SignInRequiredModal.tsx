@@ -4,13 +4,13 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     TouchableWithoutFeedback,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface SignInRequiredModalProps {
     visible: boolean;
@@ -73,7 +73,7 @@ export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.38)',
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     },
     primaryText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 14,
     },
-});
+}));

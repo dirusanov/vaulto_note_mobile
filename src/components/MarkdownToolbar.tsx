@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import {
     highlightPalette,
     normalizeHighlightColorForCss,
 } from '../utils/highlightColors';
+import { createStyles } from '../theme/createStyles';
 
 export type MarkdownFormatType = 'bold' | 'italic' | 'strikethrough' | 'underline' | 'list' | 'todo' | 'h1' | 'h2' | 'h3' | 'highlight' | 'dictate' | string;
 
@@ -200,7 +201,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                         { backgroundColor: activeHighlightColor },
                         // specific tweak for correct visual
                         activeHighlightColor.toLowerCase() === colors.highlight.white.toLowerCase()
-                        && { borderWidth: 1, borderColor: '#eee' }
+                        && { borderWidth: 1, borderColor: colors.border }
                     ]} />
                 </TouchableOpacity>
 
@@ -273,11 +274,11 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         backgroundColor: colors.surface,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.05)',
+        borderTopColor: colors.border,
         paddingVertical: spacing.xs,
         ...Platform.select({
             ios: {
@@ -327,7 +328,7 @@ const styles = StyleSheet.create({
         height: 8,
         borderRadius: 4,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: colors.border,
     },
     modalOverlay: {
         flex: 1,
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.08)',
+        borderColor: colors.border,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
@@ -391,4 +392,4 @@ const styles = StyleSheet.create({
         borderColor: colors.primary,
         transform: [{ scale: 1.1 }],
     },
-});
+}));

@@ -4,13 +4,13 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { setPrivacyWarningDismissed } from '../utils/storage';
+import { createStyles } from '../theme/createStyles';
 
 interface PrivacyWarningModalProps {
     visible: boolean;
@@ -91,7 +91,7 @@ export const PrivacyWarningModal: React.FC<PrivacyWarningModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
         borderColor: colors.primary,
     },
     checkmark: {
-        color: colors.background,
+        color: colors.onPrimary,
         fontSize: 16,
         fontWeight: 'bold',
     },
@@ -176,6 +176,6 @@ const styles = StyleSheet.create({
     },
     acceptButtonText: {
         ...typography.button,
-        color: colors.background,
+        color: colors.onPrimary,
     },
-});
+}));

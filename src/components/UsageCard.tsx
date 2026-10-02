@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -8,6 +8,7 @@ import { typography } from '../theme/typography';
 import { UserProfile } from '../api/auth';
 import { AIProvider } from '../utils/storage';
 import { ProIcon } from './ProIcon';
+import { createStyles } from '../theme/createStyles';
 
 interface UsageCardProps {
     user: UserProfile | null;
@@ -183,7 +184,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     compactWrap: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -367,4 +368,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-});
+}));

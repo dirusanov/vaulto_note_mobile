@@ -4,7 +4,6 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     TouchableWithoutFeedback,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface ErrorModalProps {
     visible: boolean;
@@ -83,7 +83,7 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 16,
     },
     secondaryButton: {
@@ -157,4 +157,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontSize: 16,
     },
-});
+}));

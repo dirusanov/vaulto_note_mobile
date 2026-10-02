@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { parseMarkdownText } from '../utils/markdownUtils';
+import { createStyles } from '../theme/createStyles';
 
 /**
  * Read-only markdown renderer for AI output shown outside the editor
@@ -269,7 +270,7 @@ export const MarkdownPreview = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     body: {
         color: colors.text,
         marginBottom: spacing.s,
@@ -327,4 +328,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border,
         marginVertical: spacing.s,
     },
-});
+}));

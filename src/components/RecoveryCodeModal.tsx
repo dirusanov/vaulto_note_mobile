@@ -1,7 +1,6 @@
 import React, { useRef } from 'react';
 import {
     Modal,
-    StyleSheet,
     Text,
     View,
     TouchableOpacity,
@@ -18,6 +17,7 @@ import { Button } from './Button';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import { createStyles } from '../theme/createStyles';
 
 interface RecoveryCodeModalProps {
     visible: boolean;
@@ -131,7 +131,7 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -264,4 +264,4 @@ const styles = StyleSheet.create({
     doneButton: {
         width: '100%',
     },
-});
+}));

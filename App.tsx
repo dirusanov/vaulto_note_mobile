@@ -4,7 +4,7 @@ import './src/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider } from './src/theme/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { SubscriptionProvider } from './src/context/SubscriptionContext';
 import { EncryptionProvider } from './src/context/EncryptionContext';
@@ -108,10 +108,11 @@ export default function App() {
                         <EncryptionProvider>
                             <NotesProvider>
                                 <AppBootstrap>
-                                    <EncryptionGate>
-                                        <StatusBar style="auto" />
-                                        <RootNavigator />
-                                    </EncryptionGate>
+                                    <ThemeProvider>
+                                        <EncryptionGate>
+                                            <RootNavigator />
+                                        </EncryptionGate>
+                                    </ThemeProvider>
                                 </AppBootstrap>
                             </NotesProvider>
                         </EncryptionProvider>

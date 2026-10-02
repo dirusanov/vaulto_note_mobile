@@ -1,8 +1,9 @@
 import React, { ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface Props {
     title: string;
@@ -31,7 +32,7 @@ export const AuthProviderButton = ({ title, icon, loading = false, onPress }: Pr
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     button: {
         height: 52,
         borderRadius: 12,
@@ -54,4 +55,4 @@ const styles = StyleSheet.create({
         color: colors.text,
         marginLeft: spacing.s,
     },
-});
+}));

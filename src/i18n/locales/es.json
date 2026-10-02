@@ -57,7 +57,8 @@
     "reviewRecovery": "Ver opciones",
     "noSearchResults": "Ninguna nota coincide con la búsqueda",
     "keptLockedTitle": "Notas de la cuenta guardadas en este teléfono: {{count}}",
-    "keptLockedText": "Están cifradas. Inicia sesión para abrirlas."
+    "keptLockedText": "Están cifradas. Inicia sesión para abrirlas.",
+    "deletedCount": "Notas eliminadas: {{count}}"
   },
   "settings": {
     "title": "Ajustes",
@@ -259,6 +260,12 @@
       "title": "Transcribir en el dispositivo",
       "active": "Modelo {{model}} · sin conexión, el audio no sale del teléfono",
       "desc": "Privado y sin conexión. Descarga un modelo de voz una vez."
+    },
+    "theme": {
+      "title": "Tema",
+      "system": "Sistema",
+      "light": "Claro",
+      "dark": "Oscuro"
     }
   },
   "languages": {

@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
-    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -20,6 +19,7 @@ import { spacing } from '../theme/spacing';
 import { MaterialIcons } from '@expo/vector-icons';
 import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
+import { createStyles } from '../theme/createStyles';
 
 type RouteParams = {
     ResetPassword: {
@@ -156,7 +156,7 @@ export const ResetPasswordScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
     },
@@ -241,4 +241,4 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '600',
     },
-});
+}));

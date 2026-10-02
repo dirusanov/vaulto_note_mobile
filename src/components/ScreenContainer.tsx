@@ -1,8 +1,9 @@
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ViewStyle, StatusBar } from 'react-native';
+import { View, ViewStyle, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { createStyles } from '../theme/createStyles';
 
 interface ScreenContainerProps {
     children: ReactNode;
@@ -12,13 +13,13 @@ interface ScreenContainerProps {
 export const ScreenContainer = ({ children, style }: ScreenContainerProps) => {
     return (
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+            <StatusBar barStyle={isDarkScheme() ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
             <View style={[styles.container, style]}>{children}</View>
         </SafeAreaView>
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     safeArea: {
         flex: 1,
         backgroundColor: colors.background,
@@ -28,4 +29,4 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.m,
         backgroundColor: colors.background,
     },
-});
+}));

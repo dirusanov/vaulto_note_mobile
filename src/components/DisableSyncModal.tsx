@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal } from 'react-native';
+import { View, Text, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
+import { createStyles } from '../theme/createStyles';
 
 interface DisableSyncModalProps {
     visible: boolean;
@@ -62,7 +63,7 @@ export const DisableSyncModal: React.FC<DisableSyncModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: colors.overlay,
@@ -114,4 +115,4 @@ const styles = StyleSheet.create({
     actionButton: {
         width: '100%',
     },
-});
+}));

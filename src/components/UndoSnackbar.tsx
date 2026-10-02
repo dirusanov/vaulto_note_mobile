@@ -1,9 +1,10 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { createStyles } from '../theme/createStyles';
 
 interface UndoSnackbarProps {
     message: string | null;
@@ -19,7 +20,7 @@ export const UndoSnackbar = ({ message, onUndo }: UndoSnackbarProps) => {
         <View
             pointerEvents="box-none"
             // Sits above the floating mic button so taps reach Undo, not the mic.
-            style={[styles.wrapper, { bottom: Math.max(insets.bottom, spacing.m) + 120 }]}
+            style={[styles.wrapper, { bottom: Math.max(insets.bottom, spacing.m) + 132 }]}
             accessibilityLiveRegion="polite"
         >
             <View style={styles.bar}>
@@ -32,7 +33,7 @@ export const UndoSnackbar = ({ message, onUndo }: UndoSnackbarProps) => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     wrapper: {
         position: 'absolute',
         left: spacing.m,
@@ -46,7 +47,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#1F2328',
+        backgroundColor: isDarkScheme() ? '#2E333A' : '#1F2328',
         borderRadius: 12,
         paddingVertical: 12,
         paddingHorizontal: spacing.m,
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
     },
     message: {
         flex: 1,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 14,
     },
     undo: {
@@ -70,4 +71,4 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
-});
+}));

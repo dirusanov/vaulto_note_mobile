@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { createStyles } from '../theme/createStyles';
 
 export const PaywallScreen = () => {
     const { t } = useTranslation();
@@ -92,7 +93,7 @@ export const PaywallScreen = () => {
                                 onPress={() => { void reloadOfferings(); }}
                                 accessibilityRole="button"
                             >
-                                <MaterialIcons name="refresh" size={18} color={colors.surface} />
+                                <MaterialIcons name="refresh" size={18} color={colors.onPrimary} />
                                 <Text style={styles.retryButtonText}>{t("aux.paywallRetry", "Try again")}</Text>
                             </TouchableOpacity>
                         </View>
@@ -184,7 +185,7 @@ const FeatureItem = ({ text }: { text: string }) => (
     </View>
 );
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     unavailableCard: {
         alignItems: 'center',
         gap: 8,
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
     },
     retryButtonText: {
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 15,
         fontWeight: '600',
     },
@@ -400,4 +401,4 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 18,
     },
-});
+}));

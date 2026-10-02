@@ -8,7 +8,7 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import {
     BridgeExtension,
     PlaceholderBridge,
@@ -42,6 +42,7 @@ import {
     countChecklistItems,
     resolveChecklistScaleFactor,
 } from '../utils/checklistScale';
+import { createStyles } from '../theme/createStyles';
 
 interface RichTextEditorProps {
     initialContent: string;
@@ -249,6 +250,7 @@ const getEditorCss = (
     font-size: ${baseFontSize}px;
     line-height: ${baseLineHeight}px;
     color: ${colors.text};
+    caret-color: ${colors.primary};
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
@@ -376,6 +378,17 @@ const getEditorCss = (
     height: 1px;
     background: ${colors.border};
     margin: ${Math.round(baseFontSize * 0.75)}px 0;
+  }
+
+  .ProseMirror .is-editor-empty:first-child::before,
+  .ProseMirror p.is-empty::before {
+    color: ${colors.textTertiary} !important;
+  }
+
+  /* Highlight fills stay pastel in both themes, so their text stays dark. */
+  .ProseMirror mark {
+    color: #1A1A1A;
+    border-radius: 3px;
   }
 
   .ProseMirror img {
@@ -1269,7 +1282,7 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.onHorizontalSwipe === next.onHorizontalSwipe
 ));
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     editorShell: {
         flex: 1,
         minHeight: 200,
@@ -1291,4 +1304,4 @@ const styles = StyleSheet.create({
         width: '100%',
         backgroundColor: colors.surface,
     },
-});
+}));

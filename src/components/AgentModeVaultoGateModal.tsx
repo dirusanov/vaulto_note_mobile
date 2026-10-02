@@ -4,7 +4,6 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     TouchableWithoutFeedback,
     Image,
@@ -12,6 +11,7 @@ import {
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface AgentModeVaultoGateModalProps {
     visible: boolean;
@@ -69,7 +69,7 @@ export const AgentModeVaultoGateModal: React.FC<AgentModeVaultoGateModalProps> =
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     },
     primaryText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 14,
     },
     secondaryButton: {
@@ -156,4 +156,4 @@ const styles = StyleSheet.create({
         ...typography.button,
         color: colors.textSecondary,
     },
-});
+}));

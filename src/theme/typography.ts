@@ -6,21 +6,21 @@ export const typography: Record<string, TextStyle> = {
     h1: {
         fontSize: 32,
         fontWeight: '700',
-        color: colors.text,
+        get color() { return colors.text; },
         lineHeight: 38,
         letterSpacing: -0.5,
     },
     h2: {
         fontSize: 24,
         fontWeight: '600',
-        color: colors.text,
+        get color() { return colors.text; },
         lineHeight: 32,
         letterSpacing: -0.3,
     },
     h3: {
         fontSize: 20,
         fontWeight: '600',
-        color: colors.text,
+        get color() { return colors.text; },
         lineHeight: 28,
     },
 
@@ -28,19 +28,19 @@ export const typography: Record<string, TextStyle> = {
     body: {
         fontSize: 16,
         fontWeight: '400',
-        color: colors.text,
+        get color() { return colors.text; },
         lineHeight: 24,
     },
     bodyLarge: {
         fontSize: 18,
         fontWeight: '400',
-        color: colors.text,
+        get color() { return colors.text; },
         lineHeight: 28,
     },
     bodySmall: {
         fontSize: 14,
         fontWeight: '400',
-        color: colors.textSecondary,
+        get color() { return colors.textSecondary; },
         lineHeight: 20,
     },
 
@@ -48,13 +48,13 @@ export const typography: Record<string, TextStyle> = {
     caption: {
         fontSize: 13,
         fontWeight: '400',
-        color: colors.textTertiary,
+        get color() { return colors.textTertiary; },
         lineHeight: 18,
     },
     captionBold: {
         fontSize: 13,
         fontWeight: '600',
-        color: colors.textSecondary,
+        get color() { return colors.textSecondary; },
         lineHeight: 18,
     },
 
@@ -62,27 +62,27 @@ export const typography: Record<string, TextStyle> = {
     button: {
         fontSize: 16,
         fontWeight: '600',
-        color: colors.surface,
+        get color() { return colors.onPrimary; },
         letterSpacing: -0.2,
     },
     buttonSmall: {
         fontSize: 14,
         fontWeight: '600',
-        color: colors.surface,
+        get color() { return colors.onPrimary; },
     },
 
     // Note-specific
     noteTitle: {
         fontSize: 17,
         fontWeight: '600',
-        color: colors.text,
+        get color() { return colors.text; },
         lineHeight: 24,
         letterSpacing: -0.2,
     },
     notePreview: {
         fontSize: 15,
         fontWeight: '400',
-        color: colors.textSecondary,
+        get color() { return colors.textSecondary; },
         lineHeight: 22,
     },
 };

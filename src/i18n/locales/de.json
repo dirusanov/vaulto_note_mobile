@@ -57,7 +57,8 @@
     "reviewRecovery": "Optionen ansehen",
     "noSearchResults": "Keine Notizen passen zu deiner Suche",
     "keptLockedTitle": "Konto-Notizen auf diesem Telefon behalten: {{count}}",
-    "keptLockedText": "Sie sind verschlüsselt. Melde dich an, um sie zu öffnen."
+    "keptLockedText": "Sie sind verschlüsselt. Melde dich an, um sie zu öffnen.",
+    "deletedCount": "Notizen gelöscht: {{count}}"
   },
   "settings": {
     "title": "Einstellungen",
@@ -259,6 +260,12 @@
       "title": "Auf dem Gerät transkribieren",
       "active": "Modell {{model}} · offline, Audio bleibt auf dem Telefon",
       "desc": "Privat und offline. Lädt einmalig ein Sprachmodell herunter."
+    },
+    "theme": {
+      "title": "Design",
+      "system": "System",
+      "light": "Hell",
+      "dark": "Dunkel"
     }
   },
   "languages": {

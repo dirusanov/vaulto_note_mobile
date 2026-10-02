@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Modal, ScrollView, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { createStyles } from '../theme/createStyles';
 
 export interface VersionListItem {
     id: string;
@@ -77,7 +78,7 @@ export const VersionsSheet = ({
                                                     <MaterialIcons
                                                         name={item.icon as any}
                                                         size={16}
-                                                        color={isActive ? colors.surface : colors.primary}
+                                                        color={isActive ? colors.onPrimary : colors.primary}
                                                     />
                                                 </View>
                                                 <View style={styles.rowText}>
@@ -145,7 +146,7 @@ const ActionButton = ({ icon, text, onPress, destructive }: { icon: string; text
     </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: colors.overlay,
@@ -270,4 +271,4 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: colors.text,
     },
-});
+}));

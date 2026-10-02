@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
-    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -20,6 +19,7 @@ import { spacing } from '../theme/spacing';
 import { MaterialIcons } from '@expo/vector-icons';
 import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
+import { createStyles } from '../theme/createStyles';
 
 export const ForgotPasswordScreen = () => {
     const { t } = useTranslation();
@@ -121,7 +121,7 @@ export const ForgotPasswordScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
     },
@@ -215,4 +215,4 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: spacing.xl,
     },
-});
+}));

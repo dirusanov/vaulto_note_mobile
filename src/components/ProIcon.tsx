@@ -1,7 +1,8 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { createStyles } from '../theme/createStyles';
 
 interface ProIconProps {
     size?: number;
@@ -106,7 +107,7 @@ export const ProIcon: React.FC<ProIconProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     wrapper: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -116,4 +117,4 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-});
+}));

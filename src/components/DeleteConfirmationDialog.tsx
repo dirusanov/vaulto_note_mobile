@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Dimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Animated, Dimensions, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -115,7 +116,7 @@ export const DeleteConfirmationDialog = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         justifyContent: 'center',
@@ -219,4 +220,4 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '700',
     },
-});
+}));

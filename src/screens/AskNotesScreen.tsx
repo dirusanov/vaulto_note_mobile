@@ -4,7 +4,6 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -28,6 +27,8 @@ import { getAIProvider, getPrivateAIAllowed } from '../utils/storage';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
+import { createStyles } from '../theme/createStyles';
+import { haptics } from '../utils/haptics';
 
 type Message =
     | { id: string; role: 'user'; text: string }
@@ -78,6 +79,7 @@ export const AskNotesScreen = () => {
     const ask = useCallback(async (raw: string) => {
         const question = raw.trim();
         if (!question || busy) return;
+        haptics.light();
         setInput('');
         const stamp = `${Date.now()}`;
         setMessages((prev) => [...prev, { id: `q-${stamp}`, role: 'user', text: question }]);
@@ -277,7 +279,7 @@ export const AskNotesScreen = () => {
                         accessibilityRole="button"
                         accessibilityLabel={t('ask.send', 'Ask')}
                     >
-                        <MaterialIcons name="arrow-upward" size={22} color={colors.surface} />
+                        <MaterialIcons name="arrow-upward" size={22} color={colors.onPrimary} />
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -286,7 +288,7 @@ export const AskNotesScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -362,7 +364,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
     },
     userText: {
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 15,
         lineHeight: 21,
     },
@@ -400,7 +402,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         lineHeight: 20,
         fontWeight: '700',
-        color: colors.surface,
+        color: colors.onPrimary,
         backgroundColor: colors.primary,
         overflow: 'hidden',
     },
@@ -415,7 +417,7 @@ const styles = StyleSheet.create({
         gap: spacing.s,
         padding: spacing.m,
         borderRadius: 12,
-        backgroundColor: 'rgba(220, 53, 69, 0.08)',
+        backgroundColor: colors.errorLight,
     },
     errorText: {
         flex: 1,
@@ -431,7 +433,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
     },
     signInText: {
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -475,4 +477,4 @@ const styles = StyleSheet.create({
     sendButtonDisabled: {
         opacity: 0.4,
     },
-});
+}));

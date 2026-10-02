@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { diffWords, hasDifferences } from '../utils/textDiff';
+import { createStyles } from '../theme/createStyles';
 
 interface CompareVersionsModalProps {
     visible: boolean;
@@ -67,7 +68,7 @@ export const CompareVersionsModal = ({ visible, versionLabel, originalText, vers
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -122,15 +123,15 @@ const styles = StyleSheet.create({
     },
     removed: {
         color: colors.error,
-        backgroundColor: 'rgba(220, 53, 69, 0.10)',
+        backgroundColor: colors.errorLight,
         textDecorationLine: 'line-through',
     },
     added: {
-        color: '#0B7A55',
-        backgroundColor: 'rgba(16, 185, 129, 0.16)',
+        color: isDarkScheme() ? '#4ADE80' : '#0B7A55',
+        backgroundColor: colors.successLight,
     },
     empty: {
         fontSize: 15,
         color: colors.textSecondary,
     },
-});
+}));

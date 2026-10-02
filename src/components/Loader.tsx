@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
+import { createStyles } from '../theme/createStyles';
 
 export const Loader = () => {
     return (
@@ -10,10 +11,10 @@ export const Loader = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-});
+}));

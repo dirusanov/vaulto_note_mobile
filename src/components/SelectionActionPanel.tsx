@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { createStyles } from '../theme/createStyles';
 
 interface SelectionActionPanelProps {
     selectedCount: number;
@@ -66,7 +67,7 @@ export const SelectionActionPanel = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         backgroundColor: colors.surface,
         borderBottomWidth: 1,
@@ -109,4 +110,4 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-});
+}));

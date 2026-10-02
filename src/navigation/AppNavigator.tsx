@@ -29,6 +29,8 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                 },
                 headerTintColor: colors.text,
                 headerShadowVisible: false,
+                // Keeps transitions from flashing white in the dark theme.
+                contentStyle: { backgroundColor: colors.background },
             }}
         >
             <Stack.Screen

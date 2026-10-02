@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 export interface AIActiveTask {
     id: string;
@@ -114,7 +115,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     wrapper: {
         position: 'absolute',
         bottom: 140,
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: colors.border,
         alignSelf: 'center',
     },
     iconContainer: {
@@ -183,6 +184,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: StyleSheet.hairlineWidth,
-        borderColor: 'rgba(0,0,0,0.1)',
+        borderColor: colors.border,
     },
-});
+}));

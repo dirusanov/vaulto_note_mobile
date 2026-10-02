@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { Text, View, Animated, Easing } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface Props {
     visible: boolean;
@@ -74,7 +75,7 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         position: 'absolute',
         bottom: 80, // Positioned above the microphone button
@@ -100,4 +101,4 @@ const styles = StyleSheet.create({
         color: colors.text,
         fontWeight: '500',
     },
-});
+}));

@@ -1,13 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Vibration, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
 import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { SelectionActionPanel } from '../components/SelectionActionPanel';
-import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
+import { UndoSnackbar } from '../components/UndoSnackbar';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -22,6 +22,8 @@ import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { hasMeaningfulRichContent } from '../utils/richContent';
+import { createStyles } from '../theme/createStyles';
+import { haptics } from '../utils/haptics';
 
 const { width } = Dimensions.get('window');
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
@@ -64,12 +66,16 @@ export const NotesListScreen = () => {
     const lastFetchAtRef = useRef(0);
     const initialFetchDoneRef = useRef(false);
     const initialOrderRef = useRef<string[] | null>(null);
+    const prevListKeyRef = useRef<string | null>(null);
     const sortFreezeUntilRef = useRef<number | null>(null);
 
     // Selection mode state
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    // Deleted from the list at once, committed after the Undo window closes.
+    const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
+    const pendingDeleteRef = useRef<string[] | null>(null);
+    const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // true = Mic is Center (Primary), Note is Right (Secondary)
     // false = Note is Center (Primary), Mic is Right (Secondary)
@@ -110,7 +116,7 @@ export const NotesListScreen = () => {
                 setShowUnlockSyncModal(false);
                 setShowUnlockingOverlay(false);
                 setUnlockProgress(null);
-                setShowDeleteConfirm(false);
+                commitPendingDeleteRef.current();
                 setIsSelectionMode(false);
                 setSelectedNoteIds(new Set());
                 return;
@@ -146,7 +152,7 @@ export const NotesListScreen = () => {
     const toggleDockLayout = async () => {
         const newValue = !isMicPrimary;
         setIsMicPrimary(newValue);
-        Vibration.vibrate(50); // Light haptic feedback
+        haptics.medium();
         try {
             await AsyncStorage.setItem(DOCK_PREF_KEY, String(newValue));
         } catch (e) {
@@ -157,6 +163,7 @@ export const NotesListScreen = () => {
     const handleNotePress = (note: any) => {
         if (isSelectionMode) {
             // Toggle selection
+            haptics.selection();
             const newSelected = new Set(selectedNoteIds);
             if (newSelected.has(note.id)) {
                 newSelected.delete(note.id);
@@ -180,7 +187,7 @@ export const NotesListScreen = () => {
             // Enter selection mode and select this note
             setIsSelectionMode(true);
             setSelectedNoteIds(new Set([note.id]));
-            Vibration.vibrate(50);
+            haptics.medium();
         }
     };
 
@@ -258,20 +265,45 @@ export const NotesListScreen = () => {
         handleExitSelectionMode();
     };
 
-    const handleBatchDelete = () => {
-        setShowDeleteConfirm(true);
+    const commitPendingDelete = () => {
+        if (pendingDeleteTimerRef.current) {
+            clearTimeout(pendingDeleteTimerRef.current);
+            pendingDeleteTimerRef.current = null;
+        }
+        const ids = pendingDeleteRef.current;
+        if (!ids) return;
+        pendingDeleteRef.current = null;
+        setPendingDeleteIds(null);
+        batchDeleteNotes(ids).catch((error) => console.error('[NotesList] Delete failed', error));
     };
+    const commitPendingDeleteRef = useRef(commitPendingDelete);
+    commitPendingDeleteRef.current = commitPendingDelete;
 
-    const handleConfirmDelete = async () => {
+    // Like Gmail and Keep: no confirmation, the notes leave the list at once
+    // and an Undo bar stays for a few seconds before anything is erased.
+    const handleBatchDelete = () => {
+        commitPendingDelete();
         const ids = Array.from(selectedNoteIds);
-        setShowDeleteConfirm(false);
-        await batchDeleteNotes(ids);
+        if (ids.length === 0) return;
+        haptics.warning();
+        pendingDeleteRef.current = ids;
+        setPendingDeleteIds(ids);
+        pendingDeleteTimerRef.current = setTimeout(() => commitPendingDeleteRef.current(), 5000);
         handleExitSelectionMode();
     };
 
-    const handleCancelDelete = () => {
-        setShowDeleteConfirm(false);
+    const handleUndoDelete = () => {
+        if (pendingDeleteTimerRef.current) {
+            clearTimeout(pendingDeleteTimerRef.current);
+            pendingDeleteTimerRef.current = null;
+        }
+        pendingDeleteRef.current = null;
+        setPendingDeleteIds(null);
+        haptics.light();
     };
+
+    // Leaving the screen commits a pending delete instead of dropping it.
+    useEffect(() => () => commitPendingDeleteRef.current(), []);
 
     const onRefresh = useCallback(async () => {
         if (isRefreshing) return;
@@ -362,6 +394,7 @@ export const NotesListScreen = () => {
 
     // Filter out empty notes (no title, content, or audio)
     const filteredNotes = notes.filter(n => {
+        if (pendingDeleteIds?.includes(n.id)) return false;
         const activeChild = n.improvements?.find(imp => imp.is_active);
         const displayTitle = (activeChild?.title || activeChild?.label || n.title || '').trim();
         const displayContent = activeChild?.content || n.content || '';
@@ -407,6 +440,14 @@ export const NotesListScreen = () => {
         sortFreezeUntilRef.current = null;
     }
 
+    // Cards slide into place when notes are added, removed or filtered by the
+    // search, instead of jumping. Configured before the commit it animates.
+    const listKey = orderedNotes.map(note => note.id).join('|');
+    if (prevListKeyRef.current !== null && prevListKeyRef.current !== listKey) {
+        LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+    }
+    prevListKeyRef.current = listKey;
+
     const leftColumnNotes: typeof sortedNotes = [];
     const rightColumnNotes: typeof sortedNotes = [];
     orderedNotes.forEach((note, index) => {
@@ -435,7 +476,7 @@ export const NotesListScreen = () => {
                     activeOpacity={0.8}
                 >
                     <View style={styles.centerButtonInner}>
-                        <MaterialIcons name="mic" size={40} color={colors.background} />
+                        <MaterialIcons name="mic" size={40} color={colors.onPrimary} />
                     </View>
                 </TouchableOpacity>
             );
@@ -452,7 +493,7 @@ export const NotesListScreen = () => {
                     activeOpacity={0.8}
                 >
                     <View style={styles.centerButtonInner}>
-                        <MaterialIcons name="edit" size={40} color={colors.background} />
+                        <MaterialIcons name="edit" size={40} color={colors.onPrimary} />
                     </View>
                 </TouchableOpacity>
             );
@@ -529,7 +570,7 @@ export const NotesListScreen = () => {
                             onPress={() => navigation.navigate('SignIn')}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="login" size={16} color={colors.surface} />
+                            <MaterialIcons name="login" size={16} color={colors.onPrimary} />
                             <Text style={styles.lockActionPrimaryText}>{t('auth.signIn', 'Sign In')}</Text>
                         </TouchableOpacity>
                     </View>
@@ -556,7 +597,7 @@ export const NotesListScreen = () => {
                             onPress={handleSettingsPress}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="settings" size={16} color={colors.surface} />
+                            <MaterialIcons name="settings" size={16} color={colors.onPrimary} />
                             <Text style={styles.lockActionPrimaryText}>
                                 {t('notes.reviewRecovery', 'Review options')}
                             </Text>
@@ -592,7 +633,7 @@ export const NotesListScreen = () => {
                             onPress={() => setShowUnlockSyncModal(true)}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="vpn-key" size={16} color={colors.surface} />
+                            <MaterialIcons name="vpn-key" size={16} color={colors.onPrimary} />
                             <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -747,11 +788,11 @@ export const NotesListScreen = () => {
                 isMainScreen={true}
             />
 
-            <DeleteConfirmationDialog
-                visible={showDeleteConfirm}
-                noteCount={selectedNoteIds.size}
-                onConfirm={handleConfirmDelete}
-                onCancel={handleCancelDelete}
+            <UndoSnackbar
+                message={pendingDeleteIds
+                    ? t('notes.deletedCount', { count: pendingDeleteIds.length, defaultValue: 'Deleted: {{count}}' })
+                    : null}
+                onUndo={handleUndoDelete}
             />
             <UnlockSyncModal
                 visible={showUnlockSyncModal}
@@ -802,7 +843,7 @@ export const NotesListScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     avatar: {
         width: 34,
         height: 34,
@@ -817,7 +858,7 @@ const styles = StyleSheet.create({
     avatarText: {
         fontSize: 15,
         fontWeight: '700',
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     searchBarButton: {
         width: 48,
@@ -925,7 +966,7 @@ const styles = StyleSheet.create({
     },
     lockActionPrimaryText: {
         ...typography.captionBold,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontSize: 13,
     },
     lockActionsRow: {
@@ -1068,4 +1109,4 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
     },
-});
+}));

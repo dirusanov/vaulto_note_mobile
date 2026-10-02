@@ -57,7 +57,8 @@
     "reviewRecovery": "Ver opções",
     "noSearchResults": "Nenhuma nota corresponde à sua pesquisa",
     "keptLockedTitle": "Notas da conta mantidas neste telefone: {{count}}",
-    "keptLockedText": "Estão criptografadas. Entre na conta para abri-las."
+    "keptLockedText": "Estão criptografadas. Entre na conta para abri-las.",
+    "deletedCount": "Notas excluídas: {{count}}"
   },
   "settings": {
     "title": "Configurações",
@@ -259,6 +260,12 @@
       "title": "Transcrever no dispositivo",
       "active": "Modelo {{model}} · offline, o áudio fica no telefone",
       "desc": "Privado e offline. Baixa um modelo de fala uma vez."
+    },
+    "theme": {
+      "title": "Tema",
+      "system": "Sistema",
+      "light": "Claro",
+      "dark": "Escuro"
     }
   },
   "languages": {

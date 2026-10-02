@@ -3,7 +3,6 @@ import React from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     Modal,
     TouchableOpacity,
     TouchableWithoutFeedback,
@@ -13,6 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface TextAppearanceModalProps {
     visible: boolean;
@@ -125,7 +125,7 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                     value={autoScalingEnabled}
                                     onValueChange={onAutoScalingChange}
                                     trackColor={{ false: colors.textMuted, true: colors.primary }}
-                                    thumbColor={colors.surface}
+                                    thumbColor={colors.onPrimary}
                                 />
                             </View>
 
@@ -137,7 +137,7 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: colors.overlay,
@@ -224,4 +224,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border,
         marginVertical: spacing.l,
     },
-});
+}));

@@ -1,8 +1,9 @@
 import React from 'react';
-import { TextInput as RNTextInput, View, Text, StyleSheet, TextInputProps, ViewStyle, StyleProp } from 'react-native';
+import { TextInput as RNTextInput, View, Text, TextInputProps, ViewStyle, StyleProp } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
+import { createStyles } from '../theme/createStyles';
 
 interface Props extends TextInputProps {
     label?: string;
@@ -30,7 +31,7 @@ export const TextInput = ({ label, error, containerStyle, style, ...props }: Pro
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         marginBottom: spacing.m,
     },
@@ -63,4 +64,4 @@ const styles = StyleSheet.create({
         color: colors.error,
         marginTop: spacing.xs,
     },
-});
+}));

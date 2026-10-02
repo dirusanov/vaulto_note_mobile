@@ -20,6 +20,7 @@ import { typography } from '../theme/typography';
 import { TextInput } from './TextInput';
 import { ResetEncryptionModal } from './ResetEncryptionModal';
 import { UseRecoveryCodeModal } from './UseRecoveryCodeModal';
+import { createStyles } from '../theme/createStyles';
 
 interface UnlockSyncModalProps {
     visible: boolean;
@@ -245,7 +246,7 @@ export const UnlockSyncModal = ({
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.35)',
@@ -390,4 +391,4 @@ const styles = StyleSheet.create({
     actionButton: {
         flex: 1,
     },
-});
+}));

@@ -57,7 +57,8 @@
     "reviewRecovery": "Voir les options",
     "noSearchResults": "Aucune note ne correspond à votre recherche",
     "keptLockedTitle": "Notes du compte conservées sur ce téléphone : {{count}}",
-    "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir."
+    "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir.",
+    "deletedCount": "Notes supprimées : {{count}}"
   },
   "settings": {
     "title": "Paramètres",
@@ -259,6 +260,12 @@
       "title": "Transcrire sur l’appareil",
       "active": "Modèle {{model}} · hors ligne, l’audio reste sur le téléphone",
       "desc": "Privé et hors ligne. Télécharge un modèle vocal une seule fois."
+    },
+    "theme": {
+      "title": "Thème",
+      "system": "Système",
+      "light": "Clair",
+      "dark": "Sombre"
     }
   },
   "languages": {

@@ -16,6 +16,7 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { Button } from './Button';
 import { TextInput } from './TextInput';
+import { createStyles } from '../theme/createStyles';
 
 interface DisableEncryptionModalProps {
     visible: boolean;
@@ -142,7 +143,7 @@ export const DisableEncryptionModal = ({ visible, onClose, onDisable }: DisableE
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.45)',
@@ -224,4 +225,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.warning,
         borderColor: colors.warning,
     },
-});
+}));

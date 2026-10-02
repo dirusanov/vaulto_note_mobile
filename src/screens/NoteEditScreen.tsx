@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffe
 import {
     View,
     TextInput,
-    StyleSheet,
     TouchableOpacity,
     Text,
     ActivityIndicator,
@@ -37,7 +36,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
 import { ScreenContainer } from '../components/ScreenContainer';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { VoiceRecorder } from '../components/VoiceRecorder';
@@ -142,6 +141,8 @@ import {
 import { buildAudioEmbedHtml } from '../utils/audioEmbeds';
 import { sanitizeDisplayLabel, stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { MarkdownPreview } from '../components/MarkdownPreview';
+import { createStyles } from '../theme/createStyles';
+import { haptics } from '../utils/haptics';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
 const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
@@ -698,7 +699,7 @@ const MemoizedImprovementChips = memo(({
                 <MaterialIcons
                     name="article"
                     size={14}
-                    color={originalActive ? colors.background : colors.textSecondary}
+                    color={originalActive ? colors.onPrimary : colors.textSecondary}
                     style={styles.variantChipIcon}
                 />
                 <Text style={[styles.variantChipText, originalActive && styles.variantChipTextActive]}>
@@ -751,13 +752,13 @@ const MemoizedImprovementChips = memo(({
                                     <MaterialIcons
                                         name="subdirectory-arrow-right"
                                         size={14}
-                                        color={isActive ? colors.background : colors.textSecondary}
+                                        color={isActive ? colors.onPrimary : colors.textSecondary}
                                     />
                                 )}
                                 <MaterialIcons
                                     name={chipIcon as any}
                                     size={14}
-                                    color={isActive ? colors.background : colors.textSecondary}
+                                    color={isActive ? colors.onPrimary : colors.textSecondary}
                                     style={styles.variantChipIcon}
                                 />
                                 <Text
@@ -1127,6 +1128,7 @@ export const NoteEditScreen = () => {
         const fullText = `${exportTitle}\n\n${richContentToPlainText(content)}`;
         const plainText = richContentToPlainText(fullText);
         await Clipboard.setStringAsync(plainText.trim());
+        haptics.success();
         showToast(t("edit.textCopied"));
     };
 
@@ -1147,6 +1149,7 @@ export const NoteEditScreen = () => {
 
         const fullText = `${exportTitle ? '# ' + exportTitle + '\n\n' : ''}${contentWithoutAudio}`;
         await Clipboard.setStringAsync(fullText);
+        haptics.success();
         showToast(t("edit.markdownCopied"));
     };
 
@@ -3708,6 +3711,7 @@ export const NoteEditScreen = () => {
 
     const handleAddTasksToNote = useCallback(async (tasks: ExtractedTask[]) => {
         if (tasks.length === 0) return;
+        haptics.success();
         const checklist = tasksToChecklistMarkdown(tasks, formatTaskDue);
         const base = editMode === 'raw' ? currentContentRef.current : await flushVisualEditorContent();
         const next = isRichHtmlContent(base) || !base.trim()
@@ -4199,6 +4203,7 @@ export const NoteEditScreen = () => {
     const confirmDeleteNote = async () => {
         if (!localNoteId) return;
         setIsDeletingNote(false);
+        haptics.warning();
         skipAutoSaveRef.current = true;
         navigateBackToList();
         try {
@@ -6324,7 +6329,7 @@ export const NoteEditScreen = () => {
                                         onPress={handlePreviewAccept}
                                         disabled={isPreviewRegenerating}
                                     >
-                                        <MaterialIcons name="check" size={18} color={colors.background} />
+                                        <MaterialIcons name="check" size={18} color={colors.onPrimary} />
                                         <Text style={styles.previewButtonPrimaryText}>
                                             {t('edit.improvePreview.accept')}
                                         </Text>
@@ -6559,7 +6564,7 @@ export const NoteEditScreen = () => {
                                                         <MaterialIcons
                                                             name={icon as any}
                                                             size={22}
-                                                            color={selected ? colors.surface : colors.text}
+                                                            color={selected ? colors.onPrimary : colors.text}
                                                         />
                                                     </TouchableOpacity>
                                                 );
@@ -7158,7 +7163,7 @@ export const NoteEditScreen = () => {
                                                     style={[
                                                         styles.recordingItem,
                                                         isPlaying && {
-                                                            backgroundColor: '#F3F4F6', // More subtle, cleaner grey
+                                                            backgroundColor: colors.backgroundSecondary,
                                                             borderColor: colors.border,
                                                             borderWidth: 1
                                                         }
@@ -7318,7 +7323,7 @@ export const NoteEditScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -7365,8 +7370,10 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 80,
         right: spacing.m,
-        backgroundColor: colors.surface,
-        borderRadius: 8,
+        backgroundColor: colors.surfaceElevated,
+        borderRadius: 14,
+        borderWidth: isDarkScheme() ? 1 : 0,
+        borderColor: colors.border,
         padding: spacing.xs,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -7650,7 +7657,7 @@ const styles = StyleSheet.create({
         maxWidth: 150,
     },
     variantChipTextActive: {
-        color: colors.background,
+        color: colors.onPrimary,
     },
     variantChipIcon: {
         marginRight: 6,
@@ -7791,7 +7798,7 @@ const styles = StyleSheet.create({
     },
     previewButtonPrimaryText: {
         ...typography.caption,
-        color: colors.background,
+        color: colors.onPrimary,
         fontWeight: '600',
     },
     aiModalHeader: {
@@ -7965,7 +7972,7 @@ const styles = StyleSheet.create({
     },
     savePromptText: {
         ...typography.body,
-        color: colors.surface,
+        color: colors.onPrimary,
         fontWeight: '600',
     },
     customInstructionBox: {
@@ -8042,7 +8049,7 @@ const styles = StyleSheet.create({
     runCustomButtonText: {
         ...typography.body,
         fontWeight: '600',
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     divider: {
         height: 1,
@@ -8109,7 +8116,7 @@ const styles = StyleSheet.create({
         elevation: 4,
     },
     retryTranscriptionText: {
-        color: colors.background,
+        color: colors.onPrimary,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -8141,7 +8148,7 @@ const styles = StyleSheet.create({
     },
     recordingItemActive: {
         borderColor: colors.primary,
-        backgroundColor: '#E6F0FF', // Distinct light blue tint
+        backgroundColor: colors.primaryLight,
         borderWidth: 1.5,
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 2 },
@@ -8317,7 +8324,7 @@ const styles = StyleSheet.create({
     },
     recordingActionText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     recordingSecondaryAction: {
         borderRadius: 12,
@@ -8350,4 +8357,4 @@ const styles = StyleSheet.create({
     recordingActionDisabled: {
         opacity: 0.45,
     },
-});
+}));

@@ -57,7 +57,8 @@
     "selectedCount": "{{count}} selected",
     "noSearchResults": "No notes match your search",
     "keptLockedTitle": "Account notes kept on this phone: {{count}}",
-    "keptLockedText": "They are encrypted. Sign in to your account to open them."
+    "keptLockedText": "They are encrypted. Sign in to your account to open them.",
+    "deletedCount": "Notes deleted: {{count}}"
   },
   "settings": {
     "title": "Settings",
@@ -259,6 +260,12 @@
       "title": "Transcribe on device",
       "active": "{{model}} model · offline, audio stays on the phone",
       "desc": "Private and offline. Downloads a speech model once."
+    },
+    "theme": {
+      "title": "Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
     }
   },
   "languages": {

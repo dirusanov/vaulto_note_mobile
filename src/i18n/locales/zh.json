@@ -57,7 +57,8 @@
     "reviewRecovery": "查看选项",
     "noSearchResults": "没有匹配的笔记",
     "keptLockedTitle": "保留在这部手机上的账户笔记：{{count}}",
-    "keptLockedText": "它们已加密。登录账户即可打开。"
+    "keptLockedText": "它们已加密。登录账户即可打开。",
+    "deletedCount": "已删除笔记：{{count}}"
   },
   "settings": {
     "title": "设置",
@@ -259,6 +260,12 @@
       "title": "在设备上转写",
       "active": "{{model}} 模型 · 离线，音频不离开手机",
       "desc": "私密且可离线使用。只需下载一次语音模型。"
+    },
+    "theme": {
+      "title": "主题",
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色"
     }
   },
   "languages": {

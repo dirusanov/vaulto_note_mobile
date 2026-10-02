@@ -7,6 +7,7 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { TextInput } from './TextInput';
 import { TranscriptionLanguage } from '../utils/storage';
+import { createStyles } from '../theme/createStyles';
 
 export interface LanguageOption {
     key: string;
@@ -229,7 +230,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     selectorButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -321,4 +322,4 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-});
+}));

@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
     Alert,
-    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -26,6 +25,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
 import { authApi, LoginResult } from '../api/auth';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { createStyles } from '../theme/createStyles';
 
 export const SignInScreen = () => {
     const { t } = useTranslation();
@@ -190,7 +190,7 @@ export const SignInScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
     },
@@ -321,4 +321,4 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontWeight: '600',
     },
-});
+}));

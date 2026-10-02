@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
@@ -16,6 +16,7 @@ import {
 } from '../services/LocalWhisperService';
 import { getLocalWhisperModelKey, setLocalWhisperModelKey } from '../utils/storage';
 import { formatModelSize } from './OnDeviceModelSection';
+import { createStyles } from '../theme/createStyles';
 
 /** Why a model cannot be downloaded on this device, if it cannot. */
 type ModelBlocker = 'memory' | 'space' | null;
@@ -244,7 +245,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
     tagText: {
         fontSize: 11,
         fontWeight: '700',
-        color: colors.surface,
+        color: colors.onPrimary,
     },
     onPhone: {
         flexDirection: 'row',
@@ -415,4 +416,4 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         backgroundColor: colors.surfaceElevated,
     },
-});
+}));

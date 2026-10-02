@@ -3,7 +3,6 @@ import React, { useMemo, useState } from 'react';
 import {
     Alert,
     Linking,
-    StyleSheet,
     Text,
     TouchableOpacity,
     View,
@@ -19,6 +18,7 @@ import { typography } from '../theme/typography';
 import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
+import { createStyles } from '../theme/createStyles';
 
 type LegalParams = {
     legalToken?: string;
@@ -143,7 +143,7 @@ export const LegalAcceptanceScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const styles = createStyles(() => ({
     container: {
         flex: 1,
     },
@@ -211,6 +211,6 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         ...typography.button,
-        color: colors.surface,
+        color: colors.onPrimary,
     },
-});
+}));
