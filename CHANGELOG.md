@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.84] - 2026-10-02
+
+### Changed
+- **Works offline with downloaded models**: without internet, recordings are transcribed by the on-device Whisper model and text editing, the notes chat and "Find tasks" run on the on-device AI, even when the cloud is the chosen provider. The cloud agent is skipped offline and the transcript is inserted as is. Protected notes still follow only the explicit choice.
+- **Voice in the note**: the recording card is added under its transcript, not only when there is no text.
+- **Note cards**: voice-only notes show a mic, a wave and the length instead of a "Voice note" placeholder; untitled notes show their text instead of a cut title repeated by the preview.
+- The 4B on-device model is recommended from 8 GB of RAM (2B below).
+
+### Fixed
+- Recording offline with cloud transcription made the voice note appear only after a request timed out (up to 90 s); it now appears at once with "No internet: the recording is saved".
+- New voice notes showed 0:00 as their length; lengths lost when a note was saved as markdown are restored from the stored recordings.
+- The audio card's first tap switched the note to edit mode instead of playing.
+- The app could be killed for memory on 6 GB phones when speech and AI models were both loaded; they are now never in memory together, and the speech model is freed after a quiet minute.
+- The on-device grammar check almost always answered "No errors"; it now returns corrections for review.
+
 ## [1.0.83] - 2026-10-02
 
 ### Added
