@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.82] - 2026-10-02
+
+### Added
+- Google button on the sign-up screen (new Google users accept the terms on the legal screen); the official multicolour Google logo.
+
+### Changed
+- Settings: sync and encryption rows use the same weight as the AI rows; the encryption row reads "End-to-end encryption"; Agent Mode explains why it is off (on-device AI, or not signed in); guests no longer see the sync card (the account card offers sign-in).
+- Sign-up subtitle says what you get ("30 minutes of transcription free"); consent reads "I accept…" with Russian links in the right case (also on the legal acceptance screen).
+
+### Fixed
+- Primary buttons had dark text on blue in the dark theme ("Sign in or create account").
+- Compare versions: a removed word and its replacement no longer run together.
+- The version close button is a 48dp target; the prompt builder hint sits under the field it explains.
+
 ## [1.0.81] - 2026-10-02
 
 ### Added
