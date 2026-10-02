@@ -222,7 +222,9 @@
       "advAISettingsDescLocal": "Локальные и собственные конфигурации ИИ",
       "customAIPendingHint": "Vaulto AI остаётся активным, пока проверка подключения не пройдёт успешно.",
       "advAISettingsDescOnDevice": "В облаке или на телефоне, без интернета",
-      "onDeviceProvider": "На телефоне"
+      "onDeviceProvider": "На телефоне",
+      "e2eeRow": "Сквозное шифрование",
+      "agentNeedsSignIn": "Доступен после входа"
     },
     "recovery": {
       "title": "Код восстановления",
@@ -303,10 +305,10 @@
     "signingIn": "Вход...",
     "creatingAccount": "Создание аккаунта...",
     "dontHaveAccount": "Нет аккаунта?",
-    "iAgreeToThe": "Я согласен с",
-    "termsOfService": "Условиями использования",
+    "iAgreeToThe": "Я принимаю",
+    "termsOfService": "Условия использования",
     "and": "и",
-    "privacyPolicy": "Политикой конфиденциальности",
+    "privacyPolicy": "Политику конфиденциальности",
     "resetTokenPlaceholder": "Введите код из письма",
     "passwordAtLeast8": "Минимум 8 символов",
     "confirmPasswordPlaceholder": "Повторите пароль",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "Не удалось отправить письмо для сброса",
     "iAcceptThe": "Я принимаю",
     "andThe": "и",
-    "locallyStoredUnaffected": "Ваши локальные заметки останутся в безопасности."
+    "locallyStoredUnaffected": "Ваши локальные заметки останутся в безопасности.",
+    "signUpPerk": "30 минут распознавания бесплатно"
   },
   "edit": {
     "visualEditor": "Визуальный редактор",
@@ -589,7 +592,7 @@
     "restorePurchases": "Восстановить покупки",
     "autoRenewable": "Автопродление. Отмена в любой момент.",
     "vaultoAIReq": "Требуется Vaulto AI",
-    "agentModeVaultoAIAvail": "Умный помощник доступен только с Vaulto AI.",
+    "agentModeVaultoAIAvail": "Режим агента работает только с Vaulto AI.",
     "aiWorking": "ИИ работает...",
     "keepIt": "Оставить",
     "deleteBtn": "Удалить",

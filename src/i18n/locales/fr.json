@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "Configurations IA locales et personnalisées",
       "customAIPendingHint": "Vaulto AI reste actif tant que le test de connexion n'a pas réussi.",
       "advAISettingsDescOnDevice": "Dans le cloud ou sur ce téléphone, hors ligne",
-      "onDeviceProvider": "Sur le téléphone"
+      "onDeviceProvider": "Sur le téléphone",
+      "e2eeRow": "Chiffrement de bout en bout",
+      "agentNeedsSignIn": "Disponible après connexion"
     },
     "recovery": {
       "title": "Code de récupération",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "Échec de l'envoi de l'e-mail de réinitialisation",
     "iAcceptThe": "J'accepte les",
     "andThe": "et",
-    "locallyStoredUnaffected": "Vos notes stockées localement restent intactes et totalement accessibles."
+    "locallyStoredUnaffected": "Vos notes stockées localement restent intactes et totalement accessibles.",
+    "signUpPerk": "30 minutes de transcription offertes"
   },
   "edit": {
     "visualEditor": "Éditeur visuel",

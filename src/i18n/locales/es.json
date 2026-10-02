@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "Configuraciones de IA locales y personalizadas",
       "customAIPendingHint": "Vaulto AI seguirá activo hasta que la prueba de conexión se complete correctamente.",
       "advAISettingsDescOnDevice": "En la nube o en este teléfono, sin conexión",
-      "onDeviceProvider": "En el teléfono"
+      "onDeviceProvider": "En el teléfono",
+      "e2eeRow": "Cifrado de extremo a extremo",
+      "agentNeedsSignIn": "Disponible al iniciar sesión"
     },
     "recovery": {
       "title": "Código de recuperación",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "No se pudo enviar el correo de restablecimiento",
     "iAcceptThe": "Acepto los",
     "andThe": "y",
-    "locallyStoredUnaffected": "Tus notas locales permanecerán seguras y accesibles."
+    "locallyStoredUnaffected": "Tus notas locales permanecerán seguras y accesibles.",
+    "signUpPerk": "30 minutos de transcripción gratis"
   },
   "edit": {
     "visualEditor": "Editor visual",

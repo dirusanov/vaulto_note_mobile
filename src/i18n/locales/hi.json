@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "लोकल और कस्टम AI कॉन्फ़िगरेशन",
       "customAIPendingHint": "कनेक्शन टेस्ट सफल होने तक Vaulto AI सक्रिय रहेगा।",
       "advAISettingsDescOnDevice": "क्लाउड में या इसी फ़ोन पर, ऑफ़लाइन",
-      "onDeviceProvider": "इस फ़ोन पर"
+      "onDeviceProvider": "इस फ़ोन पर",
+      "e2eeRow": "एंड-टू-एंड एन्क्रिप्शन",
+      "agentNeedsSignIn": "साइन इन के बाद उपलब्ध"
     },
     "recovery": {
       "title": "पुनर्प्राप्ति कोड",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "रीसेट ईमेल भेजने में विफल",
     "iAcceptThe": "मैं स्वीकार करता/करती हूं",
     "andThe": "और",
-    "locallyStoredUnaffected": "डिवाइस में सहेजी गई आपकी नोट्स अप्रभावित रहती हैं और पूरी तरह उपलब्ध हैं।"
+    "locallyStoredUnaffected": "डिवाइस में सहेजी गई आपकी नोट्स अप्रभावित रहती हैं और पूरी तरह उपलब्ध हैं।",
+    "signUpPerk": "30 मिनट ट्रांसक्रिप्शन मुफ़्त"
   },
   "edit": {
     "visualEditor": "दृश्य संपादक",

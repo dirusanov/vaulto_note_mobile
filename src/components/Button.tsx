@@ -33,7 +33,7 @@ export const Button = ({
     };
 
     const getTextColor = () => {
-        if (variant === 'primary') return colors.surface;
+        if (variant === 'primary') return colors.onPrimary;
         if (variant === 'secondary') return colors.text;
         if (variant === 'destructive') return colors.error;
         return colors.primary;

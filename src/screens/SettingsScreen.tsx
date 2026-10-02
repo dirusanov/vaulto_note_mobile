@@ -1296,105 +1296,142 @@ export const SettingsScreen = () => {
                 </View>
 
                 {/* Cloud Sync */}
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <MaterialIcons name="cloud-sync" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>{t("settings.ui.cloudSync", "Cloud Sync")}</Text>
-                        </View>
-                        <TouchableOpacity
-                            onPress={() => setShowSecurityInfoModal(true)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={t("a11y.helpSync", "About cloud sync")}
-                        >
-                            <MaterialIcons name="help-outline" size={18} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {resetRecoveryPending && (
-                        <View style={{
-                            borderWidth: 1,
-                            borderColor: colors.warning + '80',
-                            backgroundColor: colors.warning + '12',
-                            borderRadius: 14,
-                            padding: spacing.m,
-                            marginBottom: spacing.m,
-                        }}>
-                            <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' }}>
-                                <MaterialCommunityIcons name="shield-alert-outline" size={20} color={colors.warning} />
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.preferenceTitle}>
-                                        {t('settings.resetRecovery.title', 'Encrypted vault was reset')}
-                                    </Text>
-                                    <Text style={[styles.preferenceDescription, { marginTop: 4 }]}>
-                                        {t('settings.resetRecovery.description', 'Notes retained on this device are isolated locally. Sync is paused so they cannot be uploaded without your choice.')}
-                                    </Text>
-                                </View>
+                {/* Guests have nothing to sync yet; the account card above offers sign-in. */}
+                {!isGuestOrAnonymous && (
+                    <View style={styles.card}>
+                        <View style={styles.cardHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                <MaterialIcons name="cloud-sync" size={18} color={colors.primary} />
+                                <Text style={styles.sectionTitle}>{t("settings.ui.cloudSync", "Cloud Sync")}</Text>
                             </View>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginTop: spacing.m }}>
-                                <TouchableOpacity
-                                    style={[styles.smallButton, { backgroundColor: colors.primary }]}
-                                    onPress={() => setShowEnableSyncModal(true)}
-                                >
-                                    <Text style={styles.smallButtonText}>
-                                        {t('settings.resetRecovery.enableE2EE', 'Restore with E2EE')}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.smallButtonOutlined}
-                                    onPress={confirmKeepResetArchiveLocal}
-                                >
-                                    <Text style={styles.smallButtonTextOutlined}>
-                                        {t('settings.resetRecovery.keepLocal', 'Keep local')}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
-                                    onPress={confirmStandardResetRecovery}
-                                >
-                                    <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>
-                                        {t('settings.resetRecovery.standardAction', 'Use standard sync')}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowSecurityInfoModal(true)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={t("a11y.helpSync", "About cloud sync")}
+                            >
+                                <MaterialIcons name="help-outline" size={18} color={colors.textSecondary} />
+                            </TouchableOpacity>
                         </View>
-                    )}
 
-                    {/* A guest has no vault: encryption controls left by a previous account do not apply. */}
-                    {(!hasConfiguredKey || isGuestOrAnonymous) ? (
-                        <>
-                            <View style={styles.securityRowMinimal}>
-                                <View style={styles.securityRowLeft}>
-                                    <View style={[styles.iconContainer, { backgroundColor: colors.accentGreen + '20' }]}>
-                                        <MaterialIcons name={!syncEnabled ? "cloud-off" : "cloud-done"} size={16} color={!syncEnabled ? colors.textSecondary : colors.accentGreen} />
+                        {resetRecoveryPending && (
+                            <View style={{
+                                borderWidth: 1,
+                                borderColor: colors.warning + '80',
+                                backgroundColor: colors.warning + '12',
+                                borderRadius: 14,
+                                padding: spacing.m,
+                                marginBottom: spacing.m,
+                            }}>
+                                <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' }}>
+                                    <MaterialCommunityIcons name="shield-alert-outline" size={20} color={colors.warning} />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.preferenceTitle}>
+                                            {t('settings.resetRecovery.title', 'Encrypted vault was reset')}
+                                        </Text>
+                                        <Text style={[styles.preferenceDescription, { marginTop: 4 }]}>
+                                            {t('settings.resetRecovery.description', 'Notes retained on this device are isolated locally. Sync is paused so they cannot be uploaded without your choice.')}
+                                        </Text>
                                     </View>
-                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync (Normal Mode)")}</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                    <Switch
-                                        value={syncEnabled}
-                                        onValueChange={(value) => {
-                                            void handleToggleSync(value);
-                                        }}
-                                        disabled={showUnlockingOverlay || resetRecoveryPending}
-                                        trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                        thumbColor={colors.onPrimary}
-                                        style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                                    />
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginTop: spacing.m }}>
+                                    <TouchableOpacity
+                                        style={[styles.smallButton, { backgroundColor: colors.primary }]}
+                                        onPress={() => setShowEnableSyncModal(true)}
+                                    >
+                                        <Text style={styles.smallButtonText}>
+                                            {t('settings.resetRecovery.enableE2EE', 'Restore with E2EE')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.smallButtonOutlined}
+                                        onPress={confirmKeepResetArchiveLocal}
+                                    >
+                                        <Text style={styles.smallButtonTextOutlined}>
+                                            {t('settings.resetRecovery.keepLocal', 'Keep local')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
+                                        onPress={confirmStandardResetRecovery}
+                                    >
+                                        <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>
+                                            {t('settings.resetRecovery.standardAction', 'Use standard sync')}
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
+                        )}
 
-                            <View style={styles.separator} />
+                        {/* A guest has no vault: encryption controls left by a previous account do not apply. */}
+                        {(!hasConfiguredKey || isGuestOrAnonymous) ? (
+                            <>
+                                <View style={styles.securityRowMinimal}>
+                                    <View style={styles.securityRowLeft}>
+                                        <View style={[styles.iconContainer, { backgroundColor: colors.accentGreen + '20' }]}>
+                                            <MaterialIcons name={!syncEnabled ? "cloud-off" : "cloud-done"} size={16} color={!syncEnabled ? colors.textSecondary : colors.accentGreen} />
+                                        </View>
+                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync (Normal Mode)")}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                        <Switch
+                                            value={syncEnabled}
+                                            onValueChange={(value) => {
+                                                void handleToggleSync(value);
+                                            }}
+                                            disabled={showUnlockingOverlay || resetRecoveryPending}
+                                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                            thumbColor={colors.onPrimary}
+                                            style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                        />
+                                    </View>
+                                </View>
 
+                                <View style={styles.separator} />
+
+                                <View style={styles.securityRowMinimal}>
+                                    <View style={styles.securityRowLeft}>
+                                        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+                                            <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
+                                        </View>
+                                        <Text style={[styles.securityLabelMinimal, { flex: 1 }]}>
+                                            {t("settings.ui.setupSync", "Upgrade to Encrypted Mode")}
+                                        </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                        <TouchableOpacity
+                                            style={[styles.smallButton, { backgroundColor: colors.primary }]}
+                                            onPress={async () => {
+                                                if (isGuestOrAnonymous) {
+                                                    setShowSecurityAuthModal(true);
+                                                    return;
+                                                }
+                                                setShowEnableSyncModal(true);
+                                            }}
+                                        >
+                                            <Text style={styles.smallButtonText}>
+                                            {t("settings.ui.setupPassphrase", "Setup Passphrase")}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </>
+                        ) : encryptionStatus === 'locked' ? (
                             <View style={styles.securityRowMinimal}>
                                 <View style={styles.securityRowLeft}>
                                     <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
                                         <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
                                     </View>
-                                    <Text style={[styles.securityLabelMinimal, { flex: 1 }]}>
-                                        {t("settings.ui.setupSync", "Upgrade to Encrypted Mode")}
-                                    </Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.securityLabelMinimal}>
+                                            {t("settings.ui.unlockSync", "Unlock Vault")}
+                                        </Text>
+                                        {hasRemoteKeyBundle && (
+                                            <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                                                {t("settings.ui.unlockToRestore", "Encrypted notes on server")}
+                                            </Text>
+                                        )}
+                                    </View>
                                 </View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                                     <TouchableOpacity
@@ -1404,141 +1441,107 @@ export const SettingsScreen = () => {
                                                 setShowSecurityAuthModal(true);
                                                 return;
                                             }
-                                            setShowEnableSyncModal(true);
+                                            setShowUnlockSyncModal(true);
                                         }}
                                     >
                                         <Text style={styles.smallButtonText}>
-                                        {t("settings.ui.setupPassphrase", "Setup Passphrase")}
+                                            {t("settings.ui.unlock", "Unlock")}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                        </>
-                    ) : encryptionStatus === 'locked' ? (
-                        <View style={styles.securityRowMinimal}>
-                            <View style={styles.securityRowLeft}>
-                                <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-                                    <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.securityLabelMinimal}>
-                                        {t("settings.ui.unlockSync", "Unlock Vault")}
-                                    </Text>
-                                    {hasRemoteKeyBundle && (
-                                        <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
-                                            {t("settings.ui.unlockToRestore", "Encrypted notes on server")}
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                <TouchableOpacity
-                                    style={[styles.smallButton, { backgroundColor: colors.primary }]}
-                                    onPress={async () => {
-                                        if (isGuestOrAnonymous) {
-                                            setShowSecurityAuthModal(true);
-                                            return;
-                                        }
-                                        setShowUnlockSyncModal(true);
-                                    }}
-                                >
-                                    <Text style={styles.smallButtonText}>
-                                        {t("settings.ui.unlock", "Unlock")}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    ) : (
-                        <>
-                            <View style={styles.securityRowMinimal}>
-                                <View style={styles.securityRowLeft}>
-                                    <View style={[styles.iconContainer, { backgroundColor: isSyncLocked ? colors.warning + '20' : !syncEnabled ? colors.backgroundSecondary : colors.accentGreen + '20' }]}>
-                                        <MaterialIcons
-                                            name={isSyncLocked ? "lock" : !syncEnabled ? "cloud-off" : "cloud-done"}
-                                            size={16}
-                                            color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
-                                        />
+                        ) : (
+                            <>
+                                <View style={styles.securityRowMinimal}>
+                                    <View style={styles.securityRowLeft}>
+                                        <View style={[styles.iconContainer, { backgroundColor: isSyncLocked ? colors.warning + '20' : !syncEnabled ? colors.backgroundSecondary : colors.accentGreen + '20' }]}>
+                                            <MaterialIcons
+                                                name={isSyncLocked ? "lock" : !syncEnabled ? "cloud-off" : "cloud-done"}
+                                                size={16}
+                                                color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
+                                            />
+                                        </View>
+                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
                                     </View>
-                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flexShrink: 1, justifyContent: 'flex-end' }}>
-                                    <Text style={[styles.securityValueMinimal, { color: syncStatusColor, flexShrink: 1 }]} numberOfLines={1}>{syncStatusLabel}</Text>
-                                    {encryptionStatus === 'loading' ? (
-                                        <ActivityIndicator size="small" color={colors.primary} />
-                                    ) : (
-                                        <>
-                                            {isSyncLocked && !syncToggleDisabled && (
-                                                <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
-                                                    <Text style={styles.smallButtonText}>{t("settings.ui.unlock", "Unlock")}</Text>
-                                                </TouchableOpacity>
-                                            )}
-                                            {!isSyncLocked && !syncToggleDisabled && (
-                                                <Switch
-                                                    value={syncEnabled}
-                                                    onValueChange={(value) => {
-                                                        void handleToggleSync(value);
-                                                    }}
-                                                    disabled={showUnlockingOverlay}
-                                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                                    thumbColor={colors.onPrimary}
-                                                    style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                                                />
-                                            )}
-                                        </>
-                                    )}
-                                </View>
-                            </View>
-
-                            <View style={styles.separator} />
-
-                            <View style={styles.securityRowMinimal}>
-                                <View style={styles.securityRowLeft}>
-                                    <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-                                        <MaterialCommunityIcons name="shield-key" size={16} color={colors.primary} />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flexShrink: 1, justifyContent: 'flex-end' }}>
+                                        <Text style={[styles.securityValueMinimal, { color: syncStatusColor, flexShrink: 1 }]} numberOfLines={1}>{syncStatusLabel}</Text>
+                                        {encryptionStatus === 'loading' ? (
+                                            <ActivityIndicator size="small" color={colors.primary} />
+                                        ) : (
+                                            <>
+                                                {isSyncLocked && !syncToggleDisabled && (
+                                                    <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
+                                                        <Text style={styles.smallButtonText}>{t("settings.ui.unlock", "Unlock")}</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                                {!isSyncLocked && !syncToggleDisabled && (
+                                                    <Switch
+                                                        value={syncEnabled}
+                                                        onValueChange={(value) => {
+                                                            void handleToggleSync(value);
+                                                        }}
+                                                        disabled={showUnlockingOverlay}
+                                                        trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                                        thumbColor={colors.onPrimary}
+                                                        style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                                                    />
+                                                )}
+                                            </>
+                                        )}
                                     </View>
-                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.exportRecoveryCode", "Export Recovery Code")}</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                    {!!recoveryCode && (
+
+                                <View style={styles.separator} />
+
+                                <View style={styles.securityRowMinimal}>
+                                    <View style={styles.securityRowLeft}>
+                                        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+                                            <MaterialCommunityIcons name="shield-key" size={16} color={colors.primary} />
+                                        </View>
+                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.exportRecoveryCode", "Export Recovery Code")}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                        {!!recoveryCode && (
+                                            <TouchableOpacity
+                                                style={styles.smallButtonOutlined}
+                                                onPress={async () => {
+                                                    if (recoveryCode) {
+                                                        await Clipboard.setStringAsync(recoveryCode);
+                                                        Alert.alert(t("common.copied"), t("settings.recovery.copiedMsg"));
+                                                    } else {
+                                                        Alert.alert(t("common.errorTitle"), t("settings.recovery.noRecoveryCode", "No recovery code found. Try unlocking again."));
+                                                    }
+                                                }}
+                                            >
+                                                <Text style={styles.smallButtonTextOutlined}>{t('settings.ui.copyBtn', 'Copy')}</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+
+                                <View style={styles.separator} />
+
+                                <View style={styles.securityRowMinimal}>
+                                    <View style={styles.securityRowLeft}>
+                                        <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
+                                            <MaterialCommunityIcons name="shield-off-outline" size={16} color={colors.warning} />
+                                        </View>
+                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.e2eeRow", "End-to-end encryption")}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
                                         <TouchableOpacity
-                                            style={styles.smallButtonOutlined}
-                                            onPress={async () => {
-                                                if (recoveryCode) {
-                                                    await Clipboard.setStringAsync(recoveryCode);
-                                                    Alert.alert(t("common.copied"), t("settings.recovery.copiedMsg"));
-                                                } else {
-                                                    Alert.alert(t("common.errorTitle"), t("settings.recovery.noRecoveryCode", "No recovery code found. Try unlocking again."));
-                                                }
-                                            }}
+                                            style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
+                                            onPress={() => setShowDisableEncryptionModal(true)}
                                         >
-                                            <Text style={styles.smallButtonTextOutlined}>{t('settings.ui.copyBtn', 'Copy')}</Text>
+                                            <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>{t('settings.ui.disableBtn', 'Disable')}</Text>
                                         </TouchableOpacity>
-                                    )}
-                                </View>
-                            </View>
-
-                            <View style={styles.separator} />
-
-                            <View style={styles.securityRowMinimal}>
-                                <View style={styles.securityRowLeft}>
-                                    <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
-                                        <MaterialCommunityIcons name="shield-off-outline" size={16} color={colors.warning} />
                                     </View>
-                                    <Text style={styles.securityLabelMinimal}>{t("settings.ui.disableEncryptionTitle", "Disable Encryption")}</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                    <TouchableOpacity
-                                        style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
-                                        onPress={() => setShowDisableEncryptionModal(true)}
-                                    >
-                                        <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>{t('settings.ui.disableBtn', 'Disable')}</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </>
-                    )}
+                            </>
+                        )}
 
-                </View>
+                    </View>
+                )}
 
 
 
@@ -1568,12 +1571,18 @@ export const SettingsScreen = () => {
                         }}
                     >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled && !isGuestOrAnonymous ? 1 : 0.4 }}>
-                                <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled && !isGuestOrAnonymous ? colors.primary : colors.textSecondary} />
+                            <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled && !isGuestOrAnonymous && !agentUnavailable ? 1 : 0.4 }}>
+                                <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled && !isGuestOrAnonymous && !agentUnavailable ? colors.primary : colors.textSecondary} />
                             </Animated.View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.preferenceTitle}>{t("settings.ai.agentMode", "Agent Mode")}</Text>
-                                <Text style={styles.preferenceDescription}>{t("settings.ui.intelligentAssist", "Intelligent assistance")}</Text>
+                                <Text style={styles.preferenceDescription}>
+                                    {isGuestOrAnonymous
+                                        ? t("settings.ui.agentNeedsSignIn", "Available after signing in")
+                                        : agentUnavailable
+                                            ? t("aux.agentModeVaultoAIAvail", "Agent Mode is available only with Vaulto AI.")
+                                            : t("settings.ui.intelligentAssist", "Intelligent assistance")}
+                                </Text>
                             </View>
                         </View>
                         <Switch
@@ -3404,10 +3413,12 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    // Same weight as the AI-section rows so both cards read as one list.
     securityLabelMinimal: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        fontWeight: '500',
+        ...typography.body,
+        fontSize: 15,
+        color: colors.text,
+        fontWeight: '600',
         flex: 1,
     },
     securityValueMinimal: {

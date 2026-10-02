@@ -24,9 +24,10 @@ import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
 import { authApi, LoginResult } from '../api/auth';
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
+import { GoogleLogo } from '../components/GoogleLogo';
 
 export const SignInScreen = () => {
     const { t } = useTranslation();
@@ -170,7 +171,7 @@ export const SignInScreen = () => {
 
                             <AuthProviderButton
                                 title="Google"
-                                icon={<MaterialCommunityIcons name="google" size={20} color={colors.text} />}
+                                icon={<GoogleLogo size={20} />}
                                 onPress={handleGoogleSignIn}
                                 loading={googleLoading}
                             />

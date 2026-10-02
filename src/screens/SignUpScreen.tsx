@@ -18,7 +18,11 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
 import { MaterialIcons } from '@expo/vector-icons';
-import { authApi } from '../api/auth';
+import { authApi, LoginResult } from '../api/auth';
+import { useAuth } from '../hooks/useAuth';
+import { useGoogleOAuth } from '../hooks/useGoogleOAuth';
+import { AuthProviderButton } from '../components/AuthProviderButton';
+import { GoogleLogo } from '../components/GoogleLogo';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
@@ -33,6 +37,28 @@ export const SignUpScreen = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
+    const { signIn } = useAuth();
+    const { signInWithGoogle, loading: googleLoading } = useGoogleOAuth();
+
+    // Google creates the account on first sign-in; new users accept the terms
+    // on the LegalAcceptance screen, so the checkbox below is not needed here.
+    const handleGoogle = async () => {
+        try {
+            const result: LoginResult | null | undefined = await signInWithGoogle();
+            if (!result) return;
+            if (result.needs_legal_acceptance && result.legal_token) {
+                navigation.navigate('LegalAcceptance', { legalToken: result.legal_token, provider: 'google' });
+                return;
+            }
+            if (!result.access_token || !result.refresh_token) {
+                throw new Error('Invalid login response');
+            }
+            await signIn(result.access_token, result.refresh_token);
+            navigation.navigate('NotesList');
+        } catch (err) {
+            Alert.alert(t("auth.googleSignInFailed"), getErrorMessage(err, t("auth.googleSignInFailed")));
+        }
+    };
 
     const handleSignUp = async () => {
         if (!email || !password || !confirmPassword) {
@@ -92,7 +118,7 @@ export const SignUpScreen = () => {
 
                     <View style={styles.header}>
                         <Text style={styles.title}>{t("auth.createAccount", "Create Account")}</Text>
-                        <Text style={styles.subtitle}>{t("auth.signUpToGetStarted", "Sign up to get started")}</Text>
+                        <Text style={styles.subtitle}>{t("auth.signUpPerk", "30 minutes of transcription free")}</Text>
                     </View>
 
                     <View style={styles.form}>
@@ -200,6 +226,19 @@ export const SignUpScreen = () => {
                                 {loading ? t("auth.creatingAccount", "Creating account...") : t("auth.signUp", "Sign Up")}
                             </Text>
                         </TouchableOpacity>
+
+                        <View style={styles.separator}>
+                            <View style={styles.separatorLine} />
+                            <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
+                            <View style={styles.separatorLine} />
+                        </View>
+
+                        <AuthProviderButton
+                            title="Google"
+                            icon={<GoogleLogo size={20} />}
+                            onPress={handleGoogle}
+                            loading={googleLoading}
+                        />
                     </View>
 
                     <View style={styles.footer}>
@@ -249,6 +288,21 @@ const styles = createStyles(() => ({
     },
     form: {
         paddingHorizontal: spacing.l,
+    },
+    separator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: spacing.m,
+    },
+    separatorLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: colors.border,
+    },
+    separatorText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        paddingHorizontal: spacing.m,
     },
     inputGroup: {
         marginBottom: spacing.l,

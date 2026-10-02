@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "ローカルおよびカスタム AI 設定",
       "customAIPendingHint": "接続テストが成功するまで Vaulto AI が引き続き使用されます。",
       "advAISettingsDescOnDevice": "クラウド、またはこの端末上でオフライン",
-      "onDeviceProvider": "この端末で"
+      "onDeviceProvider": "この端末で",
+      "e2eeRow": "エンドツーエンド暗号化",
+      "agentNeedsSignIn": "サインイン後に利用できます"
     },
     "recovery": {
       "title": "復元コード",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "リセットメールの送信に失敗しました",
     "iAcceptThe": "同意します：",
     "andThe": "と",
-    "locallyStoredUnaffected": "端末に保存されたノートはそのまま残り、問題なく利用できます。"
+    "locallyStoredUnaffected": "端末に保存されたノートはそのまま残り、問題なく利用できます。",
+    "signUpPerk": "文字起こし 30 分無料"
   },
   "edit": {
     "visualEditor": "ビジュアルエディタ",

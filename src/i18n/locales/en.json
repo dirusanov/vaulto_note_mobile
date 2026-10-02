@@ -222,7 +222,9 @@
       "advAISettingsDescLocal": "Local and custom AI configurations",
       "customAIPendingHint": "Vaulto AI stays active until the connection test succeeds.",
       "advAISettingsDescOnDevice": "Cloud or on this phone, offline",
-      "onDeviceProvider": "On this phone"
+      "onDeviceProvider": "On this phone",
+      "e2eeRow": "End-to-end encryption",
+      "agentNeedsSignIn": "Available after signing in"
     },
     "recovery": {
       "title": "Recovery Code",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "Failed to send reset email",
     "iAcceptThe": "I accept the",
     "andThe": "and",
-    "locallyStoredUnaffected": "Your locally stored notes remain unaffected and fully accessible."
+    "locallyStoredUnaffected": "Your locally stored notes remain unaffected and fully accessible.",
+    "signUpPerk": "30 minutes of transcription free"
   },
   "edit": {
     "visualEditor": "Visual Editor",

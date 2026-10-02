@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "Lokale und eigene KI-Konfigurationen",
       "customAIPendingHint": "Vaulto AI bleibt aktiv, bis der Verbindungstest erfolgreich ist.",
       "advAISettingsDescOnDevice": "In der Cloud oder auf diesem Telefon, offline",
-      "onDeviceProvider": "Auf dem Telefon"
+      "onDeviceProvider": "Auf dem Telefon",
+      "e2eeRow": "Ende-zu-Ende-Verschlüsselung",
+      "agentNeedsSignIn": "Nach der Anmeldung verfügbar"
     },
     "recovery": {
       "title": "Wiederherstellungscode",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "E-Mail zum Zurücksetzen konnte nicht gesendet werden",
     "iAcceptThe": "Ich akzeptiere die",
     "andThe": "und",
-    "locallyStoredUnaffected": "Deine lokal gespeicherten Notizen bleiben unverändert und vollständig zugänglich."
+    "locallyStoredUnaffected": "Deine lokal gespeicherten Notizen bleiben unverändert und vollständig zugänglich.",
+    "signUpPerk": "30 Minuten Transkription gratis"
   },
   "edit": {
     "visualEditor": "Visueller Editor",

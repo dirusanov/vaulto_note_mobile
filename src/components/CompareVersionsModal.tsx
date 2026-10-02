@@ -51,12 +51,13 @@ export const CompareVersionsModal = ({ visible, versionLabel, originalText, vers
                     {changed ? (
                         <Text style={styles.text} selectable>
                             {segments.map((segment, index) => (
-                                <Text
-                                    key={index}
-                                    style={segment.type === 'removed' ? styles.removed : segment.type === 'added' ? styles.added : undefined}
-                                >
-                                    {segment.text}
-                                </Text>
+                                <React.Fragment key={index}>
+                                    <Text style={segment.type === 'removed' ? styles.removed : segment.type === 'added' ? styles.added : undefined}>
+                                        {segment.text}
+                                    </Text>
+                                    {/* A removed word directly followed by its replacement would read as one word. */}
+                                    {segment.type === 'removed' && segments[index + 1]?.type === 'added' && !/\s$/.test(segment.text) ? ' ' : null}
+                                </React.Fragment>
                             ))}
                         </Text>
                     ) : (

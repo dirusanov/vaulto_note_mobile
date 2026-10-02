@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "إعدادات الذكاء الاصطناعي المحلية والمخصّصة",
       "customAIPendingHint": "يظل Vaulto AI نشطًا حتى ينجح اختبار الاتصال.",
       "advAISettingsDescOnDevice": "في السحابة أو على هذا الهاتف دون اتصال",
-      "onDeviceProvider": "على الهاتف"
+      "onDeviceProvider": "على الهاتف",
+      "e2eeRow": "التشفير التام بين الطرفين",
+      "agentNeedsSignIn": "متاح بعد تسجيل الدخول"
     },
     "recovery": {
       "title": "رمز الاسترداد",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "فشل إرسال بريد إعادة التعيين",
     "iAcceptThe": "أوافق على",
     "andThe": "و",
-    "locallyStoredUnaffected": "تبقى ملاحظاتك المحفوظة محليًا كما هي ويمكن الوصول إليها بالكامل."
+    "locallyStoredUnaffected": "تبقى ملاحظاتك المحفوظة محليًا كما هي ويمكن الوصول إليها بالكامل.",
+    "signUpPerk": "30 دقيقة من التفريغ مجانًا"
   },
   "edit": {
     "visualEditor": "المحرر المرئي",

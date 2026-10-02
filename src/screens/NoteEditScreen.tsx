@@ -782,7 +782,7 @@ const MemoizedImprovementChips = memo(({
                                     accessibilityRole="button"
                                     accessibilityLabel={t("a11y.removeVersion", "Remove this version")}
                                 >
-                                    <MaterialIcons name="close" size={14} color={colors.textMuted} />
+                                    <MaterialIcons name="close" size={16} color={colors.textTertiary} />
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -6541,9 +6541,6 @@ export const NoteEditScreen = () => {
                             >
                                 <View style={[styles.promptBuilderContent, { paddingBottom: insets.bottom + spacing.m }]}>
                                     <Text style={styles.aiModalTitle}>{t("edit.newPrompt", "New Prompt")}</Text>
-                                    <Text style={styles.promptHelper}>
-                                        {t('alerts.promptHelper', 'Write {text} where the note text should go.')}
-                                    </Text>
                                     <View>
                                         <Text style={styles.promptHelper}>{t('alerts.promptIcon', 'Icon')}</Text>
                                         <ScrollView
@@ -6588,6 +6585,9 @@ export const NoteEditScreen = () => {
                                         multiline
                                         textAlignVertical="top"
                                     />
+                                    <Text style={styles.promptHint}>
+                                        {t('alerts.promptHelper', 'Write {text} where the note text should go.')}
+                                    </Text>
                                     <View style={styles.promptPreviewBox}>
                                         <Text style={styles.promptPreviewLabel}>{t("edit.preview", "Preview")}</Text>
                                         {renderPromptPreview()}
@@ -7667,8 +7667,11 @@ const styles = createStyles(() => ({
         marginRight: 6,
     },
     variantDeleteButton: {
-        paddingHorizontal: 4,
-        paddingVertical: 4,
+        width: 36,
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: -4,
     },
     contentInput: {
         fontSize: 16,
@@ -7913,7 +7916,13 @@ const styles = createStyles(() => ({
     },
     promptHelper: {
         ...typography.caption,
-        color: colors.textMuted,
+        color: colors.textSecondary,
+    },
+    promptHint: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginTop: -spacing.xs,
+        marginBottom: spacing.s,
     },
     promptInput: {
         borderWidth: 1,

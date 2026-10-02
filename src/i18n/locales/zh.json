@@ -211,7 +211,9 @@
       "advAISettingsDescLocal": "本地和自定义 AI 配置",
       "customAIPendingHint": "在连接测试成功之前，Vaulto AI 将保持启用。",
       "advAISettingsDescOnDevice": "云端，或在这部手机上离线运行",
-      "onDeviceProvider": "在手机上"
+      "onDeviceProvider": "在手机上",
+      "e2eeRow": "端到端加密",
+      "agentNeedsSignIn": "登录后可用"
     },
     "recovery": {
       "title": "恢复密钥",
@@ -328,7 +330,8 @@
     "sendResetEmailFailed": "发送重置邮件失败",
     "iAcceptThe": "我接受",
     "andThe": "和",
-    "locallyStoredUnaffected": "你保存在本机的笔记不受影响，仍可正常访问。"
+    "locallyStoredUnaffected": "你保存在本机的笔记不受影响，仍可正常访问。",
+    "signUpPerk": "免费转写 30 分钟"
   },
   "edit": {
     "visualEditor": "可视化编辑器",
