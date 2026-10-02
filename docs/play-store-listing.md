@@ -1,7 +1,7 @@
 # Google Play: страница приложения и Data safety
 
 Тексты сверены с кодом версии 1.0.83: только то, что приложение реально умеет.
-Ограничения, которые нельзя обещать: запись до 5 минут (не «лекции»), тегов нет,
+Ограничения: обычная запись до 5 минут, режим встречи до 60 минут (Android),
 end-to-end шифрование синхронизации включается пользователем (не по умолчанию).
 
 ---
@@ -63,7 +63,7 @@ Speak, get clean text. AI voice notes that work offline and stay private.
 ```
 Talk. Vaulto turns it into clean, organized notes — and keeps them private.
 
-Vaulto is a voice notes app with AI for people who think faster than they type. Record a thought, a to-do list or a plan, and get readable text in seconds. AI can tidy it up, pull out tasks and answer questions about everything you've saved.
+Vaulto is a voice notes app with AI for people who think faster than they type. Record a thought, a to-do list, a plan or a whole meeting, and get readable text in seconds. AI tidies it up, pulls out tasks with reminders and answers questions about everything you've saved.
 
 Unlike most AI note apps, Vaulto can run completely on your phone. Speech-to-text and the AI model work offline, in airplane mode, without a single word leaving your device.
 
@@ -73,12 +73,28 @@ Unlike most AI note apps, Vaulto can run completely on your phone. Speech-to-tex
 • Live dictation right inside a note
 • Agent mode: say "make this a shopping list" and get a checklist
 
+📋 MEETING NOTES
+• Record meetings and lectures up to 60 minutes
+• Get a summary, key points, decisions, an action checklist and open questions
+
 ✨ AI THAT WORKS FOR YOU
 • Fix grammar, summarize, make it professional, simplify, structure — one tap
 • Your own AI instructions: "shorter, with a to-do list"
-• Find tasks: pulls action items and deadlines out of a note and adds them to your calendar
+• Find tasks: pulls action items and deadlines out of a note — set a reminder or add them to your calendar
 • Ask your notes: chat with everything you've written, with links to the source notes
+• Weekly summary of what you captured
 • Every AI edit is saved as a version — compare with the original and switch back anytime
+
+⚡ CAPTURE FROM ANYWHERE
+• Home-screen widget: record, write or ask in one tap
+• Quick Settings tile to start recording from anywhere
+• Share to Vaulto: text, links and audio files from any app become notes
+
+🗂 ORGANIZED
+• #tags right in the text, with a filter row
+• Trash keeps deleted notes for 30 days
+• Pin notes, fast search across notes and versions
+• Import from Google Keep, Markdown or text files; export everything as Markdown
 
 🔒 PRIVATE BY DESIGN
 • Offline AI on your phone: nothing is sent anywhere
@@ -89,15 +105,12 @@ Unlike most AI note apps, Vaulto can run completely on your phone. Speech-to-tex
 
 📝 A CALM, FOCUSED EDITOR
 • Rich text, headings, checklists and Markdown
-• Fast search across all notes and versions
-• Pin notes, dark theme, tablet layouts
-• Share as text, Markdown or image
-• 10 interface languages, including right-to-left Arabic
+• Dark theme, tablet layouts, 10 interface languages
 
 PERFECT FOR
 • Capturing ideas while walking or driving
+• Meetings, lectures and interviews
 • To-do lists, shopping lists and plans in one breath
-• Journaling and daily reflections
 • People with ADHD who lose thoughts before they can type them
 • Anyone who wants AI without giving their notes to the cloud
 
@@ -130,7 +143,7 @@ Vaulto: голосовые заметки с ИИ
 ```
 Говорите — Vaulto превращает речь в аккуратные заметки и хранит их приватно.
 
-Vaulto — голосовые заметки с ИИ для тех, кто думает быстрее, чем печатает. Надиктуйте мысль, список дел или план и через пару секунд получите читаемый текст. ИИ приведёт его в порядок, найдёт задачи и ответит на вопросы по всем вашим заметкам.
+Vaulto — голосовые заметки с ИИ для тех, кто думает быстрее, чем печатает. Надиктуйте мысль, список дел, план или целую встречу и через пару секунд получите читаемый текст. ИИ приведёт его в порядок, найдёт задачи с напоминаниями и ответит на вопросы по всем вашим заметкам.
 
 В отличие от большинства ИИ-приложений, Vaulto может работать целиком на телефоне. Распознавание речи и ИИ-модель работают офлайн, даже в авиарежиме, и ни одно слово не покидает устройство.
 
@@ -140,31 +153,44 @@ Vaulto — голосовые заметки с ИИ для тех, кто ду�
 • Диктовка прямо в заметку
 • Режим агента: скажите «сделай из этого список покупок» — получите чек-лист
 
+📋 ПРОТОКОЛЫ ВСТРЕЧ
+• Запись встреч и лекций до 60 минут
+• Итог, ключевые мысли, решения, список задач и открытые вопросы
+
 ✨ ИИ, КОТОРЫЙ ПОМОГАЕТ
 • Исправить ошибки, сократить, сделать деловым, упростить, структурировать — в одно касание
 • Свои инструкции для ИИ: «короче и со списком дел»
-• Поиск задач: находит дела и сроки в заметке и добавляет их в календарь
+• Поиск задач: находит дела и сроки в заметке — поставьте напоминание или добавьте в календарь
 • Вопросы по заметкам: чат по всему, что вы записали, со ссылками на источники
+• Еженедельная сводка ваших заметок
 • Каждая правка ИИ сохраняется как версия — сравните с оригиналом и вернитесь в любой момент
+
+⚡ ЗАПИСЬ ИЗ ЛЮБОГО МЕСТА
+• Виджет на главном экране: запись, заметка или вопрос в одно касание
+• Плитка в быстрых настройках — запись откуда угодно
+• «Поделиться в Vaulto»: текст, ссылки и аудиофайлы из любого приложения становятся заметками
+
+🗂 ВСЁ ПО ПОЛОЧКАМ
+• #теги прямо в тексте и фильтр по ним
+• Корзина хранит удалённые заметки 30 дней
+• Закрепление заметок, быстрый поиск по заметкам и версиям
+• Импорт из Google Keep, Markdown и текстовых файлов; экспорт всего в Markdown
 
 🔒 ПРИВАТНОСТЬ ПО УМОЛЧАНИЮ
 • ИИ на телефоне работает офлайн — ничего никуда не отправляется
-• Синхронизация со сквозным шифрованием (включается в настройках) — ключ только у вас, даже мы не можем прочитать заметки
+• Синхронизация со сквозным шифрованием (включается в настройках) — ключ только у вас
 • Защищённые заметки никогда не покидают устройство в открытом виде
 • Блокировка приложения отпечатком пальца или лицом
 • Без рекламы, без слежки, без продажи данных
 
 📝 СПОКОЙНЫЙ РЕДАКТОР
 • Форматирование, заголовки, чек-листы и Markdown
-• Быстрый поиск по всем заметкам и версиям
-• Закрепление заметок, тёмная тема, режим для планшетов
-• Отправка текстом, в Markdown или картинкой
-• 10 языков интерфейса
+• Тёмная тема, режим для планшетов, 10 языков интерфейса
 
 ДЛЯ ЧЕГО
 • Записывать идеи на прогулке или за рулём
+• Встречи, лекции и интервью
 • Списки дел и покупок, планы — на одном дыхании
-• Дневник и ежедневные заметки
 • Людям с СДВГ, которые теряют мысль, пока её печатают
 • Всем, кто хочет ИИ, но не хочет отдавать свои заметки в облако
 

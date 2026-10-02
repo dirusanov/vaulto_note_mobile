@@ -1,5 +1,6 @@
-"""Design system faithful to the real Vaulto Note app: real logo, real Material icons,
-real theme tokens. Used to build Google Play store banners."""
+"""Shared design pieces for the Google Play banners: Inter, the real app logo, real
+Material icons (chips / eyebrows), theme tokens and the Android handset frame that
+the real emulator screenshots are placed into."""
 import base64, os, json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -72,27 +73,9 @@ def ic(name, size=24, color=INK, cls="mi"):
             f'style="display:block;flex:none">{inner}</svg>')
 
 # ---------------- Phone geometry (Android / Pixel-class, not iPhone) ----------------
+# 412x915 dp viewport; a 1080x2400 capture scales into it exactly (20:9).
 SCREEN_W = 412
 SCREEN_H = 915
-NAV_H    = 24   # gesture navigation area the system reserves at the bottom
-
-def statusbar(color=INK):
-    """Android status bar: time left, signal / wi-fi / battery right."""
-    return f"""<div class="sb">
-      <span class="sb-t">9:41</span>
-      <span class="sb-r">
-        <svg width="17" height="13" viewBox="0 0 17 13" fill="{color}"><path d="M15.6.6a.9.9 0 0 1 .9.9v10a.9.9 0 0 1-.9.9H14a.9.9 0 0 1-.9-.9v-10a.9.9 0 0 1 .9-.9h1.6Z"/><path d="M10.9 3.3a.9.9 0 0 1 .9.9v7.3a.9.9 0 0 1-.9.9H9.3a.9.9 0 0 1-.9-.9V4.2a.9.9 0 0 1 .9-.9h1.6Z"/><path d="M6.2 6a.9.9 0 0 1 .9.9v4.6a.9.9 0 0 1-.9.9H4.6a.9.9 0 0 1-.9-.9V6.9a.9.9 0 0 1 .9-.9h1.6Z"/><path d="M1.5 8.4a.9.9 0 0 1 .9.9v2.2a.9.9 0 0 1-.9.9H.9a.9.9 0 0 1-.9-.9V9.3a.9.9 0 0 1 .9-.9h.6Z" opacity=".3"/></svg>
-        <svg width="16" height="13" viewBox="0 0 16 13" fill="{color}"><path d="M8 12.5.4 3.6A11.6 11.6 0 0 1 8 .8c2.9 0 5.6 1 7.6 2.8L8 12.5Z"/></svg>
-        <svg width="24" height="13" viewBox="0 0 24 13" fill="none"><rect x=".7" y="1.4" width="20" height="10.2" rx="3" stroke="{color}" stroke-width="1.4" opacity=".45"/><rect x="2.4" y="3.1" width="15" height="6.8" rx="1.7" fill="{color}"/><rect x="22" y="4.4" width="1.7" height="4.2" rx=".85" fill="{color}" opacity=".45"/></svg>
-      </span>
-    </div>"""
-
-def navbar(color=INK):
-    """Android 12+ gesture handle drawn by the system on top of the app, over the
-    thin scrim the system paints so content scrolling underneath stays legible."""
-    return (f'<div class="nav" style="background:linear-gradient(to top,{BG} 55%,rgba(248,249,250,0))">'
-            f'<div style="width:118px;height:4px;border-radius:2px;'
-            f'background:{color};opacity:.85"></div></div>')
 
 def base_css():
     return FONT_FACE + f"""
@@ -102,14 +85,10 @@ img{{-webkit-user-drag:none}}
 .stage{{position:relative;overflow:hidden;background:{CANVAS}}}
 .glow{{position:absolute;border-radius:50%;pointer-events:none}}
 
-/* device — Android hardware: flat-ish corners, centre punch-hole, gesture handle */
+/* device — Android hardware: flat-ish corners, centre punch-hole */
 .phone{{position:relative;width:{SCREEN_W+24}px;height:{SCREEN_H+24}px;background:#0B0D10;border-radius:50px;padding:12px;
   box-shadow:0 2px 5px rgba(11,13,16,.10),0 50px 90px -28px rgba(14,32,74,.34),0 16px 34px -14px rgba(11,13,16,.22);}}
 .screen{{position:relative;width:{SCREEN_W}px;height:{SCREEN_H}px;background:{BG};border-radius:39px;overflow:hidden}}
 .punch{{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:12px;height:12px;background:#0B0D10;border-radius:50%;z-index:50}}
-.nav{{position:absolute;left:0;right:0;bottom:0;height:{NAV_H+22}px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;z-index:60;pointer-events:none}}
-.sb{{position:relative;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:11px 20px 4px;font-weight:600;font-size:14px;color:{INK};height:38px}}
-.sb-t{{letter-spacing:-.01em}}
-.sb-r{{display:flex;align-items:center;gap:6px}}
 .row{{display:flex;align-items:center}}
 """
