@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     View,
+    Platform,
     Text,
     TouchableOpacity,
     Modal,
@@ -585,7 +586,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 <View style={styles.container} pointerEvents="box-none">
                     {/* Toggles Row */}
                     <View style={styles.togglesRow}>
-                        {micMode !== 'force_text' && (
+                        {/* Joining meeting parts is Android-only for now (native AudioConcat). */}
+                        {micMode !== 'force_text' && Platform.OS === 'android' && (
                             <TouchableOpacity
                                 style={[
                                     styles.badgeToggle,
