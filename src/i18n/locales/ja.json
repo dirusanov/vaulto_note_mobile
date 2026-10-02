@@ -270,6 +270,27 @@
       "system": "システム",
       "light": "ライト",
       "dark": "ダーク"
+    },
+    "deleteAccountDialog": {
+      "title": "アカウントを削除しますか？",
+      "intro": "アカウントとサーバーに保存されているすべてのデータが完全に削除されます。元に戻すことはできません。",
+      "serverTitle": "サーバーから削除されるもの：",
+      "itemAccount": "アカウントとサインイン情報",
+      "itemNotes": "同期されたすべてのメモとその履歴",
+      "itemRecordings": "音声録音",
+      "itemKeys": "暗号化キー",
+      "localTitle": "このスマートフォンのメモ",
+      "keepLocal": "このスマートフォンに残す",
+      "keepLocalDesc": "アカウントなしで引き続き使えます。",
+      "eraseLocal": "これらも消去する",
+      "eraseLocalDesc": "このスマートフォンからすべてのメモと録音が削除されます。",
+      "subscriptionNoteAndroid": "アカウントを削除してもサブスクリプションは解約されません。支払いを止めるには Google Play で解約してください。",
+      "subscriptionNoteIos": "アカウントを削除してもサブスクリプションは解約されません。支払いを止めるには App Store で解約してください。",
+      "manageSubscriptions": "サブスクリプションを管理",
+      "confirmBtn": "削除",
+      "failed": "アカウントを削除できませんでした。接続を確認して、もう一度お試しください。",
+      "successTitle": "アカウントを削除しました",
+      "successMessage": "アカウントとそのデータはサーバーから削除されました。"
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "カレンダーボタンでカレンダーアプリが開き、リマインダーを設定できます。",
       "failed": "タスクを探せませんでした。接続を確認して再試行してください。",
       "added": "ノートに追加したタスク：{{count}}",
-      "calendarFailed": "カレンダーを開けませんでした"
+      "calendarFailed": "カレンダーを開けませんでした",
+      "remind": "リマインド",
+      "remindHint": "ベルでこの端末にリマインダーを設定、カレンダーボタンでタスクをカレンダーに追加します。",
+      "reminderSet": "リマインダー：{{when}}",
+      "notifyOffTitle": "通知がオフです",
+      "notifyOffText": "リマインダーを受け取るには、端末の設定で Vaulto の通知を許可してください。",
+      "openSettings": "設定を開く",
+      "reminderPast": "この時刻はすでに過ぎています"
     },
     "protected": {
       "protectNote": "ノートを保護",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "あなたのデータ"
+  },
+  "notify": {
+    "remindersChannel": "タスクのリマインダー",
+    "digestChannel": "週のまとめ",
+    "reminderBody": "ノートからのリマインダー"
+  },
+  "digest": {
+    "title": "今週のノート",
+    "body": "メモした内容と未完了のタスクを簡単にまとめます。",
+    "question": "今週のノートには何があった？要点と未完了のタスクをまとめて。",
+    "settingTitle": "週のまとめ",
+    "settingDesc": "日曜の夜：メモした内容と残っていること",
+    "permissionDenied": "まとめを受け取るには、端末の設定で Vaulto の通知を許可してください。"
   }
 }

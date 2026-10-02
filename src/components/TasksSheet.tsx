@@ -23,21 +23,41 @@ interface TasksSheetProps {
     onRetry: () => void;
     onAddToNote: (tasks: ExtractedTask[]) => void;
     onAddToCalendar: (task: ExtractedTask) => Promise<boolean>;
+    /** Schedules a local notification; only offered for tasks with a date. */
+    onRemind?: (task: ExtractedTask) => Promise<{ ok: boolean; message?: string }>;
 }
 
 /** Action items the AI found in the note: add them as a checklist or to the calendar. */
 export const TasksSheet = ({
-    visible, loading, error, tasks, formatDue, onClose, onRetry, onAddToNote, onAddToCalendar,
+    visible, loading, error, tasks, formatDue, onClose, onRetry, onAddToNote, onAddToCalendar, onRemind,
 }: TasksSheetProps) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [scheduled, setScheduled] = useState<Set<string>>(new Set());
+    const [reminded, setReminded] = useState<Set<string>>(new Set());
+    // Feedback shown inside the sheet: the editor's toast is hidden behind it.
+    const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null);
 
     useEffect(() => {
         setSelected(new Set(tasks.filter((task) => !task.inNote).map((task) => task.id)));
         setScheduled(new Set());
+        setReminded(new Set());
+        setNotice(null);
     }, [tasks]);
+
+    useEffect(() => {
+        if (!notice) return;
+        const timer = setTimeout(() => setNotice(null), 3500);
+        return () => clearTimeout(timer);
+    }, [notice]);
+
+    const remind = async (task: ExtractedTask) => {
+        if (!onRemind) return;
+        const result = await onRemind(task);
+        if (result.ok) setReminded((prev) => new Set(prev).add(task.id));
+        if (result.message) setNotice({ text: result.message, ok: result.ok });
+    };
 
     const toggle = (id: string) => {
         setSelected((prev) => {
@@ -123,6 +143,21 @@ export const TasksSheet = ({
                                                             ) : null}
                                                         </View>
                                                     </TouchableOpacity>
+                                                    {onRemind && task.date ? (
+                                                        <TouchableOpacity
+                                                            style={styles.calendarButton}
+                                                            onPress={() => { void remind(task); }}
+                                                            disabled={reminded.has(task.id)}
+                                                            accessibilityRole="button"
+                                                            accessibilityLabel={t('edit.tasks.remind', 'Remind me')}
+                                                        >
+                                                            <MaterialIcons
+                                                                name={reminded.has(task.id) ? 'notifications-active' : 'notifications-none'}
+                                                                size={22}
+                                                                color={reminded.has(task.id) ? colors.success : colors.primary}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    ) : null}
                                                     <TouchableOpacity
                                                         style={styles.calendarButton}
                                                         onPress={() => { void addToCalendar(task); }}
@@ -150,9 +185,24 @@ export const TasksSheet = ({
                                             {t('edit.tasks.addToNote', 'Add to note as checklist ({{count}})', { count: chosen.length })}
                                         </Text>
                                     </TouchableOpacity>
+                                    {notice ? (
+                                        <View style={styles.noticeRow} accessibilityLiveRegion="polite">
+                                            <MaterialIcons
+                                                name={notice.ok ? 'notifications-active' : 'info-outline'}
+                                                size={16}
+                                                color={notice.ok ? colors.success : colors.warning}
+                                            />
+                                            <Text style={[styles.noticeText, { color: notice.ok ? colors.success : colors.warning }]}>
+                                                {notice.text}
+                                            </Text>
+                                        </View>
+                                    ) : (
                                     <Text style={styles.hint}>
-                                        {t('edit.tasks.calendarHint', 'The calendar button opens your calendar app, where you can set a reminder.')}
+                                        {onRemind
+                                            ? t('edit.tasks.remindHint', 'The bell sets a reminder on this phone; the calendar button adds the task to your calendar.')
+                                            : t('edit.tasks.calendarHint', 'The calendar button opens your calendar app, where you can set a reminder.')}
                                     </Text>
+                                    )}
                                 </>
                             )}
                         </View>
@@ -230,6 +280,20 @@ const styles = createStyles(() => ({
         marginTop: 2,
         fontSize: 13,
         color: colors.textSecondary,
+    },
+    noticeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        marginTop: spacing.s,
+        minHeight: 34,
+    },
+    noticeText: {
+        fontSize: 13,
+        fontWeight: '600',
+        textAlign: 'center',
+        flexShrink: 1,
     },
     calendarButton: {
         width: 48,

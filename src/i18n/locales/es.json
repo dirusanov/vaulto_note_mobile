@@ -270,6 +270,27 @@
       "system": "Sistema",
       "light": "Claro",
       "dark": "Oscuro"
+    },
+    "deleteAccountDialog": {
+      "title": "¿Eliminar la cuenta?",
+      "intro": "Tu cuenta y todo lo guardado en nuestros servidores se eliminarán para siempre. No se puede deshacer.",
+      "serverTitle": "Se elimina del servidor:",
+      "itemAccount": "Tu cuenta y el inicio de sesión",
+      "itemNotes": "Todas las notas sincronizadas y sus versiones",
+      "itemRecordings": "Grabaciones de voz",
+      "itemKeys": "Claves de cifrado",
+      "localTitle": "Notas en este teléfono",
+      "keepLocal": "Conservarlas en este teléfono",
+      "keepLocalDesc": "Podrás seguir usándolas sin cuenta.",
+      "eraseLocal": "Borrarlas también",
+      "eraseLocalDesc": "Se eliminan todas las notas y grabaciones de este teléfono.",
+      "subscriptionNoteAndroid": "Eliminar la cuenta no cancela la suscripción. Para dejar de pagar, cancélala en Google Play.",
+      "subscriptionNoteIos": "Eliminar la cuenta no cancela la suscripción. Para dejar de pagar, cancélala en el App Store.",
+      "manageSubscriptions": "Gestionar suscripciones",
+      "confirmBtn": "Eliminar",
+      "failed": "No se pudo eliminar la cuenta. Comprueba la conexión e inténtalo de nuevo.",
+      "successTitle": "Cuenta eliminada",
+      "successMessage": "Tu cuenta y sus datos se han eliminado de nuestros servidores."
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "El botón del calendario abre tu app de calendario, donde puedes poner un recordatorio.",
       "failed": "No se pudieron buscar tareas. Revisa tu conexión e inténtalo de nuevo.",
       "added": "Tareas añadidas a la nota: {{count}}",
-      "calendarFailed": "No se pudo abrir el calendario"
+      "calendarFailed": "No se pudo abrir el calendario",
+      "remind": "Recordarme",
+      "remindHint": "La campana pone un recordatorio en este teléfono; el botón de calendario añade la tarea a tu calendario.",
+      "reminderSet": "Recordatorio: {{when}}",
+      "notifyOffTitle": "Las notificaciones están desactivadas",
+      "notifyOffText": "Permite las notificaciones de Vaulto en los ajustes del teléfono para recibir recordatorios.",
+      "openSettings": "Abrir ajustes",
+      "reminderPast": "Esa hora ya pasó"
     },
     "protected": {
       "protectNote": "Proteger nota",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "Tus datos"
+  },
+  "notify": {
+    "remindersChannel": "Recordatorios de tareas",
+    "digestChannel": "Resumen semanal",
+    "reminderBody": "Recordatorio de tu nota"
+  },
+  "digest": {
+    "title": "Tu semana en notas",
+    "body": "Un breve resumen de lo que anotaste y lo que sigue pendiente.",
+    "question": "¿Qué hubo en mis notas esta semana? Resume lo principal y las tareas pendientes.",
+    "settingTitle": "Resumen semanal",
+    "settingDesc": "Domingo por la tarde: lo que anotaste y lo que queda pendiente",
+    "permissionDenied": "Permite las notificaciones de Vaulto en los ajustes del teléfono para recibir el resumen."
   }
 }

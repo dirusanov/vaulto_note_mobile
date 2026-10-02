@@ -147,6 +147,7 @@ import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { getAIProvider } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import NetInfo from '@react-native-community/netinfo';
+import { scheduleTaskReminder } from '../services/notifications';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
 const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
@@ -3752,6 +3753,33 @@ export const NoteEditScreen = () => {
         return task.time ? `${label}, ${task.time}` : label;
     }, [i18n.language]);
 
+    // A local notification at the task's time (9:00 if it has only a date);
+    // tapping it opens this note. Works offline, nothing leaves the phone.
+    const handleRemindTask = useCallback(async (task: ExtractedTask): Promise<{ ok: boolean; message?: string }> => {
+        if (!task.date) return { ok: false };
+        const result = await scheduleTaskReminder({ title: task.title, date: task.date, time: task.time, noteId: localNoteIdRef.current });
+        if ('id' in result) {
+            haptics.success();
+            const when = result.at.toLocaleString(i18n.language, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            return { ok: true, message: t('edit.tasks.reminderSet', 'Reminder: {{when}}', { when }) };
+        }
+        if (result.error === 'permission') {
+            Alert.alert(
+                t('edit.tasks.notifyOffTitle', 'Notifications are off'),
+                t('edit.tasks.notifyOffText', 'Allow notifications for Vaulto in the phone settings to get reminders.'),
+                [
+                    { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                    { text: t('edit.tasks.openSettings', 'Open settings'), onPress: () => { void Linking.openSettings(); } },
+                ],
+            );
+            return { ok: false };
+        }
+        if (result.error === 'past') {
+            return { ok: false, message: t('edit.tasks.reminderPast', 'This time has already passed') };
+        }
+        return { ok: false };
+    }, [i18n.language, t]);
+
     const handleAddTasksToNote = useCallback(async (tasks: ExtractedTask[]) => {
         if (tasks.length === 0) return;
         haptics.success();
@@ -7005,6 +7033,7 @@ export const NoteEditScreen = () => {
                 onRetry={() => { void runFindTasks(); }}
                 onAddToNote={(tasks) => { void handleAddTasksToNote(tasks); }}
                 onAddToCalendar={handleAddTaskToCalendar}
+                onRemind={handleRemindTask}
             />
 
             <VersionsSheet

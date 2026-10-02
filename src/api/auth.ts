@@ -161,4 +161,14 @@ export const authApi = {
         const response = await authClient.post<{ url: string; token: string }>('/auth/magic-link');
         return response.data;
     },
+
+    /**
+     * Permanently deletes the signed-in account on the server: synced notes,
+     * recordings, encryption keys, usage history and the sign-in identity.
+     * Idempotent; a 503 means a step did not finish and the call can be retried.
+     */
+    deleteAccount: async (): Promise<void> => {
+        // Purging a large audio archive can take longer than the default timeout.
+        await client.delete('/account', { data: { confirm: 'DELETE' }, timeout: 90000 });
+    },
 };

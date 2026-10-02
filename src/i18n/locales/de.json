@@ -270,6 +270,27 @@
       "system": "System",
       "light": "Hell",
       "dark": "Dunkel"
+    },
+    "deleteAccountDialog": {
+      "title": "Konto löschen?",
+      "intro": "Dein Konto und alles, was auf unseren Servern gespeichert ist, wird endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+      "serverTitle": "Vom Server gelöscht:",
+      "itemAccount": "Dein Konto und deine Anmeldung",
+      "itemNotes": "Alle synchronisierten Notizen und ihre Versionen",
+      "itemRecordings": "Sprachaufnahmen",
+      "itemKeys": "Verschlüsselungsschlüssel",
+      "localTitle": "Notizen auf diesem Telefon",
+      "keepLocal": "Auf diesem Telefon behalten",
+      "keepLocalDesc": "Du kannst sie auch ohne Konto weiter nutzen.",
+      "eraseLocal": "Ebenfalls löschen",
+      "eraseLocalDesc": "Alle Notizen und Aufnahmen werden von diesem Telefon entfernt.",
+      "subscriptionNoteAndroid": "Das Löschen des Kontos kündigt kein Abo. Kündige es in Google Play, damit keine Zahlungen mehr anfallen.",
+      "subscriptionNoteIos": "Das Löschen des Kontos kündigt kein Abo. Kündige es im App Store, damit keine Zahlungen mehr anfallen.",
+      "manageSubscriptions": "Abos verwalten",
+      "confirmBtn": "Löschen",
+      "failed": "Das Konto konnte nicht gelöscht werden. Prüfe deine Verbindung und versuche es erneut.",
+      "successTitle": "Konto gelöscht",
+      "successMessage": "Dein Konto und seine Daten wurden von unseren Servern gelöscht."
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "Die Kalender-Taste öffnet deine Kalender-App, dort kannst du eine Erinnerung setzen.",
       "failed": "Aufgaben konnten nicht gesucht werden. Prüfe deine Verbindung und versuche es erneut.",
       "added": "Zur Notiz hinzugefügte Aufgaben: {{count}}",
-      "calendarFailed": "Kalender konnte nicht geöffnet werden"
+      "calendarFailed": "Kalender konnte nicht geöffnet werden",
+      "remind": "Erinnern",
+      "remindHint": "Die Glocke stellt eine Erinnerung auf diesem Telefon ein, der Kalender-Button trägt die Aufgabe in deinen Kalender ein.",
+      "reminderSet": "Erinnerung: {{when}}",
+      "notifyOffTitle": "Benachrichtigungen sind aus",
+      "notifyOffText": "Erlaube Benachrichtigungen für Vaulto in den Telefoneinstellungen, um Erinnerungen zu bekommen.",
+      "openSettings": "Einstellungen öffnen",
+      "reminderPast": "Diese Zeit ist schon vorbei"
     },
     "protected": {
       "protectNote": "Notiz schützen",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "Deine Daten"
+  },
+  "notify": {
+    "remindersChannel": "Aufgaben-Erinnerungen",
+    "digestChannel": "Wochenrückblick",
+    "reminderBody": "Erinnerung aus deiner Notiz"
+  },
+  "digest": {
+    "title": "Deine Woche in Notizen",
+    "body": "Eine kurze Zusammenfassung dessen, was du notiert hast und was noch offen ist.",
+    "question": "Was stand diese Woche in meinen Notizen? Fasse das Wichtigste und die offenen Aufgaben zusammen.",
+    "settingTitle": "Wochenrückblick",
+    "settingDesc": "Sonntagabend: was du notiert hast und was noch offen ist",
+    "permissionDenied": "Erlaube Benachrichtigungen für Vaulto in den Telefoneinstellungen, um den Rückblick zu bekommen."
   }
 }

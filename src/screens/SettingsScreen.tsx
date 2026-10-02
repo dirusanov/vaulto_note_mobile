@@ -41,6 +41,10 @@ import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
+import { DeleteAccountModal } from '../components/DeleteAccountModal';
+import { SuccessModal } from '../components/SuccessModal';
+import { authApi } from '../api/auth';
+import Purchases from 'react-native-purchases';
 import { useEncryption } from '../context/EncryptionContext';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
@@ -301,6 +305,8 @@ export const SettingsScreen = () => {
     const [aiProvider, setAiProviderState] = useState<AIProvider>('vaulto_ai');
     const [preferencesReady, setPreferencesReady] = useState(false);
     const [showSignOutDialog, setShowSignOutDialog] = useState(false);
+    const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+    const [showAccountDeletedModal, setShowAccountDeletedModal] = useState(false);
     const [showEnableSyncModal, setShowEnableSyncModal] = useState(false);
     const [showChangeSecretModal, setShowChangeSecretModal] = useState(false);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
@@ -1109,6 +1115,28 @@ export const SettingsScreen = () => {
     const handleSignOut = async () => {
         await checkSyncStatus();
         setShowSignOutDialog(true);
+    };
+
+    // Throws on failure so DeleteAccountModal can show the error and stay open.
+    const handleDeleteAccount = async (keepLocalNotes: boolean) => {
+        // Stop background sync so it cannot upload into the account being deleted.
+        syncService.setSyncEnabled(false);
+        try {
+            await authApi.deleteAccount();
+        } catch (error) {
+            syncService.setSyncEnabled(syncEnabled);
+            console.error('[Settings] Account deletion failed', getErrorMessage(error));
+            throw error;
+        }
+        try {
+            await Purchases.logOut();
+        } catch (error) {
+            // Already anonymous in RevenueCat, or the SDK is not configured.
+            console.warn('[Settings] RevenueCat logOut after account deletion failed', error);
+        }
+        setShowDeleteAccountModal(false);
+        await signOut({ keepLocalNotes, wipeLocal: !keepLocalNotes });
+        setShowAccountDeletedModal(true);
     };
 
     const subscriptionTotalSeconds = currentPeriodUsage?.limits.transcription_subscription_max_seconds
@@ -1955,13 +1983,23 @@ export const SettingsScreen = () => {
                 {/* Sign Out & About */}
                 <View style={{ marginTop: spacing.m, marginBottom: spacing.m, gap: spacing.m }}>
                     {isAuthenticated && !isGuest && (
-                        <TouchableOpacity
-                            style={styles.signOutButton}
-                            onPress={handleSignOut}
-                        >
-                            <MaterialIcons name="logout" size={18} color={colors.error} style={rtlFlip} />
-                            <Text style={styles.signOutText}>{t("settings.account.signOut", "Sign Out")}</Text>
-                        </TouchableOpacity>
+                        <>
+                            <TouchableOpacity
+                                style={styles.signOutButton}
+                                onPress={handleSignOut}
+                            >
+                                <MaterialIcons name="logout" size={18} color={colors.error} style={rtlFlip} />
+                                <Text style={styles.signOutText}>{t("settings.account.signOut", "Sign Out")}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.deleteAccountButton}
+                                onPress={() => setShowDeleteAccountModal(true)}
+                                accessibilityRole="button"
+                            >
+                                <MaterialIcons name="person-remove" size={18} color={colors.error} />
+                                <Text style={styles.deleteAccountText}>{t("settings.ui.deleteAccount", "Delete Account")}</Text>
+                            </TouchableOpacity>
+                        </>
                     )}
 
                     <View style={{ alignItems: 'center', gap: spacing.s, opacity: 0.7 }}>
@@ -2270,6 +2308,18 @@ export const SettingsScreen = () => {
                     signOut({ keepLocalNotes: false, wipeLocal: true });
                 }}
                 onCancel={() => setShowSignOutDialog(false)}
+            />
+            <DeleteAccountModal
+                visible={showDeleteAccountModal}
+                onClose={() => setShowDeleteAccountModal(false)}
+                onConfirm={handleDeleteAccount}
+                onManageSubscription={() => { void openManageSubscription(); }}
+            />
+            <SuccessModal
+                visible={showAccountDeletedModal}
+                title={t('settings.deleteAccountDialog.successTitle', 'Account deleted')}
+                message={t('settings.deleteAccountDialog.successMessage', 'Your account and its data have been deleted from our servers.')}
+                onClose={() => setShowAccountDeletedModal(false)}
             />
             <SecurityInfoModal
                 visible={showSecurityInfoModal}
@@ -3503,6 +3553,21 @@ const styles = createStyles(() => ({
         borderColor: colors.error + '20',
     },
     signOutText: {
+        ...typography.button,
+        color: colors.error,
+        fontSize: 15,
+    },
+    deleteAccountButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.s,
+        minHeight: 48,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.error + '20',
+    },
+    deleteAccountText: {
         ...typography.button,
         color: colors.error,
         fontSize: 15,

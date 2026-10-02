@@ -270,6 +270,27 @@
       "system": "Sistema",
       "light": "Claro",
       "dark": "Escuro"
+    },
+    "deleteAccountDialog": {
+      "title": "Excluir conta?",
+      "intro": "Sua conta e tudo o que está guardado nos nossos servidores serão excluídos para sempre. Não é possível desfazer.",
+      "serverTitle": "Excluído do servidor:",
+      "itemAccount": "Sua conta e o login",
+      "itemNotes": "Todas as notas sincronizadas e suas versões",
+      "itemRecordings": "Gravações de voz",
+      "itemKeys": "Chaves de criptografia",
+      "localTitle": "Notas neste celular",
+      "keepLocal": "Manter neste celular",
+      "keepLocalDesc": "Você pode continuar usando-as sem conta.",
+      "eraseLocal": "Apagar também",
+      "eraseLocalDesc": "Todas as notas e gravações são removidas deste celular.",
+      "subscriptionNoteAndroid": "Excluir a conta não cancela a assinatura. Para parar os pagamentos, cancele-a no Google Play.",
+      "subscriptionNoteIos": "Excluir a conta não cancela a assinatura. Para parar os pagamentos, cancele-a na App Store.",
+      "manageSubscriptions": "Gerenciar assinaturas",
+      "confirmBtn": "Excluir",
+      "failed": "Não foi possível excluir a conta. Verifique a conexão e tente novamente.",
+      "successTitle": "Conta excluída",
+      "successMessage": "Sua conta e seus dados foram excluídos dos nossos servidores."
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "O botão do calendário abre seu app de calendário, onde você pode definir um lembrete.",
       "failed": "Não foi possível procurar tarefas. Verifique sua conexão e tente novamente.",
       "added": "Tarefas adicionadas à nota: {{count}}",
-      "calendarFailed": "Não foi possível abrir o calendário"
+      "calendarFailed": "Não foi possível abrir o calendário",
+      "remind": "Lembrar-me",
+      "remindHint": "O sino cria um lembrete neste telefone; o botão de calendário adiciona a tarefa à sua agenda.",
+      "reminderSet": "Lembrete: {{when}}",
+      "notifyOffTitle": "As notificações estão desativadas",
+      "notifyOffText": "Permita as notificações do Vaulto nas configurações do telefone para receber lembretes.",
+      "openSettings": "Abrir configurações",
+      "reminderPast": "Esse horário já passou"
     },
     "protected": {
       "protectNote": "Proteger nota",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "Seus dados"
+  },
+  "notify": {
+    "remindersChannel": "Lembretes de tarefas",
+    "digestChannel": "Resumo semanal",
+    "reminderBody": "Lembrete da sua nota"
+  },
+  "digest": {
+    "title": "Sua semana em notas",
+    "body": "Um resumo rápido do que você anotou e do que ainda está pendente.",
+    "question": "O que aconteceu nas minhas notas esta semana? Resuma o principal e as tarefas pendentes.",
+    "settingTitle": "Resumo semanal",
+    "settingDesc": "Domingo à noite: o que você anotou e o que ainda falta",
+    "permissionDenied": "Permita as notificações do Vaulto nas configurações do telefone para receber o resumo."
   }
 }

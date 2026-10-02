@@ -270,6 +270,27 @@
       "system": "Système",
       "light": "Clair",
       "dark": "Sombre"
+    },
+    "deleteAccountDialog": {
+      "title": "Supprimer le compte ?",
+      "intro": "Votre compte et tout ce qui est stocké sur nos serveurs seront supprimés définitivement. Cette action est irréversible.",
+      "serverTitle": "Supprimé du serveur :",
+      "itemAccount": "Votre compte et votre connexion",
+      "itemNotes": "Toutes les notes synchronisées et leurs versions",
+      "itemRecordings": "Enregistrements vocaux",
+      "itemKeys": "Clés de chiffrement",
+      "localTitle": "Notes sur ce téléphone",
+      "keepLocal": "Les garder sur ce téléphone",
+      "keepLocalDesc": "Vous pourrez continuer à les utiliser sans compte.",
+      "eraseLocal": "Les effacer aussi",
+      "eraseLocalDesc": "Toutes les notes et tous les enregistrements sont supprimés de ce téléphone.",
+      "subscriptionNoteAndroid": "Supprimer le compte n'annule pas l'abonnement. Pour arrêter les paiements, annulez-le dans Google Play.",
+      "subscriptionNoteIos": "Supprimer le compte n'annule pas l'abonnement. Pour arrêter les paiements, annulez-le dans l'App Store.",
+      "manageSubscriptions": "Gérer les abonnements",
+      "confirmBtn": "Supprimer",
+      "failed": "Impossible de supprimer le compte. Vérifiez votre connexion et réessayez.",
+      "successTitle": "Compte supprimé",
+      "successMessage": "Votre compte et ses données ont été supprimés de nos serveurs."
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "Le bouton calendrier ouvre votre app de calendrier, où vous pouvez définir un rappel.",
       "failed": "Impossible de chercher les tâches. Vérifiez votre connexion et réessayez.",
       "added": "Tâches ajoutées à la note : {{count}}",
-      "calendarFailed": "Impossible d’ouvrir le calendrier"
+      "calendarFailed": "Impossible d’ouvrir le calendrier",
+      "remind": "Me rappeler",
+      "remindHint": "La cloche crée un rappel sur ce téléphone ; le bouton calendrier ajoute la tâche à votre agenda.",
+      "reminderSet": "Rappel : {{when}}",
+      "notifyOffTitle": "Les notifications sont désactivées",
+      "notifyOffText": "Autorisez les notifications de Vaulto dans les réglages du téléphone pour recevoir des rappels.",
+      "openSettings": "Ouvrir les réglages",
+      "reminderPast": "Cette heure est déjà passée"
     },
     "protected": {
       "protectNote": "Protéger la note",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "Vos données"
+  },
+  "notify": {
+    "remindersChannel": "Rappels de tâches",
+    "digestChannel": "Résumé de la semaine",
+    "reminderBody": "Rappel de votre note"
+  },
+  "digest": {
+    "title": "Votre semaine en notes",
+    "body": "Un court résumé de ce que vous avez noté et de ce qui reste à faire.",
+    "question": "Que s’est-il passé dans mes notes cette semaine ? Résume l’essentiel et les tâches en cours.",
+    "settingTitle": "Résumé de la semaine",
+    "settingDesc": "Dimanche soir : ce que vous avez noté et ce qui reste à faire",
+    "permissionDenied": "Autorisez les notifications de Vaulto dans les réglages du téléphone pour recevoir le résumé."
   }
 }

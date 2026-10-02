@@ -270,6 +270,27 @@
       "system": "跟随系统",
       "light": "浅色",
       "dark": "深色"
+    },
+    "deleteAccountDialog": {
+      "title": "删除账户？",
+      "intro": "你的账户以及我们服务器上存储的所有内容都将被永久删除，且无法撤销。",
+      "serverTitle": "将从服务器删除：",
+      "itemAccount": "你的账户和登录信息",
+      "itemNotes": "所有已同步的笔记及其版本",
+      "itemRecordings": "语音录音",
+      "itemKeys": "加密密钥",
+      "localTitle": "此手机上的笔记",
+      "keepLocal": "保留在此手机上",
+      "keepLocalDesc": "无需账户也可以继续使用。",
+      "eraseLocal": "一并清除",
+      "eraseLocalDesc": "此手机上的所有笔记和录音都将被删除。",
+      "subscriptionNoteAndroid": "删除账户不会取消订阅。如需停止扣费，请在 Google Play 中取消订阅。",
+      "subscriptionNoteIos": "删除账户不会取消订阅。如需停止扣费，请在 App Store 中取消订阅。",
+      "manageSubscriptions": "管理订阅",
+      "confirmBtn": "删除",
+      "failed": "无法删除账户。请检查网络连接后重试。",
+      "successTitle": "账户已删除",
+      "successMessage": "你的账户及其数据已从我们的服务器中删除。"
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "日历按钮会打开你的日历应用，可在其中设置提醒。",
       "failed": "无法查找任务。请检查网络后重试。",
       "added": "已添加到笔记的任务：{{count}}",
-      "calendarFailed": "无法打开日历"
+      "calendarFailed": "无法打开日历",
+      "remind": "提醒我",
+      "remindHint": "铃铛会在这部手机上设置提醒，日历按钮会把任务加入日历。",
+      "reminderSet": "提醒：{{when}}",
+      "notifyOffTitle": "通知已关闭",
+      "notifyOffText": "请在手机设置中允许 Vaulto 的通知，以便接收提醒。",
+      "openSettings": "打开设置",
+      "reminderPast": "这个时间已经过了"
     },
     "protected": {
       "protectNote": "保护笔记",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "你的数据"
+  },
+  "notify": {
+    "remindersChannel": "任务提醒",
+    "digestChannel": "每周总结",
+    "reminderBody": "来自笔记的提醒"
+  },
+  "digest": {
+    "title": "你这一周的笔记",
+    "body": "简要回顾你记了什么、还有哪些没完成。",
+    "question": "这周我的笔记里有什么？请总结要点和未完成的任务。",
+    "settingTitle": "每周总结",
+    "settingDesc": "周日晚上：你记了什么、还有什么没做",
+    "permissionDenied": "请在手机设置中允许 Vaulto 的通知，以便接收总结。"
   }
 }

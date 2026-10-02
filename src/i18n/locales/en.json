@@ -270,6 +270,27 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark"
+    },
+    "deleteAccountDialog": {
+      "title": "Delete account?",
+      "intro": "Your account and everything stored on our servers will be deleted permanently. This cannot be undone.",
+      "serverTitle": "Deleted from the server:",
+      "itemAccount": "Your account and sign-in",
+      "itemNotes": "All synced notes and their versions",
+      "itemRecordings": "Voice recordings",
+      "itemKeys": "Encryption keys",
+      "localTitle": "Notes on this phone",
+      "keepLocal": "Keep them on this phone",
+      "keepLocalDesc": "You can keep using them without an account.",
+      "eraseLocal": "Erase them too",
+      "eraseLocalDesc": "All notes and recordings are removed from this phone.",
+      "subscriptionNoteAndroid": "Deleting the account does not cancel a subscription. To stop payments, cancel it in Google Play.",
+      "subscriptionNoteIos": "Deleting the account does not cancel a subscription. To stop payments, cancel it in the App Store.",
+      "manageSubscriptions": "Manage subscriptions",
+      "confirmBtn": "Delete",
+      "failed": "Could not delete the account. Check your connection and try again.",
+      "successTitle": "Account deleted",
+      "successMessage": "Your account and its data have been deleted from our servers."
     }
   },
   "languages": {
@@ -499,7 +520,14 @@
       "calendarHint": "The calendar button opens your calendar app, where you can set a reminder.",
       "failed": "Could not look for tasks. Check your connection and try again.",
       "added": "Tasks added to the note: {{count}}",
-      "calendarFailed": "Could not open the calendar"
+      "calendarFailed": "Could not open the calendar",
+      "remind": "Remind me",
+      "remindHint": "The bell sets a reminder on this phone; the calendar button adds the task to your calendar.",
+      "reminderSet": "Reminder: {{when}}",
+      "notifyOffTitle": "Notifications are off",
+      "notifyOffText": "Allow notifications for Vaulto in the phone settings to get reminders.",
+      "openSettings": "Open settings",
+      "reminderPast": "This time has already passed"
     },
     "protected": {
       "protectNote": "Protect note",
@@ -876,5 +904,18 @@
   },
   "data": {
     "title": "Your data"
+  },
+  "notify": {
+    "remindersChannel": "Task reminders",
+    "digestChannel": "Weekly summary",
+    "reminderBody": "Reminder from your note"
+  },
+  "digest": {
+    "title": "Your week in notes",
+    "body": "A short summary of what you noted and what is still open.",
+    "question": "What happened in my notes this week? Summarise the main points and the open tasks.",
+    "settingTitle": "Weekly summary",
+    "settingDesc": "Sunday evening: what you noted and what is still open",
+    "permissionDenied": "Allow notifications for Vaulto in the phone settings to get the summary."
   }
 }
