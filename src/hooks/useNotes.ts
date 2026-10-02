@@ -26,6 +26,7 @@ import {
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
+import { AudioService } from '../services/AudioService';
 import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
 import { listSearchTerms, matchesListQuery } from '../utils/noteSearch';
 import { plainVariantTitle } from '../i18n/variantLabels';
@@ -714,10 +715,11 @@ export const useNotes = () => {
         return purgeTrash(userId, ids ? { ids } : {});
     }, [userId]);
 
-    // Expired trash goes away on its own.
+    // Expired trash goes away on its own, and so do stale unencrypted recordings.
     useEffect(() => {
         if (!userId) return;
         void purgeTrash(userId, { olderThanDays: TRASH_RETENTION_DAYS }).catch(() => undefined);
+        void AudioService.sweepStaleRawAudio().catch(() => undefined);
     }, [userId]);
 
     const deleteNote = async (id: string) => {

@@ -154,6 +154,12 @@ test('an unusable error falls back to the caller-supplied message', () => {
     assert.equal(getErrorMessage(undefined), 'Something went wrong');
 });
 
+test('whisper sound captions on their own line are dropped, brackets inside speech kept', () => {
+    const { stripWhisperHallucinations } = require('../.test-build/utils/whisperText');
+    assert.strictEqual(stripWhisperHallucinations('Hello team.\n[Birds chirping]\nNext point.'), 'Hello team. Next point.');
+    assert.strictEqual(stripWhisperHallucinations('Купить хлеб (белый) и молоко'), 'Купить хлеб (белый) и молоко');
+});
+
 test('whisper silence hallucinations are dropped, real speech kept', () => {
     const { stripWhisperHallucinations } = require('../.test-build/utils/whisperText');
     assert.equal(stripWhisperHallucinations('Купить молоко. Продолжение следует...'), 'Купить молоко.');

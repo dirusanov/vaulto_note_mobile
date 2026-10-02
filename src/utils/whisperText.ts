@@ -14,6 +14,8 @@ const HALLUCINATION_PATTERNS: RegExp[] = [
     /subtitles? by [^.!?]*[.!?]?/gi,
     /(?:please )?subscribe to (?:my|our|the) channel[.!]*/gi,
     /\[(?:music|музыка|silence|тишина|blank_audio)\]/gi,
+    // Sound captions Whisper adds on non-speech: "[Birds chirping]", "[Смех]", "(звук двигателя)".
+    /^\s*[[(][^\])\n]{1,40}[\])]\s*$/gm,
     /\((?:music|музыка)\)/gi,
 ];
 

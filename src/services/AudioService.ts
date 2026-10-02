@@ -519,6 +519,37 @@ class AudioServiceClass {
     /**
      * Clean up old temporary files
      */
+    /**
+     * Unencrypted leftovers: recorder output (cache/Audio), meeting joins and
+     * shared audio that an interrupted flow never saved or discarded. Only
+     * files older than a day are removed, so nothing in use is touched.
+     */
+    async sweepStaleRawAudio(maxAgeMs: number = 24 * 60 * 60 * 1000): Promise<number> {
+        if (Platform.OS === 'web' || !FileSystem.cacheDirectory) return 0;
+        const now = Date.now();
+        let removed = 0;
+        const sweep = async (dir: string, match: (name: string) => boolean) => {
+            const info = await FileSystem.getInfoAsync(dir).catch(() => null);
+            if (!info?.exists) return;
+            const names = await FileSystem.readDirectoryAsync(dir).catch(() => [] as string[]);
+            for (const name of names) {
+                if (!match(name)) continue;
+                const uri = `${dir}${name}`;
+                const stat = await FileSystem.getInfoAsync(uri).catch(() => null);
+                const modified = stat && stat.exists && 'modificationTime' in stat ? (stat.modificationTime || 0) * 1000 : 0;
+                if (modified && now - modified > maxAgeMs) {
+                    await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+                    removed += 1;
+                }
+            }
+        };
+        const cache = FileSystem.cacheDirectory;
+        await sweep(`${cache}Audio/`, (name) => /\.(m4a|aac|mp4|3gp|wav)$/i.test(name));
+        await sweep(`${cache}shared/`, () => true);
+        await sweep(cache, (name) => /^(meeting_|diag_).*\.m4a$/i.test(name));
+        return removed;
+    }
+
     async cleanupTempFiles(prefixes: string[] = ['temp']): Promise<void> {
         if (Platform.OS === 'web') return;
         try {
