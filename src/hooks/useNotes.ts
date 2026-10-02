@@ -14,12 +14,18 @@ import {
     getNoteById,
     getVoiceRecordingsLocal,
     deleteVoiceRecordingLocal,
+    saveVoiceRecordingLocal,
     sanitizeLocalImprovementLabels,
+    saveTrashEntry,
+    getTrashEntries,
+    removeTrashEntry,
+    purgeTrash,
+    TRASH_RETENTION_DAYS,
+    type TrashEntry,
 } from '../services/DatabaseService';
 import { useAuth } from './useAuth';
 import { generateUUID } from '../utils/uuid';
 import { syncService } from '../services/SyncService';
-import { AudioService } from '../services/AudioService';
 import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
 import { listSearchTerms, matchesListQuery } from '../utils/noteSearch';
 import { plainVariantTitle } from '../i18n/variantLabels';
@@ -645,6 +651,95 @@ export const useNotes = () => {
         }
     };
 
+    /**
+     * Keeps a deleted note restorable for 30 days: a snapshot (title, text,
+     * protection, recordings) goes to the local trash and the audio files stay
+     * on disk until the trash is purged. The note itself is deleted as before,
+     * including on the server; restoring creates it again.
+     */
+    const moveToTrash = async (existing: Note) => {
+        if (!userId) return;
+        const recordings = await getVoiceRecordingsLocal(userId, existing.id);
+        const entry: TrashEntry = {
+            id: existing.id,
+            title: existing.title || '',
+            content: existing.content || '',
+            is_protected: !!existing.is_protected,
+            storage_scope: existing.storage_scope,
+            privacy: existing.privacy,
+            audio_file_path: existing.audio_file_path ?? null,
+            audio_duration: existing.audio_duration ?? null,
+            recordings: recordings.map((recording) => ({
+                file_path: recording.file_path,
+                duration: recording.duration,
+                transcription: recording.transcription,
+            })),
+            deleted_at: new Date().toISOString(),
+        };
+        try {
+            await saveTrashEntry(userId, entry);
+        } catch (error) {
+            // Without a trash copy, deleting must not lose the audio silently.
+            console.error('[useNotes] Could not move note to trash', error);
+            throw error;
+        }
+        for (const recording of recordings) {
+            await deleteVoiceRecordingLocal(userId, recording.id, { keepFile: true });
+        }
+    };
+
+    const listTrash = useCallback(async (): Promise<TrashEntry[]> => (
+        userId ? getTrashEntries(userId) : []
+    ), [userId]);
+
+    /** Brings a trashed note back as a new note, with its recordings. */
+    const restoreFromTrash = useCallback(async (id: string): Promise<string | null> => {
+        if (!userId) return null;
+        const entry = (await getTrashEntries(userId)).find((item) => item.id === id);
+        if (!entry) return null;
+        const [first, ...others] = entry.recordings;
+        const mainAudio = first ?? (entry.audio_file_path
+            ? { file_path: entry.audio_file_path, duration: entry.audio_duration ?? 0 }
+            : null);
+        const restored = await createNote({
+            title: entry.title,
+            content: entry.content,
+            audio: mainAudio ? {
+                filePath: mainAudio.file_path,
+                duration: mainAudio.duration,
+                transcription: (mainAudio as { transcription?: string }).transcription,
+            } : undefined,
+            storage_scope: entry.storage_scope as StorageScope | undefined,
+            privacy: entry.privacy as NotePrivacy | undefined,
+            is_protected: entry.is_protected,
+        });
+        for (const recording of others) {
+            await saveVoiceRecordingLocal(userId, {
+                id: await generateUUID(),
+                note_id: restored.id,
+                file_path: recording.file_path,
+                duration: recording.duration,
+                transcription: recording.transcription,
+                created_at: new Date().toISOString(),
+            });
+        }
+        await removeTrashEntry(userId, id);
+        return restored.id;
+    // createNote is recreated each render; the latest one is what we want.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId]);
+
+    const deleteFromTrash = useCallback(async (ids?: string[]) => {
+        if (!userId) return 0;
+        return purgeTrash(userId, ids ? { ids } : {});
+    }, [userId]);
+
+    // Expired trash goes away on its own.
+    useEffect(() => {
+        if (!userId) return;
+        void purgeTrash(userId, { olderThanDays: TRASH_RETENTION_DAYS }).catch(() => undefined);
+    }, [userId]);
+
     const deleteNote = async (id: string) => {
         if (!userId) return;
         setLoading(true);
@@ -658,25 +753,7 @@ export const useNotes = () => {
                 return;
             }
 
-            const audioPaths = new Set<string>();
-            if (typeof existing.audio_file_path === 'string' && existing.audio_file_path.length > 0) {
-                audioPaths.add(existing.audio_file_path);
-            }
-            const recordings = await getVoiceRecordingsLocal(userId, id);
-            for (const recording of recordings) {
-                if (recording.file_path) {
-                    audioPaths.add(recording.file_path);
-                }
-                await deleteVoiceRecordingLocal(userId, recording.id);
-            }
-            for (const path of audioPaths) {
-                try {
-                    // Critical: note deletion must physically remove local audio blobs.
-                    await AudioService.deleteAudioFile(path);
-                } catch (audioError) {
-                    console.warn('[useNotes] Failed to delete note audio file', path, audioError);
-                }
-            }
+            await moveToTrash(existing);
 
             const marked: Note = {
                 ...existing,
@@ -1017,25 +1094,7 @@ export const useNotes = () => {
                 for (const id of ids) {
                     const existing = notesRef.current.find(n => n.id === id) || allNotesRef.current.find(n => n.id === id);
                     if (existing) {
-                        const audioPaths = new Set<string>();
-                        if (typeof existing.audio_file_path === 'string' && existing.audio_file_path.length > 0) {
-                            audioPaths.add(existing.audio_file_path);
-                        }
-                        const recordings = await getVoiceRecordingsLocal(userId, id);
-                        for (const recording of recordings) {
-                            if (recording.file_path) {
-                                audioPaths.add(recording.file_path);
-                            }
-                            await deleteVoiceRecordingLocal(userId, recording.id);
-                        }
-                        for (const path of audioPaths) {
-                            try {
-                                // Critical: batch delete must also purge on-disk audio.
-                                await AudioService.deleteAudioFile(path);
-                            } catch (audioError) {
-                                console.warn('[useNotes] Failed to delete note audio file', path, audioError);
-                            }
-                        }
+                        await moveToTrash(existing);
 
                         const marked: Note = {
                             ...existing,
@@ -1211,6 +1270,9 @@ export const useNotes = () => {
         createNote,
         updateNote,
         deleteNote,
+        listTrash,
+        restoreFromTrash,
+        deleteFromTrash,
         searchNotes,
         getAllNotes,
         lockedCount,

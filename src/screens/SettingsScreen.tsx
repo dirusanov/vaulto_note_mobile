@@ -1295,6 +1295,26 @@ export const SettingsScreen = () => {
                     </View>
                 </View>
 
+                {/* Your data: trash, export, import */}
+                <View style={styles.card}>
+                    <Text style={styles.dataCardTitle}>{t('data.title', 'Your data')}</Text>
+                    <TouchableOpacity
+                        style={styles.preferenceRow}
+                        activeOpacity={0.85}
+                        onPress={() => navigation.navigate('Trash')}
+                        accessibilityRole="button"
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons name="delete-outline" size={24} color={colors.textSecondary} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>{t('trash.title', 'Trash')}</Text>
+                                <Text style={styles.preferenceDescription}>{t('trash.rowDesc', 'Deleted notes, kept for 30 days')}</Text>
+                            </View>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
+                    </TouchableOpacity>
+                </View>
+
                 {/* Cloud Sync */}
                 {/* Guests have nothing to sync yet; the account card above offers sign-in. */}
                 {!isGuestOrAnonymous && (
@@ -2938,6 +2958,14 @@ const styles = createStyles(() => ({
     preferenceDescription: {
         ...typography.caption,
         color: colors.textSecondary,
+    },
+    dataCardTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: spacing.s,
     },
     themeDivider: {
         height: 1,

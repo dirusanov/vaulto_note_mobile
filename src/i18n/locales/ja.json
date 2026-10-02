@@ -58,7 +58,7 @@
     "noSearchResults": "一致するノートはありません",
     "keptLockedTitle": "この端末に残っているアカウントのノート：{{count}}",
     "keptLockedText": "暗号化されています。開くにはアカウントにサインインしてください。",
-    "deletedCount": "削除したノート：{{count}}",
+    "deletedCount": "ゴミ箱に移動：{{count}}",
     "offlineSync": "オフラインです。変更は保存され、後で同期されます。",
     "offline": "オフラインです。ノートと端末上の機能はそのまま使えます。"
   },
@@ -546,6 +546,13 @@
       "add": "追加",
       "transcribe": "文字起こし",
       "view": "表示"
+    },
+    "toast": {
+      "audioMissing": "この端末に録音ファイルがありません",
+      "transcriptInserted": "テキストをノートに追加しました",
+      "transcriptExists": "このテキストはすでにノートにあります",
+      "playerExists": "録音はすでにノートにあります",
+      "playerInserted": "録音をノートに追加しました"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "まだ録音はありません。",
     "promptIcon": "アイコン",
     "promptHelper": "ノートの本文を入れたい場所に {text} と書いてください。"
+  },
+  "trash": {
+    "title": "ゴミ箱",
+    "subtitle": "削除したノートは {{days}} 日間保存され、その後消去されます。",
+    "empty": "ゴミ箱は空です",
+    "restore": "元に戻す",
+    "deleteForever": "完全に削除",
+    "deleteForeverTitle": "完全に削除しますか？",
+    "deleteForeverText": "ノートと録音が消去されます。元に戻せません。",
+    "emptyAll": "ゴミ箱を空にする",
+    "emptyConfirmTitle": "ゴミ箱を空にしますか？",
+    "emptyConfirmText": "ゴミ箱内のすべてのノートと録音が消去されます。元に戻せません。",
+    "deletedOn": "{{date}} に削除",
+    "daysLeft": "残り {{count}} 日",
+    "restored": "ノートを元に戻しました",
+    "open": "開く",
+    "rowDesc": "削除したノート（30 日間保存）",
+    "deleteHint": "ノートはゴミ箱に 30 日間保存されます。"
+  },
+  "data": {
+    "title": "あなたのデータ"
   }
 }

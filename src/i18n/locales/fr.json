@@ -58,7 +58,7 @@
     "noSearchResults": "Aucune note ne correspond à votre recherche",
     "keptLockedTitle": "Notes du compte conservées sur ce téléphone : {{count}}",
     "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir.",
-    "deletedCount": "Notes supprimées : {{count}}",
+    "deletedCount": "Placées dans la corbeille : {{count}}",
     "offlineSync": "Hors ligne. Les modifications sont enregistrées et seront synchronisées plus tard.",
     "offline": "Hors ligne. Les notes et les fonctions sur le téléphone restent disponibles."
   },
@@ -546,6 +546,13 @@
       "add": "Ajouter",
       "transcribe": "Transcrire",
       "view": "Voir"
+    },
+    "toast": {
+      "audioMissing": "Le fichier de l’enregistrement est absent de ce téléphone",
+      "transcriptInserted": "Texte ajouté à la note",
+      "transcriptExists": "Ce texte est déjà dans la note",
+      "playerExists": "L’enregistrement est déjà dans la note",
+      "playerInserted": "Enregistrement ajouté à la note"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "Aucun enregistrement pour l’instant.",
     "promptIcon": "Icône",
     "promptHelper": "Écrivez {text} là où le texte de la note doit aller."
+  },
+  "trash": {
+    "title": "Corbeille",
+    "subtitle": "Les notes supprimées sont conservées {{days}} jours, puis effacées.",
+    "empty": "La corbeille est vide",
+    "restore": "Restaurer",
+    "deleteForever": "Supprimer définitivement",
+    "deleteForeverTitle": "Supprimer définitivement ?",
+    "deleteForeverText": "La note et ses enregistrements seront effacés. Action irréversible.",
+    "emptyAll": "Vider la corbeille",
+    "emptyConfirmTitle": "Vider la corbeille ?",
+    "emptyConfirmText": "Toutes les notes de la corbeille et leurs enregistrements seront effacés. Action irréversible.",
+    "deletedOn": "Supprimée le {{date}}",
+    "daysLeft": "encore {{count}} jours",
+    "restored": "Note restaurée",
+    "open": "Ouvrir",
+    "rowDesc": "Notes supprimées, conservées 30 jours",
+    "deleteHint": "La note restera dans la corbeille 30 jours."
+  },
+  "data": {
+    "title": "Vos données"
   }
 }

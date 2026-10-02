@@ -1,6 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { Note, NoteImprovement, NotePrivacy, StorageScope } from '../api/notes';
 import { useNotes, NoteAudio } from '../hooks/useNotes';
+import type { TrashEntry } from '../services/DatabaseService';
 
 interface NotesContextType {
     notes: Note[];
@@ -20,6 +21,12 @@ interface NotesContextType {
     }) => Promise<Note>;
     updateNote: (id: string, updates: Partial<Note> & { audio?: NoteAudio | null }) => Promise<Note>;
     deleteNote: (id: string) => Promise<void>;
+    /** Deleted notes kept for 30 days, newest first. */
+    listTrash: () => Promise<TrashEntry[]>;
+    /** Recreates a trashed note; returns its new id. */
+    restoreFromTrash: (id: string) => Promise<string | null>;
+    /** Deletes trashed notes for good (all when no ids are given). */
+    deleteFromTrash: (ids?: string[]) => Promise<number>;
     searchNotes: (query: string) => Promise<void>;
     getAllNotes: () => Note[];
     lockedCount: number;

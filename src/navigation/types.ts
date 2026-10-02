@@ -13,5 +13,6 @@ export type RootStackParamList = {
         sharedText?: string;
     };
     Settings: undefined;
+    Trash: undefined;
     AskNotes: { question?: string } | undefined;
 };

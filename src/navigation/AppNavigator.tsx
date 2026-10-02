@@ -13,6 +13,7 @@ import { EmailVerificationScreen } from '../screens/EmailVerificationScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
 import { LegalAcceptanceScreen } from '../screens/LegalAcceptanceScreen';
+import { TrashScreen } from '../screens/TrashScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -85,6 +86,11 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                 options={{
                     headerShown: false,
                 }}
+            />
+            <Stack.Screen
+                name="Trash"
+                component={TrashScreen}
+                options={{ headerShown: false }}
             />
             <Stack.Screen
                 name="AskNotes"

@@ -58,7 +58,7 @@
     "noSearchResults": "没有匹配的笔记",
     "keptLockedTitle": "保留在这部手机上的账户笔记：{{count}}",
     "keptLockedText": "它们已加密。登录账户即可打开。",
-    "deletedCount": "已删除笔记：{{count}}",
+    "deletedCount": "已移到回收站：{{count}}",
     "offlineSync": "离线。更改已保存，稍后会同步。",
     "offline": "离线。笔记和手机上的功能仍可使用。"
   },
@@ -546,6 +546,13 @@
       "add": "插入",
       "transcribe": "转文字",
       "view": "查看"
+    },
+    "toast": {
+      "audioMissing": "此手机上找不到录音文件",
+      "transcriptInserted": "文字已添加到笔记",
+      "transcriptExists": "这段文字已在笔记中",
+      "playerExists": "录音已在笔记中",
+      "playerInserted": "录音已添加到笔记"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "还没有录音。",
     "promptIcon": "图标",
     "promptHelper": "在需要插入笔记文字的位置写 {text}。"
+  },
+  "trash": {
+    "title": "回收站",
+    "subtitle": "已删除的笔记保留 {{days}} 天，之后永久删除。",
+    "empty": "回收站是空的",
+    "restore": "恢复",
+    "deleteForever": "永久删除",
+    "deleteForeverTitle": "永久删除？",
+    "deleteForeverText": "笔记及其录音将被删除，且无法撤销。",
+    "emptyAll": "清空回收站",
+    "emptyConfirmTitle": "清空回收站？",
+    "emptyConfirmText": "回收站中的所有笔记及录音将被删除，且无法撤销。",
+    "deletedOn": "删除于 {{date}}",
+    "daysLeft": "还剩 {{count}} 天",
+    "restored": "笔记已恢复",
+    "open": "打开",
+    "rowDesc": "已删除的笔记，保留 30 天",
+    "deleteHint": "笔记将在回收站保留 30 天。"
+  },
+  "data": {
+    "title": "你的数据"
   }
 }

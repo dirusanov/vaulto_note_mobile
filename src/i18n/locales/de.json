@@ -58,7 +58,7 @@
     "noSearchResults": "Keine Notizen passen zu deiner Suche",
     "keptLockedTitle": "Konto-Notizen auf diesem Telefon behalten: {{count}}",
     "keptLockedText": "Sie sind verschlüsselt. Melde dich an, um sie zu öffnen.",
-    "deletedCount": "Notizen gelöscht: {{count}}",
+    "deletedCount": "In den Papierkorb verschoben: {{count}}",
     "offlineSync": "Offline. Änderungen werden gespeichert und später synchronisiert.",
     "offline": "Offline. Notizen und Funktionen auf dem Telefon funktionieren weiter."
   },
@@ -546,6 +546,13 @@
       "add": "Einfügen",
       "transcribe": "Transkribieren",
       "view": "Ansehen"
+    },
+    "toast": {
+      "audioMissing": "Die Aufnahmedatei fehlt auf diesem Telefon",
+      "transcriptInserted": "Text zur Notiz hinzugefügt",
+      "transcriptExists": "Dieser Text ist schon in der Notiz",
+      "playerExists": "Die Aufnahme ist schon in der Notiz",
+      "playerInserted": "Aufnahme zur Notiz hinzugefügt"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "Noch keine Aufnahmen.",
     "promptIcon": "Symbol",
     "promptHelper": "Schreibe {text} dort, wo der Notiztext stehen soll."
+  },
+  "trash": {
+    "title": "Papierkorb",
+    "subtitle": "Gelöschte Notizen bleiben {{days}} Tage, dann werden sie entfernt.",
+    "empty": "Der Papierkorb ist leer",
+    "restore": "Wiederherstellen",
+    "deleteForever": "Endgültig löschen",
+    "deleteForeverTitle": "Endgültig löschen?",
+    "deleteForeverText": "Die Notiz und ihre Aufnahmen werden entfernt. Das lässt sich nicht rückgängig machen.",
+    "emptyAll": "Papierkorb leeren",
+    "emptyConfirmTitle": "Papierkorb leeren?",
+    "emptyConfirmText": "Alle Notizen im Papierkorb und ihre Aufnahmen werden entfernt. Das lässt sich nicht rückgängig machen.",
+    "deletedOn": "Gelöscht am {{date}}",
+    "daysLeft": "noch {{count}} Tage",
+    "restored": "Notiz wiederhergestellt",
+    "open": "Öffnen",
+    "rowDesc": "Gelöschte Notizen, 30 Tage aufbewahrt",
+    "deleteHint": "Die Notiz bleibt 30 Tage im Papierkorb."
+  },
+  "data": {
+    "title": "Deine Daten"
   }
 }

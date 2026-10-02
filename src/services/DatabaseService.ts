@@ -141,6 +141,17 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
         );
     `);
 
+    // Deleted notes kept for 30 days. The note itself is encrypted into `payload`
+    // like note content, so the trash leaks nothing the notes table would not.
+    await database.runAsync(`
+        CREATE TABLE IF NOT EXISTS trash (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            deleted_at TEXT NOT NULL
+        );
+    `);
+    await database.runAsync('CREATE INDEX IF NOT EXISTS idx_trash_user ON trash(user_id, deleted_at);');
     await database.runAsync('CREATE INDEX IF NOT EXISTS idx_note_improvements_note_id ON note_improvements(note_id);');
     await database.runAsync('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);');
 
@@ -1220,7 +1231,11 @@ export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRe
     } catch (e) {}
 };
 
-export const deleteVoiceRecordingLocal = async (userId: string, id: string): Promise<void> => {
+export const deleteVoiceRecordingLocal = async (
+    userId: string,
+    id: string,
+    options: { keepFile?: boolean } = {},
+): Promise<void> => {
     if (Platform.OS === 'web') return;
     try {
         const paths = await withDbRetry('delete voice', async (database) => {
@@ -1228,7 +1243,10 @@ export const deleteVoiceRecordingLocal = async (userId: string, id: string): Pro
             await database.runAsync('DELETE FROM voice_recordings WHERE id = ? AND user_id = ?', [id, userId]);
             return rows.map(r => r.file_path);
         });
-        await purgeAudioFiles(paths, 'delete voice');
+        // The trash keeps the file until it is purged.
+        if (!options.keepFile) {
+            await purgeAudioFiles(paths, 'delete voice');
+        }
     } catch (e) {}
 };
 
@@ -1310,3 +1328,98 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
         ));
     } catch (e) {}
 };
+
+// ─── Trash ──────────────────────────────────────────────────────────────────
+
+export const TRASH_RETENTION_DAYS = 30;
+
+export interface TrashedRecording {
+    file_path: string;
+    duration: number;
+    transcription?: string;
+}
+
+export interface TrashEntry {
+    id: string;
+    title: string;
+    content: string;
+    is_protected?: boolean;
+    storage_scope?: string;
+    privacy?: string;
+    audio_file_path?: string | null;
+    audio_duration?: number | null;
+    recordings: TrashedRecording[];
+    deleted_at: string;
+}
+
+const trashAudioPaths = (entry: TrashEntry): string[] => getUniqueAudioPaths([
+    entry.audio_file_path,
+    ...entry.recordings.map((recording) => recording.file_path),
+]);
+
+export const saveTrashEntry = async (userId: string, entry: TrashEntry): Promise<void> => {
+    if (!userId || Platform.OS === 'web') return;
+    const payload = await encrypt(JSON.stringify(entry));
+    await withDbRetry('save trash entry', (database) => database.runAsync(
+        'INSERT OR REPLACE INTO trash (id, user_id, payload, deleted_at) VALUES (?, ?, ?, ?)',
+        [entry.id, userId, payload, entry.deleted_at],
+    ));
+};
+
+/** Newest first. Entries that no longer decrypt (e.g. after an encryption reset) are skipped. */
+export const getTrashEntries = async (userId: string): Promise<TrashEntry[]> => {
+    if (!userId || Platform.OS === 'web') return [];
+    const rows = await withDbRetry('read trash', (database) => database.getAllAsync<{ payload: string }>(
+        'SELECT payload FROM trash WHERE user_id = ? ORDER BY deleted_at DESC',
+        [userId],
+    ));
+    const entries: TrashEntry[] = [];
+    for (const row of rows) {
+        try {
+            entries.push(JSON.parse(await decrypt(row.payload)) as TrashEntry);
+        } catch {
+            // Unreadable with the current key: it will be purged when it expires.
+        }
+    }
+    return entries;
+};
+
+/** Removes the entry; its audio files stay (a restored note now owns them). */
+export const removeTrashEntry = async (userId: string, id: string): Promise<void> => {
+    if (!userId || Platform.OS === 'web') return;
+    await withDbRetry('remove trash entry', (database) => database.runAsync(
+        'DELETE FROM trash WHERE id = ? AND user_id = ?', [id, userId],
+    ));
+};
+
+/**
+ * Deletes entries for good, with their audio files: all of them, the given
+ * ids, or those older than the retention period.
+ */
+export const purgeTrash = async (
+    userId: string,
+    options: { ids?: string[]; olderThanDays?: number } = {},
+): Promise<number> => {
+    if (!userId || Platform.OS === 'web') return 0;
+    const entries = await getTrashEntries(userId);
+    const cutoff = options.olderThanDays !== undefined
+        ? Date.now() - options.olderThanDays * 24 * 60 * 60 * 1000
+        : null;
+    const doomed = entries.filter((entry) => (
+        (options.ids ? options.ids.includes(entry.id) : true)
+        && (cutoff === null || new Date(entry.deleted_at).getTime() < cutoff)
+    ));
+    for (const entry of doomed) {
+        await purgeAudioFiles(trashAudioPaths(entry), 'trash');
+        await removeTrashEntry(userId, entry.id);
+    }
+    if (cutoff !== null) {
+        // Rows that no longer decrypt never appear above; drop them once expired.
+        await withDbRetry('purge unreadable trash', (database) => database.runAsync(
+            'DELETE FROM trash WHERE user_id = ? AND deleted_at < ?',
+            [userId, new Date(cutoff).toISOString()],
+        ));
+    }
+    return doomed.length;
+};
+

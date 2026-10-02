@@ -58,7 +58,7 @@
     "noSearchResults": "Nenhuma nota corresponde à sua pesquisa",
     "keptLockedTitle": "Notas da conta mantidas neste telefone: {{count}}",
     "keptLockedText": "Estão criptografadas. Entre na conta para abri-las.",
-    "deletedCount": "Notas excluídas: {{count}}",
+    "deletedCount": "Movidas para a lixeira: {{count}}",
     "offlineSync": "Sem conexão. As alterações são salvas e serão sincronizadas depois.",
     "offline": "Sem conexão. As notas e os recursos no telefone continuam funcionando."
   },
@@ -546,6 +546,13 @@
       "add": "Inserir",
       "transcribe": "Transcrever",
       "view": "Ver"
+    },
+    "toast": {
+      "audioMissing": "O arquivo da gravação não está neste telefone",
+      "transcriptInserted": "Texto adicionado à nota",
+      "transcriptExists": "Este texto já está na nota",
+      "playerExists": "A gravação já está na nota",
+      "playerInserted": "Gravação adicionada à nota"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "Ainda não há gravações.",
     "promptIcon": "Ícone",
     "promptHelper": "Escreva {text} onde o texto da nota deve entrar."
+  },
+  "trash": {
+    "title": "Lixeira",
+    "subtitle": "Notas excluídas ficam {{days}} dias e depois são apagadas.",
+    "empty": "A lixeira está vazia",
+    "restore": "Restaurar",
+    "deleteForever": "Excluir de vez",
+    "deleteForeverTitle": "Excluir de vez?",
+    "deleteForeverText": "A nota e suas gravações serão apagadas. Não dá para desfazer.",
+    "emptyAll": "Esvaziar lixeira",
+    "emptyConfirmTitle": "Esvaziar a lixeira?",
+    "emptyConfirmText": "Todas as notas da lixeira e suas gravações serão apagadas. Não dá para desfazer.",
+    "deletedOn": "Excluída em {{date}}",
+    "daysLeft": "faltam {{count}} dias",
+    "restored": "Nota restaurada",
+    "open": "Abrir",
+    "rowDesc": "Notas excluídas, guardadas por 30 dias",
+    "deleteHint": "A nota ficará na lixeira por 30 dias."
+  },
+  "data": {
+    "title": "Seus dados"
   }
 }

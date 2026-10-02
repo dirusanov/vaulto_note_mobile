@@ -1083,9 +1083,11 @@ export const NoteEditScreen = () => {
     // Toast State
     const toastOpacity = useRef(new Animated.Value(0)).current;
     const [toastMessage, setToastMessage] = useState('');
+    const [toastIsError, setToastIsError] = useState(false);
 
-    const showToast = (message: string, duration = 2000) => {
+    const showToast = (message: string, duration = 2000, isError = false) => {
         setToastMessage(message);
+        setToastIsError(isError);
         // Reset opacity in case another toast is running
         toastOpacity.setValue(0);
 
@@ -2952,7 +2954,7 @@ export const NoteEditScreen = () => {
         } catch (error: any) {
             if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
                 console.log('[Audio] File not found (deleted?):', path);
-                showToast('Audio file not found');
+                showToast(t('edit.toast.audioMissing', 'The recording file is missing on this phone'), 3000, true);
             } else {
                 console.error('Failed to load audio:', error);
             }
@@ -3343,19 +3345,19 @@ export const NoteEditScreen = () => {
                 setReparseTrigger(prev => prev + 1);
                 setIsEditing(true);
                 closeRecordingsList();
-                showToast('Transcript inserted');
+                showToast(t('edit.toast.transcriptInserted', 'Text added to the note'));
                 return;
             }
 
             closeRecordingsList();
-            showToast('Transcript already in note');
+            showToast(t('edit.toast.transcriptExists', 'This text is already in the note'));
             return;
         }
 
         const currentVariantContent = resolveVariantContent(activeVariantIdRef.current);
         if (extractEmbeddedAudioPaths(currentVariantContent).includes(targetPath)) {
             closeRecordingsList();
-            showToast('Player already inserted');
+            showToast(t('edit.toast.playerExists', 'The recording is already in the note'));
             return;
         }
 
@@ -3367,7 +3369,7 @@ export const NoteEditScreen = () => {
             });
             setIsEditing(true);
             closeRecordingsList();
-            showToast('Player inserted');
+            showToast(t('edit.toast.playerInserted', 'Recording added to the note'));
             return;
         }
 
@@ -3391,7 +3393,7 @@ export const NoteEditScreen = () => {
         if (changed) {
             setIsEditing(true);
             closeRecordingsList();
-            showToast('Player inserted');
+            showToast(t('edit.toast.playerInserted', 'Recording added to the note'));
             return;
         }
 
@@ -6859,7 +6861,7 @@ export const NoteEditScreen = () => {
             {/* Custom Toast */}
             <Animated.View style={[styles.toastContainer, { opacity: toastOpacity }]} pointerEvents="none">
                 <View style={styles.toastContent}>
-                    <MaterialIcons name="check-circle" size={20} color={colors.background} style={{ marginRight: 8 }} />
+                    <MaterialIcons name={toastIsError ? 'error-outline' : 'check-circle'} size={20} color={colors.background} style={{ marginRight: 8 }} />
                     <Text style={styles.toastText}>{toastMessage}</Text>
                 </View>
             </Animated.View>
@@ -7070,7 +7072,7 @@ export const NoteEditScreen = () => {
             <DeleteConfirmationDialog
                 visible={isDeletingNote}
                 title={t('edit.deleteNote', 'Delete Note')}
-                message={t('edit.deleteNoteDesc', 'Are you sure you want to delete this note?')}
+                message={t('trash.deleteHint', 'The note stays in the trash for 30 days.')}
                 onCancel={() => setIsDeletingNote(false)}
                 onConfirm={confirmDeleteNote}
             />

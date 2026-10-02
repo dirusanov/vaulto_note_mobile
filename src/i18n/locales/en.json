@@ -58,7 +58,7 @@
     "noSearchResults": "No notes match your search",
     "keptLockedTitle": "Account notes kept on this phone: {{count}}",
     "keptLockedText": "They are encrypted. Sign in to your account to open them.",
-    "deletedCount": "Notes deleted: {{count}}",
+    "deletedCount": "Moved to trash: {{count}}",
     "offlineSync": "Offline. Changes are saved and will sync later.",
     "offline": "Offline. Notes and on-device features still work."
   },
@@ -546,6 +546,13 @@
       "add": "Add",
       "transcribe": "Transcribe",
       "view": "View"
+    },
+    "toast": {
+      "audioMissing": "The recording file is missing on this phone",
+      "transcriptInserted": "Text added to the note",
+      "transcriptExists": "This text is already in the note",
+      "playerExists": "The recording is already in the note",
+      "playerInserted": "Recording added to the note"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "No recordings yet.",
     "promptIcon": "Icon",
     "promptHelper": "Write {text} where the note text should go."
+  },
+  "trash": {
+    "title": "Trash",
+    "subtitle": "Deleted notes are kept for {{days}} days, then erased.",
+    "empty": "The trash is empty",
+    "restore": "Restore",
+    "deleteForever": "Delete for good",
+    "deleteForeverTitle": "Delete for good?",
+    "deleteForeverText": "The note and its recordings will be erased. This cannot be undone.",
+    "emptyAll": "Empty trash",
+    "emptyConfirmTitle": "Empty the trash?",
+    "emptyConfirmText": "All notes in the trash and their recordings will be erased. This cannot be undone.",
+    "deletedOn": "Deleted {{date}}",
+    "daysLeft": "{{count}} days left",
+    "restored": "Note restored",
+    "open": "Open",
+    "rowDesc": "Deleted notes, kept for 30 days",
+    "deleteHint": "The note stays in the trash for 30 days."
+  },
+  "data": {
+    "title": "Your data"
   }
 }

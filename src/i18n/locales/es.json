@@ -58,7 +58,7 @@
     "noSearchResults": "Ninguna nota coincide con la búsqueda",
     "keptLockedTitle": "Notas de la cuenta guardadas en este teléfono: {{count}}",
     "keptLockedText": "Están cifradas. Inicia sesión para abrirlas.",
-    "deletedCount": "Notas eliminadas: {{count}}",
+    "deletedCount": "Movidas a la papelera: {{count}}",
     "offlineSync": "Sin conexión. Los cambios se guardan y se sincronizarán después.",
     "offline": "Sin conexión. Las notas y las funciones en el teléfono siguen funcionando."
   },
@@ -546,6 +546,13 @@
       "add": "Añadir",
       "transcribe": "Transcribir",
       "view": "Ver"
+    },
+    "toast": {
+      "audioMissing": "El archivo de la grabación no está en este teléfono",
+      "transcriptInserted": "Texto añadido a la nota",
+      "transcriptExists": "Este texto ya está en la nota",
+      "playerExists": "La grabación ya está en la nota",
+      "playerInserted": "Grabación añadida a la nota"
     }
   },
   "voice": {
@@ -848,5 +855,26 @@
     "recordingsEmpty": "Aún no hay grabaciones.",
     "promptIcon": "Icono",
     "promptHelper": "Escribe {text} donde debe ir el texto de la nota."
+  },
+  "trash": {
+    "title": "Papelera",
+    "subtitle": "Las notas eliminadas se guardan {{days}} días y luego se borran.",
+    "empty": "La papelera está vacía",
+    "restore": "Restaurar",
+    "deleteForever": "Eliminar definitivamente",
+    "deleteForeverTitle": "¿Eliminar definitivamente?",
+    "deleteForeverText": "La nota y sus grabaciones se borrarán. No se puede deshacer.",
+    "emptyAll": "Vaciar papelera",
+    "emptyConfirmTitle": "¿Vaciar la papelera?",
+    "emptyConfirmText": "Todas las notas de la papelera y sus grabaciones se borrarán. No se puede deshacer.",
+    "deletedOn": "Eliminada el {{date}}",
+    "daysLeft": "quedan {{count}} días",
+    "restored": "Nota restaurada",
+    "open": "Abrir",
+    "rowDesc": "Notas eliminadas, se guardan 30 días",
+    "deleteHint": "La nota se quedará en la papelera 30 días."
+  },
+  "data": {
+    "title": "Tus datos"
   }
 }

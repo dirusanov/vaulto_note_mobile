@@ -9,10 +9,12 @@ import { createStyles } from '../theme/createStyles';
 interface UndoSnackbarProps {
     message: string | null;
     onUndo: () => void;
+    /** Button text; "Undo" by default. */
+    actionLabel?: string;
 }
 
 /** Bottom bar offering to take back an action that was applied immediately. */
-export const UndoSnackbar = ({ message, onUndo }: UndoSnackbarProps) => {
+export const UndoSnackbar = ({ message, onUndo, actionLabel }: UndoSnackbarProps) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     if (!message) return null;
@@ -26,7 +28,7 @@ export const UndoSnackbar = ({ message, onUndo }: UndoSnackbarProps) => {
             <View style={styles.bar}>
                 <Text style={styles.message} numberOfLines={2}>{message}</Text>
                 <TouchableOpacity onPress={onUndo} style={styles.undoButton} accessibilityRole="button">
-                    <Text style={styles.undo}>{t('edit.versions.undo', 'Undo')}</Text>
+                    <Text style={styles.undo}>{actionLabel || t('edit.versions.undo', 'Undo')}</Text>
                 </TouchableOpacity>
             </View>
         </View>
