@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.87] - 2026-10-02
+
+### Fixed
+- On-device transcripts no longer contain Whisper sound captions such as "[Birds chirping]" (brackets inside speech are kept).
+- Unencrypted recorder leftovers (interrupted recordings, meeting joins, shared audio) older than a day are deleted from the cache on start.
+
+Verified on a release (R8) build: widget record/write/ask and Share to Vaulto from a cold start; meeting chip lock, pause across a part switch, joining parts and cancel without leftovers.
+
 ## [1.0.86] - 2026-10-02
 
 ### Fixed
