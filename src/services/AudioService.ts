@@ -8,17 +8,26 @@ import {
     type RecordingOptions,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import { encrypt, decrypt } from '../crypto/encryption';
 
 export const MAX_RECORDING_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 
 
+/** A meeting may run up to an hour; it is recorded in short segments (see rollSegment). */
+export const MAX_MEETING_DURATION_MS = 60 * 60 * 1000;
+/** Each meeting segment stays well under what one transcription request handles. */
+export const MEETING_SEGMENT_MS = 4.5 * 60 * 1000;
+
 export interface AudioRecording {
     uri: string;
     duration: number; // in seconds
     mimeType: string;
+    /** Meeting mode: the recording is a meeting; transcribe per segment, then summarise. */
+    meeting?: boolean;
+    /** Meeting mode: the short files `uri` was joined from, in order (for transcription). */
+    segments?: string[];
 }
 
 /**
@@ -139,7 +148,15 @@ class AudioServiceClass {
     /**
      * Start recording audio
      */
-    async startRecording(onMeteringUpdate?: (level: number) => void): Promise<void> {
+    private lastMeteringCallback?: (level: number) => void;
+    private lastRecordingMode: 'note' | 'meeting' = 'note';
+
+    async startRecording(
+        onMeteringUpdate?: (level: number) => void,
+        mode: 'note' | 'meeting' = 'note',
+    ): Promise<void> {
+        this.lastMeteringCallback = onMeteringUpdate;
+        this.lastRecordingMode = mode;
         if (Platform.OS === 'web') {
             alert('Audio recording is not supported in the browser. Please use the mobile app.');
             return;
@@ -160,10 +177,20 @@ class AudioServiceClass {
             console.log('[V3] Creating audio recording...');
 
             // AAC/m4a, 44.1 kHz stereo @ 128 kbps – identical to the HIGH_QUALITY preset
-            const recordingOptions: RecordingOptions = {
-                ...RecordingPresets.HIGH_QUALITY,
-                isMeteringEnabled: true,
-            };
+            // Meetings: mono 64 kbps keeps an hour near 30 MB (speech loses nothing).
+            const recordingOptions: RecordingOptions = mode === 'meeting'
+                ? {
+                    ...RecordingPresets.HIGH_QUALITY,
+                    numberOfChannels: 1,
+                    bitRate: 64000,
+                    android: { ...RecordingPresets.HIGH_QUALITY.android, numberOfChannels: 1, bitRate: 64000 } as any,
+                    ios: { ...RecordingPresets.HIGH_QUALITY.ios, numberOfChannels: 1, bitRate: 64000 } as any,
+                    isMeteringEnabled: true,
+                }
+                : {
+                    ...RecordingPresets.HIGH_QUALITY,
+                    isMeteringEnabled: true,
+                };
 
             // Ensure any existing recording is released before creating a new one
             if (this.recording) {
@@ -239,6 +266,36 @@ class AudioServiceClass {
     /**
      * Pause recording
      */
+    /**
+     * Meeting mode: closes the current segment and continues recording into a
+     * new one with the same settings; returns the finished segment's file.
+     * The gap is a few milliseconds.
+     */
+    async rollSegment(): Promise<string | null> {
+        if (!this.recording) return null;
+        const recorder = this.recording;
+        this.stopMetering();
+        await recorder.stop();
+        const uri = recorder.uri;
+        recorder.release();
+        this.recording = null;
+        const startedAt = this.recordingStartTime;
+        await this.startRecording(this.lastMeteringCallback, this.lastRecordingMode);
+        // The caller tracks the total length; keep the original start for it.
+        this.recordingStartTime = startedAt;
+        return uri ?? null;
+    }
+
+    /** Joins meeting segments into one .m4a (Android); returns the first file elsewhere. */
+    async concatSegments(uris: string[]): Promise<string> {
+        if (uris.length === 1) return uris[0];
+        const native = NativeModules.AudioConcat as { concatM4a?: (uris: string[]) => Promise<string> } | undefined;
+        if (Platform.OS === 'android' && native?.concatM4a) {
+            return native.concatM4a(uris);
+        }
+        throw new Error('Joining audio segments is not supported on this platform yet');
+    }
+
     async pauseRecording(): Promise<void> {
         if (this.recording) {
             this.recording.pause();

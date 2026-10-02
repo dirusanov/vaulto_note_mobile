@@ -11,7 +11,7 @@ import {
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { AudioService, AudioRecording, MAX_RECORDING_DURATION_MS } from '../services/AudioService';
+import { AudioService, AudioRecording, MAX_RECORDING_DURATION_MS, MAX_MEETING_DURATION_MS, MEETING_SEGMENT_MS } from '../services/AudioService';
 import {
     AIProvider,
     getAIProvider,
@@ -46,6 +46,8 @@ const BAR_COUNT = 20;
 const SILENCE_THRESHOLD_DB = -60;
 const MIN_VOICE_SAMPLES = 3;
 const MAX_RECORDING_DURATION_SECONDS = Math.floor(MAX_RECORDING_DURATION_MS / 1000);
+const MAX_MEETING_DURATION_SECONDS = Math.floor(MAX_MEETING_DURATION_MS / 1000);
+const MEETING_SEGMENT_SECONDS = Math.floor(MEETING_SEGMENT_MS / 1000);
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     visible,
@@ -78,7 +80,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const agentModeToggleTouchedRef = useRef(false);
     const isForceTextMode = micMode === 'force_text';
-    const effectiveAgentEnabled = agentModeEnabled && aiProvider === 'vaulto_ai';
+    // Meeting mode: up to an hour, transcribed as is (no agent), then summarised.
+    const [meetingMode, setMeetingMode] = useState(false);
+    const meetingSegmentsRef = useRef<string[]>([]);
+    const segmentStartRef = useRef(0);
+    const rollingRef = useRef(false);
+    const effectiveAgentEnabled = agentModeEnabled && aiProvider === 'vaulto_ai' && !meetingMode;
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -343,6 +350,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
         let disposed = false;
         const interval = setInterval(() => {
+            // A meeting segment switch briefly has no recorder: not an interruption.
+            if (rollingRef.current) return;
             void (async () => {
                 try {
                     const status = await AudioService.getRecordingStatus();
@@ -387,7 +396,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             !isRecording ||
             isPaused ||
             isStopping ||
-            duration < MAX_RECORDING_DURATION_SECONDS ||
+            duration < (meetingMode ? MAX_MEETING_DURATION_SECONDS : MAX_RECORDING_DURATION_SECONDS) ||
             maxDurationHandledRef.current
         ) {
             return;
@@ -399,7 +408,26 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             t("voice.recordingLimitReachedDesc")
         );
         void handleStopRecording();
-    }, [visible, duration, isRecording, isPaused, isStopping]);
+    }, [visible, duration, isRecording, isPaused, isStopping, meetingMode]);
+
+    // Meeting mode: start a new segment every few minutes so each part can be
+    // transcribed on its own (server and on-device limits), then joined.
+    useEffect(() => {
+        if (!meetingMode || !visible || !isRecording || isPaused || isStopping || rollingRef.current) return;
+        if (duration - segmentStartRef.current < MEETING_SEGMENT_SECONDS) return;
+        rollingRef.current = true;
+        void (async () => {
+            try {
+                const finished = await AudioService.rollSegment();
+                if (finished) meetingSegmentsRef.current.push(finished);
+                segmentStartRef.current = duration;
+            } catch (error) {
+                console.warn('[VoiceRecorder] Could not start the next meeting segment', error);
+            } finally {
+                rollingRef.current = false;
+            }
+        })();
+    }, [meetingMode, visible, isRecording, isPaused, isStopping, duration]);
 
     const formatDuration = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
@@ -419,6 +447,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             voiceSamples.current = 0;
             maxDurationHandledRef.current = false;
             interruptionHandledRef.current = false;
+            meetingSegmentsRef.current = [];
+            segmentStartRef.current = 0;
             const granted = await AudioService.requestPermissions();
             setPermissionSettled(true);
             if (!granted) {
@@ -432,7 +462,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 if (level > SILENCE_THRESHOLD_DB) {
                     voiceSamples.current += 1;
                 }
-            });
+            }, meetingMode ? 'meeting' : 'note');
             setIsRecording(true);
             setIsPaused(false);
             setDuration(0);
@@ -468,9 +498,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         haptics.medium();
         setIsStopping(true);
         try {
-            const recording = await AudioService.stopRecording();
+            while (rollingRef.current) {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            let recording = await AudioService.stopRecording();
             setIsRecording(false);
             setIsPaused(false);
+            if (recording && meetingMode) {
+                const segments = [...meetingSegmentsRef.current, recording.uri];
+                meetingSegmentsRef.current = [];
+                const joined = segments.length > 1 ? await AudioService.concatSegments(segments) : recording.uri;
+                recording = { ...recording, uri: joined, meeting: true, segments };
+            }
             if (!recording) {
                 interruptionHandledRef.current = true;
                 Alert.alert(
@@ -520,6 +559,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             if (isRecording) {
                 await AudioService.cancelRecording();
             }
+            for (const segment of meetingSegmentsRef.current) {
+                await AudioService.deleteAudioFile(segment).catch(() => undefined);
+            }
+            meetingSegmentsRef.current = [];
             setIsRecording(false);
             setIsPaused(false);
             setIsStopping(false);
@@ -542,66 +585,112 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 <View style={styles.container} pointerEvents="box-none">
                     {/* Toggles Row */}
                     <View style={styles.togglesRow}>
-                        <TouchableOpacity
-                            style={[
-                                styles.badgeToggle,
-                                isMainScreen && styles.badgeToggleLarge,
-                                transcribe ? styles.badgeToggleOn : styles.badgeToggleOff,
-                            ]}
-                            onPress={() => handleTranscriptionToggle(!transcribe)}
-                            hitSlop={{ top: 4, bottom: 4 }}
-                            activeOpacity={0.7}
-                            accessibilityRole="switch"
-                            accessibilityLabel={t("common.transcribe", "Transcribe")}
-                            accessibilityState={{ checked: transcribe }}
-                        >
-                            <MaterialIcons
-                                name={transcribe ? 'check' : 'mic'}
-                                size={isMainScreen ? 18 : 14}
-                                color={transcribe ? colors.onPrimary : colors.textSecondary}
-                            />
-                            <Text
+                        {micMode !== 'force_text' && (
+                            <TouchableOpacity
                                 style={[
-                                    styles.badgeLabel,
-                                    isMainScreen && styles.badgeLabelLarge,
-                                    { color: transcribe ? colors.onPrimary : colors.textSecondary },
+                                    styles.badgeToggle,
+                                    isMainScreen && styles.badgeToggleLarge,
+                                    meetingMode ? styles.badgeToggleOn : styles.badgeToggleOff,
                                 ]}
-                                numberOfLines={1}
+                                onPress={() => {
+                                    haptics.selection();
+                                    setMeetingMode((prev) => !prev);
+                                }}
+                                hitSlop={{ top: 4, bottom: 4 }}
+                                activeOpacity={0.7}
+                                accessibilityRole="switch"
+                                accessibilityLabel={t("voice.chipMeeting", "Meeting")}
+                                accessibilityHint={t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")}
+                                accessibilityState={{ checked: meetingMode }}
                             >
-                                {t("voice.chipTranscribe", "To text")}
-                            </Text>
-                        </TouchableOpacity>
+                                <MaterialIcons
+                                    name={meetingMode ? 'check' : 'groups'}
+                                    size={isMainScreen ? 18 : 14}
+                                    color={meetingMode ? colors.onPrimary : colors.textSecondary}
+                                />
+                                <Text
+                                    style={[
+                                        styles.badgeLabel,
+                                        isMainScreen && styles.badgeLabelLarge,
+                                        { color: meetingMode ? colors.onPrimary : colors.textSecondary },
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {t("voice.chipMeeting", "Meeting")}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                            style={[
-                                styles.badgeToggle,
-                                isMainScreen && styles.badgeToggleLarge,
-                                effectiveAgentEnabled ? styles.badgeToggleOn : styles.badgeToggleOff,
-                            ]}
-                            onPress={() => handleAgentModeToggle(!agentModeEnabled)}
-                            hitSlop={{ top: 4, bottom: 4 }}
-                            activeOpacity={0.7}
-                            accessibilityRole="switch"
-                            accessibilityLabel={t("settings.ai.agentMode", "Agent Mode")}
-                            accessibilityState={{ checked: effectiveAgentEnabled }}
-                        >
-                            <MaterialIcons
-                                name={effectiveAgentEnabled ? 'check' : 'smart-toy'}
-                                size={isMainScreen ? 18 : 14}
-                                color={effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary}
-                            />
-                            <Text
+                        {!meetingMode && (
+                            <>
+                            <TouchableOpacity
                                 style={[
-                                    styles.badgeLabel,
-                                    isMainScreen && styles.badgeLabelLarge,
-                                    { color: effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary },
+                                    styles.badgeToggle,
+                                    isMainScreen && styles.badgeToggleLarge,
+                                    transcribe ? styles.badgeToggleOn : styles.badgeToggleOff,
                                 ]}
-                                numberOfLines={1}
+                                onPress={() => handleTranscriptionToggle(!transcribe)}
+                                hitSlop={{ top: 4, bottom: 4 }}
+                                activeOpacity={0.7}
+                                accessibilityRole="switch"
+                                accessibilityLabel={t("common.transcribe", "Transcribe")}
+                                accessibilityState={{ checked: transcribe }}
                             >
-                                {t("voice.chipAgent", "Agent")}
-                            </Text>
-                        </TouchableOpacity>
+                                <MaterialIcons
+                                    name={transcribe ? 'check' : 'mic'}
+                                    size={isMainScreen ? 18 : 14}
+                                    color={transcribe ? colors.onPrimary : colors.textSecondary}
+                                />
+                                <Text
+                                    style={[
+                                        styles.badgeLabel,
+                                        isMainScreen && styles.badgeLabelLarge,
+                                        { color: transcribe ? colors.onPrimary : colors.textSecondary },
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {t("voice.chipTranscribe", "To text")}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.badgeToggle,
+                                    isMainScreen && styles.badgeToggleLarge,
+                                    effectiveAgentEnabled ? styles.badgeToggleOn : styles.badgeToggleOff,
+                                ]}
+                                onPress={() => handleAgentModeToggle(!agentModeEnabled)}
+                                hitSlop={{ top: 4, bottom: 4 }}
+                                activeOpacity={0.7}
+                                accessibilityRole="switch"
+                                accessibilityLabel={t("settings.ai.agentMode", "Agent Mode")}
+                                accessibilityState={{ checked: effectiveAgentEnabled }}
+                            >
+                                <MaterialIcons
+                                    name={effectiveAgentEnabled ? 'check' : 'smart-toy'}
+                                    size={isMainScreen ? 18 : 14}
+                                    color={effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary}
+                                />
+                                <Text
+                                    style={[
+                                        styles.badgeLabel,
+                                        isMainScreen && styles.badgeLabelLarge,
+                                        { color: effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary },
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {t("voice.chipAgent", "Agent")}
+                                </Text>
+                            </TouchableOpacity>
+                            </>
+                        )}
                     </View>
+
+                    {meetingMode && (
+                        <Text style={styles.meetingHint}>
+                            {t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")}
+                        </Text>
+                    )}
 
                     {/* Inline Warning Banner */}
                     {showModelMissingWarning && (
@@ -726,7 +815,6 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
         flexShrink: 1,
-        maxWidth: '48%',
         minHeight: 44,
         paddingHorizontal: 16,
         paddingVertical: 8,
@@ -737,6 +825,13 @@ const styles = createStyles(() => ({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+    },
+    meetingHint: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginTop: -spacing.s,
+        marginBottom: spacing.s,
     },
     badgeToggleOn: {
         backgroundColor: colors.primary,

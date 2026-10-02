@@ -13,6 +13,7 @@ class AudioTranscodePackage : ReactPackage {
             AudioTranscodeModule(reactContext),
             DeviceCapabilitiesModule(reactContext),
             ShareIntentModule(reactContext),
+            AudioConcatModule(reactContext),
         )
     }
 

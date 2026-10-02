@@ -5005,6 +5005,57 @@ export const NoteEditScreen = () => {
     };
 
 
+    /** Meeting: each segment is transcribed on its own, then the texts are joined. */
+    const transcribeMeetingSegments = async (
+        segments: string[],
+        onDeviceOnly: boolean,
+    ): Promise<{ success: boolean; text: string; error?: string }> => {
+        const parts: string[] = [];
+        let lastError: string | undefined;
+        for (let index = 0; index < segments.length; index += 1) {
+            setActiveImprovementTask({
+                id: 'meeting-transcribe',
+                text: t('meeting.transcribing', 'Transcribing the meeting: part {{part}} of {{total}}', { part: index + 1, total: segments.length }),
+                isTranscribing: true,
+            });
+            const result = await transcribeAudio(segments[index], undefined, { onDeviceOnly });
+            if (result.success && result.text.trim()) parts.push(result.text.trim());
+            else lastError = result.error;
+        }
+        setActiveImprovementTask(null);
+        const text = parts.join('\n\n');
+        return text ? { success: true, text } : { success: false, text: '', error: lastError };
+    };
+
+    // Kept in a ref so the recording flow, started from an older render, uses
+    // the current note state when it writes the summary version.
+    const runMeetingSummaryRef = useRef<(transcript: string) => Promise<void>>(async () => undefined);
+    runMeetingSummaryRef.current = async (transcript: string) => {
+        const option = aiOptions.find((item) => item.id === 'meeting')
+            || DEFAULT_IMPROVEMENT_OPTIONS.find((item) => item.id === 'meeting');
+        if (!option || !transcript.trim()) return;
+        const consentGranted = await requestPrivateAIConsent();
+        if (!consentGranted) return;
+        setTrackedIsAIProcessing(true);
+        setActiveImprovementTask({
+            id: 'meeting-summary',
+            text: getLocalizedPresetLabel(option, t) || t('edit.improvePreview.working'),
+            isTranscribing: false,
+        });
+        try {
+            const summary = await generateImprovement(option, transcript);
+            if (summary) {
+                await commitImprovement(option, summary, 'original');
+                haptics.success();
+            }
+        } catch (error: any) {
+            showPrettyQuotaNotification(error, getErrorMessage(error, t('meeting.summaryFailed', 'Could not write the meeting notes. You can run "Meeting notes" from the AI menu later.')));
+        } finally {
+            setTrackedIsAIProcessing(false);
+            setActiveImprovementTask(null);
+        }
+    };
+
     const handleRecordingFinish = async (
         recording: AudioRecording,
         transcribe: boolean = true,
@@ -5026,6 +5077,7 @@ export const NoteEditScreen = () => {
             // The agent runs on the server; offline the transcript is inserted as is.
             const shouldUseAgentModeForThisRecording =
                 !protectedNote && !onDeviceProvider && micMode !== 'force_text'
+                && !recording.meeting
                 && await shouldUseAgentModeGlobally(agentModeEnabled)
                 && !(await isDeviceOffline());
             let shouldTranscribe = transcribe;
@@ -5071,7 +5123,9 @@ export const NoteEditScreen = () => {
                     transcription = { success: false, text: '', error: 'Transcription disabled' };
                 } else {
                     setTrackedIsTranscribing(true);
-                    transcription = await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote });
+                    transcription = recording.meeting && recording.segments && recording.segments.length > 1
+                        ? await transcribeMeetingSegments(recording.segments, protectedNote)
+                        : await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote });
                     if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
                         promptOnDeviceModelForProtected();
                     }
@@ -5155,6 +5209,12 @@ export const NoteEditScreen = () => {
                 recording.uri,
                 true
             );
+            // The joined file is saved; the meeting's segment files are no longer needed.
+            if (recording.segments && recording.segments.length > 1) {
+                for (const segment of recording.segments) {
+                    void AudioService.deleteAudioFile(segment).catch(() => undefined);
+                }
+            }
             const recordingTranscription = transcribedText || undefined;
 
             // Ensure Note Exists (Create if not)
@@ -5282,6 +5342,9 @@ export const NoteEditScreen = () => {
                     // recording. Hold-to-dictate stays text only.
                     if (micMode !== 'force_text') {
                         await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
+                    }
+                    if (recording.meeting) {
+                        void runMeetingSummaryRef.current(transcribedText);
                     }
                     const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
                     setRecordingOutcomeStatus(voiceId, status);
@@ -5675,6 +5738,9 @@ export const NoteEditScreen = () => {
         variantAtRequestStart: string,
     ) => {
         finalText = normalizeModelMarkdownForEditor(finalText);
+        // Switching to the new version replaces the visible text on purpose;
+        // the dictation guard must not read that as lost text.
+        clearTranscribedInsertionExpectation();
         setTrackedIsAIProcessing(true);
         try {
             // Wait for any pending creation to finish
@@ -5682,7 +5748,8 @@ export const NoteEditScreen = () => {
                 await new Promise(r => setTimeout(r, 100));
             }
 
-            let targetNoteId = localNoteId;
+            // The ref: a meeting summary runs right after the note was created.
+            let targetNoteId = localNoteIdRef.current || localNoteId;
             if (!targetNoteId) {
                 const newNote = await createNote({
                     title,
@@ -5713,7 +5780,14 @@ export const NoteEditScreen = () => {
             console.log('[NoteEditScreen] Applying improvement');
 
             // Every accepted result becomes a new version; the source is never overwritten.
-            const improvementTitle = (deriveTitleFromText(finalText) || title || existingNote?.title || '').trim();
+            // Meeting notes start with a "Summary" heading; name them by the
+            // note's own title, or "Meeting · <date>".
+            const meetingTitle = option.id === 'meeting'
+                ? ((title || existingNote?.title || '').trim() || t('meeting.title', 'Meeting · {{date}}', {
+                    date: new Date().toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+                }))
+                : '';
+            const improvementTitle = (meetingTitle || deriveTitleFromText(finalText) || title || existingNote?.title || '').trim();
             const sourceStepLabel = variantAtRequestStart === 'original'
                 ? ''
                 : storedStepLabelOf(noteImprovements.find((imp) => imp.id === variantAtRequestStart), aiOptionsById);

@@ -474,6 +474,10 @@
       "structure": {
         "label": "Strukturieren",
         "description": "Überschriften und Listen für bessere Lesbarkeit hinzufügen"
+      },
+      "meeting": {
+        "label": "Meeting-Protokoll",
+        "description": "Zusammenfassung, Beschlüsse und Aufgaben"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden.",
     "chipTranscribe": "Als Text",
     "chipAgent": "Agent",
-    "savedOffline": "Kein Internet: Die Aufnahme ist gespeichert. Du kannst sie später transkribieren."
+    "savedOffline": "Kein Internet: Die Aufnahme ist gespeichert. Du kannst sie später transkribieren.",
+    "chipMeeting": "Meeting",
+    "meetingHint": "Bis zu 60 Minuten, danach ein Protokoll mit Beschlüssen und Aufgaben"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -917,5 +923,10 @@
     "settingTitle": "Wochenrückblick",
     "settingDesc": "Sonntagabend: was du notiert hast und was noch offen ist",
     "permissionDenied": "Erlaube Benachrichtigungen für Vaulto in den Telefoneinstellungen, um den Rückblick zu bekommen."
+  },
+  "meeting": {
+    "transcribing": "Meeting wird transkribiert: Teil {{part}} von {{total}}",
+    "summaryFailed": "Das Protokoll konnte nicht erstellt werden. Du kannst später „Meeting-Protokoll“ im KI-Menü starten.",
+    "title": "Meeting · {{date}}"
   }
 }

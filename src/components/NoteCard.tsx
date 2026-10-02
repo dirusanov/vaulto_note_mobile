@@ -86,17 +86,10 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const fullPreview = richContentToPreviewText(content);
     // An untitled note's title is its first line; don't print that line twice.
     const hasStoredTitle = !!activeChildTitle || !!note.title?.trim();
-    const [firstPreviewLine, ...restPreviewLines] = fullPreview.split('\n');
-    // An auto title that is only the start of the first line ("Tomorrow at 10…",
-    // or its first sentence) would be repeated by the preview: show just the
-    // text, as Keep does.
-    const firstLineText = (firstPreviewLine || '').trim();
-    const titleStem = (title || '').replace(/…$/, '').trim();
-    const titleIsCutFirstLine = !hasStoredTitle && !!titleStem
-        && firstLineText !== title && firstLineText.startsWith(titleStem);
-    const previewString = !hasStoredTitle && title && firstPreviewLine?.trim() === title
-        ? restPreviewLines.join('\n')
-        : fullPreview;
+    // Untitled notes show their text, as Keep does: a title derived from the
+    // first line would only repeat it.
+    const titleIsCutFirstLine = !hasStoredTitle && !!fullPreview.trim();
+    const previewString = fullPreview;
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -183,7 +176,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         {title || ' '}
                     </Text>
                 )}
-                {(!isEmpty && previewString && previewString !== title) && (
+                {(!isEmpty && previewString && (titleIsCutFirstLine || previewString !== title)) && (
                     <Text
                         style={[
                             styles.preview,

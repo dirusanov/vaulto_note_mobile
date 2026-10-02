@@ -474,6 +474,10 @@
       "structure": {
         "label": "Structure",
         "description": "Add headings and lists for readability"
+      },
+      "meeting": {
+        "label": "Meeting Notes",
+        "description": "Summary, decisions and action items"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings.",
     "chipTranscribe": "To text",
     "chipAgent": "Agent",
-    "savedOffline": "No internet: the recording is saved. You can transcribe it later."
+    "savedOffline": "No internet: the recording is saved. You can transcribe it later.",
+    "chipMeeting": "Meeting",
+    "meetingHint": "Up to 60 minutes, then a summary with decisions and tasks"
   },
   "aux": {
     "emailVerified": "Email Verified!",
@@ -917,5 +923,10 @@
     "settingTitle": "Weekly summary",
     "settingDesc": "Sunday evening: what you noted and what is still open",
     "permissionDenied": "Allow notifications for Vaulto in the phone settings to get the summary."
+  },
+  "meeting": {
+    "transcribing": "Transcribing the meeting: part {{part}} of {{total}}",
+    "summaryFailed": "Could not write the meeting notes. You can run \"Meeting notes\" from the AI menu later.",
+    "title": "Meeting · {{date}}"
   }
 }

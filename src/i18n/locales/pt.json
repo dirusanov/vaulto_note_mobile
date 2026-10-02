@@ -474,6 +474,10 @@
       "structure": {
         "label": "Estruturar",
         "description": "Adiciona títulos e listas para facilitar a leitura"
+      },
+      "meeting": {
+        "label": "Ata da reunião",
+        "description": "Resumo, decisões e tarefas"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "É necessário acesso ao microfone para gravar notas de voz. Você pode permitir nas configurações do sistema.",
     "chipTranscribe": "Para texto",
     "chipAgent": "Agente",
-    "savedOffline": "Sem internet: a gravação foi salva. Você pode transcrevê-la depois."
+    "savedOffline": "Sem internet: a gravação foi salva. Você pode transcrevê-la depois.",
+    "chipMeeting": "Reunião",
+    "meetingHint": "Até 60 minutos, depois uma ata com decisões e tarefas"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -917,5 +923,10 @@
     "settingTitle": "Resumo semanal",
     "settingDesc": "Domingo à noite: o que você anotou e o que ainda falta",
     "permissionDenied": "Permita as notificações do Vaulto nas configurações do telefone para receber o resumo."
+  },
+  "meeting": {
+    "transcribing": "Transcrevendo a reunião: parte {{part}} de {{total}}",
+    "summaryFailed": "Não foi possível escrever a ata. Você pode usar “Ata da reunião” no menu de IA depois.",
+    "title": "Reunião · {{date}}"
   }
 }

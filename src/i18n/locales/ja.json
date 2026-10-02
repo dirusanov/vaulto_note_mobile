@@ -474,6 +474,10 @@
       "structure": {
         "label": "構成を整える",
         "description": "見出しやリストを加えて読みやすくする"
+      },
+      "meeting": {
+        "label": "議事録",
+        "description": "要約・決定事項・タスク"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。",
     "chipTranscribe": "文字起こし",
     "chipAgent": "エージェント",
-    "savedOffline": "インターネットに接続されていません。録音は保存されました。後で文字起こしできます。"
+    "savedOffline": "インターネットに接続されていません。録音は保存されました。後で文字起こしできます。",
+    "chipMeeting": "会議",
+    "meetingHint": "最長 60 分、その後に決定事項とタスクをまとめた議事録を作成"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -917,5 +923,10 @@
     "settingTitle": "週のまとめ",
     "settingDesc": "日曜の夜：メモした内容と残っていること",
     "permissionDenied": "まとめを受け取るには、端末の設定で Vaulto の通知を許可してください。"
+  },
+  "meeting": {
+    "transcribing": "会議を文字起こし中：{{total}} 中 {{part}}",
+    "summaryFailed": "議事録を作成できませんでした。後で AI メニューの「議事録」から実行できます。",
+    "title": "会議 · {{date}}"
   }
 }

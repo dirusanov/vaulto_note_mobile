@@ -170,6 +170,10 @@ export const buildVariantDisplayLabels = (
             text = steps.map((step, stepIndex) => {
                 // The last custom step is this variant's own prompt: show its local name.
                 if (step === CUSTOM_PROMPT_STEP && stepIndex === steps.length - 1) {
+                    // A built-in preset the server did not know yet was stored as
+                    // "Custom prompt": show the preset's translated name.
+                    const preset = PRESET_COPY[improvement.option_id || ''];
+                    if (preset) return t(preset.labelKey, preset.label);
                     const customName = (optionsById[improvement.option_id || '']?.label || '').trim();
                     if (customName) return customName;
                 }

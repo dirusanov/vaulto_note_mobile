@@ -29,6 +29,18 @@ export interface AIImprovementOption {
     responseFormat?: 'json';
 }
 
+/**
+ * Meeting minutes from a transcript. Headings are written in the transcript's
+ * language; action items become a checklist the app can turn into reminders.
+ */
+export const MEETING_NOTES_PROMPT = [
+    'Turn the following meeting transcript into concise meeting notes in Markdown.',
+    'Write everything, including the headings, in the language of the transcript.',
+    'Sections, in this order: a short summary (2-4 sentences); key points as a bullet list; decisions as a bullet list; action items as a checklist "- [ ] task — owner, due date" (when neither owner nor date is said, write just "- [ ] task" without the dash); open questions as a bullet list.',
+    'Leave out a section entirely (with its heading) when it would be empty - never write that there were no decisions or no questions. Do not invent names, dates, numbers or decisions that are not in the transcript.',
+    'Transcript: {text}',
+].join(' ');
+
 export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
     {
         id: 'grammar',
@@ -60,6 +72,12 @@ export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
         label: 'Structure',
         icon: 'format-list-bulleted',
         prompt: 'Organize the following text, adding headings and bullet lists where appropriate, for better readability: {text}'
+    },
+    {
+        id: 'meeting',
+        label: 'Meeting Notes',
+        icon: 'groups',
+        prompt: MEETING_NOTES_PROMPT,
     }
 ];
 

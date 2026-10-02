@@ -474,6 +474,10 @@
       "structure": {
         "label": "Structurer",
         "description": "Ajoute des titres et des listes pour plus de lisibilité"
+      },
+      "meeting": {
+        "label": "Compte rendu",
+        "description": "Résumé, décisions et tâches"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "L'accès au microphone est nécessaire pour enregistrer des notes vocales. Vous pouvez l'autoriser dans les réglages du système.",
     "chipTranscribe": "En texte",
     "chipAgent": "Agent",
-    "savedOffline": "Pas d’internet : l’enregistrement est sauvegardé. Vous pourrez le transcrire plus tard."
+    "savedOffline": "Pas d’internet : l’enregistrement est sauvegardé. Vous pourrez le transcrire plus tard.",
+    "chipMeeting": "Réunion",
+    "meetingHint": "Jusqu’à 60 minutes, puis un compte rendu avec décisions et tâches"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -917,5 +923,10 @@
     "settingTitle": "Résumé de la semaine",
     "settingDesc": "Dimanche soir : ce que vous avez noté et ce qui reste à faire",
     "permissionDenied": "Autorisez les notifications de Vaulto dans les réglages du téléphone pour recevoir le résumé."
+  },
+  "meeting": {
+    "transcribing": "Transcription de la réunion : partie {{part}} sur {{total}}",
+    "summaryFailed": "Impossible de rédiger le compte rendu. Vous pourrez lancer « Compte rendu » depuis le menu IA.",
+    "title": "Réunion · {{date}}"
   }
 }

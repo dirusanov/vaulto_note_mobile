@@ -474,6 +474,10 @@
       "structure": {
         "label": "Estructurar",
         "description": "Añade encabezados y listas para facilitar la lectura"
+      },
+      "meeting": {
+        "label": "Acta de reunión",
+        "description": "Resumen, decisiones y tareas"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "Se necesita acceso al micrófono para grabar notas de voz. Puedes permitirlo en los ajustes del sistema.",
     "chipTranscribe": "A texto",
     "chipAgent": "Agente",
-    "savedOffline": "Sin internet: la grabación se guardó. Puedes transcribirla después."
+    "savedOffline": "Sin internet: la grabación se guardó. Puedes transcribirla después.",
+    "chipMeeting": "Reunión",
+    "meetingHint": "Hasta 60 minutos, luego un acta con decisiones y tareas"
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -917,5 +923,10 @@
     "settingTitle": "Resumen semanal",
     "settingDesc": "Domingo por la tarde: lo que anotaste y lo que queda pendiente",
     "permissionDenied": "Permite las notificaciones de Vaulto en los ajustes del teléfono para recibir el resumen."
+  },
+  "meeting": {
+    "transcribing": "Transcribiendo la reunión: parte {{part}} de {{total}}",
+    "summaryFailed": "No se pudo redactar el acta. Puedes usar «Acta de reunión» en el menú de IA más tarde.",
+    "title": "Reunión · {{date}}"
   }
 }

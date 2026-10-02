@@ -474,6 +474,10 @@
       "structure": {
         "label": "整理结构",
         "description": "添加标题和列表，提升可读性"
+      },
+      "meeting": {
+        "label": "会议纪要",
+        "description": "总结、决定和待办事项"
       }
     },
     "versions": {
@@ -602,7 +606,9 @@
     "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。",
     "chipTranscribe": "转文字",
     "chipAgent": "智能体",
-    "savedOffline": "没有网络：录音已保存，稍后可以转成文字。"
+    "savedOffline": "没有网络：录音已保存，稍后可以转成文字。",
+    "chipMeeting": "会议",
+    "meetingHint": "最长 60 分钟，之后生成含决定和任务的纪要"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -917,5 +923,10 @@
     "settingTitle": "每周总结",
     "settingDesc": "周日晚上：你记了什么、还有什么没做",
     "permissionDenied": "请在手机设置中允许 Vaulto 的通知，以便接收总结。"
+  },
+  "meeting": {
+    "transcribing": "正在转写会议：第 {{part}} 部分，共 {{total}} 部分",
+    "summaryFailed": "未能生成会议纪要，稍后可在 AI 菜单中运行“会议纪要”。",
+    "title": "会议 · {{date}}"
   }
 }

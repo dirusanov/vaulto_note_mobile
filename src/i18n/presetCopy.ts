@@ -32,4 +32,10 @@ export const PRESET_COPY: Record<string, PresetCopy> = {
         descriptionKey: 'edit.presets.structure.description',
         description: 'Add headings and lists for readability',
     },
+    meeting: {
+        labelKey: 'edit.presets.meeting.label',
+        label: 'Meeting Notes',
+        descriptionKey: 'edit.presets.meeting.description',
+        description: 'Summary, decisions and action items',
+    },
 };
