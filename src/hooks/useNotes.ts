@@ -660,6 +660,14 @@ export const useNotes = () => {
     const moveToTrash = async (existing: Note) => {
         if (!userId) return;
         const recordings = await getVoiceRecordingsLocal(userId, existing.id);
+        // An empty draft (the editor removes those when it closes) has nothing
+        // worth restoring: keep it out of the trash.
+        const hasSomething = !!(existing.title || '').trim()
+            || hasMeaningfulRichContent(existing.content || '')
+            || recordings.length > 0
+            || !!existing.audio_file_path
+            || (existing.improvements || []).some((imp) => !imp.deleted && hasMeaningfulRichContent(imp.content || ''));
+        if (!hasSomething) return;
         const entry: TrashEntry = {
             id: existing.id,
             title: existing.title || '',
