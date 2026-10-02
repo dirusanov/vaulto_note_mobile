@@ -90,6 +90,9 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { applyLayoutDirection } from '../i18n/direction';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
+import { useNotesContext } from '../contexts/NotesContext';
+import { isWeeklyDigestEnabled, setWeeklyDigestEnabled } from '../services/notifications';
+import { exportNotesAsZip, pickNotesToImport } from '../services/notesTransfer';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -257,6 +260,70 @@ export const SettingsScreen = () => {
     const { t, i18n } = useTranslation();
     const [showAppLanguageModal, setShowAppLanguageModal] = useState(false);
     const { preference: themePreference, setPreference: setThemePreference } = useTheme();
+    const { getAllNotes, createNote } = useNotesContext();
+    const [digestEnabled, setDigestEnabled] = useState(false);
+    const [transferBusy, setTransferBusy] = useState<'export' | 'import' | null>(null);
+    useEffect(() => {
+        void isWeeklyDigestEnabled().then(setDigestEnabled).catch(() => undefined);
+    }, []);
+
+    const toggleDigest = async (value: boolean) => {
+        setDigestEnabled(value);
+        const ok = await setWeeklyDigestEnabled(value).catch(() => false);
+        if (!ok) {
+            setDigestEnabled(false);
+            Alert.alert(t('digest.settingTitle', 'Weekly summary'), t('digest.permissionDenied', 'Allow notifications for Vaulto in the phone settings to get the summary.'), [
+                { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                { text: t('edit.tasks.openSettings', 'Open settings'), onPress: () => { void Linking.openSettings(); } },
+            ]);
+        }
+    };
+
+    const handleExport = async () => {
+        setTransferBusy('export');
+        try {
+            const result = await exportNotesAsZip(getAllNotes());
+            if (result.exported === 0) {
+                Alert.alert(t('data.exportTitle', 'Export notes'), t('data.exportNothing', 'There are no notes to export.'));
+            } else if (result.skippedProtected > 0) {
+                Alert.alert(
+                    t('data.exportTitle', 'Export notes'),
+                    t('data.exportSkippedProtected', 'Protected notes ({{count}}) were not exported: they never leave the phone unencrypted.', { count: result.skippedProtected }),
+                );
+            }
+        } catch (error) {
+            Alert.alert(t('data.exportTitle', 'Export notes'), getErrorMessage(error, t('data.exportFailed', 'Could not export the notes.')));
+        } finally {
+            setTransferBusy(null);
+        }
+    };
+
+    const handleImport = async () => {
+        setTransferBusy('import');
+        try {
+            const found = await pickNotesToImport();
+            if (!found) return;
+            if (found.length === 0) {
+                Alert.alert(t('data.importTitle', 'Import notes'), t('data.importNothing', 'No notes found in these files. Supported: .md, .txt, .zip and Google Keep (Takeout).'));
+                return;
+            }
+            let created = 0;
+            for (const note of found) {
+                try {
+                    await createNote({ title: note.title, content: note.content });
+                    created += 1;
+                } catch {
+                    // Empty notes are rejected by createNote; skip them.
+                }
+            }
+            haptics.success();
+            Alert.alert(t('data.importTitle', 'Import notes'), t('data.importDone', 'Imported notes: {{count}}', { count: created }));
+        } catch (error) {
+            Alert.alert(t('data.importTitle', 'Import notes'), getErrorMessage(error, t('data.importFailed', 'Could not import the notes.')));
+        } finally {
+            setTransferBusy(null);
+        }
+    };
     const appLanguages = [
         { key: 'en', label: 'English' },
         { key: 'ru', label: 'Русский' },
@@ -1325,7 +1392,25 @@ export const SettingsScreen = () => {
 
                 {/* Your data: trash, export, import */}
                 <View style={styles.card}>
-                    <Text style={styles.dataCardTitle}>{t('data.title', 'Your data')}</Text>
+                    <Text style={styles.dataCardTitle}>{t('data.title', 'Notes')}</Text>
+                    <View style={styles.preferenceRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons name="insights" size={24} color={colors.textSecondary} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>{t('digest.settingTitle', 'Weekly summary')}</Text>
+                                <Text style={styles.preferenceDescription}>{t('digest.settingDesc', 'Sunday evening: what you noted and what is still open')}</Text>
+                            </View>
+                        </View>
+                        <Switch
+                            value={digestEnabled}
+                            onValueChange={(value) => { void toggleDigest(value); }}
+                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                            thumbColor={colors.onPrimary}
+                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                            accessibilityLabel={t('digest.settingTitle', 'Weekly summary')}
+                        />
+                    </View>
+                    <View style={styles.themeDivider} />
                     <TouchableOpacity
                         style={styles.preferenceRow}
                         activeOpacity={0.85}
@@ -1341,6 +1426,31 @@ export const SettingsScreen = () => {
                         </View>
                         <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
                     </TouchableOpacity>
+                    <View style={styles.dataButtons}>
+                        <TouchableOpacity
+                            style={styles.dataButton}
+                            onPress={() => { void handleExport(); }}
+                            disabled={transferBusy !== null}
+                            accessibilityRole="button"
+                        >
+                            {transferBusy === 'export'
+                                ? <ActivityIndicator size="small" color={colors.primary} />
+                                : <MaterialIcons name="ios-share" size={18} color={colors.primary} />}
+                            <Text style={styles.dataButtonText} numberOfLines={1}>{t('data.export', 'Export')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.dataButton}
+                            onPress={() => { void handleImport(); }}
+                            disabled={transferBusy !== null}
+                            accessibilityRole="button"
+                        >
+                            {transferBusy === 'import'
+                                ? <ActivityIndicator size="small" color={colors.primary} />
+                                : <MaterialIcons name="file-download" size={18} color={colors.primary} />}
+                            <Text style={styles.dataButtonText} numberOfLines={1}>{t('data.import', 'Import')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.dataHint}>{t('data.hint', 'Export: Markdown files in a ZIP. Import: .md, .txt, .zip or Google Keep (Takeout).')}</Text>
                 </View>
 
                 {/* Cloud Sync */}
@@ -3016,6 +3126,31 @@ const styles = createStyles(() => ({
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         marginBottom: spacing.s,
+    },
+    dataButtons: {
+        flexDirection: 'row',
+        gap: spacing.s,
+        marginTop: spacing.m,
+    },
+    dataButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        minHeight: 44,
+        borderRadius: 12,
+        backgroundColor: colors.primaryLight,
+    },
+    dataButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    dataHint: {
+        fontSize: 12,
+        color: colors.textTertiary,
+        marginTop: spacing.s,
     },
     themeDivider: {
         height: 1,

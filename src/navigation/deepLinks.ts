@@ -33,7 +33,7 @@ export const parseDeepLink = (url: string, now: number = Date.now()): DeepLinkAc
         case 'ask':
             return { screen: 'AskNotes' };
         case 'digest':
-            return { screen: 'AskNotes', params: { question: i18n.t('digest.question', 'What happened in my notes this week? Summarise the main points and the open tasks.') } };
+            return { screen: 'AskNotes', params: { question: i18n.t('digest.question', 'What happened in my notes this week? Summarise the main points and the open tasks.'), recentDays: 7 } };
         case 'note':
             return rest[0] ? { screen: 'NoteEdit', params: { noteId: decodeURIComponent(rest[0]) } } : null;
         case 'home':

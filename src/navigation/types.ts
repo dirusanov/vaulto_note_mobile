@@ -14,5 +14,5 @@ export type RootStackParamList = {
     };
     Settings: undefined;
     Trash: undefined;
-    AskNotes: { question?: string } | undefined;
+    AskNotes: { question?: string; recentDays?: number } | undefined;
 };

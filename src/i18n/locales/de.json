@@ -909,7 +909,18 @@
     "deleteHint": "Die Notiz bleibt 30 Tage im Papierkorb."
   },
   "data": {
-    "title": "Deine Daten"
+    "title": "Notizen",
+    "export": "Exportieren",
+    "import": "Importieren",
+    "hint": "Export: Markdown-Dateien in einem ZIP. Import: .md, .txt, .zip oder Google Keep (Takeout).",
+    "exportTitle": "Notizen exportieren",
+    "exportNothing": "Keine Notizen zum Exportieren.",
+    "exportSkippedProtected": "Geschützte Notizen ({{count}}) wurden nicht exportiert: Sie verlassen das Telefon nie unverschlüsselt.",
+    "exportFailed": "Die Notizen konnten nicht exportiert werden.",
+    "importTitle": "Notizen importieren",
+    "importNothing": "In diesen Dateien wurden keine Notizen gefunden. Unterstützt: .md, .txt, .zip und Google Keep (Takeout).",
+    "importDone": "Importierte Notizen: {{count}}",
+    "importFailed": "Die Notizen konnten nicht importiert werden."
   },
   "notify": {
     "remindersChannel": "Aufgaben-Erinnerungen",

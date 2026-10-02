@@ -909,7 +909,18 @@
     "deleteHint": "Заметка будет храниться в корзине 30 дней."
   },
   "data": {
-    "title": "Ваши данные"
+    "title": "Заметки",
+    "export": "Экспорт",
+    "import": "Импорт",
+    "hint": "Экспорт: файлы Markdown в ZIP. Импорт: .md, .txt, .zip или Google Keep (Takeout).",
+    "exportTitle": "Экспорт заметок",
+    "exportNothing": "Нет заметок для экспорта.",
+    "exportSkippedProtected": "Защищённые заметки ({{count}}) не экспортированы: они не покидают телефон в незашифрованном виде.",
+    "exportFailed": "Не удалось экспортировать заметки.",
+    "importTitle": "Импорт заметок",
+    "importNothing": "В этих файлах не нашлось заметок. Поддерживаются .md, .txt, .zip и Google Keep (Takeout).",
+    "importDone": "Импортировано заметок: {{count}}",
+    "importFailed": "Не удалось импортировать заметки."
   },
   "notify": {
     "remindersChannel": "Напоминания о задачах",

@@ -909,7 +909,18 @@
     "deleteHint": "笔记将在回收站保留 30 天。"
   },
   "data": {
-    "title": "你的数据"
+    "title": "笔记",
+    "export": "导出",
+    "import": "导入",
+    "hint": "导出：ZIP 中的 Markdown 文件。导入：.md、.txt、.zip 或 Google Keep（Takeout）。",
+    "exportTitle": "导出笔记",
+    "exportNothing": "没有可导出的笔记。",
+    "exportSkippedProtected": "受保护的笔记（{{count}} 条）未导出：它们不会以未加密形式离开手机。",
+    "exportFailed": "无法导出笔记。",
+    "importTitle": "导入笔记",
+    "importNothing": "这些文件中没有找到笔记。支持 .md、.txt、.zip 和 Google Keep（Takeout）。",
+    "importDone": "已导入笔记：{{count}}",
+    "importFailed": "无法导入笔记。"
   },
   "notify": {
     "remindersChannel": "任务提醒",

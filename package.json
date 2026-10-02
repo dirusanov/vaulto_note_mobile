@@ -7,7 +7,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:utils && npm run test:versions && npm run test:search && npm run test:tasks && npm run test:tags",
+    "test": "npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:utils && npm run test:versions && npm run test:search && npm run test:tasks && npm run test:tags && npm run test:transfer",
     "typecheck": "tsc --noEmit",
     "test:encryption-state": "tsc --ignoreConfig src/services/encryptionState.ts --target ES2020 --module commonjs --outDir .test-build --skipLibCheck --esModuleInterop && node tests/encryptionState.test.cjs",
     "test:formatting": "tsc --ignoreConfig src/utils/markdownUtils.tsx src/utils/tiptapMarkdownAdapter.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/md --skipLibCheck --esModuleInterop && node tests/markdownFormatting.test.cjs",
@@ -16,7 +16,8 @@
     "test:versions": "tsc --ignoreConfig src/i18n/variantLabels.ts src/utils/textDiff.ts --target ES2020 --module commonjs --outDir .test-build/versions --skipLibCheck --esModuleInterop && node --test tests/versions.test.cjs",
     "test:search": "tsc --ignoreConfig src/utils/noteSearch.ts --target ES2020 --module commonjs --outDir .test-build/search --skipLibCheck --esModuleInterop && node --test tests/noteSearch.test.cjs",
     "test:tasks": "tsc --ignoreConfig src/utils/taskExtraction.ts --target ES2020 --module commonjs --outDir .test-build/tasks --skipLibCheck --esModuleInterop && node --test tests/taskExtraction.test.cjs",
-    "test:tags": "tsc --ignoreConfig src/utils/tags.ts --target ES2020 --module commonjs --outDir .test-build/tags --skipLibCheck --esModuleInterop && node --test tests/tags.test.cjs"
+    "test:tags": "tsc --ignoreConfig src/utils/tags.ts --target ES2020 --module commonjs --outDir .test-build/tags --skipLibCheck --esModuleInterop && node --test tests/tags.test.cjs",
+    "test:transfer": "tsc --ignoreConfig src/utils/noteTransferFormat.ts --target ES2020 --module commonjs --outDir .test-build/transfer --skipLibCheck --esModuleInterop && node --test tests/noteTransfer.test.cjs"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",

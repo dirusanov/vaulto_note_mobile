@@ -909,7 +909,18 @@
     "deleteHint": "La note restera dans la corbeille 30 jours."
   },
   "data": {
-    "title": "Vos données"
+    "title": "Notes",
+    "export": "Exporter",
+    "import": "Importer",
+    "hint": "Export : fichiers Markdown dans un ZIP. Import : .md, .txt, .zip ou Google Keep (Takeout).",
+    "exportTitle": "Exporter les notes",
+    "exportNothing": "Aucune note à exporter.",
+    "exportSkippedProtected": "Les notes protégées ({{count}}) n’ont pas été exportées : elles ne quittent jamais le téléphone sans chiffrement.",
+    "exportFailed": "Impossible d’exporter les notes.",
+    "importTitle": "Importer des notes",
+    "importNothing": "Aucune note trouvée dans ces fichiers. Formats : .md, .txt, .zip et Google Keep (Takeout).",
+    "importDone": "Notes importées : {{count}}",
+    "importFailed": "Impossible d’importer les notes."
   },
   "notify": {
     "remindersChannel": "Rappels de tâches",

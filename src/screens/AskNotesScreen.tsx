@@ -70,7 +70,9 @@ export const AskNotesScreen = () => {
             const active = (note.improvements || []).find((imp: any) => imp.is_active && !imp.deleted);
             const text = richContentToPlainText(active?.content ?? note.content ?? '');
             // Same title the note card shows.
-            const title = stripStoredTitleMarkdown(note.title || '').trim() || deriveAutoTitleFromPlainText(text);
+            const title = stripStoredTitleMarkdown(note.title || '').trim()
+                || stripStoredTitleMarkdown(active?.title || '').trim()
+                || deriveAutoTitleFromPlainText(text);
             // Protected notes never reach a cloud AI; legacy local-only ones only with consent.
             const cloudAllowed = !note.is_protected && (privateAllowed || note.storage_scope !== 'local_only');
             return { id: note.id, title, text, updatedAt: note.updated_at, cloudAllowed };
@@ -78,7 +80,7 @@ export const AskNotesScreen = () => {
         .filter((note) => note.text.trim().length > 0), [getAllNotes, notes, privateAllowed]);
     const searchable = useMemo(() => allSearchable.filter((note) => note.cloudAllowed), [allSearchable]);
 
-    const ask = useCallback(async (raw: string) => {
+    const ask = useCallback(async (raw: string, options: { recentDays?: number } = {}) => {
         const question = raw.trim();
         if (!question || busy) return;
         haptics.light();
@@ -100,9 +102,14 @@ export const AskNotesScreen = () => {
             // On-device AI sees every note (nothing leaves the phone) but has a
             // smaller context, so it gets fewer, shorter excerpts.
             const onDevice = await isOnDeviceAI();
+            // The weekly summary only looks at notes changed in the last days.
+            const cutoff = options.recentDays ? Date.now() - options.recentDays * 24 * 60 * 60 * 1000 : 0;
+            const recent = <T extends { updatedAt?: string }>(list: T[]) => (cutoff
+                ? list.filter((note) => note.updatedAt && new Date(note.updatedAt).getTime() >= cutoff)
+                : list);
             const sources = onDevice
-                ? buildNoteSources(allSearchable, question, { limit: 4, perNoteChars: 900, totalChars: 3200 })
-                : buildNoteSources(searchable, question);
+                ? buildNoteSources(recent(allSearchable), question, { limit: 4, perNoteChars: 900, totalChars: 3200 })
+                : buildNoteSources(recent(searchable), question, cutoff ? { limit: 10 } : undefined);
             if (sources.length === 0) {
                 setMessages((prev) => [...prev, {
                     id: `a-${stamp}`,
@@ -144,9 +151,9 @@ export const AskNotesScreen = () => {
         // Wait for the local notes to load, or the question would find nothing.
         if (initial && !initialAskedRef.current && (isHydrated || allSearchable.length > 0)) {
             initialAskedRef.current = true;
-            void ask(initial);
+            void ask(initial, { recentDays: route.params?.recentDays });
         }
-    }, [allSearchable.length, ask, isHydrated, route.params?.question]);
+    }, [allSearchable.length, ask, isHydrated, route.params?.question, route.params?.recentDays]);
 
     useEffect(() => {
         const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);

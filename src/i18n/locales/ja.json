@@ -909,7 +909,18 @@
     "deleteHint": "ノートはゴミ箱に 30 日間保存されます。"
   },
   "data": {
-    "title": "あなたのデータ"
+    "title": "ノート",
+    "export": "エクスポート",
+    "import": "インポート",
+    "hint": "エクスポート：Markdown ファイルを ZIP で。インポート：.md、.txt、.zip、Google Keep（Takeout）。",
+    "exportTitle": "ノートをエクスポート",
+    "exportNothing": "エクスポートするノートがありません。",
+    "exportSkippedProtected": "保護されたノート（{{count}} 件）はエクスポートされません：暗号化なしで端末の外に出ることはありません。",
+    "exportFailed": "ノートをエクスポートできませんでした。",
+    "importTitle": "ノートをインポート",
+    "importNothing": "これらのファイルにノートが見つかりません。対応形式：.md、.txt、.zip、Google Keep（Takeout）。",
+    "importDone": "インポートしたノート：{{count}}",
+    "importFailed": "ノートをインポートできませんでした。"
   },
   "notify": {
     "remindersChannel": "タスクのリマインダー",

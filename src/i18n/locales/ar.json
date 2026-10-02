@@ -909,7 +909,18 @@
     "deleteHint": "ستبقى الملاحظة في السلة 30 يومًا."
   },
   "data": {
-    "title": "بياناتك"
+    "title": "الملاحظات",
+    "export": "تصدير",
+    "import": "استيراد",
+    "hint": "التصدير: ملفات Markdown في ZIP. الاستيراد: ‎.md أو ‎.txt أو ‎.zip أو Google Keep (Takeout).",
+    "exportTitle": "تصدير الملاحظات",
+    "exportNothing": "لا توجد ملاحظات للتصدير.",
+    "exportSkippedProtected": "لم تُصدَّر الملاحظات المحمية ({{count}}): فهي لا تغادر الهاتف دون تشفير.",
+    "exportFailed": "تعذّر تصدير الملاحظات.",
+    "importTitle": "استيراد الملاحظات",
+    "importNothing": "لم يُعثر على ملاحظات في هذه الملفات. المدعوم: ‎.md و‎.txt و‎.zip وGoogle Keep (Takeout).",
+    "importDone": "الملاحظات المستوردة: {{count}}",
+    "importFailed": "تعذّر استيراد الملاحظات."
   },
   "notify": {
     "remindersChannel": "تذكيرات المهام",

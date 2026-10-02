@@ -909,7 +909,18 @@
     "deleteHint": "नोट 30 दिन तक ट्रैश में रहेगा।"
   },
   "data": {
-    "title": "आपका डेटा"
+    "title": "नोट्स",
+    "export": "एक्सपोर्ट",
+    "import": "इंपोर्ट",
+    "hint": "एक्सपोर्ट: ZIP में Markdown फ़ाइलें। इंपोर्ट: .md, .txt, .zip या Google Keep (Takeout)।",
+    "exportTitle": "नोट्स एक्सपोर्ट करें",
+    "exportNothing": "एक्सपोर्ट करने के लिए कोई नोट नहीं है।",
+    "exportSkippedProtected": "सुरक्षित नोट्स ({{count}}) एक्सपोर्ट नहीं हुए: वे बिना एन्क्रिप्शन के फ़ोन से बाहर नहीं जाते।",
+    "exportFailed": "नोट्स एक्सपोर्ट नहीं हो सके।",
+    "importTitle": "नोट्स इंपोर्ट करें",
+    "importNothing": "इन फ़ाइलों में कोई नोट नहीं मिला। समर्थित: .md, .txt, .zip और Google Keep (Takeout)।",
+    "importDone": "इंपोर्ट हुए नोट्स: {{count}}",
+    "importFailed": "नोट्स इंपोर्ट नहीं हो सके।"
   },
   "notify": {
     "remindersChannel": "काम के रिमाइंडर",
