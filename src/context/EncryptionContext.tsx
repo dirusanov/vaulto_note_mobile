@@ -102,6 +102,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const loadedForUserRef = useRef<string | null>(null);
     const [loadedForUser, setLoadedForUser] = useState<string | null>(null);
     const enableInFlightRef = useRef(false);
+    const [migrationCompletedAt, setMigrationCompletedAt] = useState(0);
     const encryptionMigrationInFlightRef = useRef(false);
     const disableTransitionInFlightRef = useRef(false);
     const encryptionReconciliationInFlightRef = useRef<Promise<void> | null>(null);
@@ -531,6 +532,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                     }
                     reportProgress(100);
                     console.log('[Encryption] E2EE migration completed.');
+                    // An interrupted setup finishes here (on launch or reconnect):
+                    // the recovery key prompt re-checks now that the key is final.
+                    setMigrationCompletedAt(Date.now());
                     return true;
                 } catch (error) {
                     console.warn('[Encryption] Failed to complete E2EE migration sync:', error);
@@ -551,8 +555,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         clearEncryptionTransitionToken,
     ]);
 
-    const loadState = useCallback(async () => {
-        loadedForUserRef.current = null;
+    const loadStateInner = useCallback(async () => {
         setStatus('loading');
         // A key shown for another account (or a guest) must not follow into this one.
         setRecoveryCode(null);
@@ -1141,8 +1144,6 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         setSyncEnabled(shouldEnableSync);
         syncService.setSyncEnabled(shouldEnableSync);
-        loadedForUserRef.current = isAuthReady ? userId : null;
-        setLoadedForUser(loadedForUserRef.current);
     }, [
         userId,
         isAuthenticated,
@@ -1154,6 +1155,20 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         finalizeDestructiveResetLocally,
         clearEncryptionTransitionToken,
     ]);
+
+    // Whichever way loadState finishes (it has many early exits), record the
+    // account it finished for: automatic encryption setup waits for exactly that.
+    const loadState = useCallback(async () => {
+        loadedForUserRef.current = null;
+        setLoadedForUser(null);
+        const forUser = userId && isAuthenticated && !isGuest ? userId : null;
+        try {
+            await loadStateInner();
+        } finally {
+            loadedForUserRef.current = forUser;
+            setLoadedForUser(forUser);
+        }
+    }, [loadStateInner, userId, isAuthenticated, isGuest]);
 
     useEffect(() => {
         void loadState();
@@ -2055,7 +2070,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             if (await storage.getEncryptionMigrationState(userId)) return;
             if (!(await storage.getRecoveryKeySaved(userId))) setRecoveryKeyNeedsSaving(true);
         })();
-    }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.secret_mode]);
+    }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.secret_mode, migrationCompletedAt]);
 
     const value = useMemo(() => ({
         status,
