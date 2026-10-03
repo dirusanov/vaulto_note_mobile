@@ -216,7 +216,8 @@
       "agentNeedsSignIn": "登录后可用",
       "guestMinutesLeft": "剩余免费语音转文字：{{minutes}} 分钟。登录可获得更多并同步笔记。",
       "guestMinutesUsed": "免费分钟已用完。登录可获得更多，或在下方开启“无网络也可用”。",
-      "trialInfoAccount": "登录可获得免费语音转文字分钟并同步笔记。"
+      "trialInfoAccount": "登录可获得免费语音转文字分钟并同步笔记。",
+      "vaultLocked": "保险箱已锁定"
     },
     "recovery": {
       "title": "恢复密钥",

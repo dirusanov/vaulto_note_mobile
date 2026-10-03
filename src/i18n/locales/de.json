@@ -216,7 +216,8 @@
       "agentNeedsSignIn": "Nach der Anmeldung verfügbar",
       "guestMinutesLeft": "Verbleibende kostenlose Spracherkennung: {{minutes}} Min. Melde dich an für mehr und zum Synchronisieren.",
       "guestMinutesUsed": "Die Freiminuten sind aufgebraucht. Melde dich an für mehr oder aktiviere unten „Ohne Internet arbeiten“.",
-      "trialInfoAccount": "Melde dich an für kostenlose Spracherkennungsminuten und Synchronisierung deiner Notizen."
+      "trialInfoAccount": "Melde dich an für kostenlose Spracherkennungsminuten und Synchronisierung deiner Notizen.",
+      "vaultLocked": "Tresor ist gesperrt"
     },
     "recovery": {
       "title": "Wiederherstellungscode",

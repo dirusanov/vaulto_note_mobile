@@ -216,7 +216,8 @@
       "agentNeedsSignIn": "サインイン後に利用できます",
       "guestMinutesLeft": "無料の文字起こし残り：{{minutes}} 分。サインインで追加とメモの同期ができます。",
       "guestMinutesUsed": "無料の分数を使い切りました。サインインで追加するか、下の「オフラインで使う」をオンにしてください。",
-      "trialInfoAccount": "サインインすると無料の文字起こし時間とメモの同期が使えます。"
+      "trialInfoAccount": "サインインすると無料の文字起こし時間とメモの同期が使えます。",
+      "vaultLocked": "保管庫はロックされています"
     },
     "recovery": {
       "title": "復元コード",

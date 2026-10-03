@@ -1284,7 +1284,7 @@ export const SettingsScreen = () => {
                         <Switch
                             value={digestEnabled}
                             onValueChange={(value) => { void toggleDigest(value); }}
-                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
                             thumbColor={colors.onPrimary}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                             accessibilityLabel={t('digest.settingTitle', 'Weekly summary')}
@@ -1350,11 +1350,8 @@ export const SettingsScreen = () => {
                 {/* Guests have nothing to sync yet; the account card above offers sign-in. */}
                 {!isGuestOrAnonymous && (
                     <View style={styles.card}>
-                        <View style={styles.cardHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                <MaterialIcons name="cloud-sync" size={18} color={colors.primary} />
-                                <Text style={styles.sectionTitle}>{t("settings.ui.cloudSync", "Cloud Sync")}</Text>
-                            </View>
+                        <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+                            <Text style={styles.dataCardTitle}>{t("settings.ui.cloudSync", "Cloud Sync")}</Text>
                             <TouchableOpacity
                                 onPress={() => setShowSecurityInfoModal(true)}
                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1431,7 +1428,7 @@ export const SettingsScreen = () => {
                                                 void handleToggleSync(value);
                                             }}
                                             disabled={showUnlockingOverlay || resetRecoveryPending}
-                                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                             thumbColor={colors.onPrimary}
                                             style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                                         />
@@ -1468,39 +1465,33 @@ export const SettingsScreen = () => {
                                 </View>
                             </>
                         ) : encryptionStatus === 'locked' ? (
-                            <View style={styles.securityRowMinimal}>
-                                <View style={styles.securityRowLeft}>
-                                    <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-                                        <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
-                                    </View>
+                            <TouchableOpacity
+                                style={styles.preferenceRow}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                onPress={() => {
+                                    if (isGuestOrAnonymous) {
+                                        setShowSecurityAuthModal(true);
+                                        return;
+                                    }
+                                    setShowUnlockSyncModal(true);
+                                }}
+                            >
+                                <View style={[styles.securityRowLeft, { gap: spacing.s }]}>
+                                    <MaterialIcons name="lock-outline" size={24} color={colors.textSecondary} />
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.securityLabelMinimal}>
-                                            {t("settings.ui.unlockSync", "Unlock Vault")}
+                                        <Text style={styles.preferenceTitle}>
+                                            {t("settings.ui.vaultLocked", "Vault is locked")}
                                         </Text>
                                         {hasRemoteKeyBundle && (
-                                            <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                                            <Text style={styles.preferenceDescription}>
                                                 {t("settings.ui.unlockToRestore", "Encrypted notes on server")}
                                             </Text>
                                         )}
                                     </View>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                    <TouchableOpacity
-                                        style={[styles.smallButton, { backgroundColor: colors.primary }]}
-                                        onPress={async () => {
-                                            if (isGuestOrAnonymous) {
-                                                setShowSecurityAuthModal(true);
-                                                return;
-                                            }
-                                            setShowUnlockSyncModal(true);
-                                        }}
-                                    >
-                                        <Text style={styles.smallButtonText}>
-                                            {t("settings.ui.unlock", "Unlock")}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
+                                <Text style={styles.rowAction}>{t("settings.ui.unlock", "Unlock")}</Text>
+                            </TouchableOpacity>
                         ) : (
                             <>
                                 <View style={styles.securityRowMinimal}>
@@ -1532,7 +1523,7 @@ export const SettingsScreen = () => {
                                                             void handleToggleSync(value);
                                                         }}
                                                         disabled={showUnlockingOverlay}
-                                                        trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                                        trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                                         thumbColor={colors.onPrimary}
                                                         style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
                                                     />
@@ -1616,7 +1607,7 @@ export const SettingsScreen = () => {
                                     value={offlineVoiceOn}
                                     onValueChange={(value) => { void handleToggleOfflineVoice(value); }}
                                     disabled={localWhisperBusy && !isDownloadingLocalWhisper}
-                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                    trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                     accessibilityLabel={t("settings.voice.offline", "Work without internet")}
@@ -1680,7 +1671,7 @@ export const SettingsScreen = () => {
                                             value={privateMode}
                                             onValueChange={(value) => { void handleTogglePrivateMode(value); }}
                                             disabled={!whisperReady && !privateMode}
-                                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                             thumbColor={colors.onPrimary}
                                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                             accessibilityLabel={t("settings.voice.private", "Only on this phone")}
@@ -1716,7 +1707,7 @@ export const SettingsScreen = () => {
                                     value={offlineAIOn}
                                     onValueChange={(value) => { void handleToggleOfflineAI(value); }}
                                     disabled={localLLMBusy && !isDownloadingLocalLLM}
-                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                    trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                                     accessibilityLabel={t("settings.voice.offlineAI", "AI without internet")}
@@ -1851,7 +1842,6 @@ export const SettingsScreen = () => {
                                 onPress={() => setShowDeleteAccountModal(true)}
                                 accessibilityRole="button"
                             >
-                                <MaterialIcons name="person-remove" size={18} color={colors.error} />
                                 <Text style={styles.deleteAccountText}>{t("settings.ui.deleteAccount", "Delete Account")}</Text>
                             </TouchableOpacity>
                         </>
@@ -3348,11 +3338,16 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.s,
-        paddingVertical: spacing.m,
-        borderRadius: 12,
-        backgroundColor: colors.error + '10',
+        minHeight: 52,
+        borderRadius: 16,
+        backgroundColor: colors.surface,
         borderWidth: 1,
-        borderColor: colors.error + '20',
+        borderColor: colors.border,
+    },
+    rowAction: {
+        ...typography.body,
+        fontWeight: '600',
+        color: colors.primary,
     },
     signOutText: {
         ...typography.button,
@@ -3363,16 +3358,13 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.s,
-        minHeight: 48,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.error + '20',
+        gap: spacing.xs,
+        minHeight: 44,
     },
     deleteAccountText: {
-        ...typography.button,
-        color: colors.error,
-        fontSize: 15,
+        ...typography.caption,
+        fontWeight: '500',
+        color: colors.textSecondary,
     },
     legalLink: {
         ...typography.caption,

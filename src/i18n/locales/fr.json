@@ -216,7 +216,8 @@
       "agentNeedsSignIn": "Disponible après connexion",
       "guestMinutesLeft": "Transcription gratuite restante : {{minutes}} min. Connectez-vous pour en avoir plus et synchroniser vos notes.",
       "guestMinutesUsed": "Les minutes gratuites sont épuisées. Connectez-vous pour en obtenir plus ou activez « Travailler sans internet » ci-dessous.",
-      "trialInfoAccount": "Connectez-vous pour obtenir des minutes de transcription gratuites et synchroniser vos notes."
+      "trialInfoAccount": "Connectez-vous pour obtenir des minutes de transcription gratuites et synchroniser vos notes.",
+      "vaultLocked": "Le coffre est verrouillé"
     },
     "recovery": {
       "title": "Code de récupération",

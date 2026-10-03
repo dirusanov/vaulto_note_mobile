@@ -124,7 +124,7 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                     accessibilityLabel={t('aux.autoScaleChecklists', 'Auto-scale Checklists')}
                                     value={autoScalingEnabled}
                                     onValueChange={onAutoScalingChange}
-                                    trackColor={{ false: colors.textMuted, true: colors.primary }}
+                                    trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
                                 />
                             </View>

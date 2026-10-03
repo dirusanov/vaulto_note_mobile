@@ -216,7 +216,8 @@
       "agentNeedsSignIn": "Disponível após entrar",
       "guestMinutesLeft": "Voz para texto grátis restante: {{minutes}} min. Entre para ganhar mais e sincronizar suas notas.",
       "guestMinutesUsed": "Os minutos grátis acabaram. Entre para ganhar mais ou ative “Usar sem internet” abaixo.",
-      "trialInfoAccount": "Entre para ganhar minutos grátis de voz para texto e sincronizar suas notas."
+      "trialInfoAccount": "Entre para ganhar minutos grátis de voz para texto e sincronizar suas notas.",
+      "vaultLocked": "O cofre está bloqueado"
     },
     "recovery": {
       "title": "Código de recuperação",

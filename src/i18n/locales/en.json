@@ -227,7 +227,8 @@
       "agentNeedsSignIn": "Available after signing in",
       "guestMinutesLeft": "Free speech-to-text left: {{minutes}} min. Sign in to get more and sync your notes.",
       "guestMinutesUsed": "Free minutes are used up. Sign in to get more, or turn on \"Work without internet\" below.",
-      "trialInfoAccount": "Sign in to get free speech-to-text minutes and sync your notes."
+      "trialInfoAccount": "Sign in to get free speech-to-text minutes and sync your notes.",
+      "vaultLocked": "Vault is locked"
     },
     "recovery": {
       "title": "Recovery Code",

@@ -216,7 +216,8 @@
       "agentNeedsSignIn": "Disponible al iniciar sesión",
       "guestMinutesLeft": "Voz a texto gratis restante: {{minutes}} min. Inicia sesión para obtener más y sincronizar tus notas.",
       "guestMinutesUsed": "Se acabaron los minutos gratis. Inicia sesión para obtener más o activa «Trabajar sin internet» abajo.",
-      "trialInfoAccount": "Inicia sesión para obtener minutos gratis de voz a texto y sincronizar tus notas."
+      "trialInfoAccount": "Inicia sesión para obtener minutos gratis de voz a texto y sincronizar tus notas.",
+      "vaultLocked": "La bóveda está bloqueada"
     },
     "recovery": {
       "title": "Código de recuperación",
