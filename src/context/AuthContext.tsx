@@ -231,9 +231,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.log('[AuthContext] Signing in with verified account...');
         await storage.setToken(newAccessToken);
         await storage.setRefreshToken(newRefreshToken);
-        setToken(newAccessToken);
-        setRefreshToken(newRefreshToken);
-        setIsGuest(false);
 
         try {
             const profile = await authApi.getProfile(newAccessToken);
@@ -250,6 +247,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 : null;
             await storage.setUserId(profile.id);
             await storage.setUserProfile(profile);
+            // All at once: nothing may see "signed in" with the guest's id.
+            setToken(newAccessToken);
+            setRefreshToken(newRefreshToken);
+            setIsGuest(false);
             setUserId(profile.id);
             setUser(profile);
             // Let automatic end-to-end setup run before the first upload.

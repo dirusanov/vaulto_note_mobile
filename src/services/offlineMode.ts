@@ -78,9 +78,16 @@ export const getOfflineStatus = async (): Promise<OfflineStatus> => {
  * Speech wins over AI when space is short: it is the core of a voice-notes app.
  */
 export const planOfflineModels = async (): Promise<OfflinePlan | null> => {
+    // Speech already on the phone stays as it is: completing offline mode only
+    // adds the AI model, it never swaps (and deletes) the speech model in use.
+    const current = await getLocalWhisperModelStatus().catch(() => null);
     const whisperOptions: LocalWhisperModelKey[] = [];
-    for (const key of WHISPER_PREFERENCE) {
-        if (await isLocalWhisperModelSupportedByDevice(key).catch(() => false)) whisperOptions.push(key);
+    if (current?.isDownloaded) {
+        whisperOptions.push(current.selectedModel.key as LocalWhisperModelKey);
+    } else {
+        for (const key of WHISPER_PREFERENCE) {
+            if (await isLocalWhisperModelSupportedByDevice(key).catch(() => false)) whisperOptions.push(key);
+        }
     }
     const llmOptions: (LocalLLMModelKey | null)[] = [];
     if (isLocalLLMRuntimeAvailable()) {
@@ -115,18 +122,46 @@ export const planOfflineModels = async (): Promise<OfflinePlan | null> => {
 export type OfflineProgress = (loadedBytes: number, totalBytes: number) => void;
 
 let cancelled = false;
+// One offline download at a time, app-wide (Settings may be left and reopened).
+let running: Promise<void> | null = null;
+let progressListener: OfflineProgress | undefined;
+let lastProgress: { loaded: number; total: number } | null = null;
+
+export const getOfflineDownloadProgress = () => (running ? lastProgress ?? { loaded: 0, total: 0 } : null);
+
+/** Follows a running download (e.g. after Settings was reopened); returns its promise. */
+export const attachOfflineDownload = (onProgress?: OfflineProgress): Promise<void> | null => {
+    progressListener = onProgress;
+    return running;
+};
 
 /**
  * Downloads the plan (speech first: it is useful on its own) and then removes
  * other offline models, so the phone keeps exactly one of each.
  */
-export const downloadOfflineModels = async (plan: OfflinePlan, onProgress?: OfflineProgress): Promise<void> => {
+export const downloadOfflineModels = (plan: OfflinePlan, onProgress?: OfflineProgress): Promise<void> => {
+    progressListener = onProgress;
+    if (running) return running;
+    lastProgress = { loaded: 0, total: plan.downloadBytes };
+    running = runDownload(plan, (loaded, total) => {
+        const clamped = Math.min(loaded, total);
+        lastProgress = { loaded: clamped, total };
+        progressListener?.(clamped, total);
+    }).finally(() => {
+        running = null;
+        lastProgress = null;
+    });
+    return running;
+};
+
+const runDownload = async (plan: OfflinePlan, onProgress?: OfflineProgress): Promise<void> => {
     cancelled = false;
     const speechMissing = !(await getLocalWhisperModelStatus(plan.whisperKey).catch(() => null))?.isDownloaded;
     const aiMissing = !!plan.llmKey && !(await getLocalLLMModelStatus(plan.llmKey).catch(() => null))?.isDownloaded;
     const speechBytes = speechMissing ? whisperSize(plan.whisperKey) : 0;
     const total = speechBytes + (aiMissing && plan.llmKey ? llmSize(plan.llmKey) : 0);
 
+    if (cancelled) throw new Error('Download cancelled');
     if (speechMissing) {
         await downloadLocalWhisperModel(plan.whisperKey, (_p, loaded) => onProgress?.(loaded, total));
     } else {

@@ -28,7 +28,7 @@ import {
     setOnDeviceTranscription,
 } from '../utils/storage';
 import { formatModelSize } from '../components/OnDeviceModelSection';
-import { cancelOfflineDownload, downloadOfflineModels, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
+import { attachOfflineDownload, cancelOfflineDownload, downloadOfflineModels, getOfflineDownloadProgress, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
@@ -413,7 +413,8 @@ export const SettingsScreen = () => {
     // phone" then keeps voice (and AI) on the device even online.
     const offlineDownloading = offlineProgress !== null;
     const offlineOn = !!offlineStatus?.speechReady || offlineDownloading;
-    const offlineAIMissing = !!offlineStatus?.speechReady && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady;
+    const offlineAIMissing = !!offlineStatus?.speechReady && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady
+        && !!offlinePlan?.llmKey && offlinePlan.downloadBytes > 0;
     const privateMode = !!offlineStatus?.speechReady && (usingLocalWhisper || onDeviceTranscription);
     const privateVoiceOnly = !offlineStatus?.aiReady;
     const offlineDescription = offlineDownloading
@@ -523,6 +524,14 @@ export const SettingsScreen = () => {
 
 
     const refreshOffline = useCallback(async () => {
+        // A download started before Settings was (re)opened: follow it.
+        const inFlight = getOfflineDownloadProgress();
+        if (inFlight) {
+            setOfflineProgress(inFlight);
+            void attachOfflineDownload((loaded, total) => setOfflineProgress({ loaded, total }))
+                ?.catch(() => undefined)
+                .finally(() => { setOfflineProgress(null); void refreshOffline(); });
+        }
         try {
             const [status, plan] = await Promise.all([getOfflineStatus(), planOfflineModels()]);
             setOfflineStatus(status);
@@ -727,6 +736,11 @@ export const SettingsScreen = () => {
             try {
                 await downloadOfflineModels(plan, (loaded, total) => setOfflineProgress({ loaded, total }));
                 haptics.success();
+                // "Only on this phone" was on with speech only: AI joins it now.
+                const after = await getOfflineStatus().catch(() => null);
+                if (after?.aiReady && onDeviceTranscription && !usingLocalWhisper) {
+                    await updateProvider('local');
+                }
             } catch (error: any) {
                 if (!String(error?.message ?? '').toLowerCase().includes('cancel')) {
                     Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
@@ -738,7 +752,7 @@ export const SettingsScreen = () => {
         } finally {
             offlineStartingRef.current = false;
         }
-    }, [offlineProgress, refreshOffline, t]);
+    }, [offlineProgress, refreshOffline, onDeviceTranscription, usingLocalWhisper, t]);
 
     const handleToggleOffline = useCallback(async (on: boolean) => {
         if (on) {

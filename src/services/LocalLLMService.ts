@@ -273,6 +273,10 @@ export const downloadLocalLLMModel = async (
     if (Platform.OS === 'web') {
         throw new Error('Local LLM is not supported in the browser');
     }
+    if (downloadInProgress) {
+        // A second transfer into the same temp file would corrupt the first.
+        throw new Error('A model is already downloading. Wait for it to finish.');
+    }
     downloadInProgress = true;
     cancelRequested = false;
     try {

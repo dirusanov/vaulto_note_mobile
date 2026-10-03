@@ -97,6 +97,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const [recoveryKeyNeedsSaving, setRecoveryKeyNeedsSaving] = useState(false);
     const [autoEncrypting, setAutoEncrypting] = useState(false);
     const autoEncryptionAttemptRef = useRef<string | null>(null);
+    // The account loadState last completed for: automatic setup runs only for it,
+    // never for a stale id while a sign-in or sign-out is switching users.
+    const loadedForUserRef = useRef<string | null>(null);
+    const [loadedForUser, setLoadedForUser] = useState<string | null>(null);
+    const enableInFlightRef = useRef(false);
     const encryptionMigrationInFlightRef = useRef(false);
     const disableTransitionInFlightRef = useRef(false);
     const encryptionReconciliationInFlightRef = useRef<Promise<void> | null>(null);
@@ -547,7 +552,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     ]);
 
     const loadState = useCallback(async () => {
+        loadedForUserRef.current = null;
         setStatus('loading');
+        // A key shown for another account (or a guest) must not follow into this one.
+        setRecoveryCode(null);
+        setRecoveryKeyNeedsSaving(false);
         clearMasterKey();
         setSyncUnlocked(false);
         setBundle(null);
@@ -1132,6 +1141,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
 
         setSyncEnabled(shouldEnableSync);
         syncService.setSyncEnabled(shouldEnableSync);
+        loadedForUserRef.current = isAuthReady ? userId : null;
+        setLoadedForUser(loadedForUserRef.current);
     }, [
         userId,
         isAuthenticated,
@@ -1302,12 +1313,19 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     // new phone unlocks the notes through either unlock path.
     const enableE2EEWithRecoveryKey = useCallback(async (onProgress?: EncryptionProgressCallback) => {
         if (!userId) throw new Error('User not available');
-        const masterKey = await ExpoCrypto.getRandomBytesAsync(32);
-        const recoveryKey = recoveryCodeFromMasterKey(masterKey);
-        await storage.setRecoveryKeySaved(userId, false);
-        await enableE2EE(recoveryKey, 'recovery_code', onProgress, masterKey);
-        await storage.setAutoEncryptionOptOut(userId, false);
-        setRecoveryKeyNeedsSaving(true);
+        if (enableInFlightRef.current) throw new Error('Encryption setup is already running.');
+        enableInFlightRef.current = true;
+        try {
+            const masterKey = await ExpoCrypto.getRandomBytesAsync(32);
+            const recoveryKey = recoveryCodeFromMasterKey(masterKey);
+            await storage.setRecoveryKeySaved(userId, false);
+            await enableE2EE(recoveryKey, 'recovery_code', onProgress, masterKey);
+            await storage.setAutoEncryptionOptOut(userId, false);
+            // Shown only now: the bundle is published and this key is the account's.
+            if (loadedForUserRef.current === userId) setRecoveryKeyNeedsSaving(true);
+        } finally {
+            enableInFlightRef.current = false;
+        }
     }, [userId, enableE2EE]);
 
     const confirmRecoveryKeySaved = useCallback(async () => {
@@ -1978,32 +1996,46 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
     }, [bundle]);
 
-    // Signed in, syncing, not yet end-to-end encrypted, and the user never turned
-    // it off: encrypt with a generated recovery key, once per account and launch.
-    // The key is then shown until the user confirms it is saved.
+    // Signed in, syncing, and the account was never end-to-end encrypted: encrypt
+    // with a generated recovery key, once per account and launch. An account that
+    // had encryption before (turned off or reset, on any device) is left alone.
     useEffect(() => {
         if (!isAuthenticated || isGuest || !userId) return;
-        if (status === 'loading') return;
-        // Nothing to set up (already encrypted, locked, sync off, or a reset to
-        // resolve): let a sign-in that waited for this sync normally.
+        if (status === 'loading' || loadedForUser !== userId) return;
         if (status !== 'ready' || mode !== 'local' || !syncEnabled || resetRecoveryPending) {
             syncService.releaseEncryptionHold();
             return;
         }
-        if (autoEncryptionAttemptRef.current === userId) return;
+        if (autoEncryptionAttemptRef.current === userId || enableInFlightRef.current) {
+            syncService.releaseEncryptionHold();
+            return;
+        }
         autoEncryptionAttemptRef.current = userId;
+        const forUser = userId;
+        setAutoEncrypting(true);
         void (async () => {
             try {
-                if (await storage.getAutoEncryptionOptOut(userId)) return;
-                if (await storage.getEncryptionMigrationState(userId)) return;
+                if (await storage.getAutoEncryptionOptOut(forUser)) return;
+                if (await storage.getEncryptionMigrationState(forUser)) return;
                 const net = await NetInfo.fetch().catch(() => null);
                 if (net?.isConnected === false || net?.isInternetReachable === false) {
                     autoEncryptionAttemptRef.current = null; // try again on a later state change
                     return;
                 }
                 const serverState = await e2eeApi.fetchState();
-                if (!serverState || serverState.enc_mode !== 'off' || serverState.transition_state) return;
-                setAutoEncrypting(true);
+                const neverEncrypted = !!serverState
+                    && serverState.enc_mode === 'off'
+                    && !serverState.transition_state
+                    && Number(serverState.key_epoch ?? 0) === 0
+                    && Number(serverState.vault_generation ?? 0) === 0;
+                if (!neverEncrypted) {
+                    // Encrypted before and turned off: respect it on this device too.
+                    if (serverState && serverState.enc_mode === 'off') {
+                        await storage.setAutoEncryptionOptOut(forUser, true);
+                    }
+                    return;
+                }
+                if (loadedForUserRef.current !== forUser) return; // the user changed meanwhile
                 await enableE2EEWithRecoveryKey();
             } catch (error) {
                 console.warn('[Encryption] Automatic end-to-end setup did not complete', error);
@@ -2012,16 +2044,18 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 syncService.releaseEncryptionHold();
             }
         })();
-    }, [isAuthenticated, isGuest, userId, status, mode, syncEnabled, resetRecoveryPending, enableE2EEWithRecoveryKey]);
+    }, [isAuthenticated, isGuest, userId, loadedForUser, status, mode, syncEnabled, resetRecoveryPending, enableE2EEWithRecoveryKey]);
 
     // A recovery key shown after automatic setup but not yet confirmed comes back.
     useEffect(() => {
         if (!userId || status !== 'ready' || mode !== 'e2ee' || !recoveryCode) return;
-        if (bundle?.secret_mode !== 'recovery_code') return;
-        void storage.getRecoveryKeySaved(userId).then((saved) => {
-            if (!saved) setRecoveryKeyNeedsSaving(true);
-        });
-    }, [userId, status, mode, recoveryCode, bundle?.secret_mode]);
+        if (bundle?.secret_mode !== 'recovery_code' || loadedForUser !== userId) return;
+        void (async () => {
+            // Not while the key may still be replaced (setup or a concurrent enable).
+            if (await storage.getEncryptionMigrationState(userId)) return;
+            if (!(await storage.getRecoveryKeySaved(userId))) setRecoveryKeyNeedsSaving(true);
+        })();
+    }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.secret_mode]);
 
     const value = useMemo(() => ({
         status,

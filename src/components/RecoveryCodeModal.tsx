@@ -78,7 +78,8 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
             visible={visible}
             transparent
             animationType="slide"
-            onRequestClose={onClose}
+            // Right after setup the key must be acknowledged with the button, not Back.
+            onRequestClose={firstTime ? () => undefined : onClose}
         >
             <View style={styles.backdrop}>
                 <View style={styles.card}>
@@ -112,7 +113,7 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                             <View style={styles.qrWrapper}>
                                 <ViewShot
                                     ref={viewShotRef}
-                                    options={{ format: 'png', quality: 1.0 }}
+                                    options={{ format: 'jpg', quality: 1.0 }} /* the key import reads JPEG */
                                     style={styles.qrBg}
                                 >
                                     <QRCode

@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useEncryption } from '../context/EncryptionContext';
+import { useAuth } from '../hooks/useAuth';
+import { storage } from '../utils/storage';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -20,7 +22,7 @@ import { TextInput } from './TextInput';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import jpeg from 'jpeg-js';
 import jsQR from 'jsqr';
 import { createStyles } from '../theme/createStyles';
@@ -37,7 +39,8 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
     onSuccess,
 }) => {
     const { t } = useTranslation();
-    const { setupWithRecoveryCode } = useEncryption();
+    const { setupWithRecoveryCode, unlock, bundle } = useEncryption();
+    const { userId } = useAuth();
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -64,7 +67,16 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
         setLoading(true);
         setError(null);
         try {
-            await setupWithRecoveryCode(code);
+            // An account encrypted with its recovery key unlocks like any vault
+            // (unlock() also handles a reset or a remote disable). The 24 words of
+            // a passphrase account are the raw key: they rebuild it locally.
+            if (bundle?.secret_mode === 'recovery_code') {
+                // Typing the key proves it is saved: no "save your key" prompt after.
+                if (userId) await storage.setRecoveryKeySaved(userId, true);
+                await unlock(code);
+            } else {
+                await setupWithRecoveryCode(code);
+            }
             setCode('');
             onSuccess();
             onClose();
@@ -102,6 +114,11 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
             });
 
             const buffer = base64ToUint8Array(base64);
+            const isJpeg = buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8;
+            if (!isJpeg) {
+                Alert.alert(t('common.error', 'Error'), t('settings.recovery.jpegOnly', 'Choose a JPEG photo or screenshot of the QR code, or scan it with the camera.'));
+                return;
+            }
             const decoded = jpeg.decode(buffer, { useTArray: true });
             
             if (decoded && decoded.data) {

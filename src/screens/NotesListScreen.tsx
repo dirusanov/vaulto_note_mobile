@@ -124,7 +124,8 @@ export const NotesListScreen = () => {
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
             if (nextState === 'background' || nextState === 'inactive') {
-                setShowUnlockSyncModal(false);
+                // The unlock sheet stays: picking the key's QR from the gallery or
+                // the camera permission prompt also sends the app to the background.
                 setShowUnlockingOverlay(false);
                 setUnlockProgress(null);
                 commitPendingDeleteRef.current();
