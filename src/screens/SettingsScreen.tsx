@@ -27,8 +27,8 @@ import {
     getOnDeviceTranscription,
     setOnDeviceTranscription,
 } from '../utils/storage';
-import { OnDeviceModelState, formatModelSize } from '../components/OnDeviceModelSection';
-import { hasRoomForModel } from '../services/modelDownload';
+import { formatModelSize } from '../components/OnDeviceModelSection';
+import { cancelOfflineDownload, downloadOfflineModels, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
@@ -50,32 +50,9 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
 import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
-import * as Clipboard from 'expo-clipboard';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
 import { CUSTOM_AI_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED, isLocalAIProvider } from '../utils/featureFlags';
-import {
-    cancelLocalWhisperDownload,
-    deleteLocalWhisperModel,
-    downloadLocalWhisperModel,
-    getAvailableLocalWhisperModels,
-    getLocalWhisperModelStatus,
-    LocalWhisperModelKey,
-    setSelectedLocalWhisperModel,
-    isLocalWhisperModelSupportedByDevice,
-    canFitLocalWhisperModel,
-} from '../services/LocalWhisperService';
-import {
-    cancelLocalLLMDownload,
-    deleteLocalLLMModel,
-    downloadLocalLLMModel,
-    getAvailableLocalLLMModels,
-    getLocalLLMModelStatus,
-    isLocalLLMRuntimeAvailable,
-    LocalLLMModelKey,
-    setSelectedLocalLLMModel,
-    isLocalLLMModelSupportedByDevice,
-    getRecommendedLocalLLMModelKey,
-} from '../services/LocalLLMService';
+import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
 import { SearchableLanguageSelector } from '../components/SearchableLanguageSelector';
 import { RecoveryCodeModal } from '../components/RecoveryCodeModal';
 import { createStyles } from '../theme/createStyles';
@@ -355,7 +332,26 @@ export const SettingsScreen = () => {
         setSyncEnabledPreference,
         keepResetArchiveLocal,
         resumeStandardSyncAfterReset,
+        enableE2EEWithRecoveryKey,
+        autoEncrypting,
     } = useEncryption();
+    const [overlayKind, setOverlayKind] = useState<'unlock' | 'encrypt'>('unlock');
+
+    // End-to-end encryption with a recovery key: the key is shown app-wide once ready.
+    const handleEnableEncryption = useCallback(async () => {
+        setOverlayKind('encrypt');
+        setUnlockProgress(0);
+        setShowUnlockingOverlay(true);
+        try {
+            await enableE2EEWithRecoveryKey((progress) => setUnlockProgress(progress));
+        } catch (error: any) {
+            Alert.alert(t('aux.enableSyncFailed', 'Could not enable encryption'), getErrorMessage(error, t('common.errorOccurred', 'An error occurred')));
+        } finally {
+            setShowUnlockingOverlay(false);
+            setUnlockProgress(null);
+            setOverlayKind('unlock');
+        }
+    }, [enableE2EEWithRecoveryKey, t]);
 
     const [apiKey, setApiKeyState] = useState('');
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
@@ -387,35 +383,20 @@ export const SettingsScreen = () => {
     const [showSecurityAuthModal, setShowSecurityAuthModal] = useState(false);
     const [showDisableSyncModal, setShowDisableSyncModal] = useState(false);
     const [showDisableEncryptionModal, setShowDisableEncryptionModal] = useState(false);
-    const [showLocalWhisperDeleteConfirm, setShowLocalWhisperDeleteConfirm] = useState(false);
     // Every model's state (on the phone? fits this phone?), not only the selected one.
-    const [whisperModelStates, setWhisperModelStates] = useState<Record<string, OnDeviceModelState>>({});
-    const [llmModelStates, setLLMModelStates] = useState<Record<string, OnDeviceModelState>>({});
-    const [recommendedLLMKey, setRecommendedLLMKey] = useState<string | null>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
-    const [localWhisperStatus, setLocalWhisperStatus] = useState<Awaited<ReturnType<typeof getLocalWhisperModelStatus>> | null>(null);
     const [onDeviceTranscription, setOnDeviceTranscriptionState] = useState(false);
-    const [localWhisperBusy, setLocalWhisperBusy] = useState(false);
-    const [localWhisperProgress, setLocalWhisperProgress] = useState(0);
-    const [localWhisperBytesLoaded, setLocalWhisperBytesLoaded] = useState(0);
-    const [localWhisperBytesTotal, setLocalWhisperBytesTotal] = useState(0);
-    const [isDownloadingLocalWhisper, setIsDownloadingLocalWhisper] = useState(false);
-    // The model being downloaded; the one in use stays selected until it is done.
-    const [pendingWhisperKey, setPendingWhisperKey] = useState<LocalWhisperModelKey | null>(null);
-    const whisperDownloadStartingRef = useRef(false);
-    const [localLLMStatus, setLocalLLMStatus] = useState<Awaited<ReturnType<typeof getLocalLLMModelStatus>> | null>(null);
-    const [localLLMBusy, setLocalLLMBusy] = useState(false);
-    const [localLLMProgress, setLocalLLMProgress] = useState(0);
-    const [localLLMBytesLoaded, setLocalLLMBytesLoaded] = useState(0);
-    const [localLLMBytesTotal, setLocalLLMBytesTotal] = useState(0);
-    const [isDownloadingLocalLLM, setIsDownloadingLocalLLM] = useState(false);
-    const [showLocalLLMDeleteConfirm, setShowLocalLLMDeleteConfirm] = useState(false);
+    const [offlineStatus, setOfflineStatus] = useState<OfflineStatus | null>(null);
+    const [offlinePlan, setOfflinePlan] = useState<OfflinePlan | null>(null);
+    // Non-null while offline mode downloads: bytes across both models.
+    const [offlineProgress, setOfflineProgress] = useState<{ loaded: number; total: number } | null>(null);
+    const [showOfflineOffConfirm, setShowOfflineOffConfirm] = useState(false);
+    const offlineStartingRef = useRef(false);
 
     const usingOpenAI = aiProvider === 'openai';
     const showCustomAIConfig = usingOpenAI || customAIPending;
     const usingLocalWhisper = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_whisper' || (aiProvider as string) === 'local');
-    const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
     const guestSecondsLeft = user?.transcription_remaining_seconds;
     const trialInfoText = typeof guestSecondsLeft === 'number'
         ? (guestSecondsLeft > 0
@@ -423,69 +404,40 @@ export const SettingsScreen = () => {
             : t('settings.ui.guestMinutesUsed', 'Free minutes are used up. Sign in to get more, or turn on "Work without internet" below.'))
         : t('settings.ui.trialInfoAccount', 'Sign in to get free speech-to-text minutes and sync your notes.');
     const hasConfiguredKey = encryptionMode === 'e2ee';
-    const isSyncLocked = syncLocked || encryptionStatus === 'locked';
-    const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking') : (isSyncLocked ? t('settings.ui.locked') : !syncEnabled ? t('settings.ui.off') : t('settings.ui.on'));
-    const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
     const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
 
-    // Voice & AI card. The cloud is the default and needs no setup; "work
-    // without internet" downloads a speech model that takes over offline, and
-    // "only on this phone" keeps voice and AI on the device even online.
-    const whisperReady = !!localWhisperStatus?.isDownloaded;
-    const offlineVoiceOn = whisperReady || isDownloadingLocalWhisper;
-    // On for "everything on the phone" (provider 'local') and for the older
-    // voice-only choice (on-device transcription with a cloud provider).
-    const privateMode = whisperReady && (usingLocalWhisper || onDeviceTranscription);
-    const privateVoiceOnly = privateMode && !usingLocalWhisper;
-    const usingLocalLLMProvider = LOCAL_MODELS_ENABLED && (aiProvider as string) === 'local';
-    const showPrivateRow = whisperReady || usingLocalWhisper || onDeviceTranscription;
-    const activeWhisperKey = pendingWhisperKey ?? localWhisperStatus?.selectedModel.key;
-    const whisperQualityOptions = (['tiny', 'base', 'turbo'] as LocalWhisperModelKey[]).map((key) => ({
-        key,
-        label: {
-            tiny: t('settings.voice.fast', 'Fast'),
-            base: t('settings.voice.balanced', 'Balanced'),
-            turbo: t('settings.voice.accurate', 'Accurate'),
-        }[key as 'tiny' | 'base' | 'turbo'],
-        sizeBytes: getAvailableLocalWhisperModels().find((m) => m.key === key)?.sizeBytes ?? 0,
-    }));
-    // Balanced is the sweet spot of size and accuracy; Fast on phones too small for it.
-    const recommendedWhisperKey: LocalWhisperModelKey = whisperModelStates.base?.available === false ? 'tiny' : 'base';
-    const downloadedWhisperBytes = getAvailableLocalWhisperModels()
-        .filter((m) => whisperModelStates[m.key]?.downloaded)
-        .reduce((sum, m) => sum + m.sizeBytes, 0) || (localWhisperStatus?.selectedModel.sizeBytes ?? 0);
-    const downloadedLLMBytes = getAvailableLocalLLMModels()
-        .filter((m) => llmModelStates[m.key]?.downloaded)
-        .reduce((sum, m) => sum + m.sizeBytes, 0) || (localLLMStatus?.selectedModel.sizeBytes ?? 0);
-    const describeDownload = (progress: number, loaded: number, total: number) => [
-        t('settings.voice.downloading', 'Downloading · {{percent}}%', { percent: Math.round(progress * 100) }),
-        total > 0 ? `${formatModelSize(loaded, t)} / ${formatModelSize(total, t)}` : '',
-    ].filter(Boolean).join(' · ');
-    const activeQualityLabel = whisperQualityOptions.find((o) => o.key === activeWhisperKey)?.label
-        ?? localWhisperStatus?.selectedModel.label ?? '';
-    const offlineVoiceDescription = isDownloadingLocalWhisper
-        ? describeDownload(localWhisperProgress, localWhisperBytesLoaded, localWhisperBytesTotal)
-        : whisperReady
-            ? t('settings.voice.offlineReady', 'Ready · {{quality}}, {{size}} on the phone', {
-                quality: activeQualityLabel,
-                size: formatModelSize(localWhisperStatus?.selectedModel.sizeBytes ?? 0, t),
-            })
-            : t('settings.voice.offlineHint', 'Turn speech into text offline. One download, {{size}}', {
-                size: formatModelSize(whisperQualityOptions.find((o) => o.key === recommendedWhisperKey)?.sizeBytes ?? 0, t),
-            });
-    const offlineAIOn = !!localLLMStatus?.isDownloaded || isDownloadingLocalLLM;
-    const recommendedLLM = getAvailableLocalLLMModels().find((m) => m.key === recommendedLLMKey) ?? localLLMStatus?.selectedModel;
-    const offlineAIDescription = isDownloadingLocalLLM
-        ? describeDownload(localLLMProgress, localLLMBytesLoaded, localLLMBytesTotal)
-        : localLLMStatus?.isDownloaded
-            ? t('settings.voice.offlineAIReady', 'Ready · edits and questions work offline, {{size}}', {
-                size: formatModelSize(localLLMStatus.selectedModel.sizeBytes, t),
-            })
-            : t('settings.voice.offlineAIHint', 'Edit and ask your notes offline. One download, {{size}}', {
-                size: formatModelSize(recommendedLLM?.sizeBytes ?? 0, t),
-            });
+    // Voice & AI card: the cloud works with no setup; one "Offline mode" switch
+    // downloads the best speech and AI models this phone can run; "Only on this
+    // phone" then keeps voice (and AI) on the device even online.
+    const offlineDownloading = offlineProgress !== null;
+    const offlineOn = !!offlineStatus?.speechReady || offlineDownloading;
+    const offlineAIMissing = !!offlineStatus?.speechReady && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady;
+    const privateMode = !!offlineStatus?.speechReady && (usingLocalWhisper || onDeviceTranscription);
+    const privateVoiceOnly = !offlineStatus?.aiReady;
+    const offlineDescription = offlineDownloading
+        ? [
+            t('settings.voice.downloading', 'Downloading · {{percent}}%', {
+                percent: offlineProgress && offlineProgress.total > 0 ? Math.round((offlineProgress.loaded / offlineProgress.total) * 100) : 0,
+            }),
+            offlineProgress && offlineProgress.total > 0
+                ? `${formatModelSize(offlineProgress.loaded, t)} / ${formatModelSize(offlineProgress.total, t)}`
+                : '',
+        ].filter(Boolean).join(' · ')
+        : offlineStatus?.speechReady
+            ? (offlineAIMissing
+                ? t('settings.voice.offlineAIMissing', 'Speech works offline. Tap to add AI ({{size}})', {
+                    size: formatModelSize(offlinePlan?.downloadBytes ?? 0, t),
+                })
+                : offlineStatus.aiReady
+                    ? t('settings.voice.offlineReadyAll', 'Ready · speech and AI work without internet')
+                    : t('settings.voice.offlineReadySpeech', 'Ready · speech works without internet'))
+            : offlinePlan
+                ? t('settings.voice.offlineHintAll', 'Speech and AI right on the phone, no internet needed · {{size}}', {
+                    size: formatModelSize(offlinePlan.downloadBytes, t),
+                })
+                : t('settings.voice.offlineNoSpace', 'Not enough free space on this phone');
 
     const openManageSubscription = useCallback(async () => {
         const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
@@ -570,63 +522,13 @@ export const SettingsScreen = () => {
 
 
 
-    const refreshModelStates = useCallback(async () => {
-        const describe = async (
-            key: string,
-            isDownloaded: Promise<boolean>,
-            supported: Promise<boolean>,
-            fits: Promise<boolean>,
-        ): Promise<[string, OnDeviceModelState]> => {
-            const [downloaded, ok, room] = await Promise.all([isDownloaded, supported, fits]);
-            return [key, {
-                downloaded,
-                available: ok && room,
-                unavailableReason: !ok
-                    ? t('localModels.notEnoughMemory', 'Needs more memory than this phone has')
-                    : t('localModels.notEnoughSpace', 'Not enough free space'),
-            }];
-        };
+    const refreshOffline = useCallback(async () => {
         try {
-            const [whisperEntries, llmEntries, recommended] = await Promise.all([
-                Promise.all(getAvailableLocalWhisperModels().map((m) => describe(
-                    m.key,
-                    getLocalWhisperModelStatus(m.key).then((st) => st.isDownloaded),
-                    isLocalWhisperModelSupportedByDevice(m.key),
-                    canFitLocalWhisperModel(m.key),
-                ))),
-                Promise.all(getAvailableLocalLLMModels().map((m) => describe(
-                    m.key,
-                    getLocalLLMModelStatus(m.key).then((st) => st.isDownloaded),
-                    isLocalLLMModelSupportedByDevice(m.key),
-                    hasRoomForModel(m.sizeBytes),
-                ))),
-                getRecommendedLocalLLMModelKey(),
-            ]);
-            setWhisperModelStates(Object.fromEntries(whisperEntries));
-            setLLMModelStates(Object.fromEntries(llmEntries));
-            setRecommendedLLMKey(recommended);
+            const [status, plan] = await Promise.all([getOfflineStatus(), planOfflineModels()]);
+            setOfflineStatus(status);
+            setOfflinePlan(plan);
         } catch (error) {
-            console.warn('Failed to read on-device model states', error);
-        }
-    }, [t]);
-
-    const refreshLocalWhisperStatus = useCallback(async () => {
-        try {
-            const status = await getLocalWhisperModelStatus();
-            setLocalWhisperStatus(status);
-        } catch (error) {
-            console.error('Failed to load Local Whisper status', error);
-            setLocalWhisperStatus(null);
-        }
-    }, []);
-
-    const refreshLocalLLMStatus = useCallback(async () => {
-        try {
-            const status = await getLocalLLMModelStatus();
-            setLocalLLMStatus(status);
-        } catch (error) {
-            console.error('Failed to load Local LLM status', error);
-            setLocalLLMStatus(null);
+            console.warn('Failed to read offline mode state', error);
         }
     }, []);
 
@@ -637,10 +539,8 @@ export const SettingsScreen = () => {
 
     useFocusEffect(
         useCallback(() => {
-            refreshLocalWhisperStatus();
-            refreshLocalLLMStatus();
-            void refreshModelStates();
-        }, [refreshLocalWhisperStatus, refreshLocalLLMStatus, refreshModelStates])
+            void refreshOffline();
+        }, [refreshOffline])
     );
 
     const refreshCurrentPeriodUsage = useCallback(async () => {
@@ -707,8 +607,6 @@ export const SettingsScreen = () => {
             } else {
                 setAiProviderState(provider || 'vaulto_ai');
             }
-            setLocalWhisperStatus(whisperStatus);
-            setLocalLLMStatus(await getLocalLLMModelStatus());
             setTranscriptionLanguageState(savedLanguage);
         } catch (error) {
             console.error('Failed to load settings', error);
@@ -790,181 +688,31 @@ export const SettingsScreen = () => {
         }
     };
 
-    const handleSelectLocalWhisperModel = useCallback(async (modelKey: LocalWhisperModelKey) => {
-        setLocalWhisperBusy(true);
+    // Turns offline mode on (or completes it): the best models for this phone,
+    // confirmed once with their total size, downloaded as one progress bar.
+    const handleEnableOffline = useCallback(async () => {
+        if (offlineStartingRef.current || offlineProgress !== null) return;
+        offlineStartingRef.current = true;
         try {
-            await setSelectedLocalWhisperModel(modelKey);
-            const status = await getLocalWhisperModelStatus();
-            setLocalWhisperStatus(status);
-        } finally {
-            setLocalWhisperBusy(false);
-        }
-    }, []);
-
-    const handleDownloadLocalWhisper = useCallback(async (key: LocalWhisperModelKey) => {
-        setPendingWhisperKey(key);
-        setLocalWhisperBusy(true);
-        setIsDownloadingLocalWhisper(true);
-        setLocalWhisperProgress(0);
-        setLocalWhisperBytesLoaded(0);
-        setLocalWhisperBytesTotal(0);
-        try {
-            const status = await downloadLocalWhisperModel(key, (progress, loaded, total) => {
-                setLocalWhisperProgress(progress);
-                setLocalWhisperBytesLoaded(loaded);
-                setLocalWhisperBytesTotal(total);
-            });
-            setLocalWhisperStatus(status);
-        } catch (error: any) {
-            if (!(error?.message && error.message.toLowerCase().includes('cancel'))) {
-                Alert.alert(t("aux.downloadFailed"), error?.message || t("aux.unableDownloadWhisper"));
-            }
-        } finally {
-            setPendingWhisperKey(null);
-            setLocalWhisperBusy(false);
-            setIsDownloadingLocalWhisper(false);
-            setLocalWhisperProgress(0);
-            setLocalWhisperBytesLoaded(0);
-            setLocalWhisperBytesTotal(0);
-            void refreshModelStates();
-        }
-    }, [refreshModelStates, t]);
-
-    const handleCancelLocalWhisper = useCallback(async () => {
-        await cancelLocalWhisperDownload();
-    }, []);
-
-    // Turning offline speech off removes every speech model and hands recordings
-    // back to the cloud (a private, phone-only setup cannot work without one).
-    const handleDeleteLocalWhisper = useCallback(async () => {
-        setLocalWhisperBusy(true);
-        setShowLocalWhisperDeleteConfirm(false);
-        try {
-            // Settings first: a failed delete must not leave a phone-only setup without a model.
-            setOnDeviceTranscriptionState(false);
-            await setOnDeviceTranscription(false);
-            if (usingLocalWhisper) {
-                await updateProvider('vaulto_ai');
-            }
-            for (const model of getAvailableLocalWhisperModels()) {
-                if (whisperModelStates[model.key]?.downloaded) {
-                    await deleteLocalWhisperModel(model.key);
-                }
-            }
-            await deleteLocalWhisperModel(localWhisperStatus?.selectedModel.key).catch(() => undefined);
-            setLocalWhisperStatus(await getLocalWhisperModelStatus());
-            void refreshModelStates();
-        } catch (error: any) {
-            Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
-        } finally {
-            setLocalWhisperBusy(false);
-        }
-    }, [localWhisperStatus?.selectedModel.key, whisperModelStates, usingLocalWhisper, refreshModelStates]);
-
-    const handleDownloadLocalLLM = useCallback(async (key?: string) => {
-        if (!localLLMStatus) return;
-        const targetKey = (key || localLLMStatus.selectedModel.key) as LocalLLMModelKey;
-        const target = getAvailableLocalLLMModels().find((m) => m.key === targetKey) ?? localLLMStatus.selectedModel;
-        // Gigabytes: confirm first, and warn when it would go over mobile data.
-        const net = await NetInfo.fetch().catch(() => null);
-        const cellular = net?.type === 'cellular';
-        const proceed = await new Promise<boolean>((resolve) => {
-            Alert.alert(
-                t('localAI.downloadTitle', 'Download {{model}}?', { model: target.label }),
-                [
-                    t('localAI.downloadDesc', 'The model is {{size}}. It is downloaded once; after that AI works on this phone without internet and nothing is sent anywhere.', { size: formatModelSize(target.sizeBytes, t) }),
-                    cellular ? t('localAI.downloadCellular', 'You are on mobile data — Wi-Fi is recommended.') : '',
-                ].filter(Boolean).join('\n\n'),
-                [
-                    { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-                    { text: t('localAI.download', 'Download'), onPress: () => resolve(true) },
-                ],
-                { cancelable: true, onDismiss: () => resolve(false) },
-            );
-        });
-        if (!proceed) return;
-        // The downloaded model becomes the one in use; a cancelled or failed
-        // download hands it back to the model that was working before.
-        const currentLLM = await getLocalLLMModelStatus().catch(() => null);
-        const previousLLM = currentLLM?.isDownloaded ? currentLLM.selectedModel.key : null;
-        let llmCompleted = false;
-        await setSelectedLocalLLMModel(targetKey);
-        setLocalLLMStatus(await getLocalLLMModelStatus(targetKey));
-        setLocalLLMBusy(true);
-        setIsDownloadingLocalLLM(true);
-        setLocalLLMProgress(0);
-        setLocalLLMBytesLoaded(0);
-        setLocalLLMBytesTotal(0);
-        try {
-            await downloadLocalLLMModel(targetKey, (progress, loaded, total) => {
-                setLocalLLMProgress(progress);
-                setLocalLLMBytesLoaded(loaded);
-                setLocalLLMBytesTotal(total);
-            });
-            llmCompleted = true;
-            await refreshLocalLLMStatus();
-        } catch (error: any) {
-            if (error?.message && error.message.toLowerCase().includes('cancel')) {
-                // Ignore cancel errors
-            } else {
-                Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('alerts.llmDownloadFailed', 'Could not download the AI model.')));
-            }
-        } finally {
-            if (!llmCompleted && previousLLM && previousLLM !== targetKey) {
-                await setSelectedLocalLLMModel(previousLLM as LocalLLMModelKey);
-            }
-            await refreshLocalLLMStatus();
-            setLocalLLMBusy(false);
-            setIsDownloadingLocalLLM(false);
-            setLocalLLMProgress(0);
-            setLocalLLMBytesLoaded(0);
-            setLocalLLMBytesTotal(0);
-            void refreshModelStates();
-        }
-    }, [localLLMStatus, refreshLocalLLMStatus, refreshModelStates, t]);
-
-    const handleCancelLocalLLM = useCallback(async () => {
-        await cancelLocalLLMDownload();
-    }, []);
-
-    const handleDeleteLocalLLM = useCallback(async () => {
-        setLocalLLMBusy(true);
-        setShowLocalLLMDeleteConfirm(false);
-        try {
-            for (const model of getAvailableLocalLLMModels()) {
-                if (llmModelStates[model.key]?.downloaded) {
-                    await deleteLocalLLMModel(model.key);
-                }
-            }
-            await deleteLocalLLMModel(localLLMStatus?.selectedModel.key).catch(() => undefined);
-            await refreshLocalLLMStatus();
-            void refreshModelStates();
-        } catch (error: any) {
-            Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.llmDeleteFailed', 'Could not remove the AI model.')));
-        } finally {
-            setLocalLLMBusy(false);
-        }
-    }, [localLLMStatus?.selectedModel.key, llmModelStates, refreshLocalLLMStatus, refreshModelStates]);
-
-    // Picks a speech quality: a model already on the phone is just selected; a new
-    // one is downloaded and then replaces the old, so only one takes up space.
-    const handleWhisperQuality = useCallback(async (key: LocalWhisperModelKey) => {
-        // A ref, not state: a quick double tap must not start two downloads.
-        if (whisperDownloadStartingRef.current || isDownloadingLocalWhisper) return;
-        whisperDownloadStartingRef.current = true;
-        try {
-            if (whisperModelStates[key]?.downloaded) {
-                await handleSelectLocalWhisperModel(key);
-                void refreshModelStates();
+            const plan = await planOfflineModels();
+            if (!plan) {
+                Alert.alert(
+                    t('settings.voice.offlineNoSpaceTitle', 'Not enough space'),
+                    t('settings.voice.offlineNoSpace', 'Not enough free space on this phone'),
+                );
                 return;
             }
-            const net = await NetInfo.fetch().catch(() => null);
-            if (net?.type === 'cellular') {
-                const size = formatModelSize(getAvailableLocalWhisperModels().find((m) => m.key === key)?.sizeBytes ?? 0, t);
+            if (plan.downloadBytes > 0) {
+                const net = await NetInfo.fetch().catch(() => null);
                 const proceed = await new Promise<boolean>((resolve) => {
                     Alert.alert(
-                        t('settings.voice.cellularTitle', 'Download over mobile data?'),
-                        t('settings.voice.cellularDesc', 'The speech model is {{size}}. Wi-Fi is recommended.', { size }),
+                        t('settings.voice.offlineConfirmTitle', 'Download offline mode?'),
+                        [
+                            t('settings.voice.offlineConfirmDesc', 'The best speech and AI models for this phone, {{size}}, downloaded once. After that notes work without internet.', {
+                                size: formatModelSize(plan.downloadBytes, t),
+                            }),
+                            net?.type === 'cellular' ? t('localAI.downloadCellular', 'You are on mobile data — Wi-Fi is recommended.') : '',
+                        ].filter(Boolean).join('\n\n'),
                         [
                             { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
                             { text: t('localAI.download', 'Download'), onPress: () => resolve(true) },
@@ -974,59 +722,64 @@ export const SettingsScreen = () => {
                 });
                 if (!proceed) return;
             }
-            const download = handleDownloadLocalWhisper(key);
-            whisperDownloadStartingRef.current = false;
-            await download;
-            const status = await getLocalWhisperModelStatus(key).catch(() => null);
-            if (!status?.isDownloaded) return;
-            for (const model of getAvailableLocalWhisperModels()) {
-                if (model.key === key) continue;
-                const other = await getLocalWhisperModelStatus(model.key).catch(() => null);
-                if (other?.isDownloaded) {
-                    await deleteLocalWhisperModel(model.key).catch(() => undefined);
+            setOfflineProgress({ loaded: 0, total: plan.downloadBytes });
+            offlineStartingRef.current = false;
+            try {
+                await downloadOfflineModels(plan, (loaded, total) => setOfflineProgress({ loaded, total }));
+                haptics.success();
+            } catch (error: any) {
+                if (!String(error?.message ?? '').toLowerCase().includes('cancel')) {
+                    Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
                 }
+            } finally {
+                setOfflineProgress(null);
+                await refreshOffline();
             }
-            setLocalWhisperStatus(await getLocalWhisperModelStatus());
-            void refreshModelStates();
-            haptics.success();
         } finally {
-            whisperDownloadStartingRef.current = false;
+            offlineStartingRef.current = false;
         }
-    }, [isDownloadingLocalWhisper, whisperModelStates, handleSelectLocalWhisperModel, handleDownloadLocalWhisper, refreshModelStates, t]);
+    }, [offlineProgress, refreshOffline, t]);
 
-    const handleToggleOfflineVoice = useCallback(async (on: boolean) => {
+    const handleToggleOffline = useCallback(async (on: boolean) => {
         if (on) {
-            await handleWhisperQuality(recommendedWhisperKey);
+            await handleEnableOffline();
             return;
         }
-        if (isDownloadingLocalWhisper) {
-            await handleCancelLocalWhisper();
+        if (offlineProgress !== null) {
+            await cancelOfflineDownload();
             return;
         }
-        setShowLocalWhisperDeleteConfirm(true);
-    }, [handleWhisperQuality, recommendedWhisperKey, isDownloadingLocalWhisper, handleCancelLocalWhisper]);
+        setShowOfflineOffConfirm(true);
+    }, [handleEnableOffline, offlineProgress]);
+
+    // Off removes both models. Settings first, so a failed delete never leaves a
+    // phone-only setup without its models.
+    const handleDisableOffline = useCallback(async () => {
+        setShowOfflineOffConfirm(false);
+        setOnDeviceTranscriptionState(false);
+        await setOnDeviceTranscription(false);
+        if (usingLocalWhisper) {
+            await updateProvider('vaulto_ai');
+        }
+        try {
+            await removeOfflineModels();
+        } catch (error: any) {
+            Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
+        }
+        await refreshOffline();
+    }, [usingLocalWhisper, refreshOffline, t]);
 
     const handleTogglePrivateMode = useCallback(async (on: boolean) => {
         setOnDeviceTranscriptionState(on);
         await setOnDeviceTranscription(on);
-        // Without the on-device AI runtime, "local" would block every AI feature:
-        // keep voice on the phone and leave AI as it was.
-        if (!on || localLLMRuntimeAvailable) {
-            await updateProvider(on ? 'local' : 'vaulto_ai');
+        // AI moves to the phone only when its model is there; otherwise "local"
+        // would block every AI feature. Voice alone stays private then.
+        if (!on) {
+            await updateProvider('vaulto_ai');
+        } else if (offlineStatus?.aiReady) {
+            await updateProvider('local');
         }
-    }, [localLLMRuntimeAvailable]);
-
-    const handleToggleOfflineAI = useCallback(async (on: boolean) => {
-        if (on) {
-            await handleDownloadLocalLLM(recommendedLLMKey ?? undefined);
-            return;
-        }
-        if (isDownloadingLocalLLM) {
-            await handleCancelLocalLLM();
-            return;
-        }
-        setShowLocalLLMDeleteConfirm(true);
-    }, [handleDownloadLocalLLM, recommendedLLMKey, isDownloadingLocalLLM, handleCancelLocalLLM]);
+    }, [offlineStatus?.aiReady]);
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
@@ -1414,55 +1167,57 @@ export const SettingsScreen = () => {
                         {/* A guest has no vault: encryption controls left by a previous account do not apply. */}
                         {(!hasConfiguredKey || isGuestOrAnonymous) ? (
                             <>
-                                <View style={styles.securityRowMinimal}>
-                                    <View style={styles.securityRowLeft}>
-                                        <View style={[styles.iconContainer, { backgroundColor: colors.accentGreen + '20' }]}>
-                                            <MaterialIcons name={!syncEnabled ? "cloud-off" : "cloud-done"} size={16} color={!syncEnabled ? colors.textSecondary : colors.accentGreen} />
-                                        </View>
-                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync (Normal Mode)")}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                        <Switch
-                                            value={syncEnabled}
-                                            onValueChange={(value) => {
-                                                void handleToggleSync(value);
-                                            }}
-                                            disabled={showUnlockingOverlay || resetRecoveryPending}
-                                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                            thumbColor={colors.onPrimary}
-                                            style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                                        />
-                                    </View>
-                                </View>
-
-                                <View style={styles.separator} />
-
-                                <View style={styles.securityRowMinimal}>
-                                    <View style={styles.securityRowLeft}>
-                                        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-                                            <MaterialCommunityIcons name="security" size={16} color={colors.primary} />
-                                        </View>
-                                        <Text style={[styles.securityLabelMinimal, { flex: 1 }]}>
-                                            {t("settings.ui.setupSync", "Upgrade to Encrypted Mode")}
-                                        </Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                        <TouchableOpacity
-                                            style={[styles.smallButton, { backgroundColor: colors.primary }]}
-                                            onPress={async () => {
-                                                if (isGuestOrAnonymous) {
-                                                    setShowSecurityAuthModal(true);
-                                                    return;
-                                                }
-                                                setShowEnableSyncModal(true);
-                                            }}
-                                        >
-                                            <Text style={styles.smallButtonText}>
-                                            {t("settings.ui.setupPassphrase", "Setup Passphrase")}
+                                <View style={[styles.preferenceRow, styles.voiceRow]}>
+                                    <View style={styles.voiceRowText}>
+                                        <MaterialIcons name={syncEnabled ? 'cloud-done' : 'cloud-off'} size={24} color={syncEnabled ? colors.primary : colors.textSecondary} />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.preferenceTitle}>{t('settings.sync.title', 'Sync')}</Text>
+                                            <Text style={styles.preferenceDescription}>
+                                                {syncEnabled
+                                                    ? t('settings.sync.onPlain', 'On · notes are backed up and on all your devices')
+                                                    : t('settings.sync.off', 'Off · notes stay on this phone')}
                                             </Text>
-                                        </TouchableOpacity>
+                                        </View>
                                     </View>
+                                    <Switch
+                                        value={syncEnabled}
+                                        onValueChange={(value) => { void handleToggleSync(value); }}
+                                        disabled={showUnlockingOverlay || resetRecoveryPending}
+                                        trackColor={{ false: colors.textTertiary, true: colors.primary }}
+                                        thumbColor={colors.onPrimary}
+                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                        accessibilityLabel={t('settings.sync.title', 'Sync')}
+                                    />
                                 </View>
+                                <View style={styles.separator} />
+                                <TouchableOpacity
+                                    style={[styles.preferenceRow, styles.voiceRow]}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    disabled={autoEncrypting}
+                                    onPress={() => {
+                                        if (isGuestOrAnonymous) {
+                                            setShowSecurityAuthModal(true);
+                                            return;
+                                        }
+                                        void handleEnableEncryption();
+                                    }}
+                                >
+                                    <View style={styles.voiceRowText}>
+                                        <MaterialIcons name="lock-outline" size={24} color={colors.textSecondary} />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.preferenceTitle}>{t('settings.sync.e2eeTitle', 'End-to-end encryption')}</Text>
+                                            <Text style={styles.preferenceDescription}>
+                                                {autoEncrypting
+                                                    ? t('settings.sync.e2eeTurningOn', 'Turning on…')
+                                                    : t('settings.sync.e2eeOffDesc', 'Only you can read your notes, not even Vaulto')}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    {autoEncrypting
+                                        ? <ActivityIndicator size="small" color={colors.primary} />
+                                        : <Text style={styles.rowAction}>{t('settings.sync.turnOn', 'Turn on')}</Text>}
+                                </TouchableOpacity>
                             </>
                         ) : encryptionStatus === 'locked' ? (
                             <TouchableOpacity
@@ -1494,91 +1249,61 @@ export const SettingsScreen = () => {
                             </TouchableOpacity>
                         ) : (
                             <>
-                                <View style={styles.securityRowMinimal}>
-                                    <View style={styles.securityRowLeft}>
-                                        <View style={[styles.iconContainer, { backgroundColor: isSyncLocked ? colors.warning + '20' : !syncEnabled ? colors.backgroundSecondary : colors.accentGreen + '20' }]}>
-                                            <MaterialIcons
-                                                name={isSyncLocked ? "lock" : !syncEnabled ? "cloud-off" : "cloud-done"}
-                                                size={16}
-                                                color={isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen}
-                                            />
+                                <View style={[styles.preferenceRow, styles.voiceRow]}>
+                                    <View style={styles.voiceRowText}>
+                                        <MaterialIcons name={syncEnabled ? 'cloud-done' : 'cloud-off'} size={24} color={syncEnabled ? colors.primary : colors.textSecondary} />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.preferenceTitle}>{t('settings.sync.title', 'Sync')}</Text>
+                                            <Text style={styles.preferenceDescription}>
+                                                {encryptionStatus === 'loading'
+                                                    ? t('settings.ui.checking', 'Checking…')
+                                                    : syncEnabled
+                                                        ? t('settings.sync.onE2ee', 'On · end-to-end encrypted, only you can read it')
+                                                        : t('settings.sync.off', 'Off · notes stay on this phone')}
+                                            </Text>
                                         </View>
-                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.sync", "Sync")}</Text>
                                     </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flexShrink: 1, justifyContent: 'flex-end' }}>
-                                        <Text style={[styles.securityValueMinimal, { color: syncStatusColor, flexShrink: 1 }]} numberOfLines={1}>{syncStatusLabel}</Text>
-                                        {encryptionStatus === 'loading' ? (
-                                            <ActivityIndicator size="small" color={colors.primary} />
-                                        ) : (
-                                            <>
-                                                {isSyncLocked && !syncToggleDisabled && (
-                                                    <TouchableOpacity style={[styles.smallButton, { backgroundColor: colors.warning }]} onPress={() => setShowUnlockSyncModal(true)}>
-                                                        <Text style={styles.smallButtonText}>{t("settings.ui.unlock", "Unlock")}</Text>
-                                                    </TouchableOpacity>
-                                                )}
-                                                {!isSyncLocked && !syncToggleDisabled && (
-                                                    <Switch
-                                                        value={syncEnabled}
-                                                        onValueChange={(value) => {
-                                                            void handleToggleSync(value);
-                                                        }}
-                                                        disabled={showUnlockingOverlay}
-                                                        trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                                        thumbColor={colors.onPrimary}
-                                                        style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-                                                    />
-                                                )}
-                                            </>
-                                        )}
-                                    </View>
+                                    {encryptionStatus === 'loading' ? (
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                    ) : !syncToggleDisabled && (
+                                        <Switch
+                                            value={syncEnabled}
+                                            onValueChange={(value) => { void handleToggleSync(value); }}
+                                            disabled={showUnlockingOverlay}
+                                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
+                                            thumbColor={colors.onPrimary}
+                                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                            accessibilityLabel={t('settings.sync.title', 'Sync')}
+                                        />
+                                    )}
                                 </View>
-
-                                <View style={styles.separator} />
-
-                                <View style={styles.securityRowMinimal}>
-                                    <View style={styles.securityRowLeft}>
-                                        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-                                            <MaterialCommunityIcons name="shield-key" size={16} color={colors.primary} />
-                                        </View>
-                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.exportRecoveryCode", "Export Recovery Code")}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                                        {!!recoveryCode && (
-                                            <TouchableOpacity
-                                                style={styles.smallButtonOutlined}
-                                                onPress={async () => {
-                                                    if (recoveryCode) {
-                                                        await Clipboard.setStringAsync(recoveryCode);
-                                                        Alert.alert(t("common.copied"), t("settings.recovery.copiedMsg"));
-                                                    } else {
-                                                        Alert.alert(t("common.errorTitle"), t("settings.recovery.noRecoveryCode", "No recovery code found. Try unlocking again."));
-                                                    }
-                                                }}
-                                            >
-                                                <Text style={styles.smallButtonTextOutlined}>{t('settings.ui.copyBtn', 'Copy')}</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
-
-                                <View style={styles.separator} />
-
-                                <View style={styles.securityRowMinimal}>
-                                    <View style={styles.securityRowLeft}>
-                                        <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
-                                            <MaterialCommunityIcons name="shield-off-outline" size={16} color={colors.warning} />
-                                        </View>
-                                        <Text style={styles.securityLabelMinimal}>{t("settings.ui.e2eeRow", "End-to-end encryption")}</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
+                                {!!recoveryCode && (
+                                    <>
+                                        <View style={styles.separator} />
                                         <TouchableOpacity
-                                            style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
-                                            onPress={() => setShowDisableEncryptionModal(true)}
+                                            style={[styles.preferenceRow, styles.voiceRow]}
+                                            activeOpacity={0.85}
+                                            accessibilityRole="button"
+                                            onPress={() => setShowRecoveryCodeModal(true)}
                                         >
-                                            <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>{t('settings.ui.disableBtn', 'Disable')}</Text>
+                                            <View style={styles.voiceRowText}>
+                                                <MaterialCommunityIcons name="key-variant" size={24} color={colors.textSecondary} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.preferenceTitle}>{t('settings.recovery.keyTitle', 'Recovery key')}</Text>
+                                                    <Text style={styles.preferenceDescription}>{t('settings.sync.keyDesc', 'Opens your notes on a new phone')}</Text>
+                                                </View>
+                                            </View>
+                                            <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
                                         </TouchableOpacity>
-                                    </View>
-                                </View>
+                                    </>
+                                )}
+                                <TouchableOpacity
+                                    style={styles.quietLink}
+                                    onPress={() => setShowDisableEncryptionModal(true)}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={styles.quietLinkText}>{t('settings.sync.turnOffE2ee', 'Turn off end-to-end encryption')}</Text>
+                                </TouchableOpacity>
                             </>
                         )}
 
@@ -1589,70 +1314,51 @@ export const SettingsScreen = () => {
 
 
 
-                {/* Voice & AI: works out of the box (cloud), the phone takes over offline */}
+                {/* Voice & AI: works out of the box (cloud), one switch for offline */}
                 <View style={styles.card}>
                     <Text style={styles.dataCardTitle}>{t("settings.voice.title", "Voice & AI")}</Text>
 
                     {LOCAL_WHISPER_ENABLED && (
                         <>
-                            <View style={[styles.preferenceRow, styles.voiceRow]}>
+                            <TouchableOpacity
+                                style={[styles.preferenceRow, styles.voiceRow]}
+                                activeOpacity={0.85}
+                                disabled={!offlineAIMissing || offlineDownloading}
+                                onPress={() => { void handleEnableOffline(); }}
+                                accessibilityRole={offlineAIMissing ? 'button' : undefined}
+                            >
                                 <View style={styles.voiceRowText}>
-                                    <MaterialIcons name="cloud-off" size={24} color={offlineVoiceOn ? colors.primary : colors.textSecondary} />
+                                    <MaterialIcons name="cloud-off" size={24} color={offlineOn ? colors.primary : colors.textSecondary} />
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offline", "Work without internet")}</Text>
-                                        <Text style={styles.preferenceDescription}>{offlineVoiceDescription}</Text>
+                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offlineMode", "Offline mode")}</Text>
+                                        <Text style={styles.preferenceDescription}>{offlineDescription}</Text>
                                     </View>
                                 </View>
                                 <Switch
-                                    value={offlineVoiceOn}
-                                    onValueChange={(value) => { void handleToggleOfflineVoice(value); }}
-                                    disabled={localWhisperBusy && !isDownloadingLocalWhisper}
+                                    value={offlineOn}
+                                    onValueChange={(value) => { void handleToggleOffline(value); }}
+                                    disabled={!offlineOn && !offlinePlan}
                                     trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                    accessibilityLabel={t("settings.voice.offline", "Work without internet")}
+                                    accessibilityLabel={t("settings.voice.offlineMode", "Offline mode")}
                                 />
-                            </View>
+                            </TouchableOpacity>
 
-                            {isDownloadingLocalWhisper && (
+                            {offlineDownloading && (
                                 <View style={styles.voiceProgress}>
                                     <View style={styles.voiceProgressTrack}>
-                                        <View style={[styles.voiceProgressFill, { width: `${Math.round(localWhisperProgress * 100)}%` }]} />
+                                        <View style={[styles.voiceProgressFill, {
+                                            width: `${offlineProgress && offlineProgress.total > 0 ? Math.round((offlineProgress.loaded / offlineProgress.total) * 100) : 0}%`,
+                                        }]} />
                                     </View>
-                                    <TouchableOpacity onPress={() => { void handleCancelLocalWhisper(); }} hitSlop={8} accessibilityRole="button">
+                                    <TouchableOpacity onPress={() => { void cancelOfflineDownload(); }} hitSlop={12} accessibilityRole="button">
                                         <Text style={styles.voiceProgressCancel}>{t("common.cancel", "Cancel")}</Text>
                                     </TouchableOpacity>
                                 </View>
                             )}
 
-                            {offlineVoiceOn && (
-                                <View style={styles.voiceQuality}>
-                                    <Text style={styles.voiceQualityLabel}>{t("settings.voice.quality", "Recognition quality")}</Text>
-                                    <View style={[styles.themeSegments, { marginTop: spacing.xs }]}>
-                                        {whisperQualityOptions.map((option) => {
-                                            const active = option.key === activeWhisperKey;
-                                            const state = whisperModelStates[option.key];
-                                            const unavailable = state?.available === false && !state?.downloaded;
-                                            return (
-                                                <TouchableOpacity
-                                                    key={option.key}
-                                                    style={[styles.themeSegment, active && styles.themeSegmentActive, unavailable && { opacity: 0.4 }]}
-                                                    onPress={() => { void handleWhisperQuality(option.key); }}
-                                                    disabled={unavailable || localWhisperBusy}
-                                                    accessibilityRole="button"
-                                                    accessibilityState={{ selected: active, disabled: unavailable }}
-                                                >
-                                                    <Text style={[styles.themeSegmentText, active && styles.themeSegmentTextActive]}>{option.label}</Text>
-                                                    <Text style={styles.voiceQualitySize}>{formatModelSize(option.sizeBytes, t)}</Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-                                    <Text style={styles.voiceHint}>{t("settings.voice.qualityHint", "More accurate means slower and more space. The cloud is used while online.")}</Text>
-                                </View>
-                            )}
-
-                            {showPrivateRow && (
+                            {!!offlineStatus?.speechReady && (
                                 <>
                                     <View style={styles.separator} />
                                     <View style={[styles.preferenceRow, styles.voiceRow]}>
@@ -1661,7 +1367,7 @@ export const SettingsScreen = () => {
                                             <View style={{ flex: 1 }}>
                                                 <Text style={styles.preferenceTitle}>{t("settings.voice.private", "Only on this phone")}</Text>
                                                 <Text style={styles.preferenceDescription}>
-                                                    {privateVoiceOnly || !localLLMRuntimeAvailable
+                                                    {privateVoiceOnly
                                                         ? t("settings.voice.privateVoiceDesc", "Voice never leaves the phone, even online")
                                                         : t("settings.voice.privateDesc", "Voice and AI never leave the phone, even online")}
                                                 </Text>
@@ -1670,7 +1376,6 @@ export const SettingsScreen = () => {
                                         <Switch
                                             value={privateMode}
                                             onValueChange={(value) => { void handleTogglePrivateMode(value); }}
-                                            disabled={!whisperReady && !privateMode}
                                             trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                             thumbColor={colors.onPrimary}
                                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
@@ -1691,41 +1396,6 @@ export const SettingsScreen = () => {
                             onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
                         />
                     </View>
-
-                    {LOCAL_MODELS_ENABLED && localLLMRuntimeAvailable && (
-                        <>
-                            <View style={styles.separator} />
-                            <View style={[styles.preferenceRow, styles.voiceRow]}>
-                                <View style={styles.voiceRowText}>
-                                    <MaterialIcons name="auto-awesome" size={24} color={offlineAIOn ? colors.primary : colors.textSecondary} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offlineAI", "AI without internet")}</Text>
-                                        <Text style={styles.preferenceDescription}>{offlineAIDescription}</Text>
-                                    </View>
-                                </View>
-                                <Switch
-                                    value={offlineAIOn}
-                                    onValueChange={(value) => { void handleToggleOfflineAI(value); }}
-                                    disabled={localLLMBusy && !isDownloadingLocalLLM}
-                                    trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                    thumbColor={colors.onPrimary}
-                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                    accessibilityLabel={t("settings.voice.offlineAI", "AI without internet")}
-                                />
-                            </View>
-                            {isDownloadingLocalLLM && (
-                                <View style={styles.voiceProgress}>
-                                    <View style={styles.voiceProgressTrack}>
-                                        <View style={[styles.voiceProgressFill, { width: `${Math.round(localLLMProgress * 100)}%` }]} />
-                                    </View>
-                                    <TouchableOpacity onPress={() => { void handleCancelLocalLLM(); }} hitSlop={8} accessibilityRole="button">
-                                        <Text style={styles.voiceProgressCancel}>{t("common.cancel", "Cancel")}</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </>
-                    )}
-
                             {/* Setup for Custom AI (OpenAI & Compatible) */}
                             {CUSTOM_AI_ENABLED && showCustomAIConfig && (
                                 <View style={styles.openAIConfigCard}>
@@ -1983,29 +1653,15 @@ export const SettingsScreen = () => {
             />
 
             <DeleteConfirmationDialog
-                visible={showLocalWhisperDeleteConfirm}
-                title={t('settings.voice.offlineOffTitle', 'Turn off offline speech?')}
+                visible={showOfflineOffConfirm}
+                title={t('settings.voice.offlineModeOffTitle', 'Turn off offline mode?')}
                 message={t(
-                    'settings.voice.offlineOffDesc',
-                    'The speech model is removed from this phone and frees {{size}}. Without internet, recordings are saved and turned into text once you are back online.',
-                    { size: formatModelSize(downloadedWhisperBytes, t) }
+                    'settings.voice.offlineModeOffDesc',
+                    'The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.',
+                    { size: formatModelSize(offlineStatus?.bytesOnPhone ?? 0, t) }
                 )}
-                onConfirm={handleDeleteLocalWhisper}
-                onCancel={() => setShowLocalWhisperDeleteConfirm(false)}
-            />
-
-            <DeleteConfirmationDialog
-                visible={showLocalLLMDeleteConfirm}
-                title={t('settings.voice.offlineAIOffTitle', 'Turn off offline AI?')}
-                message={t(
-                    usingLocalLLMProvider ? 'settings.voice.offlineAIOffPrivateDesc' : 'settings.voice.offlineAIOffDesc',
-                    usingLocalLLMProvider
-                        ? 'The AI model is removed from this phone and frees {{size}}. With "Only on this phone" on, AI features stay off until you download it again.'
-                        : 'The AI model is removed from this phone and frees {{size}}. AI features keep working online.',
-                    { size: formatModelSize(downloadedLLMBytes, t) }
-                )}
-                onConfirm={handleDeleteLocalLLM}
-                onCancel={() => setShowLocalLLMDeleteConfirm(false)}
+                onConfirm={() => { void handleDisableOffline(); }}
+                onCancel={() => setShowOfflineOffConfirm(false)}
             />
 
             <EnableSyncModal
@@ -2054,8 +1710,12 @@ export const SettingsScreen = () => {
             />
             <UnlockingOverlay
                 visible={showUnlockingOverlay}
-                title={t("settings.ui.unlockingNotesTitle", "Unlocking notes")}
-                subtitle={t("settings.ui.unlockingNotesSubtitle", "Checking your passphrase on this device.")}
+                title={overlayKind === 'encrypt'
+                    ? t("settings.sync.encryptingTitle", "Encrypting your notes")
+                    : t("settings.ui.unlockingNotesTitle", "Unlocking notes")}
+                subtitle={overlayKind === 'encrypt'
+                    ? t("settings.sync.encryptingSubtitle", "Only you will be able to read them.")
+                    : t("settings.ui.unlockingNotesSubtitle", "Checking your passphrase on this device.")}
                 progress={unlockProgress ?? undefined}
                 progressLabel={t("common.progress", "Progress")}
             />
@@ -3343,6 +3003,16 @@ const styles = createStyles(() => ({
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
+    },
+    quietLink: {
+        alignSelf: 'center',
+        minHeight: 44,
+        justifyContent: 'center',
+        marginTop: spacing.xs,
+    },
+    quietLinkText: {
+        ...typography.caption,
+        color: colors.textSecondary,
     },
     rowAction: {
         ...typography.body,

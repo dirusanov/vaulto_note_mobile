@@ -50,7 +50,7 @@ export const NotesListScreen = () => {
     const avatarInitial = signedIn
         ? ((user?.full_name || user?.email || '').trim().charAt(0).toUpperCase() || null)
         : null;
-    const { syncLocked, resetRecoveryPending } = useEncryption();
+    const { syncLocked, resetRecoveryPending, bundle: encryptionBundle } = useEncryption();
     const {
         notes,
         loading,
@@ -669,7 +669,9 @@ export const NotesListScreen = () => {
                                 {t("notes.syncLocked")}
                             </Text>
                             <Text style={styles.lockBannerText}>
-                                {t("notes.unlockToRestore")}
+                                {encryptionBundle?.secret_mode === 'recovery_code'
+                                    ? t("notes.unlockWithKey", "Enter your recovery key to show them on this phone.")
+                                    : t("notes.unlockToRestore")}
                             </Text>
                         </View>
                     </View>

@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     ScrollView,
     Alert,
+    Share,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
@@ -23,12 +24,15 @@ interface RecoveryCodeModalProps {
     visible: boolean;
     onClose: () => void;
     recoveryCode: string | null;
+    /** Shown right after encryption was set up: the user confirms the key is saved. */
+    firstTime?: boolean;
 }
 
 export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
     visible,
     onClose,
     recoveryCode,
+    firstTime = false,
 }) => {
     const { t } = useTranslation();
     const viewShotRef = useRef<any>(null);
@@ -40,6 +44,15 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
             t('common.copied', 'Copied'),
             t('settings.recovery.copiedMsg', 'Recovery code copied to clipboard. Save it in a safe place!')
         );
+    };
+
+    const handleShare = async () => {
+        if (!recoveryCode) return;
+        try {
+            await Share.share({ message: recoveryCode });
+        } catch {
+            // dismissed
+        }
     };
 
     const handleSaveQR = async () => {
@@ -71,13 +84,17 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                 <View style={styles.card}>
                     <View style={styles.header}>
                         <View style={styles.iconContainer}>
-                            <MaterialCommunityIcons name="shield-key" size={24} color={colors.primary} />
+                            <MaterialCommunityIcons name={firstTime ? 'shield-check' : 'shield-key'} size={24} color={colors.primary} />
                         </View>
-                        <Text style={styles.title}>{t('settings.recovery.title', 'Recovery Code')}</Text>
+                        <Text style={styles.title}>
+                            {firstTime
+                                ? t('settings.recovery.readyTitle', 'Your notes are encrypted')
+                                : t('settings.recovery.keyTitle', 'Recovery key')}
+                        </Text>
                     </View>
 
                     <Text style={styles.warning}>
-                        {t('settings.recovery.warning', 'This code is the ONLY way to recover your notes if you lose access to this device. Do not share it with anyone.')}
+                        {t('settings.recovery.explain', 'Only this key opens your notes on a new phone. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.')}
                     </Text>
 
                     <ScrollView style={styles.codeContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -114,13 +131,19 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                     </ScrollView>
 
                     <View style={styles.actions}>
-                        <TouchableOpacity style={styles.copyButton} onPress={handleCopy}>
-                            <MaterialCommunityIcons name="content-copy" size={20} color={colors.primary} />
-                            <Text style={styles.copyButtonText}>{t('common.copy', 'Copy Code')}</Text>
-                        </TouchableOpacity>
+                        <View style={styles.secondaryRow}>
+                            <TouchableOpacity style={styles.copyButton} onPress={handleCopy} accessibilityRole="button">
+                                <MaterialCommunityIcons name="content-copy" size={20} color={colors.primary} />
+                                <Text style={styles.copyButtonText}>{t('common.copy', 'Copy')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.copyButton} onPress={handleShare} accessibilityRole="button">
+                                <MaterialCommunityIcons name="share-variant" size={20} color={colors.primary} />
+                                <Text style={styles.copyButtonText}>{t('settings.recovery.share', 'Share')}</Text>
+                            </TouchableOpacity>
+                        </View>
 
                         <Button
-                            title={t('common.done', 'Done')}
+                            title={firstTime ? t('settings.recovery.savedIt', 'I saved the key') : t('common.done', 'Done')}
                             onPress={onClose}
                             style={styles.doneButton}
                         />
@@ -169,12 +192,9 @@ const styles = createStyles(() => ({
     },
     warning: {
         ...typography.bodySmall,
-        color: colors.error,
-        backgroundColor: colors.error + '10',
-        padding: spacing.m,
-        borderRadius: 12,
+        color: colors.textSecondary,
         marginBottom: spacing.m,
-        lineHeight: 18,
+        lineHeight: 20,
     },
     codeContainer: {
         backgroundColor: colors.backgroundSecondary,
@@ -250,7 +270,12 @@ const styles = createStyles(() => ({
         gap: spacing.s,
         marginTop: spacing.xs,
     },
+    secondaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+    },
     copyButton: {
+        minHeight: 44,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',

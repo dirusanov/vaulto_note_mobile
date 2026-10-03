@@ -410,6 +410,21 @@ class SyncService {
         this.notifyListeners();
     }
 
+    // A new sign-in waits for automatic end-to-end setup before its first upload,
+    // so notes reach the server already encrypted. Bounded, so it can never stall
+    // sync for long; the encryption migration itself is never held.
+    private encryptionHoldUntil = 0;
+
+    public holdForEncryptionSetup(ms = 120_000) {
+        this.encryptionHoldUntil = Date.now() + ms;
+    }
+
+    public releaseEncryptionHold() {
+        if (this.encryptionHoldUntil === 0) return;
+        this.encryptionHoldUntil = 0;
+        void this.syncNow('auto');
+    }
+
     private async bootstrapSync() {
         const userId = this.currentUserId;
         if (!userId) return;
@@ -525,6 +540,11 @@ class SyncService {
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
             console.log('[SyncService] Encryption locked. Skipping sync.');
             if (throwOnError) throw new Error('Encryption is locked.');
+            return;
+        }
+        if (Date.now() < this.encryptionHoldUntil && reason !== 'e2ee_migration') {
+            console.log('[SyncService] Waiting for automatic encryption setup. Skipping sync.');
+            if (throwOnError) throw new Error('Encryption setup is in progress.');
             return;
         }
         const pendingEncryptionMigration = await storage.getEncryptionMigrationState(this.currentUserId);

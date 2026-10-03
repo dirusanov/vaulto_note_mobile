@@ -60,7 +60,8 @@
     "keptLockedText": "暗号化されています。開くにはアカウントにサインインしてください。",
     "deletedCount": "ゴミ箱に移動：{{count}}",
     "offlineSync": "オフラインです。変更は保存され、後で同期されます。",
-    "offline": "オフラインです。ノートと端末上の機能はそのまま使えます。"
+    "offline": "オフラインです。ノートと端末上の機能はそのまま使えます。",
+    "unlockWithKey": "復元キーを入力すると、この端末に表示されます。"
   },
   "settings": {
     "title": "設定",
@@ -82,9 +83,20 @@
       "advancedSettings": "高度なAI設定"
     },
     "sync": {
-      "title": "クラウド同期",
+      "title": "同期",
       "status": "同期ステータス",
-      "passphrase": "パスフレーズ"
+      "passphrase": "パスフレーズ",
+      "onPlain": "オン · メモはバックアップされ全端末で使えます",
+      "onE2ee": "オン · エンドツーエンド暗号化、読めるのはあなただけ",
+      "off": "オフ · メモはこの端末だけに保存",
+      "e2eeTitle": "エンドツーエンド暗号化",
+      "e2eeOffDesc": "メモを読めるのはあなただけ。Vaulto にも読めません",
+      "e2eeTurningOn": "オンにしています…",
+      "turnOn": "オンにする",
+      "keyDesc": "新しい端末でメモを開くためのキー",
+      "turnOffE2ee": "エンドツーエンド暗号化をオフにする",
+      "encryptingTitle": "メモを暗号化しています",
+      "encryptingSubtitle": "読めるのはあなただけになります。"
     },
     "account": {
       "signOut": "サインアウト",
@@ -224,9 +236,9 @@
       "warning": "このデバイスへのアクセスを失った場合、このコードがノートを復元する唯一の方法です。誰にも共有しないでください。",
       "copiedMsg": "復元コードがクリップボードにコピーされました。安全な場所に保存してください！",
       "useBtn": "復元コードを使用する",
-      "useTitle": "復元コードを使用する",
-      "useSubtitle": "暗号化されたノートへのアクセスを再開するには、12または24語の復元コードを入力してください。",
-      "label": "復元コード",
+      "useTitle": "復元キーを入力",
+      "useSubtitle": "暗号化をオンにしたときに表示された24の単語。貼り付けるか、別の端末のQRコードを読み取ってください。",
+      "label": "復元キー",
       "inputRequired": "復元コードを入力してください。",
       "invalidCode": "無効な復元コードです。入力内容をご確認ください。",
       "sharingNotAvailable": "このデバイスでは共有をご利用いただけません。",
@@ -240,7 +252,12 @@
       "errorProcessingImage": "画像の処理に失敗しました。",
       "scanQr": "QRコードをスキャン",
       "pickQr": "画像をインポート",
-      "noRecoveryCode": "リカバリーコードが見つかりません。もう一度ロック解除をお試しください。"
+      "noRecoveryCode": "リカバリーコードが見つかりません。もう一度ロック解除をお試しください。",
+      "readyTitle": "メモは暗号化されました",
+      "keyTitle": "復元キー",
+      "explain": "新しい端末でメモを開けるのはこのキーだけです。パスワードマネージャーなど安全な場所に保管してください。Vaulto を含め誰も復元できません。",
+      "share": "共有",
+      "savedIt": "キーを保存しました"
     },
     "resetRecovery": {
       "title": "暗号化ボールトがリセットされました",
@@ -298,31 +315,21 @@
     },
     "voice": {
       "title": "音声とAI",
-      "offline": "オフラインで使う",
-      "offlineHint": "オフラインで文字起こし。ダウンロードは1回、{{size}}",
-      "offlineReady": "準備完了 · {{quality}}、端末に {{size}}",
       "downloading": "ダウンロード中 · {{percent}}%",
-      "quality": "認識の品質",
-      "fast": "速い",
-      "balanced": "バランス",
-      "accurate": "高精度",
-      "qualityHint": "高精度ほど遅く、容量も増えます。オンライン時はクラウドを使います。",
       "private": "この端末だけで",
       "privateDesc": "オンラインでも、音声とAIは端末の外に出ません",
-      "offlineAI": "オフラインAI",
-      "offlineAIHint": "オフラインでメモの編集や質問。ダウンロードは1回、{{size}}",
-      "offlineAIReady": "準備完了 · 編集と質問がオフラインで使えます、{{size}}",
-      "cellularTitle": "モバイルデータでダウンロードしますか？",
-      "cellularDesc": "音声モデルは {{size}} です。Wi-Fi をおすすめします。",
-      "offlineOffTitle": "オフライン文字起こしをオフにしますか？",
-      "offlineOffDesc": "音声モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ってから文字にできます。",
-      "offlineAIOffTitle": "オフラインAIをオフにしますか？",
-      "offlineAIOffDesc": "AIモデルが端末から削除され、{{size}} が空きます。オンラインではAI機能を引き続き使えます。",
       "privateVoiceDesc": "オンラインでも、音声は端末の外に出ません",
-      "offlineAIOffPrivateDesc": "AIモデルが端末から削除され、{{size}} が空きます。「この端末だけで」がオンの間は、再ダウンロードするまでAI機能は使えません。",
-      "fastDesc": "最速、短いメモ向け",
-      "balancedDesc": "小さなサイズで十分な精度",
-      "accurateDesc": "最も高精度、遅めで大きい"
+      "offlineMode": "オフラインモード",
+      "offlineHintAll": "音声とAIを端末上で、ネット不要 · {{size}}",
+      "offlineReadyAll": "準備完了 · 音声とAIがオフラインで動作",
+      "offlineReadySpeech": "準備完了 · 音声認識がオフラインで動作",
+      "offlineAIMissing": "音声はオフラインで使えます。タップしてAIを追加（{{size}}）",
+      "offlineNoSpace": "端末の空き容量が足りません",
+      "offlineNoSpaceTitle": "容量不足",
+      "offlineConfirmTitle": "オフラインモードをダウンロードしますか？",
+      "offlineConfirmDesc": "この端末に最適な音声とAIのモデル（{{size}}）を一度だけダウンロードします。以降はネットなしでメモが使えます。",
+      "offlineModeOffTitle": "オフラインモードをオフにしますか？",
+      "offlineModeOffDesc": "モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ると文字になります。"
     }
   },
   "languages": {
@@ -473,7 +480,8 @@
       "downloading": "{{model}} モデルをダウンロード中...",
       "cancelDownload": "ダウンロードを中止",
       "downloadFailed": "ダウンロードに失敗しました",
-      "modelDescriptionOffline": "一度ダウンロードすれば、オフラインでも録音や音声入力が文字になります。高精度なモデルほどサイズが大きくなります。"
+      "offlineTitle": "ネットなしで音声認識",
+      "offlineDesc": "一度ダウンロードすれば、ネットなしでも録音や音声入力が文字になります。この端末に最適なモデル、{{size}}。"
     },
     "titlePlaceholder": "タイトル",
     "charactersCount": "{{count}} 文字",
@@ -899,7 +907,7 @@
     "aiTitle": "AI が整えます",
     "aiText": "文章の改善、タスクの抽出、ノートへの質問に対応。",
     "privacyTitle": "初期設定でプライベート",
-    "privacyText": "ノートは暗号化して保存され、同期はエンドツーエンド暗号化にできます。"
+    "privacyText": "メモは端末上で暗号化され、同期時もエンドツーエンドで暗号化。読めるのはあなただけです。"
   },
   "errors": {
     "offline": "インターネットに接続されていません。ネットワークを確認して、もう一度お試しください。",

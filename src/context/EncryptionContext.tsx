@@ -38,6 +38,7 @@ import {
 import { syncService } from '../services/SyncService';
 import { isSameKeyGeneration } from '../services/encryptionState';
 import { generateUUID } from '../utils/uuid';
+import * as ExpoCrypto from 'expo-crypto';
 
 export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
 export type ResetEncryptionResult = { purged: boolean; syncSucceeded: boolean };
@@ -53,6 +54,13 @@ interface EncryptionContextType {
     bundle: KeyBundle | null;
     recoveryCode: string | null;
     enableE2EE: (secret: string, mode?: SecretMode, onProgress?: EncryptionProgressCallback) => Promise<void>;
+    /** End-to-end encryption with a generated recovery key (no passphrase to invent). */
+    enableE2EEWithRecoveryKey: (onProgress?: EncryptionProgressCallback) => Promise<void>;
+    /** A recovery key from automatic setup still waits for "I saved the key". */
+    recoveryKeyNeedsSaving: boolean;
+    confirmRecoveryKeySaved: () => Promise<void>;
+    /** Automatic encryption setup is running in the background. */
+    autoEncrypting: boolean;
     setupWithRecoveryCode: (code: string) => Promise<void>;
     unlock: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
     changePin: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
@@ -86,6 +94,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const [hasRemoteKeyBundle, setHasRemoteKeyBundle] = useState(false);
     const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
     const [resetRecoveryPending, setResetRecoveryPending] = useState(false);
+    const [recoveryKeyNeedsSaving, setRecoveryKeyNeedsSaving] = useState(false);
+    const [autoEncrypting, setAutoEncrypting] = useState(false);
+    const autoEncryptionAttemptRef = useRef<string | null>(null);
     const encryptionMigrationInFlightRef = useRef(false);
     const disableTransitionInFlightRef = useRef(false);
     const encryptionReconciliationInFlightRef = useRef<Promise<void> | null>(null);
@@ -1210,6 +1221,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         secret: string,
         mode: SecretMode = 'passphrase',
         onProgress?: EncryptionProgressCallback,
+        presetMasterKey?: Uint8Array,
     ) => {
         if (!isAuthenticated || isGuest) {
             throw new Error('Sign in required to enable sync');
@@ -1246,11 +1258,10 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         try {
             reportProgress(5);
             // STEP 1: Create the master key FIRST so all subsequent operations use it
-            const { bundle: newBundle, masterKey } = await createKeyBundle(
-                normalizedSecret,
-                mode,
-                (kdfProgress) => reportProgress(5 + kdfProgress * 75),
-            );
+            const onKdf = (kdfProgress: number) => reportProgress(5 + kdfProgress * 75);
+            const { bundle: newBundle, masterKey } = presetMasterKey
+                ? { bundle: await wrapMasterKey(presetMasterKey, normalizedSecret, mode, onKdf), masterKey: presetMasterKey }
+                : await createKeyBundle(normalizedSecret, mode, onKdf);
             setMasterKey(masterKey);  // Set in memory immediately
             reportProgress(80);
 
@@ -1285,6 +1296,24 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             setDeletionGuard(false);
         }
     }, [isAuthenticated, isGuest, userId, resetRecoveryPending, scheduleDatabaseInit, persistMasterKey, completeEncryptionMigration]);
+
+    // The master key is random; its 24-word form is the recovery key. The escrowed
+    // bundle is wrapped with that same key, so typing it (or scanning its QR) on a
+    // new phone unlocks the notes through either unlock path.
+    const enableE2EEWithRecoveryKey = useCallback(async (onProgress?: EncryptionProgressCallback) => {
+        if (!userId) throw new Error('User not available');
+        const masterKey = await ExpoCrypto.getRandomBytesAsync(32);
+        const recoveryKey = recoveryCodeFromMasterKey(masterKey);
+        await storage.setRecoveryKeySaved(userId, false);
+        await enableE2EE(recoveryKey, 'recovery_code', onProgress, masterKey);
+        await storage.setAutoEncryptionOptOut(userId, false);
+        setRecoveryKeyNeedsSaving(true);
+    }, [userId, enableE2EE]);
+
+    const confirmRecoveryKeySaved = useCallback(async () => {
+        setRecoveryKeyNeedsSaving(false);
+        if (userId) await storage.setRecoveryKeySaved(userId, true);
+    }, [userId]);
 
     const setupWithRecoveryCode = useCallback(async (code: string) => {
         if (!isAuthenticated || isGuest || !userId) {
@@ -1806,10 +1835,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('Sign in required to reset encryption');
         }
 
+        if (userId) await storage.setAutoEncryptionOptOut(userId, true);
         const result = await resetSync();
         // resetSync already ran resetSyncState + syncNowAndWait — no extra call needed.
         return result;
-    }, [isAuthenticated, isGuest, resetSync]);
+    }, [isAuthenticated, isGuest, userId, resetSync]);
 
     // Destructive "forgot passphrase" reset. Unlike resetSync() this must work
     // while the key is LOCKED: the passphrase is gone, so every note that is
@@ -1824,6 +1854,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (!userId) {
             throw new Error('User not available');
         }
+        await storage.setAutoEncryptionOptOut(userId, true);
 
         if (await storage.getRemoteDisableRescuePending(userId)) {
             const serverState = await e2eeApi.fetchState();
@@ -1947,6 +1978,51 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
     }, [bundle]);
 
+    // Signed in, syncing, not yet end-to-end encrypted, and the user never turned
+    // it off: encrypt with a generated recovery key, once per account and launch.
+    // The key is then shown until the user confirms it is saved.
+    useEffect(() => {
+        if (!isAuthenticated || isGuest || !userId) return;
+        if (status === 'loading') return;
+        // Nothing to set up (already encrypted, locked, sync off, or a reset to
+        // resolve): let a sign-in that waited for this sync normally.
+        if (status !== 'ready' || mode !== 'local' || !syncEnabled || resetRecoveryPending) {
+            syncService.releaseEncryptionHold();
+            return;
+        }
+        if (autoEncryptionAttemptRef.current === userId) return;
+        autoEncryptionAttemptRef.current = userId;
+        void (async () => {
+            try {
+                if (await storage.getAutoEncryptionOptOut(userId)) return;
+                if (await storage.getEncryptionMigrationState(userId)) return;
+                const net = await NetInfo.fetch().catch(() => null);
+                if (net?.isConnected === false || net?.isInternetReachable === false) {
+                    autoEncryptionAttemptRef.current = null; // try again on a later state change
+                    return;
+                }
+                const serverState = await e2eeApi.fetchState();
+                if (!serverState || serverState.enc_mode !== 'off' || serverState.transition_state) return;
+                setAutoEncrypting(true);
+                await enableE2EEWithRecoveryKey();
+            } catch (error) {
+                console.warn('[Encryption] Automatic end-to-end setup did not complete', error);
+            } finally {
+                setAutoEncrypting(false);
+                syncService.releaseEncryptionHold();
+            }
+        })();
+    }, [isAuthenticated, isGuest, userId, status, mode, syncEnabled, resetRecoveryPending, enableE2EEWithRecoveryKey]);
+
+    // A recovery key shown after automatic setup but not yet confirmed comes back.
+    useEffect(() => {
+        if (!userId || status !== 'ready' || mode !== 'e2ee' || !recoveryCode) return;
+        if (bundle?.secret_mode !== 'recovery_code') return;
+        void storage.getRecoveryKeySaved(userId).then((saved) => {
+            if (!saved) setRecoveryKeyNeedsSaving(true);
+        });
+    }, [userId, status, mode, recoveryCode, bundle?.secret_mode]);
+
     const value = useMemo(() => ({
         status,
         mode,
@@ -1957,6 +2033,10 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         bundle,
         recoveryCode,
         enableE2EE,
+        enableE2EEWithRecoveryKey,
+        recoveryKeyNeedsSaving,
+        confirmRecoveryKeySaved,
+        autoEncrypting,
         setupWithRecoveryCode,
         unlock,
         changePin,
@@ -1967,7 +2047,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         keepResetArchiveLocal,
         resumeStandardSyncAfterReset,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

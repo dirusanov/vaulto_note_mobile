@@ -5,6 +5,7 @@ import { canDeviceRunModel, describeDeviceMemory, getDeviceCapabilities, getInfe
 import { releaseLocalWhisperContext } from './LocalWhisperService';
 import {
     createMutex,
+    DOWNLOAD_CANCELLED,
     downloadModelFile,
     formatBytes,
     GGUF_MAGIC,
@@ -94,6 +95,9 @@ const MODELS_DIR = baseDir ? `${baseDir}llm-models/` : null;
 const STOP_WORDS = ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>', '<|im_end|>', '<|EOT|>', '<|END_OF_TURN_TOKEN|>', '<|end_of_turn|>', '<|endoftext|>'];
 
 let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
+// A cancel that arrives before the transfer starts is remembered (see the Whisper service).
+let downloadInProgress = false;
+let cancelRequested = false;
 let activeContext: LlamaContext | null = null;
 let activeModelUri: string | null = null;
 /** One completion at a time: a second one entering the same llama context aborts natively. */
@@ -269,7 +273,20 @@ export const downloadLocalLLMModel = async (
     if (Platform.OS === 'web') {
         throw new Error('Local LLM is not supported in the browser');
     }
+    downloadInProgress = true;
+    cancelRequested = false;
+    try {
+        return await downloadLocalLLMModelInner(key, onProgress);
+    } finally {
+        downloadInProgress = false;
+        cancelRequested = false;
+    }
+};
 
+const downloadLocalLLMModelInner = async (
+    key: LocalLLMModelKey,
+    onProgress?: ModelDownloadProgress,
+): Promise<LocalLLMModelStatus> => {
     const model = getDescriptor(key);
 
     if (!(await canDeviceRunModel(model.sizeBytes))) {
@@ -282,7 +299,7 @@ export const downloadLocalLLMModel = async (
         throw new Error(`Not enough free space for ${model.label} (${formatBytes(model.sizeBytes)}).`);
     }
 
-    await setSelectedLocalLLMModel(key);
+    // The model in use stays selected until the new one is fully on the phone.
     const { fileUri } = await getFileUriForModel(key);
 
     try {
@@ -290,7 +307,10 @@ export const downloadLocalLLMModel = async (
             { url: model.url, sizeBytes: model.sizeBytes, magic: GGUF_MAGIC },
             fileUri,
             onProgress,
-            (task) => { activeDownloadResumable = task; },
+            (task) => {
+                if (cancelRequested) throw new Error(DOWNLOAD_CANCELLED);
+                activeDownloadResumable = task;
+            },
         );
     } finally {
         activeDownloadResumable = null;
@@ -301,10 +321,14 @@ export const downloadLocalLLMModel = async (
         await releaseLocalLLMContext();
     }
 
+    await setSelectedLocalLLMModel(key);
     return getLocalLLMModelStatus(key);
 };
 
 export const cancelLocalLLMDownload = async (): Promise<void> => {
+    if (downloadInProgress) {
+        cancelRequested = true;
+    }
     if (activeDownloadResumable) {
         try {
             await activeDownloadResumable.cancelAsync();

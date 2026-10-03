@@ -60,7 +60,8 @@
     "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir.",
     "deletedCount": "Placées dans la corbeille : {{count}}",
     "offlineSync": "Hors ligne. Les modifications sont enregistrées et seront synchronisées plus tard.",
-    "offline": "Hors ligne. Les notes et les fonctions sur le téléphone restent disponibles."
+    "offline": "Hors ligne. Les notes et les fonctions sur le téléphone restent disponibles.",
+    "unlockWithKey": "Saisissez votre clé de récupération pour les afficher sur ce téléphone."
   },
   "settings": {
     "title": "Paramètres",
@@ -82,9 +83,20 @@
       "advancedSettings": "Paramètres IA avancés"
     },
     "sync": {
-      "title": "Synchronisation cloud",
+      "title": "Synchronisation",
       "status": "Statut de synchronisation",
-      "passphrase": "Phrase secrète"
+      "passphrase": "Phrase secrète",
+      "onPlain": "Activée · vos notes sont sauvegardées et sur tous vos appareils",
+      "onE2ee": "Activée · chiffrée de bout en bout, vous seul pouvez la lire",
+      "off": "Désactivée · les notes restent sur ce téléphone",
+      "e2eeTitle": "Chiffrement de bout en bout",
+      "e2eeOffDesc": "Vous seul pourrez lire vos notes, même pas Vaulto",
+      "e2eeTurningOn": "Activation…",
+      "turnOn": "Activer",
+      "keyDesc": "Ouvre vos notes sur un nouveau téléphone",
+      "turnOffE2ee": "Désactiver le chiffrement de bout en bout",
+      "encryptingTitle": "Chiffrement de vos notes",
+      "encryptingSubtitle": "Vous seul pourrez les lire."
     },
     "account": {
       "signOut": "Se déconnecter",
@@ -224,9 +236,9 @@
       "warning": "Ce code est le SEUL moyen de récupérer vos notes si vous perdez l'accès à cet appareil. Ne le partagez avec personne.",
       "copiedMsg": "Code de récupération copié dans le presse-papiers. Conservez-le en lieu sûr !",
       "useBtn": "Utiliser le code de récupération",
-      "useTitle": "Utiliser le code de récupération",
-      "useSubtitle": "Entrez votre code de récupération de 12 ou 24 mots pour retrouver l'accès à vos notes chiffrées.",
-      "label": "Code de récupération",
+      "useTitle": "Saisissez votre clé de récupération",
+      "useSubtitle": "Les 24 mots affichés lors de l’activation du chiffrement. Collez-les ou scannez le QR code de votre autre téléphone.",
+      "label": "Clé de récupération",
       "inputRequired": "Veuillez entrer votre code de récupération.",
       "invalidCode": "Code de récupération invalide. Veuillez vérifier les fautes de frappe.",
       "sharingNotAvailable": "Le partage n'est pas disponible sur cet appareil.",
@@ -240,7 +252,12 @@
       "errorProcessingImage": "Échec du traitement de l'image.",
       "scanQr": "Scanner le code QR",
       "pickQr": "Importer l'image",
-      "noRecoveryCode": "Aucun code de récupération trouvé. Réessayez de déverrouiller."
+      "noRecoveryCode": "Aucun code de récupération trouvé. Réessayez de déverrouiller.",
+      "readyTitle": "Vos notes sont chiffrées",
+      "keyTitle": "Clé de récupération",
+      "explain": "Seule cette clé ouvre vos notes sur un nouveau téléphone. Gardez-la en lieu sûr, par exemple dans un gestionnaire de mots de passe. Personne, pas même Vaulto, ne peut la récupérer.",
+      "share": "Partager",
+      "savedIt": "J’ai enregistré la clé"
     },
     "resetRecovery": {
       "title": "Le coffre chiffré a été réinitialisé",
@@ -298,31 +315,21 @@
     },
     "voice": {
       "title": "Voix et IA",
-      "offline": "Travailler sans internet",
-      "offlineHint": "Transcription hors ligne. Un seul téléchargement, {{size}}",
-      "offlineReady": "Prêt · {{quality}}, {{size}} sur le téléphone",
       "downloading": "Téléchargement · {{percent}} %",
-      "quality": "Qualité de reconnaissance",
-      "fast": "Rapide",
-      "balanced": "Équilibrée",
-      "accurate": "Précise",
-      "qualityHint": "Plus précise signifie plus lente et plus volumineuse. En ligne, le cloud est utilisé.",
       "private": "Uniquement sur ce téléphone",
       "privateDesc": "La voix et l’IA ne quittent jamais le téléphone, même en ligne",
-      "offlineAI": "IA sans internet",
-      "offlineAIHint": "Modifiez et interrogez vos notes hors ligne. Un seul téléchargement, {{size}}",
-      "offlineAIReady": "Prêt · modifications et questions hors ligne, {{size}}",
-      "cellularTitle": "Télécharger avec les données mobiles ?",
-      "cellularDesc": "Le modèle vocal fait {{size}}. Le Wi-Fi est recommandé.",
-      "offlineOffTitle": "Désactiver la transcription hors ligne ?",
-      "offlineOffDesc": "Le modèle vocal est supprimé du téléphone et libère {{size}}. Sans internet, les enregistrements sont conservés et pourront être transcrits une fois en ligne.",
-      "offlineAIOffTitle": "Désactiver l’IA hors ligne ?",
-      "offlineAIOffDesc": "Le modèle d’IA est supprimé du téléphone et libère {{size}}. Les fonctions d’IA restent disponibles en ligne.",
       "privateVoiceDesc": "La voix ne quitte jamais le téléphone, même en ligne",
-      "offlineAIOffPrivateDesc": "Le modèle d’IA est supprimé du téléphone et libère {{size}}. Avec « Uniquement sur ce téléphone » activé, l’IA reste indisponible jusqu’au prochain téléchargement.",
-      "fastDesc": "La plus rapide, pour les notes courtes",
-      "balancedDesc": "Bonne précision pour une petite taille",
-      "accurateDesc": "La plus précise, plus lente et plus lourde"
+      "offlineMode": "Mode hors ligne",
+      "offlineHintAll": "Voix et IA sur le téléphone, sans internet · {{size}}",
+      "offlineReadyAll": "Prêt · voix et IA fonctionnent sans internet",
+      "offlineReadySpeech": "Prêt · la voix fonctionne sans internet",
+      "offlineAIMissing": "La voix fonctionne hors ligne. Touchez pour ajouter l’IA ({{size}})",
+      "offlineNoSpace": "Pas assez d’espace libre sur ce téléphone",
+      "offlineNoSpaceTitle": "Espace insuffisant",
+      "offlineConfirmTitle": "Télécharger le mode hors ligne ?",
+      "offlineConfirmDesc": "Les meilleurs modèles de voix et d’IA pour ce téléphone, {{size}}, téléchargés une fois. Ensuite, les notes fonctionnent sans internet.",
+      "offlineModeOffTitle": "Désactiver le mode hors ligne ?",
+      "offlineModeOffDesc": "Les modèles sont supprimés du téléphone et libèrent {{size}}. Sans internet, les enregistrements sont conservés et transcrits au retour du réseau."
     }
   },
   "languages": {
@@ -473,7 +480,8 @@
       "downloading": "Téléchargement du modèle {{model}}...",
       "cancelDownload": "Annuler le téléchargement",
       "downloadFailed": "Échec du téléchargement",
-      "modelDescriptionOffline": "Téléchargez une fois : enregistrements et dictée sont transcrits même sans internet. Les modèles plus précis sont plus lourds."
+      "offlineTitle": "La voix sans internet",
+      "offlineDesc": "Téléchargez une fois : enregistrements et dictée sont transcrits même sans internet. Le meilleur modèle pour ce téléphone, {{size}}."
     },
     "titlePlaceholder": "Titre",
     "charactersCount": "{{count}} caractères",
@@ -899,7 +907,7 @@
     "aiTitle": "L’IA met de l’ordre",
     "aiText": "Améliore le texte, trouve les tâches, répond sur vos notes.",
     "privacyTitle": "Privé par défaut",
-    "privacyText": "Les notes sont stockées chiffrées ; la synchronisation peut être chiffrée de bout en bout."
+    "privacyText": "Les notes sont chiffrées sur le téléphone et de bout en bout à la synchronisation : vous seul pouvez les lire."
   },
   "errors": {
     "offline": "Pas de connexion internet. Vérifiez votre réseau et réessayez.",

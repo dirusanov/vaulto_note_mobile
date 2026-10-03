@@ -1339,7 +1339,11 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
                 await database.runAsync("UPDATE trash SET user_id = ? WHERE user_id = ?", [toUserId, fromUserId]);
             })
         ));
-    } catch (e) {}
+    } catch (e) {
+        // The transaction rolled back: the guest's notes stay on the phone under the
+        // guest id rather than half-moved. Surface it instead of hiding it.
+        console.error('[Database] Moving guest notes into the account failed', e);
+    }
 };
 
 // ─── Trash ──────────────────────────────────────────────────────────────────

@@ -60,7 +60,8 @@
     "keptLockedText": "They are encrypted. Sign in to your account to open them.",
     "deletedCount": "Moved to trash: {{count}}",
     "offlineSync": "Offline. Changes are saved and will sync later.",
-    "offline": "Offline. Notes and on-device features still work."
+    "offline": "Offline. Notes and on-device features still work.",
+    "unlockWithKey": "Enter your recovery key to show them on this phone."
   },
   "settings": {
     "title": "Settings",
@@ -93,9 +94,20 @@
       "advancedSettings": "Advanced AI Settings"
     },
     "sync": {
-      "title": "Cloud Sync",
+      "title": "Sync",
       "status": "Sync Status",
-      "passphrase": "Passphrase"
+      "passphrase": "Passphrase",
+      "onPlain": "On · notes are backed up and on all your devices",
+      "onE2ee": "On · end-to-end encrypted, only you can read it",
+      "off": "Off · notes stay on this phone",
+      "e2eeTitle": "End-to-end encryption",
+      "e2eeOffDesc": "Only you can read your notes, not even Vaulto",
+      "e2eeTurningOn": "Turning on…",
+      "turnOn": "Turn on",
+      "keyDesc": "Opens your notes on a new phone",
+      "turnOffE2ee": "Turn off end-to-end encryption",
+      "encryptingTitle": "Encrypting your notes",
+      "encryptingSubtitle": "Only you will be able to read them."
     },
     "account": {
       "signOut": "Sign Out",
@@ -235,9 +247,9 @@
       "warning": "This code is the ONLY way to recover your notes if you lose access to this device. Do not share it with anyone.",
       "copiedMsg": "Recovery code copied to clipboard. Save it in a safe place!",
       "useBtn": "Use Recovery Code",
-      "useTitle": "Use Recovery Code",
-      "useSubtitle": "Enter your 12 or 24-word recovery code to regain access to your encrypted notes.",
-      "label": "Recovery Code",
+      "useTitle": "Enter your recovery key",
+      "useSubtitle": "The 24 words shown when encryption was turned on. Paste them or scan the QR code from your other phone.",
+      "label": "Recovery key",
       "inputRequired": "Please enter your recovery code.",
       "invalidCode": "Invalid recovery code. Please check for typos.",
       "sharingNotAvailable": "Sharing is not available on this device.",
@@ -251,7 +263,12 @@
       "errorProcessingImage": "Failed to process image.",
       "scanQr": "Scan QR Code",
       "pickQr": "Import from Image",
-      "noRecoveryCode": "No recovery code found. Try unlocking again."
+      "noRecoveryCode": "No recovery code found. Try unlocking again.",
+      "readyTitle": "Your notes are encrypted",
+      "keyTitle": "Recovery key",
+      "explain": "Only this key opens your notes on a new phone. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.",
+      "share": "Share",
+      "savedIt": "I saved the key"
     },
     "security": {
       "localProtection": "Local protection",
@@ -298,31 +315,21 @@
     },
     "voice": {
       "title": "Voice & AI",
-      "offline": "Work without internet",
-      "offlineHint": "Turn speech into text offline. One download, {{size}}",
-      "offlineReady": "Ready · {{quality}}, {{size}} on the phone",
       "downloading": "Downloading · {{percent}}%",
-      "quality": "Recognition quality",
-      "fast": "Fast",
-      "balanced": "Balanced",
-      "accurate": "Accurate",
-      "qualityHint": "More accurate means slower and more space. The cloud is used while online.",
       "private": "Only on this phone",
       "privateDesc": "Voice and AI never leave the phone, even online",
-      "offlineAI": "AI without internet",
-      "offlineAIHint": "Edit and ask your notes offline. One download, {{size}}",
-      "offlineAIReady": "Ready · edits and questions work offline, {{size}}",
-      "cellularTitle": "Download over mobile data?",
-      "cellularDesc": "The speech model is {{size}}. Wi-Fi is recommended.",
-      "offlineOffTitle": "Turn off offline speech?",
-      "offlineOffDesc": "The speech model is removed from this phone and frees {{size}}. Without internet, recordings are saved and can be turned into text once you are back online.",
-      "offlineAIOffTitle": "Turn off offline AI?",
-      "offlineAIOffDesc": "The AI model is removed from this phone and frees {{size}}. AI features keep working online.",
       "privateVoiceDesc": "Voice never leaves the phone, even online",
-      "offlineAIOffPrivateDesc": "The AI model is removed from this phone and frees {{size}}. With \"Only on this phone\" on, AI features stay off until you download it again.",
-      "fastDesc": "Quickest, fine for short notes",
-      "balancedDesc": "Good accuracy at a small size",
-      "accurateDesc": "Most accurate, slower and larger"
+      "offlineMode": "Offline mode",
+      "offlineHintAll": "Speech and AI right on the phone, no internet needed · {{size}}",
+      "offlineReadyAll": "Ready · speech and AI work without internet",
+      "offlineReadySpeech": "Ready · speech works without internet",
+      "offlineAIMissing": "Speech works offline. Tap to add AI ({{size}})",
+      "offlineNoSpace": "Not enough free space on this phone",
+      "offlineNoSpaceTitle": "Not enough space",
+      "offlineConfirmTitle": "Download offline mode?",
+      "offlineConfirmDesc": "The best speech and AI models for this phone, {{size}}, downloaded once. After that notes work without internet.",
+      "offlineModeOffTitle": "Turn off offline mode?",
+      "offlineModeOffDesc": "The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online."
     }
   },
   "languages": {
@@ -473,7 +480,8 @@
       "downloading": "Downloading the {{model}} model...",
       "cancelDownload": "Cancel Download",
       "downloadFailed": "Download failed",
-      "modelDescriptionOffline": "Download once and recordings and dictation turn into text even without internet. More accurate models are larger."
+      "offlineTitle": "Speech without internet",
+      "offlineDesc": "Download once and recordings and dictation turn into text even without internet. The best model for this phone, {{size}}."
     },
     "titlePlaceholder": "Title",
     "charactersCount": "{{count}} characters",
@@ -899,7 +907,7 @@
     "aiTitle": "AI tidies it up",
     "aiText": "Improve the text, find tasks, ask about your notes.",
     "privacyTitle": "Private by default",
-    "privacyText": "Notes are stored encrypted; sync can be end-to-end encrypted."
+    "privacyText": "Notes are encrypted on the phone and end-to-end when synced: only you can read them."
   },
   "errors": {
     "offline": "No internet connection. Check your network and try again.",

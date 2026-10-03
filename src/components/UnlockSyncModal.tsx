@@ -123,6 +123,21 @@ export const UnlockSyncModal = ({
         }, 0);
     };
 
+    // Accounts encrypted with a recovery key (no passphrase) unlock with that key
+    // straight away: typed, pasted or scanned from the QR on the old phone.
+    if (bundle?.secret_mode === 'recovery_code') {
+        return (
+            <UseRecoveryCodeModal
+                visible={visible}
+                onClose={handleClose}
+                onSuccess={() => {
+                    handleClose();
+                    onUnlocked?.();
+                }}
+            />
+        );
+    }
+
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
             <View style={styles.backdrop}>

@@ -238,11 +238,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         try {
             const profile = await authApi.getProfile(newAccessToken);
             const previousUserId = await storage.getUserId();
+            const previousProfile = await storage.getUserProfile();
+            // Only a real guest's notes move into the account. After "keep notes on
+            // this device" the stored id still belongs to the signed-out account
+            // (the guest profile has another id): those notes must not move into
+            // whichever account signs in next.
+            const migrateFrom = previousUserId
+                && previousProfile?.provider === 'anonymous'
+                && previousProfile.id === previousUserId
+                ? previousUserId
+                : null;
             await storage.setUserId(profile.id);
             await storage.setUserProfile(profile);
             setUserId(profile.id);
             setUser(profile);
-            await syncService.setCurrentUser(profile.id, previousUserId);
+            // Let automatic end-to-end setup run before the first upload.
+            if (!(await storage.getAutoEncryptionOptOut(profile.id))) {
+                syncService.holdForEncryptionSetup();
+            }
+            await syncService.setCurrentUser(profile.id, migrateFrom);
             if (previousUserId && previousUserId !== profile.id) {
                 console.log('[AuthContext] Switched user from guest to verified');
             }

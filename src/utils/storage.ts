@@ -421,6 +421,29 @@ export const storage = {
             console.error('Failed to set reset recovery state', e);
         }
     },
+    // The user turned end-to-end encryption off (or reset it): do not set it up
+    // again automatically.
+    getAutoEncryptionOptOut: async (userId: string): Promise<boolean> => {
+        if (!userId) return true;
+        return await AsyncStorage.getItem(`vaulto_auto_e2ee_opt_out_${userId}`) === '1';
+    },
+    setAutoEncryptionOptOut: async (userId: string, optOut: boolean): Promise<void> => {
+        if (!userId) return;
+        const key = `vaulto_auto_e2ee_opt_out_${userId}`;
+        if (optOut) await AsyncStorage.setItem(key, '1');
+        else await AsyncStorage.removeItem(key);
+    },
+    // The user confirmed they saved the recovery key shown after automatic setup.
+    getRecoveryKeySaved: async (userId: string): Promise<boolean> => {
+        if (!userId) return true;
+        return await AsyncStorage.getItem(`vaulto_recovery_key_saved_${userId}`) === '1';
+    },
+    setRecoveryKeySaved: async (userId: string, saved: boolean): Promise<void> => {
+        if (!userId) return;
+        const key = `vaulto_recovery_key_saved_${userId}`;
+        if (saved) await AsyncStorage.setItem(key, '1');
+        else await AsyncStorage.removeItem(key);
+    },
     getRemoteDisableRescuePending: async (userId: string): Promise<boolean> => {
         if (!userId) return false;
         return await AsyncStorage.getItem(

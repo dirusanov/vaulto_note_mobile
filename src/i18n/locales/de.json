@@ -60,7 +60,8 @@
     "keptLockedText": "Sie sind verschlüsselt. Melde dich an, um sie zu öffnen.",
     "deletedCount": "In den Papierkorb verschoben: {{count}}",
     "offlineSync": "Offline. Änderungen werden gespeichert und später synchronisiert.",
-    "offline": "Offline. Notizen und Funktionen auf dem Telefon funktionieren weiter."
+    "offline": "Offline. Notizen und Funktionen auf dem Telefon funktionieren weiter.",
+    "unlockWithKey": "Gib deinen Wiederherstellungsschlüssel ein, um sie auf diesem Handy zu sehen."
   },
   "settings": {
     "title": "Einstellungen",
@@ -82,9 +83,20 @@
       "advancedSettings": "Erweiterte KI-Einstellungen"
     },
     "sync": {
-      "title": "Cloud-Synchronisierung",
+      "title": "Synchronisierung",
       "status": "Sync-Status",
-      "passphrase": "Passphrase"
+      "passphrase": "Passphrase",
+      "onPlain": "An · Notizen sind gesichert und auf allen Geräten",
+      "onE2ee": "An · Ende-zu-Ende-verschlüsselt, nur du kannst sie lesen",
+      "off": "Aus · Notizen bleiben auf diesem Handy",
+      "e2eeTitle": "Ende-zu-Ende-Verschlüsselung",
+      "e2eeOffDesc": "Nur du kannst deine Notizen lesen, nicht einmal Vaulto",
+      "e2eeTurningOn": "Wird eingeschaltet…",
+      "turnOn": "Einschalten",
+      "keyDesc": "Öffnet deine Notizen auf einem neuen Handy",
+      "turnOffE2ee": "Ende-zu-Ende-Verschlüsselung ausschalten",
+      "encryptingTitle": "Notizen werden verschlüsselt",
+      "encryptingSubtitle": "Nur du wirst sie lesen können."
     },
     "account": {
       "signOut": "Abmelden",
@@ -224,9 +236,9 @@
       "warning": "Dieser Code ist die EINZIGE Möglichkeit, Ihre Notizen wiederherzustellen, wenn Sie den Zugriff auf dieses Gerät verlieren. Teilen Sie ihn mit niemandem.",
       "copiedMsg": "Wiederherstellungscode in die Zwischenablage kopiert. Speichern Sie ihn an einem sicheren Ort!",
       "useBtn": "Wiederherstellungscode verwenden",
-      "useTitle": "Wiederherstellungscode verwenden",
-      "useSubtitle": "Geben Sie Ihren 12- oder 24-Wort-Wiederherstellungscode ein, um wieder Zugriff auf Ihre verschlüsselten Notizen zu erhalten.",
-      "label": "Wiederherstellungscode",
+      "useTitle": "Wiederherstellungsschlüssel eingeben",
+      "useSubtitle": "Die 24 Wörter, die beim Einschalten der Verschlüsselung angezeigt wurden. Füge sie ein oder scanne den QR-Code vom anderen Handy.",
+      "label": "Wiederherstellungsschlüssel",
       "inputRequired": "Bitte geben Sie Ihren Wiederherstellungscode ein.",
       "invalidCode": "Ungültiger Wiederherstellungscode. Bitte überprüfen Sie auf Tippfehler.",
       "sharingNotAvailable": "Freigabe ist auf diesem Gerät nicht verfügbar.",
@@ -240,7 +252,12 @@
       "errorProcessingImage": "Bild konnte nicht verarbeitet werden.",
       "scanQr": "QR-Code scannen",
       "pickQr": "Bild importieren",
-      "noRecoveryCode": "Kein Wiederherstellungscode gefunden. Versuche erneut zu entsperren."
+      "noRecoveryCode": "Kein Wiederherstellungscode gefunden. Versuche erneut zu entsperren.",
+      "readyTitle": "Deine Notizen sind verschlüsselt",
+      "keyTitle": "Wiederherstellungsschlüssel",
+      "explain": "Nur dieser Schlüssel öffnet deine Notizen auf einem neuen Handy. Bewahre ihn sicher auf, z. B. in einem Passwortmanager. Niemand, auch nicht Vaulto, kann ihn wiederherstellen.",
+      "share": "Teilen",
+      "savedIt": "Schlüssel gespeichert"
     },
     "resetRecovery": {
       "title": "Verschlüsselter Tresor wurde zurückgesetzt",
@@ -298,31 +315,21 @@
     },
     "voice": {
       "title": "Sprache & KI",
-      "offline": "Ohne Internet arbeiten",
-      "offlineHint": "Sprache offline in Text. Ein Download, {{size}}",
-      "offlineReady": "Bereit · {{quality}}, {{size}} auf dem Handy",
       "downloading": "Wird geladen · {{percent}} %",
-      "quality": "Erkennungsqualität",
-      "fast": "Schnell",
-      "balanced": "Ausgewogen",
-      "accurate": "Genau",
-      "qualityHint": "Genauer heißt langsamer und mehr Speicher. Online wird die Cloud genutzt.",
       "private": "Nur auf diesem Handy",
       "privateDesc": "Sprache und KI verlassen das Handy nie, auch online nicht",
-      "offlineAI": "KI ohne Internet",
-      "offlineAIHint": "Notizen offline bearbeiten und befragen. Ein Download, {{size}}",
-      "offlineAIReady": "Bereit · Bearbeiten und Fragen offline, {{size}}",
-      "cellularTitle": "Über mobile Daten laden?",
-      "cellularDesc": "Das Sprachmodell hat {{size}}. WLAN wird empfohlen.",
-      "offlineOffTitle": "Offline-Spracherkennung ausschalten?",
-      "offlineOffDesc": "Das Sprachmodell wird vom Handy entfernt und gibt {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und können später online zu Text werden.",
-      "offlineAIOffTitle": "Offline-KI ausschalten?",
-      "offlineAIOffDesc": "Das KI-Modell wird vom Handy entfernt und gibt {{size}} frei. Online funktioniert die KI weiter.",
       "privateVoiceDesc": "Die Sprache verlässt das Handy nie, auch online nicht",
-      "offlineAIOffPrivateDesc": "Das KI-Modell wird vom Handy entfernt und gibt {{size}} frei. Mit „Nur auf diesem Handy“ bleibt die KI aus, bis du es erneut lädst.",
-      "fastDesc": "Am schnellsten, für kurze Notizen",
-      "balancedDesc": "Gute Genauigkeit bei kleiner Größe",
-      "accurateDesc": "Am genauesten, langsamer und größer"
+      "offlineMode": "Offline-Modus",
+      "offlineHintAll": "Sprache und KI direkt auf dem Handy, ohne Internet · {{size}}",
+      "offlineReadyAll": "Bereit · Sprache und KI funktionieren ohne Internet",
+      "offlineReadySpeech": "Bereit · Sprache funktioniert ohne Internet",
+      "offlineAIMissing": "Sprache funktioniert offline. Tippe, um KI hinzuzufügen ({{size}})",
+      "offlineNoSpace": "Nicht genug freier Speicher auf dem Handy",
+      "offlineNoSpaceTitle": "Nicht genug Speicher",
+      "offlineConfirmTitle": "Offline-Modus herunterladen?",
+      "offlineConfirmDesc": "Die besten Sprach- und KI-Modelle für dieses Handy, {{size}}, einmal geladen. Danach funktionieren Notizen ohne Internet.",
+      "offlineModeOffTitle": "Offline-Modus ausschalten?",
+      "offlineModeOffDesc": "Die Modelle werden vom Handy entfernt und geben {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und später online zu Text."
     }
   },
   "languages": {
@@ -473,7 +480,8 @@
       "downloading": "Modell {{model}} wird heruntergeladen ...",
       "cancelDownload": "Download abbrechen",
       "downloadFailed": "Download fehlgeschlagen",
-      "modelDescriptionOffline": "Einmal herunterladen, dann werden Aufnahmen und Diktat auch ohne Internet zu Text. Genauere Modelle sind größer."
+      "offlineTitle": "Sprache ohne Internet",
+      "offlineDesc": "Einmal laden, dann werden Aufnahmen und Diktat auch ohne Internet zu Text. Das beste Modell für dieses Handy, {{size}}."
     },
     "titlePlaceholder": "Titel",
     "charactersCount": "{{count}} Zeichen",
@@ -899,7 +907,7 @@
     "aiTitle": "Die KI räumt auf",
     "aiText": "Verbessert Text, findet Aufgaben, beantwortet Fragen zu deinen Notizen.",
     "privacyTitle": "Standardmäßig privat",
-    "privacyText": "Notizen werden verschlüsselt gespeichert; die Synchronisierung kann Ende-zu-Ende-verschlüsselt sein."
+    "privacyText": "Notizen sind auf dem Handy verschlüsselt und beim Synchronisieren Ende-zu-Ende: nur du kannst sie lesen."
   },
   "errors": {
     "offline": "Keine Internetverbindung. Prüfe dein Netzwerk und versuche es erneut.",

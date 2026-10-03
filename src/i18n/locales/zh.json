@@ -60,7 +60,8 @@
     "keptLockedText": "它们已加密。登录账户即可打开。",
     "deletedCount": "已移到回收站：{{count}}",
     "offlineSync": "离线。更改已保存，稍后会同步。",
-    "offline": "离线。笔记和手机上的功能仍可使用。"
+    "offline": "离线。笔记和手机上的功能仍可使用。",
+    "unlockWithKey": "输入恢复密钥，在本机上显示它们。"
   },
   "settings": {
     "title": "设置",
@@ -82,9 +83,20 @@
       "advancedSettings": "高级 AI 设置"
     },
     "sync": {
-      "title": "云同步",
+      "title": "同步",
       "status": "同步状态",
-      "passphrase": "密码"
+      "passphrase": "密码",
+      "onPlain": "已开启 · 笔记已备份并在所有设备上",
+      "onE2ee": "已开启 · 端到端加密，只有你能阅读",
+      "off": "已关闭 · 笔记仅保存在本机",
+      "e2eeTitle": "端到端加密",
+      "e2eeOffDesc": "只有你能阅读笔记，Vaulto 也不能",
+      "e2eeTurningOn": "正在开启…",
+      "turnOn": "开启",
+      "keyDesc": "在新手机上打开你的笔记",
+      "turnOffE2ee": "关闭端到端加密",
+      "encryptingTitle": "正在加密笔记",
+      "encryptingSubtitle": "之后只有你能阅读。"
     },
     "account": {
       "signOut": "登出",
@@ -224,8 +236,8 @@
       "warning": "如果您失去对此设备的访问权限，此代码是恢复笔记的唯一方法。请勿与任何人共享。",
       "copiedMsg": "恢复密钥已复制到剪贴板。请将其保存在安全的地方！",
       "useBtn": "使用恢复密钥",
-      "useTitle": "使用恢复密钥",
-      "useSubtitle": "输入您的 12 或 24 个单词的恢复密钥，以重新获得对加密笔记的访问权限。",
+      "useTitle": "输入恢复密钥",
+      "useSubtitle": "开启加密时显示的 24 个单词。粘贴它们，或扫描另一部手机上的二维码。",
       "label": "恢复密钥",
       "inputRequired": "请输入您的恢复密钥。",
       "invalidCode": "恢复密钥无效。请检查是否有拼写错误。",
@@ -240,7 +252,12 @@
       "errorProcessingImage": "处理图像失败。",
       "scanQr": "扫描二维码",
       "pickQr": "导入图像",
-      "noRecoveryCode": "未找到恢复码，请重新解锁后再试。"
+      "noRecoveryCode": "未找到恢复码，请重新解锁后再试。",
+      "readyTitle": "你的笔记已加密",
+      "keyTitle": "恢复密钥",
+      "explain": "只有这个密钥能在新手机上打开你的笔记。请妥善保存，例如存入密码管理器。任何人（包括 Vaulto）都无法找回它。",
+      "share": "分享",
+      "savedIt": "我已保存密钥"
     },
     "resetRecovery": {
       "title": "加密保险库已重置",
@@ -298,31 +315,21 @@
     },
     "voice": {
       "title": "语音与 AI",
-      "offline": "无网络也可用",
-      "offlineHint": "离线语音转文字。仅需下载一次，{{size}}",
-      "offlineReady": "已就绪 · {{quality}}，手机上 {{size}}",
       "downloading": "正在下载 · {{percent}}%",
-      "quality": "识别质量",
-      "fast": "快速",
-      "balanced": "均衡",
-      "accurate": "精准",
-      "qualityHint": "越精准越慢、占用空间越大。联网时使用云端。",
       "private": "仅在本机",
       "privateDesc": "即使联网，语音和 AI 也不会离开手机",
-      "offlineAI": "离线 AI",
-      "offlineAIHint": "离线编辑和询问笔记。仅需下载一次，{{size}}",
-      "offlineAIReady": "已就绪 · 编辑和提问可离线使用，{{size}}",
-      "cellularTitle": "使用移动数据下载？",
-      "cellularDesc": "语音模型大小为 {{size}}，建议使用 Wi-Fi。",
-      "offlineOffTitle": "关闭离线语音识别？",
-      "offlineOffDesc": "语音模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后可转成文字。",
-      "offlineAIOffTitle": "关闭离线 AI？",
-      "offlineAIOffDesc": "AI 模型将从手机删除并释放 {{size}}。联网时 AI 功能仍可使用。",
       "privateVoiceDesc": "即使联网，语音也不会离开手机",
-      "offlineAIOffPrivateDesc": "AI 模型将从手机删除并释放 {{size}}。开启“仅在本机”时，重新下载前 AI 功能不可用。",
-      "fastDesc": "最快，适合短笔记",
-      "balancedDesc": "体积小，准确度好",
-      "accurateDesc": "最精准，较慢且更大"
+      "offlineMode": "离线模式",
+      "offlineHintAll": "语音和 AI 直接在手机上运行，无需网络 · {{size}}",
+      "offlineReadyAll": "已就绪 · 语音和 AI 无需网络",
+      "offlineReadySpeech": "已就绪 · 语音识别无需网络",
+      "offlineAIMissing": "语音已可离线使用。点按添加 AI（{{size}}）",
+      "offlineNoSpace": "手机可用空间不足",
+      "offlineNoSpaceTitle": "空间不足",
+      "offlineConfirmTitle": "下载离线模式？",
+      "offlineConfirmDesc": "为本机挑选的最佳语音与 AI 模型，共 {{size}}，只需下载一次。之后笔记无需网络即可使用。",
+      "offlineModeOffTitle": "关闭离线模式？",
+      "offlineModeOffDesc": "模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后转成文字。"
     }
   },
   "languages": {
@@ -473,7 +480,8 @@
       "downloading": "正在下载 {{model}} 模型…",
       "cancelDownload": "取消下载",
       "downloadFailed": "下载失败",
-      "modelDescriptionOffline": "下载一次，即使没有网络，录音和听写也能转成文字。越精准的模型体积越大。"
+      "offlineTitle": "无网络语音识别",
+      "offlineDesc": "下载一次，即使没有网络，录音和听写也能转成文字。本机最佳模型，{{size}}。"
     },
     "titlePlaceholder": "标题",
     "charactersCount": "{{count}} 个字符",
@@ -899,7 +907,7 @@
     "aiTitle": "AI 帮你整理",
     "aiText": "改写文字、找出任务、回答关于笔记的问题。",
     "privacyTitle": "默认私密",
-    "privacyText": "笔记加密存储；同步可采用端到端加密。"
+    "privacyText": "笔记在手机上加密，同步时端到端加密：只有你能阅读。"
   },
   "errors": {
     "offline": "没有网络连接。请检查网络后重试。",

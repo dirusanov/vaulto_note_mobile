@@ -60,7 +60,8 @@
     "keptLockedText": "Están cifradas. Inicia sesión para abrirlas.",
     "deletedCount": "Movidas a la papelera: {{count}}",
     "offlineSync": "Sin conexión. Los cambios se guardan y se sincronizarán después.",
-    "offline": "Sin conexión. Las notas y las funciones en el teléfono siguen funcionando."
+    "offline": "Sin conexión. Las notas y las funciones en el teléfono siguen funcionando.",
+    "unlockWithKey": "Introduce tu clave de recuperación para verlas en este teléfono."
   },
   "settings": {
     "title": "Ajustes",
@@ -82,9 +83,20 @@
       "advancedSettings": "Ajustes avanzados de IA"
     },
     "sync": {
-      "title": "Sincronización en la nube",
+      "title": "Sincronización",
       "status": "Estado de sincronización",
-      "passphrase": "Frase de contraseña"
+      "passphrase": "Frase de contraseña",
+      "onPlain": "Activada · tus notas tienen copia y están en todos tus dispositivos",
+      "onE2ee": "Activada · cifrado de extremo a extremo, solo tú puedes leerlas",
+      "off": "Desactivada · las notas se quedan en este teléfono",
+      "e2eeTitle": "Cifrado de extremo a extremo",
+      "e2eeOffDesc": "Solo tú podrás leer tus notas, ni siquiera Vaulto",
+      "e2eeTurningOn": "Activando…",
+      "turnOn": "Activar",
+      "keyDesc": "Abre tus notas en un teléfono nuevo",
+      "turnOffE2ee": "Desactivar el cifrado de extremo a extremo",
+      "encryptingTitle": "Cifrando tus notas",
+      "encryptingSubtitle": "Solo tú podrás leerlas."
     },
     "account": {
       "signOut": "Cerrar sesión",
@@ -224,9 +236,9 @@
       "warning": "Este código es la ÚNICA forma de recuperar sus notas si pierde el acceso a este dispositivo. No lo comparta con nadie.",
       "copiedMsg": "Código de recuperación copiado al portapapeles. ¡Guárdalo en un lugar seguro!",
       "useBtn": "Usar código de recuperación",
-      "useTitle": "Usar código de recuperación",
-      "useSubtitle": "Ingrese su código de recuperación de 12 o 24 palabras para recuperar el acceso a sus notas cifradas.",
-      "label": "Código de recuperación",
+      "useTitle": "Introduce tu clave de recuperación",
+      "useSubtitle": "Las 24 palabras que se mostraron al activar el cifrado. Pégalas o escanea el código QR de tu otro teléfono.",
+      "label": "Clave de recuperación",
       "inputRequired": "Por favor ingrese su código de recuperación.",
       "invalidCode": "Código de recuperación no válido. Por favor revise si hay errores de escritura.",
       "sharingNotAvailable": "Compartir no está disponible en este dispositivo.",
@@ -240,7 +252,12 @@
       "errorProcessingImage": "Error al procesar la imagen.",
       "scanQr": "Escanear código QR",
       "pickQr": "Importar imagen",
-      "noRecoveryCode": "No se encontró el código de recuperación. Intenta desbloquear de nuevo."
+      "noRecoveryCode": "No se encontró el código de recuperación. Intenta desbloquear de nuevo.",
+      "readyTitle": "Tus notas están cifradas",
+      "keyTitle": "Clave de recuperación",
+      "explain": "Solo esta clave abre tus notas en un teléfono nuevo. Guárdala en un lugar seguro, como un gestor de contraseñas. Nadie, ni siquiera Vaulto, puede recuperarla.",
+      "share": "Compartir",
+      "savedIt": "Ya guardé la clave"
     },
     "resetRecovery": {
       "title": "El almacén cifrado se restableció",
@@ -298,31 +315,21 @@
     },
     "voice": {
       "title": "Voz e IA",
-      "offline": "Trabajar sin internet",
-      "offlineHint": "Voz a texto sin conexión. Una descarga, {{size}}",
-      "offlineReady": "Listo · {{quality}}, {{size}} en el teléfono",
       "downloading": "Descargando · {{percent}} %",
-      "quality": "Calidad de reconocimiento",
-      "fast": "Rápida",
-      "balanced": "Equilibrada",
-      "accurate": "Precisa",
-      "qualityHint": "Más precisa implica más lenta y más espacio. Con conexión se usa la nube.",
       "private": "Solo en este teléfono",
       "privateDesc": "La voz y la IA nunca salen del teléfono, ni siquiera con conexión",
-      "offlineAI": "IA sin internet",
-      "offlineAIHint": "Edita y pregunta a tus notas sin conexión. Una descarga, {{size}}",
-      "offlineAIReady": "Listo · ediciones y preguntas sin conexión, {{size}}",
-      "cellularTitle": "¿Descargar con datos móviles?",
-      "cellularDesc": "El modelo de voz ocupa {{size}}. Se recomienda Wi-Fi.",
-      "offlineOffTitle": "¿Desactivar la voz sin conexión?",
-      "offlineOffDesc": "El modelo de voz se elimina del teléfono y libera {{size}}. Sin internet, las grabaciones se guardan y podrás convertirlas en texto al volver a conectarte.",
-      "offlineAIOffTitle": "¿Desactivar la IA sin conexión?",
-      "offlineAIOffDesc": "El modelo de IA se elimina del teléfono y libera {{size}}. Las funciones de IA siguen funcionando con conexión.",
       "privateVoiceDesc": "La voz nunca sale del teléfono, ni siquiera con conexión",
-      "offlineAIOffPrivateDesc": "El modelo de IA se elimina del teléfono y libera {{size}}. Con «Solo en este teléfono» activado, la IA queda desactivada hasta volver a descargarlo.",
-      "fastDesc": "La más rápida, para notas cortas",
-      "balancedDesc": "Buena precisión con poco tamaño",
-      "accurateDesc": "La más precisa, más lenta y grande"
+      "offlineMode": "Modo sin conexión",
+      "offlineHintAll": "Voz e IA en el teléfono, sin internet · {{size}}",
+      "offlineReadyAll": "Listo · voz e IA funcionan sin internet",
+      "offlineReadySpeech": "Listo · la voz funciona sin internet",
+      "offlineAIMissing": "La voz funciona sin conexión. Toca para añadir la IA ({{size}})",
+      "offlineNoSpace": "No hay espacio libre suficiente en el teléfono",
+      "offlineNoSpaceTitle": "No hay espacio",
+      "offlineConfirmTitle": "¿Descargar el modo sin conexión?",
+      "offlineConfirmDesc": "Los mejores modelos de voz e IA para este teléfono, {{size}}, se descargan una vez. Después las notas funcionan sin internet.",
+      "offlineModeOffTitle": "¿Desactivar el modo sin conexión?",
+      "offlineModeOffDesc": "Los modelos se eliminan del teléfono y liberan {{size}}. Sin internet, las grabaciones se guardan y se convierten en texto al volver la conexión."
     }
   },
   "languages": {
@@ -473,7 +480,8 @@
       "downloading": "Descargando el modelo {{model}}...",
       "cancelDownload": "Cancelar descarga",
       "downloadFailed": "Error al descargar",
-      "modelDescriptionOffline": "Descárgalo una vez y las grabaciones y el dictado se convertirán en texto incluso sin internet. Los modelos más precisos son más grandes."
+      "offlineTitle": "Voz sin internet",
+      "offlineDesc": "Descárgalo una vez y las grabaciones y el dictado se convertirán en texto incluso sin internet. El mejor modelo para este teléfono, {{size}}."
     },
     "titlePlaceholder": "Título",
     "charactersCount": "{{count}} caracteres",
@@ -899,7 +907,7 @@
     "aiTitle": "La IA lo ordena",
     "aiText": "Mejora el texto, encuentra tareas y responde sobre tus notas.",
     "privacyTitle": "Privado por defecto",
-    "privacyText": "Las notas se guardan cifradas; la sincronización puede tener cifrado de extremo a extremo."
+    "privacyText": "Las notas se cifran en el teléfono y de extremo a extremo al sincronizar: solo tú puedes leerlas."
   },
   "errors": {
     "offline": "Sin conexión a internet. Revisa tu red e inténtalo de nuevo.",
