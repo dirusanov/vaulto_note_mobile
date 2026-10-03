@@ -213,7 +213,10 @@
       "advAISettingsDescOnDevice": "En la nube o en este teléfono, sin conexión",
       "onDeviceProvider": "En el teléfono",
       "e2eeRow": "Cifrado de extremo a extremo",
-      "agentNeedsSignIn": "Disponible al iniciar sesión"
+      "agentNeedsSignIn": "Disponible al iniciar sesión",
+      "guestMinutesLeft": "Voz a texto gratis restante: {{minutes}} min. Inicia sesión para obtener más y sincronizar tus notas.",
+      "guestMinutesUsed": "Se acabaron los minutos gratis. Inicia sesión para obtener más o activa «Trabajar sin internet» abajo.",
+      "trialInfoAccount": "Inicia sesión para obtener minutos gratis de voz a texto y sincronizar tus notas."
     },
     "recovery": {
       "title": "Código de recuperación",
@@ -291,6 +294,34 @@
       "failed": "No se pudo eliminar la cuenta. Comprueba la conexión e inténtalo de nuevo.",
       "successTitle": "Cuenta eliminada",
       "successMessage": "Tu cuenta y sus datos se han eliminado de nuestros servidores."
+    },
+    "voice": {
+      "title": "Voz e IA",
+      "offline": "Trabajar sin internet",
+      "offlineHint": "Voz a texto sin conexión. Una descarga, {{size}}",
+      "offlineReady": "Listo · {{quality}}, {{size}} en el teléfono",
+      "downloading": "Descargando · {{percent}} %",
+      "quality": "Calidad de reconocimiento",
+      "fast": "Rápida",
+      "balanced": "Equilibrada",
+      "accurate": "Precisa",
+      "qualityHint": "Más precisa implica más lenta y más espacio. Con conexión se usa la nube.",
+      "private": "Solo en este teléfono",
+      "privateDesc": "La voz y la IA nunca salen del teléfono, ni siquiera con conexión",
+      "offlineAI": "IA sin internet",
+      "offlineAIHint": "Edita y pregunta a tus notas sin conexión. Una descarga, {{size}}",
+      "offlineAIReady": "Listo · ediciones y preguntas sin conexión, {{size}}",
+      "cellularTitle": "¿Descargar con datos móviles?",
+      "cellularDesc": "El modelo de voz ocupa {{size}}. Se recomienda Wi-Fi.",
+      "offlineOffTitle": "¿Desactivar la voz sin conexión?",
+      "offlineOffDesc": "El modelo de voz se elimina del teléfono y libera {{size}}. Sin internet, las grabaciones se guardan y podrás convertirlas en texto al volver a conectarte.",
+      "offlineAIOffTitle": "¿Desactivar la IA sin conexión?",
+      "offlineAIOffDesc": "El modelo de IA se elimina del teléfono y libera {{size}}. Las funciones de IA siguen funcionando con conexión.",
+      "privateVoiceDesc": "La voz nunca sale del teléfono, ni siquiera con conexión",
+      "offlineAIOffPrivateDesc": "El modelo de IA se elimina del teléfono y libera {{size}}. Con «Solo en este teléfono» activado, la IA queda desactivada hasta volver a descargarlo.",
+      "fastDesc": "La más rápida, para notas cortas",
+      "balancedDesc": "Buena precisión con poco tamaño",
+      "accurateDesc": "La más precisa, más lenta y grande"
     }
   },
   "languages": {
@@ -440,7 +471,8 @@
       "download": "Descargar",
       "downloading": "Descargando el modelo {{model}}...",
       "cancelDownload": "Cancelar descarga",
-      "downloadFailed": "Error al descargar"
+      "downloadFailed": "Error al descargar",
+      "modelDescriptionOffline": "Descárgalo una vez y las grabaciones y el dictado se convertirán en texto incluso sin internet. Los modelos más precisos son más grandes."
     },
     "titlePlaceholder": "Título",
     "charactersCount": "{{count}} caracteres",
@@ -569,8 +601,11 @@
       "guestTitle": "Texto sin cuenta",
       "guestDesc": "Esta grabación se guardó como audio. Descarga una vez el modelo de voz y tus próximas grabaciones se convertirán en texto en el propio teléfono: gratis, sin conexión y sin registrarte.",
       "suggestTitle": "Transcribe gratis en tu teléfono",
-      "suggestDesc": "Descarga una vez el modelo de voz: las grabaciones se convierten en texto en el propio teléfono, gratis y sin conexión, y el audio nunca sale de él.",
-      "enabled": "Ahora las grabaciones se transcriben en este teléfono"
+      "suggestDesc": "Descarga el modelo de voz una vez: las grabaciones se convertirán en texto incluso sin internet o cuando se acaben los minutos gratis.",
+      "enabled": "Ahora las grabaciones se transcriben en este teléfono",
+      "offlineTitle": "Trabaja sin internet",
+      "offlineDesc": "Tu última grabación se guardó sin texto porque no había internet. Descarga el modelo de voz una vez y las grabaciones se convertirán en texto incluso sin conexión.",
+      "offlineReady": "Listo: las grabaciones se convierten en texto incluso sin internet"
     },
     "recordings": {
       "addText": "Añadir texto",
@@ -606,9 +641,10 @@
     "micPermissionDenied": "Se necesita acceso al micrófono para grabar notas de voz. Puedes permitirlo en los ajustes del sistema.",
     "chipTranscribe": "A texto",
     "chipAgent": "Agente",
-    "savedOffline": "Sin internet: la grabación se guardó. Puedes transcribirla después.",
+    "savedOffline": "Sin internet: la grabación está guardada. Se convertirá en texto al volver la conexión.",
     "chipMeeting": "Reunión",
-    "meetingHint": "Hasta 60 minutos, luego un acta con decisiones y tareas"
+    "meetingHint": "Hasta 60 minutos, luego un acta con decisiones y tareas",
+    "agentAuthMessage": "Editar notas por voz está disponible al iniciar sesión. Las grabaciones se convierten en texto también sin cuenta."
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -739,7 +775,9 @@
     "autoDetect": "Detección automática",
     "noLanguagesFound": "No se encontraron idiomas para «{{query}}»",
     "onDeviceFree": "Transcribir gratis en este teléfono",
-    "perMonth": "{{price}} al mes"
+    "perMonth": "{{price}} al mes",
+    "guestMinutesUsedTitle": "Se acabaron los minutos gratis",
+    "guestMinutesUsedDesc": "Inicia sesión para obtener más minutos gratis y sincronizar tus notas. O convierte la voz en texto en este teléfono, gratis y sin conexión."
   },
   "a11y": {
     "back": "Atrás",
@@ -815,7 +853,7 @@
   },
   "localAI": {
     "modelMissingTitle": "Descarga el modelo de IA",
-    "modelMissingDesc": "La IA en el dispositivo necesita su modelo ({{model}}, {{size}}) en el teléfono. Descárgalo una vez en Ajustes → Modelo de IA; después todo funciona sin conexión.",
+    "modelMissingDesc": "La IA en el teléfono necesita su modelo ({{model}}, {{size}}). Activa «IA sin internet» en Ajustes → Voz e IA; después todo funciona sin conexión.",
     "openSettings": "Abrir ajustes",
     "downloadTitle": "¿Descargar {{model}}?",
     "downloadDesc": "El modelo ocupa {{size}}. Se descarga una vez; después la IA funciona en este teléfono sin internet y no se envía nada.",
@@ -881,7 +919,7 @@
     "llmDownloadFailed": "No se pudo descargar el modelo de IA.",
     "llmDeleteFailed": "No se pudo eliminar el modelo de IA.",
     "localLlmUnavailableTitle": "La IA en el teléfono no está disponible",
-    "localLlmUnavailableText": "Esta versión de la app no puede ejecutar IA en el teléfono. Actualiza la app o elige Vaulto AI en Ajustes.",
+    "localLlmUnavailableText": "Esta versión de la app no puede ejecutar IA en el teléfono. Actualiza la app o desactiva «Solo en este teléfono» en Ajustes.",
     "aiLockedTitle": "Inicia sesión para usar la IA",
     "aiLockedText": "La IA en la nube está disponible tras iniciar sesión. La IA en el teléfono funciona sin cuenta.",
     "deletePromptTitle": "¿Eliminar este prompt?",
@@ -920,7 +958,9 @@
     "importTitle": "Importar notas",
     "importNothing": "No se encontraron notas en estos archivos. Compatibles: .md, .txt, .zip y Google Keep (Takeout).",
     "importDone": "Notas importadas: {{count}}",
-    "importFailed": "No se pudieron importar las notas."
+    "importFailed": "No se pudieron importar las notas.",
+    "exportDesc": "Archivos Markdown en un ZIP",
+    "importDesc": ".md, .txt, .zip o Google Keep (Takeout)"
   },
   "notify": {
     "remindersChannel": "Recordatorios de tareas",

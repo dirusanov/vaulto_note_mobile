@@ -213,7 +213,10 @@
       "advAISettingsDescOnDevice": "In der Cloud oder auf diesem Telefon, offline",
       "onDeviceProvider": "Auf dem Telefon",
       "e2eeRow": "Ende-zu-Ende-Verschlüsselung",
-      "agentNeedsSignIn": "Nach der Anmeldung verfügbar"
+      "agentNeedsSignIn": "Nach der Anmeldung verfügbar",
+      "guestMinutesLeft": "Verbleibende kostenlose Spracherkennung: {{minutes}} Min. Melde dich an für mehr und zum Synchronisieren.",
+      "guestMinutesUsed": "Die Freiminuten sind aufgebraucht. Melde dich an für mehr oder aktiviere unten „Ohne Internet arbeiten“.",
+      "trialInfoAccount": "Melde dich an für kostenlose Spracherkennungsminuten und Synchronisierung deiner Notizen."
     },
     "recovery": {
       "title": "Wiederherstellungscode",
@@ -291,6 +294,34 @@
       "failed": "Das Konto konnte nicht gelöscht werden. Prüfe deine Verbindung und versuche es erneut.",
       "successTitle": "Konto gelöscht",
       "successMessage": "Dein Konto und seine Daten wurden von unseren Servern gelöscht."
+    },
+    "voice": {
+      "title": "Sprache & KI",
+      "offline": "Ohne Internet arbeiten",
+      "offlineHint": "Sprache offline in Text. Ein Download, {{size}}",
+      "offlineReady": "Bereit · {{quality}}, {{size}} auf dem Handy",
+      "downloading": "Wird geladen · {{percent}} %",
+      "quality": "Erkennungsqualität",
+      "fast": "Schnell",
+      "balanced": "Ausgewogen",
+      "accurate": "Genau",
+      "qualityHint": "Genauer heißt langsamer und mehr Speicher. Online wird die Cloud genutzt.",
+      "private": "Nur auf diesem Handy",
+      "privateDesc": "Sprache und KI verlassen das Handy nie, auch online nicht",
+      "offlineAI": "KI ohne Internet",
+      "offlineAIHint": "Notizen offline bearbeiten und befragen. Ein Download, {{size}}",
+      "offlineAIReady": "Bereit · Bearbeiten und Fragen offline, {{size}}",
+      "cellularTitle": "Über mobile Daten laden?",
+      "cellularDesc": "Das Sprachmodell hat {{size}}. WLAN wird empfohlen.",
+      "offlineOffTitle": "Offline-Spracherkennung ausschalten?",
+      "offlineOffDesc": "Das Sprachmodell wird vom Handy entfernt und gibt {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und können später online zu Text werden.",
+      "offlineAIOffTitle": "Offline-KI ausschalten?",
+      "offlineAIOffDesc": "Das KI-Modell wird vom Handy entfernt und gibt {{size}} frei. Online funktioniert die KI weiter.",
+      "privateVoiceDesc": "Die Sprache verlässt das Handy nie, auch online nicht",
+      "offlineAIOffPrivateDesc": "Das KI-Modell wird vom Handy entfernt und gibt {{size}} frei. Mit „Nur auf diesem Handy“ bleibt die KI aus, bis du es erneut lädst.",
+      "fastDesc": "Am schnellsten, für kurze Notizen",
+      "balancedDesc": "Gute Genauigkeit bei kleiner Größe",
+      "accurateDesc": "Am genauesten, langsamer und größer"
     }
   },
   "languages": {
@@ -440,7 +471,8 @@
       "download": "Herunterladen",
       "downloading": "Modell {{model}} wird heruntergeladen ...",
       "cancelDownload": "Download abbrechen",
-      "downloadFailed": "Download fehlgeschlagen"
+      "downloadFailed": "Download fehlgeschlagen",
+      "modelDescriptionOffline": "Einmal herunterladen, dann werden Aufnahmen und Diktat auch ohne Internet zu Text. Genauere Modelle sind größer."
     },
     "titlePlaceholder": "Titel",
     "charactersCount": "{{count}} Zeichen",
@@ -569,8 +601,11 @@
       "guestTitle": "Text ohne Konto",
       "guestDesc": "Diese Aufnahme ist als Audio gespeichert. Lade das Sprachmodell einmal herunter, dann werden deine nächsten Aufnahmen direkt auf dem Telefon zu Text – kostenlos, offline, ohne Anmeldung.",
       "suggestTitle": "Kostenlos auf dem Telefon transkribieren",
-      "suggestDesc": "Lade das Sprachmodell einmal herunter: Aufnahmen werden direkt auf dem Telefon zu Text, kostenlos und offline, und das Audio verlässt es nie.",
-      "enabled": "Aufnahmen werden jetzt auf diesem Telefon transkribiert"
+      "suggestDesc": "Lade das Sprachmodell einmal herunter: Aufnahmen werden auch ohne Internet oder nach den Freiminuten zu Text.",
+      "enabled": "Aufnahmen werden jetzt auf diesem Telefon transkribiert",
+      "offlineTitle": "Ohne Internet arbeiten",
+      "offlineDesc": "Deine letzte Aufnahme wurde ohne Text gespeichert, weil kein Internet da war. Lade das Sprachmodell einmal herunter, dann werden Aufnahmen auch offline zu Text.",
+      "offlineReady": "Fertig: Aufnahmen werden jetzt auch ohne Internet zu Text"
     },
     "recordings": {
       "addText": "Text einfügen",
@@ -606,9 +641,10 @@
     "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden.",
     "chipTranscribe": "Als Text",
     "chipAgent": "Agent",
-    "savedOffline": "Kein Internet: Die Aufnahme ist gespeichert. Du kannst sie später transkribieren.",
+    "savedOffline": "Kein Internet – die Aufnahme ist gespeichert. Sie wird zu Text, sobald du wieder online bist.",
     "chipMeeting": "Meeting",
-    "meetingHint": "Bis zu 60 Minuten, danach ein Protokoll mit Beschlüssen und Aufgaben"
+    "meetingHint": "Bis zu 60 Minuten, danach ein Protokoll mit Beschlüssen und Aufgaben",
+    "agentAuthMessage": "Notizen per Sprache bearbeiten ist nach der Anmeldung verfügbar. Aufnahmen werden auch ohne Konto zu Text."
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -739,7 +775,9 @@
     "autoDetect": "Automatisch erkennen",
     "noLanguagesFound": "Keine Sprachen für „{{query}}“ gefunden",
     "onDeviceFree": "Kostenlos auf diesem Telefon transkribieren",
-    "perMonth": "{{price}} pro Monat"
+    "perMonth": "{{price}} pro Monat",
+    "guestMinutesUsedTitle": "Freiminuten aufgebraucht",
+    "guestMinutesUsedDesc": "Melde dich an für weitere Freiminuten und Synchronisierung. Oder wandle Sprache direkt auf dem Handy in Text um – kostenlos und offline."
   },
   "a11y": {
     "back": "Zurück",
@@ -815,7 +853,7 @@
   },
   "localAI": {
     "modelMissingTitle": "KI-Modell herunterladen",
-    "modelMissingDesc": "Die KI auf dem Gerät braucht ihr Modell ({{model}}, {{size}}) auf dem Telefon. Lade es einmal unter Einstellungen → KI-Modell herunter; danach funktioniert alles offline.",
+    "modelMissingDesc": "Die KI auf dem Handy braucht ihr Modell ({{model}}, {{size}}). Aktiviere „KI ohne Internet“ unter Einstellungen → Sprache & KI; danach funktioniert alles offline.",
     "openSettings": "Einstellungen öffnen",
     "downloadTitle": "{{model}} herunterladen?",
     "downloadDesc": "Das Modell ist {{size}} groß. Es wird einmal heruntergeladen; danach arbeitet die KI auf diesem Telefon ohne Internet und nichts wird gesendet.",
@@ -881,7 +919,7 @@
     "llmDownloadFailed": "Das KI-Modell konnte nicht heruntergeladen werden.",
     "llmDeleteFailed": "Das KI-Modell konnte nicht entfernt werden.",
     "localLlmUnavailableTitle": "KI auf dem Telefon nicht verfügbar",
-    "localLlmUnavailableText": "Diese App-Version kann keine KI auf dem Telefon ausführen. Aktualisiere die App oder wähle Vaulto AI in den Einstellungen.",
+    "localLlmUnavailableText": "Diese App-Version kann keine KI auf dem Handy ausführen. Aktualisiere die App oder schalte „Nur auf diesem Handy“ in den Einstellungen aus.",
     "aiLockedTitle": "Melde dich an, um KI zu nutzen",
     "aiLockedText": "Cloud-KI ist nach der Anmeldung verfügbar. KI auf dem Telefon funktioniert ohne Konto.",
     "deletePromptTitle": "Diesen Prompt löschen?",
@@ -920,7 +958,9 @@
     "importTitle": "Notizen importieren",
     "importNothing": "In diesen Dateien wurden keine Notizen gefunden. Unterstützt: .md, .txt, .zip und Google Keep (Takeout).",
     "importDone": "Importierte Notizen: {{count}}",
-    "importFailed": "Die Notizen konnten nicht importiert werden."
+    "importFailed": "Die Notizen konnten nicht importiert werden.",
+    "exportDesc": "Markdown-Dateien als ZIP",
+    "importDesc": ".md, .txt, .zip oder Google Keep (Takeout)"
   },
   "notify": {
     "remindersChannel": "Aufgaben-Erinnerungen",

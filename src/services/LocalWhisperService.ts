@@ -6,6 +6,7 @@ import { canDeviceRunModel, describeDeviceMemory } from './DeviceCapabilities';
 import { releaseLocalLLMContext } from './LocalLLMService';
 import {
     createMutex,
+    DOWNLOAD_CANCELLED,
     downloadModelFile,
     formatBytes,
     GGML_MAGIC,
@@ -128,6 +129,10 @@ const REALTIME_MAX_SEC = 900;
 let activeContext: WhisperRnContext | null = null;
 let activeModelUri: string | null = null;
 let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
+// A cancel that arrives before the download task exists (memory/space checks
+// still running) is remembered and applied as soon as the task is created.
+let downloadInProgress = false;
+let cancelRequested = false;
 /** Whisper allows one job per context: a second one entering whisper_full crashes the app. */
 let activeJob: 'transcribe' | 'dictation' | null = null;
 const withContextLock = createMutex();
@@ -319,7 +324,20 @@ export const downloadLocalWhisperModel = async (
     if (Platform.OS === 'web') {
         throw new Error('Local Whisper is not supported in the browser');
     }
+    downloadInProgress = true;
+    cancelRequested = false;
+    try {
+        return await downloadLocalWhisperModelInner(key, onProgress);
+    } finally {
+        downloadInProgress = false;
+        cancelRequested = false;
+    }
+};
 
+const downloadLocalWhisperModelInner = async (
+    key: LocalWhisperModelKey,
+    onProgress?: ModelDownloadProgress,
+): Promise<LocalWhisperModelStatus> => {
     const descriptor = getDescriptor(key);
     if (!(await canDeviceRunModel(descriptor.sizeBytes))) {
         throw new Error(
@@ -330,7 +348,8 @@ export const downloadLocalWhisperModel = async (
         throw new Error(`Not enough free space for ${descriptor.label} (${formatBytes(descriptor.sizeBytes)}).`);
     }
 
-    await setSelectedLocalWhisperModel(key);
+    // The model in use stays selected until the new one is fully on the phone,
+    // so transcription keeps working (and a killed download changes nothing).
     const { model, fileUri } = await getFileUriForModel(key);
 
     try {
@@ -338,7 +357,11 @@ export const downloadLocalWhisperModel = async (
             { url: model.url, sizeBytes: model.sizeBytes, magic: GGML_MAGIC },
             fileUri,
             onProgress,
-            (task) => { activeDownloadResumable = task; },
+            (task) => {
+                // Cancelled while the checks ran: stop before the transfer starts.
+                if (cancelRequested) throw new Error(DOWNLOAD_CANCELLED);
+                activeDownloadResumable = task;
+            },
         );
     } finally {
         activeDownloadResumable = null;
@@ -349,10 +372,14 @@ export const downloadLocalWhisperModel = async (
         await releaseLocalWhisperContext();
     }
 
+    await setSelectedLocalWhisperModel(key);
     return getLocalWhisperModelStatus(key);
 };
 
 export const cancelLocalWhisperDownload = async (): Promise<void> => {
+    if (downloadInProgress) {
+        cancelRequested = true;
+    }
     if (activeDownloadResumable) {
         try {
             await activeDownloadResumable.cancelAsync();

@@ -213,7 +213,10 @@
       "advAISettingsDescOnDevice": "Dans le cloud ou sur ce téléphone, hors ligne",
       "onDeviceProvider": "Sur le téléphone",
       "e2eeRow": "Chiffrement de bout en bout",
-      "agentNeedsSignIn": "Disponible après connexion"
+      "agentNeedsSignIn": "Disponible après connexion",
+      "guestMinutesLeft": "Transcription gratuite restante : {{minutes}} min. Connectez-vous pour en avoir plus et synchroniser vos notes.",
+      "guestMinutesUsed": "Les minutes gratuites sont épuisées. Connectez-vous pour en obtenir plus ou activez « Travailler sans internet » ci-dessous.",
+      "trialInfoAccount": "Connectez-vous pour obtenir des minutes de transcription gratuites et synchroniser vos notes."
     },
     "recovery": {
       "title": "Code de récupération",
@@ -291,6 +294,34 @@
       "failed": "Impossible de supprimer le compte. Vérifiez votre connexion et réessayez.",
       "successTitle": "Compte supprimé",
       "successMessage": "Votre compte et ses données ont été supprimés de nos serveurs."
+    },
+    "voice": {
+      "title": "Voix et IA",
+      "offline": "Travailler sans internet",
+      "offlineHint": "Transcription hors ligne. Un seul téléchargement, {{size}}",
+      "offlineReady": "Prêt · {{quality}}, {{size}} sur le téléphone",
+      "downloading": "Téléchargement · {{percent}} %",
+      "quality": "Qualité de reconnaissance",
+      "fast": "Rapide",
+      "balanced": "Équilibrée",
+      "accurate": "Précise",
+      "qualityHint": "Plus précise signifie plus lente et plus volumineuse. En ligne, le cloud est utilisé.",
+      "private": "Uniquement sur ce téléphone",
+      "privateDesc": "La voix et l’IA ne quittent jamais le téléphone, même en ligne",
+      "offlineAI": "IA sans internet",
+      "offlineAIHint": "Modifiez et interrogez vos notes hors ligne. Un seul téléchargement, {{size}}",
+      "offlineAIReady": "Prêt · modifications et questions hors ligne, {{size}}",
+      "cellularTitle": "Télécharger avec les données mobiles ?",
+      "cellularDesc": "Le modèle vocal fait {{size}}. Le Wi-Fi est recommandé.",
+      "offlineOffTitle": "Désactiver la transcription hors ligne ?",
+      "offlineOffDesc": "Le modèle vocal est supprimé du téléphone et libère {{size}}. Sans internet, les enregistrements sont conservés et pourront être transcrits une fois en ligne.",
+      "offlineAIOffTitle": "Désactiver l’IA hors ligne ?",
+      "offlineAIOffDesc": "Le modèle d’IA est supprimé du téléphone et libère {{size}}. Les fonctions d’IA restent disponibles en ligne.",
+      "privateVoiceDesc": "La voix ne quitte jamais le téléphone, même en ligne",
+      "offlineAIOffPrivateDesc": "Le modèle d’IA est supprimé du téléphone et libère {{size}}. Avec « Uniquement sur ce téléphone » activé, l’IA reste indisponible jusqu’au prochain téléchargement.",
+      "fastDesc": "La plus rapide, pour les notes courtes",
+      "balancedDesc": "Bonne précision pour une petite taille",
+      "accurateDesc": "La plus précise, plus lente et plus lourde"
     }
   },
   "languages": {
@@ -440,7 +471,8 @@
       "download": "Télécharger",
       "downloading": "Téléchargement du modèle {{model}}...",
       "cancelDownload": "Annuler le téléchargement",
-      "downloadFailed": "Échec du téléchargement"
+      "downloadFailed": "Échec du téléchargement",
+      "modelDescriptionOffline": "Téléchargez une fois : enregistrements et dictée sont transcrits même sans internet. Les modèles plus précis sont plus lourds."
     },
     "titlePlaceholder": "Titre",
     "charactersCount": "{{count}} caractères",
@@ -569,8 +601,11 @@
       "guestTitle": "Du texte sans compte",
       "guestDesc": "Cet enregistrement est sauvegardé en audio. Téléchargez une fois le modèle vocal et vos prochains enregistrements deviendront du texte directement sur le téléphone : gratuit, hors ligne, sans inscription.",
       "suggestTitle": "Transcription gratuite sur votre téléphone",
-      "suggestDesc": "Téléchargez une fois le modèle vocal : les enregistrements deviennent du texte directement sur le téléphone, gratuitement et hors ligne, et l’audio ne le quitte jamais.",
-      "enabled": "Les enregistrements sont désormais transcrits sur ce téléphone"
+      "suggestDesc": "Téléchargez le modèle vocal une fois : vos enregistrements seront transcrits même sans internet ou une fois les minutes gratuites épuisées.",
+      "enabled": "Les enregistrements sont désormais transcrits sur ce téléphone",
+      "offlineTitle": "Travaillez sans internet",
+      "offlineDesc": "Votre dernier enregistrement a été sauvegardé sans texte faute d’internet. Téléchargez le modèle vocal une fois et vos enregistrements seront transcrits même hors ligne.",
+      "offlineReady": "C’est fait : les enregistrements sont transcrits même sans internet"
     },
     "recordings": {
       "addText": "Ajouter le texte",
@@ -606,9 +641,10 @@
     "micPermissionDenied": "L'accès au microphone est nécessaire pour enregistrer des notes vocales. Vous pouvez l'autoriser dans les réglages du système.",
     "chipTranscribe": "En texte",
     "chipAgent": "Agent",
-    "savedOffline": "Pas d’internet : l’enregistrement est sauvegardé. Vous pourrez le transcrire plus tard.",
+    "savedOffline": "Pas d’internet : l’enregistrement est sauvegardé. Il sera transcrit dès le retour du réseau.",
     "chipMeeting": "Réunion",
-    "meetingHint": "Jusqu’à 60 minutes, puis un compte rendu avec décisions et tâches"
+    "meetingHint": "Jusqu’à 60 minutes, puis un compte rendu avec décisions et tâches",
+    "agentAuthMessage": "La modification des notes à la voix est disponible après connexion. Les enregistrements sont transcrits même sans compte."
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -739,7 +775,9 @@
     "autoDetect": "Détection automatique",
     "noLanguagesFound": "Aucune langue trouvée pour « {{query}} »",
     "onDeviceFree": "Transcrire gratuitement sur ce téléphone",
-    "perMonth": "{{price}} par mois"
+    "perMonth": "{{price}} par mois",
+    "guestMinutesUsedTitle": "Minutes gratuites épuisées",
+    "guestMinutesUsedDesc": "Connectez-vous pour obtenir plus de minutes gratuites et synchroniser vos notes. Ou transcrivez directement sur ce téléphone, gratuitement et hors ligne."
   },
   "a11y": {
     "back": "Retour",
@@ -815,7 +853,7 @@
   },
   "localAI": {
     "modelMissingTitle": "Téléchargez le modèle d’IA",
-    "modelMissingDesc": "L’IA sur l’appareil a besoin de son modèle ({{model}}, {{size}}) sur le téléphone. Téléchargez-le une fois dans Réglages → Modèle d’IA ; ensuite tout fonctionne hors ligne.",
+    "modelMissingDesc": "L’IA sur le téléphone a besoin de son modèle ({{model}}, {{size}}). Activez « IA sans internet » dans Réglages → Voix et IA ; ensuite tout fonctionne hors ligne.",
     "openSettings": "Ouvrir les réglages",
     "downloadTitle": "Télécharger {{model}} ?",
     "downloadDesc": "Le modèle fait {{size}}. Il est téléchargé une seule fois ; ensuite l’IA fonctionne sur ce téléphone sans internet et rien n’est envoyé.",
@@ -881,7 +919,7 @@
     "llmDownloadFailed": "Impossible de télécharger le modèle d’IA.",
     "llmDeleteFailed": "Impossible de supprimer le modèle d’IA.",
     "localLlmUnavailableTitle": "IA sur le téléphone indisponible",
-    "localLlmUnavailableText": "Cette version de l’app ne peut pas exécuter l’IA sur le téléphone. Mettez l’app à jour ou choisissez Vaulto AI dans les réglages.",
+    "localLlmUnavailableText": "Cette version de l’app ne peut pas exécuter l’IA sur le téléphone. Mettez l’app à jour ou désactivez « Uniquement sur ce téléphone » dans les réglages.",
     "aiLockedTitle": "Connectez-vous pour utiliser l’IA",
     "aiLockedText": "L’IA dans le cloud est disponible après connexion. L’IA sur le téléphone fonctionne sans compte.",
     "deletePromptTitle": "Supprimer ce prompt ?",
@@ -920,7 +958,9 @@
     "importTitle": "Importer des notes",
     "importNothing": "Aucune note trouvée dans ces fichiers. Formats : .md, .txt, .zip et Google Keep (Takeout).",
     "importDone": "Notes importées : {{count}}",
-    "importFailed": "Impossible d’importer les notes."
+    "importFailed": "Impossible d’importer les notes.",
+    "exportDesc": "Fichiers Markdown dans un ZIP",
+    "importDesc": ".md, .txt, .zip ou Google Keep (Takeout)"
   },
   "notify": {
     "remindersChannel": "Rappels de tâches",

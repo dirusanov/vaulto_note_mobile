@@ -213,7 +213,10 @@
       "advAISettingsDescOnDevice": "クラウド、またはこの端末上でオフライン",
       "onDeviceProvider": "この端末で",
       "e2eeRow": "エンドツーエンド暗号化",
-      "agentNeedsSignIn": "サインイン後に利用できます"
+      "agentNeedsSignIn": "サインイン後に利用できます",
+      "guestMinutesLeft": "無料の文字起こし残り：{{minutes}} 分。サインインで追加とメモの同期ができます。",
+      "guestMinutesUsed": "無料の分数を使い切りました。サインインで追加するか、下の「オフラインで使う」をオンにしてください。",
+      "trialInfoAccount": "サインインすると無料の文字起こし時間とメモの同期が使えます。"
     },
     "recovery": {
       "title": "復元コード",
@@ -291,6 +294,34 @@
       "failed": "アカウントを削除できませんでした。接続を確認して、もう一度お試しください。",
       "successTitle": "アカウントを削除しました",
       "successMessage": "アカウントとそのデータはサーバーから削除されました。"
+    },
+    "voice": {
+      "title": "音声とAI",
+      "offline": "オフラインで使う",
+      "offlineHint": "オフラインで文字起こし。ダウンロードは1回、{{size}}",
+      "offlineReady": "準備完了 · {{quality}}、端末に {{size}}",
+      "downloading": "ダウンロード中 · {{percent}}%",
+      "quality": "認識の品質",
+      "fast": "速い",
+      "balanced": "バランス",
+      "accurate": "高精度",
+      "qualityHint": "高精度ほど遅く、容量も増えます。オンライン時はクラウドを使います。",
+      "private": "この端末だけで",
+      "privateDesc": "オンラインでも、音声とAIは端末の外に出ません",
+      "offlineAI": "オフラインAI",
+      "offlineAIHint": "オフラインでメモの編集や質問。ダウンロードは1回、{{size}}",
+      "offlineAIReady": "準備完了 · 編集と質問がオフラインで使えます、{{size}}",
+      "cellularTitle": "モバイルデータでダウンロードしますか？",
+      "cellularDesc": "音声モデルは {{size}} です。Wi-Fi をおすすめします。",
+      "offlineOffTitle": "オフライン文字起こしをオフにしますか？",
+      "offlineOffDesc": "音声モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ってから文字にできます。",
+      "offlineAIOffTitle": "オフラインAIをオフにしますか？",
+      "offlineAIOffDesc": "AIモデルが端末から削除され、{{size}} が空きます。オンラインではAI機能を引き続き使えます。",
+      "privateVoiceDesc": "オンラインでも、音声は端末の外に出ません",
+      "offlineAIOffPrivateDesc": "AIモデルが端末から削除され、{{size}} が空きます。「この端末だけで」がオンの間は、再ダウンロードするまでAI機能は使えません。",
+      "fastDesc": "最速、短いメモ向け",
+      "balancedDesc": "小さなサイズで十分な精度",
+      "accurateDesc": "最も高精度、遅めで大きい"
     }
   },
   "languages": {
@@ -440,7 +471,8 @@
       "download": "ダウンロード",
       "downloading": "{{model}} モデルをダウンロード中...",
       "cancelDownload": "ダウンロードを中止",
-      "downloadFailed": "ダウンロードに失敗しました"
+      "downloadFailed": "ダウンロードに失敗しました",
+      "modelDescriptionOffline": "一度ダウンロードすれば、オフラインでも録音や音声入力が文字になります。高精度なモデルほどサイズが大きくなります。"
     },
     "titlePlaceholder": "タイトル",
     "charactersCount": "{{count}} 文字",
@@ -569,8 +601,11 @@
       "guestTitle": "アカウントなしでテキスト化",
       "guestDesc": "この録音は音声として保存されました。音声モデルを一度ダウンロードすると、次の録音から端末上でテキストになります。無料・オフライン・登録不要です。",
       "suggestTitle": "端末で無料の文字起こし",
-      "suggestDesc": "音声モデルを一度ダウンロードすると、録音が端末上でテキストになります。無料でオフライン、音声は端末から出ません。",
-      "enabled": "録音はこの端末で文字起こしされるようになりました"
+      "suggestDesc": "音声モデルを一度ダウンロードすれば、オフラインでも無料分を使い切っても録音が文字になります。",
+      "enabled": "録音はこの端末で文字起こしされるようになりました",
+      "offlineTitle": "オフラインでも使う",
+      "offlineDesc": "インターネットがなかったため、前回の録音は文字なしで保存されました。音声モデルを一度ダウンロードすれば、オフラインでも録音が文字になります。",
+      "offlineReady": "完了：インターネットがなくても録音が文字になります"
     },
     "recordings": {
       "addText": "テキストを追加",
@@ -606,9 +641,10 @@
     "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。",
     "chipTranscribe": "文字起こし",
     "chipAgent": "エージェント",
-    "savedOffline": "インターネットに接続されていません。録音は保存されました。後で文字起こしできます。",
+    "savedOffline": "インターネットがありません。録音は保存されました。オンラインに戻ると文字になります。",
     "chipMeeting": "会議",
-    "meetingHint": "最長 60 分、その後に決定事項とタスクをまとめた議事録を作成"
+    "meetingHint": "最長 60 分、その後に決定事項とタスクをまとめた議事録を作成",
+    "agentAuthMessage": "音声でのメモ編集はサインイン後に使えます。録音はアカウントなしでも文字になります。"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -739,7 +775,9 @@
     "autoDetect": "自動検出",
     "noLanguagesFound": "「{{query}}」に一致する言語はありません",
     "onDeviceFree": "この端末で無料で文字起こし",
-    "perMonth": "月額 {{price}}"
+    "perMonth": "月額 {{price}}",
+    "guestMinutesUsedTitle": "無料の分数を使い切りました",
+    "guestMinutesUsedDesc": "サインインすると無料の分数が追加され、メモも同期できます。またはこのスマホで直接文字起こし — 無料・オフラインで。"
   },
   "a11y": {
     "back": "戻る",
@@ -815,7 +853,7 @@
   },
   "localAI": {
     "modelMissingTitle": "AI モデルをダウンロード",
-    "modelMissingDesc": "端末上の AI にはモデル（{{model}}、{{size}}）が必要です。「設定 → AI モデル」で一度ダウンロードすれば、以後はすべてオフラインで動作します。",
+    "modelMissingDesc": "端末上のAIにはモデル（{{model}}、{{size}}）が必要です。設定 → 音声とAI で「オフラインAI」をオンにすると、以降はオフラインで動作します。",
     "openSettings": "設定を開く",
     "downloadTitle": "{{model}} をダウンロードしますか？",
     "downloadDesc": "モデルのサイズは {{size}} です。一度ダウンロードすれば、AI はインターネットなしでこの端末上で動作し、何も送信されません。",
@@ -881,7 +919,7 @@
     "llmDownloadFailed": "AI モデルをダウンロードできませんでした。",
     "llmDeleteFailed": "AI モデルを削除できませんでした。",
     "localLlmUnavailableTitle": "端末上の AI は利用できません",
-    "localLlmUnavailableText": "このバージョンのアプリは端末上で AI を実行できません。アプリを更新するか、設定で Vaulto AI を選んでください。",
+    "localLlmUnavailableText": "このバージョンのアプリは端末上でAIを実行できません。アプリを更新するか、設定で「この端末だけで」をオフにしてください。",
     "aiLockedTitle": "AI を使うにはサインイン",
     "aiLockedText": "クラウド AI はサインイン後に使えます。端末上の AI はアカウントなしで使えます。",
     "deletePromptTitle": "このプロンプトを削除しますか？",
@@ -920,7 +958,9 @@
     "importTitle": "ノートをインポート",
     "importNothing": "これらのファイルにノートが見つかりません。対応形式：.md、.txt、.zip、Google Keep（Takeout）。",
     "importDone": "インポートしたノート：{{count}}",
-    "importFailed": "ノートをインポートできませんでした。"
+    "importFailed": "ノートをインポートできませんでした。",
+    "exportDesc": "Markdown ファイルを ZIP で",
+    "importDesc": ".md、.txt、.zip または Google Keep（Takeout）"
   },
   "notify": {
     "remindersChannel": "タスクのリマインダー",

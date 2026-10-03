@@ -213,7 +213,10 @@
       "advAISettingsDescOnDevice": "云端，或在这部手机上离线运行",
       "onDeviceProvider": "在手机上",
       "e2eeRow": "端到端加密",
-      "agentNeedsSignIn": "登录后可用"
+      "agentNeedsSignIn": "登录后可用",
+      "guestMinutesLeft": "剩余免费语音转文字：{{minutes}} 分钟。登录可获得更多并同步笔记。",
+      "guestMinutesUsed": "免费分钟已用完。登录可获得更多，或在下方开启“无网络也可用”。",
+      "trialInfoAccount": "登录可获得免费语音转文字分钟并同步笔记。"
     },
     "recovery": {
       "title": "恢复密钥",
@@ -291,6 +294,34 @@
       "failed": "无法删除账户。请检查网络连接后重试。",
       "successTitle": "账户已删除",
       "successMessage": "你的账户及其数据已从我们的服务器中删除。"
+    },
+    "voice": {
+      "title": "语音与 AI",
+      "offline": "无网络也可用",
+      "offlineHint": "离线语音转文字。仅需下载一次，{{size}}",
+      "offlineReady": "已就绪 · {{quality}}，手机上 {{size}}",
+      "downloading": "正在下载 · {{percent}}%",
+      "quality": "识别质量",
+      "fast": "快速",
+      "balanced": "均衡",
+      "accurate": "精准",
+      "qualityHint": "越精准越慢、占用空间越大。联网时使用云端。",
+      "private": "仅在本机",
+      "privateDesc": "即使联网，语音和 AI 也不会离开手机",
+      "offlineAI": "离线 AI",
+      "offlineAIHint": "离线编辑和询问笔记。仅需下载一次，{{size}}",
+      "offlineAIReady": "已就绪 · 编辑和提问可离线使用，{{size}}",
+      "cellularTitle": "使用移动数据下载？",
+      "cellularDesc": "语音模型大小为 {{size}}，建议使用 Wi-Fi。",
+      "offlineOffTitle": "关闭离线语音识别？",
+      "offlineOffDesc": "语音模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后可转成文字。",
+      "offlineAIOffTitle": "关闭离线 AI？",
+      "offlineAIOffDesc": "AI 模型将从手机删除并释放 {{size}}。联网时 AI 功能仍可使用。",
+      "privateVoiceDesc": "即使联网，语音也不会离开手机",
+      "offlineAIOffPrivateDesc": "AI 模型将从手机删除并释放 {{size}}。开启“仅在本机”时，重新下载前 AI 功能不可用。",
+      "fastDesc": "最快，适合短笔记",
+      "balancedDesc": "体积小，准确度好",
+      "accurateDesc": "最精准，较慢且更大"
     }
   },
   "languages": {
@@ -440,7 +471,8 @@
       "download": "下载",
       "downloading": "正在下载 {{model}} 模型…",
       "cancelDownload": "取消下载",
-      "downloadFailed": "下载失败"
+      "downloadFailed": "下载失败",
+      "modelDescriptionOffline": "下载一次，即使没有网络，录音和听写也能转成文字。越精准的模型体积越大。"
     },
     "titlePlaceholder": "标题",
     "charactersCount": "{{count}} 个字符",
@@ -569,8 +601,11 @@
       "guestTitle": "无需账户即可获得文字",
       "guestDesc": "这段录音已保存为音频。下载一次语音模型，之后的录音就能直接在手机上转成文字——免费、离线、无需注册。",
       "suggestTitle": "在手机上免费转写",
-      "suggestDesc": "下载一次语音模型：录音直接在手机上转成文字，免费且离线，音频不会离开手机。",
-      "enabled": "现在录音会在这部手机上转写"
+      "suggestDesc": "下载一次语音模型：即使没有网络或免费分钟用完，录音也能转成文字。",
+      "enabled": "现在录音会在这部手机上转写",
+      "offlineTitle": "无需网络也能用",
+      "offlineDesc": "由于没有网络，上一段录音保存时没有文字。下载一次语音模型，离线也能把录音转成文字。",
+      "offlineReady": "完成：现在没有网络也能把录音转成文字"
     },
     "recordings": {
       "addText": "插入文字",
@@ -606,9 +641,10 @@
     "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。",
     "chipTranscribe": "转文字",
     "chipAgent": "智能体",
-    "savedOffline": "没有网络：录音已保存，稍后可以转成文字。",
+    "savedOffline": "没有网络——录音已保存。恢复联网后会自动转成文字。",
     "chipMeeting": "会议",
-    "meetingHint": "最长 60 分钟，之后生成含决定和任务的纪要"
+    "meetingHint": "最长 60 分钟，之后生成含决定和任务的纪要",
+    "agentAuthMessage": "登录后可用语音编辑笔记。即使没有账号，录音也会转成文字。"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -739,7 +775,9 @@
     "autoDetect": "自动检测",
     "noLanguagesFound": "未找到与“{{query}}”匹配的语言",
     "onDeviceFree": "在这部手机上免费转写",
-    "perMonth": "每月 {{price}}"
+    "perMonth": "每月 {{price}}",
+    "guestMinutesUsedTitle": "免费分钟已用完",
+    "guestMinutesUsedDesc": "登录可获得更多免费分钟并同步笔记。也可以直接在手机上把语音转成文字——免费且离线。"
   },
   "a11y": {
     "back": "返回",
@@ -815,7 +853,7 @@
   },
   "localAI": {
     "modelMissingTitle": "下载 AI 模型",
-    "modelMissingDesc": "设备端 AI 需要在手机上安装模型（{{model}}，{{size}}）。在“设置 → AI 模型”中下载一次，之后即可完全离线使用。",
+    "modelMissingDesc": "手机端 AI 需要模型（{{model}}，{{size}}）。在 设置 → 语音与 AI 中开启“离线 AI”，之后即可离线使用。",
     "openSettings": "打开设置",
     "downloadTitle": "下载 {{model}}？",
     "downloadDesc": "模型大小为 {{size}}。只需下载一次，之后 AI 在这部手机上无需联网即可运行，不会发送任何内容。",
@@ -881,7 +919,7 @@
     "llmDownloadFailed": "无法下载 AI 模型。",
     "llmDeleteFailed": "无法移除 AI 模型。",
     "localLlmUnavailableTitle": "手机上的 AI 不可用",
-    "localLlmUnavailableText": "此版本的应用无法在手机上运行 AI。请更新应用，或在设置中选择 Vaulto AI。",
+    "localLlmUnavailableText": "此版本的应用无法在手机上运行 AI。请更新应用，或在设置中关闭“仅在本机”。",
     "aiLockedTitle": "登录后即可使用 AI",
     "aiLockedText": "登录后可使用云端 AI。手机上的 AI 无需账号。",
     "deletePromptTitle": "删除此提示词？",
@@ -920,7 +958,9 @@
     "importTitle": "导入笔记",
     "importNothing": "这些文件中没有找到笔记。支持 .md、.txt、.zip 和 Google Keep（Takeout）。",
     "importDone": "已导入笔记：{{count}}",
-    "importFailed": "无法导入笔记。"
+    "importFailed": "无法导入笔记。",
+    "exportDesc": "Markdown 文件打包为 ZIP",
+    "importDesc": ".md、.txt、.zip 或 Google Keep（Takeout）"
   },
   "notify": {
     "remindersChannel": "任务提醒",

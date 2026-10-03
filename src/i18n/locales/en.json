@@ -224,7 +224,10 @@
       "advAISettingsDescOnDevice": "Cloud or on this phone, offline",
       "onDeviceProvider": "On this phone",
       "e2eeRow": "End-to-end encryption",
-      "agentNeedsSignIn": "Available after signing in"
+      "agentNeedsSignIn": "Available after signing in",
+      "guestMinutesLeft": "Free speech-to-text left: {{minutes}} min. Sign in to get more and sync your notes.",
+      "guestMinutesUsed": "Free minutes are used up. Sign in to get more, or turn on \"Work without internet\" below.",
+      "trialInfoAccount": "Sign in to get free speech-to-text minutes and sync your notes."
     },
     "recovery": {
       "title": "Recovery Code",
@@ -291,6 +294,34 @@
       "failed": "Could not delete the account. Check your connection and try again.",
       "successTitle": "Account deleted",
       "successMessage": "Your account and its data have been deleted from our servers."
+    },
+    "voice": {
+      "title": "Voice & AI",
+      "offline": "Work without internet",
+      "offlineHint": "Turn speech into text offline. One download, {{size}}",
+      "offlineReady": "Ready · {{quality}}, {{size}} on the phone",
+      "downloading": "Downloading · {{percent}}%",
+      "quality": "Recognition quality",
+      "fast": "Fast",
+      "balanced": "Balanced",
+      "accurate": "Accurate",
+      "qualityHint": "More accurate means slower and more space. The cloud is used while online.",
+      "private": "Only on this phone",
+      "privateDesc": "Voice and AI never leave the phone, even online",
+      "offlineAI": "AI without internet",
+      "offlineAIHint": "Edit and ask your notes offline. One download, {{size}}",
+      "offlineAIReady": "Ready · edits and questions work offline, {{size}}",
+      "cellularTitle": "Download over mobile data?",
+      "cellularDesc": "The speech model is {{size}}. Wi-Fi is recommended.",
+      "offlineOffTitle": "Turn off offline speech?",
+      "offlineOffDesc": "The speech model is removed from this phone and frees {{size}}. Without internet, recordings are saved and can be turned into text once you are back online.",
+      "offlineAIOffTitle": "Turn off offline AI?",
+      "offlineAIOffDesc": "The AI model is removed from this phone and frees {{size}}. AI features keep working online.",
+      "privateVoiceDesc": "Voice never leaves the phone, even online",
+      "offlineAIOffPrivateDesc": "The AI model is removed from this phone and frees {{size}}. With \"Only on this phone\" on, AI features stay off until you download it again.",
+      "fastDesc": "Quickest, fine for short notes",
+      "balancedDesc": "Good accuracy at a small size",
+      "accurateDesc": "Most accurate, slower and larger"
     }
   },
   "languages": {
@@ -440,7 +471,8 @@
       "download": "Download",
       "downloading": "Downloading the {{model}} model...",
       "cancelDownload": "Cancel Download",
-      "downloadFailed": "Download failed"
+      "downloadFailed": "Download failed",
+      "modelDescriptionOffline": "Download once and recordings and dictation turn into text even without internet. More accurate models are larger."
     },
     "titlePlaceholder": "Title",
     "charactersCount": "{{count}} characters",
@@ -569,8 +601,11 @@
       "guestTitle": "Get text without an account",
       "guestDesc": "This recording is saved as audio. Download the speech model once and your next recordings turn into text right on the phone — free, offline, no sign-in.",
       "suggestTitle": "Transcribe for free on your phone",
-      "suggestDesc": "Download the speech model once: recordings turn into text right on the phone, free and offline, and the audio never leaves it.",
-      "enabled": "Recordings are now transcribed on this phone"
+      "suggestDesc": "Download the speech model once: recordings turn into text even without internet or when free minutes run out.",
+      "enabled": "Recordings are now transcribed on this phone",
+      "offlineTitle": "Work without internet",
+      "offlineDesc": "Your last recording was saved without text because there was no internet. Download the speech model once and recordings turn into text even offline.",
+      "offlineReady": "Done: recordings now turn into text even without internet"
     },
     "recordings": {
       "addText": "Add text",
@@ -606,9 +641,10 @@
     "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings.",
     "chipTranscribe": "To text",
     "chipAgent": "Agent",
-    "savedOffline": "No internet: the recording is saved. You can transcribe it later.",
+    "savedOffline": "No internet — the recording is saved. It turns into text when you are back online.",
     "chipMeeting": "Meeting",
-    "meetingHint": "Up to 60 minutes, then a summary with decisions and tasks"
+    "meetingHint": "Up to 60 minutes, then a summary with decisions and tasks",
+    "agentAuthMessage": "Editing notes by voice is available after you sign in. Recordings still turn into text without an account."
   },
   "aux": {
     "emailVerified": "Email Verified!",
@@ -739,7 +775,9 @@
     "autoDetect": "Auto-Detect",
     "noLanguagesFound": "No languages found for \"{{query}}\"",
     "onDeviceFree": "Transcribe free on this phone",
-    "perMonth": "{{price}} / month"
+    "perMonth": "{{price}} / month",
+    "guestMinutesUsedTitle": "Free minutes used up",
+    "guestMinutesUsedDesc": "Sign in to get more free minutes and sync your notes. Or turn speech into text right on this phone — free and offline."
   },
   "a11y": {
     "back": "Back",
@@ -815,7 +853,7 @@
   },
   "localAI": {
     "modelMissingTitle": "Download the AI model",
-    "modelMissingDesc": "On-device AI needs its model ({{model}}, {{size}}) on the phone. Download it once in Settings → AI Model; after that everything works offline.",
+    "modelMissingDesc": "On-device AI needs its model ({{model}}, {{size}}). Turn on \"AI without internet\" in Settings → Voice & AI; after that everything works offline.",
     "openSettings": "Open Settings",
     "downloadTitle": "Download {{model}}?",
     "downloadDesc": "The model is {{size}}. It is downloaded once; after that AI works on this phone without internet and nothing is sent anywhere.",
@@ -881,7 +919,7 @@
     "llmDownloadFailed": "Could not download the AI model.",
     "llmDeleteFailed": "Could not remove the AI model.",
     "localLlmUnavailableTitle": "On-device AI is unavailable",
-    "localLlmUnavailableText": "This version of the app cannot run AI on the phone. Update the app or switch to Vaulto AI in Settings.",
+    "localLlmUnavailableText": "This version of the app cannot run AI on the phone. Update the app or turn off \"Only on this phone\" in Settings.",
     "aiLockedTitle": "Sign in to use AI",
     "aiLockedText": "Cloud AI features are available after signing in. On-device AI works without an account.",
     "deletePromptTitle": "Delete this prompt?",
@@ -920,7 +958,9 @@
     "importTitle": "Import notes",
     "importNothing": "No notes found in these files. Supported: .md, .txt, .zip and Google Keep (Takeout).",
     "importDone": "Imported notes: {{count}}",
-    "importFailed": "Could not import the notes."
+    "importFailed": "Could not import the notes.",
+    "exportDesc": "Markdown files in a ZIP",
+    "importDesc": ".md, .txt, .zip or Google Keep (Takeout)"
   },
   "notify": {
     "remindersChannel": "Task reminders",

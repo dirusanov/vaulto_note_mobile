@@ -65,8 +65,9 @@ export const EmptyState = ({ message, variant = 'plain' }: EmptyStateProps) => {
                         </View>
                     ))}
                 </View>
+                {/* Kept in the layout while hidden, so the screen does not jump. */}
                 <View style={styles.cta}>
-                    <Text style={styles.ctaText}>{message}</Text>
+                    <Text style={[styles.ctaText, !message && { opacity: 0 }]}>{message || ' '}</Text>
                 </View>
             </View>
         );

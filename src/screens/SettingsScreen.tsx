@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image, Animated, Easing } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
@@ -22,21 +22,15 @@ import {
     setAIProvider,
     setOpenAIApiKey,
     setOpenAIBaseUrl,
-    getAgentModeEnabled,
-    setAgentModeEnabled,
-    getTranscriptionEnabled,
-    setTranscriptionEnabled,
     getTranscriptionLanguage,
     setTranscriptionLanguage,
     getOnDeviceTranscription,
     setOnDeviceTranscription,
 } from '../utils/storage';
-import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadModal';
-import { OnDeviceModelSection, OnDeviceModelState, OnDeviceModelOption, formatModelSize } from '../components/OnDeviceModelSection';
+import { OnDeviceModelState, formatModelSize } from '../components/OnDeviceModelSection';
 import { hasRoomForModel } from '../services/modelDownload';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
-import { AgentModeVaultoGateModal } from '../components/AgentModeVaultoGateModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
@@ -58,7 +52,7 @@ import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import * as Clipboard from 'expo-clipboard';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
-import { CUSTOM_AI_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { CUSTOM_AI_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED, isLocalAIProvider } from '../utils/featureFlags';
 import {
     cancelLocalWhisperDownload,
     deleteLocalWhisperModel,
@@ -365,8 +359,6 @@ export const SettingsScreen = () => {
 
     const [apiKey, setApiKeyState] = useState('');
     const [openAIBaseUrl, setOpenAIBaseUrlState] = useState(DEFAULT_OPENAI_BASE_URL);
-    const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
-    const [transcriptionEnabled, setTranscriptionEnabledState] = useState(true);
     const [transcriptionLanguage, setTranscriptionLanguageState] = useState<TranscriptionLanguage>('auto');
     const [testingConnection, setTestingConnection] = useState(false);
     const [aiProvider, setAiProviderState] = useState<AIProvider>('vaulto_ai');
@@ -392,29 +384,26 @@ export const SettingsScreen = () => {
         type: 'idle',
         message: '',
     });
-    const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
     const [showSecurityAuthModal, setShowSecurityAuthModal] = useState(false);
     const [showDisableSyncModal, setShowDisableSyncModal] = useState(false);
     const [showDisableEncryptionModal, setShowDisableEncryptionModal] = useState(false);
-    const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
     const [showLocalWhisperDeleteConfirm, setShowLocalWhisperDeleteConfirm] = useState(false);
     // Every model's state (on the phone? fits this phone?), not only the selected one.
     const [whisperModelStates, setWhisperModelStates] = useState<Record<string, OnDeviceModelState>>({});
     const [llmModelStates, setLLMModelStates] = useState<Record<string, OnDeviceModelState>>({});
     const [recommendedLLMKey, setRecommendedLLMKey] = useState<string | null>(null);
-    const [whisperDeleteKey, setWhisperDeleteKey] = useState<string | null>(null);
-    const [llmDeleteKey, setLLMDeleteKey] = useState<string | null>(null);
-    const [providerGate, setProviderGate] = useState<null | { kind: 'signin' | 'upgrade'; providerTitle: string }>(null);
     const [showSecurityInfoModal, setShowSecurityInfoModal] = useState(false);
     const [currentPeriodUsage, setCurrentPeriodUsage] = useState<CurrentPeriodUsage | null>(null);
     const [localWhisperStatus, setLocalWhisperStatus] = useState<Awaited<ReturnType<typeof getLocalWhisperModelStatus>> | null>(null);
     const [onDeviceTranscription, setOnDeviceTranscriptionState] = useState(false);
-    const [showWhisperDownload, setShowWhisperDownload] = useState(false);
     const [localWhisperBusy, setLocalWhisperBusy] = useState(false);
     const [localWhisperProgress, setLocalWhisperProgress] = useState(0);
     const [localWhisperBytesLoaded, setLocalWhisperBytesLoaded] = useState(0);
     const [localWhisperBytesTotal, setLocalWhisperBytesTotal] = useState(0);
     const [isDownloadingLocalWhisper, setIsDownloadingLocalWhisper] = useState(false);
+    // The model being downloaded; the one in use stays selected until it is done.
+    const [pendingWhisperKey, setPendingWhisperKey] = useState<LocalWhisperModelKey | null>(null);
+    const whisperDownloadStartingRef = useRef(false);
     const [localLLMStatus, setLocalLLMStatus] = useState<Awaited<ReturnType<typeof getLocalLLMModelStatus>> | null>(null);
     const [localLLMBusy, setLocalLLMBusy] = useState(false);
     const [localLLMProgress, setLocalLLMProgress] = useState(0);
@@ -422,110 +411,81 @@ export const SettingsScreen = () => {
     const [localLLMBytesTotal, setLocalLLMBytesTotal] = useState(0);
     const [isDownloadingLocalLLM, setIsDownloadingLocalLLM] = useState(false);
     const [showLocalLLMDeleteConfirm, setShowLocalLLMDeleteConfirm] = useState(false);
-    const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
-    const [showAdvancedAI, setShowAdvancedAI] = useState(false);
-    const warningOpacity = useRef(new Animated.Value(0)).current;
-    const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    // Agent Mode Animation - Swaying
-    const swayAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        if (agentModeEnabled) {
-            // Sway animation sequence
-            Animated.loop(
-                Animated.sequence([
-                    // Tilt left
-                    Animated.timing(swayAnim, {
-                        toValue: -1,
-                        duration: 1000,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                    // Tilt right
-                    Animated.timing(swayAnim, {
-                        toValue: 1,
-                        duration: 1000,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                    // Return to center
-                    Animated.timing(swayAnim, {
-                        toValue: 0,
-                        duration: 1000,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                    // Pause
-                    Animated.delay(2000)
-                ])
-            ).start();
-        } else {
-            swayAnim.stopAnimation();
-            Animated.timing(swayAnim, {
-                toValue: 0,
-                duration: 300,
-                useNativeDriver: true,
-            }).start();
-        }
-    }, [agentModeEnabled]);
-
-    const sway = swayAnim.interpolate({
-        inputRange: [-1, 1],
-        outputRange: ['-15deg', '15deg'],
-    });
 
     const usingOpenAI = aiProvider === 'openai';
     const showCustomAIConfig = usingOpenAI || customAIPending;
     const usingLocalWhisper = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_whisper' || (aiProvider as string) === 'local');
-    const usingLocalLLM = LOCAL_MODELS_ENABLED && ((aiProvider as string) === 'local_llm' || (aiProvider as string) === 'local');
     const localLLMRuntimeAvailable = isLocalLLMRuntimeAvailable();
-    const usingLocal = usingLocalWhisper || usingLocalLLM;
-    const trialInfoText = t('settings.ui.trialInfo');
+    const guestSecondsLeft = user?.transcription_remaining_seconds;
+    const trialInfoText = typeof guestSecondsLeft === 'number'
+        ? (guestSecondsLeft > 0
+            ? t('settings.ui.guestMinutesLeft', 'Free speech-to-text left: {{minutes}} min. Sign in to get more and sync your notes.', { minutes: Math.max(1, Math.round(guestSecondsLeft / 60)) })
+            : t('settings.ui.guestMinutesUsed', 'Free minutes are used up. Sign in to get more, or turn on "Work without internet" below.'))
+        : t('settings.ui.trialInfoAccount', 'Sign in to get free speech-to-text minutes and sync your notes.');
     const hasConfiguredKey = encryptionMode === 'e2ee';
     const isSyncLocked = syncLocked || encryptionStatus === 'locked';
     const syncStatusLabel = encryptionStatus === 'loading' ? t('settings.ui.checking') : (isSyncLocked ? t('settings.ui.locked') : !syncEnabled ? t('settings.ui.off') : t('settings.ui.on'));
     const syncStatusColor = encryptionStatus === 'loading' ? colors.textSecondary : (isSyncLocked ? colors.warning : !syncEnabled ? colors.textSecondary : colors.accentGreen);
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
-    const onDeviceTranscriptionActive = LOCAL_WHISPER_ENABLED && onDeviceTranscription && !!localWhisperStatus?.isDownloaded;
-    const transcriptionAuthRequired = isGuestOrAnonymous && aiProvider === 'vaulto_ai' && !onDeviceTranscriptionActive;
     const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
 
-    // The agent runs on the server, so it is unavailable with Custom AI and on-device
-    // AI. That is shown, not stored: the user's choice comes back with Vaulto AI.
-    const agentUnavailable = usingOpenAI || usingLocalWhisper || usingLocalLLM || aiProvider === ('local' as any);
-
-    // What each on-device model is for, in plain words. Whisper Large is left out
-    // unless already on the phone: Turbo matches it at a fifth of the size.
-    const whisperModelOptions: OnDeviceModelOption[] = getAvailableLocalWhisperModels()
-        .filter((m) => m.key !== 'large' || whisperModelStates.large?.downloaded || localWhisperStatus?.selectedModel.key === 'large')
-        .sort((a, b) => a.sizeBytes - b.sizeBytes)
-        .map((m) => ({
-            key: m.key,
-            label: m.label,
-            sizeBytes: m.sizeBytes,
-            recommended: m.key === 'turbo' ? whisperModelStates.turbo?.available !== false : m.key === 'base' && whisperModelStates.turbo?.available === false,
-            description: {
-                tiny: t('localModels.whisperTiny', 'Fastest, basic accuracy'),
-                base: t('localModels.whisperBase', 'Fast, more accurate than Tiny'),
-                turbo: t('localModels.whisperTurbo', 'Most accurate, a bit slower'),
-                large: t('localModels.whisperLarge', 'Largest; Turbo is as accurate'),
-            }[m.key] ?? '',
-        }));
-    const llmModelOptions: OnDeviceModelOption[] = getAvailableLocalLLMModels()
-        .sort((a, b) => a.sizeBytes - b.sizeBytes)
-        .map((m) => ({
-            key: m.key,
-            label: m.label,
-            sizeBytes: m.sizeBytes,
-            recommended: m.key === recommendedLLMKey,
-            description: {
-                'qwen3.5-0.8b': t('localModels.llm08', 'For older phones, simple edits'),
-                'qwen3.5-2b': t('localModels.llm2', 'Fast, good for short notes'),
-                'qwen3.5-4b': t('localModels.llm4', 'Best answers, needs 6 GB+ RAM'),
-            }[m.key] ?? '',
-        }));
+    // Voice & AI card. The cloud is the default and needs no setup; "work
+    // without internet" downloads a speech model that takes over offline, and
+    // "only on this phone" keeps voice and AI on the device even online.
+    const whisperReady = !!localWhisperStatus?.isDownloaded;
+    const offlineVoiceOn = whisperReady || isDownloadingLocalWhisper;
+    // On for "everything on the phone" (provider 'local') and for the older
+    // voice-only choice (on-device transcription with a cloud provider).
+    const privateMode = whisperReady && (usingLocalWhisper || onDeviceTranscription);
+    const privateVoiceOnly = privateMode && !usingLocalWhisper;
+    const usingLocalLLMProvider = LOCAL_MODELS_ENABLED && (aiProvider as string) === 'local';
+    const showPrivateRow = whisperReady || usingLocalWhisper || onDeviceTranscription;
+    const activeWhisperKey = pendingWhisperKey ?? localWhisperStatus?.selectedModel.key;
+    const whisperQualityOptions = (['tiny', 'base', 'turbo'] as LocalWhisperModelKey[]).map((key) => ({
+        key,
+        label: {
+            tiny: t('settings.voice.fast', 'Fast'),
+            base: t('settings.voice.balanced', 'Balanced'),
+            turbo: t('settings.voice.accurate', 'Accurate'),
+        }[key as 'tiny' | 'base' | 'turbo'],
+        sizeBytes: getAvailableLocalWhisperModels().find((m) => m.key === key)?.sizeBytes ?? 0,
+    }));
+    // Balanced is the sweet spot of size and accuracy; Fast on phones too small for it.
+    const recommendedWhisperKey: LocalWhisperModelKey = whisperModelStates.base?.available === false ? 'tiny' : 'base';
+    const downloadedWhisperBytes = getAvailableLocalWhisperModels()
+        .filter((m) => whisperModelStates[m.key]?.downloaded)
+        .reduce((sum, m) => sum + m.sizeBytes, 0) || (localWhisperStatus?.selectedModel.sizeBytes ?? 0);
+    const downloadedLLMBytes = getAvailableLocalLLMModels()
+        .filter((m) => llmModelStates[m.key]?.downloaded)
+        .reduce((sum, m) => sum + m.sizeBytes, 0) || (localLLMStatus?.selectedModel.sizeBytes ?? 0);
+    const describeDownload = (progress: number, loaded: number, total: number) => [
+        t('settings.voice.downloading', 'Downloading · {{percent}}%', { percent: Math.round(progress * 100) }),
+        total > 0 ? `${formatModelSize(loaded, t)} / ${formatModelSize(total, t)}` : '',
+    ].filter(Boolean).join(' · ');
+    const activeQualityLabel = whisperQualityOptions.find((o) => o.key === activeWhisperKey)?.label
+        ?? localWhisperStatus?.selectedModel.label ?? '';
+    const offlineVoiceDescription = isDownloadingLocalWhisper
+        ? describeDownload(localWhisperProgress, localWhisperBytesLoaded, localWhisperBytesTotal)
+        : whisperReady
+            ? t('settings.voice.offlineReady', 'Ready · {{quality}}, {{size}} on the phone', {
+                quality: activeQualityLabel,
+                size: formatModelSize(localWhisperStatus?.selectedModel.sizeBytes ?? 0, t),
+            })
+            : t('settings.voice.offlineHint', 'Turn speech into text offline. One download, {{size}}', {
+                size: formatModelSize(whisperQualityOptions.find((o) => o.key === recommendedWhisperKey)?.sizeBytes ?? 0, t),
+            });
+    const offlineAIOn = !!localLLMStatus?.isDownloaded || isDownloadingLocalLLM;
+    const recommendedLLM = getAvailableLocalLLMModels().find((m) => m.key === recommendedLLMKey) ?? localLLMStatus?.selectedModel;
+    const offlineAIDescription = isDownloadingLocalLLM
+        ? describeDownload(localLLMProgress, localLLMBytesLoaded, localLLMBytesTotal)
+        : localLLMStatus?.isDownloaded
+            ? t('settings.voice.offlineAIReady', 'Ready · edits and questions work offline, {{size}}', {
+                size: formatModelSize(localLLMStatus.selectedModel.sizeBytes, t),
+            })
+            : t('settings.voice.offlineAIHint', 'Edit and ask your notes offline. One download, {{size}}', {
+                size: formatModelSize(recommendedLLM?.sizeBytes ?? 0, t),
+            });
 
     const openManageSubscription = useCallback(async () => {
         const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
@@ -608,48 +568,6 @@ export const SettingsScreen = () => {
         );
     }, [resumeStandardSyncAfterReset, t]);
 
-    type ProviderOption = {
-        key: AIProvider;
-        title: string;
-        blurb: string;
-        description: string;
-        icon: string;
-        accent: string;
-        chips: string[];
-        isLocked?: boolean;
-        proMessage?: string;
-    };
-
-    const providerOptions: ProviderOption[] = [
-        {
-            key: 'vaulto_ai',
-            title: 'Vaulto AI',
-            blurb: 'Private & Anonymous',
-            description: 'Whisper + LLM on our server. No data stored or analyzed. Fully anonymous and secure.',
-            icon: 'security',
-            accent: colors.primary,
-            chips: ['Zero retention', 'Anonymous', 'Trial'],
-            isLocked: isGuestOrAnonymous,
-        },
-        {
-            key: 'openai',
-            title: 'Custom AI',
-            blurb: 'OpenAI & Compatible APIs',
-            description: 'Works with OpenAI, self-hosted servers, and any OpenAI-compatible API endpoints.',
-            icon: 'dns',
-            accent: colors.accentGreen,
-            chips: ['OpenAI', 'Custom', 'Self-hosted'],
-        },
-        ...(LOCAL_MODELS_ENABLED ? [{
-            key: 'local' as AIProvider,
-            title: 'Local',
-            blurb: 'On-device AI',
-            description: 'Uses on-device models for both transcription and reasoning, ensuring maximum privacy and offline capability.',
-            icon: 'memory',
-            accent: '#0F766E',
-            chips: ['Offline', 'Private'],
-        }] : []),
-    ];
 
 
     const refreshModelStates = useCallback(async () => {
@@ -717,16 +635,6 @@ export const SettingsScreen = () => {
         void getOnDeviceTranscription().then(setOnDeviceTranscriptionState);
     }, []);
 
-    const updateOnDeviceTranscription = useCallback(async (enabled: boolean) => {
-        if (enabled && !localWhisperStatus?.isDownloaded) {
-            // The switch turns on once the model is on the phone.
-            setShowWhisperDownload(true);
-            return;
-        }
-        setOnDeviceTranscriptionState(enabled);
-        await setOnDeviceTranscription(enabled);
-    }, [localWhisperStatus?.isDownloaded]);
-
     useFocusEffect(
         useCallback(() => {
             refreshLocalWhisperStatus();
@@ -767,13 +675,11 @@ export const SettingsScreen = () => {
 
     const loadPreferences = async () => {
         try {
-            const [storedOpenAIKey, storedBaseUrl, provider, legacySelfHostedApiKey, agentMode, transcription, whisperStatus, savedLanguage] = await Promise.all([
+            const [storedOpenAIKey, storedBaseUrl, provider, legacySelfHostedApiKey, whisperStatus, savedLanguage] = await Promise.all([
                 getOpenAIApiKey(),
                 getOpenAIBaseUrl(),
                 getAIProvider(),
                 getLegacySelfHostedApiKey(),
-                getAgentModeEnabled(),
-                getTranscriptionEnabled(),
                 getLocalWhisperModelStatus(),
                 getTranscriptionLanguage(),
             ]);
@@ -790,9 +696,17 @@ export const SettingsScreen = () => {
                 void setOpenAIApiKey(legacySelfHostedApiKey);
             }
 
-            setAiProviderState(provider || 'vaulto_ai');
-            setAgentModeEnabledState(agentMode);
-            setTranscriptionEnabledState(transcription);
+            // A phone-only setup without its speech model (chosen before the model was
+            // downloaded, or the file was removed) has nothing to turn off in the new
+            // settings and would fail every recording: hand it back to the cloud.
+            if (isLocalAIProvider(provider) && !whisperStatus.isDownloaded) {
+                await setAIProvider('vaulto_ai');
+                await setOnDeviceTranscription(false);
+                setOnDeviceTranscriptionState(false);
+                setAiProviderState('vaulto_ai');
+            } else {
+                setAiProviderState(provider || 'vaulto_ai');
+            }
             setLocalWhisperStatus(whisperStatus);
             setLocalLLMStatus(await getLocalLLMModelStatus());
             setTranscriptionLanguageState(savedLanguage);
@@ -804,32 +718,9 @@ export const SettingsScreen = () => {
     };
 
     const updateProvider = async (provider: AIProvider) => {
-        const selectedOption = providerOptions.find(opt => opt.key === provider);
-
-        // Show upgrade alert for locked providers
-        if (selectedOption?.isLocked) {
-            if (!isAuthenticated || isGuest) {
-                setProviderGate({ kind: 'signin', providerTitle: selectedOption.title });
-                return;
-            }
-            setProviderGate({ kind: 'upgrade', providerTitle: selectedOption.title });
-            return;
-        }
-
         setAiProviderState(provider);
         try {
             await setAIProvider(provider);
-            // The agent is unavailable with these providers; that is shown via
-            // agentUnavailable, not stored, so it comes back with Vaulto AI.
-
-            // If switching to local and no whisper model, disable transcription
-            if (provider === 'local' || provider === 'local_whisper') {
-                const status = await getLocalWhisperModelStatus();
-                if (!status.isDownloaded) {
-                    setTranscriptionEnabledState(false);
-                    await setTranscriptionEnabled(false);
-                }
-            }
         } catch (e) {
             console.error('Failed to persist AI provider', e);
         }
@@ -843,50 +734,6 @@ export const SettingsScreen = () => {
     const closeMinutesSheet = useCallback(() => {
         setShowMinutesSheet(false);
     }, []);
-
-    const toggleAgentMode = async (value: boolean) => {
-        if (agentUnavailable) {
-            setShowAgentVaultoGate(true);
-            return;
-        }
-        setAgentModeEnabledState(value);
-        await setAgentModeEnabled(value);
-    };
-
-    const toggleTranscription = async (value: boolean) => {
-        // Warning is now handled by animating an inline message when model is missing.
-        if (value && (aiProvider === 'local' || aiProvider === 'local_whisper')) {
-            const status = await getLocalWhisperModelStatus();
-            if (!status.isDownloaded) {
-                setShowModelMissingWarning(true);
-                warningOpacity.setValue(0);
-                if (warningTimeoutRef.current) {
-                    clearTimeout(warningTimeoutRef.current);
-                }
-                Animated.timing(warningOpacity, {
-                    toValue: 1,
-                    duration: 300,
-                    useNativeDriver: true,
-                }).start();
-                warningTimeoutRef.current = setTimeout(() => {
-                    Animated.timing(warningOpacity, {
-                        toValue: 0,
-                        duration: 300,
-                        useNativeDriver: true,
-                    }).start(() => setShowModelMissingWarning(false));
-                }, 3500);
-                return;
-            }
-        }
-
-        if (transcriptionAuthRequired && value) {
-            setShowTranscriptionAuthModal(true);
-            setTranscriptionEnabledState(false);
-            return;
-        }
-        setTranscriptionEnabledState(value);
-        await setTranscriptionEnabled(value);
-    };
 
     const updateTranscriptionLanguage = useCallback(async (language: TranscriptionLanguage) => {
         setTranscriptionLanguageState(language);
@@ -910,29 +757,6 @@ export const SettingsScreen = () => {
 
         return () => clearTimeout(timeout);
     }, [openAIBaseUrl, preferencesReady]);
-
-    useEffect(() => {
-        if (!preferencesReady) return;
-        if (transcriptionAuthRequired) {
-            setTranscriptionEnabledState(false);
-            return;
-        }
-        getTranscriptionEnabled()
-            .then(enabled => setTranscriptionEnabledState(enabled))
-            .catch(() => setTranscriptionEnabledState(true));
-    }, [preferencesReady, transcriptionAuthRequired]);
-
-    useEffect(() => {
-        // Guest/anonymous users can't use Agent Mode; force UI OFF (don't persist).
-        if (!preferencesReady) return;
-        if (!isAuthenticated || isGuest) {
-            setAgentModeEnabledState(false);
-            return;
-        }
-        getAgentModeEnabled()
-            .then(enabled => setAgentModeEnabledState(enabled))
-            .catch(() => setAgentModeEnabledState(true));
-    }, [isAuthenticated, isGuest, preferencesReady]);
 
     const handleTestConnection = async () => {
         if (!showCustomAIConfig) {
@@ -972,56 +796,31 @@ export const SettingsScreen = () => {
             await setSelectedLocalWhisperModel(modelKey);
             const status = await getLocalWhisperModelStatus();
             setLocalWhisperStatus(status);
-            
-            // Auto-toggle transcription based on the newly selected model's download status
-            if (aiProvider === 'local' || aiProvider === 'local_whisper') {
-                setTranscriptionEnabledState(status.isDownloaded);
-                await setTranscriptionEnabled(status.isDownloaded);
-            }
         } finally {
             setLocalWhisperBusy(false);
         }
-    }, [aiProvider]);
+    }, []);
 
-    const handleDownloadLocalWhisper = useCallback(async (key?: string) => {
-        const modelKey = (key || localWhisperStatus?.selectedModel.key || 'tiny') as LocalWhisperModelKey;
-        // The downloaded model becomes the one in use; a cancelled or failed
-        // download hands it back to the model that was working before.
-        // Read fresh: the status captured by this callback can predate a download that just finished.
-        const current = await getLocalWhisperModelStatus().catch(() => null);
-        const previous = current?.isDownloaded ? current.selectedModel.key : null;
-        let completed = false;
-        await setSelectedLocalWhisperModel(modelKey);
-        setLocalWhisperStatus(await getLocalWhisperModelStatus(modelKey));
+    const handleDownloadLocalWhisper = useCallback(async (key: LocalWhisperModelKey) => {
+        setPendingWhisperKey(key);
         setLocalWhisperBusy(true);
         setIsDownloadingLocalWhisper(true);
         setLocalWhisperProgress(0);
         setLocalWhisperBytesLoaded(0);
         setLocalWhisperBytesTotal(0);
         try {
-            const status = await downloadLocalWhisperModel(modelKey, (progress, loaded, total) => {
+            const status = await downloadLocalWhisperModel(key, (progress, loaded, total) => {
                 setLocalWhisperProgress(progress);
                 setLocalWhisperBytesLoaded(loaded);
                 setLocalWhisperBytesTotal(total);
             });
             setLocalWhisperStatus(status);
-            completed = true;
-            
-            if (aiProvider === 'local' || aiProvider === 'local_whisper') {
-                setTranscriptionEnabledState(true);
-                await setTranscriptionEnabled(true);
-            }
         } catch (error: any) {
-            if (error?.message && error.message.toLowerCase().includes('cancel')) {
-                // Ignore cancel errors
-            } else {
+            if (!(error?.message && error.message.toLowerCase().includes('cancel'))) {
                 Alert.alert(t("aux.downloadFailed"), error?.message || t("aux.unableDownloadWhisper"));
             }
         } finally {
-            if (!completed && previous && previous !== modelKey) {
-                await setSelectedLocalWhisperModel(previous as LocalWhisperModelKey);
-                setLocalWhisperStatus(await getLocalWhisperModelStatus(previous));
-            }
+            setPendingWhisperKey(null);
             setLocalWhisperBusy(false);
             setIsDownloadingLocalWhisper(false);
             setLocalWhisperProgress(0);
@@ -1029,44 +828,38 @@ export const SettingsScreen = () => {
             setLocalWhisperBytesTotal(0);
             void refreshModelStates();
         }
-    }, [localWhisperStatus?.selectedModel.key, aiProvider, whisperDeleteKey, refreshModelStates]);
+    }, [refreshModelStates, t]);
 
     const handleCancelLocalWhisper = useCallback(async () => {
         await cancelLocalWhisperDownload();
     }, []);
 
+    // Turning offline speech off removes every speech model and hands recordings
+    // back to the cloud (a private, phone-only setup cannot work without one).
     const handleDeleteLocalWhisper = useCallback(async () => {
         setLocalWhisperBusy(true);
         setShowLocalWhisperDeleteConfirm(false);
         try {
-            const target = whisperDeleteKey || localWhisperStatus?.selectedModel.key;
-            await deleteLocalWhisperModel(target);
-            const status = await getLocalWhisperModelStatus();
-            setLocalWhisperStatus(status);
-            
-            if ((aiProvider === 'local' || aiProvider === 'local_whisper') && !status.isDownloaded) {
-                setTranscriptionEnabledState(false);
-                await setTranscriptionEnabled(false);
+            // Settings first: a failed delete must not leave a phone-only setup without a model.
+            setOnDeviceTranscriptionState(false);
+            await setOnDeviceTranscription(false);
+            if (usingLocalWhisper) {
+                await updateProvider('vaulto_ai');
             }
+            for (const model of getAvailableLocalWhisperModels()) {
+                if (whisperModelStates[model.key]?.downloaded) {
+                    await deleteLocalWhisperModel(model.key);
+                }
+            }
+            await deleteLocalWhisperModel(localWhisperStatus?.selectedModel.key).catch(() => undefined);
+            setLocalWhisperStatus(await getLocalWhisperModelStatus());
             void refreshModelStates();
         } catch (error: any) {
             Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
         } finally {
             setLocalWhisperBusy(false);
         }
-    }, [localWhisperStatus?.selectedModel.key, aiProvider, whisperDeleteKey, refreshModelStates]);
-
-    const handleSelectLocalLLMModel = useCallback(async (key: LocalLLMModelKey) => {
-        setLocalLLMBusy(true);
-        try {
-            await setSelectedLocalLLMModel(key);
-            await refreshLocalLLMStatus();
-        } catch (error: any) {
-            Alert.alert(t('alerts.selectFailed', 'Could not select'), getErrorMessage(error, t('alerts.llmSelectFailed', 'Could not select the AI model.')));
-        } finally {
-            setLocalLLMBusy(false);
-        }
-    }, [refreshLocalLLMStatus]);
+    }, [localWhisperStatus?.selectedModel.key, whisperModelStates, usingLocalWhisper, refreshModelStates]);
 
     const handleDownloadLocalLLM = useCallback(async (key?: string) => {
         if (!localLLMStatus) return;
@@ -1138,7 +931,12 @@ export const SettingsScreen = () => {
         setLocalLLMBusy(true);
         setShowLocalLLMDeleteConfirm(false);
         try {
-            await deleteLocalLLMModel(llmDeleteKey || localLLMStatus?.selectedModel.key);
+            for (const model of getAvailableLocalLLMModels()) {
+                if (llmModelStates[model.key]?.downloaded) {
+                    await deleteLocalLLMModel(model.key);
+                }
+            }
+            await deleteLocalLLMModel(localLLMStatus?.selectedModel.key).catch(() => undefined);
             await refreshLocalLLMStatus();
             void refreshModelStates();
         } catch (error: any) {
@@ -1146,7 +944,89 @@ export const SettingsScreen = () => {
         } finally {
             setLocalLLMBusy(false);
         }
-    }, [localLLMStatus?.selectedModel.key, refreshLocalLLMStatus, llmDeleteKey, refreshModelStates]);
+    }, [localLLMStatus?.selectedModel.key, llmModelStates, refreshLocalLLMStatus, refreshModelStates]);
+
+    // Picks a speech quality: a model already on the phone is just selected; a new
+    // one is downloaded and then replaces the old, so only one takes up space.
+    const handleWhisperQuality = useCallback(async (key: LocalWhisperModelKey) => {
+        // A ref, not state: a quick double tap must not start two downloads.
+        if (whisperDownloadStartingRef.current || isDownloadingLocalWhisper) return;
+        whisperDownloadStartingRef.current = true;
+        try {
+            if (whisperModelStates[key]?.downloaded) {
+                await handleSelectLocalWhisperModel(key);
+                void refreshModelStates();
+                return;
+            }
+            const net = await NetInfo.fetch().catch(() => null);
+            if (net?.type === 'cellular') {
+                const size = formatModelSize(getAvailableLocalWhisperModels().find((m) => m.key === key)?.sizeBytes ?? 0, t);
+                const proceed = await new Promise<boolean>((resolve) => {
+                    Alert.alert(
+                        t('settings.voice.cellularTitle', 'Download over mobile data?'),
+                        t('settings.voice.cellularDesc', 'The speech model is {{size}}. Wi-Fi is recommended.', { size }),
+                        [
+                            { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                            { text: t('localAI.download', 'Download'), onPress: () => resolve(true) },
+                        ],
+                        { cancelable: true, onDismiss: () => resolve(false) },
+                    );
+                });
+                if (!proceed) return;
+            }
+            const download = handleDownloadLocalWhisper(key);
+            whisperDownloadStartingRef.current = false;
+            await download;
+            const status = await getLocalWhisperModelStatus(key).catch(() => null);
+            if (!status?.isDownloaded) return;
+            for (const model of getAvailableLocalWhisperModels()) {
+                if (model.key === key) continue;
+                const other = await getLocalWhisperModelStatus(model.key).catch(() => null);
+                if (other?.isDownloaded) {
+                    await deleteLocalWhisperModel(model.key).catch(() => undefined);
+                }
+            }
+            setLocalWhisperStatus(await getLocalWhisperModelStatus());
+            void refreshModelStates();
+            haptics.success();
+        } finally {
+            whisperDownloadStartingRef.current = false;
+        }
+    }, [isDownloadingLocalWhisper, whisperModelStates, handleSelectLocalWhisperModel, handleDownloadLocalWhisper, refreshModelStates, t]);
+
+    const handleToggleOfflineVoice = useCallback(async (on: boolean) => {
+        if (on) {
+            await handleWhisperQuality(recommendedWhisperKey);
+            return;
+        }
+        if (isDownloadingLocalWhisper) {
+            await handleCancelLocalWhisper();
+            return;
+        }
+        setShowLocalWhisperDeleteConfirm(true);
+    }, [handleWhisperQuality, recommendedWhisperKey, isDownloadingLocalWhisper, handleCancelLocalWhisper]);
+
+    const handleTogglePrivateMode = useCallback(async (on: boolean) => {
+        setOnDeviceTranscriptionState(on);
+        await setOnDeviceTranscription(on);
+        // Without the on-device AI runtime, "local" would block every AI feature:
+        // keep voice on the phone and leave AI as it was.
+        if (!on || localLLMRuntimeAvailable) {
+            await updateProvider(on ? 'local' : 'vaulto_ai');
+        }
+    }, [localLLMRuntimeAvailable]);
+
+    const handleToggleOfflineAI = useCallback(async (on: boolean) => {
+        if (on) {
+            await handleDownloadLocalLLM(recommendedLLMKey ?? undefined);
+            return;
+        }
+        if (isDownloadingLocalLLM) {
+            await handleCancelLocalLLM();
+            return;
+        }
+        setShowLocalLLMDeleteConfirm(true);
+    }, [handleDownloadLocalLLM, recommendedLLMKey, isDownloadingLocalLLM, handleCancelLocalLLM]);
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
@@ -1257,7 +1137,7 @@ export const SettingsScreen = () => {
                     accessibilityRole="button"
                     accessibilityLabel={t("a11y.back", "Back")}
                 >
-                    <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
+                    <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
                 <Text style={styles.title}>{t('settings.ui.settingsHeader', 'Settings')}</Text>
             </View>
@@ -1426,31 +1306,44 @@ export const SettingsScreen = () => {
                         </View>
                         <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
                     </TouchableOpacity>
-                    <View style={styles.dataButtons}>
-                        <TouchableOpacity
-                            style={styles.dataButton}
-                            onPress={() => { void handleExport(); }}
-                            disabled={transferBusy !== null}
-                            accessibilityRole="button"
-                        >
-                            {transferBusy === 'export'
-                                ? <ActivityIndicator size="small" color={colors.primary} />
-                                : <MaterialIcons name="ios-share" size={18} color={colors.primary} />}
-                            <Text style={styles.dataButtonText} numberOfLines={1}>{t('data.export', 'Export')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.dataButton}
-                            onPress={() => { void handleImport(); }}
-                            disabled={transferBusy !== null}
-                            accessibilityRole="button"
-                        >
-                            {transferBusy === 'import'
-                                ? <ActivityIndicator size="small" color={colors.primary} />
-                                : <MaterialIcons name="file-download" size={18} color={colors.primary} />}
-                            <Text style={styles.dataButtonText} numberOfLines={1}>{t('data.import', 'Import')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <Text style={styles.dataHint}>{t('data.hint', 'Export: Markdown files in a ZIP. Import: .md, .txt, .zip or Google Keep (Takeout).')}</Text>
+                    <View style={styles.themeDivider} />
+                    <TouchableOpacity
+                        style={styles.preferenceRow}
+                        activeOpacity={0.85}
+                        onPress={() => { void handleExport(); }}
+                        disabled={transferBusy !== null}
+                        accessibilityRole="button"
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons name="ios-share" size={24} color={colors.textSecondary} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>{t('data.exportTitle', 'Export notes')}</Text>
+                                <Text style={styles.preferenceDescription}>{t('data.exportDesc', 'Markdown files in a ZIP')}</Text>
+                            </View>
+                        </View>
+                        {transferBusy === 'export'
+                            ? <ActivityIndicator size="small" color={colors.primary} />
+                            : <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />}
+                    </TouchableOpacity>
+                    <View style={styles.themeDivider} />
+                    <TouchableOpacity
+                        style={styles.preferenceRow}
+                        activeOpacity={0.85}
+                        onPress={() => { void handleImport(); }}
+                        disabled={transferBusy !== null}
+                        accessibilityRole="button"
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
+                            <MaterialIcons name="file-download" size={24} color={colors.textSecondary} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.preferenceTitle}>{t('data.importTitle', 'Import notes')}</Text>
+                                <Text style={styles.preferenceDescription}>{t('data.importDesc', '.md, .txt, .zip or Google Keep (Takeout)')}</Text>
+                            </View>
+                        </View>
+                        {transferBusy === 'import'
+                            ? <ActivityIndicator size="small" color={colors.primary} />
+                            : <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />}
+                    </TouchableOpacity>
                 </View>
 
                 {/* Cloud Sync */}
@@ -1705,231 +1598,145 @@ export const SettingsScreen = () => {
 
 
 
-                {/* AI Configuration */}
-
-                {/* AI Configuration */}
+                {/* Voice & AI: works out of the box (cloud), the phone takes over offline */}
                 <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                            <MaterialIcons name="psychology" size={18} color={colors.primary} />
-                            <Text style={styles.sectionTitle}>{t("settings.ui.aiModel", "AI Model")}</Text>
-                        </View>
-                    </View>
-
-                    {/* Agent Mode Toggle */}
-                    <TouchableOpacity
-                        style={[styles.preferenceRow, { marginBottom: spacing.m }]}
-                        activeOpacity={0.85}
-                        onPress={() => {
-                            if (isGuestOrAnonymous) {
-                                setProviderGate({ kind: 'signin', providerTitle: 'Agent Mode' });
-                            } else if (usingOpenAI || usingLocalWhisper) {
-                                setShowAgentVaultoGate(true);
-                            }
-                        }}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <Animated.View style={{ transform: [{ rotate: sway }], opacity: agentModeEnabled && !isGuestOrAnonymous && !agentUnavailable ? 1 : 0.4 }}>
-                                <MaterialIcons name="smart-toy" size={24} color={agentModeEnabled && !isGuestOrAnonymous && !agentUnavailable ? colors.primary : colors.textSecondary} />
-                            </Animated.View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t("settings.ai.agentMode", "Agent Mode")}</Text>
-                                <Text style={styles.preferenceDescription}>
-                                    {isGuestOrAnonymous
-                                        ? t("settings.ui.agentNeedsSignIn", "Available after signing in")
-                                        : agentUnavailable
-                                            ? t("aux.agentModeVaultoAIAvail", "Agent Mode is available only with Vaulto AI.")
-                                            : t("settings.ui.intelligentAssist", "Intelligent assistance")}
-                                </Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={isGuestOrAnonymous || agentUnavailable ? false : agentModeEnabled}
-                            onValueChange={(value) => {
-                                toggleAgentMode(value);
-                            }}
-                            disabled={isGuestOrAnonymous}
-                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                            thumbColor={colors.onPrimary}
-                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                        />
-                    </TouchableOpacity>
-
-                    <View style={styles.separator} />
-
-                    {/* Auto-Transcribe Toggle */}
-                    <TouchableOpacity
-                        style={[styles.preferenceRow, { marginBottom: showModelMissingWarning ? spacing.xs : spacing.m }]}
-                        activeOpacity={0.85}
-                        disabled={!transcriptionAuthRequired}
-                        onPress={() => {
-                            if (transcriptionAuthRequired) {
-                                setShowTranscriptionAuthModal(true);
-                            }
-                        }}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons
-                                name="mic"
-                                size={24}
-                                color={transcriptionEnabled && !transcriptionAuthRequired ? colors.primary : colors.textSecondary}
-                            />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t("settings.ui.autoTranscribe", "Auto-Transcribe Audio")}</Text>
-                                <Text style={styles.preferenceDescription}>{t("settings.ui.autoTranscribeDesc", "Automatic voice transcription")}</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={transcriptionAuthRequired ? false : transcriptionEnabled}
-                            onValueChange={toggleTranscription}
-                            disabled={transcriptionAuthRequired}
-                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                            thumbColor={colors.onPrimary}
-                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                        />
-                    </TouchableOpacity>
+                    <Text style={styles.dataCardTitle}>{t("settings.voice.title", "Voice & AI")}</Text>
 
                     {LOCAL_WHISPER_ENABLED && (
-                        <TouchableOpacity
-                            style={[styles.preferenceRow, { marginBottom: spacing.m }]}
-                            activeOpacity={0.85}
-                            onPress={() => setShowWhisperDownload(true)}
-                            accessibilityRole="button"
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                                <MaterialIcons
-                                    name="phonelink-lock"
-                                    size={24}
-                                    color={onDeviceTranscriptionActive ? colors.primary : colors.textSecondary}
+                        <>
+                            <View style={[styles.preferenceRow, styles.voiceRow]}>
+                                <View style={styles.voiceRowText}>
+                                    <MaterialIcons name="cloud-off" size={24} color={offlineVoiceOn ? colors.primary : colors.textSecondary} />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offline", "Work without internet")}</Text>
+                                        <Text style={styles.preferenceDescription}>{offlineVoiceDescription}</Text>
+                                    </View>
+                                </View>
+                                <Switch
+                                    value={offlineVoiceOn}
+                                    onValueChange={(value) => { void handleToggleOfflineVoice(value); }}
+                                    disabled={localWhisperBusy && !isDownloadingLocalWhisper}
+                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                    thumbColor={colors.onPrimary}
+                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                    accessibilityLabel={t("settings.voice.offline", "Work without internet")}
                                 />
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.preferenceTitle}>{t("settings.onDevice.title", "Transcribe on device")}</Text>
-                                    <Text style={styles.preferenceDescription}>
-                                        {onDeviceTranscriptionActive
-                                            ? t("settings.onDevice.active", "{{model}} model · offline, audio stays on the phone", { model: localWhisperStatus?.selectedModel.label ?? '' })
-                                            : t("settings.onDevice.desc", "Private and offline. Downloads a speech model once.")}
-                                    </Text>
+                            </View>
+
+                            {isDownloadingLocalWhisper && (
+                                <View style={styles.voiceProgress}>
+                                    <View style={styles.voiceProgressTrack}>
+                                        <View style={[styles.voiceProgressFill, { width: `${Math.round(localWhisperProgress * 100)}%` }]} />
+                                    </View>
+                                    <TouchableOpacity onPress={() => { void handleCancelLocalWhisper(); }} hitSlop={8} accessibilityRole="button">
+                                        <Text style={styles.voiceProgressCancel}>{t("common.cancel", "Cancel")}</Text>
+                                    </TouchableOpacity>
                                 </View>
-                            </View>
-                            <Switch
-                                value={onDeviceTranscriptionActive}
-                                onValueChange={(value) => { void updateOnDeviceTranscription(value); }}
-                                trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
-                                thumbColor={colors.onPrimary}
-                                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                            />
-                        </TouchableOpacity>
-                    )}
+                            )}
 
-                    {showModelMissingWarning && (
-                        <Animated.View style={[styles.inlineWarningContainer, { opacity: warningOpacity, marginHorizontal: spacing.m, marginBottom: spacing.m }]}>
-                            <MaterialIcons name="error-outline" size={16} color={colors.warning} />
-                            <Text style={styles.inlineWarningText}>
-                                Whisper model not found. Check settings below.
-                            </Text>
-                        </Animated.View>
-                    )}
+                            {offlineVoiceOn && (
+                                <View style={styles.voiceQuality}>
+                                    <Text style={styles.voiceQualityLabel}>{t("settings.voice.quality", "Recognition quality")}</Text>
+                                    <View style={[styles.themeSegments, { marginTop: spacing.xs }]}>
+                                        {whisperQualityOptions.map((option) => {
+                                            const active = option.key === activeWhisperKey;
+                                            const state = whisperModelStates[option.key];
+                                            const unavailable = state?.available === false && !state?.downloaded;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={option.key}
+                                                    style={[styles.themeSegment, active && styles.themeSegmentActive, unavailable && { opacity: 0.4 }]}
+                                                    onPress={() => { void handleWhisperQuality(option.key); }}
+                                                    disabled={unavailable || localWhisperBusy}
+                                                    accessibilityRole="button"
+                                                    accessibilityState={{ selected: active, disabled: unavailable }}
+                                                >
+                                                    <Text style={[styles.themeSegmentText, active && styles.themeSegmentTextActive]}>{option.label}</Text>
+                                                    <Text style={styles.voiceQualitySize}>{formatModelSize(option.sizeBytes, t)}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                    <Text style={styles.voiceHint}>{t("settings.voice.qualityHint", "More accurate means slower and more space. The cloud is used while online.")}</Text>
+                                </View>
+                            )}
 
-                    <View style={styles.separator} />
-
-                    {/* Compact Provider Selector */}
-                    <TouchableOpacity
-                        style={[styles.preferenceRow, showAdvancedAI ? { marginBottom: spacing.m } : undefined]}
-                        activeOpacity={0.85}
-                        onPress={() => setShowAdvancedAI(!showAdvancedAI)}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons name="tune" size={24} color={showAdvancedAI ? colors.primary : colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t("settings.ui.advAISettings", "Advanced AI Settings")}</Text>
-                                <Text style={styles.preferenceDescription}>
-                                    {LOCAL_MODELS_ENABLED
-                                        ? (CUSTOM_AI_ENABLED
-                                            ? t("settings.ui.advAISettingsDescLocal", "Local and custom AI configurations")
-                                            : t("settings.ui.advAISettingsDescOnDevice", "Cloud or on this phone, offline"))
-                                        : t("settings.ui.advAISettingsDescCustom", "Custom AI configuration.")}
-                                </Text>
-                            </View>
-                        </View>
-                        <MaterialIcons name={showAdvancedAI ? 'expand-less' : 'expand-more'} size={24} color={colors.textSecondary} />
-                    </TouchableOpacity>
-
-                    {showAdvancedAI && (
-                        <View style={{ gap: spacing.m }}>
-                            {/* Compact Provider Selector Inside */}
-
-                            <View style={[styles.compactProviderSelector, { flexDirection: 'column' }]}>
-                                {/* Top row: Vaulto AI (+ Custom AI for those who already use it) + On device */}
-                                <View style={{ flexDirection: 'row', gap: spacing.s }}>
-                                    {providerOptions.filter(o => o.key !== 'local' && (o.key !== 'openai' || CUSTOM_AI_ENABLED)).map((option) => {
-                                        const isActive = customAIPending
-                                            ? option.key === 'openai'
-                                            : option.key === aiProvider;
-                                        const isLocked = option.isLocked;
-                                        return (
-                                            <TouchableOpacity
-                                                key={option.key}
-                                                style={[
-                                                    styles.compactProviderOption,
-                                                    isActive && styles.compactProviderOptionActive,
-                                                    isLocked && styles.compactProviderOptionLocked,
-                                                    { flex: 1 }
-                                                ]}
-                                                onPress={() => {
-                                                    if (option.key === 'openai' && !isLocked && !apiKey.trim()) {
-                                                        setCustomAIPending(true);
-                                                        return;
-                                                    }
-                                                    setCustomAIPending(false);
-                                                    if (option.key !== aiProvider) {
-                                                        void updateProvider(option.key);
-                                                    }
-                                                }}
-                                                disabled={isActive && !isLocked}
-                                                accessibilityRole="button"
-                                                accessibilityState={{ selected: isActive }}
-                                            >
-                                                {option.key === 'vaulto_ai' ? (
-                                                    <Image
-                                                        source={require('../../assets/icon.png')}
-                                                        style={{
-                                                            width: 14,
-                                                            height: 14,
-                                                            tintColor: isActive ? colors.onPrimary : colors.textSecondary,
-                                                        }}
-                                                        resizeMode="contain"
-                                                    />
-                                                ) : (
-                                                    <MaterialIcons name={option.icon as any} size={14} color={isActive ? colors.onPrimary : colors.textSecondary} />
-                                                )}
-                                                <Text style={[styles.compactProviderText, isActive && styles.compactProviderTextActive]} numberOfLines={1}>
-                                                    {option.title.replace(' Compatible', '').replace(' Hosted', '')}
+                            {showPrivateRow && (
+                                <>
+                                    <View style={styles.separator} />
+                                    <View style={[styles.preferenceRow, styles.voiceRow]}>
+                                        <View style={styles.voiceRowText}>
+                                            <MaterialIcons name="phonelink-lock" size={24} color={privateMode ? colors.primary : colors.textSecondary} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.preferenceTitle}>{t("settings.voice.private", "Only on this phone")}</Text>
+                                                <Text style={styles.preferenceDescription}>
+                                                    {privateVoiceOnly || !localLLMRuntimeAvailable
+                                                        ? t("settings.voice.privateVoiceDesc", "Voice never leaves the phone, even online")
+                                                        : t("settings.voice.privateDesc", "Voice and AI never leave the phone, even online")}
                                                 </Text>
-                                                {isLocked && <MaterialIcons name="lock" size={12} color={colors.accentPurple} />}
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                    {LOCAL_MODELS_ENABLED && (
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.compactProviderOption,
-                                                usingLocal && styles.compactProviderOptionActive,
-                                                { flex: 1 }
-                                            ]}
-                                            onPress={() => updateProvider('local')}
-                                        >
-                                            <MaterialIcons name="memory" size={14} color={usingLocal ? colors.onPrimary : colors.textSecondary} />
-                                            <Text style={[styles.compactProviderText, usingLocal && styles.compactProviderTextActive]} numberOfLines={1}>
-                                                {t('settings.ui.onDeviceProvider', 'On this phone')}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
+                                            </View>
+                                        </View>
+                                        <Switch
+                                            value={privateMode}
+                                            onValueChange={(value) => { void handleTogglePrivateMode(value); }}
+                                            disabled={!whisperReady && !privateMode}
+                                            trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                            thumbColor={colors.onPrimary}
+                                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                            accessibilityLabel={t("settings.voice.private", "Only on this phone")}
+                                        />
+                                    </View>
+                                </>
+                            )}
+                            <View style={styles.separator} />
+                        </>
+                    )}
 
+                    <View style={[styles.modelLanguageRow, styles.voiceRow]}>
+                        <MaterialIcons name="translate" size={24} color={colors.textSecondary} />
+                        <Text style={styles.modelLanguageLabel}>{t('localModels.language', 'Speech language')}</Text>
+                        <SearchableLanguageSelector
+                            value={transcriptionLanguage}
+                            onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
+                        />
+                    </View>
+
+                    {LOCAL_MODELS_ENABLED && localLLMRuntimeAvailable && (
+                        <>
+                            <View style={styles.separator} />
+                            <View style={[styles.preferenceRow, styles.voiceRow]}>
+                                <View style={styles.voiceRowText}>
+                                    <MaterialIcons name="auto-awesome" size={24} color={offlineAIOn ? colors.primary : colors.textSecondary} />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offlineAI", "AI without internet")}</Text>
+                                        <Text style={styles.preferenceDescription}>{offlineAIDescription}</Text>
+                                    </View>
+                                </View>
+                                <Switch
+                                    value={offlineAIOn}
+                                    onValueChange={(value) => { void handleToggleOfflineAI(value); }}
+                                    disabled={localLLMBusy && !isDownloadingLocalLLM}
+                                    trackColor={{ false: colors.backgroundSecondary, true: colors.primary }}
+                                    thumbColor={colors.onPrimary}
+                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                    accessibilityLabel={t("settings.voice.offlineAI", "AI without internet")}
+                                />
                             </View>
+                            {isDownloadingLocalLLM && (
+                                <View style={styles.voiceProgress}>
+                                    <View style={styles.voiceProgressTrack}>
+                                        <View style={[styles.voiceProgressFill, { width: `${Math.round(localLLMProgress * 100)}%` }]} />
+                                    </View>
+                                    <TouchableOpacity onPress={() => { void handleCancelLocalLLM(); }} hitSlop={8} accessibilityRole="button">
+                                        <Text style={styles.voiceProgressCancel}>{t("common.cancel", "Cancel")}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </>
+                    )}
 
                             {/* Setup for Custom AI (OpenAI & Compatible) */}
-                            {showCustomAIConfig && (
+                            {CUSTOM_AI_ENABLED && showCustomAIConfig && (
                                 <View style={styles.openAIConfigCard}>
                                     {/* Header */}
                                     <View style={styles.openAIConfigHeader}>
@@ -2025,68 +1832,6 @@ export const SettingsScreen = () => {
                                     </TouchableOpacity>
                                 </View>
                             )}
-
-                    {LOCAL_MODELS_ENABLED && usingLocalWhisper && (
-                        <OnDeviceModelSection
-                            icon="graphic-eq"
-                            title={t('localModels.voiceTitle', 'Speech to text')}
-                            subtitle={t('localModels.voiceSubtitle', 'Whisper · recordings and dictation, offline')}
-                            models={whisperModelOptions}
-                            states={whisperModelStates}
-                            selectedKey={localWhisperStatus?.selectedModel.key}
-                            download={isDownloadingLocalWhisper ? {
-                                key: localWhisperStatus?.selectedModel.key ?? '',
-                                progress: localWhisperProgress,
-                                loadedBytes: localWhisperBytesLoaded,
-                                totalBytes: localWhisperBytesTotal,
-                            } : null}
-                            busy={localWhisperBusy}
-                            headerAccessory={(
-                                <View style={styles.modelLanguageRow}>
-                                    <MaterialIcons name="translate" size={18} color={colors.textSecondary} />
-                                    <Text style={styles.modelLanguageLabel}>{t('localModels.language', 'Speech language')}</Text>
-                                    <SearchableLanguageSelector
-                                        value={transcriptionLanguage}
-                                        onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
-                                    />
-                                </View>
-                            )}
-                            onSelect={(key) => { void handleSelectLocalWhisperModel(key as LocalWhisperModelKey).then(refreshModelStates); }}
-                            onDownload={(key) => { void handleDownloadLocalWhisper(key); }}
-                            onCancelDownload={() => { void handleCancelLocalWhisper(); }}
-                            onDelete={(key) => { setWhisperDeleteKey(key); setShowLocalWhisperDeleteConfirm(true); }}
-                        />
-                    )}
-
-                    {LOCAL_MODELS_ENABLED && usingLocalLLM && (
-                        <OnDeviceModelSection
-                            icon="auto-awesome"
-                            title={t('localModels.aiTitle', 'AI on this phone')}
-                            subtitle={t('localModels.aiSubtitle', 'Qwen3.5 · edits, notes chat and tasks, offline')}
-                            models={llmModelOptions}
-                            states={llmModelStates}
-                            selectedKey={localLLMStatus?.selectedModel.key}
-                            download={isDownloadingLocalLLM ? {
-                                key: localLLMStatus?.selectedModel.key ?? '',
-                                progress: localLLMProgress,
-                                loadedBytes: localLLMBytesLoaded,
-                                totalBytes: localLLMBytesTotal,
-                            } : null}
-                            busy={localLLMBusy}
-                            headerAccessory={!localLLMRuntimeAvailable ? (
-                                <Text style={styles.modelWarning}>
-                                    {t('localModels.runtimeMissing', 'This build of the app cannot run on-device AI. Update the app to use it.')}
-                                </Text>
-                            ) : undefined}
-                            onSelect={(key) => { void handleSelectLocalLLMModel(key as LocalLLMModelKey).then(refreshModelStates); }}
-                            onDownload={(key) => { void handleDownloadLocalLLM(key); }}
-                            onCancelDownload={() => { void handleCancelLocalLLM(); }}
-                            onDelete={(key) => { setLLMDeleteKey(key); setShowLocalLLMDeleteConfirm(true); }}
-                        />
-                    )}
-
-                        </View>
-                    )}
 
                 </View>
 
@@ -2236,30 +1981,6 @@ export const SettingsScreen = () => {
                 </Pressable>
             </Modal>
 
-            <LocalWhisperDownloadModal
-                visible={showWhisperDownload}
-                onClose={() => setShowWhisperDownload(false)}
-                onDownloadComplete={() => {
-                    setShowWhisperDownload(false);
-                    void (async () => {
-                        await refreshLocalWhisperStatus();
-                        setOnDeviceTranscriptionState(true);
-                        await setOnDeviceTranscription(true);
-                    })();
-                }}
-            />
-
-            <SignInRequiredModal
-                visible={showTranscriptionAuthModal}
-                title={t('voice.signInRequired', 'Sign in required')}
-                message={t('settings.ui.autoTranscribeAuthMessage', 'Auto-transcription is available after you create an account.')}
-                onClose={() => setShowTranscriptionAuthModal(false)}
-                onSignIn={() => {
-                    setShowTranscriptionAuthModal(false);
-                    navigation.navigate('SignIn');
-                }}
-            />
-
             <SignInRequiredModal
                 visible={showSecurityAuthModal}
                 title={t('voice.signInRequired', 'Sign in required')}
@@ -2271,44 +1992,13 @@ export const SettingsScreen = () => {
                 }}
             />
 
-            <SignInRequiredModal
-                visible={!!providerGate}
-                title={providerGate?.kind === 'upgrade'
-                    ? t('settings.pro.upgrade', 'Upgrade to Pro')
-                    : t('voice.signInRequired', 'Sign in required')}
-                message={providerGate
-                    ? (providerGate.kind === 'upgrade'
-                        ? t('settings.ui.providerProOnly', '{{provider}} is available in Pro.', { provider: providerGate.providerTitle })
-                        : t('settings.ui.providerNeedsAccount', 'Create an account to use {{provider}}.', { provider: providerGate.providerTitle }))
-                    : ''}
-                signInLabel={providerGate?.kind === 'upgrade'
-                    ? t('aux.upgrade', 'Upgrade')
-                    : t('auth.signIn', 'Sign In')}
-                onClose={() => setProviderGate(null)}
-                onSignIn={() => {
-                    const kind = providerGate?.kind;
-                    setProviderGate(null);
-                    if (kind === 'upgrade') {
-                        navigation.navigate('Paywall');
-                    } else {
-                        navigation.navigate('SignIn');
-                    }
-                }}
-            />
-
-            <AgentModeVaultoGateModal
-                visible={showAgentVaultoGate}
-                onClose={() => setShowAgentVaultoGate(false)}
-                onPrimaryAction={() => updateProvider('vaulto_ai')}
-            />
-
             <DeleteConfirmationDialog
                 visible={showLocalWhisperDeleteConfirm}
-                title={t('settings.ui.removeWhisperTitle', 'Remove Model?')}
+                title={t('settings.voice.offlineOffTitle', 'Turn off offline speech?')}
                 message={t(
-                    'settings.ui.removeWhisperDesc',
-                    'The {{model}} Whisper model will be deleted from this device. You will need to download it again to use offline transcription.',
-                    { model: getAvailableLocalWhisperModels().find((m) => m.key === whisperDeleteKey)?.label || localWhisperStatus?.selectedModel.label || 'local' }
+                    'settings.voice.offlineOffDesc',
+                    'The speech model is removed from this phone and frees {{size}}. Without internet, recordings are saved and turned into text once you are back online.',
+                    { size: formatModelSize(downloadedWhisperBytes, t) }
                 )}
                 onConfirm={handleDeleteLocalWhisper}
                 onCancel={() => setShowLocalWhisperDeleteConfirm(false)}
@@ -2316,11 +2006,13 @@ export const SettingsScreen = () => {
 
             <DeleteConfirmationDialog
                 visible={showLocalLLMDeleteConfirm}
-                title={t('settings.ui.removeLLMTitle', 'Remove LLM?')}
+                title={t('settings.voice.offlineAIOffTitle', 'Turn off offline AI?')}
                 message={t(
-                    'settings.ui.removeLLMDesc',
-                    'The {{model}} LLM model will be deleted from this device. You will need to download it again to use offline reasoning.',
-                    { model: getAvailableLocalLLMModels().find((m) => m.key === llmDeleteKey)?.label || localLLMStatus?.selectedModel.label || 'local' }
+                    usingLocalLLMProvider ? 'settings.voice.offlineAIOffPrivateDesc' : 'settings.voice.offlineAIOffDesc',
+                    usingLocalLLMProvider
+                        ? 'The AI model is removed from this phone and frees {{size}}. With "Only on this phone" on, AI features stay off until you download it again.'
+                        : 'The AI model is removed from this phone and frees {{size}}. AI features keep working online.',
+                    { size: formatModelSize(downloadedLLMBytes, t) }
                 )}
                 onConfirm={handleDeleteLocalLLM}
                 onCancel={() => setShowLocalLLMDeleteConfirm(false)}
@@ -3127,31 +2819,6 @@ const styles = createStyles(() => ({
         letterSpacing: 0.5,
         marginBottom: spacing.s,
     },
-    dataButtons: {
-        flexDirection: 'row',
-        gap: spacing.s,
-        marginTop: spacing.m,
-    },
-    dataButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        minHeight: 44,
-        borderRadius: 12,
-        backgroundColor: colors.primaryLight,
-    },
-    dataButtonText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: colors.primary,
-    },
-    dataHint: {
-        fontSize: 12,
-        color: colors.textTertiary,
-        marginTop: spacing.s,
-    },
     themeDivider: {
         height: 1,
         backgroundColor: colors.border,
@@ -3917,6 +3584,59 @@ const styles = createStyles(() => ({
         gap: spacing.xs,
         borderWidth: 1,
         borderColor: `${colors.warning}30`,
+    },
+    voiceRow: {
+        minHeight: 56,
+        paddingVertical: spacing.s,
+    },
+    voiceRowText: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        flex: 1,
+        paddingRight: spacing.s,
+    },
+    voiceProgress: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+        paddingLeft: 24 + spacing.s,
+        paddingBottom: spacing.s,
+    },
+    voiceProgressTrack: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+        overflow: 'hidden',
+        backgroundColor: colors.backgroundSecondary,
+    },
+    voiceProgressFill: {
+        height: '100%',
+        borderRadius: 2,
+        backgroundColor: colors.primary,
+    },
+    voiceProgressCancel: {
+        ...typography.caption,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    voiceQuality: {
+        paddingLeft: 24 + spacing.s,
+        paddingBottom: spacing.m,
+    },
+    voiceQualityLabel: {
+        ...typography.caption,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    voiceQualitySize: {
+        fontSize: 11,
+        color: colors.textSecondary,
+    },
+    voiceHint: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginTop: spacing.s,
     },
     inlineWarningText: {
         ...typography.captionBold,

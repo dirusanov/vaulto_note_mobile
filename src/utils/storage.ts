@@ -917,18 +917,26 @@ export const setOnDeviceTranscription = async (enabled: boolean): Promise<void> 
 const ON_DEVICE_OFFER_SHOWN_KEY = 'vaulto_on_device_offer_shown_v1';
 const RECORDINGS_COUNT_KEY = 'vaulto_recordings_count_v1';
 
-/** The one-time "transcribe free on the phone" suggestion was shown. */
-export const getOnDeviceOfferShown = async (): Promise<boolean> => {
+const OFFLINE_OFFER_SHOWN_KEY = 'vaulto_offline_offer_shown_v1';
+
+type OnDeviceOfferKind = 'suggest' | 'offline';
+const offerShownKey = (kind: OnDeviceOfferKind) => (kind === 'offline' ? OFFLINE_OFFER_SHOWN_KEY : ON_DEVICE_OFFER_SHOWN_KEY);
+
+/**
+ * One-time on-device suggestions: "transcribe free on the phone" after a few
+ * cloud recordings, and "work offline" after a recording made without internet.
+ */
+export const getOnDeviceOfferShown = async (kind: OnDeviceOfferKind = 'suggest'): Promise<boolean> => {
     try {
-        return (await AsyncStorage.getItem(ON_DEVICE_OFFER_SHOWN_KEY)) === 'true';
+        return (await AsyncStorage.getItem(offerShownKey(kind))) === 'true';
     } catch {
         return true;
     }
 };
 
-export const setOnDeviceOfferShown = async (): Promise<void> => {
+export const setOnDeviceOfferShown = async (kind: OnDeviceOfferKind = 'suggest'): Promise<void> => {
     try {
-        await AsyncStorage.setItem(ON_DEVICE_OFFER_SHOWN_KEY, 'true');
+        await AsyncStorage.setItem(offerShownKey(kind), 'true');
     } catch {
         // best effort
     }

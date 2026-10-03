@@ -30,7 +30,7 @@ interface Props {
 export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, onDownloadComplete }) => {
     const { t } = useTranslation();
     const [models, setModels] = useState<LocalWhisperModelDescriptor[]>([]);
-    const [selectedModelKey, setSelectedModelKey] = useState<LocalWhisperModelKey>('turbo');
+    const [selectedModelKey, setSelectedModelKey] = useState<LocalWhisperModelKey>('base');
     const [blockers, setBlockers] = useState<Partial<Record<LocalWhisperModelKey, ModelBlocker>>>({});
     const [isDownloading, setIsDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -69,7 +69,8 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
             // Start on the stored model if it suits this phone, else the best one that does.
             const stored = (await storedKeyPromise) as LocalWhisperModelKey | '';
             const usable = (key: LocalWhisperModelKey) => available.some((m) => m.key === key) && !blockerMap[key];
-            const preferred = (['turbo', 'base', 'tiny'] as LocalWhisperModelKey[]).find(usable);
+            // Same default as Settings → Voice & AI: Balanced, or Fast on a smaller phone.
+            const preferred = (['base', 'tiny', 'turbo'] as LocalWhisperModelKey[]).find(usable);
             setSelectedModelKey(stored && usable(stored) ? stored : (preferred ?? 'tiny'));
         })();
 
@@ -89,7 +90,6 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
         setBytesTotal(0);
 
         try {
-            await setLocalWhisperModelKey(selectedModelKey);
             await downloadLocalWhisperModel(
                 selectedModelKey,
                 (p, loaded, total) => {
@@ -123,6 +123,18 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
     if (!visible) return null;
 
     const selectedModel = models.find(m => m.key === selectedModelKey);
+    // The same plain names as the quality picker in Settings.
+    const qualityName = (key: string): string => ({
+        tiny: t('settings.voice.fast', 'Fast'),
+        base: t('settings.voice.balanced', 'Balanced'),
+        turbo: t('settings.voice.accurate', 'Accurate'),
+    } as Record<string, string>)[key] ?? key;
+    const qualityHint = (key: string): string => ({
+        tiny: t('settings.voice.fastDesc', 'Quickest, fine for short notes'),
+        base: t('settings.voice.balancedDesc', 'Good accuracy at a small size'),
+        turbo: t('settings.voice.accurateDesc', 'Most accurate, slower and larger'),
+    } as Record<string, string>)[key] ?? '';
+    const recommendedKey: LocalWhisperModelKey = blockers.base ? 'tiny' : 'base';
     const selectedBlocker = blockers[selectedModelKey] ?? null;
 
     const describeBlocker = (blocker: ModelBlocker): string | null => {
@@ -143,7 +155,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                     {!isDownloading ? (
                         <>
                             <Text style={styles.description}>
-                                {t('edit.dictation.modelDescription', 'Download once to turn recordings and live dictation into text right on the phone — free, offline, and the audio never leaves it. Larger models are more accurate.')}
+                                {t('edit.dictation.modelDescriptionOffline', 'Download once and recordings and dictation turn into text even without internet. More accurate models are larger.')}
                             </Text>
 
                             <View style={styles.modelList}>
@@ -169,20 +181,16 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                                             <View style={styles.modelOptionContent}>
                                                 <View style={styles.modelNameLine}>
                                                     <Text style={[styles.modelName, selectedModelKey === model.key && styles.modelNameSelected]}>
-                                                        {model.label}
+                                                        {qualityName(model.key)}
                                                     </Text>
-                                                    {model.key === 'turbo' && blocker === null && (
+                                                    {model.key === recommendedKey && blocker === null && (
                                                         <View style={styles.tag}>
                                                             <Text style={styles.tagText}>{t('localModels.recommended', 'Recommended')}</Text>
                                                         </View>
                                                     )}
                                                 </View>
                                                 <Text style={styles.modelSize}>
-                                                    {formatModelSize(model.sizeBytes, t)} · {blockerLabel ?? ({
-                                                        tiny: t('localModels.whisperTiny', 'Fastest, basic accuracy'),
-                                                        base: t('localModels.whisperBase', 'Fast, more accurate than Tiny'),
-                                                        turbo: t('localModels.whisperTurbo', 'Most accurate, a bit slower'),
-                                                    } as Record<string, string>)[model.key] ?? ''}
+                                                    {formatModelSize(model.sizeBytes, t)} · {blockerLabel ?? qualityHint(model.key)}
                                                 </Text>
                                             </View>
                                             {downloaded[model.key] && (
@@ -209,7 +217,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                                         {describeBlocker(selectedBlocker)
                                             || (downloaded[selectedModelKey]
                                                 ? t('localModels.useModel', 'Use this model')
-                                                : t('localModels.downloadSize', 'Download · {{size}}', { size: formatModelSize(selectedModel?.sizeBytes ?? 0, t) }))}
+                                                : t('localAI.download', 'Download'))}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -217,7 +225,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                     ) : (
                         <View style={styles.downloadingContainer}>
                             <Text style={styles.downloadingText}>
-                                {t('edit.dictation.downloading', 'Downloading the {{model}} model...', { model: selectedModel?.label ?? '' })}
+                                {t('edit.dictation.downloading', 'Downloading the {{model}} model...', { model: qualityName(selectedModelKey) })}
                             </Text>
                             
                             <View style={styles.progressBarContainer}>

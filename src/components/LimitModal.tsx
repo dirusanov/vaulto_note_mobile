@@ -16,15 +16,17 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
 import { onLimitReached } from '../utils/limitEvents';
 import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
-import { setOnDeviceTranscription } from '../utils/storage';
 import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
 import { createStyles } from '../theme/createStyles';
+import { useAuth } from '../hooks/useAuth';
 
 export const LimitModal: React.FC = () => {
     const { t } = useTranslation();
 
     const navigation = useNavigation();
+    const { isAuthenticated, isGuest } = useAuth();
+    const isGuestUser = !isAuthenticated || isGuest;
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState<CurrentPeriodUsage | null>(null);
@@ -63,7 +65,8 @@ export const LimitModal: React.FC = () => {
 
     const handleUpgrade = () => {
         setVisible(false);
-        (navigation as any).navigate('Paywall');
+        // A guest signs in first: the account brings its own free minutes.
+        (navigation as any).navigate(isGuestUser ? 'SignIn' : 'Paywall');
     };
 
     let title = t('aux.usageLimitTitle', 'Usage Limit Reached');
@@ -100,6 +103,14 @@ export const LimitModal: React.FC = () => {
         }
     }
 
+    if (isGuestUser) {
+        title = t('aux.guestMinutesUsedTitle', 'Free minutes used up');
+        message = t('aux.guestMinutesUsedDesc', 'Sign in to get more free minutes and sync your notes. Or turn speech into text right on this phone — free and offline.');
+        iconName = 'stars';
+        isTrial = true;
+        isTranscriptionLimit = true;
+    }
+
     // Out of transcription minutes is not a dead end: the phone can transcribe for free.
     const offerOnDevice = LOCAL_WHISPER_ENABLED && isTranscriptionLimit && !onDeviceActive && !loading;
 
@@ -108,8 +119,9 @@ export const LimitModal: React.FC = () => {
             visible={showWhisperDownload}
             onClose={() => setShowWhisperDownload(false)}
             onDownloadComplete={() => {
+                // No "always on device" switch: out of minutes, recordings fall
+                // back to this model, and the cloud returns with new minutes.
                 setShowWhisperDownload(false);
-                void setOnDeviceTranscription(true);
             }}
         />
     );
@@ -154,7 +166,7 @@ export const LimitModal: React.FC = () => {
 
                                 {isTrial && (
                                     <TouchableOpacity onPress={handleUpgrade} activeOpacity={0.85} style={styles.primaryButton}>
-                                        <Text style={styles.primaryText}>{t("aux.upgrade", "Upgrade")}</Text>
+                                        <Text style={styles.primaryText}>{isGuestUser ? t('auth.signIn', 'Sign In') : t("aux.upgrade", "Upgrade")}</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>

@@ -800,6 +800,8 @@ export const NotesListScreen = () => {
                             variant={searchQuery.trim() ? 'search' : (lockedCount > 0 ? 'plain' : 'welcome')}
                             message={searchQuery.trim()
                                 ? t("notes.noSearchResults", "No notes match your search")
+                                // The open recorder covers this spot: no "tap the mic" under it.
+                                : isVoiceRecorderVisible ? ''
                                 : isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")}
                         />
                     </View>

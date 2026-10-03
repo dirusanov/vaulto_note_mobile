@@ -23,7 +23,6 @@ import {
     setTranscriptionEnabled
 } from '../utils/storage';
 import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
-import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
@@ -73,7 +72,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     // system permission dialog.
     const [permissionSettled, setPermissionSettled] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
-    const [onDeviceTranscription, setOnDeviceTranscription] = useState(false);
     const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [aiProvider, setAiProvider] = useState<AIProvider>('vaulto_ai');
     const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
@@ -124,13 +122,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             agentModeToggleTouchedRef.current = false;
 
             getAIProvider().then(async (provider) => {
-                const onDevice = await isOnDeviceTranscriptionActive();
-                setOnDeviceTranscription(onDevice);
-                const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDevice;
-                if (isUserTranscriptionRestricted) {
-                    setTranscribe(false);
-                    return;
-                }
 
                 // Check model status if local
                 if (provider === 'local' || provider === 'local_whisper') {
@@ -173,12 +164,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
 
     const handleTranscriptionToggle = async (value: boolean) => {
-        if ((!isAuthenticated || isGuest) && aiProvider === 'vaulto_ai' && !onDeviceTranscription && value) {
-            setShowTranscriptionAuthModal(true);
-            setTranscribe(false);
-            return;
-        }
-
         if (value && (aiProvider === 'local' || aiProvider === 'local_whisper')) {
             const status = await getLocalWhisperModelStatus();
             if (!status.isDownloaded) {
@@ -213,9 +198,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             }
         }
         setTranscribe(value);
-        if (isAuthenticated && !isGuest) {
-            setTranscriptionEnabled(value);
-        }
+        setTranscriptionEnabled(value);
     };
 
     const handleAgentModeToggle = (value: boolean) => {
@@ -820,7 +803,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
                 title={t("voice.signInRequired")}
-                message={t("voice.transcriptionAuthMessage")}
+                message={t("voice.agentAuthMessage", "Editing notes by voice is available after you sign in. Recordings still turn into text without an account.")}
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
                     setShowTranscriptionAuthModal(false);

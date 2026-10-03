@@ -21,6 +21,7 @@ import { isRichHtmlContent, richContentToAgentMarkdown } from '../utils/richCont
 import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
 import { refreshSession } from '../api/tokenRefresh';
+import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 import { isDeviceOffline } from '../utils/connectivity';
 import { getEffectiveAIProvider } from './effectiveProvider';
@@ -137,6 +138,24 @@ const emitTranscriptionUnauthorizedOnce = async () => {
     onUnauthorized.emit();
 };
 
+// A guest session has no refresh token: its short-lived access token is
+// renewed by signing in anonymously again with the same device id, which
+// returns the same guest (and its remaining free minutes).
+const renewGuestAccessToken = async (): Promise<string | null> => {
+    try {
+        const profile = await storage.getUserProfile();
+        if (profile?.provider !== 'anonymous') return null;
+        const { authApi } = await import('../api/auth');
+        const guest = await authApi.anonymousAuth(await getDeviceId(), getPlatformName());
+        if (!guest?.access_token) return null;
+        await storage.setToken(guest.access_token);
+        return guest.access_token;
+    } catch (error) {
+        console.warn('[Transcription] Guest session renewal failed', error);
+        return null;
+    }
+};
+
 const refreshTranscriptionAccessToken = async (): Promise<string | null> => {
     // Shared with the API clients: refresh tokens are single-use.
     const result = await refreshSession();
@@ -145,6 +164,11 @@ const refreshTranscriptionAccessToken = async (): Promise<string | null> => {
         return result.accessToken;
     }
     if (result.kind === 'invalid_refresh') {
+        const guestToken = await renewGuestAccessToken();
+        if (guestToken) {
+            transcriptionUnauthorizedEmitted = false;
+            return guestToken;
+        }
         await emitTranscriptionUnauthorizedOnce();
     }
     return null;
@@ -463,7 +487,15 @@ export async function transcribeAudio(
     }
     const provider = await getAIProvider();
     if (provider === 'vaulto_ai') {
-        return transcribeViaBackend(audioUri, selectedLanguage);
+        // Out of cloud minutes with the speech model on the phone: transcribe here
+        // instead of stopping at the limit sheet. The sheet shows only without one.
+        const localReady = LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
+            && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
+        const cloud = await transcribeViaBackend(audioUri, selectedLanguage, { announceLimit: !localReady });
+        if (localReady && cloud.error === USAGE_LIMIT_REACHED) {
+            return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+        }
+        return cloud;
     }
     if (provider === 'local_whisper' || provider === 'local_llm' || provider === 'local') {
         return transcribeViaLocalWhisper(audioUri, selectedLanguage);
@@ -610,7 +642,13 @@ async function transcribeViaLocalWhisper(audioUri: string, language?: string): P
     }
 }
 
-async function transcribeViaBackend(audioUri: string, language?: string): Promise<TranscriptionResult> {
+const USAGE_LIMIT_REACHED = 'Usage limit reached';
+
+async function transcribeViaBackend(
+    audioUri: string,
+    language?: string,
+    options: { announceLimit?: boolean } = {},
+): Promise<TranscriptionResult> {
     const idempotencyKey = await generateUUID();
 
     try {
@@ -628,12 +666,14 @@ async function transcribeViaBackend(audioUri: string, language?: string): Promis
         const response = await fetchBackendTranscriptionWithAuth(audioUri, idempotencyKey, language);
 
         if (response.status === 403) {
-            const { onLimitReached } = await import('../utils/limitEvents');
-            onLimitReached.emit();
+            if (options.announceLimit !== false) {
+                const { onLimitReached } = await import('../utils/limitEvents');
+                onLimitReached.emit();
+            }
             return {
                 text: '',
                 success: false,
-                error: 'Usage limit reached',
+                error: USAGE_LIMIT_REACHED,
             };
         }
 

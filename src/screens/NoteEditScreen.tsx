@@ -1495,12 +1495,49 @@ export const NoteEditScreen = () => {
 
     // Offline, a cloud choice falls back to the on-device model; keep the
     // provider the editor reasons about in step with the network.
-    useEffect(() => {
-        const unsubscribe = NetInfo.addEventListener(() => {
-            void getEffectiveAIProvider().then(setCurrentAIProvider).catch(() => undefined);
-        });
-        return unsubscribe;
+    const offlineOfferPendingRef = useRef(false);
+    const offerOnDeviceTranscriptionRef = useRef<((reason: 'suggest' | 'offline') => Promise<void>) | null>(null);
+    const offlineOfferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Recordings saved without text for lack of network: transcribed as soon as it is back.
+    const offlineRecordingIdsRef = useRef<string[]>([]);
+    const retryTranscriptionRef = useRef<((recording: VoiceRecording, options?: { silent?: boolean }) => Promise<boolean>) | null>(null);
+    const scheduleOfflineOffer = useCallback(() => {
+        offlineOfferPendingRef.current = false;
+        if (offlineOfferTimerRef.current) clearTimeout(offlineOfferTimerRef.current);
+        offlineOfferTimerRef.current = setTimeout(() => {
+            offlineOfferTimerRef.current = null;
+            void offerOnDeviceTranscriptionRef.current?.('offline');
+        }, 1200);
     }, []);
+    useEffect(() => {
+        const unsubscribe = NetInfo.addEventListener((state) => {
+            void getEffectiveAIProvider().then(setCurrentAIProvider).catch(() => undefined);
+            // A recording was saved without text offline: now that the network is
+            // back (a download needs it), offer the model that works without it.
+            const online = state.isConnected !== false && state.isInternetReachable !== false;
+            // Right after Wi-Fi comes up reachability is still unknown; wait for a
+            // confirmed connection, and keep anything that fails for the next one.
+            if (state.isConnected === true && state.isInternetReachable === true && offlineRecordingIdsRef.current.length > 0) {
+                const ids = offlineRecordingIdsRef.current;
+                offlineRecordingIdsRef.current = [];
+                void (async () => {
+                    for (const id of ids) {
+                        const rec = voiceRecordingsRef.current.find((r) => r.id === id);
+                        if (!rec || rec.transcription?.trim()) continue;
+                        const done = await retryTranscriptionRef.current?.(rec, { silent: true });
+                        if (!done) offlineRecordingIdsRef.current.push(id);
+                    }
+                })();
+            }
+            if (online && offlineOfferPendingRef.current) {
+                scheduleOfflineOffer();
+            }
+        });
+        return () => {
+            unsubscribe();
+            if (offlineOfferTimerRef.current) clearTimeout(offlineOfferTimerRef.current);
+        };
+    }, [scheduleOfflineOffer]);
 
     const requestPrivateAIConsent = useCallback(async (): Promise<boolean> => {
         // Protected notes go by the stored choice, never the offline fallback:
@@ -1591,7 +1628,7 @@ export const NoteEditScreen = () => {
         if (needsLocalLLMRuntime && !isLocalLLMRuntimeAvailable()) {
             Alert.alert(
                 t('alerts.localLlmUnavailableTitle', 'On-device AI is unavailable'),
-                t('alerts.localLlmUnavailableText', 'This version of the app cannot run AI on the phone. Update the app or switch to Vaulto AI in Settings.'),
+                t('alerts.localLlmUnavailableText', 'This version of the app cannot run AI on the phone. Update the app or turn off "Only on this phone" in Settings.'),
             );
             return;
         }
@@ -1601,7 +1638,7 @@ export const NoteEditScreen = () => {
             if (!llmStatus?.isDownloaded) {
                 Alert.alert(
                     t('localAI.modelMissingTitle', 'Download the AI model'),
-                    t('localAI.modelMissingDesc', 'On-device AI needs its model ({{model}}, {{size}}) on the phone. Download it once in Settings → AI Model; after that everything works offline.', {
+                    t('localAI.modelMissingDesc', 'On-device AI needs its model ({{model}}, {{size}}). Turn on "AI without internet" in Settings → Voice & AI; after that everything works offline.', {
                         model: llmStatus?.selectedModel.label ?? 'Qwen3.5',
                         size: llmStatus?.selectedModel.sizeLabel ?? '',
                     }),
@@ -1702,48 +1739,39 @@ export const NoteEditScreen = () => {
 
     // Why the model download was opened: live dictation (start it afterwards), a
     // protected recording, or turning on free on-device transcription.
-    const [whisperModalPurpose, setWhisperModalPurpose] = useState<'dictate' | 'protected' | 'enable'>('dictate');
-    // Free on-device transcription, offered where it helps: a guest who cannot use
-    // the cloud, and once to everyone after a few recordings.
+    const [whisperModalPurpose, setWhisperModalPurpose] = useState<'dictate' | 'protected' | 'enable' | 'offline'>('dictate');
+    // Free on-device transcription, offered where it helps: once after a few
+    // cloud recordings, and once after a recording made without internet.
     const onDeviceOfferedRef = useRef(false);
-    const offerOnDeviceTranscription = useCallback(async (reason: 'guest' | 'suggest') => {
+    const offerOnDeviceTranscription = useCallback(async (reason: 'suggest' | 'offline') => {
         if (!LOCAL_WHISPER_ENABLED || onDeviceOfferedRef.current) return;
         if (await isOnDeviceTranscriptionActive()) return;
-        if (reason === 'suggest') {
-            if (await getOnDeviceOfferShown()) return;
-            await setOnDeviceOfferShown();
-        }
-        onDeviceOfferedRef.current = true;
         const modelReady = (await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
+        // A downloaded model already takes over offline and when cloud minutes run out.
+        if (modelReady) return;
+        if (await getOnDeviceOfferShown(reason)) return;
+        await setOnDeviceOfferShown(reason);
+        onDeviceOfferedRef.current = true;
         const enable = () => {
-            if (modelReady) {
-                void setOnDeviceTranscription(true);
-                showToast(t('edit.onDeviceOffer.enabled', 'Recordings are now transcribed on this phone'));
-                return;
-            }
-            setWhisperModalPurpose('enable');
+            setWhisperModalPurpose('offline');
             setShowLocalWhisperModal(true);
         };
         const buttons: any[] = [
             { text: t('edit.onDeviceOffer.later', 'Not now'), style: 'cancel' },
+            { text: t('edit.onDeviceOffer.download', 'Download'), onPress: enable },
         ];
-        if (reason === 'guest') {
-            buttons.push({ text: t('edit.onDeviceOffer.signIn', 'Sign in'), onPress: () => navigation.navigate('SignIn') });
-        }
-        buttons.push({
-            text: modelReady ? t('edit.onDeviceOffer.turnOn', 'Turn on') : t('edit.onDeviceOffer.download', 'Download'),
-            onPress: enable,
-        });
         Alert.alert(
-            reason === 'guest'
-                ? t('edit.onDeviceOffer.guestTitle', 'Get text without an account')
+            reason === 'offline'
+                ? t('edit.onDeviceOffer.offlineTitle', 'Work without internet')
                 : t('edit.onDeviceOffer.suggestTitle', 'Transcribe for free on your phone'),
-            reason === 'guest'
-                ? t('edit.onDeviceOffer.guestDesc', 'This recording is saved as audio. Download the speech model once and your next recordings turn into text right on the phone — free, offline, no sign-in.')
-                : t('edit.onDeviceOffer.suggestDesc', 'Download the speech model once: recordings turn into text right on the phone, free and offline, and the audio never leaves it.'),
+            reason === 'offline'
+                ? t('edit.onDeviceOffer.offlineDesc', 'Your last recording was saved without text because there was no internet. Download the speech model once and recordings turn into text even offline.')
+                : t('edit.onDeviceOffer.suggestDesc', 'Download the speech model once: recordings turn into text even without internet or when free minutes run out.'),
             buttons,
         );
-    }, [navigation, t]);
+    }, [t]);
+
+    offerOnDeviceTranscriptionRef.current = offerOnDeviceTranscription;
 
     const promptOnDeviceModelForProtected = useCallback(() => {
         Alert.alert(
@@ -2546,11 +2574,6 @@ export const NoteEditScreen = () => {
 
     useEffect(() => {
         const loadSettings = async () => {
-            const provider = await getEffectiveAIProvider();
-            if ((!isAuthenticated || isGuest) && provider !== 'local_whisper') {
-                setTranscriptionEnabled(false);
-                return;
-            }
             const transcription = await getTranscriptionEnabled();
             setTranscriptionEnabled(transcription);
         };
@@ -4914,12 +4937,17 @@ export const NoteEditScreen = () => {
 
     const shouldUseAgentModeGlobally = useCallback(
         async (agentModeOverride?: boolean): Promise<boolean> => {
+            // The agent is a server feature for accounts: a guest's transcript is
+            // inserted as is (shared audio, retries) instead of failing with 401.
+            if (!isAuthenticated || isGuest) {
+                return false;
+            }
             if (typeof agentModeOverride === 'boolean') {
                 return agentModeOverride;
             }
             return await getAgentModeEnabled();
         },
-        [],
+        [isAuthenticated, isGuest],
     );
 
     useFocusEffect(
@@ -5072,7 +5100,6 @@ export const NoteEditScreen = () => {
             const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
             const provider = await getEffectiveAIProvider();
             const onDeviceTranscription = await isOnDeviceTranscriptionActive();
-            const isUserTranscriptionRestricted = (!isAuthenticated || isGuest) && provider === 'vaulto_ai' && !onDeviceTranscription && !isProtectedRef.current;
             const protectedNote = isProtectedRef.current;
             // The agent sends the text to the server: never for a protected note.
             const onDeviceProvider = provider === 'local' || provider === 'local_llm' || provider === 'local_whisper';
@@ -5082,17 +5109,9 @@ export const NoteEditScreen = () => {
                 && !recording.meeting
                 && await shouldUseAgentModeGlobally(agentModeEnabled)
                 && !(await isDeviceOffline());
+            // Guests transcribe in the cloud too, from their free trial minutes;
+            // when those run out the limit sheet offers sign-in or the phone model.
             let shouldTranscribe = transcribe;
-            if (isUserTranscriptionRestricted && shouldTranscribe) {
-                // Anonymous users can't transcribe; keep audio flow intact.
-                shouldTranscribe = false;
-                // Offer the free on-device route instead of only asking to sign in.
-                if (LOCAL_WHISPER_ENABLED) {
-                    setTimeout(() => { void offerOnDeviceTranscription('guest'); }, 900);
-                } else if (micMode === 'force_text') {
-                    setShowTranscriptionAuthModal(true);
-                }
-            }
             if (shouldTranscribe && !onDeviceTranscription && !protectedNote) {
                 const consentGranted = await requestPrivateAIConsent();
                 if (!consentGranted) {
@@ -5171,7 +5190,6 @@ export const NoteEditScreen = () => {
                 const rawErrorLower = (transcription.error || '').toLowerCase();
                 // Auto-insert audio player when there is no transcription (e.g., failed, disabled, or due to limits).
                 const isAuthOrQuotaError =
-                    isUserTranscriptionRestricted ||
                     errorMsgLower.includes('sign in') ||
                     errorMsgLower.includes('trial limit') ||
                     errorMsgLower.includes('authentication') ||
@@ -5189,7 +5207,16 @@ export const NoteEditScreen = () => {
 
                 if (skippedOffline || isNetworkError(transcription.error)) {
                     // Not an error from the user's point of view: the audio is kept.
-                    showToast(t('voice.savedOffline', 'No internet: the recording is saved. You can transcribe it later.'), 3500);
+                    if (skippedOffline) {
+                        offlineRecordingIdsRef.current.push(voiceId);
+                    }
+                    if (LOCAL_WHISPER_ENABLED) {
+                        // A request that failed while the phone reports a network
+                        // (weak signal) gets no "back online" event: offer right away.
+                        offlineOfferPendingRef.current = true;
+                        if (!(await isDeviceOffline())) scheduleOfflineOffer();
+                    }
+                    showToast(t('voice.savedOffline', 'No internet — the recording is saved. It turns into text when you are back online.'), 3500);
                 } else if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
                     console.log('[Transparency] Transcription skipped due to auth/guest status');
@@ -5339,12 +5366,8 @@ export const NoteEditScreen = () => {
                     if (!insertedPlainTextEarly) {
                         registerTranscribedInsertion(transcribedText);
                     }
-                    // Keep the voice itself next to its transcript (as Keep does), so
-                    // a note recorded offline or without the agent still shows the
-                    // recording. Hold-to-dictate stays text only.
-                    if (micMode !== 'force_text') {
-                        await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
-                    }
+                    // Transcribed: the note shows only the text. The audio stays
+                    // in the note's recordings (toolbar) to replay or re-transcribe.
                     if (recording.meeting) {
                         void runMeetingSummaryRef.current(transcribedText);
                     }
@@ -6086,18 +6109,15 @@ export const NoteEditScreen = () => {
         };
     }, [editMode, isColorPickerVisible]);
 
-    const handleRetryTranscription = async (recording?: VoiceRecording) => {
+    // Returns whether the recording got its text. `silent` (the automatic retry
+    // once the network is back) shows no error: the recording simply stays queued.
+    const handleRetryTranscription = async (recording?: VoiceRecording, options: { silent?: boolean } = {}): Promise<boolean> => {
         const targetRecording = recording
             || voiceRecordings.find((rec) => rec.id === playingRecordingId)
             || voiceRecordings[0];
-        if (!targetRecording) return;
-        const provider = await getEffectiveAIProvider();
-        if ((!isAuthenticated || isGuest) && provider !== 'local_whisper') {
-            setShowTranscriptionAuthModal(true);
-            return;
-        }
+        if (!targetRecording) return false;
         const consentGranted = await requestPrivateAIConsent();
-        if (!consentGranted) return;
+        if (!consentGranted) return false;
         const shouldUseAgentModeForRetry = await shouldUseAgentModeGlobally();
 
         setTrackedIsTranscribing(true);
@@ -6109,20 +6129,24 @@ export const NoteEditScreen = () => {
 
             if (!transcription.success || !transcription.text) {
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
-                showPrettyQuotaNotification(
-                    transcription.error,
-                    getErrorMessage(transcription.error, 'Check internet connection')
-                );
-                return;
+                if (!options.silent) {
+                    showPrettyQuotaNotification(
+                        transcription.error,
+                        getErrorMessage(transcription.error, 'Check internet connection')
+                    );
+                }
+                return false;
             }
 
             const text = transcription.text.trim();
             if (!text) {
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
-                setErrorMessage('Recognition returned empty text');
-                setErrorShowSettingsAction(false);
-                setErrorModalVisible(true);
-                return;
+                if (!options.silent) {
+                    setErrorMessage('Recognition returned empty text');
+                    setErrorShowSettingsAction(false);
+                    setErrorModalVisible(true);
+                }
+                return false;
             }
 
             const targetVariantId = activeVariantIdRef.current;
@@ -6168,7 +6192,7 @@ export const NoteEditScreen = () => {
                 if (inserted && !insertedEarly) {
                     registerTranscribedInsertion(text);
                 }
-                return;
+                return true;
             }
 
             if (!insertedEarly) {
@@ -6182,10 +6206,13 @@ export const NoteEditScreen = () => {
                 micMode: 'agent',
                 recordingId: targetRecording.id,
             });
-
+            return true;
         } catch (error: any) {
             setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
-            showPrettyQuotaNotification(error, 'Failed to retry transcription');
+            if (!options.silent) {
+                showPrettyQuotaNotification(error, 'Failed to retry transcription');
+            }
+            return false;
         } finally {
             setTrackedIsTranscribing(false);
             setTranscribingRecordingId(null);
@@ -6193,6 +6220,8 @@ export const NoteEditScreen = () => {
     };
 
 
+
+    retryTranscriptionRef.current = handleRetryTranscription;
 
     const formatDuration = (seconds: number) => {
         const m = Math.floor(seconds / 60);
@@ -6386,7 +6415,7 @@ export const NoteEditScreen = () => {
                             style={styles.iconButton}
                             accessibilityRole="button" accessibilityLabel={t("a11y.recordVoice", "Voice recordings")}
                         >
-                            <MaterialIcons name="mic" size={24} color={colors.text} />
+                            <MaterialIcons name="graphic-eq" size={24} color={colors.text} />
                         </TouchableOpacity>
                     )}
 
@@ -7203,7 +7232,7 @@ export const NoteEditScreen = () => {
             <SignInRequiredModal
                 visible={showTranscriptionAuthModal}
                 title={t('voice.signInRequired', 'Sign in required')}
-                message={t('voice.transcriptionAuthMessage', 'Transcription is available after you create an account.')}
+                message={t('voice.agentAuthMessage', 'Editing notes by voice is available after you sign in. Recordings still turn into text without an account.')}
                 onClose={() => setShowTranscriptionAuthModal(false)}
                 onSignIn={() => {
                     setShowTranscriptionAuthModal(false);
@@ -7267,6 +7296,12 @@ export const NoteEditScreen = () => {
                         setWhisperModalPurpose('dictate');
                         void setOnDeviceTranscription(true);
                         showToast(t('edit.onDeviceOffer.enabled', 'Recordings are now transcribed on this phone'));
+                        return;
+                    }
+                    if (whisperModalPurpose === 'offline') {
+                        // The cloud stays the default; the model takes over without internet.
+                        setWhisperModalPurpose('dictate');
+                        showToast(t('edit.onDeviceOffer.offlineReady', 'Done: recordings now turn into text even without internet'));
                         return;
                     }
                     if (whisperModalPurpose === 'protected') {
@@ -7345,14 +7380,15 @@ export const NoteEditScreen = () => {
                                                 >
                                                     {/* Actions wrap under the duration when they do not fit beside it. */}
                                                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', rowGap: spacing.s }}>
+                                                        {/* Tapping the row plays it: the icon says so. */}
                                                         <View style={[
                                                             styles.recordingIconContainer,
-                                                            isPlaying && { backgroundColor: colors.primary + '10' }
+                                                            { backgroundColor: colors.primary + (isPlaying ? '24' : '14') }
                                                         ]}>
                                                             <MaterialIcons
-                                                                name={isPlaying ? "graphic-eq" : "mic"}
-                                                                size={20}
-                                                                color={isPlaying ? colors.primary : colors.textSecondary}
+                                                                name={isPlaying ? "graphic-eq" : "play-arrow"}
+                                                                size={22}
+                                                                color={colors.primary}
                                                             />
                                                         </View>
 
