@@ -334,7 +334,21 @@ export const SettingsScreen = () => {
         resumeStandardSyncAfterReset,
         enableE2EEWithRecoveryKey,
         autoEncrypting,
+        keyBackup,
     } = useEncryption();
+
+    // The key is the notes: show it only after the phone's own unlock (fingerprint,
+    // face or PIN) when one is set.
+    const openRecoveryKey = useCallback(async () => {
+        const { BiometricService } = await import('../services/BiometricService');
+        const LocalAuthentication = await import('expo-local-authentication');
+        const level = await LocalAuthentication.getEnrolledLevelAsync().catch(() => 0);
+        if (level > 0) {
+            const ok = await BiometricService.authenticate(t('settings.recovery.authReason', 'Show your recovery key'));
+            if (!ok) return;
+        }
+        setShowRecoveryCodeModal(true);
+    }, [t]);
     const [overlayKind, setOverlayKind] = useState<'unlock' | 'encrypt'>('unlock');
 
     // End-to-end encryption with a recovery key: the key is shown app-wide once ready.
@@ -837,6 +851,11 @@ export const SettingsScreen = () => {
         syncService.setSyncEnabled(false);
         try {
             await authApi.deleteAccount();
+            // The account and its notes are gone: so is the key's platform backup.
+            if (userId) {
+                const { removeKeyBackup } = await import('../services/keyBackup');
+                await removeKeyBackup(userId);
+            }
         } catch (error) {
             syncService.setSyncEnabled(syncEnabled);
             console.error('[Settings] Account deletion failed', getErrorMessage(error));
@@ -1298,13 +1317,23 @@ export const SettingsScreen = () => {
                                             style={[styles.preferenceRow, styles.voiceRow]}
                                             activeOpacity={0.85}
                                             accessibilityRole="button"
-                                            onPress={() => setShowRecoveryCodeModal(true)}
+                                            onPress={() => { void openRecoveryKey(); }}
                                         >
                                             <View style={styles.voiceRowText}>
-                                                <MaterialCommunityIcons name="key-variant" size={24} color={colors.textSecondary} />
+                                                <MaterialCommunityIcons
+                                                    name={keyBackup?.cloud ? 'cloud-check-outline' : 'key-variant'}
+                                                    size={24}
+                                                    color={keyBackup?.cloud ? colors.success : colors.warning}
+                                                />
                                                 <View style={{ flex: 1 }}>
                                                     <Text style={styles.preferenceTitle}>{t('settings.recovery.keyTitle', 'Recovery key')}</Text>
-                                                    <Text style={styles.preferenceDescription}>{t('settings.sync.keyDesc', 'Opens your notes on a new phone')}</Text>
+                                                    <Text style={[styles.preferenceDescription, !keyBackup?.cloud && { color: colors.warning }]}>
+                                                        {keyBackup?.cloud
+                                                            ? (Platform.OS === 'ios'
+                                                                ? t('settings.sync.keyInIcloud', 'In iCloud Keychain · opens your notes on a new iPhone')
+                                                                : t('settings.sync.keyInGoogle', 'In your Google backup · opens your notes on a new phone'))
+                                                            : t('settings.sync.keyOnlyHere', 'Only on this phone · save a copy so you never lose your notes')}
+                                                    </Text>
                                                 </View>
                                             </View>
                                             <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
@@ -1798,6 +1827,7 @@ export const SettingsScreen = () => {
                 visible={showRecoveryCodeModal}
                 onClose={() => setShowRecoveryCodeModal(false)}
                 recoveryCode={recoveryCode}
+                backup={keyBackup}
             />
 
             <Modal

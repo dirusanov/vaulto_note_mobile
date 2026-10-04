@@ -39,6 +39,7 @@ import { syncService } from '../services/SyncService';
 import { isSameKeyGeneration } from '../services/encryptionState';
 import { generateUUID } from '../utils/uuid';
 import * as ExpoCrypto from 'expo-crypto';
+import { backupKey, removeKeyBackup, restoreKey } from '../services/keyBackup';
 
 export type EncryptionStatus = 'loading' | 'uninitialized' | 'locked' | 'ready';
 export type ResetEncryptionResult = { purged: boolean; syncSucceeded: boolean };
@@ -61,6 +62,8 @@ interface EncryptionContextType {
     confirmRecoveryKeySaved: () => Promise<void>;
     /** Automatic encryption setup is running in the background. */
     autoEncrypting: boolean;
+    /** Where the key is kept by the platform (Google / iCloud); null while unknown or unsaved. */
+    keyBackup: { cloud: boolean } | null;
     setupWithRecoveryCode: (code: string) => Promise<void>;
     unlock: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
     changePin: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
@@ -103,6 +106,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const [loadedForUser, setLoadedForUser] = useState<string | null>(null);
     const enableInFlightRef = useRef(false);
     const [migrationCompletedAt, setMigrationCompletedAt] = useState(0);
+    const [keyBackup, setKeyBackup] = useState<{ cloud: boolean } | null>(null);
+    const keyBackedUpRef = useRef<string | null>(null);
+    const keyRestoreAttemptRef = useRef<string | null>(null);
     const encryptionMigrationInFlightRef = useRef(false);
     const disableTransitionInFlightRef = useRef(false);
     const encryptionReconciliationInFlightRef = useRef<Promise<void> | null>(null);
@@ -1161,6 +1167,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const loadState = useCallback(async () => {
         loadedForUserRef.current = null;
         setLoadedForUser(null);
+        // Every (re)load of an account may need the platform key again (signed out
+        // and back in, reinstall): allow one restore attempt per load.
+        keyRestoreAttemptRef.current = null;
         const forUser = userId && isAuthenticated && !isGuest ? userId : null;
         try {
             await loadStateInner();
@@ -1868,7 +1877,10 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('Sign in required to reset encryption');
         }
 
-        if (userId) await storage.setAutoEncryptionOptOut(userId, true);
+        if (userId) {
+            await storage.setAutoEncryptionOptOut(userId, true);
+            void removeKeyBackup(userId);
+        }
         const result = await resetSync();
         // resetSync already ran resetSyncState + syncNowAndWait — no extra call needed.
         return result;
@@ -1888,6 +1900,8 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             throw new Error('User not available');
         }
         await storage.setAutoEncryptionOptOut(userId, true);
+        // The key is being thrown away: its platform backup would only unlock nothing.
+        void removeKeyBackup(userId);
 
         if (await storage.getRemoteDisableRescuePending(userId)) {
             const serverState = await e2eeApi.fetchState();
@@ -2072,6 +2086,60 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         })();
     }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.secret_mode, migrationCompletedAt]);
 
+    // Keep the unlocked key in the platform store (Google Block Store / iCloud
+    // Keychain), so a reinstall or a new phone opens the notes by itself.
+    useEffect(() => {
+        if (!userId || loadedForUser !== userId) return;
+        if (status !== 'ready' || mode !== 'e2ee' || !recoveryCode) {
+            if (mode !== 'e2ee') setKeyBackup(null);
+            return;
+        }
+        const stamp = `${userId}:${bundle?.key_id ?? recoveryCode.slice(0, 12)}`;
+        if (keyBackedUpRef.current === stamp) return;
+        keyBackedUpRef.current = stamp;
+        const forUser = userId;
+        void (async () => {
+            if (await storage.getEncryptionMigrationState(forUser)) {
+                keyBackedUpRef.current = null; // not final yet; retried when setup completes
+                return;
+            }
+            const saved = await backupKey(forUser, recoveryCode);
+            if (loadedForUserRef.current === forUser) setKeyBackup(saved);
+        })();
+    }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.key_id, migrationCompletedAt]);
+
+    // Locked on this phone (reinstall, new phone, signed in again): try the key the
+    // platform kept before asking the user for it.
+    useEffect(() => {
+        if (!userId || loadedForUser !== userId || status !== 'locked' || !bundle) return;
+        if (keyRestoreAttemptRef.current === userId) return;
+        keyRestoreAttemptRef.current = userId;
+        const forUser = userId;
+        void (async () => {
+            try {
+                if (resetRecoveryPending || await storage.getRemoteDisableRescuePending(forUser)) return;
+                const saved = await restoreKey(forUser);
+                if (!saved || loadedForUserRef.current !== forUser) return;
+                let candidate: Uint8Array;
+                try {
+                    candidate = masterKeyFromRecoveryCode(normalizeSecretInput(saved, 'recovery_code'));
+                } catch {
+                    return;
+                }
+                if (!bundle.key_id || keyIdFromMasterKey(candidate) !== bundle.key_id) return; // an old key
+                await storage.setRecoveryKeySaved(forUser, true);
+                if (bundle.secret_mode === 'recovery_code') {
+                    await unlock(saved);
+                } else {
+                    await setupWithRecoveryCode(saved);
+                }
+                console.log('[Encryption] Unlocked with the key kept by the platform.');
+            } catch (error) {
+                console.warn('[Encryption] Platform key restore did not unlock', error instanceof Error ? error.message : 'unknown');
+            }
+        })();
+    }, [userId, loadedForUser, status, bundle, resetRecoveryPending, unlock, setupWithRecoveryCode]);
+
     const value = useMemo(() => ({
         status,
         mode,
@@ -2086,6 +2154,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         recoveryKeyNeedsSaving,
         confirmRecoveryKeySaved,
         autoEncrypting,
+        keyBackup,
         setupWithRecoveryCode,
         unlock,
         changePin,
@@ -2096,7 +2165,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         keepResetArchiveLocal,
         resumeStandardSyncAfterReset,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, keyBackup, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

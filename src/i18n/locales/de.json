@@ -96,7 +96,10 @@
       "keyDesc": "Öffnet deine Notizen auf einem neuen Handy",
       "turnOffE2ee": "Ende-zu-Ende-Verschlüsselung ausschalten",
       "encryptingTitle": "Notizen werden verschlüsselt",
-      "encryptingSubtitle": "Nur du wirst sie lesen können."
+      "encryptingSubtitle": "Nur du wirst sie lesen können.",
+      "keyInGoogle": "In deiner Google-Sicherung · öffnet Notizen auf einem neuen Handy",
+      "keyInIcloud": "Im iCloud-Schlüsselbund · öffnet Notizen auf einem neuen iPhone",
+      "keyOnlyHere": "Nur auf diesem Handy · sichere eine Kopie, damit du keine Notizen verlierst"
     },
     "account": {
       "signOut": "Abmelden",
@@ -257,7 +260,12 @@
       "keyTitle": "Wiederherstellungsschlüssel",
       "explain": "Nur dieser Schlüssel öffnet deine Notizen auf einem neuen Handy. Bewahre ihn sicher auf, z. B. in einem Passwortmanager. Niemand, auch nicht Vaulto, kann ihn wiederherstellen.",
       "share": "Teilen",
-      "savedIt": "Schlüssel gespeichert"
+      "savedIt": "Schlüssel gespeichert",
+      "inGoogle": "In deiner Google-Sicherung gespeichert: Auf einem neuen Handy öffnen sich deine Notizen von selbst.",
+      "inIcloud": "Im iCloud-Schlüsselbund gespeichert: Auf einem neuen iPhone öffnen sich deine Notizen von selbst.",
+      "explainBackup": "Bewahre auch eine Kopie auf, falls die Sicherung einmal aus ist – am besten im Passwortmanager. Niemand, auch nicht Vaulto, kann diesen Schlüssel wiederherstellen.",
+      "enableBackupTip": "Aktiviere eine Displaysperre und die Google-Sicherung, dann bewahrt Vaulto den Schlüssel automatisch auf",
+      "authReason": "Wiederherstellungsschlüssel anzeigen"
     },
     "resetRecovery": {
       "title": "Verschlüsselter Tresor wurde zurückgesetzt",

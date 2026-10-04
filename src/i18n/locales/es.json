@@ -96,7 +96,10 @@
       "keyDesc": "Abre tus notas en un teléfono nuevo",
       "turnOffE2ee": "Desactivar el cifrado de extremo a extremo",
       "encryptingTitle": "Cifrando tus notas",
-      "encryptingSubtitle": "Solo tú podrás leerlas."
+      "encryptingSubtitle": "Solo tú podrás leerlas.",
+      "keyInGoogle": "En tu copia de Google · abre tus notas en un teléfono nuevo",
+      "keyInIcloud": "En el Llavero de iCloud · abre tus notas en un iPhone nuevo",
+      "keyOnlyHere": "Solo en este teléfono · guarda una copia para no perder tus notas"
     },
     "account": {
       "signOut": "Cerrar sesión",
@@ -257,7 +260,12 @@
       "keyTitle": "Clave de recuperación",
       "explain": "Solo esta clave abre tus notas en un teléfono nuevo. Guárdala en un lugar seguro, como un gestor de contraseñas. Nadie, ni siquiera Vaulto, puede recuperarla.",
       "share": "Compartir",
-      "savedIt": "Ya guardé la clave"
+      "savedIt": "Ya guardé la clave",
+      "inGoogle": "Guardada en tu copia de seguridad de Google: tus notas se abrirán solas en un teléfono nuevo.",
+      "inIcloud": "Guardada en el Llavero de iCloud: tus notas se abrirán solas en un iPhone nuevo.",
+      "explainBackup": "Guarda también una copia por si la copia de seguridad se desactiva: lo ideal es un gestor de contraseñas. Nadie, ni siquiera Vaulto, puede recuperar esta clave.",
+      "enableBackupTip": "Activa el bloqueo de pantalla y la copia de seguridad de Google, y Vaulto guardará esta clave por ti",
+      "authReason": "Mostrar tu clave de recuperación"
     },
     "resetRecovery": {
       "title": "El almacén cifrado se restableció",

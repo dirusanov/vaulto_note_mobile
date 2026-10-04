@@ -14,6 +14,7 @@ class AudioTranscodePackage : ReactPackage {
             DeviceCapabilitiesModule(reactContext),
             ShareIntentModule(reactContext),
             AudioConcatModule(reactContext),
+            KeyBackupModule(reactContext),
         )
     }
 

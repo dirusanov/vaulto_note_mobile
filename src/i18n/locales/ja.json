@@ -96,7 +96,10 @@
       "keyDesc": "新しい端末でメモを開くためのキー",
       "turnOffE2ee": "エンドツーエンド暗号化をオフにする",
       "encryptingTitle": "メモを暗号化しています",
-      "encryptingSubtitle": "読めるのはあなただけになります。"
+      "encryptingSubtitle": "読めるのはあなただけになります。",
+      "keyInGoogle": "Google バックアップ内 · 新しい端末でメモを開けます",
+      "keyInIcloud": "iCloud キーチェーン内 · 新しい iPhone でメモを開けます",
+      "keyOnlyHere": "この端末のみ · メモを失わないよう控えを保存してください"
     },
     "account": {
       "signOut": "サインアウト",
@@ -257,7 +260,12 @@
       "keyTitle": "復元キー",
       "explain": "新しい端末でメモを開けるのはこのキーだけです。パスワードマネージャーなど安全な場所に保管してください。Vaulto を含め誰も復元できません。",
       "share": "共有",
-      "savedIt": "キーを保存しました"
+      "savedIt": "キーを保存しました",
+      "inGoogle": "Google のバックアップに保存済み：新しい端末でもメモが自動で開きます。",
+      "inIcloud": "iCloud キーチェーンに保存済み：新しい iPhone でもメモが自動で開きます。",
+      "explainBackup": "バックアップがオフになった場合に備えて、パスワードマネージャーなどにも控えを保存してください。Vaulto を含め誰もこのキーを復元できません。",
+      "enableBackupTip": "画面ロックと Google バックアップをオンにすると、Vaulto がこのキーを自動で保管します",
+      "authReason": "復元キーを表示"
     },
     "resetRecovery": {
       "title": "暗号化ボールトがリセットされました",

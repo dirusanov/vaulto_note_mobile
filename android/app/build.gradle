@@ -219,6 +219,8 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    // Encryption key backup that survives reinstalls and moves to a new phone.
+    implementation("com.google.android.gms:play-services-auth-blockstore:16.4.0")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

@@ -96,7 +96,10 @@
       "keyDesc": "Abre suas notas em um celular novo",
       "turnOffE2ee": "Desativar a criptografia de ponta a ponta",
       "encryptingTitle": "Criptografando suas notas",
-      "encryptingSubtitle": "Só você poderá lê-las."
+      "encryptingSubtitle": "Só você poderá lê-las.",
+      "keyInGoogle": "No seu backup do Google · abre suas notas em um celular novo",
+      "keyInIcloud": "Nas Chaves do iCloud · abre suas notas em um iPhone novo",
+      "keyOnlyHere": "Só neste celular · guarde uma cópia para nunca perder suas notas"
     },
     "account": {
       "signOut": "Sair",
@@ -257,7 +260,12 @@
       "keyTitle": "Chave de recuperação",
       "explain": "Só esta chave abre suas notas em um celular novo. Guarde-a em lugar seguro, como um gerenciador de senhas. Ninguém, nem a Vaulto, consegue recuperá-la.",
       "share": "Compartilhar",
-      "savedIt": "Já salvei a chave"
+      "savedIt": "Já salvei a chave",
+      "inGoogle": "Salva no seu backup do Google: suas notas abrem sozinhas em um celular novo.",
+      "inIcloud": "Salva nas Chaves do iCloud: suas notas abrem sozinhas em um iPhone novo.",
+      "explainBackup": "Guarde também uma cópia, caso o backup seja desativado: o ideal é um gerenciador de senhas. Ninguém, nem a Vaulto, consegue recuperar esta chave.",
+      "enableBackupTip": "Ative o bloqueio de tela e o backup do Google, e a Vaulto guarda esta chave para você",
+      "authReason": "Mostrar sua chave de recuperação"
     },
     "resetRecovery": {
       "title": "O cofre criptografado foi redefinido",

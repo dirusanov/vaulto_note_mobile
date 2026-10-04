@@ -96,7 +96,10 @@
       "keyDesc": "Ouvre vos notes sur un nouveau téléphone",
       "turnOffE2ee": "Désactiver le chiffrement de bout en bout",
       "encryptingTitle": "Chiffrement de vos notes",
-      "encryptingSubtitle": "Vous seul pourrez les lire."
+      "encryptingSubtitle": "Vous seul pourrez les lire.",
+      "keyInGoogle": "Dans votre sauvegarde Google · ouvre vos notes sur un nouveau téléphone",
+      "keyInIcloud": "Dans le trousseau iCloud · ouvre vos notes sur un nouvel iPhone",
+      "keyOnlyHere": "Uniquement sur ce téléphone · gardez une copie pour ne jamais perdre vos notes"
     },
     "account": {
       "signOut": "Se déconnecter",
@@ -257,7 +260,12 @@
       "keyTitle": "Clé de récupération",
       "explain": "Seule cette clé ouvre vos notes sur un nouveau téléphone. Gardez-la en lieu sûr, par exemple dans un gestionnaire de mots de passe. Personne, pas même Vaulto, ne peut la récupérer.",
       "share": "Partager",
-      "savedIt": "J’ai enregistré la clé"
+      "savedIt": "J’ai enregistré la clé",
+      "inGoogle": "Enregistrée dans votre sauvegarde Google : vos notes s’ouvriront seules sur un nouveau téléphone.",
+      "inIcloud": "Enregistrée dans le trousseau iCloud : vos notes s’ouvriront seules sur un nouvel iPhone.",
+      "explainBackup": "Gardez aussi une copie au cas où la sauvegarde serait désactivée : idéalement dans un gestionnaire de mots de passe. Personne, pas même Vaulto, ne peut récupérer cette clé.",
+      "enableBackupTip": "Activez un verrouillage d’écran et la sauvegarde Google, et Vaulto conservera cette clé pour vous",
+      "authReason": "Afficher votre clé de récupération"
     },
     "resetRecovery": {
       "title": "Le coffre chiffré a été réinitialisé",

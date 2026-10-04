@@ -7,6 +7,8 @@ import {
     ScrollView,
     Alert,
     Share,
+    Platform,
+    Linking,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +28,8 @@ interface RecoveryCodeModalProps {
     recoveryCode: string | null;
     /** Shown right after encryption was set up: the user confirms the key is saved. */
     firstTime?: boolean;
+    /** Where the platform keeps the key: cloud = restores on a new phone by itself. */
+    backup?: { cloud: boolean } | null;
 }
 
 export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
@@ -33,6 +37,7 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
     onClose,
     recoveryCode,
     firstTime = false,
+    backup = null,
 }) => {
     const { t } = useTranslation();
     const viewShotRef = useRef<any>(null);
@@ -94,9 +99,35 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                         </Text>
                     </View>
 
+                    {backup?.cloud ? (
+                        <View style={styles.backupOk}>
+                            <MaterialCommunityIcons name="cloud-check-outline" size={20} color={colors.success} />
+                            <Text style={styles.backupOkText}>
+                                {Platform.OS === 'ios'
+                                    ? t('settings.recovery.inIcloud', 'Saved in iCloud Keychain: your notes open on a new iPhone by themselves.')
+                                    : t('settings.recovery.inGoogle', 'Saved in your Google backup: your notes open on a new phone by themselves.')}
+                            </Text>
+                        </View>
+                    ) : null}
                     <Text style={styles.warning}>
-                        {t('settings.recovery.explain', 'Only this key opens your notes on a new phone. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.')}
+                        {backup?.cloud
+                            ? t('settings.recovery.explainBackup', 'Keep a copy too, in case that backup is ever off: a password manager is ideal. Nobody, including Vaulto, can restore this key.')
+                            : t('settings.recovery.explain', 'Only this key opens your notes on a new phone. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.')}
                     </Text>
+                    {!backup?.cloud && Platform.OS === 'android' ? (
+                        <TouchableOpacity
+                            style={styles.backupTip}
+                            accessibilityRole="button"
+                            onPress={() => {
+                                void Linking.sendIntent('android.settings.SECURITY_SETTINGS').catch(() => Linking.openSettings());
+                            }}
+                        >
+                            <MaterialCommunityIcons name="shield-lock-outline" size={18} color={colors.primary} />
+                            <Text style={styles.backupTipText}>
+                                {t('settings.recovery.enableBackupTip', 'Turn on a screen lock and Google backup, and Vaulto keeps this key for you automatically')}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : null}
 
                     <ScrollView style={styles.codeContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                         <View style={styles.wordsGrid}>
@@ -144,7 +175,7 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                         </View>
 
                         <Button
-                            title={firstTime ? t('settings.recovery.savedIt', 'I saved the key') : t('common.done', 'Done')}
+                            title={firstTime && !backup?.cloud ? t('settings.recovery.savedIt', 'I saved the key') : t('common.done', 'Done')}
                             onPress={onClose}
                             style={styles.doneButton}
                         />
@@ -270,6 +301,34 @@ const styles = createStyles(() => ({
     actions: {
         gap: spacing.s,
         marginTop: spacing.xs,
+    },
+    backupOk: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        padding: spacing.m,
+        borderRadius: 12,
+        backgroundColor: colors.success + '14',
+        marginBottom: spacing.m,
+    },
+    backupOkText: {
+        ...typography.bodySmall,
+        flex: 1,
+        color: colors.text,
+        lineHeight: 20,
+    },
+    backupTip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        minHeight: 44,
+        marginBottom: spacing.m,
+    },
+    backupTipText: {
+        ...typography.bodySmall,
+        flex: 1,
+        color: colors.primary,
+        lineHeight: 20,
     },
     secondaryRow: {
         flexDirection: 'row',

@@ -107,7 +107,10 @@
       "keyDesc": "Opens your notes on a new phone",
       "turnOffE2ee": "Turn off end-to-end encryption",
       "encryptingTitle": "Encrypting your notes",
-      "encryptingSubtitle": "Only you will be able to read them."
+      "encryptingSubtitle": "Only you will be able to read them.",
+      "keyInGoogle": "In your Google backup · opens your notes on a new phone",
+      "keyInIcloud": "In iCloud Keychain · opens your notes on a new iPhone",
+      "keyOnlyHere": "Only on this phone · save a copy so you never lose your notes"
     },
     "account": {
       "signOut": "Sign Out",
@@ -268,7 +271,12 @@
       "keyTitle": "Recovery key",
       "explain": "Only this key opens your notes on a new phone. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.",
       "share": "Share",
-      "savedIt": "I saved the key"
+      "savedIt": "I saved the key",
+      "inGoogle": "Saved in your Google backup: your notes open on a new phone by themselves.",
+      "inIcloud": "Saved in iCloud Keychain: your notes open on a new iPhone by themselves.",
+      "explainBackup": "Keep a copy too, in case that backup is ever off: a password manager is ideal. Nobody, including Vaulto, can restore this key.",
+      "enableBackupTip": "Turn on a screen lock and Google backup, and Vaulto keeps this key for you automatically",
+      "authReason": "Show your recovery key"
     },
     "security": {
       "localProtection": "Local protection",

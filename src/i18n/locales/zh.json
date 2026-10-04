@@ -96,7 +96,10 @@
       "keyDesc": "在新手机上打开你的笔记",
       "turnOffE2ee": "关闭端到端加密",
       "encryptingTitle": "正在加密笔记",
-      "encryptingSubtitle": "之后只有你能阅读。"
+      "encryptingSubtitle": "之后只有你能阅读。",
+      "keyInGoogle": "在 Google 备份中 · 在新手机上打开笔记",
+      "keyInIcloud": "在 iCloud 钥匙串中 · 在新 iPhone 上打开笔记",
+      "keyOnlyHere": "仅在本机 · 请另存一份，以免丢失笔记"
     },
     "account": {
       "signOut": "登出",
@@ -257,7 +260,12 @@
       "keyTitle": "恢复密钥",
       "explain": "只有这个密钥能在新手机上打开你的笔记。请妥善保存，例如存入密码管理器。任何人（包括 Vaulto）都无法找回它。",
       "share": "分享",
-      "savedIt": "我已保存密钥"
+      "savedIt": "我已保存密钥",
+      "inGoogle": "已保存到你的 Google 备份：在新手机上笔记会自动打开。",
+      "inIcloud": "已保存到 iCloud 钥匙串：在新 iPhone 上笔记会自动打开。",
+      "explainBackup": "也请另存一份，以防备份被关闭：最好存在密码管理器中。任何人（包括 Vaulto）都无法找回此密钥。",
+      "enableBackupTip": "开启屏幕锁定和 Google 备份，Vaulto 会自动为你保存此密钥",
+      "authReason": "显示恢复密钥"
     },
     "resetRecovery": {
       "title": "加密保险库已重置",
