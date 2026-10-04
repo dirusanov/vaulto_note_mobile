@@ -1,5 +1,7 @@
 # Android Release
 
+The usual route (no passwords, EAS supplies the upload key) is in `AGENTS.md` → "Releasing to Google Play". The steps below are the manual-keystore alternative.
+
 1. Copy `android/keystore.properties.example` to `android/keystore.properties`.
 2. Put your upload keystore at the path from `storeFile` relative to `android/`.
 3. Fill `storePassword`, `keyAlias`, and `keyPassword`.
