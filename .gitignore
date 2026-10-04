@@ -85,3 +85,6 @@ credentials.json
 # Codex
 .codex
 .codex/
+
+# Local release bundles
+/build-*.aab
