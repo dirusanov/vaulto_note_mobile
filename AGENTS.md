@@ -23,7 +23,9 @@ The app is built locally; nobody types signing passwords.
      --output build-1.0.N.aab
    ```
 
-   Takes ~15–20 min. The `production` profile in `eas.json` sets the prod API URLs.
+   Takes ~4–5 min on this Mac (measured 4m17s end to end; Gradle itself ~3.5 min — the
+   "TOTAL ~850–1000s" in its profile table is summed parallel task time, not wall time).
+   The `production` profile in `eas.json` sets the prod API URLs.
    `build-*.aab` is gitignored.
 5. **Verify the bundle.**
    - Signature: `keytool -printcert -jarfile build-1.0.N.aab` must show upload key
