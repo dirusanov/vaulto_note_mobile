@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.88] - 2026-10-04
+
+### Added
+- Voice works right after install: guests get 10 free minutes of cloud speech-to-text; when they run out, sign in for more or use the phone model.
+- Offline mode, one switch: the best speech and AI models this phone can run are downloaded together; "Only on this phone" keeps voice and AI on the device.
+- End-to-end encryption on by default: on sign-in, sync is encrypted with a generated recovery key (24 words + QR), shown once until saved; a new phone unlocks with the key or its QR.
+- Offline recordings turn into text automatically when the network is back.
+
+### Changed
+- Settings: "Voice & AI" replaces the AI Model card, its switches and model lists; Cloud Sync shows its protection and the recovery key; export/import are list rows; calmer account footer.
+- A transcribed recording shows only its text in the note (the audio stays in the note's recordings).
+
+### Fixed
+- Importing the recovery key's QR from an image (never worked); the unlock sheet no longer closes when the gallery opens.
+- Signing out with notes kept and into another account no longer moves the first account's notes into it.
+- Out of cloud minutes with the phone model downloaded: transcribed on the phone.
+- Model downloads: no duplicate or corrupted downloads, the model in use stays until the new one is ready, early cancel works.
+
+Verified on two emulators syncing one encrypted account (create, edit, delete both ways; unlock by QR; server stores only ciphertext).
+
 ## [1.0.87] - 2026-10-02
 
 ### Fixed
