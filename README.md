@@ -18,7 +18,9 @@
   <a href="#what-you-can-do">Features</a> ·
   <a href="#local-or-cloud-your-choice">Local &amp; cloud</a> ·
   <a href="#build-and-explore">Build</a> ·
-  <a href="CONTRIBUTING.md">Contribute</a>
+  <a href="CONTRIBUTING.md">Contribute</a> ·
+  <a href="https://github.com/dirusanov/vaulto_note_mobile/issues">Feedback</a> ·
+  <a href="https://vaultonote.com">Website</a>
 </p>
 
 ## A quick look
@@ -27,7 +29,7 @@
   <img src="docs/media/app-tour.gif" alt="Animated screenshot tour: capture a voice note, prepare offline models, find tasks and reminders, and ask your notes." width="880">
 </p>
 
-*This is an animated tour of real app screenshots, not a live recording or a speed benchmark. Screens were captured in Android release 1.0.87; the current source version is 1.0.89. AI output in these screens was generated on the device. [Media provenance and regeneration](docs/media/README.md).*
+*This is an animated tour of real app screenshots, not a live recording or a speed benchmark. Screens were captured in Android release 1.0.87 and may differ from the latest release. AI output in these screens was generated on the device. [Media provenance and regeneration](docs/media/README.md).*
 
 Record an idea while it's fresh. Turn the transcript into something you can use later: a clearer note, a checklist, a reminder, or an answer from your saved notes.
 
