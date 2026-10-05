@@ -265,7 +265,10 @@
       "inIcloud": "已保存到 iCloud 钥匙串：在新 iPhone 上笔记会自动打开。",
       "explainBackup": "也请另存一份，以防备份被关闭：最好存在密码管理器中。任何人（包括 Vaulto）都无法找回此密钥。",
       "enableBackupTip": "开启屏幕锁定和 Google 备份，Vaulto 会自动为你保存此密钥",
-      "authReason": "显示恢复密钥"
+      "authReason": "显示恢复密钥",
+      "bannerTitle": "笔记已端到端加密",
+      "bannerGoogle": "密钥已保存到 Google 备份。也可在 设置 → 恢复密钥 中查看。",
+      "bannerIcloud": "密钥已保存到 iCloud 钥匙串。也可在 设置 → 恢复密钥 中查看。"
     },
     "resetRecovery": {
       "title": "加密保险库已重置",

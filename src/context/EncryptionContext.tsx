@@ -64,6 +64,8 @@ interface EncryptionContextType {
     autoEncrypting: boolean;
     /** Where the key is kept by the platform (Google / iCloud); null while unknown or unsaved. */
     keyBackup: { cloud: boolean } | null;
+    /** The platform backup of the current key was attempted (keyBackup is final). */
+    keyBackupChecked: boolean;
     setupWithRecoveryCode: (code: string) => Promise<void>;
     unlock: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
     changePin: (secret: string, onProgress?: EncryptionProgressCallback) => Promise<void>;
@@ -107,6 +109,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const enableInFlightRef = useRef(false);
     const [migrationCompletedAt, setMigrationCompletedAt] = useState(0);
     const [keyBackup, setKeyBackup] = useState<{ cloud: boolean } | null>(null);
+    const [keyBackupChecked, setKeyBackupChecked] = useState(false);
     const keyBackedUpRef = useRef<string | null>(null);
     const keyRestoreAttemptRef = useRef<string | null>(null);
     const keyRestoreInFlightRef = useRef(false);
@@ -2098,6 +2101,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         const stamp = `${userId}:${bundle?.key_id ?? recoveryCode.slice(0, 12)}`;
         if (keyBackedUpRef.current === stamp) return;
         keyBackedUpRef.current = stamp;
+        setKeyBackupChecked(false);
         const forUser = userId;
         void (async () => {
             if (await storage.getEncryptionMigrationState(forUser)) {
@@ -2105,7 +2109,10 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 return;
             }
             const saved = await backupKey(forUser, recoveryCode);
-            if (loadedForUserRef.current === forUser) setKeyBackup(saved);
+            if (loadedForUserRef.current === forUser) {
+                setKeyBackup(saved);
+                setKeyBackupChecked(true);
+            }
         })();
     }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.key_id, migrationCompletedAt]);
 
@@ -2168,6 +2175,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         confirmRecoveryKeySaved,
         autoEncrypting,
         keyBackup,
+        keyBackupChecked,
         setupWithRecoveryCode,
         unlock,
         changePin,
@@ -2178,7 +2186,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         keepResetArchiveLocal,
         resumeStandardSyncAfterReset,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, keyBackup, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
+    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, keyBackup, keyBackupChecked, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

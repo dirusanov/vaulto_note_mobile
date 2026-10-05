@@ -265,7 +265,10 @@
       "inIcloud": "iCloud キーチェーンに保存済み：新しい iPhone でもメモが自動で開きます。",
       "explainBackup": "バックアップがオフになった場合に備えて、パスワードマネージャーなどにも控えを保存してください。Vaulto を含め誰もこのキーを復元できません。",
       "enableBackupTip": "画面ロックと Google バックアップをオンにすると、Vaulto がこのキーを自動で保管します",
-      "authReason": "復元キーを表示"
+      "authReason": "復元キーを表示",
+      "bannerTitle": "メモはエンドツーエンドで暗号化されています",
+      "bannerGoogle": "キーは Google のバックアップに保存されました。設定 → 復元キー でも確認できます。",
+      "bannerIcloud": "キーは iCloud キーチェーンに保存されました。設定 → 復元キー でも確認できます。"
     },
     "resetRecovery": {
       "title": "暗号化ボールトがリセットされました",

@@ -265,7 +265,10 @@
       "inIcloud": "Im iCloud-Schlüsselbund gespeichert: Auf einem neuen iPhone öffnen sich deine Notizen von selbst.",
       "explainBackup": "Bewahre auch eine Kopie auf, falls die Sicherung einmal aus ist – am besten im Passwortmanager. Niemand, auch nicht Vaulto, kann diesen Schlüssel wiederherstellen.",
       "enableBackupTip": "Aktiviere eine Displaysperre und die Google-Sicherung, dann bewahrt Vaulto den Schlüssel automatisch auf",
-      "authReason": "Wiederherstellungsschlüssel anzeigen"
+      "authReason": "Wiederherstellungsschlüssel anzeigen",
+      "bannerTitle": "Notizen sind Ende-zu-Ende-verschlüsselt",
+      "bannerGoogle": "Schlüssel in deiner Google-Sicherung gespeichert. Er ist auch unter Einstellungen → Wiederherstellungsschlüssel.",
+      "bannerIcloud": "Schlüssel im iCloud-Schlüsselbund gespeichert. Er ist auch unter Einstellungen → Wiederherstellungsschlüssel."
     },
     "resetRecovery": {
       "title": "Verschlüsselter Tresor wurde zurückgesetzt",

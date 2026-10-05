@@ -265,7 +265,10 @@
       "inIcloud": "Salva nas Chaves do iCloud: suas notas abrem sozinhas em um iPhone novo.",
       "explainBackup": "Guarde também uma cópia, caso o backup seja desativado: o ideal é um gerenciador de senhas. Ninguém, nem a Vaulto, consegue recuperar esta chave.",
       "enableBackupTip": "Ative o bloqueio de tela e o backup do Google, e a Vaulto guarda esta chave para você",
-      "authReason": "Mostrar sua chave de recuperação"
+      "authReason": "Mostrar sua chave de recuperação",
+      "bannerTitle": "Suas notas têm criptografia de ponta a ponta",
+      "bannerGoogle": "Chave salva no seu backup do Google. Ela também está em Ajustes → Chave de recuperação.",
+      "bannerIcloud": "Chave salva nas Chaves do iCloud. Ela também está em Ajustes → Chave de recuperação."
     },
     "resetRecovery": {
       "title": "O cofre criptografado foi redefinido",

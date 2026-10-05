@@ -265,7 +265,10 @@
       "inIcloud": "Guardada en el Llavero de iCloud: tus notas se abrirán solas en un iPhone nuevo.",
       "explainBackup": "Guarda también una copia por si la copia de seguridad se desactiva: lo ideal es un gestor de contraseñas. Nadie, ni siquiera Vaulto, puede recuperar esta clave.",
       "enableBackupTip": "Activa el bloqueo de pantalla y la copia de seguridad de Google, y Vaulto guardará esta clave por ti",
-      "authReason": "Mostrar tu clave de recuperación"
+      "authReason": "Mostrar tu clave de recuperación",
+      "bannerTitle": "Tus notas tienen cifrado de extremo a extremo",
+      "bannerGoogle": "Clave guardada en tu copia de Google. También está en Ajustes → Clave de recuperación.",
+      "bannerIcloud": "Clave guardada en el Llavero de iCloud. También está en Ajustes → Clave de recuperación."
     },
     "resetRecovery": {
       "title": "El almacén cifrado se restableció",

@@ -276,7 +276,10 @@
       "inIcloud": "Saved in iCloud Keychain: your notes open on a new iPhone by themselves.",
       "explainBackup": "Keep a copy too, in case that backup is ever off: a password manager is ideal. Nobody, including Vaulto, can restore this key.",
       "enableBackupTip": "Turn on a screen lock and Google backup, and Vaulto keeps this key for you automatically",
-      "authReason": "Show your recovery key"
+      "authReason": "Show your recovery key",
+      "bannerTitle": "Notes are end-to-end encrypted",
+      "bannerGoogle": "Key saved in your Google backup. It is also in Settings → Recovery key.",
+      "bannerIcloud": "Key saved in iCloud Keychain. It is also in Settings → Recovery key."
     },
     "security": {
       "localProtection": "Local protection",
