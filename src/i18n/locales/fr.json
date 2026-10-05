@@ -216,7 +216,7 @@
       "encryptionDisabledTitle": "Chiffrement désactivé",
       "minutesWarningText": "Vous avez utilisé toutes les minutes du mois. La réserve d'essai sera utilisée ensuite.",
       "minutesWarningTextLow": "Il vous reste peu de minutes de transcription ce mois-ci",
-      "saveRecoveryFirst": "Assurez-vous d'avoir enregistré votre code de récupération pour accéder aux notes sur d'autres appareils.",
+      "saveRecoveryFirst": "Vos notes restent sur le serveur, chiffrées de bout en bout. Pour les rouvrir, connectez-vous : la clé est restaurée depuis la sauvegarde du téléphone, ou saisissez votre clé de récupération.",
       "signOutMessage": "Que faire de vos notes sur cet appareil ?",
       "syncPendingMessage": "Le chiffrement de bout en bout a été désactivé sur cet appareil. Vos notes n'ont toutefois pas pu être synchronisées avec le serveur pour le moment. Elles seront automatiquement converties en texte clair dès que vous aurez une connexion internet.",
       "unableDisableSync": "Impossible de désactiver la synchronisation.",

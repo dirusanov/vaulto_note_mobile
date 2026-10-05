@@ -216,7 +216,7 @@
       "encryptionDisabledTitle": "Verschlüsselung deaktiviert",
       "minutesWarningText": "Du hast alle Minuten des Monats verbraucht. Als Nächstes wird die Testreserve genutzt.",
       "minutesWarningTextLow": "Die Transkriptionsminuten für diesen Monat gehen zur Neige",
-      "saveRecoveryFirst": "Stelle sicher, dass du deinen Wiederherstellungscode gespeichert hast, um auf anderen Geräten auf die Notizen zuzugreifen.",
+      "saveRecoveryFirst": "Deine Notizen bleiben Ende-zu-Ende-verschlüsselt auf dem Server. Zum erneuten Öffnen melde dich an: Der Schlüssel kommt aus der Handy-Sicherung, oder gib deinen Wiederherstellungsschlüssel ein.",
       "signOutMessage": "Was sollen wir mit deinen Notizen auf diesem Gerät tun?",
       "syncPendingMessage": "Die Ende-zu-Ende-Verschlüsselung wurde auf diesem Gerät deaktiviert. Deine Notizen konnten jedoch gerade nicht mit dem Server synchronisiert werden. Sie werden automatisch in Klartext umgewandelt, sobald du eine Internetverbindung hast.",
       "unableDisableSync": "Synchronisierung konnte nicht deaktiviert werden.",

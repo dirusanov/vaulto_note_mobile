@@ -216,7 +216,7 @@
       "encryptionDisabledTitle": "加密已关闭",
       "minutesWarningText": "本月的分钟数已用完，接下来将使用试用额度。",
       "minutesWarningTextLow": "本月的转写分钟数快用完了",
-      "saveRecoveryFirst": "请确认你已保存恢复码，以便在其他设备上访问笔记。",
+      "saveRecoveryFirst": "笔记以端到端加密方式保留在服务器上。重新登录即可打开：密钥会从手机备份中恢复，或输入你的恢复密钥。",
       "signOutMessage": "本机上的笔记要如何处理？",
       "syncPendingMessage": "本机已关闭端到端加密。但你的笔记暂时无法同步到服务器，联网后会自动更新为普通文本。",
       "unableDisableSync": "无法关闭同步。",

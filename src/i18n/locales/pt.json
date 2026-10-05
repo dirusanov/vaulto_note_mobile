@@ -216,7 +216,7 @@
       "encryptionDisabledTitle": "Criptografia desativada",
       "minutesWarningText": "Você usou todos os minutos do mês. A reserva de teste será usada em seguida.",
       "minutesWarningTextLow": "Seus minutos de transcrição do mês estão acabando",
-      "saveRecoveryFirst": "Confirme que salvou seu código de recuperação para acessar as notas em outros dispositivos.",
+      "saveRecoveryFirst": "Suas notas continuam no servidor, com criptografia de ponta a ponta. Para abri-las de novo, entre: a chave volta do backup do celular, ou digite sua chave de recuperação.",
       "signOutMessage": "O que fazer com suas notas neste dispositivo?",
       "syncPendingMessage": "A criptografia de ponta a ponta foi desativada neste dispositivo. Porém, suas notas não puderam ser sincronizadas com o servidor agora. Elas serão atualizadas automaticamente para texto simples assim que você tiver conexão com a internet.",
       "unableDisableSync": "Não foi possível desativar a sincronização.",

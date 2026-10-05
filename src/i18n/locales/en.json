@@ -227,7 +227,7 @@
       "encryptionDisabledTitle": "Encryption Disabled",
       "minutesWarningText": "You've used all monthly minutes. Trial reserve will be used next.",
       "minutesWarningTextLow": "Running low on monthly transcription minutes",
-      "saveRecoveryFirst": "Ensure you have saved your Recovery Code to access notes on other devices.",
+      "saveRecoveryFirst": "Your notes stay on the server, end-to-end encrypted. To open them again, sign in: the key is restored from your phone backup, or enter your recovery key.",
       "signOutMessage": "What should we do with your notes on this device?",
       "syncPendingMessage": "End-to-end encryption has been disabled on this device. However, your notes could not be synced to the server right now. They will be automatically updated to plain text as soon as you have an internet connection.",
       "unableDisableSync": "Unable to disable sync.",

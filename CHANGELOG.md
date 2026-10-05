@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.89] - 2026-10-05
+
+### Added
+- The encryption key is kept by the phone: Google Block Store on Android (survives a reinstall and moves to a new phone with Google backup; the cloud copy is end-to-end encrypted with the screen lock), iCloud Keychain on iOS. Signing in again opens the notes without typing the key.
+- Settings shows where the key is kept ("In your Google backup" or, in warning colour, "Only on this phone"); viewing the key asks for the fingerprint or PIN.
+
+### Fixed
+- After signing in again the kept key was found but the notes stayed locked (a restore attempt interrupted by the sign-in reload was counted as done).
+- Sign-out dialog explains how encrypted notes are opened again.
+
+Verified on two emulators against production: new account, sign out/in, switching accounts on one phone, one account on two phones (QR), sign out with delete, legacy passphrase account.
+
 ## [1.0.88] - 2026-10-04
 
 ### Added

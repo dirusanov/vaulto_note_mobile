@@ -216,7 +216,7 @@
       "encryptionDisabledTitle": "Cifrado desactivado",
       "minutesWarningText": "Has usado todos los minutos del mes. A continuación se usará la reserva de prueba.",
       "minutesWarningTextLow": "Te quedan pocos minutos de transcripción este mes",
-      "saveRecoveryFirst": "Asegúrate de haber guardado tu código de recuperación para acceder a las notas en otros dispositivos.",
+      "saveRecoveryFirst": "Tus notas siguen en el servidor, cifradas de extremo a extremo. Para abrirlas de nuevo, inicia sesión: la clave se recupera de la copia del teléfono, o introduce tu clave de recuperación.",
       "signOutMessage": "¿Qué hacemos con tus notas en este dispositivo?",
       "syncPendingMessage": "El cifrado de extremo a extremo se ha desactivado en este dispositivo. Sin embargo, tus notas no se pudieron sincronizar con el servidor ahora. Se actualizarán automáticamente a texto plano en cuanto tengas conexión a internet.",
       "unableDisableSync": "No se pudo desactivar la sincronización.",

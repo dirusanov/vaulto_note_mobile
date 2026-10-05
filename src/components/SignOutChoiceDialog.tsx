@@ -112,7 +112,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                                     <View style={styles.infoBoxSmall}>
                                         <MaterialIcons name="security" size={18} color={colors.primary} />
                                         <Text style={styles.infoTextSmall}>
-                                            {t("settings.ui.saveRecoveryFirst", "Ensure you have saved your Recovery Code to access notes on other devices.")}
+                                            {t("settings.ui.saveRecoveryFirst", "Your notes stay on the server, end-to-end encrypted. To open them again, sign in: the key is restored from your phone backup, or enter your recovery key.")}
                                         </Text>
                                     </View>
                                 )}
