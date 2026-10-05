@@ -91,5 +91,6 @@
   "overrides": {
     "react-dom": "19.2.3"
   },
-  "private": true
+  "private": true,
+  "license": "GPL-3.0-only"
 }

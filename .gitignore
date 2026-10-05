@@ -77,6 +77,7 @@ fastlane/test_output/
 # Env
 .env
 .env.*
+!.env.example
 credentials.json
 
 # Kotlin

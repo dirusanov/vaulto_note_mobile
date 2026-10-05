@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible problem in Vaulto Note.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: Use fictional notes and recordings. Remove tokens, recovery keys and account details. Report security issues privately through SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: "For example: 1.0.89"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: "Phone model, Android version, RAM if relevant"
+    validations:
+      required: true
+  - type: textarea
+    id: mode
+    attributes:
+      label: Processing mode and models
+      description: Local or cloud? Which speech and AI models are selected?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reproducible example using fictional content.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true

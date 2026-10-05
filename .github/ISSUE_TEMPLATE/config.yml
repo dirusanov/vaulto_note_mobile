@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security issue privately
+    url: mailto:random1k11@gmail.com?subject=Vaulto%20Note%20security%20report
+    about: Do not publish vulnerabilities, private notes or recovery keys in an issue.

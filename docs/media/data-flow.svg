@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="410" viewBox="0 0 1000 410" role="img" aria-labelledby="title desc">
+  <title id="title">Vaulto Note data flow</title>
+  <desc id="desc">Local Whisper and Qwen processing happen on the phone. Optional cloud AI receives readable input over HTTPS. Sync uploads ciphertext when end-to-end encryption is enabled. Other network services handle guest sessions, downloads, login and purchases.</desc>
+  <rect width="1000" height="410" rx="18" fill="#f1f5fb"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="36" y="45" font-size="23" font-weight="700" fill="#14233e">Know where your words go.</text>
+    <rect x="36" y="76" width="352" height="242" rx="18" fill="#142744"/>
+    <text x="59" y="111" font-size="18" font-weight="700" fill="#f7fbff">ON YOUR PHONE</text>
+    <rect x="59" y="136" width="306" height="72" rx="10" fill="#224666"/>
+    <text x="77" y="165" font-size="16" font-weight="700" fill="#bcf2e0">Whisper + Qwen</text>
+    <text x="77" y="190" font-size="14" fill="#d7e6f7">Downloaded models · local inference</text>
+    <text x="59" y="248" font-size="15" fill="#d7e6f7">Encrypted note fields</text>
+    <text x="59" y="276" font-size="15" fill="#d7e6f7">Recordings · tasks · versions</text>
+    <rect x="616" y="76" width="348" height="114" rx="14" fill="#e0eafa" stroke="#a9c0e3"/>
+    <text x="637" y="111" font-size="17" font-weight="700" fill="#19365d">OPTIONAL CLOUD AI</text>
+    <text x="637" y="139" font-size="14" fill="#385777">Selected audio/text is readable</text>
+    <text x="637" y="163" font-size="14" fill="#385777">to the processing service</text>
+    <rect x="616" y="215" width="348" height="103" rx="14" fill="#e1f2ed" stroke="#a0cbbd"/>
+    <text x="637" y="250" font-size="17" font-weight="700" fill="#194e40">OPTIONAL SYNC</text>
+    <text x="637" y="278" font-size="14" fill="#376658">Ciphertext when E2EE is enabled</text>
+    <path d="M388 145h207" fill="none" stroke="#507bb4" stroke-width="2"/>
+    <path d="m588 139 9 6-9 6" fill="none" stroke="#507bb4" stroke-width="2"/>
+    <text x="412" y="130" font-size="13" fill="#385777">Input over HTTPS</text>
+    <path d="M388 268h207" fill="none" stroke="#448770" stroke-width="2"/>
+    <path d="m588 262 9 6-9 6" fill="none" stroke="#448770" stroke-width="2"/>
+    <text x="412" y="254" font-size="13" fill="#376658">Encrypted payload</text>
+    <text x="36" y="357" font-size="14" fill="#445873">Network services may also handle guest sessions, model downloads, login and purchases.</text>
+    <text x="36" y="384" font-size="13" fill="#63758c">Local inference and encrypted sync are separate choices. Cloud inference is not end-to-end encrypted.</text>
+  </g>
+</svg>

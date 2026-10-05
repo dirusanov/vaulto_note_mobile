@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Vaulto Note — Speak it. Keep it. Find it.</title>
+  <desc id="desc">Private AI voice notes for Android. Voice to text, on-device AI, and optional encrypted sync.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0e1528"/><stop offset="1" stop-color="#142c52"/></linearGradient>
+    <linearGradient id="wave" y2="1"><stop stop-color="#91d7ff"/><stop offset="1" stop-color="#448bff"/></linearGradient>
+  </defs>
+  <rect width="1200" height="430" rx="24" fill="#111f36"/>
+  <circle cx="1040" cy="165" r="120" fill="#3063ac" opacity=".13"/>
+  <circle cx="1040" cy="165" r="157" fill="none" stroke="#4886d2" opacity=".14"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="66" y="66" font-size="16" font-weight="700" letter-spacing="3" fill="#8dbae8">VAULTO NOTE</text>
+    <text x="63" y="150" font-size="59" font-weight="700" fill="#f4f8ff">Speak it. Keep it.</text>
+    <text x="63" y="218" font-size="59" font-weight="700" fill="#8dcaff">Find it.</text>
+    <text x="66" y="270" font-size="23" fill="#bed0e7">Turn spoken thoughts into notes and next steps.</text>
+    <text x="66" y="306" font-size="19" fill="#bed0e7">On-device AI. Your choice of local or cloud.</text>
+    <g font-size="14" font-weight="700" fill="#d6e6ff">
+      <rect x="66" y="345" width="128" height="36" rx="18" fill="#213c61"/><text x="86" y="369">VOICE TO TEXT</text>
+      <rect x="205" y="345" width="118" height="36" rx="18" fill="#213c61"/><text x="226" y="369">LOCAL AI</text>
+      <rect x="334" y="345" width="156" height="36" rx="18" fill="#213c61"/><text x="355" y="369">OPTIONAL SYNC</text>
+    </g>
+  </g>
+  <g fill="#81c2ff">
+    <rect x="850" y="163" width="15" height="44" rx="7.5"/>
+    <rect x="876" y="137" width="15" height="96" rx="7.5"/>
+    <rect x="902" y="112" width="15" height="146" rx="7.5"/>
+    <rect x="928" y="142" width="15" height="86" rx="7.5"/>
+    <rect x="954" y="88" width="15" height="194" rx="7.5"/>
+    <rect x="980" y="119" width="15" height="132" rx="7.5"/>
+    <rect x="1006" y="152" width="15" height="66" rx="7.5"/>
+    <rect x="1032" y="109" width="15" height="152" rx="7.5"/>
+    <rect x="1058" y="141" width="15" height="88" rx="7.5"/>
+    <rect x="1084" y="161" width="15" height="48" rx="7.5"/>
+  </g>
+  <path d="M855 336h247" stroke="#5e95dd" stroke-width="2" opacity=".5"/>
+  <circle cx="902" cy="336" r="6" fill="#8dcaff"/>
+  <circle cx="977" cy="336" r="6" fill="#8dcaff"/>
+  <circle cx="1052" cy="336" r="6" fill="#8dcaff"/>
+  <g font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#a8c1df" text-anchor="middle">
+    <text x="902" y="366">Capture</text><text x="977" y="366">Organize</text><text x="1052" y="366">Recall</text>
+  </g>
+</svg>
