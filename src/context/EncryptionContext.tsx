@@ -109,6 +109,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     const [keyBackup, setKeyBackup] = useState<{ cloud: boolean } | null>(null);
     const keyBackedUpRef = useRef<string | null>(null);
     const keyRestoreAttemptRef = useRef<string | null>(null);
+    const keyRestoreInFlightRef = useRef(false);
     const encryptionMigrationInFlightRef = useRef(false);
     const disableTransitionInFlightRef = useRef(false);
     const encryptionReconciliationInFlightRef = useRef<Promise<void> | null>(null);
@@ -1168,7 +1169,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         loadedForUserRef.current = null;
         setLoadedForUser(null);
         // Every (re)load of an account may need the platform key again (signed out
-        // and back in, reinstall): allow one restore attempt per load.
+        // and back in, reinstall).
         keyRestoreAttemptRef.current = null;
         const forUser = userId && isAuthenticated && !isGuest ? userId : null;
         try {
@@ -2109,17 +2110,26 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     }, [userId, loadedForUser, status, mode, recoveryCode, bundle?.key_id, migrationCompletedAt]);
 
     // Locked on this phone (reinstall, new phone, signed in again): try the key the
-    // platform kept before asking the user for it.
+    // platform kept before asking the user for it. A sign-in reloads the account
+    // state more than once; an attempt cut short by that is not counted as done.
     useEffect(() => {
         if (!userId || loadedForUser !== userId || status !== 'locked' || !bundle) return;
-        if (keyRestoreAttemptRef.current === userId) return;
-        keyRestoreAttemptRef.current = userId;
+        const attemptKey = `${userId}:${bundle.key_id ?? ''}`;
+        if (keyRestoreAttemptRef.current === attemptKey || keyRestoreInFlightRef.current) return;
+        keyRestoreAttemptRef.current = attemptKey;
+        keyRestoreInFlightRef.current = true;
         const forUser = userId;
         void (async () => {
+            const abandon = () => {
+                // Not a verdict on the key: let the next settled state try again.
+                if (keyRestoreAttemptRef.current === attemptKey) keyRestoreAttemptRef.current = null;
+            };
             try {
                 if (resetRecoveryPending || await storage.getRemoteDisableRescuePending(forUser)) return;
                 const saved = await restoreKey(forUser);
-                if (!saved || loadedForUserRef.current !== forUser) return;
+                // Another account (or a reload in progress, which re-runs this when done).
+                if (loadedForUserRef.current !== forUser) return abandon();
+                if (!saved) return;
                 let candidate: Uint8Array;
                 try {
                     candidate = masterKeyFromRecoveryCode(normalizeSecretInput(saved, 'recovery_code'));
@@ -2136,6 +2146,9 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 console.log('[Encryption] Unlocked with the key kept by the platform.');
             } catch (error) {
                 console.warn('[Encryption] Platform key restore did not unlock', error instanceof Error ? error.message : 'unknown');
+                abandon();
+            } finally {
+                keyRestoreInFlightRef.current = false;
             }
         })();
     }, [userId, loadedForUser, status, bundle, resetRecoveryPending, unlock, setupWithRecoveryCode]);

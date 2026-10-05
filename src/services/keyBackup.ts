@@ -39,6 +39,7 @@ export const backupKey = async (userId: string, recoveryKey: string): Promise<{ 
     if (!native || !userId || !recoveryKey) return null;
     try {
         const result = await native.store(userId, recoveryKey);
+        console.log(`[KeyBackup] Key saved (cloud copy: ${!!result?.cloud}).`);
         return { cloud: !!result?.cloud };
     } catch (error) {
         console.warn('[KeyBackup] Could not save the key', error instanceof Error ? error.message : 'unknown');
@@ -50,7 +51,9 @@ export const restoreKey = async (userId: string): Promise<string | null> => {
     if (!native || !userId) return null;
     try {
         const value = await native.retrieve(userId);
-        return typeof value === 'string' && value.trim() ? value.trim() : null;
+        const found = typeof value === 'string' && !!value.trim();
+        console.log(`[KeyBackup] Kept key ${found ? 'found' : 'not found'}.`);
+        return found ? (value as string).trim() : null;
     } catch {
         return null;
     }
