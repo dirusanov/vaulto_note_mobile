@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.90] - 2026-10-05
+
+### Changed
+- First sign-in: when the encryption key reached the Google backup (iCloud Keychain on iOS), there is nothing to write down — a short banner says the notes are end-to-end encrypted and where the key is. Without a cloud backup the 24-word key is shown as before, until saved. The key is always in Settings → Recovery key.
+
 ## [1.0.89] - 2026-10-05
 
 ### Added
