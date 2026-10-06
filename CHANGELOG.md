@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.90] - 2026-10-06
+## [1.0.91] - 2026-10-06
 
 ### Added
 - Voice requests without a switch: every recording is either dictation (inserted as is) or a request ("make a shopping list…", "name the note…"). Online with an account our server decides; with "Only on this phone", offline or in a protected note the phone model does (Qwen3.5 2B/4B, short phrases only, so long dictation is never delayed). The original note is never rewritten: results go to a separate version.
@@ -9,6 +9,10 @@
 
 ### Changed
 - The "Agent" chip in the recorder is gone.
+
+## [1.0.90] - 2026-10-05
+
+### Changed
 - First sign-in: when the encryption key reached the Google backup (iCloud Keychain on iOS), there is nothing to write down — a short banner says the notes are end-to-end encrypted and where the key is. Without a cloud backup the 24-word key is shown as before, until saved. The key is always in Settings → Recovery key.
 
 ## [1.0.89] - 2026-10-05
