@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "Les meilleurs modèles de voix et d’IA pour ce téléphone, {{size}}, téléchargés une fois. Ensuite, les notes fonctionnent sans internet.",
       "offlineModeOffTitle": "Désactiver le mode hors ligne ?",
       "offlineModeOffDesc": "Les modèles sont supprimés du téléphone et libèrent {{size}}. Sans internet, les enregistrements sont conservés et transcrits au retour du réseau."
+    },
+    "models": {
+      "row": "Modèles",
+      "title": "Modèles sur ce téléphone",
+      "subtitle": "Utilisés sans internet. En ligne, le cloud Vaulto est utilisé : plus rapide et plus précis.",
+      "subtitlePrivate": "La voix et l’IA fonctionnent uniquement sur ce téléphone.",
+      "speech": "Voix en texte",
+      "ai": "IA : demandes vocales, retouches, chat",
+      "fast": "Rapide",
+      "balanced": "Équilibré",
+      "accurate": "Le plus précis",
+      "smartest": "Le plus intelligent",
+      "recommended": "Idéal pour ce téléphone",
+      "inUse": "utilisé",
+      "tooBig": "{{name}} · mémoire insuffisante sur ce téléphone",
+      "download": "Télécharger · {{size}}",
+      "switch": "Changer",
+      "heavyTitle": "Lourd pour ce téléphone",
+      "heavy": "Il fonctionnera sans internet, mais plus lentement et en consommant plus de batterie. En ligne, le cloud Vaulto est utilisé de toute façon.",
+      "heavyPrivate": "Il fonctionnera, mais plus lentement et en consommant plus de batterie. Le cloud Vaulto est plus rapide et plus précis, et vos notes restent chiffrées.",
+      "useCloud": "Utiliser le cloud Vaulto",
+      "fastNoRequests": "Sans internet, Rapide ne traite pas les demandes vocales : les enregistrements restent du texte. Équilibré les comprend."
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "Cette version de l’app ne peut pas exécuter l’IA sur l’appareil. Mettez l’app à jour.",
     "useModel": "Utiliser ce modèle",
     "downloadSize": "Télécharger · {{size}}",
-    "progressShort": "{{loaded}} sur {{total}}"
+    "progressShort": "{{loaded}} sur {{total}}",
+    "notificationTitle": "Vaulto · mode hors ligne"
   },
   "welcome": {
     "title": "Vos notes vivront ici",

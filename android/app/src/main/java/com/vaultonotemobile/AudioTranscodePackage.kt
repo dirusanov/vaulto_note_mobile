@@ -15,6 +15,7 @@ class AudioTranscodePackage : ReactPackage {
             ShareIntentModule(reactContext),
             AudioConcatModule(reactContext),
             KeyBackupModule(reactContext),
+            ModelDownloadModule(reactContext),
         )
     }
 

@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "为本机挑选的最佳语音与 AI 模型，共 {{size}}，只需下载一次。之后笔记无需网络即可使用。",
       "offlineModeOffTitle": "关闭离线模式？",
       "offlineModeOffDesc": "模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后转成文字。"
+    },
+    "models": {
+      "row": "模型",
+      "title": "本机模型",
+      "subtitle": "无网络时使用。联网时使用 Vaulto 云端：更快、更准确。",
+      "subtitlePrivate": "语音和 AI 仅在本机运行。",
+      "speech": "语音转文字",
+      "ai": "AI：语音指令、编辑、对话",
+      "fast": "快速",
+      "balanced": "均衡",
+      "accurate": "最准确",
+      "smartest": "最智能",
+      "recommended": "最适合本机",
+      "inUse": "使用中",
+      "tooBig": "{{name}} · 本机内存不足",
+      "download": "下载 · {{size}}",
+      "switch": "切换",
+      "heavyTitle": "对本机来说偏重",
+      "heavy": "无网络时可以使用，但速度更慢、更耗电。联网时仍会使用 Vaulto 云端。",
+      "heavyPrivate": "可以使用，但速度更慢、更耗电。Vaulto 云端更快更准确，笔记仍保持加密。",
+      "useCloud": "使用 Vaulto 云端",
+      "fastNoRequests": "无网络时，“快速”不执行语音指令：录音保持为普通文字。“均衡”可以理解指令。"
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "此版本的应用无法在设备上运行 AI。请更新应用。",
     "useModel": "使用此模型",
     "downloadSize": "下载 · {{size}}",
-    "progressShort": "{{loaded}} / {{total}}"
+    "progressShort": "{{loaded}} / {{total}}",
+    "notificationTitle": "Vaulto · 离线模式"
   },
   "welcome": {
     "title": "你的笔记会出现在这里",

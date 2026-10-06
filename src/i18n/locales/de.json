@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "Die besten Sprach- und KI-Modelle für dieses Handy, {{size}}, einmal geladen. Danach funktionieren Notizen ohne Internet.",
       "offlineModeOffTitle": "Offline-Modus ausschalten?",
       "offlineModeOffDesc": "Die Modelle werden vom Handy entfernt und geben {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und später online zu Text."
+    },
+    "models": {
+      "row": "Modelle",
+      "title": "Modelle auf diesem Handy",
+      "subtitle": "Werden ohne Internet genutzt. Online nutzt die App die Vaulto-Cloud: schneller und genauer.",
+      "subtitlePrivate": "Sprache und KI laufen nur auf diesem Handy.",
+      "speech": "Sprache zu Text",
+      "ai": "KI: Sprachbefehle, Bearbeiten, Chat",
+      "fast": "Schnell",
+      "balanced": "Ausgewogen",
+      "accurate": "Am genauesten",
+      "smartest": "Am klügsten",
+      "recommended": "Ideal für dieses Handy",
+      "inUse": "in Verwendung",
+      "tooBig": "{{name}} · zu wenig Arbeitsspeicher auf diesem Handy",
+      "download": "Herunterladen · {{size}}",
+      "switch": "Wechseln",
+      "heavyTitle": "Schwer für dieses Handy",
+      "heavy": "Ohne Internet funktioniert es, aber langsamer und mit mehr Akkuverbrauch. Online wird ohnehin die Vaulto-Cloud genutzt.",
+      "heavyPrivate": "Es funktioniert, aber langsamer und mit mehr Akkuverbrauch. Die Vaulto-Cloud ist schneller und genauer, und deine Notizen bleiben verschlüsselt.",
+      "useCloud": "Vaulto-Cloud nutzen",
+      "fastNoRequests": "Ohne Internet nimmt Schnell keine Sprachbefehle an: Aufnahmen bleiben reiner Text. Ausgewogen versteht sie."
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "Diese App-Version kann keine KI auf dem Gerät ausführen. Aktualisiere die App.",
     "useModel": "Dieses Modell verwenden",
     "downloadSize": "Herunterladen · {{size}}",
-    "progressShort": "{{loaded}} von {{total}}"
+    "progressShort": "{{loaded}} von {{total}}",
+    "notificationTitle": "Vaulto · Offline-Modus"
   },
   "welcome": {
     "title": "Hier leben deine Notizen",

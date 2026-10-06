@@ -9,7 +9,9 @@ import {
     downloadModelFile,
     formatBytes,
     GGUF_MAGIC,
+    hasPendingModelDownload,
     hasRoomForModel,
+    ModelDownloadHandle,
     ModelDownloadProgress,
 } from './modelDownload';
 
@@ -94,7 +96,7 @@ const baseDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? nul
 const MODELS_DIR = baseDir ? `${baseDir}llm-models/` : null;
 const STOP_WORDS = ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>', '<|im_end|>', '<|EOT|>', '<|END_OF_TURN_TOKEN|>', '<|end_of_turn|>', '<|endoftext|>'];
 
-let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
+let activeDownloadResumable: ModelDownloadHandle | null = null;
 // A cancel that arrives before the transfer starts is remembered (see the Whisper service).
 let downloadInProgress = false;
 let cancelRequested = false;
@@ -299,16 +301,17 @@ const downloadLocalLLMModelInner = async (
         );
     }
 
-    if (!(await hasRoomForModel(model.sizeBytes))) {
-        throw new Error(`Not enough free space for ${model.label} (${formatBytes(model.sizeBytes)}).`);
-    }
-
     // The model in use stays selected until the new one is fully on the phone.
     const { fileUri } = await getFileUriForModel(key);
 
+    // A transfer resumed after the app was reopened already holds its space.
+    if (!(await hasPendingModelDownload(fileUri)) && !(await hasRoomForModel(model.sizeBytes))) {
+        throw new Error(`Not enough free space for ${model.label} (${formatBytes(model.sizeBytes)}).`);
+    }
+
     try {
         await downloadModelFile(
-            { url: model.url, sizeBytes: model.sizeBytes, magic: GGUF_MAGIC },
+            { url: model.url, sizeBytes: model.sizeBytes, magic: GGUF_MAGIC, label: model.label },
             fileUri,
             onProgress,
             (task) => {

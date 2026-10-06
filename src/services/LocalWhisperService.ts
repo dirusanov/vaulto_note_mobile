@@ -10,7 +10,9 @@ import {
     downloadModelFile,
     formatBytes,
     GGML_MAGIC,
+    hasPendingModelDownload,
     hasRoomForModel,
+    ModelDownloadHandle,
     ModelDownloadProgress,
 } from './modelDownload';
 
@@ -128,7 +130,7 @@ const REALTIME_MAX_SEC = 900;
 
 let activeContext: WhisperRnContext | null = null;
 let activeModelUri: string | null = null;
-let activeDownloadResumable: FileSystem.DownloadResumable | null = null;
+let activeDownloadResumable: ModelDownloadHandle | null = null;
 // A cancel that arrives before the download task exists (memory/space checks
 // still running) is remembered and applied as soon as the task is created.
 let downloadInProgress = false;
@@ -348,17 +350,18 @@ const downloadLocalWhisperModelInner = async (
             `${descriptor.label} needs more memory than this device has (${await describeDeviceMemory()} of RAM). Choose a smaller model.`
         );
     }
-    if (!(await hasRoomForModel(descriptor.sizeBytes))) {
-        throw new Error(`Not enough free space for ${descriptor.label} (${formatBytes(descriptor.sizeBytes)}).`);
-    }
-
     // The model in use stays selected until the new one is fully on the phone,
     // so transcription keeps working (and a killed download changes nothing).
     const { model, fileUri } = await getFileUriForModel(key);
 
+    // A transfer resumed after the app was reopened already holds its space.
+    if (!(await hasPendingModelDownload(fileUri)) && !(await hasRoomForModel(descriptor.sizeBytes))) {
+        throw new Error(`Not enough free space for ${descriptor.label} (${formatBytes(descriptor.sizeBytes)}).`);
+    }
+
     try {
         await downloadModelFile(
-            { url: model.url, sizeBytes: model.sizeBytes, magic: GGML_MAGIC },
+            { url: model.url, sizeBytes: model.sizeBytes, magic: GGML_MAGIC, label: `Whisper ${model.label}` },
             fileUri,
             onProgress,
             (task) => {

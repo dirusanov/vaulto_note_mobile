@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "この端末に最適な音声とAIのモデル（{{size}}）を一度だけダウンロードします。以降はネットなしでメモが使えます。",
       "offlineModeOffTitle": "オフラインモードをオフにしますか？",
       "offlineModeOffDesc": "モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ると文字になります。"
+    },
+    "models": {
+      "row": "モデル",
+      "title": "この端末のモデル",
+      "subtitle": "オフライン時に使います。オンライン時は Vaulto クラウドを使用し、より速く正確です。",
+      "subtitlePrivate": "音声と AI はこの端末だけで動作します。",
+      "speech": "音声の文字起こし",
+      "ai": "AI：音声での依頼・編集・チャット",
+      "fast": "高速",
+      "balanced": "バランス",
+      "accurate": "最高精度",
+      "smartest": "最も賢い",
+      "recommended": "この端末に最適",
+      "inUse": "使用中",
+      "tooBig": "{{name}} · この端末ではメモリが足りません",
+      "download": "ダウンロード · {{size}}",
+      "switch": "切り替える",
+      "heavyTitle": "この端末には重め",
+      "heavy": "オフラインでも動きますが、遅くなりバッテリーも多く使います。オンライン時はいつも通り Vaulto クラウドを使います。",
+      "heavyPrivate": "動きますが、遅くなりバッテリーも多く使います。Vaulto クラウドの方が速く正確で、メモは暗号化されたままです。",
+      "useCloud": "Vaulto クラウドを使う",
+      "fastNoRequests": "オフラインでは「高速」は音声での依頼を実行せず、録音はそのまま文字になります。「バランス」は依頼を理解します。"
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "このバージョンのアプリは端末上で AI を実行できません。アプリを更新してください。",
     "useModel": "このモデルを使う",
     "downloadSize": "ダウンロード · {{size}}",
-    "progressShort": "{{loaded}} / {{total}}"
+    "progressShort": "{{loaded}} / {{total}}",
+    "notificationTitle": "Vaulto · オフラインモード"
   },
   "welcome": {
     "title": "ここにノートが並びます",

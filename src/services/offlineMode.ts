@@ -21,6 +21,9 @@ import {
     setSelectedLocalLLMModel,
 } from './LocalLLMService';
 import { hasRoomForModel } from './modelDownload';
+import { getDeviceCapabilities } from './DeviceCapabilities';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAIProvider, getOnDeviceTranscription, setAIProvider } from '../utils/storage';
 
 /**
  * "Offline mode" is one switch: the best speech model and the best on-device AI
@@ -85,7 +88,8 @@ export const planOfflineModels = async (): Promise<OfflinePlan | null> => {
     if (current?.isDownloaded) {
         whisperOptions.push(current.selectedModel.key as LocalWhisperModelKey);
     } else {
-        for (const key of WHISPER_PREFERENCE) {
+        const recommended = await getRecommendedWhisperKey();
+        for (const key of WHISPER_PREFERENCE.slice(WHISPER_PREFERENCE.indexOf(recommended))) {
             if (await isLocalWhisperModelSupportedByDevice(key).catch(() => false)) whisperOptions.push(key);
         }
     }
@@ -118,6 +122,94 @@ export const planOfflineModels = async (): Promise<OfflinePlan | null> => {
     return null;
 };
 
+/**
+ * Speech model that stays fast on this phone. Turbo transcribes a minute of audio
+ * in seconds on 4 GB+ phones; below that it gets slow, so lighter ones are advised.
+ */
+export const getRecommendedWhisperKey = async (): Promise<LocalWhisperModelKey> => {
+    const { totalMemoryBytes } = await getDeviceCapabilities();
+    if (!totalMemoryBytes || totalMemoryBytes >= 3.6e9) return 'turbo';
+    if (totalMemoryBytes >= 2.4e9) return 'base';
+    return 'tiny';
+};
+
+export type ModelTier = 'fast' | 'balanced' | 'best';
+
+export type ModelChoice = {
+    key: string;
+    tier: ModelTier;
+    /** Technical name, shown small: "Whisper Turbo", "Qwen3.5 2B". */
+    name: string;
+    sizeBytes: number;
+    /** The phone has the memory to load it at all (a bigger one gets the app killed). */
+    supported: boolean;
+    /** Best fit for this phone. */
+    recommended: boolean;
+    /** Loads, but heavier than this phone handles well: slower answers. */
+    heavy: boolean;
+    /** In use now. */
+    current: boolean;
+};
+
+const TIERS: ModelTier[] = ['fast', 'balanced', 'best'];
+
+/** Every model the user may pick, lightest first, with how it suits this phone. */
+export const getModelChoices = async (): Promise<{ speech: ModelChoice[]; ai: ModelChoice[] }> => {
+    const speechKeys = [...WHISPER_PREFERENCE].reverse();
+    const recommendedSpeech = await getRecommendedWhisperKey();
+    const currentSpeech = await getLocalWhisperModelStatus().catch(() => null);
+    const speech: ModelChoice[] = [];
+    for (const [index, key] of speechKeys.entries()) {
+        const descriptor = getAvailableLocalWhisperModels().find((m) => m.key === key);
+        if (!descriptor) continue;
+        speech.push({
+            key,
+            tier: TIERS[index],
+            name: `Whisper ${descriptor.label}`,
+            sizeBytes: descriptor.sizeBytes,
+            supported: await isLocalWhisperModelSupportedByDevice(key).catch(() => false),
+            recommended: key === recommendedSpeech,
+            heavy: speechKeys.indexOf(key) > speechKeys.indexOf(recommendedSpeech),
+            current: !!currentSpeech?.isDownloaded && currentSpeech.selectedModel.key === key,
+        });
+    }
+
+    const ai: ModelChoice[] = [];
+    if (isLocalLLMRuntimeAvailable()) {
+        const aiKeys = [...LLM_PREFERENCE].reverse();
+        const recommendedAI = await getRecommendedLocalLLMModelKey().catch(() => 'qwen3.5-2b' as LocalLLMModelKey);
+        const currentAI = await getLocalLLMModelStatus().catch(() => null);
+        for (const [index, key] of aiKeys.entries()) {
+            const descriptor = getAvailableLocalLLMModels().find((m) => m.key === key);
+            if (!descriptor) continue;
+            ai.push({
+                key,
+                tier: TIERS[index],
+                name: descriptor.label,
+                sizeBytes: descriptor.sizeBytes,
+                supported: await isLocalLLMModelSupportedByDevice(key).catch(() => false),
+                recommended: key === recommendedAI,
+                heavy: aiKeys.indexOf(key) > aiKeys.indexOf(recommendedAI),
+                current: !!currentAI?.isDownloaded && currentAI.selectedModel.key === key,
+            });
+        }
+    }
+    return { speech, ai };
+};
+
+/** A plan for exactly these models (the user's pick); null when they do not fit. */
+export const planModelSwitch = async (
+    whisperKey: LocalWhisperModelKey,
+    llmKey: LocalLLMModelKey | null,
+): Promise<OfflinePlan | null> => {
+    const speechStatus = await getLocalWhisperModelStatus(whisperKey).catch(() => null);
+    const aiStatus = llmKey ? await getLocalLLMModelStatus(llmKey).catch(() => null) : null;
+    const downloadBytes = (speechStatus?.isDownloaded ? 0 : whisperSize(whisperKey))
+        + (llmKey && !aiStatus?.isDownloaded ? llmSize(llmKey) : 0);
+    if (downloadBytes > 0 && !(await hasRoomForModel(downloadBytes))) return null;
+    return { whisperKey, llmKey, downloadBytes };
+};
+
 /** Whole-plan progress: bytes across both models. */
 export type OfflineProgress = (loadedBytes: number, totalBytes: number) => void;
 
@@ -143,6 +235,9 @@ export const downloadOfflineModels = (plan: OfflinePlan, onProgress?: OfflinePro
     progressListener = onProgress;
     if (running) return running;
     lastProgress = { loaded: 0, total: plan.downloadBytes };
+    // Remembered until it ends: if the app is closed meanwhile, the next launch
+    // picks the same transfer up (on Android it keeps running in the system).
+    void AsyncStorage.setItem(PLAN_KEY, JSON.stringify(plan)).catch(() => undefined);
     running = runDownload(plan, (loaded, total) => {
         const clamped = Math.min(loaded, total);
         lastProgress = { loaded: clamped, total };
@@ -150,8 +245,27 @@ export const downloadOfflineModels = (plan: OfflinePlan, onProgress?: OfflinePro
     }).finally(() => {
         running = null;
         lastProgress = null;
+        void AsyncStorage.removeItem(PLAN_KEY).catch(() => undefined);
     });
     return running;
+};
+
+const PLAN_KEY = 'vaulto_offline_download_plan_v1';
+
+/** Called at app start: continues an offline download the app was closed during. */
+export const resumeOfflineDownload = async (): Promise<void> => {
+    if (running) return;
+    let plan: OfflinePlan | null = null;
+    try {
+        plan = JSON.parse((await AsyncStorage.getItem(PLAN_KEY)) || 'null');
+    } catch {
+        plan = null;
+    }
+    if (!plan?.whisperKey) return;
+    console.log('[OfflineMode] Resuming the offline download');
+    await downloadOfflineModels(plan).catch((error) => {
+        console.warn('[OfflineMode] Resumed download stopped', error instanceof Error ? error.message : 'unknown');
+    });
 };
 
 const runDownload = async (plan: OfflinePlan, onProgress?: OfflineProgress): Promise<void> => {
@@ -175,6 +289,13 @@ const runDownload = async (plan: OfflinePlan, onProgress?: OfflineProgress): Pro
         } else {
             await setSelectedLocalLLMModel(plan.llmKey);
         }
+    }
+
+    // "Only on this phone" was on with speech only: AI joins it now (also when
+    // the download finished after the app was reopened, with Settings closed).
+    if (plan.llmKey && (await getOnDeviceTranscription().catch(() => false))) {
+        const provider = await getAIProvider().catch(() => null);
+        if (provider !== 'local' && provider !== 'local_whisper') await setAIProvider('local').catch(() => undefined);
     }
 
     // Keep one model of each kind.

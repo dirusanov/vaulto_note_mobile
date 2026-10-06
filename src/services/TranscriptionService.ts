@@ -8,7 +8,6 @@ import { Platform } from 'react-native';
 import { API_URL } from '../utils/env';
 import {
     storage,
-    getAgentModeEnabled,
     getAIProvider,
     getOpenAIApiKey,
     getOpenAIBaseUrl,
@@ -24,7 +23,6 @@ import { refreshSession } from '../api/tokenRefresh';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 import { isDeviceOffline } from '../utils/connectivity';
-import { getEffectiveAIProvider } from './effectiveProvider';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -743,53 +741,22 @@ export async function processVoiceNote(
     language?: string,
     currentContent?: string,
     preTranscribedText?: string,
-    recentMessages: string[] = []
+    recentMessages: string[] = [],
+    options: { onDevice?: boolean } = {},
 ): Promise<VoiceNoteResult> {
-    const [provider, agentModeEnabled] = await Promise.all([
-        getEffectiveAIProvider(),
-        getAgentModeEnabled(),
-    ]);
-    console.log('[VoiceAgent] Provider:', provider, 'Agent mode enabled:', agentModeEnabled);
-
-    // Hard guard: /ai/agent must only be called when Agent Mode is enabled.
-    // When Agent Mode is OFF, always fall back to normal transcription (/ai/transcribe or client-side Whisper).
-    if (!agentModeEnabled) {
-        console.log('[VoiceAgent] Agent mode disabled. Falling back to simple transcription.');
-        // If we already have text, return it
-        if (preTranscribedText) {
-            return {
-                originalText: preTranscribedText,
-                processedText: null,
-                hasInstruction: false,
-                instruction: null,
-                mode: 'none',
-                contentAction: 'none',
-                needsConfirmation: false,
-                confirmationKind: '',
-                confirmationMessage: null,
-                titleAction: 'none',
-                titleValue: null,
-                suggestedTitle: null,
-                success: true,
-            };
+    // There is no agent switch: the caller already chose cloud or device
+    // (see resolveVoiceAgentRoute); the on-device agent never sends anything.
+    if (options.onDevice) {
+        let text = preTranscribedText || '';
+        if (!text) {
+            const transResult = await transcribeAudio(audioUri, language, { onDeviceOnly: true });
+            if (!transResult.success || !transResult.text) {
+                return { originalText: '', success: false, error: transResult.error, hasInstruction: false };
+            }
+            text = transResult.text;
         }
-        const transResult = await transcribeAudio(audioUri, language);
-        return {
-            originalText: transResult.text,
-            processedText: null,
-            hasInstruction: false,
-            instruction: null,
-            mode: 'none',
-            contentAction: 'none',
-            needsConfirmation: false,
-            confirmationKind: '',
-            confirmationMessage: null,
-            titleAction: 'none',
-            titleValue: null,
-            suggestedTitle: null,
-            success: transResult.success,
-            error: transResult.error,
-        };
+        const { processVoiceNoteOnDevice } = await import('./voiceAgent');
+        return processVoiceNoteOnDevice(text, normalizeAgentContextContent(currentContent) || '');
     }
 
     console.log('[VoiceAgent] Request URL:', BACKEND_PROCESS_NOTE_URL);

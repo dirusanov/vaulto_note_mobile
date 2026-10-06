@@ -28,7 +28,8 @@ import {
     setOnDeviceTranscription,
 } from '../utils/storage';
 import { formatModelSize } from '../components/OnDeviceModelSection';
-import { attachOfflineDownload, cancelOfflineDownload, downloadOfflineModels, getOfflineDownloadProgress, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
+import { attachOfflineDownload, cancelOfflineDownload, downloadOfflineModels, getModelChoices, getOfflineDownloadProgress, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
+import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
@@ -406,6 +407,9 @@ export const SettingsScreen = () => {
     // Non-null while offline mode downloads: bytes across both models.
     const [offlineProgress, setOfflineProgress] = useState<{ loaded: number; total: number } | null>(null);
     const [showOfflineOffConfirm, setShowOfflineOffConfirm] = useState(false);
+    const [showModelPicker, setShowModelPicker] = useState(false);
+    // "Whisper Turbo · Qwen3.5 2B": the models in use, under the Models row.
+    const [modelSummary, setModelSummary] = useState('');
     const offlineStartingRef = useRef(false);
 
     const usingOpenAI = aiProvider === 'openai';
@@ -547,9 +551,10 @@ export const SettingsScreen = () => {
                 .finally(() => { setOfflineProgress(null); void refreshOffline(); });
         }
         try {
-            const [status, plan] = await Promise.all([getOfflineStatus(), planOfflineModels()]);
+            const [status, plan, choices] = await Promise.all([getOfflineStatus(), planOfflineModels(), getModelChoices()]);
             setOfflineStatus(status);
             setOfflinePlan(plan);
+            setModelSummary([...choices.speech, ...choices.ai].filter((c) => c.current).map((c) => c.name).join(' · '));
         } catch (error) {
             console.warn('Failed to read offline mode state', error);
         }
@@ -808,6 +813,27 @@ export const SettingsScreen = () => {
             await updateProvider('local');
         }
     }, [offlineStatus?.aiReady]);
+
+    // The user's own pick from the Models sheet: same download path as offline mode.
+    const handleApplyModels = useCallback(async (plan: OfflinePlan) => {
+        if (offlineProgress !== null) return;
+        setOfflineProgress({ loaded: 0, total: plan.downloadBytes });
+        try {
+            await downloadOfflineModels(plan, (loaded, total) => setOfflineProgress({ loaded, total }));
+            haptics.success();
+            const after = await getOfflineStatus().catch(() => null);
+            if (after?.aiReady && onDeviceTranscription && !usingLocalWhisper) {
+                await updateProvider('local');
+            }
+        } catch (error: any) {
+            if (!String(error?.message ?? '').toLowerCase().includes('cancel')) {
+                Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
+            }
+        } finally {
+            setOfflineProgress(null);
+            await refreshOffline();
+        }
+    }, [offlineProgress, onDeviceTranscription, usingLocalWhisper, refreshOffline, t]);
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
@@ -1425,6 +1451,26 @@ export const SettingsScreen = () => {
                                             accessibilityLabel={t("settings.voice.private", "Only on this phone")}
                                         />
                                     </View>
+                                    {!offlineDownloading && (
+                                        <>
+                                            <View style={styles.separator} />
+                                            <TouchableOpacity
+                                                style={[styles.preferenceRow, styles.voiceRow]}
+                                                activeOpacity={0.85}
+                                                onPress={() => setShowModelPicker(true)}
+                                                accessibilityRole="button"
+                                            >
+                                                <View style={styles.voiceRowText}>
+                                                    <MaterialIcons name="tune" size={24} color={colors.textSecondary} />
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={styles.preferenceTitle}>{t("settings.models.row", "Models")}</Text>
+                                                        {!!modelSummary && <Text style={styles.preferenceDescription}>{modelSummary}</Text>}
+                                                    </View>
+                                                </View>
+                                                <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
+                                            </TouchableOpacity>
+                                        </>
+                                    )}
                                 </>
                             )}
                             <View style={styles.separator} />
@@ -1695,6 +1741,13 @@ export const SettingsScreen = () => {
                 }}
             />
 
+            <ModelPickerSheet
+                visible={showModelPicker}
+                privateMode={privateMode}
+                onClose={() => setShowModelPicker(false)}
+                onApply={(plan) => { void handleApplyModels(plan); }}
+                onUseCloud={() => { void handleTogglePrivateMode(false); }}
+            />
             <DeleteConfirmationDialog
                 visible={showOfflineOffConfirm}
                 title={t('settings.voice.offlineModeOffTitle', 'Turn off offline mode?')}

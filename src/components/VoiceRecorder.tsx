@@ -16,25 +16,18 @@ import { AudioService, AudioRecording, MAX_RECORDING_DURATION_MS, MAX_MEETING_DU
 import {
     AIProvider,
     getAIProvider,
-    getAgentModeEnabled,
     getTranscriptionEnabled,
-    setAIProvider,
-    setAgentModeEnabled,
     setTranscriptionEnabled
 } from '../utils/storage';
 import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuth } from '../hooks/useAuth';
-import { useNavigation } from '@react-navigation/native';
-import { SignInRequiredModal } from './SignInRequiredModal';
-import { AgentModeVaultoGateModal } from './AgentModeVaultoGateModal';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 
 interface VoiceRecorderProps {
     visible: boolean;
-    onFinish: (recording: AudioRecording, transcribe: boolean, agentEnabled?: boolean) => void;
+    onFinish: (recording: AudioRecording, transcribe: boolean) => void;
     onCancel: () => void;
     autoStart?: boolean;
     micMode?: 'agent' | 'force_text';
@@ -58,10 +51,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     isMainScreen = false,
 }) => {
     const { t } = useTranslation();
-    const navigation = useNavigation<any>();
-    const { isAuthenticated, isGuest } = useAuth();
-    const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
-    const [showAgentVaultoGate, setShowAgentVaultoGate] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
@@ -72,13 +61,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     // system permission dialog.
     const [permissionSettled, setPermissionSettled] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
-    const [agentModeEnabled, setAgentModeEnabledState] = useState(true);
     const [aiProvider, setAiProvider] = useState<AIProvider>('vaulto_ai');
     const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
     const warningOpacity = useRef(new Animated.Value(0)).current;
     const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const agentModeToggleTouchedRef = useRef(false);
-    const isForceTextMode = micMode === 'force_text';
     // Meeting mode: up to an hour, transcribed as is (no agent), then summarised.
     const [meetingMode, setMeetingMode] = useState(false);
     const meetingSegmentsRef = useRef<string[]>([]);
@@ -86,7 +72,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const [meetingLocked, setMeetingLocked] = useState(false);
     const segmentStartRef = useRef(0);
     const rollingRef = useRef(false);
-    const effectiveAgentEnabled = agentModeEnabled && aiProvider === 'vaulto_ai' && !meetingMode;
     const currentMetering = useRef(-160); // Default low dB
     const meteringSamples = useRef(0);
     const voiceSamples = useRef(0);
@@ -100,26 +85,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     useEffect(() => {
         if (visible) {
-            getAgentModeEnabled().then(enabled => {
-                if (!isAuthenticated || isGuest) {
-                    setAgentModeEnabledState(false);
-                } else if (isForceTextMode) {
-                    // HOLD mode starts with agent disabled by design, but user can enable it.
-                    setAgentModeEnabledState(false);
-                } else {
-                    setAgentModeEnabledState(enabled);
-                }
-            });
             getAIProvider().then(provider => {
-                if (provider) {
-                    setAiProvider(provider);
-                    // The agent runs on the server: unavailable with Custom AI and on-device AI.
-                    if (provider === 'openai' || provider === 'local_whisper' || provider === 'local' || provider === 'local_llm') {
-                        setAgentModeEnabledState(false);
-                    }
-                }
+                if (provider) setAiProvider(provider);
             });
-            agentModeToggleTouchedRef.current = false;
 
             getAIProvider().then(async (provider) => {
 
@@ -159,9 +127,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             maxDurationHandledRef.current = false;
             interruptionHandledRef.current = false;
             recordingStartAtRef.current = null;
-            agentModeToggleTouchedRef.current = false;
         }
-    }, [visible, autoStart, isAuthenticated, isGuest, isForceTextMode]);
+    }, [visible, autoStart]);
 
     const handleTranscriptionToggle = async (value: boolean) => {
         if (value && (aiProvider === 'local' || aiProvider === 'local_whisper')) {
@@ -199,23 +166,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
         setTranscribe(value);
         setTranscriptionEnabled(value);
-    };
-
-    const handleAgentModeToggle = (value: boolean) => {
-        agentModeToggleTouchedRef.current = true;
-        if ((!isAuthenticated || isGuest) && value) {
-            setShowTranscriptionAuthModal(true);
-            setAgentModeEnabledState(false);
-            return;
-        }
-        if ((aiProvider === 'openai' || aiProvider === 'local_whisper' || aiProvider === 'local' || aiProvider === 'local_llm') && value) {
-            // Unavailable with this provider: say so, without overwriting the saved choice.
-            setAgentModeEnabledState(false);
-            setShowAgentVaultoGate(true);
-            return;
-        }
-        setAgentModeEnabledState(value);
-        setAgentModeEnabled(value);
     };
 
     useEffect(() => {
@@ -515,7 +465,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
         const totalSeconds = last?.duration || duration;
         recordingStartAtRef.current = null;
-        onFinish({ uri, duration: totalSeconds, mimeType: 'audio/m4a', meeting: true, segments }, true, false);
+        onFinish({ uri, duration: totalSeconds, mimeType: 'audio/m4a', meeting: true, segments }, true);
     };
 
     const handleStopRecording = async () => {
@@ -561,11 +511,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 onCancel();
                 return;
             }
-            // Persist for normal mode, or when user explicitly changed agent state in HOLD mode.
-            if (!isForceTextMode || agentModeToggleTouchedRef.current) {
-                await setAgentModeEnabled(agentModeEnabled);
-            }
-            onFinish(recording, transcribe, agentModeEnabled);
+            onFinish(recording, transcribe);
             recordingStartAtRef.current = null;
         } catch (error) {
             // Recovery path: if stop failed, the native recorder may already be invalid.
@@ -688,36 +634,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                     {t("voice.chipTranscribe", "To text")}
                                 </Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.badgeToggle,
-                                    isMainScreen && styles.badgeToggleLarge,
-                                    effectiveAgentEnabled ? styles.badgeToggleOn : styles.badgeToggleOff,
-                                ]}
-                                onPress={() => handleAgentModeToggle(!agentModeEnabled)}
-                                hitSlop={{ top: 4, bottom: 4 }}
-                                activeOpacity={0.7}
-                                accessibilityRole="switch"
-                                accessibilityLabel={t("settings.ai.agentMode", "Agent Mode")}
-                                accessibilityState={{ checked: effectiveAgentEnabled }}
-                            >
-                                <MaterialIcons
-                                    name={effectiveAgentEnabled ? 'check' : 'smart-toy'}
-                                    size={isMainScreen ? 18 : 14}
-                                    color={effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary}
-                                />
-                                <Text
-                                    style={[
-                                        styles.badgeLabel,
-                                        isMainScreen && styles.badgeLabelLarge,
-                                        { color: effectiveAgentEnabled ? colors.onPrimary : colors.textSecondary },
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {t("voice.chipAgent", "Agent")}
-                                </Text>
-                            </TouchableOpacity>
                             </>
                         )}
                     </View>
@@ -800,26 +716,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 </View>
             </View>
 
-            <SignInRequiredModal
-                visible={showTranscriptionAuthModal}
-                title={t("voice.signInRequired")}
-                message={t("voice.agentAuthMessage", "Editing notes by voice is available after you sign in. Recordings still turn into text without an account.")}
-                onClose={() => setShowTranscriptionAuthModal(false)}
-                onSignIn={() => {
-                    setShowTranscriptionAuthModal(false);
-                    handleCancel();
-                    navigation.navigate('SignIn');
-                }}
-            />
-
-            <AgentModeVaultoGateModal
-                visible={showAgentVaultoGate}
-                onClose={() => setShowAgentVaultoGate(false)}
-                onPrimaryAction={() => {
-                    setAIProvider('vaulto_ai').catch(() => {});
-                    setAiProvider('vaulto_ai');
-                }}
-            />
         </Modal>
     );
 };

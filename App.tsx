@@ -42,6 +42,13 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
         return () => clearTimeout(timeout);
     }, []);
 
+    // An offline-model download the app was closed during carries on (on Android
+    // it never stopped: the system keeps it going and shows it in notifications).
+    useEffect(() => {
+        if (!appReady) return;
+        void import('./src/services/offlineMode').then((m) => m.resumeOfflineDownload());
+    }, [appReady]);
+
     useEffect(() => {
         if (!appReady || splashHidden) {
             return;

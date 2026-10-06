@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "The best speech and AI models for this phone, {{size}}, downloaded once. After that notes work without internet.",
       "offlineModeOffTitle": "Turn off offline mode?",
       "offlineModeOffDesc": "The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online."
+    },
+    "models": {
+      "row": "Models",
+      "title": "Models on this phone",
+      "subtitle": "Used without internet. Online, Vaulto cloud is used: it is faster and more accurate.",
+      "subtitlePrivate": "Voice and AI run only on this phone.",
+      "speech": "Speech to text",
+      "ai": "AI: voice requests, editing, chat",
+      "fast": "Fast",
+      "balanced": "Balanced",
+      "accurate": "Most accurate",
+      "smartest": "Smartest",
+      "recommended": "Best for this phone",
+      "inUse": "in use",
+      "tooBig": "{{name}} · not enough memory on this phone",
+      "download": "Download · {{size}}",
+      "switch": "Switch",
+      "heavyTitle": "Heavy for this phone",
+      "heavy": "It will work without internet, but slower and with more battery. Online, Vaulto cloud is used anyway.",
+      "heavyPrivate": "It will work, but slower and with more battery. Vaulto cloud is faster and more accurate, and your notes stay encrypted.",
+      "useCloud": "Use Vaulto cloud",
+      "fastNoRequests": "Without internet, Fast does not take voice requests: recordings stay plain text. Balanced understands them."
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "This build of the app cannot run on-device AI. Update the app to use it.",
     "useModel": "Use this model",
     "downloadSize": "Download · {{size}}",
-    "progressShort": "{{loaded}} of {{total}}"
+    "progressShort": "{{loaded}} of {{total}}",
+    "notificationTitle": "Vaulto · offline mode"
   },
   "welcome": {
     "title": "Your notes will live here",

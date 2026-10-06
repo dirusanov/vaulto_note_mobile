@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "Los mejores modelos de voz e IA para este teléfono, {{size}}, se descargan una vez. Después las notas funcionan sin internet.",
       "offlineModeOffTitle": "¿Desactivar el modo sin conexión?",
       "offlineModeOffDesc": "Los modelos se eliminan del teléfono y liberan {{size}}. Sin internet, las grabaciones se guardan y se convierten en texto al volver la conexión."
+    },
+    "models": {
+      "row": "Modelos",
+      "title": "Modelos en este teléfono",
+      "subtitle": "Se usan sin internet. Con conexión se usa la nube de Vaulto: es más rápida y precisa.",
+      "subtitlePrivate": "La voz y la IA funcionan solo en este teléfono.",
+      "speech": "Voz a texto",
+      "ai": "IA: peticiones por voz, edición, chat",
+      "fast": "Rápido",
+      "balanced": "Equilibrado",
+      "accurate": "El más preciso",
+      "smartest": "El más inteligente",
+      "recommended": "Ideal para este teléfono",
+      "inUse": "en uso",
+      "tooBig": "{{name}} · no hay memoria suficiente en este teléfono",
+      "download": "Descargar · {{size}}",
+      "switch": "Cambiar",
+      "heavyTitle": "Pesado para este teléfono",
+      "heavy": "Funcionará sin internet, pero más lento y con más batería. Con conexión se usa igualmente la nube de Vaulto.",
+      "heavyPrivate": "Funcionará, pero más lento y con más batería. La nube de Vaulto es más rápida y precisa, y tus notas siguen cifradas.",
+      "useCloud": "Usar la nube de Vaulto",
+      "fastNoRequests": "Sin internet, Rápido no atiende peticiones por voz: las grabaciones quedan como texto. Equilibrado sí las entiende."
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "Esta versión de la app no puede ejecutar IA en el dispositivo. Actualiza la app.",
     "useModel": "Usar este modelo",
     "downloadSize": "Descargar · {{size}}",
-    "progressShort": "{{loaded}} de {{total}}"
+    "progressShort": "{{loaded}} de {{total}}",
+    "notificationTitle": "Vaulto · modo sin conexión"
   },
   "welcome": {
     "title": "Aquí vivirán tus notas",

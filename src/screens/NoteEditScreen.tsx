@@ -77,9 +77,9 @@ import {
     ensureTemplateHasPlaceholder,
     extractTasks,
 } from '../services/AIService';
+import { isDeviceAgentCandidate, resolveVoiceAgentRoute, VoiceAgentRoute } from '../services/voiceAgent';
 import {
     AIProvider,
-    getAgentModeEnabled,
     getTranscriptionEnabled,
     getFontSize,
     setFontSize,
@@ -859,6 +859,8 @@ interface AgentQueueTask {
     isBackground?: boolean;
     preserveOriginalOnInstruction?: boolean;
     dictationAlreadyApplied?: boolean;
+    /** Where the request is understood: our server, or the model on this phone. */
+    agentRoute?: VoiceAgentRoute;
 }
 
 interface NoteProcessingState {
@@ -4459,7 +4461,8 @@ export const NoteEditScreen = () => {
                             undefined,
                             contextContent,
                             normalizedTaskText,
-                            requestHistoryRef.current
+                            requestHistoryRef.current,
+                            { onDevice: task.agentRoute === 'device' }
                         ),
                         new Promise<never>((_, reject) => {
                             setTimeout(() => reject(new Error('Agent task timeout')), AGENT_TASK_TIMEOUT_MS);
@@ -4935,19 +4938,19 @@ export const NoteEditScreen = () => {
         showVoiceResultStatus,
     ]);
 
-    const shouldUseAgentModeGlobally = useCallback(
-        async (agentModeOverride?: boolean): Promise<boolean> => {
-            // The agent is a server feature for accounts: a guest's transcript is
-            // inserted as is (shared audio, retries) instead of failing with 401.
-            if (!isAuthenticated || isGuest) {
-                return false;
-            }
-            if (typeof agentModeOverride === 'boolean') {
-                return agentModeOverride;
-            }
-            return await getAgentModeEnabled();
-        },
+    // No agent switch: our server for accounts online, otherwise the model on the
+    // phone when it is there; without either, recordings are plain dictation.
+    const resolveAgentRoute = useCallback(
+        (): Promise<VoiceAgentRoute> => resolveVoiceAgentRoute({
+            signedIn: isAuthenticated && !isGuest,
+            protectedNote: isProtectedRef.current,
+        }),
         [isAuthenticated, isGuest],
+    );
+
+    const shouldUseAgentModeGlobally = useCallback(
+        async (): Promise<boolean> => (await resolveAgentRoute()) !== null,
+        [resolveAgentRoute],
     );
 
     useFocusEffect(
@@ -4979,9 +4982,13 @@ export const NoteEditScreen = () => {
             agentContextContent?: string;
             preserveOriginalOnInstruction?: boolean;
             dictationAlreadyApplied?: boolean;
+            agentRoute?: VoiceAgentRoute;
         }
     ) => {
-        const shouldUseAgentMode = await shouldUseAgentModeGlobally();
+        const agentRoute = options?.agentRoute !== undefined ? options.agentRoute : await resolveAgentRoute();
+        // The phone model only looks at short phrases: long dictation is never a request.
+        const shouldUseAgentMode = agentRoute === 'cloud'
+            || (agentRoute === 'device' && isDeviceAgentCandidate(transcribedText));
         const targetVariantId = options?.targetVariantId ?? activeVariantIdRef.current;
         const normalizedText = transcribedText.trim();
 
@@ -5026,6 +5033,7 @@ export const NoteEditScreen = () => {
             isBackground: options?.isBackground ?? false,
             preserveOriginalOnInstruction: options?.preserveOriginalOnInstruction ?? false,
             dictationAlreadyApplied: options?.dictationAlreadyApplied ?? false,
+            agentRoute,
         };
         agentQueue.current.push(newTask);
         console.log(`[NoteEditScreen] Enqueued agent task ${taskId} (queue=${getPendingTaskCount(agentQueue.current)})`);
@@ -5090,7 +5098,6 @@ export const NoteEditScreen = () => {
         recording: AudioRecording,
         transcribe: boolean = true,
         micMode: MicInputMode = 'agent',
-        agentModeEnabled?: boolean
     ) => {
         setShowVoiceRecorder(false);
         setIsRecordingFlowActive(true);
@@ -5098,17 +5105,14 @@ export const NoteEditScreen = () => {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
             const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
-            const provider = await getEffectiveAIProvider();
             const onDeviceTranscription = await isOnDeviceTranscriptionActive();
             const protectedNote = isProtectedRef.current;
-            // The agent sends the text to the server: never for a protected note.
-            const onDeviceProvider = provider === 'local' || provider === 'local_llm' || provider === 'local_whisper';
-            // The agent runs on the server; offline the transcript is inserted as is.
-            const shouldUseAgentModeForThisRecording =
-                !protectedNote && !onDeviceProvider && micMode !== 'force_text'
-                && !recording.meeting
-                && await shouldUseAgentModeGlobally(agentModeEnabled)
-                && !(await isDeviceOffline());
+            // Server for accounts online, the phone model otherwise (protected notes
+            // never leave the phone); meetings and hold-to-dictate are plain text.
+            const agentRoute: VoiceAgentRoute = micMode === 'force_text' || recording.meeting
+                ? null
+                : await resolveAgentRoute();
+            let shouldUseAgentModeForThisRecording = agentRoute !== null;
             // Guests transcribe in the cloud too, from their free trial minutes;
             // when those run out the limit sheet offers sign-in or the phone model.
             let shouldTranscribe = transcribe;
@@ -5174,6 +5178,10 @@ export const NoteEditScreen = () => {
             }
 
             const shouldBypassAgentForThisRecording = micMode === 'force_text';
+            // The phone model only looks at short phrases; long dictation goes in at once.
+            if (agentRoute === 'device' && !isDeviceAgentCandidate(transcribedText)) {
+                shouldUseAgentModeForThisRecording = false;
+            }
             if (isTranscriptionSuccess) {
                 if (shouldBypassAgentForThisRecording || !shouldUseAgentModeForThisRecording) {
                     insertedPlainTextEarly = await applyPlainTextToVariant(targetVariantId, transcribedText);
@@ -5334,6 +5342,7 @@ export const NoteEditScreen = () => {
                     micMode,
                     agentContextContent: targetVariantContentAtStart,
                     dictationAlreadyApplied: inserted,
+                    agentRoute,
                 });
                 return;
             }
@@ -5393,6 +5402,7 @@ export const NoteEditScreen = () => {
                 recordingId: voiceId,
                 micMode,
                 dictationAlreadyApplied: false,
+                agentRoute,
             });
         } finally {
             setIsRecordingFlowActive(false);
@@ -6118,7 +6128,7 @@ export const NoteEditScreen = () => {
         if (!targetRecording) return false;
         const consentGranted = await requestPrivateAIConsent();
         if (!consentGranted) return false;
-        const shouldUseAgentModeForRetry = await shouldUseAgentModeGlobally();
+        const retryAgentRoute = await resolveAgentRoute();
 
         setTrackedIsTranscribing(true);
         setTranscribingRecordingId(targetRecording.id);
@@ -6149,6 +6159,8 @@ export const NoteEditScreen = () => {
                 return false;
             }
 
+            const shouldUseAgentModeForRetry = retryAgentRoute === 'cloud'
+                || (retryAgentRoute === 'device' && isDeviceAgentCandidate(text));
             const targetVariantId = activeVariantIdRef.current;
             const insertedEarly = !shouldUseAgentModeForRetry
                 ? await applyPlainTextToVariant(targetVariantId, text)
@@ -6205,6 +6217,7 @@ export const NoteEditScreen = () => {
                 targetVariantId,
                 micMode: 'agent',
                 recordingId: targetRecording.id,
+                agentRoute: retryAgentRoute,
             });
             return true;
         } catch (error: any) {
@@ -7270,11 +7283,11 @@ export const NoteEditScreen = () => {
                 autoStart
                 micMode={pendingMicInputMode}
                 isMainScreen={false}
-                onFinish={(rec, transcribe, agentEnabled) => {
+                onFinish={(rec, transcribe) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current, agentEnabled);
+                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current);
                     }
                     setPendingMicInputMode('agent');
                     pendingMicInputModeRef.current = 'agent';

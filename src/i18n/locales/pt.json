@@ -341,6 +341,28 @@
       "offlineConfirmDesc": "Os melhores modelos de voz e IA para este celular, {{size}}, baixados uma vez. Depois as notas funcionam sem internet.",
       "offlineModeOffTitle": "Desativar o modo offline?",
       "offlineModeOffDesc": "Os modelos são removidos do celular e liberam {{size}}. Sem internet, as gravações são salvas e viram texto quando a conexão voltar."
+    },
+    "models": {
+      "row": "Modelos",
+      "title": "Modelos neste celular",
+      "subtitle": "Usados sem internet. Online, a nuvem da Vaulto é usada: é mais rápida e precisa.",
+      "subtitlePrivate": "Voz e IA funcionam só neste celular.",
+      "speech": "Voz para texto",
+      "ai": "IA: pedidos por voz, edição, chat",
+      "fast": "Rápido",
+      "balanced": "Equilibrado",
+      "accurate": "Mais preciso",
+      "smartest": "Mais inteligente",
+      "recommended": "Ideal para este celular",
+      "inUse": "em uso",
+      "tooBig": "{{name}} · memória insuficiente neste celular",
+      "download": "Baixar · {{size}}",
+      "switch": "Trocar",
+      "heavyTitle": "Pesado para este celular",
+      "heavy": "Vai funcionar sem internet, mas mais devagar e gastando mais bateria. Online, a nuvem da Vaulto é usada de qualquer forma.",
+      "heavyPrivate": "Vai funcionar, mas mais devagar e gastando mais bateria. A nuvem da Vaulto é mais rápida e precisa, e suas notas continuam criptografadas.",
+      "useCloud": "Usar a nuvem da Vaulto",
+      "fastNoRequests": "Sem internet, Rápido não atende pedidos por voz: as gravações ficam como texto. Equilibrado entende os pedidos."
     }
   },
   "languages": {
@@ -909,7 +931,8 @@
     "runtimeMissing": "Esta versão do app não executa IA no dispositivo. Atualize o app.",
     "useModel": "Usar este modelo",
     "downloadSize": "Baixar · {{size}}",
-    "progressShort": "{{loaded}} de {{total}}"
+    "progressShort": "{{loaded}} de {{total}}",
+    "notificationTitle": "Vaulto · modo offline"
   },
   "welcome": {
     "title": "Suas notas ficarão aqui",
