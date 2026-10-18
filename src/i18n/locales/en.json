@@ -790,6 +790,8 @@
     "goBack": "Go Back",
     "somethingWentWrong": "Something went wrong",
     "unsyncedNotesWarn": "unsynced notes will be lost forever.",
+    "unsyncedNotesWarn_one": "unsynced note will be lost forever.",
+    "unsyncedNotesWarn_other": "unsynced notes will be lost forever.",
     "paywallUnavailableTitle": "Plans are unavailable right now",
     "paywallUnavailableDesc": "We couldn't load subscription options. Check your connection and try again.",
     "paywallRetry": "Try again",

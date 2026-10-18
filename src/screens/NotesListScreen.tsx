@@ -799,10 +799,15 @@ export const NotesListScreen = () => {
                 {canShowEmptyState ? (
                     <View style={styles.emptyContainer}>
                         <EmptyState
-                            // The intro is for a first launch, not for someone whose notes are kept locked.
-                            variant={searchQuery.trim() ? 'search' : (lockedCount > 0 ? 'plain' : 'welcome')}
+                            // A fresh device has no local rows yet, but its server
+                            // notes can still be locked. Do not imply an empty account.
+                            variant={searchQuery.trim() ? 'search' : (lockedCount > 0 || syncLocked ? 'plain' : 'welcome')}
                             message={searchQuery.trim()
                                 ? t("notes.noSearchResults", "No notes match your search")
+                                : syncLocked
+                                    ? encryptionBundle?.secret_mode === 'recovery_code'
+                                        ? t('notes.unlockWithKey', 'Enter your recovery key to show them on this phone.')
+                                        : t('notes.unlockToRestore')
                                 // The open recorder covers this spot: no "tap the mic" under it.
                                 : isVoiceRecorderVisible ? ''
                                 : isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")}

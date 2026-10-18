@@ -17,7 +17,8 @@ import com.google.android.gms.auth.blockstore.StoreBytesData
  * Block Store data survives uninstall/reinstall when Google backup is on, and moves
  * to a new phone in the device restore flow. Cloud backup is requested only when
  * Google can end-to-end encrypt it with the phone's screen lock; otherwise the key
- * stays on this device (still kept across reinstalls) and is never uploaded in clear.
+ * stays on this device and is never uploaded in clear. Without Backup services,
+ * uninstalling the app can remove that local copy: the recovery key is still needed.
  */
 class KeyBackupModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Modal,
     StyleSheet,
@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useEncryption } from '../context/EncryptionContext';
-import { useAuth } from '../hooks/useAuth';
-import { storage } from '../utils/storage';
+import { getSecretValidationError, normalizeSecretInput } from '../crypto/e2ee';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -22,6 +21,7 @@ import { TextInput } from './TextInput';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import jpeg from 'jpeg-js';
 import jsQR from 'jsqr';
@@ -40,13 +40,25 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
 }) => {
     const { t } = useTranslation();
     const { setupWithRecoveryCode, unlock, bundle } = useEncryption();
-    const { userId } = useAuth();
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const inFlight = useRef(false);
 
     const [showScanner, setShowScanner] = useState(false);
     const [permission, requestPermission] = useCameraPermissions();
+
+    useEffect(() => {
+        if (visible) return;
+        setCode('');
+        setError(null);
+        setShowScanner(false);
+    }, [visible]);
+
+    const handleClose = () => {
+        if (!inFlight.current) onClose();
+    };
 
     const base64ToUint8Array = (base64: string): Uint8Array => {
         const binaryString = atob(base64);
@@ -59,30 +71,39 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
     };
 
     const handleUnlock = async () => {
+        if (inFlight.current) return;
         if (!code.trim()) {
             setError(t('settings.recovery.inputRequired', 'Please enter your recovery code.'));
             return;
         }
 
+        const normalizedCode = normalizeSecretInput(code, 'recovery_code');
+        if (getSecretValidationError(normalizedCode, 'recovery_code')) {
+            setError(t('settings.recovery.invalidCode', 'Invalid recovery code. Please check for typos.'));
+            return;
+        }
+
+        inFlight.current = true;
         setLoading(true);
+        setProgress(null);
         setError(null);
         try {
             // An account encrypted with its recovery key unlocks like any vault
             // (unlock() also handles a reset or a remote disable). The 24 words of
             // a passphrase account are the raw key: they rebuild it locally.
             if (bundle?.secret_mode === 'recovery_code') {
-                // Typing the key proves it is saved: no "save your key" prompt after.
-                if (userId) await storage.setRecoveryKeySaved(userId, true);
-                await unlock(code);
+                await unlock(normalizedCode, (value) => setProgress(Math.round(value)));
             } else {
-                await setupWithRecoveryCode(code);
+                await setupWithRecoveryCode(normalizedCode);
             }
             setCode('');
             onSuccess();
             onClose();
         } catch (e: any) {
-            setError(e?.message || t('settings.recovery.invalidCode', 'Invalid recovery code. Please check for typos.'));
+            const invalidKey = /incorrect passphrase|invalid access key|invalid recovery code|recovery code does not match/i.test(e?.message ?? '');
+            setError(invalidKey ? t('settings.recovery.invalidCode', 'Invalid recovery code. Please check for typos.') : e?.message || t('aux.unlockFailed', 'Unable to unlock.'));
         } finally {
+            inFlight.current = false;
             setLoading(false);
         }
     };
@@ -99,26 +120,28 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
     };
 
     const handleImportImage = async () => {
+        let convertedUri: string | undefined;
         try {
             const res = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: 'images',
-                allowsEditing: true,
+                allowsEditing: false,
                 quality: 1,
             });
 
             if (res.canceled || !res.assets || !res.assets[0]) return;
 
-            const uri = res.assets[0].uri;
-            const base64 = await FileSystem.readAsStringAsync(uri, {
+            // Android screenshots are usually PNG; normalize native image
+            // formats before passing pixels to the JPEG/QR decoder. No crop step.
+            const converted = await ImageManipulator.manipulateAsync(res.assets[0].uri, [], {
+                compress: 1,
+                format: ImageManipulator.SaveFormat.JPEG,
+            });
+            convertedUri = converted.uri;
+            const base64 = await FileSystem.readAsStringAsync(convertedUri, {
                 encoding: 'base64',
             });
 
             const buffer = base64ToUint8Array(base64);
-            const isJpeg = buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8;
-            if (!isJpeg) {
-                Alert.alert(t('common.error', 'Error'), t('settings.recovery.jpegOnly', 'Choose a JPEG photo or screenshot of the QR code, or scan it with the camera.'));
-                return;
-            }
             const decoded = jpeg.decode(buffer, { useTArray: true });
             
             if (decoded && decoded.data) {
@@ -134,6 +157,8 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
             }
         } catch (e: any) {
             Alert.alert(t('common.error', 'Error'), e.message || t('settings.recovery.errorProcessingImage', 'Failed to process image.'));
+        } finally {
+            if (convertedUri) await FileSystem.deleteAsync(convertedUri, { idempotent: true }).catch(() => {});
         }
     };
 
@@ -163,9 +188,9 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
     }
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
             <View style={styles.backdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+                <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
                 <KeyboardAvoidingView
                     behavior="padding"
                     style={styles.avoider}
@@ -189,7 +214,8 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
                                 <TextInput
                                     label={t('settings.recovery.label', 'Recovery Code')}
                                     value={code}
-                                    onChangeText={setCode}
+                                    onChangeText={(value) => { setCode(value); setError(null); }}
+                                    editable={!loading}
                                     multiline
                                     numberOfLines={3}
                                     autoCapitalize="none"
@@ -199,12 +225,12 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
                                 />
 
                                 <View style={styles.qrActions}>
-                                    <TouchableOpacity style={styles.qrActionButton} onPress={handleScanQr}>
+                                    <TouchableOpacity style={styles.qrActionButton} onPress={handleScanQr} disabled={loading}>
                                         <MaterialCommunityIcons name="camera" size={20} color={colors.primary} />
                                         <Text style={styles.qrActionButtonText}>{t('settings.recovery.scanQr', 'Scan QR Code')}</Text>
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity style={styles.qrActionButton} onPress={handleImportImage}>
+                                    <TouchableOpacity style={styles.qrActionButton} onPress={handleImportImage} disabled={loading}>
                                         <MaterialCommunityIcons name="image-search" size={20} color={colors.primary} />
                                         <Text style={styles.qrActionButtonText}>{t('settings.recovery.pickQr', 'Import from Image')}</Text>
                                     </TouchableOpacity>
@@ -212,11 +238,29 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
 
                                 {error && <Text style={styles.error}>{error}</Text>}
 
+                                {loading && (
+                                    <View
+                                        accessibilityRole="progressbar"
+                                        accessibilityLabel={t('settings.ui.unlockingNotesTitle', 'Unlocking notes')}
+                                        accessibilityValue={progress === null ? undefined : { min: 0, max: 100, now: progress }}
+                                    >
+                                        <Text style={styles.progressText}>
+                                            {t('settings.ui.unlockingNotesTitle', 'Unlocking notes')}
+                                            {progress === null ? '' : ` · ${progress}%`}
+                                        </Text>
+                                        {progress !== null && (
+                                            <View style={styles.progressTrack}>
+                                                <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+
                                 <View style={styles.actions}>
                                     <Button
                                         title={t('common.cancel', 'Cancel')}
                                         variant="outline"
-                                        onPress={onClose}
+                                        onPress={handleClose}
                                         disabled={loading}
                                         style={styles.actionButton}
                                     />
@@ -313,6 +357,23 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         gap: spacing.s,
         marginTop: spacing.m,
+    },
+    progressText: {
+        ...typography.captionBold,
+        color: colors.textSecondary,
+        marginTop: spacing.s,
+        textAlign: 'center',
+    },
+    progressTrack: {
+        height: 6,
+        backgroundColor: colors.border,
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginTop: spacing.s,
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: colors.primary,
     },
     actionButton: {
         flex: 1,

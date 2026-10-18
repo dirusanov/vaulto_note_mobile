@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback, useR
 import { clearSyncLockBannerDismissed, storage } from '../utils/storage';
 import { authApi, UserProfile } from '../api/auth';
 import { syncService } from '../services/SyncService';
-import { getAllImprovementsLocal, getNotesLocal, wipeLocalDatabase } from '../services/DatabaseService';
+import { wipeLocalDatabase } from '../services/DatabaseService';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { onUnauthorized } from '../utils/authEvents';
 
@@ -273,8 +273,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const shouldWipeLocal = !keepLocalNotes && (options?.wipeLocal ?? true);
         const previousUserId = userId;
         console.log('[AuthContext] Signing out, reverting to guest...');
-        if (previousUserId) {
+        // Drain sync before changing credentials or deleting local rows. Keep
+        // the current key available until encrypted trash/audio are cleaned up.
+        syncService.setAuthenticated(false);
+        await syncService.setCurrentUser(null);
+        if (shouldWipeLocal && previousUserId) {
+            try {
+                // Persist this before deletion, so even an interrupted sign-out
+                // downloads all server notes on the next sign-in.
+                await syncService.clearLocalSyncCursor(previousUserId);
+                await wipeLocalDatabase(previousUserId);
+            } catch (error) {
+                await syncService.setCurrentUser(previousUserId);
+                syncService.setAuthenticated(!!token && !isGuest);
+                throw error;
+            }
+        }
+        // "Keep on Device" includes the key needed to read those notes (and
+        // their versions/trash). It stays in SecureStore, scoped to this user.
+        if (previousUserId && !keepLocalNotes) {
             await storage.removeStoredMasterKey(previousUserId);
+        }
+        if (previousUserId) {
             await clearSyncLockBannerDismissed(previousUserId);
         }
         await storage.removeToken();
@@ -292,32 +312,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setIsGuest(false);
         await storage.setKeepLocalNotes(keepLocalNotes);
         await syncService.setCurrentUser(null);
-
-        if (shouldWipeLocal) {
-            try {
-                await wipeLocalDatabase();
-                if (previousUserId) {
-                    const [remainingNotes, remainingImprovements] = await Promise.all([
-                        getNotesLocal(previousUserId),
-                        getAllImprovementsLocal(previousUserId),
-                    ]);
-                    if (remainingNotes.length > 0 || remainingImprovements.length > 0) {
-                        console.error(
-                            '[AuthContext][WIPE FAILED] Local DB still has data after sign out',
-                            {
-                                userId: previousUserId,
-                                notesCount: remainingNotes.length,
-                                improvementsCount: remainingImprovements.length,
-                                noteIds: remainingNotes.slice(0, 50).map(n => n.id),
-                                improvementIds: remainingImprovements.slice(0, 50).map(i => i.id),
-                            }
-                        );
-                    }
-                }
-            } catch (err) {
-                console.error('[AuthContext] Failed to wipe local DB on sign out', err);
-            }
-        }
 
         // Re-create guest session
         await createGuestSession({ preserveLocalUserId: keepLocalNotes });

@@ -867,8 +867,13 @@ export const SettingsScreen = () => {
     );
 
     const handleSignOut = async () => {
-        await checkSyncStatus();
-        setShowSignOutDialog(true);
+        try {
+            const { getSignOutDataAtRiskCount } = await import('../services/DatabaseService');
+            setUnsyncedCount(await getSignOutDataAtRiskCount(userId ?? user?.id ?? ''));
+            setShowSignOutDialog(true);
+        } catch (error) {
+            Alert.alert(t('common.error', 'Error'), getErrorMessage(error));
+        }
     };
 
     // Throws on failure so DeleteAccountModal can show the error and stay open.
@@ -1849,11 +1854,15 @@ export const SettingsScreen = () => {
                 recoveryCode={recoveryCode}
                 onKeep={() => {
                     setShowSignOutDialog(false);
-                    signOut({ keepLocalNotes: true, wipeLocal: false });
+                    void signOut({ keepLocalNotes: true, wipeLocal: false }).catch((error) => {
+                        Alert.alert(t('common.error', 'Error'), getErrorMessage(error));
+                    });
                 }}
                 onDelete={() => {
                     setShowSignOutDialog(false);
-                    signOut({ keepLocalNotes: false, wipeLocal: true });
+                    void signOut({ keepLocalNotes: false, wipeLocal: true }).catch((error) => {
+                        Alert.alert(t('common.error', 'Error'), getErrorMessage(error));
+                    });
                 }}
                 onCancel={() => setShowSignOutDialog(false)}
             />

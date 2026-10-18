@@ -246,7 +246,9 @@ export const storage = {
             return await secureGet(DEVICE_KEY_KEY);
         } catch (e) {
             console.error('Failed to get device key', e);
-            return null;
+            // Unavailable is not missing: generating a replacement would make
+            // every previously saved local note unreadable.
+            throw e;
         }
     },
     setDeviceKey: async (hexKey: string): Promise<void> => {
@@ -254,6 +256,8 @@ export const storage = {
             await secureSet(DEVICE_KEY_KEY, hexKey);
         } catch (e) {
             console.error('Failed to set device key', e);
+            // Do not encrypt with a key that will disappear on app restart.
+            throw e;
         }
     },
     getKeyBundle: async (userId: string): Promise<KeyBundle | null> => {

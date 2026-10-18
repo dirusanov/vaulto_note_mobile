@@ -16,6 +16,7 @@ export const V2_COMPAT_PREFIX = 'v2.';
 
 let cryptoMode: CryptoMode = 'local';
 let cachedDeviceKey: Uint8Array | null = null;
+let deviceKeyPromise: Promise<Uint8Array> | null = null;
 
 export const setCryptoMode = (mode: CryptoMode) => {
     cryptoMode = mode;
@@ -25,16 +26,23 @@ export const getCryptoMode = () => cryptoMode;
 
 const getOrCreateDeviceKey = async (): Promise<Uint8Array> => {
     if (cachedDeviceKey) return cachedDeviceKey;
-    const existing = await storage.getDeviceKey();
-    if (existing) {
-        cachedDeviceKey = hexToBytes(existing);
-        return cachedDeviceKey;
+    // Concurrent first saves must share one key. Otherwise each save can use a
+    // different key, while only the last one survives the next app launch.
+    if (!deviceKeyPromise) {
+        deviceKeyPromise = (async () => {
+            const existing = await storage.getDeviceKey();
+            if (existing) return hexToBytes(existing);
+            const randomKey = await Crypto.getRandomBytesAsync(32);
+            await storage.setDeviceKey(bytesToHex(randomKey));
+            return randomKey;
+        })();
     }
-    const randomKey = await Crypto.getRandomBytesAsync(32);
-    const hex = bytesToHex(randomKey);
-    await storage.setDeviceKey(hex);
-    cachedDeviceKey = randomKey;
-    return randomKey;
+    try {
+        cachedDeviceKey = await deviceKeyPromise;
+        return cachedDeviceKey;
+    } finally {
+        deviceKeyPromise = null;
+    }
 };
 
 const encryptWithKey = async (plaintext: string, key: Uint8Array, prefix: string): Promise<string> => {

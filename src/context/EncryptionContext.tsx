@@ -613,6 +613,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         syncService.setSyncEnabled(shouldEnableSync);
 
         if (!isAuthReady) {
+            // Explicitly retained notes still belong to the signed-out account.
+            // Restore its device-held key for local reading; sync stays disabled.
+            if (userId && storedCryptoMode === 'e2ee' && await storage.getKeepLocalNotes()) {
+                await restoreMasterKey(userId);
+            }
             setStatus('ready');
             if (userId) {
                 scheduleDatabaseInit(userId);
@@ -1371,6 +1376,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         if (bundle?.key_id && keyIdFromMasterKey(mk) !== bundle.key_id) {
             throw new Error('Recovery code does not match this encrypted account.');
         }
+        await storage.setRecoveryKeySaved(userId, true);
 
         // To protect the Master Key even when using a Recovery Code for entry,
         // we should ideally ask for a local Passphrase to wrap it for storage.
@@ -1445,6 +1451,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         setSyncUnlocked(true);
         if (userId) {
             await persistMasterKey(userId, resolvedMasterKey);
+            // Only a verified recovery key proves it was saved. Do this before
+            // publishing ready, so recovery never opens the first-setup prompt.
+            if (bundle.secret_mode === 'recovery_code') {
+                await storage.setRecoveryKeySaved(userId, true);
+            }
 
             // The server vault may have been destructively reset while this
             // device was locked. The local bundle can still unlock its retained

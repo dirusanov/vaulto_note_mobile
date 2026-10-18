@@ -103,7 +103,7 @@ export const SignOutChoiceDialog: React.FC<SignOutChoiceDialogProps> = ({
                                     <View style={styles.dangerBoxSmall}>
                                         <MaterialIcons name="sync-problem" size={18} color={colors.error} />
                                         <Text style={styles.dangerTextSmall}>
-                                            {unsyncedCount} {t("aux.unsyncedNotesWarn", "unsynced notes will be lost forever.")}
+                                            {unsyncedCount} {t("aux.unsyncedNotesWarn", { count: unsyncedCount, defaultValue: "unsynced notes will be lost forever." })}
                                         </Text>
                                     </View>
                                 )}

@@ -939,20 +939,55 @@ export const getNoteById = async (userId: string, id: string): Promise<Note | nu
     } catch (e) { return null; }
 };
 
-export const wipeLocalDatabase = async (): Promise<void> => {
+/** Notes whose current contents cannot be recovered by signing in again.
+ * Read metadata directly: locked ciphertext must still count, and disabling
+ * sync does not make unsent changes or local-only notes safe to erase.
+ */
+export const getSignOutDataAtRiskCount = async (userId: string): Promise<number> => {
+    if (!userId) return 0;
     if (Platform.OS === 'web') {
+        return getWebStore(userId).filter((note) => !note.deleted && !note.pending_delete && (
+            note.storage_scope === 'local_only' || note.dirty || !note.synced
+            || (note.has_audio && note.audio_file_path && !note.audio_synced)
+        )).length;
+    }
+    const rows = await withDbRetry('count notes at risk on sign out', (database) => database.getAllAsync<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM notes n
+         WHERE n.user_id = ? AND COALESCE(n.deleted, 0) = 0 AND (
+             n.storage_scope = 'local_only'
+             OR COALESCE(n.dirty, 0) = 1 OR COALESCE(n.synced, 0) = 0
+             OR (n.has_audio = 1 AND n.audio_file_path IS NOT NULL AND n.audio_file_path != '' AND COALESCE(n.audio_synced, 0) = 0)
+             OR EXISTS (
+                 SELECT 1 FROM note_improvements i
+                 WHERE i.note_id = n.id AND i.user_id = n.user_id
+                   AND (i.dirty = 1 OR COALESCE(i.synced, 0) = 0)
+             )
+         )`,
+        [userId],
+    ));
+    return rows[0]?.count ?? 0;
+};
+
+export const wipeLocalDatabase = async (userId?: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+        if (userId) {
+            localStorage.removeItem(getStorageKey(userId));
+            return;
+        }
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
             if (key?.startsWith(STORAGE_KEY_PREFIX)) localStorage.removeItem(key);
         }
         return;
     }
+    const scope = userId ? ' WHERE user_id = ?' : '';
+    const params = userId ? [userId] : [];
     try {
         const audioPaths = await withDbRetry('wipe (collect)', async (database) => {
-            const notes = await database.getAllAsync<{ audio_file_path: string | null }>("SELECT audio_file_path FROM notes WHERE audio_file_path IS NOT NULL AND audio_file_path != ''");
-            const voice = await database.getAllAsync<{ file_path: string }>("SELECT file_path FROM voice_recordings WHERE file_path IS NOT NULL AND file_path != ''");
+            const notes = await database.getAllAsync<{ audio_file_path: string | null }>(`SELECT audio_file_path FROM notes${scope}`, params);
+            const voice = await database.getAllAsync<{ file_path: string }>(`SELECT file_path FROM voice_recordings${scope}`, params);
             // Trashed notes keep their recordings on disk: erase those too.
-            const trashRows = await database.getAllAsync<{ payload: string }>('SELECT payload FROM trash');
+            const trashRows = await database.getAllAsync<{ payload: string }>(`SELECT payload FROM trash${scope}`, params);
             const trashPaths: Array<string | null | undefined> = [];
             for (const row of trashRows) {
                 try {
@@ -966,10 +1001,10 @@ export const wipeLocalDatabase = async (): Promise<void> => {
         });
         await purgeAudioFiles(audioPaths, 'wipe');
         await withDbRetry('wipe (delete)', async (database) => {
-            await database.runAsync('DELETE FROM trash;');
-            await database.runAsync('DELETE FROM voice_recordings;');
-            await database.runAsync('DELETE FROM note_improvements;');
-            await database.runAsync('DELETE FROM notes;');
+            await database.runAsync(`DELETE FROM trash${scope}`, params);
+            await database.runAsync(`DELETE FROM voice_recordings${scope}`, params);
+            await database.runAsync(`DELETE FROM note_improvements${scope}`, params);
+            await database.runAsync(`DELETE FROM notes${scope}`, params);
         });
     } catch (e) { throw e; }
 };

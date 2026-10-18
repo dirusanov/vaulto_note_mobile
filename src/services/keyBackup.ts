@@ -2,8 +2,9 @@ import { NativeModules, Platform } from 'react-native';
 
 /**
  * The end-to-end key, kept by the platform so nobody has to type it again:
- * Google Block Store on Android (survives reinstalls, restores on a new phone, cloud
- * copy end-to-end encrypted with the screen lock), iCloud Keychain on iOS.
+ * Google Block Store on Android (survives reinstalls when Backup services are
+ * enabled; transfers during device restore), iCloud Keychain on iOS.
+ * A requested Google cloud copy is end-to-end encrypted with the screen lock.
  * Vaulto's server never sees it. The stored value is the account's 24-word key.
  */
 
@@ -20,7 +21,7 @@ const native: NativeKeyBackup | undefined =
 export type KeyBackupStatus = {
     /** The platform store exists in this build and on this phone. */
     available: boolean;
-    /** A copy also goes to the user's Google/iCloud backup (end-to-end encrypted there). */
+    /** Encrypted Google/iCloud backup is available, not confirmation of a completed cloud upload. */
     cloud: boolean;
 };
 
@@ -34,7 +35,7 @@ export const getKeyBackupStatus = async (): Promise<KeyBackupStatus> => {
     }
 };
 
-/** Saves the key; resolves whether it reached the cloud backup, or null when it could not be saved. */
+/** Saves locally; reports whether encrypted cloud backup was requested, or null on failure. */
 export const backupKey = async (userId: string, recoveryKey: string): Promise<{ cloud: boolean } | null> => {
     if (!native || !userId || !recoveryKey) return null;
     try {

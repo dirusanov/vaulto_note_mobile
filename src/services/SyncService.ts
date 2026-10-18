@@ -296,12 +296,17 @@ class SyncService {
     ): Promise<void> {
         const effectiveUserId = userId ?? this.currentUserId;
         if (!effectiveUserId) return;
-        this.lastSyncSeq = null;
-        await AsyncStorage.removeItem(`${SYNC_SEQ_KEY}_${effectiveUserId}`);
+        await this.clearLocalSyncCursor(effectiveUserId);
         // A migration preflight must never upload local dirty rows. In
         // particular, a retained E2EE reset archive must not briefly reach a
         // standard-mode server as plaintext before E2EE is established.
         await this.syncNowAndWait(reason, true, false);
+    }
+
+    /** A deleted local database must never reuse its old incremental cursor. */
+    public async clearLocalSyncCursor(userId: string): Promise<void> {
+        if (userId === this.currentUserId) this.lastSyncSeq = null;
+        await AsyncStorage.removeItem(`${SYNC_SEQ_KEY}_${userId}`);
     }
 
     /** Waits for any in-progress sync to complete, then runs a fresh sync. */

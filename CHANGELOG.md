@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.92] - 2026-10-18
+
+### Fixed
+- Keeping notes on sign-out also keeps their encryption key, so they remain readable after restarting the app.
+- Signing out and removing local data resets the sync cursor for a complete restore on the next sign-in, and preserves other accounts' local notes.
+- Parallel first saves share one device key; key storage failures no longer silently generate or use an unsaved key.
+- Sign-out warns about unsent changes even when sync is disabled or notes are locked.
+- Recovery accepts QR screenshots in PNG as well as JPEG, shows unlock progress, validates incorrect keys inline, and explains locked notes on a fresh device.
+
+Verified with the automated suite and two Android API 36 emulators using isolated test accounts and the real local auth/sync services: keep/delete sign-out, cold starts, uninstall/reinstall with recovery key, cross-device editing and account isolation. Google cloud key restoration and production Google sign-in were not verified in this run. See `docs/encryption-recovery-qa-2026-10-18.md`.
+
 ## [1.0.91] - 2026-10-06
 
 ### Added
