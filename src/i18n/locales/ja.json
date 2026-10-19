@@ -338,14 +338,17 @@
       "offlineNoSpace": "端末の空き容量が足りません",
       "offlineNoSpaceTitle": "容量不足",
       "offlineConfirmTitle": "オフラインモードをダウンロードしますか？",
-      "offlineConfirmDesc": "この端末に最適な音声とAIのモデル（{{size}}）を一度だけダウンロードします。以降はネットなしでメモが使えます。",
+      "offlineConfirmDesc": "オフライン用に{{size}}を一度ダウンロードします。「この端末のみ」がオフの場合、接続時はクラウドを使います。",
       "offlineModeOffTitle": "オフラインモードをオフにしますか？",
-      "offlineModeOffDesc": "モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ると文字になります。"
+      "offlineModeOffDesc": "モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ると文字になります。",
+      "routingHint": "接続時は選択したクラウドを使用します。オフラインモデルは任意です。クラウド処理では選択した音声やテキストをサービスに送信します。",
+      "speechFirst": "音声認識はオフラインで使えます。端末上のAIは任意で、メモリが少ない端末では遅くなる場合があります。",
+      "offlineHintSpeech": "オフライン音声認識 · {{size}}"
     },
     "models": {
       "row": "モデル",
       "title": "この端末のモデル",
-      "subtitle": "オフライン時に使います。オンライン時は Vaulto クラウドを使用し、より速く正確です。",
+      "subtitle": "オフライン用モデルです。「この端末のみ」がオフの場合、接続時は選択したクラウドを使います。",
       "subtitlePrivate": "音声と AI はこの端末だけで動作します。",
       "speech": "音声の文字起こし",
       "ai": "AI：音声での依頼・編集・チャット",
@@ -353,16 +356,18 @@
       "balanced": "バランス",
       "accurate": "最高精度",
       "smartest": "最も賢い",
-      "recommended": "この端末に最適",
+      "recommended": "おすすめ",
       "inUse": "使用中",
       "tooBig": "{{name}} · この端末ではメモリが足りません",
       "download": "ダウンロード · {{size}}",
       "switch": "切り替える",
       "heavyTitle": "この端末には重め",
-      "heavy": "オフラインでも動きますが、遅くなりバッテリーも多く使います。オンライン時はいつも通り Vaulto クラウドを使います。",
-      "heavyPrivate": "動きますが、遅くなりバッテリーも多く使います。Vaulto クラウドの方が速く正確で、メモは暗号化されたままです。",
+      "heavy": "このモデルは処理が遅く、電池消費が増える場合があります。処理方法の選択は変わりません。",
+      "heavyPrivate": "このモデルは処理が遅く、電池消費が増える場合があります。クラウドは速い場合がありますが、選択した音声やテキストをサーバーに送信して処理します。",
       "useCloud": "Vaulto クラウドを使う",
-      "fastNoRequests": "オフラインでは「高速」は音声での依頼を実行せず、録音はそのまま文字になります。「バランス」は依頼を理解します。"
+      "fastNoRequests": "オフラインでは「高速」は音声での依頼を実行せず、録音はそのまま文字になります。「バランス」は依頼を理解します。",
+      "speechOnly": "音声認識のみ",
+      "speechOnlyHint": "AIはダウンロードしません。接続時のクラウドAIは別途選択できます。"
     }
   },
   "languages": {
@@ -498,7 +503,8 @@
       "noChanges": "すでに問題ありません — 変更点はありません。",
       "emptyText": "改善を依頼する前にテキストを入力してください。",
       "grammarPerfect": "完璧です！誤りは見つかりませんでした。",
-      "working": "処理中…"
+      "working": "処理中…",
+      "reviewHint": "名前、金額、日時を確認してください。結果は別のバージョンとして保存され、原文は残ります。"
     },
     "dictation": {
       "errorTitle": "音声入力エラー",
@@ -605,7 +611,8 @@
       "notifyOffTitle": "通知がオフです",
       "notifyOffText": "リマインダーを受け取るには、端末の設定で Vaulto の通知を許可してください。",
       "openSettings": "設定を開く",
-      "reminderPast": "この時刻はすでに過ぎています"
+      "reminderPast": "この時刻はすでに過ぎています",
+      "reviewHint": "追加する前に、タスクと日付を元のノートと照合してください。"
     },
     "protected": {
       "protectNote": "ノートを保護",
@@ -683,10 +690,14 @@
     "micPermissionDenied": "ボイスメモを録音するにはマイクへのアクセスが必要です。システム設定で許可できます。",
     "chipTranscribe": "文字起こし",
     "chipAgent": "エージェント",
-    "savedOffline": "インターネットがありません。録音は保存されました。オンラインに戻ると文字になります。",
+    "savedOffline": "録音を保存しました。インターネットに接続してこのノートを開くと、自動で文字起こしします。",
     "chipMeeting": "会議",
     "meetingHint": "最長 60 分、その後に決定事項とタスクをまとめた議事録を作成",
-    "agentAuthMessage": "音声でのメモ編集はサインイン後に使えます。録音はアカウントなしでも文字になります。"
+    "agentAuthMessage": "音声でのメモ編集はサインイン後に使えます。録音はアカウントなしでも文字になります。",
+    "retryManually": "録音を保存しました。録音一覧から文字起こしを再試行してください。",
+    "transcribingLocal": "この端末で文字起こし中…",
+    "slowOnDevice": "この録音は端末上で処理中です。次回は、接続時にクラウドを使うと速くなる場合があります。",
+    "processingSeconds": "{{seconds}} 秒"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -713,7 +724,7 @@
     "autoRenewable": "自動更新です。いつでも解約できます。",
     "vaultoAIReq": "Vaulto AI が必要です",
     "agentModeVaultoAIAvail": "エージェントモードは Vaulto AI でのみ利用できます。",
-    "aiWorking": "AI エージェントが処理中…",
+    "aiWorking": "テキストを処理中…",
     "keepIt": "残す",
     "deleteBtn": "削除",
     "deleteNoteTitle": "ノートを削除しますか？",
@@ -870,7 +881,8 @@
     "allVersions": "すべてのバージョン",
     "protected": "保護されたノート",
     "onThisPhoneOnly": "この端末のみ",
-    "accountSettings": "アカウントと設定"
+    "accountSettings": "アカウントと設定",
+    "voiceRecordings": "音声録音"
   },
   "ask": {
     "title": "ノートに質問",
@@ -946,7 +958,8 @@
   "errors": {
     "offline": "インターネットに接続されていません。ネットワークを確認して、もう一度お試しください。",
     "serverUnavailable": "サーバーが一時的に利用できません。ノートは安全です。少し待ってから再度お試しください。",
-    "timeout": "リクエストに時間がかかりすぎました。接続を確認して、もう一度お試しください。"
+    "timeout": "リクエストに時間がかかりすぎました。接続を確認して、もう一度お試しください。",
+    "localAIMemory": "このAIモデルにはメモリが不足しています。設定で軽いモデルまたはクラウドAIを選んでください。"
   },
   "alerts": {
     "shareUnavailable": "この端末では共有できません。",
@@ -1023,5 +1036,6 @@
     "transcribing": "会議を文字起こし中：{{total}} 中 {{part}}",
     "summaryFailed": "議事録を作成できませんでした。後で AI メニューの「議事録」から実行できます。",
     "title": "会議 · {{date}}"
-  }
+  },
+  "paywall": {}
 }

@@ -61,7 +61,12 @@ function app() {
             getItemAsync: async (key) => secrets.get(key) ?? null,
             setItemAsync: async (key, value) => { secrets.set(key, value); },
         },
-        '@react-native-async-storage/async-storage': { getItem: async (key) => values.get(key) ?? null },
+        '@react-native-async-storage/async-storage': {
+            getItem: async (key) => values.get(key) ?? null,
+            setItem: async (key, value) => { values.set(key, value); },
+            removeItem: async (key) => { values.delete(key); },
+            getAllKeys: async () => [...values.keys()],
+        },
         [path.join(root, 'src/utils/storage.ts')]: { storage, clearSyncLockBannerDismissed: async () => {} },
         [path.join(root, 'src/services/AudioService.ts')]: { AudioService: { deleteAudioFile: async () => {} } },
         [path.join(root, 'src/services/SyncService.ts')]: { syncService: sync },
@@ -214,7 +219,11 @@ test('deleting one account leaves the other account notes, versions and trash in
             await db.saveImprovementLocal(user, { id: `${user}-version`, note_id: `${user}-note`, encrypted_content: await crypto.encrypt(`Version for ${user}`) });
             await db.saveTrashEntry(user, { id: `${user}-trash`, title: user, content: 'trash', recordings: [], deleted_at: new Date().toISOString() });
         }
+        const pending = a.load('src/services/pendingTranscriptions.ts');
+        for (const user of ['alice', 'bob']) await pending.enqueuePendingTranscription(user, { noteId: `${user}-note`, recordingId: 'r', variantId: 'original' });
         await db.wipeLocalDatabase('alice');
+        assert.equal((await pending.getPendingTranscriptions('alice', 'alice-note')).length, 0);
+        assert.equal((await pending.getPendingTranscriptions('bob', 'bob-note')).length, 1);
         assert.deepEqual(await db.getNotesLocal('alice'), []);
         assert.deepEqual(await db.getAllImprovementsLocal('alice'), []);
         assert.deepEqual(await db.getTrashEntries('alice'), []);
@@ -277,5 +286,43 @@ test('a recovery key restores server ciphertext and audio on a clean installatio
         e2ee.setMasterKey(new Uint8Array(randomBytes(32)));
         await assert.rejects(fresh.decryptFromSync(ciphertext));
         assert.throws(() => fresh.decryptAudioBase64FromSync(audioCiphertext));
+    } finally { a.database.close(); }
+});
+
+
+test('voice recording transcripts are encrypted in SQLite and hidden while their parent vault is locked', async () => {
+    const a = app();
+    try {
+        const db = a.load('src/services/DatabaseService.ts');
+        const crypto = a.load('src/crypto/encryption.ts');
+        const e2ee = a.load('src/crypto/e2ee.ts');
+        const key = new Uint8Array(randomBytes(32));
+        e2ee.setMasterKey(key); crypto.setCryptoMode('e2ee');
+        await db.saveNoteLocal('alice', { id: 'voice-note', title: 'Private dictation', content: '' });
+        await db.saveVoiceRecordingLocal('alice', { id: 'recording', note_id: 'voice-note', file_path: '/encrypted.m4a', duration: 12, created_at: new Date().toISOString(), transcription: 'Call Alice on Friday' });
+        const raw = a.database.prepare('SELECT transcription FROM voice_recordings WHERE id = ?').get('recording').transcription;
+        assert.match(raw, /^v3d\./);
+        assert.equal((await db.getVoiceRecordingsLocal('alice', 'voice-note'))[0].transcription, 'Call Alice on Friday');
+        assert.equal((await db.getNotesLocal('alice'))[0].voice_files[0].transcription, 'Call Alice on Friday');
+        e2ee.clearMasterKey();
+        assert.equal((await db.getVoiceRecordingsLocal('alice', 'voice-note'))[0].transcription, undefined);
+        e2ee.setMasterKey(key); crypto.setCryptoMode('local');
+        await db.decryptAndRescueAllNotes('alice'); e2ee.clearMasterKey();
+        assert.equal((await db.getVoiceRecordingsLocal('alice', 'voice-note'))[0].transcription, 'Call Alice on Friday');
+    } finally { a.database.close(); }
+});
+
+test('reading a legacy plaintext voice transcript migrates it without rewriting other accounts', async () => {
+    const a = app();
+    try {
+        const db = a.load('src/services/DatabaseService.ts');
+        for (const user of ['alice', 'bob']) {
+            await db.saveNoteLocal(user, { id: user+'-n', content: 'note' });
+            await db.saveVoiceRecordingLocal(user, { id: user+'-r', note_id: user+'-n', file_path: '/encrypted.m4a', duration: 2, created_at: new Date().toISOString() });
+            a.database.prepare('UPDATE voice_recordings SET transcription = ? WHERE id = ?').run('Legacy '+user, user+'-r');
+        }
+        assert.equal((await db.getVoiceRecordingsLocal('alice', 'alice-n'))[0].transcription, 'Legacy alice');
+        assert.match(a.database.prepare('SELECT transcription FROM voice_recordings WHERE id = ?').get('alice-r').transcription, /^v3d\./);
+        assert.equal(a.database.prepare('SELECT transcription FROM voice_recordings WHERE id = ?').get('bob-r').transcription, 'Legacy bob');
     } finally { a.database.close(); }
 });

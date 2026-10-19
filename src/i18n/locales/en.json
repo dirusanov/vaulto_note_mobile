@@ -338,14 +338,17 @@
       "offlineNoSpace": "Not enough free space on this phone",
       "offlineNoSpaceTitle": "Not enough space",
       "offlineConfirmTitle": "Download offline mode?",
-      "offlineConfirmDesc": "The best speech and AI models for this phone, {{size}}, downloaded once. After that notes work without internet.",
+      "offlineConfirmDesc": "Download {{size}} once for offline processing. Online keeps using your cloud service unless “Only on this phone” is on.",
       "offlineModeOffTitle": "Turn off offline mode?",
-      "offlineModeOffDesc": "The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online."
+      "offlineModeOffDesc": "The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.",
+      "routingHint": "Online uses your selected cloud service. Offline models are optional. Cloud processing sends the selected audio or text to the service.",
+      "speechFirst": "Speech works without internet. Local AI is optional: it can be slow on phones with little memory.",
+      "offlineHintSpeech": "Speech without internet · {{size}}"
     },
     "models": {
       "row": "Models",
       "title": "Models on this phone",
-      "subtitle": "Used without internet. Online, Vaulto cloud is used: it is faster and more accurate.",
+      "subtitle": "Models for use without internet. Online uses your selected cloud service unless “Only on this phone” is on.",
       "subtitlePrivate": "Voice and AI run only on this phone.",
       "speech": "Speech to text",
       "ai": "AI: voice requests, editing, chat",
@@ -353,16 +356,18 @@
       "balanced": "Balanced",
       "accurate": "Most accurate",
       "smartest": "Smartest",
-      "recommended": "Best for this phone",
+      "recommended": "Recommended",
       "inUse": "in use",
       "tooBig": "{{name}} · not enough memory on this phone",
       "download": "Download · {{size}}",
       "switch": "Switch",
       "heavyTitle": "Heavy for this phone",
-      "heavy": "It will work without internet, but slower and with more battery. Online, Vaulto cloud is used anyway.",
-      "heavyPrivate": "It will work, but slower and with more battery. Vaulto cloud is faster and more accurate, and your notes stay encrypted.",
+      "heavy": "This model may be slow and use more battery. Your processing choice stays in effect.",
+      "heavyPrivate": "This model may be slow and use more battery. Cloud may be faster, but sends selected audio or text to a server for processing.",
       "useCloud": "Use Vaulto cloud",
-      "fastNoRequests": "Without internet, Fast does not take voice requests: recordings stay plain text. Balanced understands them."
+      "fastNoRequests": "Without internet, Fast does not take voice requests: recordings stay plain text. Balanced understands them.",
+      "speechOnly": "Speech only",
+      "speechOnlyHint": "Skip the AI download. Cloud AI is a separate choice when online."
     }
   },
   "languages": {
@@ -498,7 +503,8 @@
       "noChanges": "The text is already fine — nothing to change.",
       "emptyText": "Enter some text before requesting an improvement.",
       "grammarPerfect": "Perfect! No grammar errors found.",
-      "working": "Thinking…"
+      "working": "Thinking…",
+      "reviewHint": "Check names, amounts and dates. Accept creates a separate version; the original stays safe."
     },
     "dictation": {
       "errorTitle": "Dictation Error",
@@ -605,7 +611,8 @@
       "notifyOffTitle": "Notifications are off",
       "notifyOffText": "Allow notifications for Vaulto in the phone settings to get reminders.",
       "openSettings": "Open settings",
-      "reminderPast": "This time has already passed"
+      "reminderPast": "This time has already passed",
+      "reviewHint": "Check tasks and dates against the note before adding them."
     },
     "protected": {
       "protectNote": "Protect note",
@@ -683,10 +690,14 @@
     "micPermissionDenied": "Microphone access is required to record voice notes. You can allow it in system settings.",
     "chipTranscribe": "To text",
     "chipAgent": "Agent",
-    "savedOffline": "No internet — the recording is saved. It turns into text when you are back online.",
+    "savedOffline": "Recording saved. Reopen this note with internet to transcribe it automatically.",
     "chipMeeting": "Meeting",
     "meetingHint": "Up to 60 minutes, then a summary with decisions and tasks",
-    "agentAuthMessage": "Editing notes by voice is available after you sign in. Recordings still turn into text without an account."
+    "agentAuthMessage": "Editing notes by voice is available after you sign in. Recordings still turn into text without an account.",
+    "retryManually": "Recording saved. Retry transcription from the recordings list.",
+    "transcribingLocal": "Transcribing on this phone…",
+    "slowOnDevice": "This recording is still processing on the phone. For future recordings, cloud processing may be faster when online.",
+    "processingSeconds": "{{seconds}} s"
   },
   "aux": {
     "emailVerified": "Email Verified!",
@@ -713,7 +724,7 @@
     "autoRenewable": "Auto-renewable. Cancel anytime.",
     "vaultoAIReq": "Vaulto AI required",
     "agentModeVaultoAIAvail": "Agent Mode is available only with Vaulto AI.",
-    "aiWorking": "AI Agent working...",
+    "aiWorking": "Working on your text…",
     "keepIt": "Keep it",
     "deleteBtn": "Delete",
     "deleteNoteTitle": "Delete Note?",
@@ -872,7 +883,8 @@
     "allVersions": "All versions",
     "protected": "Protected note",
     "onThisPhoneOnly": "Only on this phone",
-    "accountSettings": "Account and settings"
+    "accountSettings": "Account and settings",
+    "voiceRecordings": "Voice recordings"
   },
   "ask": {
     "title": "Ask your notes",
@@ -948,7 +960,8 @@
   "errors": {
     "offline": "No internet connection. Check your network and try again.",
     "serverUnavailable": "The server is temporarily unavailable. Your notes are safe; try again in a minute.",
-    "timeout": "The request took too long. Check your connection and try again."
+    "timeout": "The request took too long. Check your connection and try again.",
+    "localAIMemory": "Not enough memory for AI on this phone. Choose a lighter model or cloud AI in Settings."
   },
   "alerts": {
     "shareUnavailable": "Sharing is not available on this device.",
@@ -1025,5 +1038,6 @@
     "transcribing": "Transcribing the meeting: part {{part}} of {{total}}",
     "summaryFailed": "Could not write the meeting notes. You can run \"Meeting notes\" from the AI menu later.",
     "title": "Meeting · {{date}}"
-  }
+  },
+  "paywall": {}
 }

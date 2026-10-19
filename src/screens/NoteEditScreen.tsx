@@ -60,6 +60,8 @@ import { CompareVersionsModal } from '../components/CompareVersionsModal';
 import { UndoSnackbar } from '../components/UndoSnackbar';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
+import { enqueuePendingTranscription, getPendingTranscriptions, removePendingTranscription } from '../services/pendingTranscriptions';
+import { persistMeetingParts, transcribeMeetingParts } from '../services/meetingTranscription';
 import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive, ON_DEVICE_MODEL_REQUIRED } from '../services/TranscriptionService';
 import { getCryptoMode } from '../crypto/encryption';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
@@ -144,7 +146,7 @@ import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 import { getEffectiveAIProvider } from '../services/effectiveProvider';
-import { getAIProvider } from '../utils/storage';
+import { getAIProvider, storage } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import NetInfo from '@react-native-community/netinfo';
 import { scheduleTaskReminder } from '../services/notifications';
@@ -731,7 +733,8 @@ const MemoizedImprovementChips = memo(({
                     const isActive = selectedVariantId === imp.id;
                     const chipIcon = variantIconFor(imp, optionIcons);
                     const chipLabel = displayLabels[imp.id] || `${t("edit.improvement")} ${index + 1}`;
-                    const chipText = chipTextForLabel(chipLabel);
+                    const hasCustomName = !!userVariantName(imp.title);
+                    const chipText = hasCustomName ? chipLabel : chipTextForLabel(chipLabel);
                     return (
                         <View
                             style={styles.variantChipWrapper}
@@ -752,7 +755,7 @@ const MemoizedImprovementChips = memo(({
                                 accessibilityState={{ selected: isActive }}
                                 accessibilityLabel={chipLabel}
                             >
-                                {isDerivedLabel(chipLabel) && (
+                                {!hasCustomName && isDerivedLabel(chipLabel) && (
                                     // Made from another version, not from the original.
                                     <MaterialIcons
                                         name="subdirectory-arrow-right"
@@ -1195,11 +1198,13 @@ export const NoteEditScreen = () => {
             const safeTitle = (exportTitle || 'note').replace(/[^a-z0-9а-яё]/gi, '_').toLowerCase();
             const filename = `${safeTitle}_${dateStr}.md`;
 
-            const fileUri = `${FileSystem.documentDirectory}${filename} `;
-            const exportBody = isRichHtmlContent(content)
-                ? richContentToPlainText(content)
-                : content;
-            const fullText = `${exportTitle ? '# ' + exportTitle + '\n\n' : ''}${exportBody} `;
+            if (!FileSystem.cacheDirectory) throw new Error('Export cache unavailable');
+            const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+            const exportBody = (await currentNoteMarkdown())
+                .replace(/^\s*!\[audio\]\([^)]+\)\s*$/gm, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+            const fullText = `${exportTitle ? '# ' + exportTitle + '\n\n' : ''}${exportBody}\n`;
 
             await FileSystem.writeAsStringAsync(fileUri, fullText, {
                 encoding: 'utf8',
@@ -1266,6 +1271,7 @@ export const NoteEditScreen = () => {
     const [recordingsPreviewUri, setRecordingsPreviewUri] = useState<string | null>(null);
     const [recordingsPreviewDuration, setRecordingsPreviewDuration] = useState<number>(0);
     const [isTranscribing, setIsTranscribingState] = useState(false);
+    const [transcribingOnDevice, setTranscribingOnDevice] = useState(false);
     const [, setIsRecordingFlowActive] = useState(false);
 
     const lastSavedTitle = useRef(stripStoredTitleMarkdown(existingNote?.title || ''));
@@ -1501,8 +1507,11 @@ export const NoteEditScreen = () => {
     const offerOnDeviceTranscriptionRef = useRef<((reason: 'suggest' | 'offline') => Promise<void>) | null>(null);
     const offlineOfferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Recordings saved without text for lack of network: transcribed as soon as it is back.
-    const offlineRecordingIdsRef = useRef<string[]>([]);
-    const retryTranscriptionRef = useRef<((recording: VoiceRecording, options?: { silent?: boolean }) => Promise<boolean>) | null>(null);
+    const retryPendingTranscriptionsRef = useRef<(() => Promise<void>) | null>(null);
+    const pendingRetryRunningRef = useRef(false);
+    const recordingFlowsInFlightRef = useRef(0);
+    const pendingRetryScopeRef = useRef({ userId, noteId: localNoteId });
+    pendingRetryScopeRef.current = { userId, noteId: localNoteId };
     const scheduleOfflineOffer = useCallback(() => {
         offlineOfferPendingRef.current = false;
         if (offlineOfferTimerRef.current) clearTimeout(offlineOfferTimerRef.current);
@@ -1519,17 +1528,8 @@ export const NoteEditScreen = () => {
             const online = state.isConnected !== false && state.isInternetReachable !== false;
             // Right after Wi-Fi comes up reachability is still unknown; wait for a
             // confirmed connection, and keep anything that fails for the next one.
-            if (state.isConnected === true && state.isInternetReachable === true && offlineRecordingIdsRef.current.length > 0) {
-                const ids = offlineRecordingIdsRef.current;
-                offlineRecordingIdsRef.current = [];
-                void (async () => {
-                    for (const id of ids) {
-                        const rec = voiceRecordingsRef.current.find((r) => r.id === id);
-                        if (!rec || rec.transcription?.trim()) continue;
-                        const done = await retryTranscriptionRef.current?.(rec, { silent: true });
-                        if (!done) offlineRecordingIdsRef.current.push(id);
-                    }
-                })();
+            if (state.isConnected === true && state.isInternetReachable === true) {
+                void retryPendingTranscriptionsRef.current?.();
             }
             if (online && offlineOfferPendingRef.current) {
                 scheduleOfflineOffer();
@@ -3644,9 +3644,8 @@ export const NoteEditScreen = () => {
         }
 
         updateHistory(text, currentContentRef.current, variantId);
-        if (localNoteIdRef.current) {
-            debouncedSave(currentContentRef.current, text);
-        }
+        // New drafts need the same durability as edits of existing notes.
+        debouncedSave(currentContentRef.current, text);
     }, [debouncedSave]);
 
     const noteTitleRef = useRef(noteTitle);
@@ -3711,9 +3710,7 @@ export const NoteEditScreen = () => {
             improvementDraftsRef.current[variantId] = sanitizedText;
         }
 
-        if (localNoteIdRef.current) {
-            debouncedSave(sanitizedText, currentTitle);
-        }
+        debouncedSave(sanitizedText, currentTitle);
 
         updateHistory(currentTitle, sanitizedText, variantId);
     }, [debouncedSave, stageOriginalCreationAutoScale]);
@@ -5045,24 +5042,23 @@ export const NoteEditScreen = () => {
 
     /** Meeting: each segment is transcribed on its own, then the texts are joined. */
     const transcribeMeetingSegments = async (
-        segments: string[],
-        onDeviceOnly: boolean,
+        segments: string[], onDeviceOnly: boolean, recordingId: string, encrypted: boolean = false,
     ): Promise<{ success: boolean; text: string; error?: string }> => {
-        const parts: string[] = [];
-        let lastError: string | undefined;
-        for (let index = 0; index < segments.length; index += 1) {
-            setActiveImprovementTask({
-                id: 'meeting-transcribe',
-                text: t('meeting.transcribing', 'Transcribing the meeting: part {{part}} of {{total}}', { part: index + 1, total: segments.length }),
-                isTranscribing: true,
+        try {
+            return await transcribeMeetingParts(segments, recordingId, encrypted, {
+                exists: async (uri) => (await FileSystem.getInfoAsync(uri)).exists,
+                decrypt: (uri, prefix) => AudioService.readAudioFile(uri, prefix),
+                remove: (uri) => FileSystem.deleteAsync(uri, { idempotent: true }),
+                transcribe: (uri, key) => transcribeAudio(uri, undefined, { onDeviceOnly, idempotencyKey: key, onMode: (mode) => setTranscribingOnDevice(mode === 'device') }),
+                onPart: (part, total) => setActiveImprovementTask({
+                    id: 'meeting-transcribe',
+                    text: t('meeting.transcribing', 'Transcribing the meeting: part {{part}} of {{total}}', { part, total }),
+                    isTranscribing: true,
+                }),
             });
-            const result = await transcribeAudio(segments[index], undefined, { onDeviceOnly });
-            if (result.success && result.text.trim()) parts.push(result.text.trim());
-            else lastError = result.error;
+        } finally {
+            setActiveImprovementTask(null);
         }
-        setActiveImprovementTask(null);
-        const text = parts.join('\n\n');
-        return text ? { success: true, text } : { success: false, text: '', error: lastError };
     };
 
     // Kept in a ref so the recording flow, started from an older render, uses
@@ -5100,13 +5096,98 @@ export const NoteEditScreen = () => {
         micMode: MicInputMode = 'agent',
     ) => {
         setShowVoiceRecorder(false);
+        recordingFlowsInFlightRef.current++;
         setIsRecordingFlowActive(true);
         try {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
             const targetVariantContentAtStart = resolveVariantContent(targetVariantId);
+            const voiceId = Date.now().toString() + Math.random().toString(36).substring(2);
+            // Wait for any pending creation to finish
+            while (isCreatingNote.current) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            let currentNoteId = localNoteIdRef.current;
+
+            // Persist before network/model work. A force-stop must not lose the recording.
+            const savedPath = await AudioService.saveAudioFile(
+                recording.uri,
+                false
+            );
+            // A second recording may have finished encrypting while the first
+            // one was creating this draft. Re-read its id after that write.
+            while (isCreatingNote.current) await new Promise(r => setTimeout(r, 100));
+            currentNoteId = localNoteIdRef.current;
+
+            // Ensure Note Exists (Create if not)
+            if (!currentNoteId) {
+                isCreatingNote.current = true;
+                try {
+                    const titleToUse = currentTitleRef.current.trim();
+                    const newNote = await createNote({
+                        title: titleToUse,
+                        content: currentContentRef.current,
+                        audio: {
+                            filePath: savedPath,
+                            duration: recording.duration,
+                        },
+                        storage_scope: storageScope,
+                        is_protected: isProtectedRef.current,
+                        privacy,
+                    });
+                    setLocalNoteId(newNote.id);
+                    localNoteIdRef.current = newNote.id;
+                    syncTrackedProcessingToNote(newNote.id);
+                    bindCreatedDraftToRoute(newNote.id);
+                    currentNoteId = newNote.id;
+                    lastSavedTitle.current = currentTitleRef.current;
+                    lastSavedContent.current = stripAudioEmbedsFromRichContent(currentContentRef.current);
+                    await handleCreatedNoteAutoScale(newNote.id, currentContentRef.current);
+                } catch (e) {
+                    console.error('Failed to create note for voice:', e);
+                    // Critical: avoid orphan ciphertext files when note creation fails.
+                    await AudioService.deleteAudioFile(savedPath).catch(() => undefined);
+                    setErrorMessage('Failed to save note');
+                    setErrorShowSettingsAction(false);
+                    setErrorModalVisible(true);
+                    return;
+                } finally {
+                    isCreatingNote.current = false;
+                }
+            }
+
+            // Save Metadata to DB
+            const voiceRecording: VoiceRecording = {
+                id: voiceId,
+                note_id: currentNoteId,
+                file_path: savedPath,
+                duration: recording.duration,
+                created_at: new Date().toISOString(),
+            }
+            if (userId) {
+                await saveVoiceRecordingLocal(userId, voiceRecording);
+            } else {
+                console.warn('[NoteEditScreen] No user ID, strictly local recording might be lost on exit');
+            }
+
+            // Reload from DB to ensure consistency and correct order
+            const updatedRecs = userId ? await getVoiceRecordingsLocal(userId, currentNoteId) : [];
+            setVoiceRecordings(updatedRecs);
+
+            // ALWAYS update the parent note to indicate it has audio
+            // This ensures the microphone icon appears in the list view
+            await updateNote(currentNoteId, {
+                content: resolveOriginalNoteContentForPersistence(),
+                has_audio: true,
+            });
+            setPlayingRecordingId(null);
+
+            await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
+
             const onDeviceTranscription = await isOnDeviceTranscriptionActive();
             const protectedNote = isProtectedRef.current;
+            setTranscribingOnDevice(onDeviceTranscription || protectedNote);
             // Server for accounts online, the phone model otherwise (protected notes
             // never leave the phone); meetings and hold-to-dictate are plain text.
             const agentRoute: VoiceAgentRoute = micMode === 'force_text' || recording.meeting
@@ -5136,9 +5217,30 @@ export const NoteEditScreen = () => {
             let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
             let isTranscriptionSuccess = false;
             let transcribedText = '';
-            const voiceId = Date.now().toString() + Math.random().toString(36).substring(2);
             let insertedPlainTextEarly = false;
             let insertedPendingEarly = false;
+
+            let meetingParts = recording.segments;
+            let meetingPartsEncrypted = false;
+            if ((shouldTranscribe || skippedOffline) && recording.meeting && meetingParts && meetingParts.length > 1) {
+                const rawParts = meetingParts;
+                meetingParts = await persistMeetingParts(rawParts,
+                    (uri) => AudioService.saveAudioFile(uri, false),
+                    (uri) => AudioService.deleteAudioFile(uri));
+                meetingPartsEncrypted = true;
+                for (const path of rawParts) await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => undefined);
+            }
+            if (userId && (shouldTranscribe || skippedOffline)) {
+                try {
+                    await enqueuePendingTranscription(userId, {
+                        noteId: currentNoteId, recordingId: voiceId, variantId: targetVariantId, micMode: recording.meeting ? 'force_text' : micMode,
+                        ...(recording.meeting && meetingParts && meetingParts.length > 1 ? { segments: meetingParts, segmentsEncrypted: meetingPartsEncrypted } : {}),
+                    });
+                } catch (error) {
+                    console.warn('[Transcription] Audio saved, but could not queue retry', error);
+                    showToast(t('voice.retryManually', 'Recording saved. Retry transcription from the recordings list.'), 4500);
+                }
+            }
 
             // 1. TRY TO TRANSCRIBE (But don't fail if it doesn't work)
             try {
@@ -5148,9 +5250,9 @@ export const NoteEditScreen = () => {
                     transcription = { success: false, text: '', error: 'Transcription disabled' };
                 } else {
                     setTrackedIsTranscribing(true);
-                    transcription = recording.meeting && recording.segments && recording.segments.length > 1
-                        ? await transcribeMeetingSegments(recording.segments, protectedNote)
-                        : await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote });
+                    transcription = recording.meeting && meetingParts && meetingParts.length > 1
+                        ? await transcribeMeetingSegments(meetingParts, protectedNote, voiceId, meetingPartsEncrypted)
+                        : await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote, idempotencyKey: voiceId, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
                     if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
                         promptOnDeviceModelForProtected();
                     }
@@ -5161,6 +5263,11 @@ export const NoteEditScreen = () => {
             } finally {
                 setTrackedIsTranscribing(false);
             }
+
+            // Sign-out with deletion must not resurrect an old account's note.
+            if (userId && await storage.getUserId() !== userId) return;
+            await FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => undefined);
+            if (userId && !(await getVoiceRecordingsLocal(userId, currentNoteId)).some((item) => item.id === voiceId)) return;
 
             isTranscriptionSuccess = transcription.success && !!transcription.text;
             transcribedText = isTranscriptionSuccess ? transcription.text : '';
@@ -5215,16 +5322,13 @@ export const NoteEditScreen = () => {
 
                 if (skippedOffline || isNetworkError(transcription.error)) {
                     // Not an error from the user's point of view: the audio is kept.
-                    if (skippedOffline) {
-                        offlineRecordingIdsRef.current.push(voiceId);
-                    }
                     if (LOCAL_WHISPER_ENABLED) {
                         // A request that failed while the phone reports a network
                         // (weak signal) gets no "back online" event: offer right away.
                         offlineOfferPendingRef.current = true;
                         if (!(await isDeviceOffline())) scheduleOfflineOffer();
                     }
-                    showToast(t('voice.savedOffline', 'No internet — the recording is saved. It turns into text when you are back online.'), 3500);
+                    showToast(t('voice.savedOffline', 'Recording saved. Reopen this note with internet to transcribe it automatically.'), 4500);
                 } else if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
                     console.log('[Transparency] Transcription skipped due to auth/guest status');
@@ -5234,92 +5338,20 @@ export const NoteEditScreen = () => {
                 }
             }
 
-            // Wait for any pending creation to finish
-            while (isCreatingNote.current) {
-                await new Promise(r => setTimeout(r, 100));
+            if (userId && isTranscriptionSuccess) {
+                await saveVoiceRecordingLocal(userId, { ...voiceRecording, transcription: transcribedText });
+                setVoiceRecordings(await getVoiceRecordingsLocal(userId, currentNoteId));
+                await updateNote(currentNoteId, { encrypted_transcription: transcribedText, has_audio: true });
+                await removeAudioEmbedsForRecording(savedPath);
+                await removePendingTranscription(userId, currentNoteId, voiceId);
             }
-
-            let currentNoteId = localNoteIdRef.current;
-
-            // 2. SAVE AUDIO (ALWAYS)
-            const savedPath = await AudioService.saveAudioFile(
-                recording.uri,
-                true
-            );
-            // The joined file is saved; the meeting's segment files are no longer needed.
-            if (recording.segments && recording.segments.length > 1) {
-                for (const segment of recording.segments) {
-                    void AudioService.deleteAudioFile(segment).catch(() => undefined);
-                }
+            // Keep meeting parts for a restart until every attempted segment returned.
+            if (meetingParts && (isTranscriptionSuccess || (!shouldTranscribe && !skippedOffline))) {
+                for (const segment of meetingParts) void AudioService.deleteAudioFile(segment).catch(() => undefined);
             }
-            const recordingTranscription = transcribedText || undefined;
-
-            // Ensure Note Exists (Create if not)
-            if (!currentNoteId) {
-                try {
-                    const titleToUse = currentTitleRef.current.trim();
-                    const newNote = await createNote({
-                        title: titleToUse,
-                        content: currentContentRef.current,
-                        audio: {
-                            filePath: savedPath,
-                            duration: recording.duration,
-                            transcription: recordingTranscription,
-                        },
-                        storage_scope: storageScope,
-                        is_protected: isProtectedRef.current,
-                        privacy,
-                    });
-                    setLocalNoteId(newNote.id);
-                    localNoteIdRef.current = newNote.id;
-                    syncTrackedProcessingToNote(newNote.id);
-                    bindCreatedDraftToRoute(newNote.id);
-                    currentNoteId = newNote.id;
-                    lastSavedTitle.current = currentTitleRef.current;
-                    lastSavedContent.current = stripAudioEmbedsFromRichContent(currentContentRef.current);
-                    await handleCreatedNoteAutoScale(newNote.id, currentContentRef.current);
-                } catch (e) {
-                    console.error('Failed to create note for voice:', e);
-                    // Critical: avoid orphan ciphertext files when note creation fails.
-                    await AudioService.deleteAudioFile(savedPath).catch(() => undefined);
-                    setErrorMessage('Failed to save note');
-                    setErrorShowSettingsAction(false);
-                    setErrorModalVisible(true);
-                    return;
-                }
-            }
-
-            // Save Metadata to DB
-            const voiceRecording: VoiceRecording = {
-                id: voiceId,
-                note_id: currentNoteId,
-                file_path: savedPath,
-                duration: recording.duration,
-                transcription: recordingTranscription,
-                created_at: new Date().toISOString(),
-            }
-            if (userId) {
-                await saveVoiceRecordingLocal(userId, voiceRecording);
-            } else {
-                console.warn('[NoteEditScreen] No user ID, strictly local recording might be lost on exit');
-            }
-
-            // Reload from DB to ensure consistency and correct order
-            const updatedRecs = userId ? await getVoiceRecordingsLocal(userId, currentNoteId) : [];
-            setVoiceRecordings(updatedRecs);
-
-            // ALWAYS update the parent note to indicate it has audio
-            // This ensures the microphone icon appears in the list view
-            await updateNote(currentNoteId, {
-                content: resolveOriginalNoteContentForPersistence(),
-                has_audio: true,
-                ...(transcribedText ? { encrypted_transcription: transcribedText } : {})
-            });
-            setPlayingRecordingId(null);
 
             // 4. STOP IF NO TEXT
             if (!isTranscriptionSuccess) {
-                await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
                 const status = 'Saved recording (no text)';
                 setRecordingOutcomeStatus(voiceId, status);
                 showVoiceResultStatus(status, voiceId);
@@ -5404,8 +5436,14 @@ export const NoteEditScreen = () => {
                 dictationAlreadyApplied: false,
                 agentRoute,
             });
+        } catch (error) {
+            console.error('[NoteEditScreen] Recording flow failed:', error);
+            setErrorMessage(getErrorMessage(error, t('voice.finishError')));
+            setErrorShowSettingsAction(false);
+            setErrorModalVisible(true);
         } finally {
-            setIsRecordingFlowActive(false);
+            recordingFlowsInFlightRef.current--;
+            setIsRecordingFlowActive(recordingFlowsInFlightRef.current > 0);
         }
     };
 
@@ -6121,23 +6159,29 @@ export const NoteEditScreen = () => {
 
     // Returns whether the recording got its text. `silent` (the automatic retry
     // once the network is back) shows no error: the recording simply stays queued.
-    const handleRetryTranscription = async (recording?: VoiceRecording, options: { silent?: boolean } = {}): Promise<boolean> => {
+    const handleRetryTranscription = async (recording?: VoiceRecording, options: { silent?: boolean; variantId?: string; micMode?: MicInputMode; segments?: string[]; segmentsEncrypted?: boolean } = {}): Promise<boolean> => {
         const targetRecording = recording
             || voiceRecordings.find((rec) => rec.id === playingRecordingId)
             || voiceRecordings[0];
         if (!targetRecording) return false;
-        const consentGranted = await requestPrivateAIConsent();
-        if (!consentGranted) return false;
+        const onDeviceOnly = isProtectedRef.current;
+        setTranscribingOnDevice(onDeviceOnly || await isOnDeviceTranscriptionActive());
+        // Local speech does not need permission to send text to a cloud AI.
+        if (!onDeviceOnly && !(await isOnDeviceTranscriptionActive()) && !(await requestPrivateAIConsent())) return false;
         const retryAgentRoute = await resolveAgentRoute();
 
         setTrackedIsTranscribing(true);
         setTranscribingRecordingId(targetRecording.id);
         setRecordingOutcomeStatus(targetRecording.id, 'Transcribing...');
+        let sourceUri: string | undefined;
         try {
-            const sourceUri = await AudioService.readAudioFile(targetRecording.file_path);
-            const transcription = await transcribeAudio(sourceUri);
+            sourceUri = options.segments?.length ? undefined : await AudioService.readAudioFile(targetRecording.file_path, `transcription_${targetRecording.id}`);
+            const transcription = options.segments?.length
+                ? await transcribeMeetingSegments(options.segments, onDeviceOnly, targetRecording.id, options.segmentsEncrypted)
+                : await transcribeAudio(sourceUri!, undefined, { onDeviceOnly, idempotencyKey: targetRecording.id, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
 
             if (!transcription.success || !transcription.text) {
+                if (!options.silent && transcription.error === ON_DEVICE_MODEL_REQUIRED) promptOnDeviceModelForProtected();
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 if (!options.silent) {
                     showPrettyQuotaNotification(
@@ -6148,6 +6192,8 @@ export const NoteEditScreen = () => {
                 return false;
             }
 
+            if (userId && await storage.getUserId() !== userId) return false;
+            if (userId && !(await getVoiceRecordingsLocal(userId, targetRecording.note_id)).some((item) => item.id === targetRecording.id)) return false;
             const text = transcription.text.trim();
             if (!text) {
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
@@ -6159,9 +6205,11 @@ export const NoteEditScreen = () => {
                 return false;
             }
 
-            const shouldUseAgentModeForRetry = retryAgentRoute === 'cloud'
-                || (retryAgentRoute === 'device' && isDeviceAgentCandidate(text));
-            const targetVariantId = activeVariantIdRef.current;
+            const shouldUseAgentModeForRetry = options.micMode !== 'force_text' && (retryAgentRoute === 'cloud'
+                || (retryAgentRoute === 'device' && isDeviceAgentCandidate(text)));
+            const requestedVariant = options.variantId ?? activeVariantIdRef.current;
+            const targetVariantId = requestedVariant === 'original' || visibleImprovements.some((item) => item.id === requestedVariant)
+                ? requestedVariant : 'original';
             const insertedEarly = !shouldUseAgentModeForRetry
                 ? await applyPlainTextToVariant(targetVariantId, text)
                 : await insertPendingTranscriptionToVariant(targetVariantId, targetRecording.id, text);
@@ -6191,6 +6239,8 @@ export const NoteEditScreen = () => {
             }
 
             await removeAudioEmbedsForRecording(targetRecording.file_path);
+            if (userId && localNoteId) await removePendingTranscription(userId, localNoteId, targetRecording.id);
+            for (const segment of options.segments ?? []) await FileSystem.deleteAsync(segment, { idempotent: true }).catch(() => undefined);
 
             if (!shouldUseAgentModeForRetry) {
                 const inserted = insertedEarly
@@ -6227,6 +6277,7 @@ export const NoteEditScreen = () => {
             }
             return false;
         } finally {
+            if (sourceUri) await FileSystem.deleteAsync(sourceUri, { idempotent: true }).catch(() => undefined);
             setTrackedIsTranscribing(false);
             setTranscribingRecordingId(null);
         }
@@ -6234,7 +6285,35 @@ export const NoteEditScreen = () => {
 
 
 
-    retryTranscriptionRef.current = handleRetryTranscription;
+    retryPendingTranscriptionsRef.current = async () => {
+        if (!userId || !localNoteId || pendingRetryRunningRef.current || recordingFlowsInFlightRef.current > 0 || isTranscribingRef.current || isAIProcessing) return;
+        pendingRetryRunningRef.current = true;
+        try {
+            if ((await isDeviceOffline()) && !(await isOnDeviceTranscriptionActive())) return;
+            const jobs = await getPendingTranscriptions(userId, localNoteId);
+            const recordings = await getVoiceRecordingsLocal(userId, localNoteId);
+            for (const job of jobs) {
+                if (!isMounted.current || pendingRetryScopeRef.current.userId !== userId || pendingRetryScopeRef.current.noteId !== localNoteId) break;
+                const recording = recordings.find((item) => item.id === job.recordingId);
+                if (!recording) continue;
+                // A crash after saving the transcript must not insert or bill it twice.
+                if (recording.transcription?.trim() || await handleRetryTranscription(recording, { silent: true, variantId: job.variantId, micMode: job.micMode, segments: job.segments, segmentsEncrypted: job.segmentsEncrypted })) {
+                    await removePendingTranscription(userId, localNoteId, job.recordingId);
+                    if (job.segmentsEncrypted) for (const path of job.segments ?? []) await AudioService.deleteAudioFile(path).catch(() => undefined);
+                }
+            }
+        } catch (error) {
+            console.warn('[Transcription] Pending recordings retained for a later retry', error);
+        } finally {
+            pendingRetryRunningRef.current = false;
+        }
+    };
+
+    useEffect(() => {
+        void retryPendingTranscriptionsRef.current?.();
+    }, [userId, localNoteId, voiceRecordings.length]);
+    useFocusEffect(useCallback(() => { void retryPendingTranscriptionsRef.current?.(); }, [userId, localNoteId]));
+
 
     const formatDuration = (seconds: number) => {
         const m = Math.floor(seconds / 60);
@@ -6258,6 +6337,13 @@ export const NoteEditScreen = () => {
 
         if (userId) {
             await deleteVoiceRecordingLocal(userId, id);
+            if (localNoteId) {
+                const jobs = await getPendingTranscriptions(userId, localNoteId);
+                for (const job of jobs.filter((job) => job.recordingId === id && job.segmentsEncrypted)) {
+                    for (const path of job.segments ?? []) await AudioService.deleteAudioFile(path).catch(() => undefined);
+                }
+                await removePendingTranscription(userId, localNoteId, id);
+            }
         }
         await AudioService.deleteAudioFile(path);
 
@@ -6426,7 +6512,7 @@ export const NoteEditScreen = () => {
                                 setShowRecordingsList(true);
                             }}
                             style={styles.iconButton}
-                            accessibilityRole="button" accessibilityLabel={t("a11y.recordVoice", "Voice recordings")}
+                            accessibilityRole="button" accessibilityLabel={t("a11y.voiceRecordings", "Voice recordings")}
                         >
                             <MaterialIcons name="graphic-eq" size={24} color={colors.text} />
                         </TouchableOpacity>
@@ -6499,6 +6585,9 @@ export const NoteEditScreen = () => {
                                 </View>
 
                                 <Text style={styles.previewSectionLabel}>{t('edit.improvePreview.result')}</Text>
+                                <Text style={styles.previewReviewHint}>
+                                    {t('edit.improvePreview.reviewHint', 'Check names, amounts and dates. Accept creates a separate version; the original stays safe.')}
+                                </Text>
                                 <ScrollView style={styles.previewBody} keyboardShouldPersistTaps="handled">
                                     <MarkdownPreview
                                         content={improvementPreview?.resultText || ''}
@@ -7327,7 +7416,7 @@ export const NoteEditScreen = () => {
                 }}
             />
 
-            <TranscriptionIndicator visible={isTranscribing} />
+            <TranscriptionIndicator visible={isTranscribing} onDevice={transcribingOnDevice} onOpenSettings={() => navigation.navigate('Settings')} />
 
             {/* Recordings List Modal */}
             <Modal
@@ -7978,6 +8067,11 @@ const styles = createStyles(() => ({
         textTransform: 'uppercase',
         letterSpacing: 0.6,
         marginBottom: spacing.xs,
+    },
+    previewReviewHint: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginBottom: spacing.s,
     },
     previewBody: {
         // The sheet itself is capped at 82%, so let the result use the room it

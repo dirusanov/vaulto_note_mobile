@@ -59,8 +59,8 @@ test('chip texts are localized, show lineage and number duplicates', () => {
     ], t);
     assert.deepEqual(labels, {
         1: 'Кратко',
-        2: 'Деловой стиль → Кратко',
-        3: 'Кратко 2',
+        2: 'Деловой стиль → Кратко 2',
+        3: 'Кратко 3',
         4: 'Чеклист',
         // No step and no option: shown by position, never by its (content) label.
         5: '5',
@@ -123,4 +123,15 @@ test('word diff marks removed and added words and reassembles both texts', () =>
     assert.ok(segments.some((s) => s.type === 'added' && s.text.includes('reconvene')));
     assert.equal(hasDifferences(segments), true);
     assert.equal(hasDifferences(diffWords('same text', 'same text')), false);
+});
+
+
+test('different lineages remain distinct after compact tabs hide the source steps', () => {
+    const labels = buildVariantDisplayLabels([
+        { id: 'a', label: 'Summarize', option_id: 'summarize' },
+        { id: 'b', label: 'Summarize → Summarize', option_id: 'summarize' },
+        { id: 'c', label: 'Make Professional → Summarize', option_id: 'summarize' },
+    ], t);
+    assert.deepEqual(Object.values(labels).map(chipTextForLabel), ['Кратко', 'Кратко 2', 'Кратко 3']);
+    assert.equal(labels.b, 'Кратко → Кратко 2');
 });

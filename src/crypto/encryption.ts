@@ -135,6 +135,12 @@ export async function encrypt(plaintext: string): Promise<string> {
     }
 }
 
+/** Local-only metadata must survive sync-key changes without ever being plaintext. */
+export async function encryptForDevice(plaintext: string): Promise<string> {
+    if (!plaintext) return '';
+    return encryptWithKey(plaintext, await getOrCreateDeviceKey(), V3_DEVICE_PREFIX);
+}
+
 export async function encryptForSync(plaintext: string): Promise<string> {
     if (!plaintext) return '';
     if (cryptoMode === 'local') {

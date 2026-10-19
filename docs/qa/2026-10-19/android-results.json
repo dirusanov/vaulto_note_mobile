@@ -1,0 +1,268 @@
+[
+  {
+    "time": "2026-10-18T23:57:57+0300",
+    "case": "manual_note_create",
+    "result": "PASS",
+    "detail": "Cyrillic title and long text entered in native UI, saved to list",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T00:04:06+0300",
+    "case": "cloud_speech_ru",
+    "result": "PASS",
+    "detail": "Native Android Files → Share → Vaulto imported synthetic Russian speech (12.04 seconds). Cloud transcript rendered; Anna, Boris, Friday, 15:00 and 20,000 rubles retained. Inflection позвонить/позвоните differs; completion observed within 24s, not a phone benchmark.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T01:20:42+0300",
+    "case": "offline_models_download_background",
+    "result": "IN PROGRESS",
+    "detail": "Background download remains at rounded 100% (678/680 MB); speech is ready, AI status not yet confirmed. Do not count as complete.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T01:21:48+0300",
+    "case": "offline_models_download_background_complete",
+    "result": "PASS",
+    "detail": "Native UI shows Ready: speech and AI work without internet. Both models finished; leaving Settings and importing a cloud recording did not cancel download.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T01:23:42+0300",
+    "case": "local_ai_summary_quality",
+    "result": "PASS",
+    "detail": "Qwen3.5 0.8B produced Russian summary from the synthetic meeting note, preserving names/date/time/budget and conditional launch; observed result within 35s on emulator (not handset speed). Native low-memory killer reclaimed background Android processes during cold model initialization.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T01:33:50+0300",
+    "case": "ambiguous_nested_version_tabs",
+    "result": "REPRODUCED BUG",
+    "detail": "Original Summarize and derived Summarize → Summarize both display compact Summarize without distinct ordinals on release 1.0.92; full versions list distinguishes them.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T01:37:20+0300",
+    "case": "nested_version_names_distinct",
+    "result": "PASS",
+    "detail": "After fix the derived Summarize → Summarize is displayed as Summarize → Summarize 4, and compact tabs use distinct ordinals. Original edits survived the debug update.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:04:12+0300",
+    "case": "offline_speech_ru",
+    "result": "PASS",
+    "detail": "Wi-Fi and mobile data disabled: downloaded Whisper Base produced 145 characters from actual synthetic Russian audio. Functional offline ASR works; Anna became адне and Friday became 5ницу, so quality is imperfect.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:05:38+0300",
+    "case": "search_russian_body_multiple_words",
+    "result": "PASS",
+    "detail": "Search Анна понедельник shows only the matching original note, offline.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:05:40+0300",
+    "case": "search_empty",
+    "result": "PASS",
+    "detail": "Unmatched query hides notes; no stale match.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:07:57+0300",
+    "case": "version_custom_name_with_arrow",
+    "result": "PASS",
+    "detail": "Custom name Итог → клиенту remains whole on the compact tab instead of being interpreted as generated lineage.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:10:12+0300",
+    "case": "version_edit_independence",
+    "result": "PASS",
+    "detail": "Edited version marker persists across opening another version and reopening the note; original marker stays only in original.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:10:45+0300",
+    "case": "compare_original",
+    "result": "PASS",
+    "detail": "Native comparison screen shows removed/added words for original versus renamed version, including both independent QA markers.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:11:20+0300",
+    "case": "native_legacy_voice_encryption_migration",
+    "result": "PASS",
+    "detail": "Two existing plaintext Russian recording captions became v3d ciphertext after loading current code on the same Android installation; four newly generated captions on the second AVD were already v3d.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:11:24+0300",
+    "case": "version_cold_restart",
+    "result": "PASS",
+    "detail": "Custom arrow name and independent edited version survived force-stop and full current-code reload.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:11:54+0300",
+    "case": "delete_version_undo",
+    "result": "PASS",
+    "detail": "Deleted a selected version, then used Undo; its tab returned and the Original remained present.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:11:59+0300",
+    "case": "version_copy_to_new_note",
+    "result": "PASS",
+    "detail": "Copy action completed; checking separate note on list next.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:13:17+0300",
+    "case": "version_copy_confirmed_separate",
+    "result": "PASS",
+    "detail": "List now contains a separate copy of Structure and the source with its unchanged Original.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:16:55+0300",
+    "case": "local_find_tasks_milk",
+    "result": "QUALITY FAILURE",
+    "detail": "Real Qwen3.5 0.8B result captured in 57-milk-tasks-result.png: one Buy milk task, no dairy, but invented 2026-10-19 08:00 from source Buy milk. Incoming feedback is not closed.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:19:37+0300",
+    "case": "new_text_draft_before_exit",
+    "result": "REPRODUCED BUG",
+    "detail": "After entering title/body and waiting 3s without leaving editor: notes 4→4 after force-stop.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:37:00+0300",
+    "case": "new_text_draft_before_exit",
+    "result": "PASS",
+    "detail": "After entering title/body and waiting 3s without leaving editor: notes 4→5 after force-stop.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:37:53+0300",
+    "case": "body_only_draft_before_exit",
+    "result": "PASS",
+    "detail": "After entering title/body and waiting 3s without leaving editor: notes 5→6 after force-stop.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:38:09+0300",
+    "case": "body_only_draft_cold_restart",
+    "result": "PASS",
+    "detail": "Untitled body-only draft is present after force-stop and cold restart.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T02:39:08+0300",
+    "case": "empty_draft_not_saved",
+    "result": "PASS",
+    "detail": "New empty editor → wait3s → Back: note count remains 6. New draft autosave does not create empty notes.",
+    "emulator": "5560"
+  },
+  {
+    "time": "2026-10-19T01:26:36+0300",
+    "case": "offline_reopen_auto_transcription",
+    "result": "REPRODUCED BUG",
+    "detail": "Recording saved offline without a model; app stopped, connectivity restored, app and note reopened. Recording remains without text despite the earlier automatic-recovery promise. Pending IDs are kept only in a component ref.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T01:40:58+0300",
+    "case": "durable_offline_retry_after_restart",
+    "result": "PASS",
+    "detail": "After offline share, saved queued metadata, force-stopped app, restored network, reopened note. Actual cloud transcription filled 149 characters; queue acknowledged and removed.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T01:41:01+0300",
+    "case": "durable_retry_idempotency",
+    "result": "PASS",
+    "detail": "Reopening the completed note does not insert the transcription twice.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T01:49:04+0300",
+    "case": "kill_during_transcription_loses_new_recording",
+    "result": "REPRODUCED BUG",
+    "detail": "Force-stopped during cloud ASR. Note count 2→2. New recording lacks a durable note/recording entry until ASR completes.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:02:20+0300",
+    "case": "kill_during_transcription_preserves_audio",
+    "result": "PASS",
+    "detail": "Force-stopped while Transcribing visible: the added recording, encrypted file, parent note and pending ID are durable. ASR has not saved a transcript yet. This import appended to the already open note.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:04:08+0300",
+    "case": "killed_asr_reopens_and_completes",
+    "result": "PASS",
+    "detail": "Opening the parent note after force-stop re-runs actual cloud ASR, saves an encrypted transcript and acknowledges its queue entry. Recording metadata was durable before ASR.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:05:17+0300",
+    "case": "kill_during_transcription_preserves_audio",
+    "result": "PASS",
+    "detail": "Transcribing was visible. Note, encrypted audio, metadata and pending identifier survive force-stop before transcript exists.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:06:44+0300",
+    "case": "new_note_killed_asr_recovers",
+    "result": "PASS",
+    "detail": "After force-stop during ASR of a NEW note (count3→4), reopen its audio-only tile: real cloud ASR fills text, v3d encrypted caption, queue cleared.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:06:44+0300",
+    "case": "shared_audio_while_editor_open_creates_new_note",
+    "result": "PASS",
+    "detail": "A second audio Share while the old editor is open now creates a separate note instead of appending to the old one.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:08:54+0300",
+    "case": "microphone_denied",
+    "result": "PASS",
+    "detail": "Android microphone prompt is shown; denial returns a permission explanation rather than starting a recording.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:09:54+0300",
+    "case": "microphone_permission_and_pause_resume",
+    "result": "PASS",
+    "detail": "After denying then granting Android permission: recorder starts, paused elapsed time stays fixed, resume returns to recording controls. Emulator input is silence, so this is a control test only.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:14:17+0300",
+    "case": "rich_markdown_export_loses_formatting",
+    "result": "REPRODUCED BUG",
+    "detail": "Actual exported Markdown file from rich note strips checkbox states and bold; filename/body also have trailing spaces. Read native app file.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:16:17+0300",
+    "case": "rich_markdown_export_preserves_formatting",
+    "result": "PASS",
+    "detail": "Actual cached .md preserves source unchecked/checked tasks, **Сумма**, Unicode, #qa and final newline. Filename has no trailing space. Share sheet opened, no recipient chosen. Visual source also inspected directly; WebView checked flags are unreliable for UI automation.",
+    "emulator": "5562"
+  },
+  {
+    "time": "2026-10-19T02:39:05+0300",
+    "case": "trash_restore_rich_note",
+    "result": "PASS",
+    "detail": "Restored from Trash, native Raw Markdown confirms unchecked/checked task states, bold amount and tag intact.",
+    "emulator": "5562"
+  }
+]

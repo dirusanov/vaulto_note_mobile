@@ -113,6 +113,7 @@ export const TasksSheet = ({
                                 </View>
                             ) : (
                                 <>
+                                    <Text style={styles.hint}>{t('edit.tasks.reviewHint', 'Check tasks and dates against the note before adding them.')}</Text>
                                     <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: spacing.s }}>
                                         {tasks.map((task) => {
                                             const isSelected = selected.has(task.id);

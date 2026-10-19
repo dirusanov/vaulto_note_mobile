@@ -22,6 +22,7 @@ import {
 } from './LocalLLMService';
 import { hasRoomForModel } from './modelDownload';
 import { getDeviceCapabilities } from './DeviceCapabilities';
+import { recommendOfflineAI, recommendSpeechModel } from './offlineModelPolicy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAIProvider, getOnDeviceTranscription, setAIProvider } from '../utils/storage';
 
@@ -94,7 +95,7 @@ export const planOfflineModels = async (): Promise<OfflinePlan | null> => {
         }
     }
     const llmOptions: (LocalLLMModelKey | null)[] = [];
-    if (isLocalLLMRuntimeAvailable()) {
+    if (isLocalLLMRuntimeAvailable() && recommendOfflineAI(await getDeviceCapabilities())) {
         const recommended = await getRecommendedLocalLLMModelKey().catch(() => null);
         const start = recommended ? Math.max(LLM_PREFERENCE.indexOf(recommended), 0) : 0;
         for (const key of LLM_PREFERENCE.slice(start)) {
@@ -123,14 +124,11 @@ export const planOfflineModels = async (): Promise<OfflinePlan | null> => {
 };
 
 /**
- * Speech model that stays fast on this phone. Turbo transcribes a minute of audio
- * in seconds on 4 GB+ phones; below that it gets slow, so lighter ones are advised.
+ * Conservative capacity-based default. Actual latency depends on the processor,
+ * recording and thermal state; RAM alone cannot promise a transcription speed.
  */
 export const getRecommendedWhisperKey = async (): Promise<LocalWhisperModelKey> => {
-    const { totalMemoryBytes } = await getDeviceCapabilities();
-    if (!totalMemoryBytes || totalMemoryBytes >= 3.6e9) return 'turbo';
-    if (totalMemoryBytes >= 2.4e9) return 'base';
-    return 'tiny';
+    return recommendSpeechModel(await getDeviceCapabilities());
 };
 
 export type ModelTier = 'fast' | 'balanced' | 'best';
@@ -176,6 +174,7 @@ export const getModelChoices = async (): Promise<{ speech: ModelChoice[]; ai: Mo
 
     const ai: ModelChoice[] = [];
     if (isLocalLLMRuntimeAvailable()) {
+        const recommendAI = recommendOfflineAI(await getDeviceCapabilities());
         const aiKeys = [...LLM_PREFERENCE].reverse();
         const recommendedAI = await getRecommendedLocalLLMModelKey().catch(() => 'qwen3.5-2b' as LocalLLMModelKey);
         const currentAI = await getLocalLLMModelStatus().catch(() => null);
@@ -188,8 +187,8 @@ export const getModelChoices = async (): Promise<{ speech: ModelChoice[]; ai: Mo
                 name: descriptor.label,
                 sizeBytes: descriptor.sizeBytes,
                 supported: await isLocalLLMModelSupportedByDevice(key).catch(() => false),
-                recommended: key === recommendedAI,
-                heavy: aiKeys.indexOf(key) > aiKeys.indexOf(recommendedAI),
+                recommended: recommendAI && key === recommendedAI,
+                heavy: !recommendAI || aiKeys.indexOf(key) > aiKeys.indexOf(recommendedAI),
                 current: !!currentAI?.isDownloaded && currentAI.selectedModel.key === key,
             });
         }
@@ -202,6 +201,8 @@ export const planModelSwitch = async (
     whisperKey: LocalWhisperModelKey,
     llmKey: LocalLLMModelKey | null,
 ): Promise<OfflinePlan | null> => {
+    if (!(await isLocalWhisperModelSupportedByDevice(whisperKey))
+        || (llmKey && !(await isLocalLLMModelSupportedByDevice(llmKey)))) return null;
     const speechStatus = await getLocalWhisperModelStatus(whisperKey).catch(() => null);
     const aiStatus = llmKey ? await getLocalLLMModelStatus(llmKey).catch(() => null) : null;
     const downloadBytes = (speechStatus?.isDownloaded ? 0 : whisperSize(whisperKey))

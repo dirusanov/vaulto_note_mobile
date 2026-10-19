@@ -65,7 +65,7 @@ export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
         id: 'summarize',
         label: 'Summarize',
         icon: 'short-text',
-        prompt: 'Make a brief summary of the following text, highlighting only the most important points: {text}'
+        prompt: 'Make a brief summary of the following text. Preserve names, amounts, dates, conditions and who is responsible for each action exactly. Keep unrelated actions in separate bullets; never attach an amount, owner or deadline to another task. Do not infer missing connections or add facts. Text: {text}'
     },
     {
         id: 'structure',
@@ -465,5 +465,5 @@ export async function extractTasks(noteMarkdown: string, now: Date = new Date())
         jsonSchema: TASKS_RESPONSE_SCHEMA,
         maxTokens: 768,
     });
-    return parseExtractedTasks(raw);
+    return parseExtractedTasks(raw, noteMarkdown, now);
 }

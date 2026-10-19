@@ -39,6 +39,9 @@ const describeTransportFailure = (error: unknown): string | null => {
 };
 
 export const getErrorMessage = (error: unknown, fallback = 'Something went wrong'): string => {
+    if (/not enough memory for on-device AI/i.test(messageOf(error))) {
+        return translate('errors.localAIMemory', 'Not enough memory for AI on this phone. Choose a lighter model or cloud AI in Settings.');
+    }
     const transport = describeTransportFailure(error);
     if (transport) return transport;
 

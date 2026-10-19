@@ -1,13 +1,38 @@
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { Note, NoteImprovement, VoiceRecording } from '../api/notes';
-import { decrypt, encrypt, getCryptoMode, isMasterCiphertext } from '../crypto/encryption';
+import { decrypt, encrypt, encryptForDevice, getCryptoMode, isMasterCiphertext, isDeviceCiphertext } from '../crypto/encryption';
 import { hasMasterKey } from '../crypto/e2ee';
 
 import { AudioService } from './AudioService';
 import { sanitizeStepLabel } from '../i18n/variantLabels';
+import { clearPendingTranscriptions, movePendingTranscriptions } from './pendingTranscriptions';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
+
+type StoredRecording = VoiceRecording & { user_id: string; note_ciphertext?: string; note_title_ciphertext?: string; note_transcript_ciphertext?: string };
+const decodeRecordings = async (rows: StoredRecording[]): Promise<VoiceRecording[]> => Promise.all(rows.map(async (row) => {
+    const { note_ciphertext, note_title_ciphertext, note_transcript_ciphertext, ...recording } = row;
+    if (!recording.transcription) return recording;
+    try {
+        const previous = recording.transcription;
+        const locked = !hasMasterKey() && [note_ciphertext, note_title_ciphertext, note_transcript_ciphertext].some((value) => !!value && isMasterCiphertext(value));
+        const legacyPlaintext = !isDeviceCiphertext(previous) && !isMasterCiphertext(previous);
+        // Backfill old local plaintext too. Compare-and-set protects a newer ASR result.
+        if (legacyPlaintext || (!locked && isMasterCiphertext(previous))) {
+            const wrapped = await encryptForDevice(await decrypt(previous));
+            await withDbRetry('protect voice transcript', (database) => database.runAsync(
+                'UPDATE voice_recordings SET transcription = ? WHERE id = ? AND user_id = ? AND transcription = ?',
+                [wrapped, recording.id, recording.user_id, previous],
+            ));
+            recording.transcription = wrapped;
+        }
+        return { ...recording, transcription: locked ? undefined : await decrypt(recording.transcription) };
+    } catch (error) {
+        console.warn('[DatabaseService] Voice transcript remains unavailable', recording.id, error);
+        return { ...recording, transcription: undefined };
+    }
+}));
 
 const normalizeStorageScope = (value: unknown): 'sync' | 'local_only' => {
     return value === 'local_only' ? 'local_only' : 'sync';
@@ -776,13 +801,13 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
         const { rawNotes, rawImprovements, allVoice } = await withDbRetry('get notes', async (database) => {
             const notes = await database.getAllAsync<any>('SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC', [userId]);
             const imps = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE user_id = ?', [userId]);
-            const voice = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE user_id = ?', [userId]);
+            const voice = await database.getAllAsync<StoredRecording>('SELECT vr.*, n.encrypted_content AS note_ciphertext, n.encrypted_title AS note_title_ciphertext, n.encrypted_transcription AS note_transcript_ciphertext FROM voice_recordings vr JOIN notes n ON n.id = vr.note_id AND n.user_id = vr.user_id WHERE vr.user_id = ?', [userId]);
             return { rawNotes: notes, rawImprovements: imps, allVoice: voice };
         });
 
         const improvementsMap = await processImprovements(rawImprovements);
         const voiceMap = new Map<string, VoiceRecording[]>();
-        allVoice.forEach(v => { const list = voiceMap.get(v.note_id) ?? []; list.push(v); voiceMap.set(v.note_id, list); });
+        (await decodeRecordings(allVoice)).forEach(v => { const list = voiceMap.get(v.note_id) ?? []; list.push(v); voiceMap.set(v.note_id, list); });
         const { notes, hasStuckE2EE } = await processNotes(rawNotes, improvementsMap, voiceMap);
 
         // If stuck E2EE notes were found in local mode, trigger an immediate
@@ -928,12 +953,12 @@ export const getNoteById = async (userId: string, id: string): Promise<Note | nu
             const note = await database.getFirstAsync<any>('SELECT * FROM notes WHERE id = ? AND user_id = ?', [id, userId]);
             if (!note) return { rawNote: null, rawImprovements: [], voiceRecordings: [] };
             const imps = await database.getAllAsync<any>('SELECT * FROM note_improvements WHERE note_id = ?', [id]);
-            const voice = await database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ?', [id]);
+            const voice = await database.getAllAsync<StoredRecording>('SELECT vr.*, n.encrypted_content AS note_ciphertext, n.encrypted_title AS note_title_ciphertext, n.encrypted_transcription AS note_transcript_ciphertext FROM voice_recordings vr JOIN notes n ON n.id = vr.note_id AND n.user_id = vr.user_id WHERE vr.note_id = ? AND vr.user_id = ?', [id, userId]);
             return { rawNote: note, rawImprovements: imps, voiceRecordings: voice };
         });
         if (!rawNote) return null;
         const impsMap = await processImprovements(rawImprovements);
-        const voiceMap = new Map([[id, voiceRecordings]]);
+        const voiceMap = new Map([[id, await decodeRecordings(voiceRecordings)]]);
         const processed = await processNotes([rawNote], impsMap, voiceMap);
         return processed.notes[0] || null;
     } catch (e) { return null; }
@@ -972,12 +997,14 @@ export const wipeLocalDatabase = async (userId?: string): Promise<void> => {
     if (Platform.OS === 'web') {
         if (userId) {
             localStorage.removeItem(getStorageKey(userId));
+            await clearPendingTranscriptions(userId);
             return;
         }
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
             if (key?.startsWith(STORAGE_KEY_PREFIX)) localStorage.removeItem(key);
         }
+        await clearPendingTranscriptions();
         return;
     }
     const scope = userId ? ' WHERE user_id = ?' : '';
@@ -1006,6 +1033,8 @@ export const wipeLocalDatabase = async (userId?: string): Promise<void> => {
             await database.runAsync(`DELETE FROM note_improvements${scope}`, params);
             await database.runAsync(`DELETE FROM notes${scope}`, params);
         });
+        const pendingParts = await clearPendingTranscriptions(userId);
+        for (const path of pendingParts) await AudioService.deleteAudioFile(path).catch(() => undefined);
     } catch (e) { throw e; }
 };
 
@@ -1259,23 +1288,25 @@ export const markAllDirty = async (userId: string): Promise<void> => {
 export const getVoiceRecordingsLocal = async (userId: string, noteId: string): Promise<VoiceRecording[]> => {
     if (Platform.OS === 'web') return [];
     try {
-        return await withDbRetry('get voice', (database) => (
-            database.getAllAsync<VoiceRecording>('SELECT * FROM voice_recordings WHERE note_id = ? AND user_id = ? ORDER BY created_at DESC', [noteId, userId])
+        const rows = await withDbRetry('get voice', (database) => (
+            database.getAllAsync<StoredRecording>('SELECT vr.*, n.encrypted_content AS note_ciphertext, n.encrypted_title AS note_title_ciphertext, n.encrypted_transcription AS note_transcript_ciphertext FROM voice_recordings vr JOIN notes n ON n.id = vr.note_id AND n.user_id = vr.user_id WHERE vr.note_id = ? AND vr.user_id = ? ORDER BY vr.created_at DESC', [noteId, userId])
         ));
+        return await decodeRecordings(rows);
     } catch (e) { return []; }
 };
 
 export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRecording): Promise<void> => {
     if (Platform.OS === 'web') return;
     try {
+        const transcript = recording.transcription ? await encryptForDevice(recording.transcription) : null;
         await withDbRetry('save voice', (database) => (
             database.runAsync(
                 `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, file_path=excluded.file_path, transcription=excluded.transcription, iso_code=excluded.iso_code`,
-                [recording.id, recording.note_id, userId, recording.file_path, recording.duration, recording.transcription || null, recording.created_at, recording.iso_code || null]
+                [recording.id, recording.note_id, userId, recording.file_path, recording.duration, transcript, recording.created_at, recording.iso_code || null]
             )
         ));
-    } catch (e) {}
+    } catch (e) { throw e; }
 };
 
 export const deleteVoiceRecordingLocal = async (
@@ -1362,6 +1393,7 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
         const merged = [...target, ...guest.filter(n => !targetIds.has(n.id)).map(n => ({ ...n, dirty: normalizeStorageScope(n.storage_scope) === 'sync', synced: 0 }))];
         saveWebStore(toUserId, merged);
         localStorage.removeItem(getStorageKey(fromUserId));
+        await movePendingTranscriptions(fromUserId, toUserId).catch((error) => console.warn('[DatabaseService] Notes moved, but recording retries need migration', error));
         return;
     }
     try {
@@ -1374,6 +1406,7 @@ export const migrateGuestData = async (fromUserId: string, toUserId: string): Pr
                 await database.runAsync("UPDATE trash SET user_id = ? WHERE user_id = ?", [toUserId, fromUserId]);
             })
         ));
+        await movePendingTranscriptions(fromUserId, toUserId).catch((error) => console.warn('[DatabaseService] Notes moved, but recording retries need migration', error));
     } catch (e) {
         // The transaction rolled back: the guest's notes stay on the phone under the
         // guest id rather than half-moved. Surface it instead of hiding it.

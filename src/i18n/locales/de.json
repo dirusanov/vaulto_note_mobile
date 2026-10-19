@@ -338,14 +338,17 @@
       "offlineNoSpace": "Nicht genug freier Speicher auf dem Handy",
       "offlineNoSpaceTitle": "Nicht genug Speicher",
       "offlineConfirmTitle": "Offline-Modus herunterladen?",
-      "offlineConfirmDesc": "Die besten Sprach- und KI-Modelle für dieses Handy, {{size}}, einmal geladen. Danach funktionieren Notizen ohne Internet.",
+      "offlineConfirmDesc": "Lade einmal {{size}} für Offline-Verarbeitung herunter. Online bleibt die Cloud aktiv, außer „Nur auf diesem Telefon“ ist eingeschaltet.",
       "offlineModeOffTitle": "Offline-Modus ausschalten?",
-      "offlineModeOffDesc": "Die Modelle werden vom Handy entfernt und geben {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und später online zu Text."
+      "offlineModeOffDesc": "Die Modelle werden vom Handy entfernt und geben {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und später online zu Text.",
+      "routingHint": "Online wird dein gewählter Cloud-Dienst genutzt. Offline-Modelle sind optional. Bei Cloud-Verarbeitung werden ausgewählte Audios oder Texte an den Dienst gesendet.",
+      "speechFirst": "Spracherkennung funktioniert offline. Lokale KI ist optional und kann auf Geräten mit wenig Arbeitsspeicher langsam sein.",
+      "offlineHintSpeech": "Spracherkennung ohne Internet · {{size}}"
     },
     "models": {
       "row": "Modelle",
       "title": "Modelle auf diesem Handy",
-      "subtitle": "Werden ohne Internet genutzt. Online nutzt die App die Vaulto-Cloud: schneller und genauer.",
+      "subtitle": "Modelle für die Offline-Nutzung. Online wird die gewählte Cloud verwendet, außer „Nur auf diesem Telefon“ ist aktiv.",
       "subtitlePrivate": "Sprache und KI laufen nur auf diesem Handy.",
       "speech": "Sprache zu Text",
       "ai": "KI: Sprachbefehle, Bearbeiten, Chat",
@@ -353,16 +356,18 @@
       "balanced": "Ausgewogen",
       "accurate": "Am genauesten",
       "smartest": "Am klügsten",
-      "recommended": "Ideal für dieses Handy",
+      "recommended": "Empfohlen",
       "inUse": "in Verwendung",
       "tooBig": "{{name}} · zu wenig Arbeitsspeicher auf diesem Handy",
       "download": "Herunterladen · {{size}}",
       "switch": "Wechseln",
       "heavyTitle": "Schwer für dieses Handy",
-      "heavy": "Ohne Internet funktioniert es, aber langsamer und mit mehr Akkuverbrauch. Online wird ohnehin die Vaulto-Cloud genutzt.",
-      "heavyPrivate": "Es funktioniert, aber langsamer und mit mehr Akkuverbrauch. Die Vaulto-Cloud ist schneller und genauer, und deine Notizen bleiben verschlüsselt.",
+      "heavy": "Dieses Modell kann langsam sein und mehr Akku verbrauchen. Deine Verarbeitungswahl bleibt bestehen.",
+      "heavyPrivate": "Dieses Modell kann langsam sein und mehr Akku verbrauchen. Die Cloud kann schneller sein, sendet aber ausgewählte Audios oder Texte zur Verarbeitung an einen Server.",
       "useCloud": "Vaulto-Cloud nutzen",
-      "fastNoRequests": "Ohne Internet nimmt Schnell keine Sprachbefehle an: Aufnahmen bleiben reiner Text. Ausgewogen versteht sie."
+      "fastNoRequests": "Ohne Internet nimmt Schnell keine Sprachbefehle an: Aufnahmen bleiben reiner Text. Ausgewogen versteht sie.",
+      "speechOnly": "Nur Spracherkennung",
+      "speechOnlyHint": "Kein KI-Download. Cloud-KI ist online separat wählbar."
     }
   },
   "languages": {
@@ -498,7 +503,8 @@
       "noChanges": "Der Text ist bereits gut — nichts zu ändern.",
       "emptyText": "Gib Text ein, bevor du eine Verbesserung anforderst.",
       "grammarPerfect": "Perfekt! Keine Fehler gefunden.",
-      "working": "Denke nach…"
+      "working": "Denke nach…",
+      "reviewHint": "Prüfe Namen, Beträge und Termine. Das Ergebnis wird als eigene Version gespeichert; das Original bleibt erhalten."
     },
     "dictation": {
       "errorTitle": "Diktierfehler",
@@ -605,7 +611,8 @@
       "notifyOffTitle": "Benachrichtigungen sind aus",
       "notifyOffText": "Erlaube Benachrichtigungen für Vaulto in den Telefoneinstellungen, um Erinnerungen zu bekommen.",
       "openSettings": "Einstellungen öffnen",
-      "reminderPast": "Diese Zeit ist schon vorbei"
+      "reminderPast": "Diese Zeit ist schon vorbei",
+      "reviewHint": "Prüfe Aufgaben und Termine vor dem Hinzufügen anhand der Notiz."
     },
     "protected": {
       "protectNote": "Notiz schützen",
@@ -683,10 +690,14 @@
     "micPermissionDenied": "Für Sprachnotizen wird Zugriff auf das Mikrofon benötigt. Er kann in den Systemeinstellungen erlaubt werden.",
     "chipTranscribe": "Als Text",
     "chipAgent": "Agent",
-    "savedOffline": "Kein Internet – die Aufnahme ist gespeichert. Sie wird zu Text, sobald du wieder online bist.",
+    "savedOffline": "Aufnahme gespeichert. Öffne diese Notiz mit Internet, um sie automatisch zu transkribieren.",
     "chipMeeting": "Meeting",
     "meetingHint": "Bis zu 60 Minuten, danach ein Protokoll mit Beschlüssen und Aufgaben",
-    "agentAuthMessage": "Notizen per Sprache bearbeiten ist nach der Anmeldung verfügbar. Aufnahmen werden auch ohne Konto zu Text."
+    "agentAuthMessage": "Notizen per Sprache bearbeiten ist nach der Anmeldung verfügbar. Aufnahmen werden auch ohne Konto zu Text.",
+    "retryManually": "Aufnahme gespeichert. Starte die Transkription erneut in der Aufnahmeliste.",
+    "transcribingLocal": "Transkription auf diesem Telefon…",
+    "slowOnDevice": "Diese Aufnahme wird noch auf dem Telefon verarbeitet. Für künftige Aufnahmen kann die Cloud bei Internetverbindung schneller sein.",
+    "processingSeconds": "{{seconds}} s"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -713,7 +724,7 @@
     "autoRenewable": "Verlängert sich automatisch. Jederzeit kündbar.",
     "vaultoAIReq": "Vaulto AI erforderlich",
     "agentModeVaultoAIAvail": "Der Agent-Modus ist nur mit Vaulto AI verfügbar.",
-    "aiWorking": "KI-Agent arbeitet ...",
+    "aiWorking": "Text wird verarbeitet…",
     "keepIt": "Behalten",
     "deleteBtn": "Löschen",
     "deleteNoteTitle": "Notiz löschen?",
@@ -870,7 +881,8 @@
     "allVersions": "Alle Versionen",
     "protected": "Geschützte Notiz",
     "onThisPhoneOnly": "Nur auf diesem Telefon",
-    "accountSettings": "Konto und Einstellungen"
+    "accountSettings": "Konto und Einstellungen",
+    "voiceRecordings": "Sprachaufnahmen"
   },
   "ask": {
     "title": "Notizen fragen",
@@ -946,7 +958,8 @@
   "errors": {
     "offline": "Keine Internetverbindung. Prüfe dein Netzwerk und versuche es erneut.",
     "serverUnavailable": "Der Server ist vorübergehend nicht erreichbar. Deine Notizen sind sicher; versuche es in einer Minute erneut.",
-    "timeout": "Die Anfrage hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut."
+    "timeout": "Die Anfrage hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
+    "localAIMemory": "Nicht genug Arbeitsspeicher für diese KI. Wähle in den Einstellungen ein kleineres Modell oder Cloud-KI."
   },
   "alerts": {
     "shareUnavailable": "Teilen ist auf diesem Gerät nicht verfügbar.",
@@ -1023,5 +1036,6 @@
     "transcribing": "Meeting wird transkribiert: Teil {{part}} von {{total}}",
     "summaryFailed": "Das Protokoll konnte nicht erstellt werden. Du kannst später „Meeting-Protokoll“ im KI-Menü starten.",
     "title": "Meeting · {{date}}"
-  }
+  },
+  "paywall": {}
 }

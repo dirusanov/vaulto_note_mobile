@@ -338,14 +338,17 @@
       "offlineNoSpace": "手机可用空间不足",
       "offlineNoSpaceTitle": "空间不足",
       "offlineConfirmTitle": "下载离线模式？",
-      "offlineConfirmDesc": "为本机挑选的最佳语音与 AI 模型，共 {{size}}，只需下载一次。之后笔记无需网络即可使用。",
+      "offlineConfirmDesc": "一次下载 {{size}} 用于离线处理。除非开启“仅在此手机上”，联网时仍使用云端。",
       "offlineModeOffTitle": "关闭离线模式？",
-      "offlineModeOffDesc": "模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后转成文字。"
+      "offlineModeOffDesc": "模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后转成文字。",
+      "routingHint": "联网时使用所选云服务。离线模型为可选项。云端处理会将所选音频或文本发送给服务。",
+      "speechFirst": "语音识别可离线使用。本地 AI 为可选项，在内存较少的手机上可能较慢。",
+      "offlineHintSpeech": "离线语音识别 · {{size}}"
     },
     "models": {
       "row": "模型",
       "title": "本机模型",
-      "subtitle": "无网络时使用。联网时使用 Vaulto 云端：更快、更准确。",
+      "subtitle": "用于离线工作的模型。除非开启“仅在此手机上”，联网时使用所选云服务。",
       "subtitlePrivate": "语音和 AI 仅在本机运行。",
       "speech": "语音转文字",
       "ai": "AI：语音指令、编辑、对话",
@@ -353,16 +356,18 @@
       "balanced": "均衡",
       "accurate": "最准确",
       "smartest": "最智能",
-      "recommended": "最适合本机",
+      "recommended": "推荐",
       "inUse": "使用中",
       "tooBig": "{{name}} · 本机内存不足",
       "download": "下载 · {{size}}",
       "switch": "切换",
       "heavyTitle": "对本机来说偏重",
-      "heavy": "无网络时可以使用，但速度更慢、更耗电。联网时仍会使用 Vaulto 云端。",
-      "heavyPrivate": "可以使用，但速度更慢、更耗电。Vaulto 云端更快更准确，笔记仍保持加密。",
+      "heavy": "此模型可能较慢且更耗电。所选处理方式保持不变。",
+      "heavyPrivate": "此模型可能较慢且更耗电。云端可能更快，但会将所选音频或文本发送到服务器处理。",
       "useCloud": "使用 Vaulto 云端",
-      "fastNoRequests": "无网络时，“快速”不执行语音指令：录音保持为普通文字。“均衡”可以理解指令。"
+      "fastNoRequests": "无网络时，“快速”不执行语音指令：录音保持为普通文字。“均衡”可以理解指令。",
+      "speechOnly": "仅语音识别",
+      "speechOnlyHint": "不下载 AI。联网时可另行选择云端 AI。"
     }
   },
   "languages": {
@@ -498,7 +503,8 @@
       "noChanges": "文本已经很好 — 无需更改。",
       "emptyText": "请先输入文本再请求改进。",
       "grammarPerfect": "完美！没有发现错误。",
-      "working": "思考中…"
+      "working": "思考中…",
+      "reviewHint": "请检查姓名、金额和日期。结果将保存为单独版本，原文会保留。"
     },
     "dictation": {
       "errorTitle": "听写错误",
@@ -605,7 +611,8 @@
       "notifyOffTitle": "通知已关闭",
       "notifyOffText": "请在手机设置中允许 Vaulto 的通知，以便接收提醒。",
       "openSettings": "打开设置",
-      "reminderPast": "这个时间已经过了"
+      "reminderPast": "这个时间已经过了",
+      "reviewHint": "添加前，请对照笔记核对任务和日期。"
     },
     "protected": {
       "protectNote": "保护笔记",
@@ -683,10 +690,14 @@
     "micPermissionDenied": "录制语音笔记需要访问麦克风。可在系统设置中允许。",
     "chipTranscribe": "转文字",
     "chipAgent": "智能体",
-    "savedOffline": "没有网络——录音已保存。恢复联网后会自动转成文字。",
+    "savedOffline": "录音已保存。联网后重新打开此笔记，即可自动转写。",
     "chipMeeting": "会议",
     "meetingHint": "最长 60 分钟，之后生成含决定和任务的纪要",
-    "agentAuthMessage": "登录后可用语音编辑笔记。即使没有账号，录音也会转成文字。"
+    "agentAuthMessage": "登录后可用语音编辑笔记。即使没有账号，录音也会转成文字。",
+    "retryManually": "录音已保存。请在录音列表中重试转写。",
+    "transcribingLocal": "正在此手机上转写…",
+    "slowOnDevice": "此录音仍在手机上处理。今后的录音在联网时使用云端处理可能更快。",
+    "processingSeconds": "{{seconds}} 秒"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -713,7 +724,7 @@
     "autoRenewable": "自动续订，可随时取消。",
     "vaultoAIReq": "需要 Vaulto AI",
     "agentModeVaultoAIAvail": "智能体模式仅在 Vaulto AI 下可用。",
-    "aiWorking": "AI 智能体处理中…",
+    "aiWorking": "正在处理文本…",
     "keepIt": "保留",
     "deleteBtn": "删除",
     "deleteNoteTitle": "删除笔记？",
@@ -870,7 +881,8 @@
     "allVersions": "所有版本",
     "protected": "受保护的笔记",
     "onThisPhoneOnly": "仅在这部手机上",
-    "accountSettings": "账户和设置"
+    "accountSettings": "账户和设置",
+    "voiceRecordings": "语音录音"
   },
   "ask": {
     "title": "询问笔记",
@@ -946,7 +958,8 @@
   "errors": {
     "offline": "没有网络连接。请检查网络后重试。",
     "serverUnavailable": "服务器暂时不可用。你的笔记是安全的，请稍后再试。",
-    "timeout": "请求耗时过长。请检查网络后重试。"
+    "timeout": "请求耗时过长。请检查网络后重试。",
+    "localAIMemory": "此手机没有足够内存运行该 AI 模型。请在设置中选择更轻的模型或云端 AI。"
   },
   "alerts": {
     "shareUnavailable": "此设备无法分享。",
@@ -1023,5 +1036,6 @@
     "transcribing": "正在转写会议：第 {{part}} 部分，共 {{total}} 部分",
     "summaryFailed": "未能生成会议纪要，稍后可在 AI 菜单中运行“会议纪要”。",
     "title": "会议 · {{date}}"
-  }
+  },
+  "paywall": {}
 }

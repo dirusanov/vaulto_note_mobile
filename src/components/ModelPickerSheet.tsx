@@ -41,8 +41,8 @@ export const ModelPickerSheet = ({ visible, privateMode, onClose, onApply, onUse
         void getModelChoices().then((result) => {
             if (!active) return;
             setChoices(result);
-            setSpeechKey((result.speech.find((c) => c.current) ?? result.speech.find((c) => c.recommended))?.key ?? null);
-            setAiKey((result.ai.find((c) => c.current) ?? result.ai.find((c) => c.recommended))?.key ?? null);
+            setSpeechKey((result.speech.find((c) => c.current) ?? result.speech.find((c) => c.recommended && c.supported))?.key ?? null);
+            setAiKey((result.ai.find((c) => c.current) ?? result.ai.find((c) => c.recommended && c.supported))?.key ?? null);
         });
         return () => { active = false; };
     }, [visible]);
@@ -143,6 +143,20 @@ export const ModelPickerSheet = ({ visible, privateMode, onClose, onApply, onUse
                                     {choices.ai.length > 0 && (
                                         <>
                                             <Text style={styles.section}>{t('settings.models.ai', 'AI: voice requests, editing, chat')}</Text>
+                                            {!choices.ai.some((choice) => choice.current) && (
+                                                <TouchableOpacity
+                                                    style={[styles.row, aiKey === null && styles.rowSelected]}
+                                                    onPress={() => setAiKey(null)}
+                                                    accessibilityRole="radio"
+                                                    accessibilityState={{ selected: aiKey === null }}
+                                                >
+                                                    <MaterialIcons name={aiKey === null ? 'radio-button-checked' : 'radio-button-unchecked'} size={22} color={aiKey === null ? colors.primary : colors.textTertiary} />
+                                                    <View style={styles.rowText}>
+                                                        <Text style={styles.rowTitle}>{t('settings.models.speechOnly', 'Speech only')}</Text>
+                                                        <Text style={styles.rowMeta}>{t('settings.models.speechOnlyHint', 'Skip the AI download. Cloud AI is a separate choice when online.')}</Text>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            )}
                                             {choices.ai.map((c) => renderRow('ai', c))}
                                             {!!aiKey && !modelUnderstandsRequests(aiKey) && (
                                                 <Text style={styles.hint}>

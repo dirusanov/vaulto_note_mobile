@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.93] - 2026-10-19
+
+### Fixed
+- New text drafts save while you type; audio is encrypted and saved before transcription starts. Interrupted transcription resumes when the note is reopened.
+- Recording captions are encrypted locally, including existing captions when read. Retry keeps the original version and dictation mode, and protected audio stays on the device.
+- Incomplete meeting transcription remains queued. Retry parts are encrypted and temporary decrypted parts are removed.
+- Imported audio opens a separate note. Markdown export preserves checkboxes and formatting.
+- Compact version tabs distinguish repeated actions and preserve user-given names.
+- Undated notes cannot acquire model-invented reminder dates/times without recognizable evidence in the source. Unsupported date expressions conservatively remain undated.
+
+### Changed
+- Conservative offline downloads for low-memory or unknown devices: speech first, optional AI separately. Local processing shows elapsed time and an option to choose cloud processing for future recordings.
+- Clearer cloud/local explanations and review hints for generated text and tasks. AI results still need review; the small local model can make factual errors.
+
+QA: `docs/qa-notes-voice-2026-10-19.md` and `docs/release-1.0.93-2026-10-19.md`.
+
 ## [1.0.92] - 2026-10-18
 
 ### Fixed

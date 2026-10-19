@@ -453,7 +453,7 @@ export const SettingsScreen = () => {
                     ? t('settings.voice.offlineReadyAll', 'Ready · speech and AI work without internet')
                     : t('settings.voice.offlineReadySpeech', 'Ready · speech works without internet'))
             : offlinePlan
-                ? t('settings.voice.offlineHintAll', 'Speech and AI right on the phone, no internet needed · {{size}}', {
+                ? t(offlinePlan.llmKey ? 'settings.voice.offlineHintAll' : 'settings.voice.offlineHintSpeech', offlinePlan.llmKey ? 'Speech and AI without internet · {{size}}' : 'Speech without internet · {{size}}', {
                     size: formatModelSize(offlinePlan.downloadBytes, t),
                 })
                 : t('settings.voice.offlineNoSpace', 'Not enough free space on this phone');
@@ -740,6 +740,7 @@ export const SettingsScreen = () => {
                                 size: formatModelSize(plan.downloadBytes, t),
                             }),
                             net?.type === 'cellular' ? t('localAI.downloadCellular', 'You are on mobile data — Wi-Fi is recommended.') : '',
+                            !plan.llmKey ? t('settings.voice.speechFirst', 'Speech works without internet. Local AI is optional: it can be slow on phones with little memory.') : '',
                         ].filter(Boolean).join('\n\n'),
                         [
                             { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
@@ -1391,6 +1392,11 @@ export const SettingsScreen = () => {
                 {/* Voice & AI: works out of the box (cloud), one switch for offline */}
                 <View style={styles.card}>
                     <Text style={styles.dataCardTitle}>{t("settings.voice.title", "Voice & AI")}</Text>
+                    {!privateMode && (
+                        <Text style={[styles.preferenceDescription, { marginBottom: spacing.s }]}>
+                            {t('settings.voice.routingHint', 'Online uses your selected cloud service. Offline models are optional. Cloud processing sends the selected audio or text to the service.')}
+                        </Text>
+                    )}
 
                     {LOCAL_WHISPER_ENABLED && (
                         <>
@@ -1456,26 +1462,26 @@ export const SettingsScreen = () => {
                                             accessibilityLabel={t("settings.voice.private", "Only on this phone")}
                                         />
                                     </View>
-                                    {!offlineDownloading && (
-                                        <>
-                                            <View style={styles.separator} />
-                                            <TouchableOpacity
-                                                style={[styles.preferenceRow, styles.voiceRow]}
-                                                activeOpacity={0.85}
-                                                onPress={() => setShowModelPicker(true)}
-                                                accessibilityRole="button"
-                                            >
-                                                <View style={styles.voiceRowText}>
-                                                    <MaterialIcons name="tune" size={24} color={colors.textSecondary} />
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={styles.preferenceTitle}>{t("settings.models.row", "Models")}</Text>
-                                                        {!!modelSummary && <Text style={styles.preferenceDescription}>{modelSummary}</Text>}
-                                                    </View>
-                                                </View>
-                                                <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
-                                            </TouchableOpacity>
-                                        </>
-                                    )}
+                                </>
+                            )}
+                            {!offlineDownloading && (
+                                <>
+                                    <View style={styles.separator} />
+                                    <TouchableOpacity
+                                        style={[styles.preferenceRow, styles.voiceRow]}
+                                        activeOpacity={0.85}
+                                        onPress={() => setShowModelPicker(true)}
+                                        accessibilityRole="button"
+                                    >
+                                        <View style={styles.voiceRowText}>
+                                            <MaterialIcons name="tune" size={24} color={colors.textSecondary} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.preferenceTitle}>{t("settings.models.row", "Models")}</Text>
+                                                {!!modelSummary && <Text style={styles.preferenceDescription}>{modelSummary}</Text>}
+                                            </View>
+                                        </View>
+                                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
+                                    </TouchableOpacity>
                                 </>
                             )}
                             <View style={styles.separator} />

@@ -183,8 +183,11 @@ export const buildVariantDisplayLabels = (
             // Never show a label or title that is not a step: that would be note text.
             text = fallbackText(index);
         }
-        const count = (seen.get(text) || 0) + 1;
-        seen.set(text, count);
+        // The compact tab hides lineage. Count by what is actually visible,
+        // otherwise two different chains both become indistinguishable tabs.
+        const compactText = chipTextForLabel(text);
+        const count = (seen.get(compactText) || 0) + 1;
+        seen.set(compactText, count);
         result[improvement.id] = count > 1 ? `${text} ${count}` : text;
     });
     return result;

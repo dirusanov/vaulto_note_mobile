@@ -36,6 +36,29 @@ test('tasks already in the note checklist are recognised', () => {
     assert.ok(!isTaskInNote({ title: 'Купить молоко и хлеб' }, existing));
 });
 
+test('undated notes cannot acquire an invented model deadline or reminder time', () => {
+    const now = new Date(2026, 9, 19, 2, 0);
+    const raw = '{"tasks":[{"title":"Buy milk","date":"2026-10-19","time":"08:00"}]}';
+    const [task] = parseExtractedTasks(raw, 'Buy milk.', now);
+    assert.equal(task.date, null);
+    assert.equal(task.time, null);
+    assert.equal(tasksToChecklistMarkdown([task]), '- [ ] Buy milk');
+    assert.equal(parseExtractedTasks(raw, 'Buy 19 bottles of milk for 8 dollars.', now)[0].date, null);
+});
+
+test('source deadlines retain supported dates and explicit times, but reject wrong resolutions', () => {
+    const now = new Date(2026, 9, 19, 2, 0); // Monday
+    const raw = (date, time = '15:00') => JSON.stringify({ tasks: [{ title: 'Call Anna', date, time }] });
+    assert.equal(parseExtractedTasks(raw('2026-10-20'), 'Позвонить Анне завтра в 15:00.', now)[0].time, '15:00');
+    assert.equal(parseExtractedTasks(raw('2026-10-20'), 'Позвонить Анне завтра.', now)[0].time, null);
+    assert.equal(parseExtractedTasks(raw('2026-10-19'), 'Позвонить Анне завтра.', now)[0].date, null);
+    assert.equal(parseExtractedTasks(raw('2026-10-23'), 'Call Anna on Friday at 15:00.', now)[0].date, '2026-10-23');
+    assert.equal(parseExtractedTasks(raw('2026-10-20'), 'Call Anna the day after tomorrow.', now)[0].date, null);
+    assert.equal(parseExtractedTasks(raw('2026-10-21'), 'Call Anna the day after tomorrow.', now)[0].date, '2026-10-21');
+    assert.equal(parseExtractedTasks(raw('2026-10-23'), 'Позвонить 23.10.2026 в 15:00.', now)[0].date, '2026-10-23');
+    assert.equal(parseExtractedTasks(raw('2026-10-23'), 'Call on 2026-10-23 at 15:00.', now)[0].date, '2026-10-23');
+});
+
 test('checklist markdown and calendar events', () => {
     const tasks = parseExtractedTasks('{"tasks":[{"title":"Ship v2","date":"2026-10-01","time":"14:00"},{"title":"Pack","date":"2026-10-03"},{"title":"Think"}]}');
     assert.equal(tasksToChecklistMarkdown(tasks), '- [ ] Ship v2 — 2026-10-01 14:00\n- [ ] Pack — 2026-10-03\n- [ ] Think');

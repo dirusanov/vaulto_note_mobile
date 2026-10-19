@@ -338,14 +338,17 @@
       "offlineNoSpace": "Pas assez d’espace libre sur ce téléphone",
       "offlineNoSpaceTitle": "Espace insuffisant",
       "offlineConfirmTitle": "Télécharger le mode hors ligne ?",
-      "offlineConfirmDesc": "Les meilleurs modèles de voix et d’IA pour ce téléphone, {{size}}, téléchargés une fois. Ensuite, les notes fonctionnent sans internet.",
+      "offlineConfirmDesc": "Téléchargez {{size}} une fois pour travailler hors ligne. Avec internet, le cloud reste utilisé sauf si « Sur ce téléphone uniquement » est activé.",
       "offlineModeOffTitle": "Désactiver le mode hors ligne ?",
-      "offlineModeOffDesc": "Les modèles sont supprimés du téléphone et libèrent {{size}}. Sans internet, les enregistrements sont conservés et transcrits au retour du réseau."
+      "offlineModeOffDesc": "Les modèles sont supprimés du téléphone et libèrent {{size}}. Sans internet, les enregistrements sont conservés et transcrits au retour du réseau.",
+      "routingHint": "En ligne, le service cloud choisi est utilisé. Les modèles hors ligne sont facultatifs. Le traitement cloud envoie le texte ou l’audio sélectionné au service.",
+      "speechFirst": "La reconnaissance vocale fonctionne sans internet. L’IA locale est facultative et peut être lente sur un téléphone avec peu de mémoire.",
+      "offlineHintSpeech": "Reconnaissance vocale sans internet · {{size}}"
     },
     "models": {
       "row": "Modèles",
       "title": "Modèles sur ce téléphone",
-      "subtitle": "Utilisés sans internet. En ligne, le cloud Vaulto est utilisé : plus rapide et plus précis.",
+      "subtitle": "Modèles pour travailler hors ligne. En ligne, le cloud choisi est utilisé sauf si « Sur ce téléphone uniquement » est activé.",
       "subtitlePrivate": "La voix et l’IA fonctionnent uniquement sur ce téléphone.",
       "speech": "Voix en texte",
       "ai": "IA : demandes vocales, retouches, chat",
@@ -353,16 +356,18 @@
       "balanced": "Équilibré",
       "accurate": "Le plus précis",
       "smartest": "Le plus intelligent",
-      "recommended": "Idéal pour ce téléphone",
+      "recommended": "Recommandé",
       "inUse": "utilisé",
       "tooBig": "{{name}} · mémoire insuffisante sur ce téléphone",
       "download": "Télécharger · {{size}}",
       "switch": "Changer",
       "heavyTitle": "Lourd pour ce téléphone",
-      "heavy": "Il fonctionnera sans internet, mais plus lentement et en consommant plus de batterie. En ligne, le cloud Vaulto est utilisé de toute façon.",
-      "heavyPrivate": "Il fonctionnera, mais plus lentement et en consommant plus de batterie. Le cloud Vaulto est plus rapide et plus précis, et vos notes restent chiffrées.",
+      "heavy": "Ce modèle peut être lent et consommer davantage de batterie. Votre choix de traitement est conservé.",
+      "heavyPrivate": "Ce modèle peut être lent et consommer davantage de batterie. Le cloud peut être plus rapide, mais envoie le texte ou l’audio sélectionné à un serveur pour traitement.",
       "useCloud": "Utiliser le cloud Vaulto",
-      "fastNoRequests": "Sans internet, Rapide ne traite pas les demandes vocales : les enregistrements restent du texte. Équilibré les comprend."
+      "fastNoRequests": "Sans internet, Rapide ne traite pas les demandes vocales : les enregistrements restent du texte. Équilibré les comprend.",
+      "speechOnly": "Voix uniquement",
+      "speechOnlyHint": "Sans télécharger d’IA. L’IA cloud peut être choisie séparément avec internet."
     }
   },
   "languages": {
@@ -498,7 +503,8 @@
       "noChanges": "Le texte est déjà bon — rien à changer.",
       "emptyText": "Saisissez du texte avant de demander une amélioration.",
       "grammarPerfect": "Parfait ! Aucune faute trouvée.",
-      "working": "Réflexion…"
+      "working": "Réflexion…",
+      "reviewHint": "Vérifiez les noms, montants et dates. Le résultat sera une version distincte ; l’original est conservé."
     },
     "dictation": {
       "errorTitle": "Erreur de dictée",
@@ -605,7 +611,8 @@
       "notifyOffTitle": "Les notifications sont désactivées",
       "notifyOffText": "Autorisez les notifications de Vaulto dans les réglages du téléphone pour recevoir des rappels.",
       "openSettings": "Ouvrir les réglages",
-      "reminderPast": "Cette heure est déjà passée"
+      "reminderPast": "Cette heure est déjà passée",
+      "reviewHint": "Vérifiez les tâches et les dates dans la note avant de les ajouter."
     },
     "protected": {
       "protectNote": "Protéger la note",
@@ -683,10 +690,14 @@
     "micPermissionDenied": "L'accès au microphone est nécessaire pour enregistrer des notes vocales. Vous pouvez l'autoriser dans les réglages du système.",
     "chipTranscribe": "En texte",
     "chipAgent": "Agent",
-    "savedOffline": "Pas d’internet : l’enregistrement est sauvegardé. Il sera transcrit dès le retour du réseau.",
+    "savedOffline": "Enregistrement sauvegardé. Rouvrez cette note avec internet pour la transcrire automatiquement.",
     "chipMeeting": "Réunion",
     "meetingHint": "Jusqu’à 60 minutes, puis un compte rendu avec décisions et tâches",
-    "agentAuthMessage": "La modification des notes à la voix est disponible après connexion. Les enregistrements sont transcrits même sans compte."
+    "agentAuthMessage": "La modification des notes à la voix est disponible après connexion. Les enregistrements sont transcrits même sans compte.",
+    "retryManually": "Enregistrement sauvegardé. Relancez la transcription depuis la liste des enregistrements.",
+    "transcribingLocal": "Transcription sur ce téléphone…",
+    "slowOnDevice": "Cet enregistrement est encore traité sur le téléphone. Pour les suivants, le cloud peut être plus rapide avec internet.",
+    "processingSeconds": "{{seconds}} s"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -713,7 +724,7 @@
     "autoRenewable": "Renouvellement automatique. Annulable à tout moment.",
     "vaultoAIReq": "Vaulto AI requis",
     "agentModeVaultoAIAvail": "Le mode Agent est disponible uniquement avec Vaulto AI.",
-    "aiWorking": "L'agent IA travaille...",
+    "aiWorking": "Traitement du texte…",
     "keepIt": "Conserver",
     "deleteBtn": "Supprimer",
     "deleteNoteTitle": "Supprimer la note ?",
@@ -870,7 +881,8 @@
     "allVersions": "Toutes les versions",
     "protected": "Note protégée",
     "onThisPhoneOnly": "Uniquement sur ce téléphone",
-    "accountSettings": "Compte et réglages"
+    "accountSettings": "Compte et réglages",
+    "voiceRecordings": "Enregistrements vocaux"
   },
   "ask": {
     "title": "Interroger vos notes",
@@ -946,7 +958,8 @@
   "errors": {
     "offline": "Pas de connexion internet. Vérifiez votre réseau et réessayez.",
     "serverUnavailable": "Le serveur est momentanément indisponible. Vos notes sont en sécurité ; réessayez dans une minute.",
-    "timeout": "La requête a pris trop de temps. Vérifiez votre connexion et réessayez."
+    "timeout": "La requête a pris trop de temps. Vérifiez votre connexion et réessayez.",
+    "localAIMemory": "Mémoire insuffisante pour cette IA. Choisissez un modèle plus léger ou l’IA cloud dans les réglages."
   },
   "alerts": {
     "shareUnavailable": "Le partage n’est pas disponible sur cet appareil.",
@@ -1023,5 +1036,6 @@
     "transcribing": "Transcription de la réunion : partie {{part}} sur {{total}}",
     "summaryFailed": "Impossible de rédiger le compte rendu. Vous pourrez lancer « Compte rendu » depuis le menu IA.",
     "title": "Réunion · {{date}}"
-  }
+  },
+  "paywall": {}
 }

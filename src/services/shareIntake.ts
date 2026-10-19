@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { StackActions } from '@react-navigation/native';
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { navigationRef } from '../navigation/deepLinks';
 import { Sound } from './audioPlayback';
@@ -57,10 +58,10 @@ export const useShareIntake = (
                     (navigationRef.navigate as any)('NoteEdit', { noteId: note.id });
                 } else if (payload.kind === 'audio') {
                     const duration = await readDuration(payload.path);
-                    (navigationRef.navigate as any)('NoteEdit', {
+                    navigationRef.dispatch(StackActions.push('NoteEdit', {
                         initialRecording: { uri: payload.path, duration, mimeType: payload.mimeType || 'audio/m4a' },
                         initialTranscribe: true,
-                    });
+                    }));
                 }
             } catch (error) {
                 console.warn('[ShareIntake] Could not import shared content', error);

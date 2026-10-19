@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AppState, NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { getLocalLLMModelKey, setLocalLLMModelKey } from '../utils/storage';
 import { canDeviceRunModel, describeDeviceMemory, getDeviceCapabilities, getInferenceThreadCount } from './DeviceCapabilities';
+import { hasLocalAIMemoryBudget } from './offlineModelPolicy';
 import { releaseLocalWhisperContext } from './LocalWhisperService';
 import {
     createMutex,
@@ -251,7 +252,7 @@ export const setSelectedLocalLLMModel = async (key: LocalLLMModelKey): Promise<v
 
 /** Whether this device has the RAM to load the model at all. */
 export const isLocalLLMModelSupportedByDevice = async (key: LocalLLMModelKey): Promise<boolean> => {
-    return canDeviceRunModel(getDescriptor(key).sizeBytes);
+    return hasLocalAIMemoryBudget(await getDeviceCapabilities(), getDescriptor(key).sizeBytes) && await canDeviceRunModel(getDescriptor(key).sizeBytes);
 };
 
 export const getLocalLLMModelStatus = async (key?: string): Promise<LocalLLMModelStatus> => {
@@ -366,6 +367,9 @@ export const generateWithLocalLLM = async (
     }
 
     const status = await getLocalLLMModelStatus();
+    if (!(await isLocalLLMModelSupportedByDevice(status.selectedModel.key))) {
+        throw new Error('Not enough memory for on-device AI. Use cloud AI or a lighter model.');
+    }
     if (!status.isDownloaded) {
         throw new Error(`Local LLM model "${status.selectedModel.label}" is not downloaded`);
     }

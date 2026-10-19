@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Text, View, Animated, Easing } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Text, View, Animated, Easing, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
@@ -8,14 +8,26 @@ import { createStyles } from '../theme/createStyles';
 
 interface Props {
     visible: boolean;
+    onDevice?: boolean;
+    onOpenSettings?: () => void;
 }
 
-export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
+export const TranscriptionIndicator: React.FC<Props> = ({ visible, onDevice, onOpenSettings }) => {
     const { t } = useTranslation();
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
+        setElapsed(0);
+        if (!visible) return;
+        const started = Date.now();
+        const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+        return () => clearInterval(timer);
+    }, [visible]);
+
+    useEffect(() => {
+        let pulse: ReturnType<typeof Animated.loop> | undefined;
         if (visible) {
             Animated.timing(fadeAnim, {
                 toValue: 1,
@@ -24,7 +36,7 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
                 useNativeDriver: true,
             }).start();
 
-            Animated.loop(
+            pulse = Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, {
                         toValue: 1.2,
@@ -39,7 +51,8 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
                         useNativeDriver: true,
                     }),
                 ])
-            ).start();
+            );
+            pulse.start();
         } else {
             Animated.timing(fadeAnim, {
                 toValue: 0,
@@ -48,6 +61,7 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
                 useNativeDriver: true,
             }).start(() => pulseAnim.stopAnimation());
         }
+        return () => { pulse?.stop(); pulseAnim.stopAnimation(); fadeAnim.stopAnimation(); };
     }, [visible, fadeAnim, pulseAnim]);
 
     if (!visible) return null;
@@ -69,8 +83,21 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible }) => {
                 <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                     <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
                 </Animated.View>
-                <Text style={styles.text}>{t('aux.transcribing', 'Transcribing...')}</Text>
+                <Text style={styles.text}>
+                    {onDevice ? t('voice.transcribingLocal', 'Transcribing on this phone…') : t('aux.transcribing', 'Transcribing...')}
+                    {elapsed >= 3 ? ` · ${t('voice.processingSeconds', '{{seconds}} s', { seconds: elapsed })}` : ''}
+                </Text>
             </View>
+            {onDevice && elapsed >= 30 && (
+                <View style={{ marginTop: 8 }}>
+                    <Text style={styles.slowHint}>{t('voice.slowOnDevice', 'This recording is still processing on the phone. For future recordings, cloud processing may be faster when online.')}</Text>
+                    {!!onOpenSettings && (
+                        <TouchableOpacity onPress={onOpenSettings} accessibilityRole="button" style={{ paddingVertical: 8 }}>
+                            <Text style={[styles.text, { color: colors.primary }]}>{t('common.settings', 'Settings')}</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
         </Animated.View>
     );
 };
@@ -90,6 +117,7 @@ const styles = createStyles(() => ({
         shadowRadius: 8,
         elevation: 4,
         zIndex: 100, // Ensure it's above other elements
+        maxWidth: '90%',
     },
     content: {
         flexDirection: 'row',
@@ -100,5 +128,10 @@ const styles = createStyles(() => ({
         ...typography.caption,
         color: colors.text,
         fontWeight: '500',
+        flexShrink: 1,
+    },
+    slowHint: {
+        ...typography.caption,
+        color: colors.textSecondary,
     },
 }));

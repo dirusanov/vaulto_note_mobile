@@ -66,7 +66,7 @@ const normalizeTitle = (title: string): string =>
     (title.toLowerCase().replace(/ё/g, 'е').match(WORD_REGEX) || []).join(' ');
 
 /** Tolerates code fences, prose around the JSON and a bare array. */
-export const parseExtractedTasks = (raw: string): ExtractedTask[] => {
+export const parseExtractedTasks = (raw: string, source?: string, now: Date = new Date()): ExtractedTask[] => {
     const text = (raw || '').replace(/```(?:json)?/gi, '').trim();
     let parsed: unknown = null;
     const candidates = [text, text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1), text.slice(text.indexOf('['), text.lastIndexOf(']') + 1)];
@@ -91,16 +91,64 @@ export const parseExtractedTasks = (raw: string): ExtractedTask[] => {
         const key = normalizeTitle(clean);
         if (!key || seen.has(key)) continue;
         seen.add(key);
-        const date = validDate((item as { date?: unknown })?.date);
+        const proposedDate = validDate((item as { date?: unknown })?.date);
+        const date = proposedDate && (source === undefined || dateOccursInSource(proposedDate, source, now)) ? proposedDate : null;
+        const proposedTime = validTime((item as { time?: unknown })?.time);
         tasks.push({
             id: `task-${tasks.length}`,
             title: clean,
             date,
-            time: date ? validTime((item as { time?: unknown })?.time) : null,
+            time: date && proposedTime && (source === undefined || timeOccursInSource(proposedTime, source)) ? proposedTime : null,
         });
         if (tasks.length >= MAX_TASKS) break;
     }
     return tasks;
+};
+
+// A model can invent a perfectly valid date from the prompt's "today" even for
+// "Buy milk.". Accept only dates supported by recognizable source expressions.
+// This guards scheduling metadata; task ownership/meaning still needs review.
+const normalizedSource = (source: string): string => source.normalize('NFKC').toLowerCase();
+const dateOccursInSource = (date: string, source: string, now: Date): boolean => {
+    const text = normalizedSource(source);
+    if (text.includes(date)) return true;
+    for (const match of text.matchAll(/\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b/g)) {
+        if (`${match[3]}-${pad(Number(match[2]))}-${pad(Number(match[1]))}` === date) return true;
+    }
+    const addDays = (days: number): string => {
+        const result = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        result.setDate(result.getDate() + days);
+        return localDateString(result);
+    };
+    const relative: Array<[number, RegExp]> = [
+        [2, /\bday after tomorrow\b|послезавтра|übermorgen|pasado mañana|après-demain|depois de amanhã|بعد غد|明後日|后天/],
+        [1, /\btomorrow\b|(?:^|[^а-я])завтра(?![а-я])|\bmorgen\b|\bmañana\b|\bdemain\b|\bamanhã\b|غدًا|غدا|明日|明天/],
+        [0, /\btoday\b|сегодня|\bheute\b|\bhoy\b|\baujourd'hui\b|\bhoje\b|اليوم|今日|今天/],
+    ];
+    // Remove the longer phrase before looking for its shorter "tomorrow" part.
+    let remainder = text;
+    for (const [days, pattern] of relative) {
+        if (pattern.test(remainder)) {
+            if (addDays(days) === date) return true;
+            remainder = remainder.replace(new RegExp(pattern.source, 'g'), ' ');
+        }
+    }
+    const weekdays = [
+        /\bsunday\b|воскресень[еяю]|\bsonntag\b|\bdomingo\b|\bdimanche\b|الأحد|रविवार|日曜日|(?:周|星期)日|(?:周|星期)天/,
+        /\bmonday\b|понедельник|\bmontag\b|\blunes\b|\blundi\b|\bsegunda-feira\b|الاثنين|सोमवार|月曜日|(?:周|星期)一/,
+        /\btuesday\b|вторник|\bdienstag\b|\bmartes\b|\bmardi\b|\bterça-feira\b|الثلاثاء|मंगलवार|火曜日|(?:周|星期)二/,
+        /\bwednesday\b|сред[ауеы]|\bmittwoch\b|\bmiércoles\b|\bmercredi\b|\bquarta-feira\b|الأربعاء|बुधवार|水曜日|(?:周|星期)三/,
+        /\bthursday\b|четверг|\bdonnerstag\b|\bjueves\b|\bjeudi\b|\bquinta-feira\b|الخميس|गुरुवार|木曜日|(?:周|星期)四/,
+        /\bfriday\b|пятниц[ауеы]|\bfreitag\b|\bviernes\b|\bvendredi\b|\bsexta-feira\b|الجمعة|शुक्रवार|金曜日|(?:周|星期)五/,
+        /\bsaturday\b|суббот[ауеы]|\bsamstag\b|\bsábado\b|\bsamedi\b|السبت|शनिवार|土曜日|(?:周|星期)六/,
+    ];
+    return weekdays.some((pattern, day) => pattern.test(text) && addDays((day - now.getDay() + 7) % 7 || 7) === date);
+};
+
+const timeOccursInSource = (time: string, source: string): boolean => {
+    const [hour, minute] = time.split(':').map(Number);
+    return Array.from(normalizedSource(source).matchAll(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g))
+        .some((match) => Number(match[1]) === hour && Number(match[2]) === minute);
 };
 
 /** Checklist items already in the note (checked or not), normalized for comparison. */

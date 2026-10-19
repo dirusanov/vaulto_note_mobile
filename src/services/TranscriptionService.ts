@@ -469,35 +469,42 @@ export const ON_DEVICE_MODEL_REQUIRED = 'on_device_model_required';
 export async function transcribeAudio(
     audioUri: string,
     language?: string,
-    options: { onDeviceOnly?: boolean } = {},
+    options: { onDeviceOnly?: boolean; idempotencyKey?: string; onMode?: (mode: 'device' | 'cloud') => void } = {},
 ): Promise<TranscriptionResult> {
     const selectedLanguage = language || await resolvePreferredTranscriptionLanguage();
+    const local = () => {
+        options.onMode?.('device');
+        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+    };
     if (options.onDeviceOnly) {
         // Protected notes: the audio never leaves the device, whatever the settings.
         const status = await getLocalWhisperModelStatus().catch(() => null);
         if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web' || !status?.isDownloaded) {
+            options.onMode?.('device');
             return { text: '', success: false, error: ON_DEVICE_MODEL_REQUIRED };
         }
-        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+        return local();
     }
     if (await isOnDeviceTranscriptionActive()) {
-        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+        return local();
     }
     const provider = await getAIProvider();
     if (provider === 'vaulto_ai') {
+        options.onMode?.('cloud');
         // Out of cloud minutes with the speech model on the phone: transcribe here
         // instead of stopping at the limit sheet. The sheet shows only without one.
         const localReady = LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
             && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
-        const cloud = await transcribeViaBackend(audioUri, selectedLanguage, { announceLimit: !localReady });
+        const cloud = await transcribeViaBackend(audioUri, selectedLanguage, { announceLimit: !localReady, idempotencyKey: options.idempotencyKey });
         if (localReady && cloud.error === USAGE_LIMIT_REACHED) {
-            return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+            return local();
         }
         return cloud;
     }
     if (provider === 'local_whisper' || provider === 'local_llm' || provider === 'local') {
-        return transcribeViaLocalWhisper(audioUri, selectedLanguage);
+        return local();
     }
+    options.onMode?.('cloud');
 
     let lastError: Error | null = null;
 
@@ -645,9 +652,9 @@ const USAGE_LIMIT_REACHED = 'Usage limit reached';
 async function transcribeViaBackend(
     audioUri: string,
     language?: string,
-    options: { announceLimit?: boolean } = {},
+    options: { announceLimit?: boolean; idempotencyKey?: string } = {},
 ): Promise<TranscriptionResult> {
-    const idempotencyKey = await generateUUID();
+    const idempotencyKey = options.idempotencyKey || await generateUUID();
 
     try {
         if (Platform.OS !== 'web') {
