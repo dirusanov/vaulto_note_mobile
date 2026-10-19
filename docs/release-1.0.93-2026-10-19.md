@@ -61,3 +61,17 @@ new version becomes available in the store.
   present for en-US and ru-RU.
 
 Submission state will be appended after sending changes for review.
+
+
+## Production submission confirmed
+
+**19 October 2026, 07:15 UTC**: Google Play Publishing overview shows
+**“Изменения на проверке” / “Изменения находятся на рассмотрении”** for
+**93 (1.0.93), Production, full rollout (100%)**. The preliminary common-problems
+check finished; no blocking issues were displayed. Managed publishing is off,
+so Google will publish automatically after approval. Store availability of
+1.0.93 has not yet been confirmed; 1.0.92 was active before this submission.
+
+Release notes are saved for en-US and ru-RU. Source and signed-build QA commits
+were pushed to `origin/master` before submission (`35f25b5`, `f6404fc`).
+[Console receipt](qa/2026-10-19/play-93-submission.json) records the observed state.
