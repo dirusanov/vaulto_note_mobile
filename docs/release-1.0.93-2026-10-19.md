@@ -33,7 +33,31 @@ microphone recording.
 
 ## Distribution
 
-Production, 100% rollout, authorized in the ongoing conversation. Version 1.0.92 was
-still in Google review when this release preparation started. Signed bundle validation,
-release-build Android smoke tests, Git push and Play review submission will be recorded
-below after they complete. Google approval is required before store availability.
+Production, 100% rollout, authorized in the ongoing conversation. The old publishing tab initially showed 1.0.92 under review; after refreshing the
+Production page it was confirmed active. Google approval is required before the
+new version becomes available in the store.
+
+
+## Signed bundle and release-build validation
+
+- Source commit: `35f25b50b2cbc568f79c088c4c21bc3666f02b75` (`chore: release 1.0.93`).
+- EAS local production build: successful; native versionCode 93, versionName 1.0.93.
+- AAB bytes: **132849351**; SHA-256: `7944b18ca70775d6d53b4df74844503237470a4fc4bc7f25ecb217c10b76b308`.
+- Upload certificate SHA-256: `BF:6B:4E:CB:B0:51:DA:CA:97:06:00:7F:C5:25:FE:3D:F4:69:95:F1:BF:51:15:EE:B7:23:A1:7E:4E:AC:32:00` (matches Play upload key).
+- APK set generated from this AAB for emulator-5562, re-signed only for emulator
+  installation with the standard project debug key. The AAB itself keeps its
+  upload signature. Installed as an upgrade without clearing test data.
+- Release app starts without Metro or dev Tools; native package flags do not
+  include DEBUGGABLE. Existing notes remain readable. [Version screen](qa/2026-10-19/release-93-version.png).
+- New text draft with Unicode title/checklists survives force-stop from the
+  editor and a cold launch. Markdown export opens the native share sheet.
+- Actual Russian audio imported while Wi-Fi/mobile data were disabled, without
+  a local model, is saved. Force-stop → network on → cold launch → open note:
+  actual cloud ASR yields 149 characters. Reopening again leaves the same body,
+  with no duplicate insertion. [Result](qa/2026-10-19/release-93-offline-online.png).
+- [Native release results](qa/2026-10-19/release-93-results.json).
+- Play accepted the AAB and reported ready to release, no errors and **zero
+  newly unsupported devices**. Review page rollout is **100%**; release notes
+  present for en-US and ru-RU.
+
+Submission state will be appended after sending changes for review.
