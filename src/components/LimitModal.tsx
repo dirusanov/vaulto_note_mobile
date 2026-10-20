@@ -15,7 +15,7 @@ import { typography } from '../theme/typography';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
 import { onLimitReached } from '../utils/limitEvents';
-import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { LOCAL_WHISPER_ENABLED, STORE_PURCHASES_ENABLED } from '../utils/featureFlags';
 import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
 import { createStyles } from '../theme/createStyles';
@@ -66,7 +66,8 @@ export const LimitModal: React.FC = () => {
     const handleUpgrade = () => {
         setVisible(false);
         // A guest signs in first: the account brings its own free minutes.
-        (navigation as any).navigate(isGuestUser ? 'SignIn' : 'Paywall');
+        if (isGuestUser) (navigation as any).navigate('SignIn');
+        else if (STORE_PURCHASES_ENABLED) (navigation as any).navigate('Paywall');
     };
 
     let title = t('aux.usageLimitTitle', 'Usage Limit Reached');
@@ -109,6 +110,10 @@ export const LimitModal: React.FC = () => {
         iconName = 'stars';
         isTrial = true;
         isTranscriptionLimit = true;
+    }
+
+    if (!STORE_PURCHASES_ENABLED && !isGuestUser && isTranscriptionLimit) {
+        message = t('aux.cloudMinutesUsedFree', 'Your free cloud minutes are used up. You can keep transcribing for free with a downloaded model on this phone.');
     }
 
     // Out of transcription minutes is not a dead end: the phone can transcribe for free.
@@ -164,7 +169,7 @@ export const LimitModal: React.FC = () => {
                                     <Text style={styles.cancelText}>{isTrial ? t('aux.maybeLater', 'Maybe Later') : t('common.close', 'Close')}</Text>
                                 </TouchableOpacity>
 
-                                {isTrial && (
+                                {isTrial && (isGuestUser || STORE_PURCHASES_ENABLED) && (
                                     <TouchableOpacity onPress={handleUpgrade} activeOpacity={0.85} style={styles.primaryButton}>
                                         <Text style={styles.primaryText}>{isGuestUser ? t('auth.signIn', 'Sign In') : t("aux.upgrade", "Upgrade")}</Text>
                                     </TouchableOpacity>

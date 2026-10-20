@@ -5,6 +5,7 @@ import { subscriptionApi, SubscriptionPlan } from '../api/subscription';
 import { ErrorModal } from '../components/ErrorModal';
 import { SuccessModal } from '../components/SuccessModal';
 import { useAuth } from '../hooks/useAuth';
+import { STORE_PURCHASES_ENABLED } from '../utils/featureFlags';
 import { colors } from '../theme/colors';
 
 // TODO: Replace with your actual RevenueCat API keys in .env
@@ -35,7 +36,7 @@ export interface SubscriptionStatus {
     managementURL: string | null;
 }
 
-interface SubscriptionContextType {
+export interface SubscriptionContextType {
     isPro: boolean;
     subscriptionStatus: SubscriptionStatus | null;
     packages: MergedPackage[];
@@ -224,6 +225,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     useEffect(() => {
         const init = async () => {
             if (isConfigured.current) return;
+            if (!STORE_PURCHASES_ENABLED) { setIsLoading(false); return; }
 
             try {
                 if (Platform.OS === 'android') {
@@ -306,6 +308,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }, [userId, user?.email, user?.full_name]);
 
     const loadOfferings = async () => {
+        if (!STORE_PURCHASES_ENABLED) return;
         try {
             const [offerings, backendPlans] = await Promise.all([
                 Purchases.getOfferings(),
@@ -350,6 +353,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
     const purchasePackage = async (pack: MergedPackage) => {
+        if (!STORE_PURCHASES_ENABLED) return false;
         try {
             if (!isAuthenticated || isGuest || !userId) {
                 setError('Sign in required to purchase.');
@@ -392,6 +396,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
     const restorePurchases = async () => {
+        if (!STORE_PURCHASES_ENABLED) return;
         try {
             if (!isAuthenticated || isGuest || !userId) {
                 setError('Sign in required to restore purchases.');

@@ -3,7 +3,7 @@
     "name": "Vaulto Note",
     "slug": "vaulto-note-mobile",
     "owner": "random1k11",
-    "version": "1.0.93",
+    "version": "1.0.94",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,11 +12,16 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "93",
+      "buildNumber": "94",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes."
+        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes.",
+        "NSCameraUsageDescription": "Scan a recovery key QR code to restore access to your encrypted notes.",
+        "NSPhotoLibraryUsageDescription": "Choose an image containing your recovery key QR code.",
+        "NSCalendarsUsageDescription": "Add tasks from your notes to your calendar when you choose.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Add tasks from your notes to your calendar when you choose."
       },
-      "bundleIdentifier": "com.anonymous.vaultonotemobile"
+      "bundleIdentifier": "com.vaultonotemobile",
+      "appleTeamId": "PC7H2H9BH5"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,7 +37,7 @@
         "android.permission.CAMERA"
       ],
       "package": "com.vaultonotemobile",
-      "versionCode": 93
+      "versionCode": 94
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -78,7 +83,19 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      "./plugins/ios-native-modules",
+      "expo-sharing",
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "eas": {

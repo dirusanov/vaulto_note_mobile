@@ -1,4 +1,4 @@
-import { getAIProvider } from '../utils/storage';
+import { getAIProvider, getOnDeviceTranscription } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
 import { getLocalLLMModelStatus, isLocalLLMRuntimeAvailable } from './LocalLLMService';
@@ -26,7 +26,9 @@ export const getEffectiveAIProvider = async (): Promise<Provider> => {
     const provider = await getAIProvider();
     if (provider && LOCAL_PROVIDERS.has(provider)) return provider;
     if (provider === 'local_whisper') return provider;
-    if ((await isDeviceOffline()) && (await isLocalLLMReady())) {
+    // A phone-only choice stays local when AI becomes available again, including
+    // after restored model files, even if the saved provider has not caught up.
+    if (((await getOnDeviceTranscription()) || (await isDeviceOffline())) && (await isLocalLLMReady())) {
         return 'local' as Provider;
     }
     return provider;

@@ -1,0 +1,13 @@
+{
+  "sha256": "d99721f26346d55e5876f7281907ab065f86047036ea7c728dd2afce6adfeefa",
+  "size": 28087625,
+  "version": "1.0.94",
+  "build": "94",
+  "bundleIdentifier": "com.vaultonotemobile",
+  "minimumOS": "16.4",
+  "sceneManifestPresent": true,
+  "deviceFamilies": [
+    1,
+    2
+  ]
+}

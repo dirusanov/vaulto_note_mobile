@@ -330,25 +330,25 @@
       "private": "Only on this phone",
       "privateDesc": "Voice and AI never leave the phone, even online",
       "privateVoiceDesc": "Voice never leaves the phone, even online",
-      "offlineMode": "Offline mode",
+      "offlineMode": "Work without internet",
       "offlineHintAll": "Speech and AI right on the phone, no internet needed · {{size}}",
       "offlineReadyAll": "Ready · speech and AI work without internet",
       "offlineReadySpeech": "Ready · speech works without internet",
       "offlineAIMissing": "Speech works offline. Tap to add AI ({{size}})",
       "offlineNoSpace": "Not enough free space on this phone",
       "offlineNoSpaceTitle": "Not enough space",
-      "offlineConfirmTitle": "Download offline mode?",
+      "offlineConfirmTitle": "Download models?",
       "offlineConfirmDesc": "Download {{size}} once for offline processing. Online keeps using your cloud service unless “Only on this phone” is on.",
-      "offlineModeOffTitle": "Turn off offline mode?",
+      "offlineModeOffTitle": "Remove downloaded models?",
       "offlineModeOffDesc": "The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.",
-      "routingHint": "Online uses your selected cloud service. Offline models are optional. Cloud processing sends the selected audio or text to the service.",
+      "routingHint": "Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.",
       "speechFirst": "Speech works without internet. Local AI is optional: it can be slow on phones with little memory.",
       "offlineHintSpeech": "Speech without internet · {{size}}"
     },
     "models": {
       "row": "Models",
       "title": "Models on this phone",
-      "subtitle": "Models for use without internet. Online uses your selected cloud service unless “Only on this phone” is on.",
+      "subtitle": "Downloaded models work without internet. When you reconnect, new requests use the cloud again. Turn on “Only on this phone” to always process locally.",
       "subtitlePrivate": "Voice and AI run only on this phone.",
       "speech": "Speech to text",
       "ai": "AI: voice requests, editing, chat",
@@ -367,7 +367,9 @@
       "useCloud": "Use Vaulto cloud",
       "fastNoRequests": "Without internet, Fast does not take voice requests: recordings stay plain text. Balanced understands them.",
       "speechOnly": "Speech only",
-      "speechOnlyHint": "Skip the AI download. Cloud AI is a separate choice when online."
+      "speechOnlyHint": "Skip the AI download. Cloud AI is a separate choice when online.",
+      "fastQualityHint": "The small AI model can miss details or get facts wrong. Check text improvements; consider the cloud for complex notes.",
+      "loadFailed": "Could not check the models. Please try again."
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "Recording saved. Retry transcription from the recordings list.",
     "transcribingLocal": "Transcribing on this phone…",
     "slowOnDevice": "This recording is still processing on the phone. For future recordings, cloud processing may be faster when online.",
-    "processingSeconds": "{{seconds}} s"
+    "processingSeconds": "{{seconds}} s",
+    "transcribingCloud": "Transcribing in the cloud…",
+    "privateModelMissing": "Phone-only processing is on, but the speech model is unavailable. Your recording is saved on this phone. Download the model to transcribe it."
   },
   "aux": {
     "emailVerified": "Email Verified!",
@@ -832,7 +836,8 @@
     "onDeviceFree": "Transcribe free on this phone",
     "perMonth": "{{price}} / month",
     "guestMinutesUsedTitle": "Free minutes used up",
-    "guestMinutesUsedDesc": "Sign in to get more free minutes and sync your notes. Or turn speech into text right on this phone — free and offline."
+    "guestMinutesUsedDesc": "Sign in to get more free minutes and sync your notes. Or turn speech into text right on this phone — free and offline.",
+    "cloudMinutesUsedFree": "Your free cloud minutes are used up. You can keep transcribing for free with a downloaded model on this phone."
   },
   "a11y": {
     "back": "Back",

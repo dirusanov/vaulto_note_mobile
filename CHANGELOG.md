@@ -1,3 +1,9 @@
+# 1.0.94
+
+- Prepare the first free iOS release with email sign-in and no unavailable purchase entry points.
+- Keep private processing on-device even when model files are missing; recover pending recordings after downloading a model.
+- Improve automatic cloud/local fallback, model selection and large-text dialogs.
+
 # Changelog
 
 ## [1.0.93] - 2026-10-19

@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-19",
+  "voice_workflow_tests": 17,
+  "failures": 0,
+  "before_missing_model_cloud_calls": 1,
+  "after_missing_model_cloud_calls": 0,
+  "before_phone_only_agent_route": "cloud",
+  "after_phone_only_agent_routes": {
+    "capable_ai": "device",
+    "small_or_missing_ai": null
+  },
+  "transport_boundary": "mocked fetch around production services; not a native network traffic capture",
+  "native_unique_scenarios": 13
+}

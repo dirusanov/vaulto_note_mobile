@@ -1,3 +1,4 @@
+import { GOOGLE_SIGN_IN_ENABLED } from '../utils/featureFlags';
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
@@ -163,7 +164,8 @@ export const SignInScreen = () => {
                                 </Text>
                             </TouchableOpacity>
 
-                            <View style={styles.separator}>
+                            {GOOGLE_SIGN_IN_ENABLED && (<>
+<View style={styles.separator}>
                                 <View style={styles.separatorLine} />
                                 <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
                                 <View style={styles.separatorLine} />
@@ -175,6 +177,7 @@ export const SignInScreen = () => {
                                 onPress={handleGoogleSignIn}
                                 loading={googleLoading}
                             />
+</>)}
 
                             <TouchableOpacity
                                 style={styles.signUpButton}

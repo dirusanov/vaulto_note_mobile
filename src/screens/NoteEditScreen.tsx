@@ -96,6 +96,7 @@ import {
     setOnDeviceOfferShown,
     incrementRecordingsCount,
     setOnDeviceTranscription,
+    getOnDeviceTranscription,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -1775,10 +1776,12 @@ export const NoteEditScreen = () => {
 
     offerOnDeviceTranscriptionRef.current = offerOnDeviceTranscription;
 
-    const promptOnDeviceModelForProtected = useCallback(() => {
+    const promptOnDeviceModelRequired = useCallback(() => {
         Alert.alert(
             t('edit.protected.modelTitle', 'Recording saved without text'),
-            t('edit.protected.modelDesc', 'Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.'),
+            isProtectedRef.current
+                ? t('edit.protected.modelDesc', 'Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.')
+                : t('voice.privateModelMissing', 'Phone-only processing is on, but the speech model is unavailable. Your recording is saved on this phone. Download the model to transcribe it.'),
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
@@ -5185,7 +5188,7 @@ export const NoteEditScreen = () => {
 
             await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
 
-            const onDeviceTranscription = await isOnDeviceTranscriptionActive();
+            const onDeviceTranscription = await getOnDeviceTranscription() || await isOnDeviceTranscriptionActive();
             const protectedNote = isProtectedRef.current;
             setTranscribingOnDevice(onDeviceTranscription || protectedNote);
             // Server for accounts online, the phone model otherwise (protected notes
@@ -5254,7 +5257,7 @@ export const NoteEditScreen = () => {
                         ? await transcribeMeetingSegments(meetingParts, protectedNote, voiceId, meetingPartsEncrypted)
                         : await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote, idempotencyKey: voiceId, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
                     if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
-                        promptOnDeviceModelForProtected();
+                        promptOnDeviceModelRequired();
                     }
                 }
             } catch (err) {
@@ -6164,7 +6167,7 @@ export const NoteEditScreen = () => {
             || voiceRecordings.find((rec) => rec.id === playingRecordingId)
             || voiceRecordings[0];
         if (!targetRecording) return false;
-        const onDeviceOnly = isProtectedRef.current;
+        const onDeviceOnly = isProtectedRef.current || await getOnDeviceTranscription();
         setTranscribingOnDevice(onDeviceOnly || await isOnDeviceTranscriptionActive());
         // Local speech does not need permission to send text to a cloud AI.
         if (!onDeviceOnly && !(await isOnDeviceTranscriptionActive()) && !(await requestPrivateAIConsent())) return false;
@@ -6181,13 +6184,16 @@ export const NoteEditScreen = () => {
                 : await transcribeAudio(sourceUri!, undefined, { onDeviceOnly, idempotencyKey: targetRecording.id, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
 
             if (!transcription.success || !transcription.text) {
-                if (!options.silent && transcription.error === ON_DEVICE_MODEL_REQUIRED) promptOnDeviceModelForProtected();
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 if (!options.silent) {
-                    showPrettyQuotaNotification(
-                        transcription.error,
-                        getErrorMessage(transcription.error, 'Check internet connection')
-                    );
+                    if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
+                        promptOnDeviceModelRequired();
+                    } else {
+                        showPrettyQuotaNotification(
+                            transcription.error,
+                            getErrorMessage(transcription.error, 'Check internet connection')
+                        );
+                    }
                 }
                 return false;
             }
@@ -7407,9 +7413,10 @@ export const NoteEditScreen = () => {
                         return;
                     }
                     if (whisperModalPurpose === 'protected') {
-                        // Opened for a protected recording: nothing to start.
+                        // Complete the saved recording that needed this model.
                         setWhisperModalPurpose('dictate');
                         showToast(t('edit.protected.modelReady', 'Speech model ready'));
+                        void retryPendingTranscriptionsRef.current?.();
                         return;
                     }
                     handleFormat('dictate'); // Auto-start after download

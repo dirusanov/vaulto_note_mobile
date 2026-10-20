@@ -1,4 +1,5 @@
 import React from 'react';
+import { STORE_PURCHASES_ENABLED } from '../utils/featureFlags';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NotesListScreen } from '../screens/NotesListScreen';
 import { NoteEditScreen } from '../screens/NoteEditScreen';
@@ -99,6 +100,7 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                     headerShown: false,
                 }}
             />
+            {STORE_PURCHASES_ENABLED && (
             <Stack.Screen
                 name="Paywall"
                 component={PaywallScreen}
@@ -107,6 +109,7 @@ export const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }
                     presentation: 'modal',
                 }}
             />
+            )}
         </Stack.Navigator>
     );
 };

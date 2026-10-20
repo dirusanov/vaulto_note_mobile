@@ -89,3 +89,9 @@ credentials.json
 
 # Local release bundles
 /build-*.aab
+
+# Local iOS release credentials and artifacts
+/build-*.ipa
+*.p8
+*.p12
+*.mobileprovision

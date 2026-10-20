@@ -330,25 +330,25 @@
       "private": "Solo en este teléfono",
       "privateDesc": "La voz y la IA nunca salen del teléfono, ni siquiera con conexión",
       "privateVoiceDesc": "La voz nunca sale del teléfono, ni siquiera con conexión",
-      "offlineMode": "Modo sin conexión",
+      "offlineMode": "Usar sin internet",
       "offlineHintAll": "Voz e IA en el teléfono, sin internet · {{size}}",
       "offlineReadyAll": "Listo · voz e IA funcionan sin internet",
       "offlineReadySpeech": "Listo · la voz funciona sin internet",
       "offlineAIMissing": "La voz funciona sin conexión. Toca para añadir la IA ({{size}})",
       "offlineNoSpace": "No hay espacio libre suficiente en el teléfono",
       "offlineNoSpaceTitle": "No hay espacio",
-      "offlineConfirmTitle": "¿Descargar el modo sin conexión?",
+      "offlineConfirmTitle": "¿Descargar modelos?",
       "offlineConfirmDesc": "Descarga {{size}} una vez para trabajar sin conexión. Con internet se sigue usando la nube, salvo que actives «Solo en este teléfono».",
-      "offlineModeOffTitle": "¿Desactivar el modo sin conexión?",
+      "offlineModeOffTitle": "¿Eliminar los modelos descargados?",
       "offlineModeOffDesc": "Los modelos se eliminan del teléfono y liberan {{size}}. Sin internet, las grabaciones se guardan y se convierten en texto al volver la conexión.",
-      "routingHint": "Con internet se usa el servicio en la nube elegido. Los modelos sin conexión son opcionales. La nube recibe el audio o texto seleccionado para procesarlo.",
+      "routingHint": "Con internet se usa la nube; sin conexión, los modelos descargados. El cambio es automático. El procesamiento en la nube envía el audio o texto seleccionado al servicio.",
       "speechFirst": "El reconocimiento de voz funciona sin internet. La IA local es opcional y puede ser lenta en teléfonos con poca memoria.",
       "offlineHintSpeech": "Voz sin internet · {{size}}"
     },
     "models": {
       "row": "Modelos",
       "title": "Modelos en este teléfono",
-      "subtitle": "Modelos para usar sin internet. Con conexión se usa la nube elegida, salvo que actives «Solo en este teléfono».",
+      "subtitle": "Los modelos descargados funcionan sin internet. Al recuperar la conexión, las nuevas solicitudes vuelven a usar la nube. Activa «Solo en este teléfono» para procesar siempre localmente.",
       "subtitlePrivate": "La voz y la IA funcionan solo en este teléfono.",
       "speech": "Voz a texto",
       "ai": "IA: peticiones por voz, edición, chat",
@@ -367,7 +367,9 @@
       "useCloud": "Usar la nube de Vaulto",
       "fastNoRequests": "Sin internet, Rápido no atiende peticiones por voz: las grabaciones quedan como texto. Equilibrado sí las entiende.",
       "speechOnly": "Solo voz",
-      "speechOnlyHint": "Sin descargar IA. La IA en la nube se puede elegir por separado con internet."
+      "speechOnlyHint": "Sin descargar IA. La IA en la nube se puede elegir por separado con internet.",
+      "fastQualityHint": "El modelo de IA pequeño puede omitir detalles o equivocarse en los hechos. Revisa las mejoras de texto; considera la nube para notas complejas.",
+      "loadFailed": "No se pudieron comprobar los modelos. Inténtalo de nuevo."
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "Grabación guardada. Reintenta la transcripción desde la lista de grabaciones.",
     "transcribingLocal": "Transcribiendo en este teléfono…",
     "slowOnDevice": "Esta grabación sigue procesándose en el teléfono. Para próximas grabaciones, la nube puede ser más rápida si hay internet.",
-    "processingSeconds": "{{seconds}} s"
+    "processingSeconds": "{{seconds}} s",
+    "transcribingCloud": "Transcribiendo en la nube…",
+    "privateModelMissing": "Está activado el procesamiento solo en este teléfono, pero el modelo de voz no está disponible. La grabación se ha guardado en el dispositivo. Descarga el modelo para transcribirla."
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -830,7 +834,8 @@
     "onDeviceFree": "Transcribir gratis en este teléfono",
     "perMonth": "{{price}} al mes",
     "guestMinutesUsedTitle": "Se acabaron los minutos gratis",
-    "guestMinutesUsedDesc": "Inicia sesión para obtener más minutos gratis y sincronizar tus notas. O convierte la voz en texto en este teléfono, gratis y sin conexión."
+    "guestMinutesUsedDesc": "Inicia sesión para obtener más minutos gratis y sincronizar tus notas. O convierte la voz en texto en este teléfono, gratis y sin conexión.",
+    "cloudMinutesUsedFree": "Has agotado los minutos gratuitos en la nube. Puedes seguir transcribiendo gratis con un modelo descargado en este teléfono."
   },
   "a11y": {
     "back": "Atrás",

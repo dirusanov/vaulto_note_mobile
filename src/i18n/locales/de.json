@@ -330,25 +330,25 @@
       "private": "Nur auf diesem Handy",
       "privateDesc": "Sprache und KI verlassen das Handy nie, auch online nicht",
       "privateVoiceDesc": "Die Sprache verlässt das Handy nie, auch online nicht",
-      "offlineMode": "Offline-Modus",
+      "offlineMode": "Ohne Internet nutzen",
       "offlineHintAll": "Sprache und KI direkt auf dem Handy, ohne Internet · {{size}}",
       "offlineReadyAll": "Bereit · Sprache und KI funktionieren ohne Internet",
       "offlineReadySpeech": "Bereit · Sprache funktioniert ohne Internet",
       "offlineAIMissing": "Sprache funktioniert offline. Tippe, um KI hinzuzufügen ({{size}})",
       "offlineNoSpace": "Nicht genug freier Speicher auf dem Handy",
       "offlineNoSpaceTitle": "Nicht genug Speicher",
-      "offlineConfirmTitle": "Offline-Modus herunterladen?",
+      "offlineConfirmTitle": "Modelle herunterladen?",
       "offlineConfirmDesc": "Lade einmal {{size}} für Offline-Verarbeitung herunter. Online bleibt die Cloud aktiv, außer „Nur auf diesem Telefon“ ist eingeschaltet.",
-      "offlineModeOffTitle": "Offline-Modus ausschalten?",
+      "offlineModeOffTitle": "Heruntergeladene Modelle entfernen?",
       "offlineModeOffDesc": "Die Modelle werden vom Handy entfernt und geben {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und später online zu Text.",
-      "routingHint": "Online wird dein gewählter Cloud-Dienst genutzt. Offline-Modelle sind optional. Bei Cloud-Verarbeitung werden ausgewählte Audios oder Texte an den Dienst gesendet.",
+      "routingHint": "Mit Internet in der Cloud, offline mit heruntergeladenen Modellen. Der Wechsel erfolgt automatisch. Bei Cloud-Verarbeitung werden ausgewählte Audiodaten oder Texte an den Dienst gesendet.",
       "speechFirst": "Spracherkennung funktioniert offline. Lokale KI ist optional und kann auf Geräten mit wenig Arbeitsspeicher langsam sein.",
       "offlineHintSpeech": "Spracherkennung ohne Internet · {{size}}"
     },
     "models": {
       "row": "Modelle",
       "title": "Modelle auf diesem Handy",
-      "subtitle": "Modelle für die Offline-Nutzung. Online wird die gewählte Cloud verwendet, außer „Nur auf diesem Telefon“ ist aktiv.",
+      "subtitle": "Heruntergeladene Modelle funktionieren offline. Sobald die Verbindung zurück ist, nutzen neue Anfragen wieder die Cloud. Für dauerhaft lokale Verarbeitung „Nur auf diesem Telefon“ aktivieren.",
       "subtitlePrivate": "Sprache und KI laufen nur auf diesem Handy.",
       "speech": "Sprache zu Text",
       "ai": "KI: Sprachbefehle, Bearbeiten, Chat",
@@ -367,7 +367,9 @@
       "useCloud": "Vaulto-Cloud nutzen",
       "fastNoRequests": "Ohne Internet nimmt Schnell keine Sprachbefehle an: Aufnahmen bleiben reiner Text. Ausgewogen versteht sie.",
       "speechOnly": "Nur Spracherkennung",
-      "speechOnlyHint": "Kein KI-Download. Cloud-KI ist online separat wählbar."
+      "speechOnlyHint": "Kein KI-Download. Cloud-KI ist online separat wählbar.",
+      "fastQualityHint": "Das kleine KI-Modell kann Details übersehen oder Fakten verwechseln. Prüfe Textverbesserungen; für komplexe Notizen empfiehlt sich die Cloud.",
+      "loadFailed": "Die Modelle konnten nicht geprüft werden. Bitte versuche es erneut."
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "Aufnahme gespeichert. Starte die Transkription erneut in der Aufnahmeliste.",
     "transcribingLocal": "Transkription auf diesem Telefon…",
     "slowOnDevice": "Diese Aufnahme wird noch auf dem Telefon verarbeitet. Für künftige Aufnahmen kann die Cloud bei Internetverbindung schneller sein.",
-    "processingSeconds": "{{seconds}} s"
+    "processingSeconds": "{{seconds}} s",
+    "transcribingCloud": "Transkription in der Cloud…",
+    "privateModelMissing": "Die Verarbeitung nur auf diesem Telefon ist aktiviert, aber das Sprachmodell ist nicht verfügbar. Die Aufnahme ist auf dem Gerät gespeichert. Lade das Modell zur Transkription herunter."
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -830,7 +834,8 @@
     "onDeviceFree": "Kostenlos auf diesem Telefon transkribieren",
     "perMonth": "{{price}} pro Monat",
     "guestMinutesUsedTitle": "Freiminuten aufgebraucht",
-    "guestMinutesUsedDesc": "Melde dich an für weitere Freiminuten und Synchronisierung. Oder wandle Sprache direkt auf dem Handy in Text um – kostenlos und offline."
+    "guestMinutesUsedDesc": "Melde dich an für weitere Freiminuten und Synchronisierung. Oder wandle Sprache direkt auf dem Handy in Text um – kostenlos und offline.",
+    "cloudMinutesUsedFree": "Deine kostenlosen Cloud-Minuten sind aufgebraucht. Mit einem heruntergeladenen Modell kannst du auf diesem Gerät weiter kostenlos transkribieren."
   },
   "a11y": {
     "back": "Zurück",

@@ -1,4 +1,5 @@
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
+import { GOOGLE_SIGN_IN_ENABLED } from '../utils/featureFlags';
 import { useCallback, useEffect, useState } from 'react';
 import { authApi, LoginResult } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -9,6 +10,7 @@ export const useGoogleOAuth = () => {
 
     // Initial Configuration
     useEffect(() => {
+        if (!GOOGLE_SIGN_IN_ENABLED) return;
         const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
 
         GoogleSignin.configure({
@@ -22,6 +24,7 @@ export const useGoogleOAuth = () => {
     }, []);
 
     const signInWithGoogle = useCallback(async (): Promise<LoginResult | null> => {
+        if (!GOOGLE_SIGN_IN_ENABLED) return null;
         setLoading(true);
         setLastError(null);
         try {

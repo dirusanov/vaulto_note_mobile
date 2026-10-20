@@ -1,0 +1,68 @@
+{
+  "status": "prepare_for_submission",
+  "bundleId": "com.vaultonotemobile",
+  "version": "1.0.94",
+  "build": "94",
+  "primaryLocale": "en-US",
+  "name": "Vaulto: Private AI Voice Notes",
+  "subtitle": "Voice to text. Local or cloud.",
+  "description": "Capture a thought, a list or a meeting. Vaulto turns your recordings into editable notes and helps you organize the result.\n\nVOICE TO TEXT\nRecord in a note or import an audio file. Use cloud transcription with included free minutes, or download a Whisper model for free on-device transcription. With a downloaded model, speech-to-text works without an internet connection.\n\nYOUR ORIGINAL, ALWAYS AVAILABLE\nClean up wording, summarize, structure a note or extract a checklist. Each AI result is saved as a separate version so you can compare it with the original and switch back. AI can make mistakes: review important details.\n\nLOCAL AI WHEN YOU WANT IT\nDownload a Qwen model to process text on your device. Model downloads need internet, storage and sufficient memory. Smaller models can be less accurate, and performance depends on your device.\n\nNOTES YOU CAN KEEP\nWrite with headings and checklists, organize with tags, search your notes and export Markdown. Recover deleted notes from Trash for 30 days.\n\nCLEAR PRIVACY CHOICES\nLocal processing runs on your device. Cloud processing sends the selected audio or text to our processing service and its AI providers. Encrypted sync is a separate optional feature, available after creating an account with email. Keep your recovery key safe.\n\nYou can start taking notes without an account. This initial iOS release is free and does not offer in-app purchases. Cloud features have usage limits; downloaded models can continue working offline.\n\nPrivacy: https://vaultonote.com/privacy\nSupport: https://vaultonote.com/contact",
+  "keywords": "voice,notes,transcription,whisper,offline,private,dictation,markdown,recorder,checklist,summary",
+  "supportUrl": "https://vaultonote.com/contact",
+  "privacyPolicyUrl": "https://vaultonote.com/privacy",
+  "marketingUrl": "https://vaultonote.com",
+  "copyright": "2026 Dmitrii Rusanov",
+  "price": "0",
+  "primaryCategory": "PRODUCTIVITY",
+  "secondaryCategory": "UTILITIES",
+  "reviewNotes": "The initial iOS release is free; no in-app purchases or external purchase links are offered. Start in the guest session to create, edit and record notes without signing in. Optional email sign-up/sign-in enables account features. Settings offers account deletion for signed-in users. On-device transcription and AI require model downloads. Cloud processing has a consent step and free usage limits. Phone-only mode keeps processing on-device, including when a model needs to be downloaded again. AI outputs are separate from the original and may contain errors. A downloaded speech model can transcribe without internet. Hold the microphone button for live dictation or use the recording action. No special hardware is required.",
+  "checks": {
+    "developerMembership": "active_until_2027-10-20",
+    "freeAgreement": "active",
+    "paidAgreement": "not_required_free_release",
+    "storeAppRecord": "created_version_1.0.94",
+    "signedIpa": "built_1.0.94_build94_signature_valid",
+    "screenshots": "pending_native_run",
+    "appPrivacy": "published_2026-10-20",
+    "exportCompliance": "pending_encryption_questionnaire",
+    "territories": "148_selected_EU27_excluded_initial_release",
+    "signing": "distribution_certificate_and_profile_ready",
+    "reviewAccount": "email_verified_login_checked",
+    "digitalServicesAct": "active_declared_no_EU_distribution",
+    "nativeIPhoneQA": "create_edit_encrypted_storage_relaunch_email_login_passed"
+  },
+  "privacyDraft": {
+    "tracking": false,
+    "emailAddress": {
+      "purpose": "App functionality",
+      "linkedToIdentity": true
+    },
+    "userId": {
+      "purpose": "App functionality",
+      "linkedToIdentity": true
+    },
+    "deviceId": {
+      "purpose": "App functionality and abuse prevention",
+      "linkedToIdentity": true
+    },
+    "otherUserContent": {
+      "purpose": "Optional note sync and cloud AI",
+      "linkedToIdentity": true
+    },
+    "audioData": {
+      "purpose": "App functionality: requested cloud transcription",
+      "linkedToIdentity": true
+    },
+    "productInteraction": {
+      "purpose": "App functionality: usage quota accounting",
+      "linkedToIdentity": true
+    }
+  },
+  "notes": [
+    "Initial availability excludes the 27 EU countries while trader/payment setup is deferred. Apple DSA option selected: not a trader OR no planned EU distribution. This records the no-EU distribution choice, not an assertion about business status.",
+    "No encryption exemption has been declared. Complete the questionnaire for the actual standard client-side algorithms before review.",
+    "Review credentials and signing secrets are stored outside the repository."
+  ],
+  "appStoreConnectId": "6824942467",
+  "appleTeamId": "PC7H2H9BH5"
+}

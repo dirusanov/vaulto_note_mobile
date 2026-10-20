@@ -84,7 +84,7 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible, onDevice, onO
                     <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
                 </Animated.View>
                 <Text style={styles.text}>
-                    {onDevice ? t('voice.transcribingLocal', 'Transcribing on this phone…') : t('aux.transcribing', 'Transcribing...')}
+                    {onDevice ? t('voice.transcribingLocal', 'Transcribing on this phone…') : t('voice.transcribingCloud', 'Transcribing in the cloud…')}
                     {elapsed >= 3 ? ` · ${t('voice.processingSeconds', '{{seconds}} s', { seconds: elapsed })}` : ''}
                 </Text>
             </View>

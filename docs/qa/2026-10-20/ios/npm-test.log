@@ -1,0 +1,390 @@
+
+> vaulto-note-mobile@1.0.94 test
+> npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:encryption-lifecycle && npm run test:utils && npm run test:versions && npm run test:voice-workflow && npm run test:search && npm run test:tasks && npm run test:tags && npm run test:transfer
+
+
+> vaulto-note-mobile@1.0.94 typecheck
+> tsc --noEmit
+
+
+> vaulto-note-mobile@1.0.94 test:encryption-state
+> tsc --ignoreConfig src/services/encryptionState.ts --target ES2020 --module commonjs --outDir .test-build --skipLibCheck --esModuleInterop && node tests/encryptionState.test.cjs
+
+✔ pauses a plaintext device when another device enables E2EE (0.593708ms)
+✔ pauses an E2EE device when another device disables E2EE (0.045667ms)
+✔ continues when local and server encryption modes match (0.033833ms)
+✔ keeps legacy servers without enc_mode compatible (0.030375ms)
+✔ pauses when E2EE key generation changed while the device was offline (0.043292ms)
+✔ pauses before apply when a destructive vault reset changed generation (0.300583ms)
+✔ continues when the destructive vault generation is current (0.032666ms)
+✔ pauses when the server loses a previously known vault generation (0.035041ms)
+✔ does not treat an unknown bootstrap epoch as a key rotation (0.041792ms)
+✔ preserves semantic local edits for version and timestamp conflicts (0.075333ms)
+✔ rebased retry timestamp is strictly newer than a future server clock (0.669833ms)
+✔ rebased retry timestamp uses current time for invalid server timestamp (0.04925ms)
+✔ recognizes crash-resume bundles by key commitment, not wrapper bytes (0.040583ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4.62425
+
+> vaulto-note-mobile@1.0.94 test:formatting
+> tsc --ignoreConfig src/utils/markdownUtils.tsx src/utils/tiptapMarkdownAdapter.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/md --skipLibCheck --esModuleInterop && node tests/markdownFormatting.test.cjs
+
+ok   snake_case survives
+ok   snake_case has no italics
+ok   file name survives
+ok   url survives
+ok   multiplication survives
+ok   real underscore italic still parses
+ok   real underscore italic marks
+ok   real star italic still parses
+ok   italic after a snake_case word
+ok   italic after snake_case marks
+ok   bold untouched
+ok   highlight untouched
+ok   strip keeps identifiers
+ok   bare ** is kept as typed
+ok   bare ** produces no format
+ok   bare == is kept as typed
+ok   spaced stars are kept
+ok   cyrillic underscores survive
+ok   quoted italic still parses
+ok   empty brackets checklist does not crash
+ok   checked checklist
+ok   empty checklist item stays a checklist
+ok   identifier inside a bullet is preserved
+ok   nested bullets keep their nesting
+ok   nested bullet round-trips back to markdown
+ok   ordered list nested under a bullet
+ok   nested checklist round-trips
+ok   three levels deep
+ok   flat list is unchanged
+ok   ordered list keeps its start number
+ok   a bullet list following a checklist stays separate
+ok   paragraph after a list is not swallowed
+ok   nested bullets keep indentation for the AI
+ok   three list levels keep indentation
+ok   nested checklist keeps its state
+ok   flat list has no blank lines between items
+ok   wrapped item line is indented under its bullet
+ok   empty item is dropped
+ok   paragraphs around a list are kept
+ok   rich html becomes markdown, not tags
+ok   markdown from rich html round-trips to the same html
+ok   heading and one empty paragraph
+ok   underline and highlight keep adapter syntax
+ok   plain markdown passes through
+ok   blank lines around headings and lists are dropped
+ok   code fences keep their blank lines
+ok   html results are left alone
+ok   card preview keeps lines and checklist state
+ok   card preview is capped
+ok   markdown link becomes an editor link
+ok   formatted link label
+ok   link survives html -> markdown -> html
+ok   image syntax is not a link
+ok   non-web target stays literal
+ok   link label in plain text
+ok   russian title on english note is rejected
+ok   english title on english note is kept
+ok   russian title on russian note is kept
+ok   mixed note allows either script
+ok   digits-only title is kept
+ok   short heading used whole
+ok   short first sentence used whole
+ok   six-word sentence used whole
+ok   long sentence cut with ellipsis
+ok   bullet marker skipped
+ok   russian
+ok   cjk long line truncated
+ok   empty
+ok   hashtags left out of the title
+
+All formatting tests passed
+
+> vaulto-note-mobile@1.0.94 test:e2ee
+> tsc --ignoreConfig src/crypto/e2ee.ts --target ES2020 --module commonjs --outDir .test-build/crypto --skipLibCheck --esModuleInterop && node tests/e2eeCrypto.test.cjs
+
+✔ a generated recovery code is a 24-word BIP39 mnemonic (1.134875ms)
+✔ the recovery code is the master key, so it round-trips both ways (1.683166ms)
+✔ a recovery code survives the casing and spacing a user pastes (0.880375ms)
+✔ a mnemonic with a broken checksum is rejected, not silently accepted (0.147875ms)
+✔ a wrapped master key unwraps back to the same bytes (232.041583ms)
+✔ the bundle advertises the parameters the app promises (108.9415ms)
+✔ two wraps of one key differ but commit to the same key_id (217.813417ms)
+✔ a wrong passphrase fails closed instead of returning garbage (218.869542ms)
+✔ unwrapping tolerates the whitespace a keyboard adds around a passphrase (318.725916ms)
+✔ the sync and async unwrap paths agree (209.572417ms)
+✔ KDF progress is reported monotonically and ends at 1 (137.543458ms)
+✔ a passphrase passes on length or on word count, not on neither (0.113125ms)
+✔ one-letter tokens do not count towards the word minimum (0.055291ms)
+✔ the validator names the right problem for each secret mode (0.468709ms)
+✔ normalization strips zero-width characters that break a paste (0.052291ms)
+✔ a well-formed bundle is recognized (0.0595ms)
+✔ a malformed bundle is rejected rather than half-trusted (0.043209ms)
+✔ the master key is held only in memory and can be cleared (0.054792ms)
+✔ the cipher version the notes are tagged with is v3 (0.016667ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1451.70275
+
+> vaulto-note-mobile@1.0.94 test:encryption-lifecycle
+> node --test tests/encryptionLifecycle.test.cjs
+
+[encrypt] Encryption failed: Error: Keystore unavailable
+    at a.storage.setDeviceKey (/private/tmp/vaulto-ios-release-1.0.94/tests/encryptionLifecycle.test.cjs:139:54)
+    at /private/tmp/vaulto-ios-release-1.0.94/src/crypto/encryption.ts:77:37
+    at async getOrCreateDeviceKey (/private/tmp/vaulto-ios-release-1.0.94/src/crypto/encryption.ts:82:27)
+    at async Object.encrypt (/private/tmp/vaulto-ios-release-1.0.94/src/crypto/encryption.ts:166:27)
+    at async waitForActual (node:assert:646:5)
+    at async strict.rejects (node:assert:769:25)
+    at async TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/encryptionLifecycle.test.cjs:141:9)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+[AuthContext] Signing out, reverting to guest...
+[AuthContext] Creating guest session with deviceId: test-device
+[AuthContext] Guest session created: guest
+✔ parallel first saves all decrypt after a cold app restart (63.096625ms)
+✔ a failed device key write is retried instead of caching an unusable key (22.455542ms)
+[AuthContext] Signing out, reverting to guest...
+[AuthContext] Creating guest session with deviceId: test-device
+[AuthContext] Guest session created: guest
+Failed to get device key Error: Keychain temporarily unavailable
+    at native.getItemAsync (/private/tmp/vaulto-ios-release-1.0.94/tests/encryptionLifecycle.test.cjs:204:51)
+    at secureGet (/private/tmp/vaulto-ios-release-1.0.94/src/utils/storage.ts:97:24)
+    at Object.getDeviceKey (/private/tmp/vaulto-ios-release-1.0.94/src/utils/storage.ts:283:26)
+    at TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/encryptionLifecycle.test.cjs:207:38)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1402:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    at Test.postRun (node:internal/test_runner/test:1542:19)
+    at Test.run (node:internal/test_runner/test:1467:12)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+Failed to set device key Error: Keychain write failed
+    at native.setItemAsync (/private/tmp/vaulto-ios-release-1.0.94/tests/encryptionLifecycle.test.cjs:205:51)
+    at secureSet (/private/tmp/vaulto-ios-release-1.0.94/src/utils/storage.ts:103:24)
+    at Object.setDeviceKey (/private/tmp/vaulto-ios-release-1.0.94/src/utils/storage.ts:294:19)
+    at TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/encryptionLifecycle.test.cjs:208:38)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ keep-on-device sign-out retains the scoped key, notes, versions and trash (89.260708ms)
+✔ delete-on-device sign-out removes the local key and data (33.660791ms)
+✔ SecureStore errors never masquerade as a missing or successfully saved device key (13.932083ms)
+✔ deleting one account leaves the other account notes, versions and trash intact (28.511667ms)
+✔ sign-out warns about locked, local-only, changed-version and unsent audio notes (22.995583ms)
+[DatabaseService] Decrypted and rescued 1 notes for user alice
+✔ a recovery key restores server ciphertext and audio on a clean installation (345.951792ms)
+✔ voice recording transcripts are encrypted in SQLite and hidden while their parent vault is locked (29.398833ms)
+✔ reading a legacy plaintext voice transcript migrates it without rewriting other accounts (25.059917ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 780.710417
+
+> vaulto-note-mobile@1.0.94 test:utils
+> tsc --ignoreConfig src/utils/checklistScale.ts src/utils/openaiCompat.ts src/utils/errorMessage.ts src/utils/whisperText.ts --target ES2020 --module commonjs --outDir .test-build/utils --skipLibCheck --esModuleInterop && node tests/utils.test.cjs
+
+✔ checklist items are counted in the visual editor HTML (0.681166ms)
+✔ checklist items are counted in raw markdown, checked or not (0.0695ms)
+✔ an empty checkbox with no trailing space still counts (0.031ms)
+✔ plain bullets and prose are not mistaken for a checklist (0.029125ms)
+✔ HTML task items win over any markdown lookalike in the same content (0.033375ms)
+✔ short checklists are scaled up, long ones are left alone (0.046ms)
+✔ scaling is a no-op when disabled or when there is nothing to scale (0.037208ms)
+✔ content without a checklist reports no scale at all, not a scale of 1 (0.035542ms)
+✔ an empty or blank base URL falls back to the OpenAI default (0.04575ms)
+✔ a custom base URL keeps its path but loses trailing slashes (0.081625ms)
+✔ joining a base and a path never doubles or drops the slash (0.066208ms)
+✔ reasoning models are not sent a temperature they would reject (0.038084ms)
+✔ ordinary chat models still get a temperature (0.024167ms)
+✔ the backend's detail field is preferred over the transport message (0.143875ms)
+✔ a raw OpenAI error envelope is unwrapped to its message (0.142458ms)
+✔ billing and key failures become advice instead of provider jargon (0.1005ms)
+✔ an unparseable API error is relabelled rather than shown as-is (0.020167ms)
+✔ a tunnel outage tells the user their note is safe (0.03425ms)
+✔ transport failures are translated into something actionable (0.046292ms)
+✔ an unusable error falls back to the caller-supplied message (0.029958ms)
+✔ whisper sound captions on their own line are dropped, brackets inside speech kept (0.5165ms)
+✔ whisper silence hallucinations are dropped, real speech kept (0.389583ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5.326166
+
+> vaulto-note-mobile@1.0.94 test:versions
+> tsc --ignoreConfig src/i18n/variantLabels.ts src/utils/textDiff.ts --target ES2020 --module commonjs --outDir .test-build/versions --skipLibCheck --esModuleInterop && node --test tests/versions.test.cjs
+
+✔ step names are stored in English and never carry note text (0.332542ms)
+✔ lineage joins the source step and the new step (0.071958ms)
+✔ legacy variants whose label was a content title recover the step from option_id (0.295ms)
+✔ chip texts are localized, show lineage and number duplicates (0.3355ms)
+✔ a legacy content title with an arrow is not treated as a lineage (0.055959ms)
+✔ custom prompts display their local name, generic when unknown (0.062458ms)
+✔ stored labels are sanitized exactly like the server does (0.044917ms)
+✔ user-given names live in the encrypted title and win on display (0.054542ms)
+✔ derived versions show only their own step on the chip (0.042875ms)
+✔ agent modes map to their own kinds and icons (0.082792ms)
+✔ word diff marks removed and added words and reassembles both texts (0.213833ms)
+✔ different lineages remain distinct after compact tabs hide the source steps (0.062708ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36.510625
+
+> vaulto-note-mobile@1.0.94 test:voice-workflow
+> node --test tests/voiceWorkflow.test.cjs
+
+✔ automatic offline downloads keep weak/unknown devices to speech, without blocking explicit capable-device AI (0.378042ms)
+✔ pending recordings survive cold module restart and keep their original target version (16.474375ms)
+✔ concurrent recording/reconnect writes do not lose jobs; acknowledgements are scoped and idempotent (53.411875ms)
+[Transcription] Backend call failed TypeError: Network request failed
+    at fetch (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:97:39)
+    at fetchWithTimeout (src/services/TranscriptionService.ts:183:22)
+    at performBackendTranscriptionRequest (src/services/TranscriptionService.ts:211:12)
+    at fetchBackendTranscriptionWithAuth (src/services/TranscriptionService.ts:227:35)
+    at async transcribeViaBackend (src/services/TranscriptionService.ts:544:26)
+    at async Object.transcribeAudio (src/services/TranscriptionService.ts:389:23)
+    at async TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:179:16)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+[Transcription] Backend call failed Error [AbortError]: Aborted
+    at fetch (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:96:63)
+    at fetchWithTimeout (src/services/TranscriptionService.ts:183:22)
+    at performBackendTranscriptionRequest (src/services/TranscriptionService.ts:211:12)
+    at fetchBackendTranscriptionWithAuth (src/services/TranscriptionService.ts:227:35)
+    at async transcribeViaBackend (src/services/TranscriptionService.ts:544:26)
+    at async Object.transcribeAudio (src/services/TranscriptionService.ts:389:23)
+    at async TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:191:20)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+Transcription attempt 1 failed: TypeError: Network request failed
+    at fetch (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:97:39)
+    at Object.transcribeAudio (src/services/TranscriptionService.ts:439:36)
+    at async TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:191:20)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+[Transcription] Backend call failed TypeError: Network request failed
+    at fetch (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:97:39)
+    at fetchWithTimeout (src/services/TranscriptionService.ts:183:22)
+    at performBackendTranscriptionRequest (src/services/TranscriptionService.ts:211:12)
+    at fetchBackendTranscriptionWithAuth (src/services/TranscriptionService.ts:227:35)
+    at async transcribeViaBackend (src/services/TranscriptionService.ts:544:26)
+    at async Object.transcribeAudio (src/services/TranscriptionService.ts:389:23)
+    at async TestContext.<anonymous> (/private/tmp/vaulto-ios-release-1.0.94/tests/voiceWorkflow.test.cjs:199:18)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ failed persistence rejects instead of promising a durable retry (10.909458ms)
+✔ protected audio never falls back to the cloud, including when no model is available (27.358958ms)
+✔ phone-only preference never uploads audio when the downloaded model becomes unavailable (42.820708ms)
+✔ phone-only voice never selects the cloud command agent, even with only speech installed (5.359459ms)
+✔ a downloaded model stays a backup online, activates offline or by choice, and handles exhausted cloud minutes (28.067833ms)
+✔ online → offline → online switches each new recording automatically without sticking to local processing (5.672833ms)
+✔ a transport failure after the online check uses the downloaded model; reconnection restores cloud (5.621458ms)
+✔ cloud timeouts and custom-service transport failures also fall back to downloaded speech (11.24425ms)
+✔ missing offline models and rejected HTTP requests are not disguised as successful local transcription (23.189875ms)
+✔ text improvements return to the chosen cloud after reconnecting and respect an explicit local choice (1.292208ms)
+✔ guest migration moves pending identifiers to the same owner as the recordings (18.996417ms)
+✔ plain dictation and encrypted meeting retry metadata survive cold restart (9.817875ms)
+✔ a failed meeting part is never acknowledged as complete and decrypted temporary files are removed (1.703458ms)
+✔ an incomplete encrypted meeting save preserves raw input and cleans only its attempted copies (1.048ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 377.854166
+
+> vaulto-note-mobile@1.0.94 test:search
+> tsc --ignoreConfig src/utils/noteSearch.ts --target ES2020 --module commonjs --outDir .test-build/search --skipLibCheck --esModuleInterop && node --test tests/noteSearch.test.cjs
+
+✔ stopwords are dropped and words are stemmed (0.558292ms)
+✔ ranking finds inflected Russian and English matches (3.909667ms)
+✔ matches come first, then recent notes fill the free slots (0.069375ms)
+✔ broad questions fall back to the most recent notes (0.091ms)
+✔ long notes contribute the passage around the match (0.113417ms)
+✔ sources are numbered, budgeted and formatted for the model (0.098584ms)
+✔ list search matches every word, in any order and inflection, not markup (0.078541ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 37.28975
+
+> vaulto-note-mobile@1.0.94 test:tasks
+> tsc --ignoreConfig src/utils/taskExtraction.ts --target ES2020 --module commonjs --outDir .test-build/tasks --skipLibCheck --esModuleInterop && node --test tests/taskExtraction.test.cjs
+
+✔ prompt carries the local date and weekday (0.850208ms)
+✔ parses fenced JSON, bare arrays and drops junk (0.51825ms)
+✔ tasks already in the note checklist are recognised (0.154458ms)
+✔ undated notes cannot acquire an invented model deadline or reminder time (0.662041ms)
+✔ source deadlines retain supported dates and explicit times, but reject wrong resolutions (0.987ms)
+✔ checklist markdown and calendar events (0.093417ms)
+✔ google calendar fallback url (0.080084ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 35.606208
+
+> vaulto-note-mobile@1.0.94 test:tags
+> tsc --ignoreConfig src/utils/tags.ts --target ES2020 --module commonjs --outDir .test-build/tags --skipLibCheck --esModuleInterop && node --test tests/tags.test.cjs
+
+✔ hashtags in any script are found, lower-cased and unique (1.332791ms)
+✔ URL fragments, headings and numbers are not tags (0.192375ms)
+✔ a tag at the start of a line or in brackets counts; trailing dashes are trimmed (0.0465ms)
+✔ countTags orders by use then name; hasTag ignores case (3.718041ms)
+✔ splitTags keeps the text intact and marks tags (0.083542ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 37.440916
+
+> vaulto-note-mobile@1.0.94 test:transfer
+> tsc --ignoreConfig src/utils/noteTransferFormat.ts --target ES2020 --module commonjs --outDir .test-build/transfer --skipLibCheck --esModuleInterop && node --test tests/noteTransfer.test.cjs
+
+✔ file names are safe and unique (0.429792ms)
+✔ markdown export round-trips through import (0.395125ms)
+✔ plain text has no title; a named markdown file keeps its name (0.143834ms)
+✔ Google Keep notes: text, checklists, labels; trashed and foreign JSON skipped (0.12175ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 33.480542

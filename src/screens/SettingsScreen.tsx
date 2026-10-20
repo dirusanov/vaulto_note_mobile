@@ -39,7 +39,8 @@ import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { DeleteAccountModal } from '../components/DeleteAccountModal';
 import { SuccessModal } from '../components/SuccessModal';
 import { authApi } from '../api/auth';
-import Purchases from 'react-native-purchases';
+import Purchases from '../services/storePurchases';
+import { STORE_PURCHASES_ENABLED } from '../utils/featureFlags';
 import { useEncryption } from '../context/EncryptionContext';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
@@ -104,7 +105,7 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
 }) => {
     const { t } = useTranslation();
     
-    if (!isAuthenticated || isGuest) return null;
+    if (!isAuthenticated || isGuest || (!STORE_PURCHASES_ENABLED && !isPro)) return null;
 
     if (isLoading) {
         return <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.s }} />;
@@ -433,7 +434,7 @@ export const SettingsScreen = () => {
     const offlineOn = !!offlineStatus?.speechReady || offlineDownloading;
     const offlineAIMissing = !!offlineStatus?.speechReady && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady
         && !!offlinePlan?.llmKey && offlinePlan.downloadBytes > 0;
-    const privateMode = !!offlineStatus?.speechReady && (usingLocalWhisper || onDeviceTranscription);
+    const privateMode = usingLocalWhisper || onDeviceTranscription;
     const privateVoiceOnly = !offlineStatus?.aiReady;
     const offlineDescription = offlineDownloading
         ? [
@@ -734,7 +735,7 @@ export const SettingsScreen = () => {
                 const net = await NetInfo.fetch().catch(() => null);
                 const proceed = await new Promise<boolean>((resolve) => {
                     Alert.alert(
-                        t('settings.voice.offlineConfirmTitle', 'Download offline mode?'),
+                        t('settings.voice.offlineConfirmTitle', 'Download models?'),
                         [
                             t('settings.voice.offlineConfirmDesc', 'The best speech and AI models for this phone, {{size}}, downloaded once. After that notes work without internet.', {
                                 size: formatModelSize(plan.downloadBytes, t),
@@ -894,7 +895,7 @@ export const SettingsScreen = () => {
             throw error;
         }
         try {
-            await Purchases.logOut();
+            if (STORE_PURCHASES_ENABLED) await Purchases.logOut();
         } catch (error) {
             // Already anonymous in RevenueCat, or the SDK is not configured.
             console.warn('[Settings] RevenueCat logOut after account deletion failed', error);
@@ -1394,7 +1395,7 @@ export const SettingsScreen = () => {
                     <Text style={styles.dataCardTitle}>{t("settings.voice.title", "Voice & AI")}</Text>
                     {!privateMode && (
                         <Text style={[styles.preferenceDescription, { marginBottom: spacing.s }]}>
-                            {t('settings.voice.routingHint', 'Online uses your selected cloud service. Offline models are optional. Cloud processing sends the selected audio or text to the service.')}
+                            {t('settings.voice.routingHint', 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.')}
                         </Text>
                     )}
 
@@ -1410,7 +1411,7 @@ export const SettingsScreen = () => {
                                 <View style={styles.voiceRowText}>
                                     <MaterialIcons name="cloud-off" size={24} color={offlineOn ? colors.primary : colors.textSecondary} />
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offlineMode", "Offline mode")}</Text>
+                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offlineMode", "Work without internet")}</Text>
                                         <Text style={styles.preferenceDescription}>{offlineDescription}</Text>
                                     </View>
                                 </View>
@@ -1421,7 +1422,7 @@ export const SettingsScreen = () => {
                                     trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                    accessibilityLabel={t("settings.voice.offlineMode", "Offline mode")}
+                                    accessibilityLabel={t("settings.voice.offlineMode", "Work without internet")}
                                 />
                             </TouchableOpacity>
 
@@ -1438,7 +1439,7 @@ export const SettingsScreen = () => {
                                 </View>
                             )}
 
-                            {!!offlineStatus?.speechReady && (
+                            {(!!offlineStatus?.speechReady || privateMode) && (
                                 <>
                                     <View style={styles.separator} />
                                     <View style={[styles.preferenceRow, styles.voiceRow]}>
@@ -1755,13 +1756,14 @@ export const SettingsScreen = () => {
             <ModelPickerSheet
                 visible={showModelPicker}
                 privateMode={privateMode}
+                privateVoiceOnly={privateVoiceOnly}
                 onClose={() => setShowModelPicker(false)}
                 onApply={(plan) => { void handleApplyModels(plan); }}
                 onUseCloud={() => { void handleTogglePrivateMode(false); }}
             />
             <DeleteConfirmationDialog
                 visible={showOfflineOffConfirm}
-                title={t('settings.voice.offlineModeOffTitle', 'Turn off offline mode?')}
+                title={t('settings.voice.offlineModeOffTitle', 'Remove downloaded models?')}
                 message={t(
                     'settings.voice.offlineModeOffDesc',
                     'The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.',

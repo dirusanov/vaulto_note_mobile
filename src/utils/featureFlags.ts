@@ -1,3 +1,13 @@
+import { Platform } from 'react-native';
+
+// The initial iOS release is free. Enable store billing only after Apple
+// agreements, products and RevenueCat are configured and tested.
+export const STORE_PURCHASES_ENABLED = Platform.OS === 'android';
+
+// iOS uses the existing email account flow until native Google and an
+// equivalent privacy-preserving login option are configured.
+export const GOOGLE_SIGN_IN_ENABLED = Platform.OS === 'android';
+
 // The all-on-device provider ("Local"): Whisper for voice and an on-device LLM
 // (Qwen3.5) for AI edits, the notes chat and tasks — everything works offline.
 export const LOCAL_MODELS_ENABLED = true;
