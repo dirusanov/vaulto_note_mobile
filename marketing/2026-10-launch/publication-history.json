@@ -1,0 +1,512 @@
+{
+  "schema_version": 1,
+  "product": "Vaulto Note Android",
+  "package": "com.vaultonotemobile",
+  "scope": "Structured records started7Oct2026; earlier placements are retained in analytics.md and PUBLICATIONS.md",
+  "placements": [
+    {
+      "title": "Voice notes with local Whisper and Qwen on Android — the app I'm building",
+      "body": "I'm the developer of Vaulto, an Android voice-notes app. Development has included AI assistance.\n\nRecord a short note, transcribe it, then clean up the text, extract tasks and set reminders. You can also ask questions across saved notes and export Markdown.\n\nWhisper handles local transcription and Qwen handles local AI after downloading the models. Local notes and processing are free, without an account. The trade-offs are model downloads, storage and processing time that depends on your phone.\n\nThe mobile client is GPLv3; the hosted backend is separate. Cloud processing and sync are optional Pro features. Cloud AI sends the selected input to a server; local inference doesn't switch off the app's other network features.\n\nTask extraction still needs work: one tester reported that a grocery item turned into extra checklist entries. If you try a made-up note, does it become useful text? Which phone and model did you use?\n\nGoogle Play: https://play.google.com/store/apps/details?id=com.vaultonotemobile Source and data-flow docs: https://github.com/dirusanov/vaulto_note_mobile\n\nImages: real v1.0.87 Android emulator screenshots. The current interface may differ; these are not a speed test.",
+      "post_id": "1x08awu",
+      "url": "https://www.reddit.com/r/AIToolBench/comments/1x08awu/voice_notes_with_local_whisper_and_qwen_on/",
+      "published_at_utc": "2026-10-07T21:04:36.015000+00:00",
+      "published_at_moscow": "2026-10-08T00:04:36.015000+03:00",
+      "flair": null,
+      "attachment_type": "image_gallery",
+      "state": "published_publicly_verified",
+      "assets": [
+        {
+          "file": "01-record.png",
+          "sha256": "11e16dc680cff7f19a1f53dabd945bc0dde13b2382f6f482b5e3366bc5838e62"
+        },
+        {
+          "file": "02-tasks.png",
+          "sha256": "2e231fd9ad0da39016f2da683afa4f166630da7dc7b18ea6627c18af1af23eec"
+        },
+        {
+          "file": "03-offline.png",
+          "sha256": "d5860382311f7f97c9b80969c43f50f77af800a5f8ecef0a1f1c2f6c69e8f26a"
+        }
+      ]
+    },
+    {
+      "post_id": "1x0jld6",
+      "community": "r/AppsWebappsFullstack",
+      "url": "https://www.reddit.com/r/AppsWebappsFullstack/comments/1x0jld6/vaulto_an_android_app_for_turning_voice/",
+      "title": "Vaulto: an Android app for turning voice recordings into readable notes",
+      "published_at_utc": "2026-10-08T06:22:58.654000+00:00",
+      "published_at_moscow": "2026-10-08T09:22:58.654000+03:00",
+      "body": "I'm building Vaulto for capturing thoughts by voice and turning the transcript into a note you can use later. I'm the developer, and development has included AI assistance.\n\nRecord an idea, transcribe it, then clean up the text or extract tasks and set reminders. You can ask questions across saved notes and export Markdown.\n\nThe local option uses Whisper and Qwen on your Android phone after downloading the models. Local notes, transcription and AI are free, without an account. The downloads take storage; processing time and output quality depend on your phone and model. AI results can need correction.\n\nOptional Pro features add cloud processing and sync. Cloud AI sends the selected audio or text to a server. Local inference doesn't switch off the app's other network features. The mobile client is GPLv3; the hosted backend is separate.\n\nIf you use voice notes already, what do you usually do with them after recording? I'd like feedback on whether the cleaned-up note is useful enough to keep.\n\nGoogle Play: https://play.google.com/store/apps/details?id=com.vaultonotemobile GitHub and data-flow docs: https://github.com/dirusanov/vaulto_note_mobile\n\nImages are real v1.0.87 Android emulator screenshots; the current interface may differ. They are not a speed test.",
+      "state": "published_publicly_verified",
+      "flair": null,
+      "attachment_type": "image_gallery",
+      "assets": [
+        {
+          "file": "01-record.png",
+          "sha256": "11e16dc680cff7f19a1f53dabd945bc0dde13b2382f6f482b5e3366bc5838e62"
+        },
+        {
+          "file": "02-tasks.png",
+          "sha256": "2e231fd9ad0da39016f2da683afa4f166630da7dc7b18ea6627c18af1af23eec"
+        },
+        {
+          "file": "03-offline.png",
+          "sha256": "d5860382311f7f97c9b80969c43f50f77af800a5f8ecef0a1f1c2f6c69e8f26a"
+        }
+      ]
+    },
+    {
+      "post_id": "1x0jmtl",
+      "community": "r/sideprojects",
+      "url": "https://www.reddit.com/r/sideprojects/comments/1x0jmtl/i_built_an_android_app_that_turns_voice_notes/",
+      "title": "I built an Android app that turns voice notes into readable notes, with local Whisper and Qwen",
+      "published_at_utc": "2026-10-08T06:25:36.687000+00:00",
+      "published_at_moscow": "2026-10-08T09:25:36.687000+03:00",
+      "body": "I'm the developer of Vaulto, an Android voice-notes app. Development has included AI assistance.\n\nRecord a short note, transcribe it, then clean up the text, extract tasks and set reminders. You can also ask questions across saved notes and export Markdown.\n\nWhisper handles local transcription and Qwen handles local AI after downloading the models. Local notes and processing are free, without an account. The trade-offs are model downloads, storage and processing time that depends on your phone.\n\nThe mobile client is GPLv3; the hosted backend is separate. Cloud processing and sync are optional Pro features. Cloud AI sends the selected input to a server; local inference doesn't switch off the app's other network features.\n\nTask extraction still needs work: one tester reported that a grocery item turned into extra checklist entries. If you try a made-up note, does it become useful text? Which phone and model did you use?\n\nGoogle Play: https://play.google.com/store/apps/details?id=com.vaultonotemobile Source and data-flow docs: https://github.com/dirusanov/vaulto_note_mobile\n\nImages: real v1.0.87 Android emulator screenshots. The current interface may differ; these are not a speed test.",
+      "state": "published_publicly_verified",
+      "flair": "Showcase: Open Source",
+      "attachment_type": "image_gallery",
+      "assets": [
+        {
+          "file": "01-record.png",
+          "sha256": "11e16dc680cff7f19a1f53dabd945bc0dde13b2382f6f482b5e3366bc5838e62"
+        },
+        {
+          "file": "02-tasks.png",
+          "sha256": "2e231fd9ad0da39016f2da683afa4f166630da7dc7b18ea6627c18af1af23eec"
+        },
+        {
+          "file": "03-offline.png",
+          "sha256": "d5860382311f7f97c9b80969c43f50f77af800a5f8ecef0a1f1c2f6c69e8f26a"
+        }
+      ]
+    },
+    {
+      "post_id": "1wyerii",
+      "title": "I opened the source of my Android voice-notes app, including its local AI and encryption",
+      "community": "r/SideProject",
+      "url": "https://www.reddit.com/r/SideProject/comments/1wyerii/i_opened_the_source_of_my_android_voicenotes_app/",
+      "published_at_utc": "2026-10-05T17:33:12.188000+0000",
+      "state": "published_owner_intact",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:51.482508+00:00"
+    },
+    {
+      "post_id": "1wyexi9",
+      "title": "I made an Android voice-notes app that can transcribe and organize notes offline",
+      "community": "r/IMadeThis",
+      "url": "https://www.reddit.com/r/IMadeThis/comments/1wyexi9/i_made_an_android_voicenotes_app_that_can/",
+      "published_at_utc": "2026-10-05T17:39:35.181000+0000",
+      "state": "published_owner_intact",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:51.584360+00:00"
+    },
+    {
+      "post_id": "1wyfizr",
+      "title": "[Android] Vaulto - looking for feedback on offline voice notes",
+      "community": "r/alphaandbetausers",
+      "url": "https://www.reddit.com/r/alphaandbetausers/comments/1wyfizr/android_vaulto_looking_for_feedback_on_offline/",
+      "published_at_utc": "2026-10-05T18:01:50.115000+0000",
+      "state": "published_owner_intact",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:51.685390+00:00"
+    },
+    {
+      "post_id": "1wz020s",
+      "title": "Vaulto for Android: turn a voice note into tasks and reminders",
+      "community": "r/AiNoteTaker",
+      "url": "https://www.reddit.com/r/AiNoteTaker/comments/1wz020s/vaulto_for_android_turn_a_voice_note_into_tasks/",
+      "published_at_utc": "2026-10-06T11:23:13.062000+0000",
+      "state": "published_owner_intact",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:51.787896+00:00"
+    },
+    {
+      "post_id": "1wz0hpe",
+      "title": "Vaulto: Android voice notes with on-device Whisper and Qwen",
+      "community": "r/localaiapps",
+      "url": "https://www.reddit.com/r/localaiapps/comments/1wz0hpe/vaulto_android_voice_notes_with_ondevice_whisper/",
+      "published_at_utc": "2026-10-06T11:47:08.106000+0000",
+      "state": "published_owner_intact",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:51.901358+00:00"
+    },
+    {
+      "post_id": "1wyemer",
+      "title": "Vaulto - open-source offline voice notes",
+      "community": "r/droidappshowcase",
+      "url": "https://www.reddit.com/r/droidappshowcase/comments/1wyemer/vaulto_opensource_offline_voice_notes/",
+      "published_at_utc": "2026-10-05T17:27:47.938000+0000",
+      "state": "published_reddit_filtered",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:52.008794+00:00"
+    },
+    {
+      "post_id": "1wyflgv",
+      "title": "Vaulto: open-source Android voice notes with free local AI and optional paid cloud",
+      "community": "r/indiehackers",
+      "url": "https://www.reddit.com/r/indiehackers/comments/1wyflgv/vaulto_opensource_android_voice_notes_with_free/",
+      "published_at_utc": "2026-10-05T18:04:24.139000+0000",
+      "state": "published_moderator_removed",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:52.116220+00:00"
+    },
+    {
+      "post_id": "1wyfpeu",
+      "title": "[Android] Vaulto: voice notes with offline transcription, tasks and reminders",
+      "community": "r/apps",
+      "url": "https://www.reddit.com/r/apps/comments/1wyfpeu/android_vaulto_voice_notes_with_offline/",
+      "published_at_utc": "2026-10-05T18:08:35.652000+0000",
+      "state": "published_reddit_filtered",
+      "imported_historical_placement": true,
+      "metadata_observed_at_utc": "2026-10-09T11:04:52.224305+00:00"
+    }
+  ],
+  "snapshots": [
+    {
+      "post_id": "1x08awu",
+      "observed_at_utc": "2026-10-07T21:06:05.294557+00:00",
+      "source": "https://www.reddit.com/poststats/1x08awu/ author UI",
+      "views": 1,
+      "upvotes_shown": 1,
+      "upvote_ratio": 1.0,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "own_vote_included": true,
+      "independent_public_status": "available",
+      "independent_public_source": "unauthenticated web reader",
+      "installs": null,
+      "revenue": null
+    },
+    {
+      "post_id": "1x0jld6",
+      "observed_at_utc": "2026-10-08T06:29:44.866364+00:00",
+      "source": "https://www.reddit.com/poststats/1x0jld6/ author UI",
+      "independent_public_status": "available",
+      "independent_public_source": "unauthenticated web reader",
+      "own_vote_included": true,
+      "installs": null,
+      "revenue": null,
+      "views": 1,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x0jmtl",
+      "observed_at_utc": "2026-10-08T06:29:44.970210+00:00",
+      "source": "https://www.reddit.com/poststats/1x0jmtl/ author UI",
+      "independent_public_status": "available",
+      "independent_public_source": "unauthenticated web reader",
+      "own_vote_included": true,
+      "installs": null,
+      "revenue": null,
+      "views": 1,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x0jmtl",
+      "observed_at_utc": "2026-10-08T06:55:44.553559+00:00",
+      "source": "https://www.reddit.com/poststats/1x0jmtl/ newly navigated author UI",
+      "owner_status": "full_no_removal_notice",
+      "independent_public_status": "unverified_captcha",
+      "independent_public_source": "fresh Chrome Incognito",
+      "own_vote_included": true,
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "views": 19,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x0jld6",
+      "observed_at_utc": "2026-10-08T06:55:44.786569+00:00",
+      "source": "https://www.reddit.com/poststats/1x0jld6/ newly navigated author UI",
+      "owner_status": "full_no_removal_notice",
+      "independent_public_status": "available_no_removal_notice",
+      "independent_public_source": "fresh Chrome Incognito",
+      "own_vote_included": true,
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "views": 14,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x08awu",
+      "observed_at_utc": "2026-10-08T06:55:45.028374+00:00",
+      "source": "https://www.reddit.com/poststats/1x08awu/ newly navigated author UI",
+      "owner_status": "full_no_removal_notice",
+      "independent_public_status": "unverified_captcha",
+      "independent_public_source": "fresh Chrome Incognito",
+      "own_vote_included": true,
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "views": 48,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x0jmtl",
+      "observed_at_utc": "2026-10-09T10:53:10.636469+00:00",
+      "source": "https://www.reddit.com/poststats/1x0jmtl/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "unverified_captcha",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 104,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x0jld6",
+      "observed_at_utc": "2026-10-09T10:53:10.849014+00:00",
+      "source": "https://www.reddit.com/poststats/1x0jld6/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "unverified_captcha",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 86,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1x08awu",
+      "observed_at_utc": "2026-10-09T10:53:11.078648+00:00",
+      "source": "https://www.reddit.com/poststats/1x08awu/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "unverified_captcha",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 114,
+      "upvotes_shown": 1,
+      "comments_count": 1,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1wyerii",
+      "observed_at_utc": "2026-10-09T10:59:15.771061+00:00",
+      "source": "https://www.reddit.com/poststats/1wyerii/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "not_rechecked_today",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 291,
+      "upvotes_shown": 2,
+      "comments_count": 0,
+      "shares": 1,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1wyexi9",
+      "observed_at_utc": "2026-10-09T10:59:15.990408+00:00",
+      "source": "https://www.reddit.com/poststats/1wyexi9/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "not_rechecked_today",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 104,
+      "upvotes_shown": 1,
+      "comments_count": 5,
+      "shares": 1,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1wyfizr",
+      "observed_at_utc": "2026-10-09T10:59:16.199095+00:00",
+      "source": "https://www.reddit.com/poststats/1wyfizr/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "unverified_captcha",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 90,
+      "upvotes_shown": 1,
+      "comments_count": 2,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1wz020s",
+      "observed_at_utc": "2026-10-09T10:59:16.398427+00:00",
+      "source": "https://www.reddit.com/poststats/1wz020s/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "not_rechecked_today",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 128,
+      "upvotes_shown": 2,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    },
+    {
+      "post_id": "1wz0hpe",
+      "observed_at_utc": "2026-10-09T10:59:16.606807+00:00",
+      "source": "https://www.reddit.com/poststats/1wz0hpe/ freshly navigated author UI",
+      "owner_status": "body_intact_no_removal_notice",
+      "independent_public_status": "not_rechecked_today",
+      "installs": null,
+      "retention": null,
+      "revenue": null,
+      "own_vote_included": true,
+      "views": 104,
+      "upvotes_shown": 1,
+      "comments_count": 0,
+      "shares": 0,
+      "awards": 0,
+      "upvote_ratio": 1.0
+    }
+  ],
+  "attempts": [
+    {
+      "observed_at_utc": "2026-10-07T21:07:32.322859+00:00",
+      "community": "r/sideprojects",
+      "state": "attempt_not_published_required_flair_not_applied",
+      "permalink": null,
+      "video_upload_progress": 85,
+      "note": "Advisory confirmation did not create a post; no returned permalink. Documented in2026-10-07-sideprojects."
+    },
+    {
+      "observed_at_utc": "2026-10-08T06:31:55.073602+00:00",
+      "community": "r/sideprojects",
+      "state": "prior_blocker_resolved_and_published",
+      "post_id": "1x0jmtl",
+      "resolution": "Focus actual Add button then click; standard component form validation persists flair"
+    }
+  ],
+  "comments": [
+    {
+      "id": "pepe2p0",
+      "author": "NeuralNomad87",
+      "url": "https://www.reddit.com/r/AIToolBench/comments/1x08awu/comment/pepe2p0/",
+      "post_id": "1x08awu",
+      "observed_at_utc": "2026-10-09T11:03:21.089365+00:00",
+      "kind": "incoming_question_not_reported_use",
+      "summary": "Qwen model download size and whether task extraction is suitable for a mid-range phone or flagship only."
+    },
+    {
+      "id": "pekzb1c",
+      "author": "befittingswimmer66",
+      "url": "https://www.reddit.com/r/IMadeThis/comments/1wyexi9/comment/pekzb1c/",
+      "post_id": "1wyexi9",
+      "observed_at_utc": "2026-10-09T11:03:21.089365+00:00",
+      "kind": "incoming_suggestion_not_reported_use",
+      "summary": "Free local processing trust, first-run local/cloud clarity, find an old half-formed idea using a vague question weeks later. Suggested sync-only privacy phrase is incomplete because cloud AI can also transmit selected input."
+    }
+  ],
+  "product_checks": [
+    {
+      "observed_at_utc": "2026-10-09T11:03:21.089365+00:00",
+      "product_hunt": {
+        "state": "launched_publicly_confirmed_signed_out",
+        "points": 1,
+        "followers": 1,
+        "comments": 0,
+        "owner_upvoted_active": true,
+        "dashboard_position": 344,
+        "notable_voters_shown": [
+          "Robert G (NextGen Tools)"
+        ],
+        "views": null,
+        "installs": null,
+        "first_maker_comment_present": false,
+        "exact_actual_launch_timestamp": null
+      },
+      "play_console": {
+        "package": "com.vaultonotemobile",
+        "dashboard_last28_installs": 2,
+        "monthly_active_devices": 2,
+        "device_impressions": 189,
+        "first_opens": null,
+        "day7_retention": null,
+        "stats_selected_range": "2026-09-11/2026-10-08",
+        "stats_latest_filled_daily_row": null,
+        "store_listings_selected_range": "2026-09-08/2026-10-05",
+        "store_visitors": 12,
+        "unique_install_click_users": 3,
+        "ctr_percent": 25,
+        "campaign_installs": null,
+        "note": "Tables render zero-width empty ESS canvas through DOM. No fresh daily filled-date or CSV obtained; selected range is not proof of data completeness."
+      }
+    }
+  ],
+  "outgoing_replies": [
+    {
+      "id": "t1_petsd7o",
+      "author": "Random1k17",
+      "parent": "t1_pepe2p0",
+      "permalink": "/r/AIToolBench/comments/1x08awu/comment/petsd7o/",
+      "created": "2026-10-09T11:27:52.457000+0000",
+      "text": "The model catalogue lists three Qwen3.5 Q4_K_M downloads: 0.8B (~530 MB), 2B (~1.3 GB), and 4B (~2.7 GB). Those are model-file sizes, not total storage or RAM requirements; Whisper is a separate download.\n\nThe app includes smaller model choices and memory checks, but I don't have a published mid-range-phone benchmark for task extraction, so I can't promise smooth performance or accuracy on a particular device. Which phone and RAM size are you considering?",
+      "url": "https://www.reddit.com/r/AIToolBench/comments/1x08awu/comment/petsd7o/",
+      "published_at_utc": "2026-10-09T11:27:52.457000+00:00",
+      "published_at_moscow": "2026-10-09T14:27:52.457000+03:00",
+      "parent_author": "NeuralNomad87",
+      "observed_at_utc": "2026-10-09T11:31:05.136635+00:00",
+      "state": "published_owner_persistence_and_public_verified",
+      "public_source": "Fresh unauthenticated web reader of returned reply permalink",
+      "organic_incoming_comment": false
+    },
+    {
+      "id": "t1_petsj7d",
+      "author": "Random1k17",
+      "parent": "t1_pekzb1c",
+      "permalink": "/r/IMadeThis/comments/1wyexi9/comment/petsj7d/",
+      "created": "2026-10-09T11:28:54.153000+0000",
+      "text": "Thanks, I've added the forgotten-idea scenario to my feedback notes. I haven't verified that weeks-later, vague-question case yet.\n\nThe short first-run explanation is a useful suggestion. I'd keep local processing, cloud AI and sync separate: local inference processes the content on the phone; cloud AI sends the selected input for processing; encrypted sync is a separate option. Saying it stays on the phone unless sync is enabled would miss the cloud-AI path.\n\nFor that forgotten idea, would a few likely notes with quoted snippets be useful, or would you expect one direct answer?",
+      "url": "https://www.reddit.com/r/IMadeThis/comments/1wyexi9/comment/petsj7d/",
+      "published_at_utc": "2026-10-09T11:28:54.153000+00:00",
+      "published_at_moscow": "2026-10-09T14:28:54.153000+03:00",
+      "parent_author": "befittingswimmer66",
+      "observed_at_utc": "2026-10-09T11:31:05.136635+00:00",
+      "state": "published_owner_persistence_and_public_verified",
+      "public_source": "Fresh unauthenticated web reader of returned reply permalink",
+      "organic_incoming_comment": false
+    }
+  ]
+}

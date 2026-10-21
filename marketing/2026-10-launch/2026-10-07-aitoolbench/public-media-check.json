@@ -1,0 +1,23 @@
+[
+  {
+    "asset": "01-record.png",
+    "url": "https://i.redd.it/ugbmriss04uh1.png",
+    "http": 200,
+    "bytes": 133563,
+    "matches_local_sha256": true
+  },
+  {
+    "asset": "02-tasks.png",
+    "url": "https://i.redd.it/dr8t0jss04uh1.png",
+    "http": 200,
+    "bytes": 87520,
+    "matches_local_sha256": true
+  },
+  {
+    "asset": "03-offline.png",
+    "url": "https://i.redd.it/g5mgkiss04uh1.png",
+    "http": 200,
+    "bytes": 101855,
+    "matches_local_sha256": true
+  }
+]

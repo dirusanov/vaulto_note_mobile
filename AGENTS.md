@@ -1,5 +1,12 @@
 # Vaulto Note mobile — notes for agents
 
+## Feedback for future improvements
+
+Before planning or making product/UX improvements, read `docs/USER_FEEDBACK.md`
+and its linked source records. Preserve dated feedback and distinguish suggestions,
+user-reported trials, reproduced defects and verified fixes. Do not treat our own
+Reddit replies/votes as organic feedback or mix Cards extension analytics into mobile.
+
 ## Releasing to Google Play
 
 The app is built locally; nobody types signing passwords.

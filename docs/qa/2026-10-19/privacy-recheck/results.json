@@ -1,0 +1,80 @@
+[
+  {
+    "time": "2026-10-19T12:44:33+0300",
+    "case": "private_choice_visible_when_model_missing",
+    "result": "PASS",
+    "detail": "Whisper file unavailable after enabling voice-only privacy: setting remains visible and ON; cloud routing explanation is not shown."
+  },
+  {
+    "time": "2026-10-19T12:44:43+0300",
+    "case": "private_missing_model_saves_audio",
+    "result": "PASS",
+    "detail": "With internet ON, missing speech model and saved phone-only choice, native import shows local-model recovery prompt and preserves audio instead of creating a cloud transcript."
+  },
+  {
+    "time": "2026-10-19T12:44:48+0300",
+    "case": "private_retry_single_prompt",
+    "result": "PASS",
+    "detail": "Explicit Transcribe on the saved recording presents the model-recovery prompt; ciphertext audio and pending job remain, caption stays empty."
+  },
+  {
+    "time": "2026-10-19T12:46:16+0300",
+    "case": "download_then_automatic_local_retry",
+    "result": "PASS",
+    "detail": "Real Whisper Base download completes, the pending recording is automatically transcribed on this phone, encrypted caption v3d is saved and queue acknowledged; phone-only flag remains ON."
+  },
+  {
+    "time": "2026-10-19T12:48:07+0300",
+    "case": "private_recovered_body_cold_restart",
+    "result": "PASS",
+    "detail": "Restored real local transcript survives cold launch; body: Завтра в 15 часов позвонить адне, купить молоко и 2 яблока, в 5ницу отправить отчет Борису, бюджет встречи 20 тысяч рублей, это тестовая заметка."
+  },
+  {
+    "time": "2026-10-19T12:48:22+0300",
+    "case": "new_draft_private_cold_restart",
+    "result": "PASS",
+    "detail": "New note is saved from the editor and survives force-stop with exact Buy milk input."
+  },
+  {
+    "time": "2026-10-19T12:48:29+0300",
+    "case": "restored_ai_stays_private_online",
+    "result": "PASS",
+    "detail": "Internet available, saved provider still vaulto_ai, phone-only flag ON and restored Qwen present: actual local Qwen extracts Buy milk without cloud sign-in; no manual provider repair needed."
+  },
+  {
+    "time": "2026-10-19T12:48:31+0300",
+    "case": "repeat_markdown_export",
+    "result": "PASS",
+    "detail": "A real Markdown export share sheet opens for the saved draft; no recipient selected."
+  },
+  {
+    "time": "2026-10-19T12:49:17+0300",
+    "case": "repeat_original_version_roundtrip",
+    "result": "PASS",
+    "detail": "Existing note: Structure and Original remain independently selectable; returning restores byte-equal editor text."
+  },
+  {
+    "time": "2026-10-19T12:49:19+0300",
+    "case": "repeat_compare_versions",
+    "result": "PASS",
+    "detail": "Comparison against Original opens correctly in Russian."
+  },
+  {
+    "time": "2026-10-19T12:52:26+0300",
+    "case": "10-online",
+    "result": "PASS",
+    "detail": "Actual Russian audio via Android Files. Распознаю в облаке… Body: Завтра в 15 часов позвоните Анне, купить молоко и два яблока, в пятницу отправить отчет Борису, бюджет встречи 20 тысяч рублей, это тестовая заметка. Stored cloud choice retained; caption encrypted."
+  },
+  {
+    "time": "2026-10-19T12:55:52+0300",
+    "case": "11-offline",
+    "result": "PASS",
+    "detail": "Actual Russian audio via Android Files. Распознаю на телефоне… Body: Завтра в 15 часов позвонить адне, купить молоко и 2 яблока, в 5ницу отправить отчет Борису, бюджет встречи 20 тысяч рублей, это тестовая заметка. Stored cloud choice retained; caption encrypted."
+  },
+  {
+    "time": "2026-10-19T12:56:50+0300",
+    "case": "12-reconnected",
+    "result": "PASS",
+    "detail": "Actual Russian audio via Android Files. Распознаю в облаке… Body: Завтра в 15 часов позвоните Анне, купить молоко и два яблока, в пятницу отправить отчет Борису, бюджет встречи 20 тысяч рублей, это тестовая заметка. Stored cloud choice retained; caption encrypted."
+  }
+]

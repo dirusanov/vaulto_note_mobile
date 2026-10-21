@@ -1,0 +1,14 @@
+{
+  "url": "https://www.reddit.com/r/AppsWebappsFullstack/comments/1x0jld6/vaulto_an_android_app_for_turning_voice/",
+  "text": "Skip to main content\nVaulto: an Android app for turning voice recordings into readable notes : r/AppsWebappsFullstack\nAdvertise on Reddit\nCreate\nCreate post\nExpand user menu\nRepost\nGo to AppsWebappsFullstack\nr/AppsWebappsFullstack\n•\n4m ago\nu/Random1k17\nVaulto: an Android app for turning voice recordings into readable notes\n\nI'm building Vaulto for capturing thoughts by voice and turning the transcript into a note you can use later. I'm the developer, and development has included AI assistance.\n\nRecord an idea, transcribe it, then clean up the text or extract tasks and set reminders. You can ask questions across saved notes and export Markdown.\n\nThe local option uses Whisper and Qwen on your Android phone after downloading the models. Local notes, transcription and AI are free, without an account. The downloads take storage; processing time and output quality depend on your phone and model. AI results can need correction.\n\nOptional Pro features add cloud processing and sync. Cloud AI sends the selected audio or text to a server. Local inference doesn't switch off the app's other network features. The mobile client is GPLv3; the hosted backend is separate.\n\nIf you use voice notes already, what do you usually do with them after recording? I'd like feedback on whether the cleaned-up note is useful enough to keep.\n\nGoogle Play: https://play.google.com/store/apps/details?id=com.vaultonotemobile GitHub and data-flow docs: https://github.com/dirusanov/vaulto_note_mobile\n\nImages are real v1.0.87 Android emulator screenshots; the current interface may differ. They are not a speed test.\n\nRepost to another community\n1 view\nSee More Insights\nShare\nComments Section\nCreated Sep 9, 2025\nPublic\n10K2.9K\nR/APPSWEBAPPSFULLSTACK RULES\n1\nNo Violence\n2\nNo Discrimination\n3\nKeep it SFW\n4\nBe Civil and Respectful\nMODERATORS\nMessage Mods\nu/SofwareAppDev\nHaydar\nu/AddendumSuspicious30\nLeo\nu/AutoModerator\nu/metehankasapp\nsteellix\nu/Mammoth-Anywhere7285\nTrainLikeAPro\nu/CalligrapherSlow5236\nTeddyBearFace\nu/Mammoth-Doughnut-713\nLionel Lakson\nu/AppDev_37\nu/Ok-Background-6406\nu/ToughInternal1580\nRealAppTesters - 12 Testers Google Play\nView all moderators\nReddit Rules\nPrivacy Policy\nUser Agreement\nYour Privacy Choices\nAccessibility\nReddit, Inc. © 2026. All rights reserved.\nCollapse Navigation",
+  "posts": [
+    {
+      "id": "t3_1x0jld6",
+      "score": "1",
+      "comments": "0",
+      "created": "2026-10-08T06:22:58.654000+0000",
+      "moderation": ""
+    }
+  ],
+  "observed_at_utc": "2026-10-08T06:29:44.635739+00:00"
+}

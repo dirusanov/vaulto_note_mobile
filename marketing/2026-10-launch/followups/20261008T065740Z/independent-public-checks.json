@@ -1,0 +1,23 @@
+{
+  "sideprojects": {
+    "observed_at_utc": "2026-10-08T06:56:42.310369+00:00",
+    "url": "https://www.reddit.com/comments/1x0jmtl/",
+    "signed_out": true,
+    "status": "unverified_captcha",
+    "challenge_interacted": false
+  },
+  "appsweb": {
+    "observed_at_utc": "2026-10-08T06:56:42.418892+00:00",
+    "url": "https://www.reddit.com/r/AppsWebappsFullstack/comments/1x0jld6/vaulto_an_android_app_for_turning_voice/",
+    "signed_out": true,
+    "status": "available_no_removal_notice",
+    "challenge_interacted": false
+  },
+  "aitoolbench": {
+    "observed_at_utc": "2026-10-08T06:56:42.526775+00:00",
+    "url": "https://www.reddit.com/comments/1x08awu/",
+    "signed_out": true,
+    "status": "unverified_captcha",
+    "challenge_interacted": false
+  }
+}

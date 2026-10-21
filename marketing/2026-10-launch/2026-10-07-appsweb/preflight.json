@@ -1,0 +1,16 @@
+{
+  "url": "https://www.reddit.com/r/AppsWebappsFullstack/submit/",
+  "title": "Vaulto: an Android app for turning voice recordings into readable notes",
+  "body": "I'm building Vaulto for capturing thoughts by voice and turning the transcript into a note you can use later. I'm the developer, and development has included AI assistance.\n\nRecord an idea, transcribe it, then clean up the text or extract tasks and set reminders. You can ask questions across saved notes and export Markdown.\n\nThe local option uses Whisper and Qwen on your Android phone after downloading the models. Local notes, transcription and AI are free, without an account. The downloads take storage; processing time and output quality depend on your phone and model. AI results can need correction.\n\nOptional Pro features add cloud processing and sync. Cloud AI sends the selected audio or text to a server. Local inference doesn't switch off the app's other network features. The mobile client is GPLv3; the hosted backend is separate.\n\nIf you use voice notes already, what do you usually do with them after recording? I'd like feedback on whether the cleaned-up note is useful enough to keep.\n\nGoogle Play: https://play.google.com/store/apps/details?id=com.vaultonotemobile GitHub and data-flow docs: https://github.com/dirusanov/vaulto_note_mobile\n\nImages are real v1.0.87 Android emulator screenshots; the current interface may differ. They are not a speed test.",
+  "mediaImages": [
+    "blob:https://www.reddit.com/3cd5bf51-093f-4410-a0f4-d6935463ec47",
+    "blob:https://www.reddit.com/3cd5bf51-093f-4410-a0f4-d6935463ec47",
+    "blob:https://www.reddit.com/a7873f4b-8dac-4b06-a1ff-e8797bd57890",
+    "blob:https://www.reddit.com/a7873f4b-8dac-4b06-a1ff-e8797bd57890",
+    "blob:https://www.reddit.com/ae62fa48-6b6e-4439-8023-e8f0d1077b5b",
+    "blob:https://www.reddit.com/ae62fa48-6b6e-4439-8023-e8f0d1077b5b"
+  ],
+  "postEnabled": true,
+  "flairRequired": false,
+  "observed_at_utc": "2026-10-08T06:22:57.092485+00:00"
+}

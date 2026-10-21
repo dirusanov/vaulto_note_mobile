@@ -75,3 +75,21 @@ so Google will publish automatically after approval. Store availability of
 Release notes are saved for en-US and ru-RU. Source and signed-build QA commits
 were pushed to `origin/master` before submission (`35f25b5`, `f6404fc`).
 [Console receipt](qa/2026-10-19/play-93-submission.json) records the observed state.
+
+
+## Live publication verified: 20 October 2026
+
+Fresh Chrome checks at **2026-10-20T11:58:18.815092+00:00** confirm Production is active with latest
+release **93 (1.0.93)** in **178 countries/regions**. Publishing overview shows
+the last publication on **19 October 2026**, with no pending review section.
+The public US/en store listing is available and shows **Updated on Oct 19, 2026**
+and the release-93 saving/retry/version/export/model-selection release notes.
+The public listing does not display a version number in the captured page; the
+version is confirmed by the signed-in Production page.
+
+[Fresh Console and public-store evidence](qa/2026-10-20/play-93-live-check.json).
+
+This confirms availability of the submitted release-93 bundle only. Later local
+network-routing, model-picker/accessibility and privacy-guard fixes documented
+in the three 19 October follow-up QA reports remain uncommitted and are not
+in this published bundle. No new binary was uploaded during this status check.

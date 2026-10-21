@@ -1,0 +1,190 @@
+{
+  "observed_at_utc": "2026-10-07T20:36:08.079609+00:00",
+  "state": "scheduled_not_yet_launched",
+  "scheduled_at_utc": "2026-10-08T07:01:00Z",
+  "scheduled_at_moscow": "2026-10-08T10:01:00+03:00",
+  "scheduled_at_pacific": "2026-10-08T00:01:00-07:00",
+  "owner": {
+    "url": "https://www.producthunt.com/posts/vaulto-3/edit",
+    "title": "Product Hunt – The best new products in tech.",
+    "text": "Best Products\nLaunches\nNews\nForums\nAdvertise\nHome\nVaulto\nEdit\nMain info\nImages and media\nHunter & makers\nShoutouts\nExtras\nConnect with Investors\nScheduled\nThis post is scheduled to launch at October 8th, 2026 12:01 AM PDT\nSchedule launch\nTell us more about this launch\nWe’ll need its name, tagline, links, launch tags, and description.\nName of the launch\n6/40\nTagline\n47/60\nLinks\nLinks to the launch\n-\n+ Add more links\n\"App Store, Google Play, Steam, Amazon…\"\nIs this an open source project?\nX account of the launch\nx.com/\nDescription\nWhat’s new or different about your launch compared to existing products? Which features make it stand out?\nDescription of the launch\n369/500\nLaunch tags\nSelect up to three launch tags\nAndroid\nProductivity\nOpen Source\nThumbnail\n\nPreview of your launch on the homepage. Animated images will only play on hover.\n\n1. Vaulto\nTurn voice notes into text, tasks and reminders\n\n54\n\n123\n\nAdd a separate thumbnail for this launch\nGallery\nThe first image will be used as the social preview when your link is shared online.\nWe recommend at least 3 or more images.\nVideo / Loom (recommended)\nUpload an optional video from YouTube or Loom to show people how to use your launch or share your maker story. Video helps you connect with viewers.\nLink to the video / loom\nOptional\nInteractive demo (optional)\nAdd an interactive demo (optional) to showcase your launch's functionality and tell the story of your launch better. Build your demo with Arcade, Storylane, Hexus, Supademo, Layerpath, ScreenSpace, Guideflow - all are free for Product Hunt launches. Learn more about interactive demos on Product Hunt Launch Guide.\nLink to the demo\nOptional\nWho is showcasing this launch?\n\nThis is an optional step. \nДмитрий Русанов\n is the current hunter of this launch. You can use the search below to select who you'd like to invite as the new hunter.\n\nHunter\nWho worked on this launch?\nYou're free to add anyone who worked on this launch.\nMakers\nДмитрий Русанов\n@random1k11\nAdd products that helped make yours awesome\nEach shoutout lives on as a founder review — shown first on that product's review page with a link back to your product. It's extra visibility that lasts beyond launch day! Launches with shoutouts are also more likely to get featured. Hereareafewexamples\n\nLaunches typically add 3 shoutouts, but feel free to add more!\n\nAdd shoutout\nAdd shoutout\nPricing\nOptional, but the community really appreciates knowing.\nFree\nThis launch is free to use\nPaid\nThis launch requires payment and there is no free option\nPaid (with a free trial or plan)\nThis launch requires payment but also offers a free trial or version\nPromo code\nIf you'd like to offer a promo code for the Product Hunt community, you can add it here. All fields must be completed to have a valid promo offer.\nWhat is the offer?\nPromo code\nExpiration Date\nConnect with Investors\nWe partner with a small set of investors who are looking for great teams and products to fund. If you would like to be connected with these investors, fill out the below. We will reach out to you if there is a match. This information will never be shared publicly.\nWhy are you the right founder/team to work on this?\n0 / 5000\nWhy did you pick this idea to work on?\n0 / 5000\nWho are your competitors, and what do you understand about this idea that they don't?\n0 / 5000\nWhat's your revenue and/or growth rate?\n0 / 5000\nAnything else you would like investors to know?\n0 / 5000\nDelete post\n\nThis will permanently remove your launch from Product Hunt. The launch can be restored by contacting support if needed.\n\nDelete post\nSave changes\nCancel\nNo changes to save.\nVaulto Launch tips 🚀",
+    "images": [
+      {
+        "alt": "Android",
+        "src": "https://ph-files.imgix.net/d3e235c7-437b-4ed1-8298-2ce04eded455.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=24&w=24"
+      },
+      {
+        "alt": "Productivity",
+        "src": "https://ph-files.imgix.net/5e906c86-5776-4ef0-9841-2b76dea8e255.jpeg?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=24&w=24"
+      },
+      {
+        "alt": "Open Source",
+        "src": "https://ph-files.imgix.net/3fa5b9f3-8ad8-4266-88c2-2f6b2615ea6a.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=24&w=24"
+      },
+      {
+        "alt": "Vaulto",
+        "src": "https://ph-files.imgix.net/be154ac0-e8f9-4004-8ba2-cd970c34fac4.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=48&w=48"
+      },
+      {
+        "alt": "Media Gallery Image",
+        "src": "https://ph-files.imgix.net/81575deb-8151-493f-8e3a-70953bd8337d.png?auto=compress,format&codec=mozjpeg&cs=strip&fill=blur&fit=fill&frame=1&h=330&w=551"
+      },
+      {
+        "alt": "Media",
+        "src": "https://ph-files.imgix.net/81575deb-8151-493f-8e3a-70953bd8337d.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=56&w=56"
+      },
+      {
+        "alt": "Media",
+        "src": "https://ph-files.imgix.net/ca837a37-1e1a-44e7-bcf0-0ed96c1ac0b1.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=56&w=56"
+      },
+      {
+        "alt": "Media",
+        "src": "https://ph-files.imgix.net/d7c1d46b-06d6-459d-bcf7-5e4084490f3d.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=56&w=56"
+      }
+    ],
+    "fields": [
+      {
+        "name": "featuredAt",
+        "value": "2026-10-08T00:01:00-07:00",
+        "checked": false
+      },
+      {
+        "name": "name",
+        "value": "Vaulto",
+        "checked": false
+      },
+      {
+        "name": "tagline",
+        "value": "Turn voice notes into text, tasks and reminders",
+        "checked": false
+      },
+      {
+        "name": "url",
+        "value": "https://play.google.com/store/apps/details?id=com.vaultonotemobile",
+        "checked": false
+      },
+      {
+        "name": "additionalLinks[0]",
+        "value": "https://github.com/dirusanov/vaulto_note_mobile",
+        "checked": false
+      },
+      {
+        "name": "openSource",
+        "value": "on",
+        "checked": true
+      },
+      {
+        "name": "productTwitterHandle",
+        "value": "",
+        "checked": false
+      },
+      {
+        "name": "description",
+        "value": "Record a thought and turn it into editable text, tasks and reminders on Android. Whisper and Qwen run on your phone after model download. Local notes, transcription and AI are free, without an account. Optional Pro adds cloud processing and sync. The mobile client is GPLv3; the hosted backend is separate. Model downloads take storage, and speed depends on your phone."
+      },
+      {
+        "name": "topics",
+        "value": "",
+        "checked": false
+      },
+      {
+        "name": "videoMedia",
+        "value": "",
+        "checked": false
+      },
+      {
+        "name": "interactiveDemo",
+        "value": "",
+        "checked": false
+      },
+      {
+        "name": "pricingType",
+        "value": "free",
+        "checked": false
+      },
+      {
+        "name": "pricingType",
+        "value": "payment_required",
+        "checked": false
+      },
+      {
+        "name": "pricingType",
+        "value": "free_options",
+        "checked": true
+      },
+      {
+        "name": "promoText",
+        "value": "",
+        "checked": false
+      },
+      {
+        "name": "promoCode",
+        "value": "",
+        "checked": false
+      },
+      {
+        "name": "promoExpireAt",
+        "value": "",
+        "checked": false
+      }
+    ]
+  },
+  "signed_out_public_check": {
+    "url": "https://www.producthunt.com/products/vaulto-3",
+    "title": "Vaulto: Turn voice notes into text, tasks and reminders | Product Hunt",
+    "text": "Best Products\nLaunches\nNews\nForums\nAdvertise\nSubscribe\nSign in\nVaulto\nTurn voice notes into text, tasks and reminders\n\n0 followers\n\nVisit website\nRecord a thought and turn it into editable text, tasks and reminders on Android. Whisper and Qwen run on your phone after model download. Local notes, transcription and AI are free, without an account. Optional Pro adds cloud processing and sync. The mobile client is GPLv3; the hosted backend is separate. Model downloads take storage, and speed depends on your phone.\nsee more\nOverview\nReviews\nTeam\nMore\nFollow Vaulto\nAdd to collection\nCompany Info\nplay.google.com/store/apps/details?id=com.vaultonotemobile\nPlay Store\nGitHub\nVaulto Info\nLaunched in 2026\nForum\np/vaulto-3\nTop Product Categories\nEngineering & Development\nVibe Coding Tools\nAI Coding Agents\nAI Code Editors\nLLMs\nAI Chatbots\nAI Infrastructure Tools\nPrompt Engineering Tools\nProductivity\nAI notetakers\nNote and writing apps\nTeam collaboration software\nSearch\nAI Workflow Automation\nMarketing & Sales\nLead generation software\nMarketing automation platforms\nDesign & Creative\nVideo editing\nDesign resources\nGraphic design tools\nAI Generative Media\nSocial & Community\nSocial Networking\nProfessional networking platforms\nCommunity management\nFinance\nAccounting software\nFundraising resources\nInvesting\nAI Agents\nAI Voice Agents\nSee All Categories >>\nTrending categories\nVibe Coding Tools\nAI Dictation Apps\nAI notetakers\nCode Review Tools\nNo-code Platforms\nFigma Plugins\nStatic site generators\nTop reviewed\nLovable\nn8n\nAttio\nPostHog\nVapi\nGranola\nRaycast\nSupabase\nTrending products\nLovable\nScreen Studio\nbolt.new\nWispr Flow\nFramer\nReplit\nVapi\nGranola\nTop forum threads\nCursor or Claude Code?\nPOLL: Domain or product first?\nYC deadline in <2 weeks; Who's applying?\nWe Got into YC, Got Kicked Out, and Fought Our Way Back\nHow Wispr Flow found PMF through pivot\nBest Vibe Coding tool so far?\nLanding page roast - 48 hours only\nFix your tagline with the PH CEO\n© 2026 Product Hunt\nNewsletter\nApps\nAbout\nFAQ\nTerms\nPrivacy & Cookies\nPrivacy Choices\nAdvertise\nllms.txt\nContact us: hello@producthunt.com",
+    "images": [
+      {
+        "alt": "Vaulto",
+        "src": "https://ph-files.imgix.net/be154ac0-e8f9-4004-8ba2-cd970c34fac4.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=crop&frame=1&h=64&w=64"
+      },
+      {
+        "alt": "Vaulto gallery image",
+        "src": "https://ph-files.imgix.net/81575deb-8151-493f-8e3a-70953bd8337d.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=max&frame=1&h=220&w=368"
+      },
+      {
+        "alt": "Vaulto gallery image",
+        "src": "https://ph-files.imgix.net/ca837a37-1e1a-44e7-bcf0-0ed96c1ac0b1.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=max&frame=1&h=220&w=368"
+      },
+      {
+        "alt": "Vaulto gallery image",
+        "src": "https://ph-files.imgix.net/d7c1d46b-06d6-459d-bcf7-5e4084490f3d.png?auto=compress,format&codec=mozjpeg&cs=strip&fit=max&frame=1&h=220&w=368"
+      }
+    ],
+    "fields": []
+  },
+  "links": [
+    {
+      "source": "Play",
+      "error": "'NoneType' object has no attribute 'group'"
+    },
+    {
+      "source": "GitHub",
+      "status": 200,
+      "data": {
+        "private": false,
+        "license": {
+          "key": "gpl-3.0",
+          "name": "GNU General Public License v3.0",
+          "spdx_id": "GPL-3.0",
+          "url": "https://api.github.com/licenses/gpl-3.0",
+          "node_id": "MDc6TGljZW5zZTk="
+        },
+        "html_url": "https://github.com/dirusanov/vaulto_note_mobile"
+      }
+    },
+    {
+      "source": "README",
+      "status": 200,
+      "data": {
+        "source_public": true,
+        "local_whisper": true,
+        "local_qwen": true,
+        "play_link": true
+      }
+    }
+  ],
+  "comment_added": false,
+  "public_views": null,
+  "campaign_installs": null
+}

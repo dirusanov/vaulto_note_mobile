@@ -1,0 +1,80 @@
+[
+  {
+    "time": "2026-10-19T11:05:57+0300",
+    "case": "compact_200_models_scroll",
+    "result": "PASS",
+    "detail": "900x1600 at 420 dpi, font scale 2.0: explanation and models scroll together; Qwen reached, header close and Done remain accessible."
+  },
+  {
+    "time": "2026-10-19T11:08:21+0300",
+    "case": "compact_200_delete_confirmation",
+    "result": "PASS",
+    "detail": "Large-font compact dialog stays within screen; explanatory content scrolls and both stacked actions are reachable. Keep preserves all downloaded models."
+  },
+  {
+    "time": "2026-10-19T11:09:01+0300",
+    "case": "speech_only_privacy_copy",
+    "result": "PASS",
+    "detail": "Whisper downloaded, Qwen temporarily unavailable: phone-only mode describes voice only. AI section offers speech-only. Unchanged speech-only choice correctly shows Done."
+  },
+  {
+    "time": "2026-10-19T11:09:04+0300",
+    "case": "cancel_model_selection",
+    "result": "PASS",
+    "detail": "Selecting another speech model shows its download size; closing and reopening discards the unconfirmed selection, preserves current Base, and shows Done."
+  },
+  {
+    "time": "2026-10-19T11:10:28+0300",
+    "case": "full_private_mode_cold_restart",
+    "result": "PASS",
+    "detail": "Both models present: Only on this phone sets both voice and AI to local, dark English explanation is correct, choice survives force-stop/cold launch with internet available."
+  },
+  {
+    "time": "2026-10-19T11:10:36+0300",
+    "case": "explicit_cloud_choice",
+    "result": "PASS",
+    "detail": "Heavy-model warning states performance/data boundary, offers Use Vaulto cloud only by explicit tap, and turns off phone-only processing when selected."
+  },
+  {
+    "time": "2026-10-19T11:11:09+0300",
+    "case": "download_progress_and_cancel",
+    "result": "PASS",
+    "detail": "Actual Whisper Turbo download: explicit file size before tap; settings display progress and Cancel; cancellation returns to ready state and preserves downloaded Base + Qwen and selected models."
+  },
+  {
+    "time": "2026-10-19T11:11:11+0300",
+    "case": "normal_dark_confirmation",
+    "result": "PASS",
+    "detail": "Standard font/dimensions: complete dark confirmation fits, both actions visible and Keep leaves models enabled."
+  },
+  {
+    "time": "2026-10-19T11:13:02+0300",
+    "case": "original_variant_roundtrip_dark",
+    "result": "PASS",
+    "detail": "Existing synthetic note with five derived versions: Structure → Original returns exact original editor text without overwriting it; dark chips and swipe hint visible."
+  },
+  {
+    "time": "2026-10-19T11:14:20+0300",
+    "case": "compare_version_dark",
+    "result": "PASS",
+    "detail": "Selecting Structure then Compare with Original opens a readable diff with added/removed legend in dark theme."
+  },
+  {
+    "time": "2026-10-19T11:15:21+0300",
+    "case": "new_draft_cold_restart",
+    "result": "PASS",
+    "detail": "New Unicode-titled note with heading, unchecked/checked items, bold amount and marker: edits saved without leaving editor; survive force-stop/cold launch."
+  },
+  {
+    "time": "2026-10-19T11:15:23+0300",
+    "case": "markdown_export_native_share",
+    "result": "PASS",
+    "detail": "Recovered draft exports a real Markdown file through Android share sheet. No recipient selected; no content sent to another app."
+  },
+  {
+    "time": "2026-10-19T11:15:33+0300",
+    "case": "normal_light_ru_final",
+    "result": "PASS",
+    "detail": "Original 1080x2400/420 dpi and font 1.0 restored. Russian and system/light theme restored; Base and Qwen still selected, automatic processing mode remains enabled."
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "post_id": "1x0jmtl",
+  "community": "r/sideprojects",
+  "url": "https://www.reddit.com/r/sideprojects/comments/1x0jmtl/i_built_an_android_app_that_turns_voice_notes/",
+  "title": "I built an Android app that turns voice notes into readable notes, with local Whisper and Qwen",
+  "published_at_utc": "2026-10-08T06:25:36.687000+00:00",
+  "published_at_moscow": "2026-10-08T09:25:36.687000+03:00",
+  "body": "I'm the developer of Vaulto, an Android voice-notes app. Development has included AI assistance.\n\nRecord a short note, transcribe it, then clean up the text, extract tasks and set reminders. You can also ask questions across saved notes and export Markdown.\n\nWhisper handles local transcription and Qwen handles local AI after downloading the models. Local notes and processing are free, without an account. The trade-offs are model downloads, storage and processing time that depends on your phone.\n\nThe mobile client is GPLv3; the hosted backend is separate. Cloud processing and sync are optional Pro features. Cloud AI sends the selected input to a server; local inference doesn't switch off the app's other network features.\n\nTask extraction still needs work: one tester reported that a grocery item turned into extra checklist entries. If you try a made-up note, does it become useful text? Which phone and model did you use?\n\nGoogle Play: https://play.google.com/store/apps/details?id=com.vaultonotemobile Source and data-flow docs: https://github.com/dirusanov/vaulto_note_mobile\n\nImages: real v1.0.87 Android emulator screenshots. The current interface may differ; these are not a speed test.",
+  "state": "published_publicly_verified",
+  "flair": "Showcase: Open Source",
+  "attachment_type": "image_gallery",
+  "assets": [
+    {
+      "file": "01-record.png",
+      "sha256": "11e16dc680cff7f19a1f53dabd945bc0dde13b2382f6f482b5e3366bc5838e62"
+    },
+    {
+      "file": "02-tasks.png",
+      "sha256": "2e231fd9ad0da39016f2da683afa4f166630da7dc7b18ea6627c18af1af23eec"
+    },
+    {
+      "file": "03-offline.png",
+      "sha256": "d5860382311f7f97c9b80969c43f50f77af800a5f8ecef0a1f1c2f6c69e8f26a"
+    }
+  ]
+}

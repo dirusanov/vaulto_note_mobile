@@ -1,0 +1,19 @@
+{
+  "prepared_at_utc": "2026-10-08T06:31:55.073602+00:00",
+  "name": "Vaulto",
+  "short_description": "Android voice notes with local transcription, tasks and reminders.",
+  "description": "Vaulto records voice notes and turns them into editable text. It can clean up notes, extract tasks, set reminders, answer questions across saved notes and export Markdown. Whisper and Qwen run on the phone after model download. Local notes and processing are free without an account. Optional Pro adds cloud processing and sync. Cloud AI sends selected input to a server. The mobile client is GPLv3; the hosted backend is separate. Model downloads require storage and processing speed depends on the phone.",
+  "website": "https://vaultonote.com",
+  "play_url": "https://play.google.com/store/apps/details?id=com.vaultonotemobile",
+  "source_url": "https://github.com/dirusanov/vaulto_note_mobile",
+  "platforms": [
+    "Android"
+  ],
+  "pricing": "Freemium",
+  "client_license": "GPL-3.0-only",
+  "uneed_state": "anonymous_preview_only_not_saved_not_queued",
+  "alternativeto_state": "not_submitted_requires_login_verified_email",
+  "uneed_scraped_description_requires_correction": true,
+  "views": null,
+  "installs": null
+}
