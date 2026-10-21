@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.96] - 2026-10-21
 
 ### Fixed
 - Tablets and iPad: the app language picker, rename-version and recovery-key dialogs, the transcription language list, version comparison, the encryption banner, the selection bar, the undo snackbar, toasts and the QR-scanner button no longer stretch across a wide screen; the welcome cards keep the search bar's width.
@@ -9,6 +9,8 @@
 - The AI result preview resizes with the window instead of keeping its size from app start. On iPad the editor toolbar sits on the keyboard in Stage Manager windows and with a hardware keyboard (it used to rise by a whole hidden keyboard).
 - Editor messages shown while typing appear above the keyboard and the mic button instead of behind the keyboard.
 - Texts no longer call the device a phone, which read wrong on tablets and iPad: all 10 languages say "this device", and the "Only on this device" switch has one name everywhere it is mentioned.
+- "Only on this device" stays in force when a downloaded model is missing; after a network failure recordings fall back to a downloaded model; the local/cloud status is clearer; model and removal dialogs work on small screens with large text.
+- Voice notes: the note can be renamed from any version, dictation no longer adds the raw text next to the formatted one, delete confirmations list what will be removed, and questions to notes keep checked task states.
 
 ## [1.0.93] - 2026-10-19
 
