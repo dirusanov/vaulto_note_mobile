@@ -1635,7 +1635,7 @@ export const NoteEditScreen = () => {
         if (needsLocalLLMRuntime && !isLocalLLMRuntimeAvailable()) {
             Alert.alert(
                 t('alerts.localLlmUnavailableTitle', 'On-device AI is unavailable'),
-                t('alerts.localLlmUnavailableText', 'This version of the app cannot run AI on the phone. Update the app or turn off "Only on this phone" in Settings.'),
+                t('alerts.localLlmUnavailableText', 'This version of the app cannot run AI on the device. Update the app or turn off "Only on this device" in Settings.'),
             );
             return;
         }
@@ -1704,9 +1704,9 @@ export const NoteEditScreen = () => {
 
     const handleProtectNote = useCallback(async () => {
         const signedIn = isAuthenticated && !isGuest;
-        const lines = [t('edit.protected.protectDesc', 'The text never leaves this phone unencrypted: AI features and cloud voice transcription are turned off for this note. Voice is transcribed on the phone.')];
+        const lines = [t('edit.protected.protectDesc', 'The text never leaves this device unencrypted: AI features and cloud voice transcription are turned off for this note. Voice is transcribed on the device.')];
         if (signedIn && !accountEncrypted && localNoteId) {
-            lines.push(t('edit.protected.protectNoE2ee', 'End-to-end encryption is off, so the note is removed from the server and your other devices and stays on this phone until you turn encryption on.'));
+            lines.push(t('edit.protected.protectNoE2ee', 'End-to-end encryption is off, so the note is removed from the server and your other devices and stays on this device until you turn encryption on.'));
         }
         const ok = await confirm(t('edit.protected.protectTitle', 'Protect this note?'), lines.join('\n\n'), t('edit.protected.protect', 'Protect'));
         if (ok) await applyProtection({ isProtected: true, sync: true });
@@ -1725,8 +1725,8 @@ export const NoteEditScreen = () => {
         const syncOn = normalizeScope(storageScope) === 'sync';
         if (syncOn) {
             const ok = await confirm(
-                t('edit.protected.syncOffTitle', 'Keep only on this phone?'),
-                t('edit.protected.syncOffDesc', 'The note is removed from the server and your other devices. If this phone is lost or the app is deleted, the note is gone for good — there is no copy anywhere.'),
+                t('edit.protected.syncOffTitle', 'Keep only on this device?'),
+                t('edit.protected.syncOffDesc', 'The note is removed from the server and your other devices. If this device is lost or the app is deleted, the note is gone for good — there is no copy anywhere.'),
                 t('edit.protected.syncOff', 'Turn off sync'),
                 true,
             );
@@ -1739,7 +1739,7 @@ export const NoteEditScreen = () => {
                 t('edit.protected.syncWaitsTitle', 'Sync waits for encryption'),
                 isAuthenticated && !isGuest
                     ? t('edit.protected.syncWaitsE2ee', 'Protected notes sync only end-to-end encrypted. Turn on encryption in Settings → Cloud Sync and the note syncs.')
-                    : t('edit.protected.syncWaitsSignIn', 'Without an account notes stay on this phone. Sign in and turn on end-to-end encryption to sync.'),
+                    : t('edit.protected.syncWaitsSignIn', 'Without an account notes stay on this device. Sign in and turn on end-to-end encryption to sync.'),
             );
         }
     }, [accountEncrypted, applyProtection, confirm, isAuthenticated, isGuest, storageScope, t]);
@@ -1770,7 +1770,7 @@ export const NoteEditScreen = () => {
         Alert.alert(
             reason === 'offline'
                 ? t('edit.onDeviceOffer.offlineTitle', 'Work without internet')
-                : t('edit.onDeviceOffer.suggestTitle', 'Transcribe for free on your phone'),
+                : t('edit.onDeviceOffer.suggestTitle', 'Transcribe for free on your device'),
             reason === 'offline'
                 ? t('edit.onDeviceOffer.offlineDesc', 'Your last recording was saved without text because there was no internet. Download the speech model once and recordings turn into text even offline.')
                 : t('edit.onDeviceOffer.suggestDesc', 'Download the speech model once: recordings turn into text even without internet or when free minutes run out.'),
@@ -1784,8 +1784,8 @@ export const NoteEditScreen = () => {
         Alert.alert(
             t('edit.protected.modelTitle', 'Recording saved without text'),
             isProtectedRef.current
-                ? t('edit.protected.modelDesc', 'Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.')
-                : t('voice.privateModelMissing', 'Phone-only processing is on, but the speech model is unavailable. Your recording is saved on this phone. Download the model to transcribe it.'),
+                ? t('edit.protected.modelDesc', 'Protected notes are transcribed only on the device. Download the speech model once to get text from recordings.')
+                : t('voice.privateModelMissing', 'Device-only processing is on, but the speech model is unavailable. Your recording is saved on this device. Download the model to transcribe it.'),
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
@@ -2987,7 +2987,7 @@ export const NoteEditScreen = () => {
         } catch (error: any) {
             if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT' || error?.message?.includes('No such file')) {
                 console.log('[Audio] File not found (deleted?):', path);
-                showToast(t('edit.toast.audioMissing', 'The recording file is missing on this phone'), 3000, true);
+                showToast(t('edit.toast.audioMissing', 'The recording file is missing on this device'), 3000, true);
             } else {
                 console.error('Failed to load audio:', error);
             }
@@ -3797,7 +3797,7 @@ export const NoteEditScreen = () => {
         if (result.error === 'permission') {
             Alert.alert(
                 t('edit.tasks.notifyOffTitle', 'Notifications are off'),
-                t('edit.tasks.notifyOffText', 'Allow notifications for Vaulto in the phone settings to get reminders.'),
+                t('edit.tasks.notifyOffText', 'Allow notifications for Vaulto in the device settings to get reminders.'),
                 [
                     { text: t('common.cancel', 'Cancel'), style: 'cancel' },
                     { text: t('edit.tasks.openSettings', 'Open settings'), onPress: () => { void Linking.openSettings(); } },
@@ -7106,7 +7106,7 @@ export const NoteEditScreen = () => {
                                         </Text>
                                         <Text style={styles.menuItemHint}>
                                             {effectiveStorageScope !== 'sync'
-                                                ? t('edit.protected.hintLocal', 'Only on this phone')
+                                                ? t('edit.protected.hintLocal', 'Only on this device')
                                                 : accountEncrypted
                                                     ? t('edit.protected.hintEncrypted', 'End-to-end encrypted')
                                                     : t('edit.protected.hintWaiting', 'Waits for end-to-end encryption')}
@@ -7443,7 +7443,7 @@ export const NoteEditScreen = () => {
                     if (whisperModalPurpose === 'enable') {
                         setWhisperModalPurpose('dictate');
                         void setOnDeviceTranscription(true);
-                        showToast(t('edit.onDeviceOffer.enabled', 'Recordings are now transcribed on this phone'));
+                        showToast(t('edit.onDeviceOffer.enabled', 'Recordings are now transcribed on this device'));
                         return;
                     }
                     if (whisperModalPurpose === 'offline') {

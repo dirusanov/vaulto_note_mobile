@@ -246,7 +246,7 @@ export const SettingsScreen = () => {
         const ok = await setWeeklyDigestEnabled(value).catch(() => false);
         if (!ok) {
             setDigestEnabled(false);
-            Alert.alert(t('digest.settingTitle', 'Weekly summary'), t('digest.permissionDenied', 'Allow notifications for Vaulto in the phone settings to get the summary.'), [
+            Alert.alert(t('digest.settingTitle', 'Weekly summary'), t('digest.permissionDenied', 'Allow notifications for Vaulto in the device settings to get the summary.'), [
                 { text: t('common.cancel', 'Cancel'), style: 'cancel' },
                 { text: t('edit.tasks.openSettings', 'Open settings'), onPress: () => { void Linking.openSettings(); } },
             ]);
@@ -262,7 +262,7 @@ export const SettingsScreen = () => {
             } else if (result.skippedProtected > 0) {
                 Alert.alert(
                     t('data.exportTitle', 'Export notes'),
-                    t('data.exportSkippedProtected', 'Protected notes ({{count}}) were not exported: they never leave the phone unencrypted.', { count: result.skippedProtected }),
+                    t('data.exportSkippedProtected', 'Protected notes ({{count}}) were not exported: they never leave the device unencrypted.', { count: result.skippedProtected }),
                 );
             }
         } catch (error) {
@@ -458,7 +458,7 @@ export const SettingsScreen = () => {
                 ? t(offlinePlan.llmKey ? 'settings.voice.offlineHintAll' : 'settings.voice.offlineHintSpeech', offlinePlan.llmKey ? 'Speech and AI without internet · {{size}}' : 'Speech without internet · {{size}}', {
                     size: formatModelSize(offlinePlan.downloadBytes, t),
                 })
-                : t('settings.voice.offlineNoSpace', 'Not enough free space on this phone');
+                : t('settings.voice.offlineNoSpace', 'Not enough free space on this device');
 
     const openManageSubscription = useCallback(async () => {
         const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
@@ -728,7 +728,7 @@ export const SettingsScreen = () => {
             if (!plan) {
                 Alert.alert(
                     t('settings.voice.offlineNoSpaceTitle', 'Not enough space'),
-                    t('settings.voice.offlineNoSpace', 'Not enough free space on this phone'),
+                    t('settings.voice.offlineNoSpace', 'Not enough free space on this device'),
                 );
                 return;
             }
@@ -738,11 +738,11 @@ export const SettingsScreen = () => {
                     Alert.alert(
                         t('settings.voice.offlineConfirmTitle', 'Download models?'),
                         [
-                            t('settings.voice.offlineConfirmDesc', 'The best speech and AI models for this phone, {{size}}, downloaded once. After that notes work without internet.', {
+                            t('settings.voice.offlineConfirmDesc', 'The best speech and AI models for this device, {{size}}, downloaded once. After that notes work without internet.', {
                                 size: formatModelSize(plan.downloadBytes, t),
                             }),
                             net?.type === 'cellular' ? t('localAI.downloadCellular', 'You are on mobile data — Wi-Fi is recommended.') : '',
-                            !plan.llmKey ? t('settings.voice.speechFirst', 'Speech works without internet. Local AI is optional: it can be slow on phones with little memory.') : '',
+                            !plan.llmKey ? t('settings.voice.speechFirst', 'Speech works without internet. Local AI is optional: it can be slow on devices with little memory.') : '',
                         ].filter(Boolean).join('\n\n'),
                         [
                             { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
@@ -1242,7 +1242,7 @@ export const SettingsScreen = () => {
                                             <Text style={styles.preferenceDescription}>
                                                 {syncEnabled
                                                     ? t('settings.sync.onPlain', 'On · notes are backed up and on all your devices')
-                                                    : t('settings.sync.off', 'Off · notes stay on this phone')}
+                                                    : t('settings.sync.off', 'Off · notes stay on this device')}
                                             </Text>
                                         </View>
                                     </View>
@@ -1326,7 +1326,7 @@ export const SettingsScreen = () => {
                                                     ? t('settings.ui.checking', 'Checking…')
                                                     : syncEnabled
                                                         ? t('settings.sync.onE2ee', 'On · end-to-end encrypted, only you can read it')
-                                                        : t('settings.sync.off', 'Off · notes stay on this phone')}
+                                                        : t('settings.sync.off', 'Off · notes stay on this device')}
                                             </Text>
                                         </View>
                                     </View>
@@ -1365,8 +1365,8 @@ export const SettingsScreen = () => {
                                                         {keyBackup?.cloud
                                                             ? (Platform.OS === 'ios'
                                                                 ? t('settings.sync.keyInIcloud', 'In iCloud Keychain · opens your notes on a new iPhone')
-                                                                : t('settings.sync.keyInGoogle', 'In your Google backup · opens your notes on a new phone'))
-                                                            : t('settings.sync.keyOnlyHere', 'Only on this phone · save a copy so you never lose your notes')}
+                                                                : t('settings.sync.keyInGoogle', 'In your Google backup · opens your notes on a new device'))
+                                                            : t('settings.sync.keyOnlyHere', 'Only on this device · save a copy so you never lose your notes')}
                                                     </Text>
                                                 </View>
                                             </View>
@@ -1449,11 +1449,11 @@ export const SettingsScreen = () => {
                                         <View style={styles.voiceRowText}>
                                             <MaterialIcons name="phonelink-lock" size={24} color={privateMode ? colors.primary : colors.textSecondary} />
                                             <View style={{ flex: 1 }}>
-                                                <Text style={styles.preferenceTitle}>{t("settings.voice.private", "Only on this phone")}</Text>
+                                                <Text style={styles.preferenceTitle}>{t("settings.voice.private", "Only on this device")}</Text>
                                                 <Text style={styles.preferenceDescription}>
                                                     {privateVoiceOnly
-                                                        ? t("settings.voice.privateVoiceDesc", "Voice never leaves the phone, even online")
-                                                        : t("settings.voice.privateDesc", "Voice and AI never leave the phone, even online")}
+                                                        ? t("settings.voice.privateVoiceDesc", "Voice never leaves the device, even online")
+                                                        : t("settings.voice.privateDesc", "Voice and AI never leave the device, even online")}
                                                 </Text>
                                             </View>
                                         </View>
@@ -1463,7 +1463,7 @@ export const SettingsScreen = () => {
                                             trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                             thumbColor={colors.onPrimary}
                                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                            accessibilityLabel={t("settings.voice.private", "Only on this phone")}
+                                            accessibilityLabel={t("settings.voice.private", "Only on this device")}
                                         />
                                     </View>
                                 </>
@@ -1769,7 +1769,7 @@ export const SettingsScreen = () => {
                 title={t('settings.voice.offlineModeOffTitle', 'Remove downloaded models?')}
                 message={t(
                     'settings.voice.offlineModeOffDesc',
-                    'The models are removed from this phone and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.',
+                    'The models are removed from this device and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.',
                     { size: formatModelSize(offlineStatus?.bytesOnPhone ?? 0, t) }
                 )}
                 onConfirm={() => { void handleDisableOffline(); }}

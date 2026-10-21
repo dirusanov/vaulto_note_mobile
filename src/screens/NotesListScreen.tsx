@@ -604,7 +604,7 @@ export const NotesListScreen = () => {
                         </View>
                         <View style={styles.lockBannerTextWrap}>
                             <Text style={styles.lockBannerTitle}>
-                                {t('notes.keptLockedTitle', 'Account notes kept on this phone: {{count}}', { count: lockedCount })}
+                                {t('notes.keptLockedTitle', 'Account notes kept on this device: {{count}}', { count: lockedCount })}
                             </Text>
                             <Text style={styles.lockBannerText}>
                                 {t('notes.keptLockedText', 'They are encrypted. Sign in to your account to open them.')}
@@ -671,7 +671,7 @@ export const NotesListScreen = () => {
                             </Text>
                             <Text style={styles.lockBannerText}>
                                 {encryptionBundle?.secret_mode === 'recovery_code'
-                                    ? t("notes.unlockWithKey", "Enter your recovery key to show them on this phone.")
+                                    ? t("notes.unlockWithKey", "Enter your recovery key to show them on this device.")
                                     : t("notes.unlockToRestore")}
                             </Text>
                         </View>
@@ -806,7 +806,7 @@ export const NotesListScreen = () => {
                                 ? t("notes.noSearchResults", "No notes match your search")
                                 : syncLocked
                                     ? encryptionBundle?.secret_mode === 'recovery_code'
-                                        ? t('notes.unlockWithKey', 'Enter your recovery key to show them on this phone.')
+                                        ? t('notes.unlockWithKey', 'Enter your recovery key to show them on this device.')
                                         : t('notes.unlockToRestore')
                                 // The open recorder covers this spot: no "tap the mic" under it.
                                 : isVoiceRecorderVisible ? ''

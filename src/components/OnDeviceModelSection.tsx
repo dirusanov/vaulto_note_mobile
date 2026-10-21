@@ -131,7 +131,7 @@ export const OnDeviceModelSection = ({
                                     {state?.downloaded && (
                                         <View style={styles.onPhoneLine}>
                                             <MaterialIcons name="check-circle" size={14} color={colors.success} />
-                                            <Text style={styles.downloadedText}>{t('localModels.onPhone', 'On phone')}</Text>
+                                            <Text style={styles.downloadedText}>{t('localModels.onPhone', 'On device')}</Text>
                                         </View>
                                     )}
                                     <Text style={styles.meta}>

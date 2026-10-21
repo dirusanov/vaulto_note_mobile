@@ -22,6 +22,7 @@
 - The editor's "More" menu scrolls when it is taller than the window (tablets in landscape, large fonts), so Protect and Delete stay reachable.
 - The AI result preview resizes with the window instead of keeping its size from app start. On iPad the editor toolbar sits on the keyboard in Stage Manager windows and with a hardware keyboard (it used to rise by a whole hidden keyboard).
 - Editor messages shown while typing appear above the keyboard and the mic button instead of behind the keyboard.
+- Texts no longer call the device a phone, which read wrong on tablets and iPad: all 10 languages say "this device", and the "Only on this device" switch has one name everywhere it is mentioned.
 
 ## [1.0.93] - 2026-10-19
 

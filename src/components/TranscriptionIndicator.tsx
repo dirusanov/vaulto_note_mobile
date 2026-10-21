@@ -84,13 +84,13 @@ export const TranscriptionIndicator: React.FC<Props> = ({ visible, onDevice, onO
                     <MaterialIcons name="graphic-eq" size={20} color={colors.primary} />
                 </Animated.View>
                 <Text style={styles.text}>
-                    {onDevice ? t('voice.transcribingLocal', 'Transcribing on this phone…') : t('voice.transcribingCloud', 'Transcribing in the cloud…')}
+                    {onDevice ? t('voice.transcribingLocal', 'Transcribing on this device…') : t('voice.transcribingCloud', 'Transcribing in the cloud…')}
                     {elapsed >= 3 ? ` · ${t('voice.processingSeconds', '{{seconds}} s', { seconds: elapsed })}` : ''}
                 </Text>
             </View>
             {onDevice && elapsed >= 30 && (
                 <View style={{ marginTop: 8 }}>
-                    <Text style={styles.slowHint}>{t('voice.slowOnDevice', 'This recording is still processing on the phone. For future recordings, cloud processing may be faster when online.')}</Text>
+                    <Text style={styles.slowHint}>{t('voice.slowOnDevice', 'This recording is still processing on the device. For future recordings, cloud processing may be faster when online.')}</Text>
                     {!!onOpenSettings && (
                         <TouchableOpacity onPress={onOpenSettings} accessibilityRole="button" style={{ paddingVertical: 8 }}>
                             <Text style={[styles.text, { color: colors.primary }]}>{t('common.settings', 'Settings')}</Text>

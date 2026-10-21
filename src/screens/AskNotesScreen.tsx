@@ -181,7 +181,7 @@ export const AskNotesScreen = () => {
                     <Text style={styles.title}>{t('ask.title', 'Ask your notes')}</Text>
                     <Text style={styles.subtitle} numberOfLines={2}>
                         {onDeviceAI
-                            ? t('ask.privacyNoteLocal', 'Runs entirely on this phone, offline — nothing is sent anywhere.')
+                            ? t('ask.privacyNoteLocal', 'Runs entirely on this device, offline — nothing is sent anywhere.')
                             : t('ask.privacyNote', 'Notes are searched on this device; only the matching excerpts are sent to AI.')}
                     </Text>
                 </View>
@@ -231,7 +231,7 @@ export const AskNotesScreen = () => {
                                     <Text style={styles.errorText}>
                                         {message.text}
                                         {message.offline ? (
-                                            <Text style={styles.errorHint}>{`\n${t('ask.offlineHint', 'AI on this phone works without internet.')}`}</Text>
+                                            <Text style={styles.errorHint}>{`\n${t('ask.offlineHint', 'AI on this device works without internet.')}`}</Text>
                                         ) : null}
                                     </Text>
                                     {message.offline && (

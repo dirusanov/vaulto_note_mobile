@@ -200,7 +200,7 @@ export const TasksSheet = ({
                                     ) : (
                                     <Text style={styles.hint}>
                                         {onRemind
-                                            ? t('edit.tasks.remindHint', 'The bell sets a reminder on this phone; the calendar button adds the task to your calendar.')
+                                            ? t('edit.tasks.remindHint', 'The bell sets a reminder on this device; the calendar button adds the task to your calendar.')
                                             : t('edit.tasks.calendarHint', 'The calendar button opens your calendar app, where you can set a reminder.')}
                                     </Text>
                                     )}
