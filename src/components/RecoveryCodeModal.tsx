@@ -191,9 +191,12 @@ const styles = createStyles(() => ({
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
+        alignItems: 'center',
         padding: spacing.m,
     },
     card: {
+        width: '100%',
+        maxWidth: 400,
         backgroundColor: colors.surface,
         borderRadius: 24,
         padding: spacing.l,

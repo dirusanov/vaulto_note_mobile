@@ -78,7 +78,11 @@ const styles = createStyles(() => ({
         shadowRadius: 4,
         elevation: 4,
     },
+    // The bar spans the window; its controls line up with the 760 notes header.
     content: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: spacing.m,

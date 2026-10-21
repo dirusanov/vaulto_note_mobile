@@ -2,6 +2,8 @@ package com.vaultonotemobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 
@@ -21,9 +23,39 @@ class MainActivity : ReactActivity() {
     // @generated begin expo-splashscreen - expo prebuild (DO NOT MODIFY) sync-f3ff59a738c56c9a6119210cb55f0b613eb8b6af
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
+    applyOrientationPolicy(resources.configuration)
     super.onCreate(null)
     // "Share -> Vaulto" that cold-started the app.
     ShareIntentStore.capture(applicationContext, intent)
+  }
+
+  // Folding, unfolding and window resizes arrive here (smallestScreenSize is in
+  // configChanges), so the screen is re-laid out instead of recreated.
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    applyOrientationPolicy(newConfig)
+  }
+
+  override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
+    super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
+    applyOrientationPolicy(newConfig)
+  }
+
+  // The manifest locks portrait for phones; tablets and unfolded foldables
+  // (600dp+) rotate freely, as Android 16 already does on large screens.
+  // Only decided when the app owns the whole display: in split screen or a
+  // desktop/ChromeOS window the configuration describes the window, and a
+  // narrow window must not lock the app into a phone-shaped portrait frame.
+  private fun applyOrientationPolicy(config: Configuration) {
+    if (isInMultiWindowMode) return
+    val orientation = if (config.smallestScreenWidthDp >= 600) {
+      ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    } else {
+      ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    if (requestedOrientation != orientation) {
+      requestedOrientation = orientation
+    }
   }
 
   override fun onNewIntent(intent: Intent) {

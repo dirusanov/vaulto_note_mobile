@@ -392,5 +392,6 @@ const styles = createStyles(() => ({
     },
     scannerCancelButton: {
         width: '80%',
+        maxWidth: 400,
     },
 }));

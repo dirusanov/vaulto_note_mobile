@@ -185,6 +185,8 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                         <View style={{ width: 44 }} />
                     </View>
 
+                    {/* Search and list keep a readable width on tablets. */}
+                    <View style={styles.modalBody}>
                     <View style={styles.searchContainer}>
                         <MaterialIcons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
                         <TextInput
@@ -224,6 +226,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                             </View>
                         }
                     />
+                    </View>
                 </SafeAreaView>
             </Modal>
         </View>
@@ -260,6 +263,12 @@ const styles = createStyles(() => ({
         paddingBottom: spacing.s,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+    },
+    modalBody: {
+        flex: 1,
+        width: '100%',
+        maxWidth: 680,
+        alignSelf: 'center',
     },
     modalTitle: {
         ...typography.h3,
