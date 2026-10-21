@@ -1044,5 +1044,16 @@
     "summaryFailed": "Could not write the meeting notes. You can run \"Meeting notes\" from the AI menu later.",
     "title": "Meeting · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "cloudAIConsent": {
+    "title": "Use cloud AI?",
+    "gateway": "Your selected audio, note text and questions are sent to Vaulto and OpenAI to process your request. They receive readable content; encrypted sync is separate. Downloaded models process data on this device.",
+    "custom": "Your selected audio, note text and questions are sent to {{host}}, your chosen AI service. It receives readable content; encrypted sync is separate. Downloaded models process data on this device.",
+    "allow": "Allow cloud AI",
+    "required": "Cloud AI needs your permission. Your note is still saved.",
+    "settingTitle": "Cloud AI permission",
+    "allowed": "Allowed for approved AI services. Turn off to ask again.",
+    "ask": "Ask before sending audio or text.",
+    "updateError": "Permission could not be updated. Please try again."
+  }
 }

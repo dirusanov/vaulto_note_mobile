@@ -1,3 +1,4 @@
+import { isCloudAIConsentError } from '../services/cloudAIConsent';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, memo } from 'react';
 import {
@@ -1470,6 +1471,7 @@ export const NoteEditScreen = () => {
     } | null>(null);
     const [isPreviewRegenerating, setIsPreviewRegenerating] = useState(false);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
+        if (isCloudAIConsentError(errorValue)) return false;
         const originalErrorMsg = getErrorMessage(errorValue, '');
         const raw = originalErrorMsg.toLowerCase();
 
@@ -6577,9 +6579,9 @@ export const NoteEditScreen = () => {
                 animationType="slide"
                 onRequestClose={handlePreviewDiscard}
             >
-                <TouchableWithoutFeedback onPress={handlePreviewDiscard}>
+                <TouchableWithoutFeedback accessible={false} onPress={handlePreviewDiscard}>
                     <View style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback onPress={() => { }}>
+                        <TouchableWithoutFeedback accessible={false} onPress={() => { }}>
                             <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 16 }]}>
                                 <View style={styles.aiModalHeader}>
                                     <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]} numberOfLines={1}>
@@ -6655,9 +6657,9 @@ export const NoteEditScreen = () => {
                 onRequestClose={() => setShowAIModal(false)}
             >
                 <GestureHandlerRootView style={{ flex: 1 }}>
-                    <TouchableWithoutFeedback onPress={() => setShowAIModal(false)}>
+                    <TouchableWithoutFeedback accessible={false} onPress={() => setShowAIModal(false)}>
                         <View style={styles.modalOverlay}>
-                            <TouchableWithoutFeedback onPress={() => { }}>
+                            <TouchableWithoutFeedback accessible={false} onPress={() => { }}>
                                 <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + 16 }]}>
                                     <View style={styles.aiModalHeader}>
                                         <Text style={[styles.aiModalTitle, styles.aiModalTitleInline]}>{t("edit.improveText", "Improve Text with AI")}</Text>
@@ -6837,9 +6839,9 @@ export const NoteEditScreen = () => {
                 animationType="fade"
                 onRequestClose={closePromptBuilder}
             >
-                <TouchableWithoutFeedback onPress={closePromptBuilder}>
+                <TouchableWithoutFeedback accessible={false} onPress={closePromptBuilder}>
                     <GestureHandlerRootView style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback>
+                        <TouchableWithoutFeedback accessible={false}>
                             <KeyboardAvoidingView
                                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                                 style={styles.promptBuilderWrapper}
@@ -6930,7 +6932,7 @@ export const NoteEditScreen = () => {
                 animationType="fade"
                 onRequestClose={() => setShowMenu(false)}
             >
-                <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
+                <TouchableWithoutFeedback accessible={false} onPress={() => setShowMenu(false)}>
                     <View style={styles.menuOverlay}>
                         <View style={styles.menuContainer}>
                             <View style={styles.menuSectionHeader}>
@@ -7432,9 +7434,9 @@ export const NoteEditScreen = () => {
                 animationType="slide"
                 onRequestClose={closeRecordingsList}
             >
-                <TouchableWithoutFeedback onPress={closeRecordingsList}>
+                <TouchableWithoutFeedback accessible={false} onPress={closeRecordingsList}>
                     <GestureHandlerRootView style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback>
+                        <TouchableWithoutFeedback accessible={false}>
                             <View style={styles.aiModalContent}>
                                 <Text style={styles.aiModalTitle}>{t("edit.voiceRecordings", "Voice Recordings")}</Text>
 
@@ -7581,9 +7583,9 @@ export const NoteEditScreen = () => {
                 animationType="slide"
                 onRequestClose={() => setShowRecordingTextModal(false)}
             >
-                <TouchableWithoutFeedback onPress={() => setShowRecordingTextModal(false)}>
+                <TouchableWithoutFeedback accessible={false} onPress={() => setShowRecordingTextModal(false)}>
                     <GestureHandlerRootView style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback>
+                        <TouchableWithoutFeedback accessible={false}>
                             <View
                                 style={[
                                     styles.recordingTextModalContent,

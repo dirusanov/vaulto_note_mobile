@@ -1,3 +1,4 @@
+import { cloudAIFetch } from './cloudAIConsent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTaskExtractionPrompt, parseExtractedTasks, type ExtractedTask } from '../utils/taskExtraction';
 import { API_URL } from '../utils/env';
@@ -266,7 +267,7 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
             requestBody.response_format = { type: 'json_object' };
         }
 
-        const response = await fetch(chatUrl, {
+        const response = await cloudAIFetch(chatUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -311,7 +312,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         json_mode: wantsJson,
     };
 
-    const response = await fetch(baseUrl, {
+    const response = await cloudAIFetch(baseUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -372,7 +373,7 @@ async function runInstruction(
     if (provider === 'vaulto_ai') {
         const token = await storage.getToken();
         if (!token) throw new Error('Sign in required to use Vaulto AI.');
-        const response = await fetch(BACKEND_IMPROVE_URL, {
+        const response = await cloudAIFetch(BACKEND_IMPROVE_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -406,7 +407,7 @@ async function runInstruction(
         ],
     };
     if (modelSupportsTemperature(model)) body.temperature = 0.2;
-    const response = await fetch(buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/chat/completions'), {
+    const response = await cloudAIFetch(buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/chat/completions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify(body),

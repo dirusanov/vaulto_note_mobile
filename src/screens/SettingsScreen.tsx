@@ -1,3 +1,4 @@
+import { CloudAIConsentControl } from '../components/CloudAIConsentControl';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
@@ -1398,6 +1399,8 @@ export const SettingsScreen = () => {
                             {t('settings.voice.routingHint', 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.')}
                         </Text>
                     )}
+
+                    <CloudAIConsentControl />
 
                     {LOCAL_WHISPER_ENABLED && (
                         <>

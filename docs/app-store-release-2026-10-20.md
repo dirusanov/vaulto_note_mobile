@@ -82,3 +82,11 @@ AudioTranscode and DeviceCapabilities across prebuild.
 
 Apple review and public availability are separate states. Uploading an IPA alone
 is not publication and does not submit the App Store version for review.
+
+
+## 21 October follow-up
+
+Build 94 was accepted by Apple as VALID, but was not submitted for review. It is
+superseded before submission by 1.0.95: native accessibility checks exposed grouped
+recovery/editor modal controls, and the iOS cloud upload path now requests explicit
+AI data-sharing permission. See [the 21 October release record](app-store-release-2026-10-21.md).

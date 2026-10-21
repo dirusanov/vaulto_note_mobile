@@ -1042,5 +1042,16 @@
     "summaryFailed": "Das Protokoll konnte nicht erstellt werden. Du kannst später „Meeting-Protokoll“ im KI-Menü starten.",
     "title": "Meeting · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "cloudAIConsent": {
+    "title": "Cloud-KI verwenden?",
+    "gateway": "Ausgewählte Audiodaten, Notiztexte und Fragen werden zur Bearbeitung an Vaulto und OpenAI gesendet. Sie erhalten lesbare Inhalte; verschlüsselte Synchronisierung ist davon getrennt. Heruntergeladene Modelle verarbeiten Daten auf diesem Gerät.",
+    "custom": "Ausgewählte Audiodaten, Notiztexte und Fragen werden an Ihren KI-Dienst {{host}} gesendet. Er erhält lesbare Inhalte; verschlüsselte Synchronisierung ist davon getrennt. Heruntergeladene Modelle arbeiten auf diesem Gerät.",
+    "allow": "Cloud-KI erlauben",
+    "required": "Cloud-KI benötigt Ihre Erlaubnis. Ihre Notiz ist gespeichert.",
+    "settingTitle": "Erlaubnis für Cloud-KI",
+    "allowed": "Für bestätigte KI-Dienste erlaubt. Ausschalten, um erneut zu fragen.",
+    "ask": "Vor dem Senden von Audio oder Text fragen.",
+    "updateError": "Die Erlaubnis konnte nicht geändert werden. Bitte erneut versuchen."
+  }
 }

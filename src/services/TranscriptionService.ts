@@ -1,3 +1,4 @@
+import { requireCloudAIConsent, isCloudAIConsentError } from './cloudAIConsent';
 /**
  * Transcription service for sending audio to OpenAI Whisper API.
  */
@@ -42,7 +43,7 @@ export interface TranscriptionResult {
     success: boolean;
     error?: string;
     /** A transport failure can use a downloaded speech model without changing settings. */
-    errorKind?: 'network';
+    errorKind?: 'network' | 'permission';
 }
 
 /** How the returned content relates to the note it was built from. */
@@ -196,6 +197,7 @@ const isNetworkRequestError = (error: unknown): boolean => {
 };
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+    await requireCloudAIConsent(url);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -495,7 +497,7 @@ export async function transcribeAudio(
         const localReady = LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
             && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
         const cloud = await transcribeViaBackend(audioUri, selectedLanguage, { announceLimit: !localReady, idempotencyKey: options.idempotencyKey });
-        if (localReady && (cloud.error === USAGE_LIMIT_REACHED || cloud.errorKind === 'network')) {
+        if (localReady && (cloud.error === USAGE_LIMIT_REACHED || cloud.errorKind === 'network' || cloud.errorKind === 'permission')) {
             return local();
         }
         return cloud;
@@ -554,6 +556,7 @@ export async function transcribeAudio(
             const whisperUrl = buildOpenAICompatibleUrl(baseUrl || DEFAULT_OPENAI_BASE_URL, '/audio/transcriptions');
 
             // Send request
+            await requireCloudAIConsent(whisperUrl);
             const response = await fetch(whisperUrl, {
                 method: 'POST',
                 headers: {
@@ -573,6 +576,12 @@ export async function transcribeAudio(
                 success: true,
             };
         } catch (error) {
+            if (isCloudAIConsentError(error)) {
+                const localReady = LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
+                    && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
+                if (localReady) return local();
+                return { text: '', success: false, error: (error as Error).message, errorKind: 'permission' };
+            }
             lastError = error as Error;
             console.error(`Transcription attempt ${attempt + 1} failed:`, error);
 
@@ -714,7 +723,8 @@ async function transcribeViaBackend(
             : error instanceof Error
                 ? error.message
                 : 'Failed to get transcription from server';
-        return { text: '', success: false, error: message, ...(isNetworkRequestError(error) ? { errorKind: 'network' as const } : {}) };
+        return { text: '', success: false, error: message, ...(isCloudAIConsentError(error) ? { errorKind: 'permission' as const }
+            : isNetworkRequestError(error) ? { errorKind: 'network' as const } : {}) };
     }
 }
 

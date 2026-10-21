@@ -1,0 +1,69 @@
+Attributes: Application, 0x1119b83c0, pid: 72720, label: 'Vaulto Note'
+Element subtree:
+ →Application, 0x1119b83c0, pid: 72720, label: 'Vaulto Note'
+    Window (Main), 0x1119b9040, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x1119b9180, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x1119b92c0, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x1119b9400, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x1119b9540, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x1119b9680, {{0.0, 0.0}, {402.0, 874.0}}
+                Other, 0x1119b97c0, {{0.0, 0.0}, {402.0, 874.0}}
+                  Other, 0x1119b9900, {{0.0, 0.0}, {402.0, 874.0}}
+                  Other, 0x1119b9a40, {{0.0, 0.0}, {402.0, 874.0}}
+                    Other, 0x1119b9b80, {{0.0, 0.0}, {402.0, 874.0}}
+                      Other, 0x1119b9cc0, {{0.0, 0.0}, {402.0, 874.0}}
+                        Other, 0x1119b9e00, {{0.0, 0.0}, {402.0, 874.0}}
+                          Other, 0x1119b9f40, {{0.0, 0.0}, {402.0, 874.0}}
+                            Other, 0x1119ba080, {{0.0, 0.0}, {402.0, 874.0}}
+                              Other, 0x1119ba1c0, {{0.0, 0.0}, {402.0, 874.0}}
+                                Other, 0x1119ba300, {{0.0, 62.0}, {402.0, 812.0}}
+                                Button, 0x1119ba440, {{4.0, 70.0}, {48.0, 48.0}}, label: 'Back'
+                                Button, 0x1119ba580, {{238.0, 70.0}, {48.0, 48.0}}, label: 'Text appearance'
+                                Button, 0x1119ba6c0, {{294.0, 70.0}, {48.0, 48.0}}, label: 'Improve with AI'
+                                Button, 0x1119ba800, {{350.0, 70.0}, {48.0, 48.0}}, label: 'More options'
+                                Other, 0x1119ba940, {{16.0, 130.0}, {370.0, 744.0}}
+                                  Other, 0x1119baa80, {{16.0, 130.0}, {370.0, 28.7}}
+                                    TextView, 0x1119babc0, {{16.0, 130.0}, {370.0, 28.7}}, value: Website launch mee...
+                                      Other, 0x1119bad00, {{353.0, 130.0}, {30.0, 28.7}}, label: 'Vertical scroll bar, 2 pages', value: 100%
+                                        Other, 0x1119bae40, {{380.0, 119.7}, {3.0, 36.0}}
+                                      Other, 0x1119baf80, {{16.0, 141.3}, {370.0, 14.3}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                        Other, 0x1119bb0c0, {{19.0, 152.7}, {361.0, 3.0}}
+                                  StaticText, 0x1119bb200, {{16.0, 162.7}, {370.0, 14.3}}, label: 'October 21 at 09:00  |  324 characters'
+                                    StaticText, 0x1119bb340, {{16.0, 162.7}, {370.0, 14.3}}, label: 'October 21 at 09:00  |  324 characters'
+                                  Other, 0x1119bb480, {{16.0, 201.0}, {370.0, 673.0}}
+                                  Other, 0x1119bb5c0, {{16.0, 201.0}, {370.0, 673.0}}
+                                    Other, 0x1119bb700, {{16.0, 201.0}, {370.0, 673.0}}
+                                      Other, 0x1119bb840, {{16.0, 201.0}, {370.0, 673.0}}
+                                        WebView, 0x1119bb980, {{16.0, 201.0}, {370.0, 673.0}}
+                                          WebView, 0x1119bbac0, {{16.0, 201.0}, {370.0, 673.0}}
+                                            WebView, 0x1119bbc00, {{16.0, 201.0}, {370.0, 673.0}}
+                                              Other, 0x1119bbd40, {{0.0, 0.0}, {370.0, 673.0}}
+                                                Other, 0x1119bbe80, {{0.0, 0.0}, {370.0, 673.0}}
+                                                  Other, 0x1095e1e00, {{16.0, 201.0}, {370.0, 673.0}}
+                                                    Other, 0x1095e1f40, {{16.0, 201.0}, {370.0, 673.0}}, label: 'RichTextEditor', Focused
+                                                      Other, 0x1095e2080, {{16.0, 201.0}, {370.0, 10.0}}, Focused
+                                                        TextView, 0x1095e2580, {{16.0, 201.0}, {370.0, 673.0}}, value: We agreed to launc..., Focused
+                                                          Other, 0x1095e26c0, {{16.0, 201.0}, {370.0, 175.0}}, Focused
+                                                            StaticText, 0x1095e21c0, {{16.0, 203.0}, {363.0, 171.0}}, label: 'We agreed to launch the new website next Friday. Maya will finish the illustrations by Tuesday. Alex will review the welcome page and check mobile layouts. I will prepare the announcement and collect feedback. Before launch, test the sign-up flow and make sure the support link works. Our next check-in is Wednesday morning.', value: We agreed to launc..., Focused
+                                                          StaticText, 0x1095e2300, {{16.0, 203.0}, {363.0, 171.0}}, label: 'We agreed to launch the new website next Friday. Maya will finish the illustrations by Tuesday. Alex will review the welcome page and check mobile layouts. I will prepare the announcement and collect feedback. Before launch, test the sign-up flow and make sure the support link works. Our next check-in is Wednesday morning.', value: We agreed to launc..., Focused
+                                            Other, 0x1095e2440, {{353.0, 201.0}, {30.0, 627.0}}, label: 'Vertical scroll bar, 1 page', value: 0%
+                                              Other, 0x1095e0c80, {{380.0, 864.0}, {3.0, 7.0}}
+                                            Other, 0x1095e1b80, {{62.0, 841.0}, {278.0, 30.0}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                              Other, 0x1095e1cc0, {{376.0, 868.0}, {7.0, 3.0}}
+                                            Other, 0x1095e1900, {{353.0, 201.0}, {30.0, 627.0}}, label: 'Vertical scroll bar, 1 page', value: 0%
+                                              Other, 0x1095e1a40, {{380.0, 864.0}, {3.0, 7.0}}
+                                            Other, 0x1095e1680, {{62.0, 841.0}, {278.0, 30.0}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                              Other, 0x1095e17c0, {{376.0, 868.0}, {7.0, 3.0}}
+                                Button, 0x1095e1400, {{314.0, 750.0}, {56.0, 56.0}}, label: 'Record voice note'
+                      Toolbar, 0x1095e1540, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Toolbar', label: 'Toolbar'
+                        Other, 0x1095e0dc0, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x1095e0f00, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x1095e12c0, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x1095e1180, {{0.0, 0.0}, {402.0, 874.0}}
+Path to element:
+ →Application, 0x1119b83c0, pid: 72720, label: 'Vaulto Note'
+Query chain:
+ →Find: Application 'com.vaultonotemobile'
+  Output: {
+    Application, 0x1095e1040, pid: 72720, label: 'Vaulto Note'
+  }

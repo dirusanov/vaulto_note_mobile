@@ -65,6 +65,9 @@ export const Button = ({
             ]}
             onPress={onPress}
             disabled={disabled || loading}
+            accessibilityRole="button"
+            accessibilityLabel={title}
+            accessibilityState={{ disabled: disabled || loading, busy: loading }}
             activeOpacity={0.8}
         >
             {loading ? (

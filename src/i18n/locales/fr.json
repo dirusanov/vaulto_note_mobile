@@ -1042,5 +1042,16 @@
     "summaryFailed": "Impossible de rédiger le compte rendu. Vous pourrez lancer « Compte rendu » depuis le menu IA.",
     "title": "Réunion · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "cloudAIConsent": {
+    "title": "Utiliser l’IA en ligne ?",
+    "gateway": "Les fichiers audio, textes de notes et questions sélectionnés sont envoyés à Vaulto et OpenAI pour traiter votre demande. Ils reçoivent un contenu lisible ; la synchronisation chiffrée est distincte. Les modèles téléchargés traitent les données sur cet appareil.",
+    "custom": "Les fichiers audio, textes de notes et questions sélectionnés sont envoyés à {{host}}, votre service d’IA choisi. Il reçoit un contenu lisible ; la synchronisation chiffrée est distincte. Les modèles téléchargés fonctionnent sur cet appareil.",
+    "allow": "Autoriser l’IA en ligne",
+    "required": "L’IA en ligne nécessite votre autorisation. Votre note est enregistrée.",
+    "settingTitle": "Autorisation de l’IA en ligne",
+    "allowed": "Autorisée pour les services d’IA approuvés. Désactivez pour redemander.",
+    "ask": "Demander avant d’envoyer de l’audio ou du texte.",
+    "updateError": "Impossible de modifier l’autorisation. Réessayez."
+  }
 }

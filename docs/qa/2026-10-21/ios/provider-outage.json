@@ -1,0 +1,14 @@
+{
+  "checkedAtUTC": [
+    "2026-10-21T06:22:32Z",
+    "2026-10-21T06:26:19Z"
+  ],
+  "gatewayPath": "/ai/improve",
+  "gatewayStatus": 502,
+  "provider": "OpenAI",
+  "providerStatus": 429,
+  "providerErrorType": "insufficient_quota",
+  "providerErrorCode": "credit_balance_exhausted",
+  "nativeOriginalPreserved": true,
+  "submittedForReview": false
+}

@@ -3,7 +3,7 @@
     "name": "Vaulto Note",
     "slug": "vaulto-note-mobile",
     "owner": "random1k11",
-    "version": "1.0.94",
+    "version": "1.0.95",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "94",
+      "buildNumber": "95",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes.",
         "NSCameraUsageDescription": "Scan a recovery key QR code to restore access to your encrypted notes.",
@@ -37,7 +37,7 @@
         "android.permission.CAMERA"
       ],
       "package": "com.vaultonotemobile",
-      "versionCode": 94
+      "versionCode": 95
     },
     "web": {
       "favicon": "./assets/favicon.png"

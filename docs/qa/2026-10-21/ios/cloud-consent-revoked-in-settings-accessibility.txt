@@ -1,0 +1,129 @@
+Attributes: Application, 0x10566fac0, pid: 72720, label: 'Vaulto Note'
+Element subtree:
+ →Application, 0x10566fac0, pid: 72720, label: 'Vaulto Note'
+    Window (Main), 0x10566d540, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x10566f0c0, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x10566f840, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x10566f980, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x10566fc00, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x10566fd40, {{0.0, 0.0}, {402.0, 874.0}}
+                Other, 0x10566f480, {{0.0, 0.0}, {402.0, 874.0}}
+                  Other, 0x10566f200, {{0.0, 0.0}, {402.0, 874.0}}
+                  Other, 0x108482300, {{0.0, 0.0}, {402.0, 874.0}}
+                    Other, 0x108482d00, {{0.0, 0.0}, {402.0, 874.0}}
+                      Other, 0x108481180, {{0.0, 0.0}, {402.0, 874.0}}
+                        Other, 0x1084812c0, {{0.0, 0.0}, {402.0, 874.0}}
+                          Other, 0x108481400, {{0.0, 0.0}, {402.0, 874.0}}
+                            Other, 0x108481040, {{0.0, 0.0}, {402.0, 874.0}}
+                              Other, 0x108481a40, {{0.0, 0.0}, {402.0, 874.0}}
+                                Other, 0x108481540, {{0.0, 62.0}, {402.0, 812.0}}
+                                Button, 0x108481cc0, {{32.0, 86.0}, {48.0, 48.0}}, label: 'Back'
+                                StaticText, 0x108481e00, {{88.0, 91.0}, {282.0, 38.0}}, label: 'Settings'
+                                  StaticText, 0x108481f40, {{88.0, 91.0}, {282.0, 38.0}}, label: 'Settings'
+                                Other, 0x1084821c0, {{16.0, 142.0}, {370.0, 732.0}}
+                                  ScrollView, 0x108482080, {{16.0, 142.0}, {370.0, 732.0}}
+                                    Other, 0x108482440, {{16.0, -505.3}, {370.0, 1823.0}}
+                                      Other, 0x1084826c0, {{16.0, -505.3}, {370.0, 1823.0}}
+                                        Other, 0x1095e0000, {{32.0, -497.3}, {338.0, 221.0}}
+                                        Other, 0x1095e0140, {{49.0, -471.3}, {40.0, 40.0}}
+                                        StaticText, 0x1095e0280, {{105.0, -476.3}, {248.0, 28.0}}, label: 'Vaulto App Review'
+                                          StaticText, 0x1095e03c0, {{105.0, -476.3}, {248.0, 28.0}}, label: 'Vaulto App Review'
+                                        StaticText, 0x1095e0500, {{62.7, -465.3}, {12.7, 28.0}}, label: 'V'
+                                          StaticText, 0x1095e0640, {{62.7, -465.3}, {12.7, 28.0}}, label: 'V'
+                                        StaticText, 0x1095e0780, {{105.0, -446.3}, {248.0, 20.0}}, label: 'review-account@example.invalid'
+                                          StaticText, 0x1095e08c0, {{105.0, -446.3}, {248.0, 20.0}}, label: 'review-account@example.invalid'
+                                        Other, 0x1095e0a00, {{49.0, -406.3}, {304.0, 113.0}}
+                                        Other, 0x1095e0b40, {{49.0, -391.3}, {36.0, 36.0}}
+                                        StaticText, 0x1095e0c80, {{93.0, -397.3}, {126.3, 28.0}}, label: 'Trial Balance'
+                                          StaticText, 0x1095e0dc0, {{93.0, -397.3}, {126.3, 28.0}}, label: 'Trial Balance'
+                                        StaticText, 0x1095e0f00, {{57.0, -383.3}, {20.0, 20.0}}, label: ''
+                                          StaticText, 0x1095e1040, {{57.0, -383.3}, {20.0, 20.0}}, label: ''
+                                        StaticText, 0x1095e1180, {{93.0, -367.3}, {126.3, 18.0}}, label: 'One-time trial minutes'
+                                          StaticText, 0x1095e12c0, {{93.0, -367.3}, {126.3, 18.0}}, label: 'One-time trial minutes'
+                                        Other, 0x1095e1400, {{49.0, -333.3}, {304.0, 8.0}}
+                                        StaticText, 0x1095e1540, {{49.0, -314.3}, {31.7, 18.0}}, label: 'Used'
+                                          StaticText, 0x1095e1680, {{49.0, -314.3}, {31.7, 18.0}}, label: 'Used'
+                                        StaticText, 0x1095e17c0, {{274.0, -317.3}, {79.0, 24.0}}, label: '⁦0:00 / 30:00⁩'
+                                          StaticText, 0x1095e1900, {{274.0, -317.3}, {79.0, 24.0}}, label: '⁦0:00 / 30:00⁩'
+                                        Other, 0x1095e1a40, {{32.0, -260.3}, {338.0, 209.0}}
+                                        Other, 0x1095e1b80, {{49.0, -243.3}, {304.0, 52.0}}, label: ', App Language, English, '
+                                        Other, 0x1095e1cc0, {{49.0, -175.3}, {304.0, 1.0}}
+                                        StaticText, 0x1095e1e00, {{49.0, -157.3}, {24.0, 24.0}}, label: ''
+                                          StaticText, 0x1095e1f40, {{49.0, -157.3}, {24.0, 24.0}}, label: ''
+                                        StaticText, 0x1095e2080, {{81.0, -158.3}, {52.3, 24.0}}, label: 'Theme'
+                                          StaticText, 0x1095e21c0, {{81.0, -158.3}, {52.3, 24.0}}, label: 'Theme'
+                                        Other, 0x1095e2300, {{49.0, -124.3}, {304.0, 56.0}}
+                                        Other, 0x1095e2440, {{53.0, -120.3}, {96.0, 48.0}}, label: 'System', value: radio button, Selected
+                                        Other, 0x1095e2580, {{153.0, -120.3}, {96.0, 48.0}}, label: 'Light', value: radio button
+                                        Other, 0x1095e26c0, {{253.0, -120.3}, {96.0, 48.0}}, label: 'Dark', value: radio button
+                                        Other, 0x1095e2800, {{32.0, -35.3}, {338.0, 382.7}}
+                                        StaticText, 0x1095e2940, {{49.0, -18.3}, {304.0, 15.7}}, label: 'NOTES'
+                                          StaticText, 0x1095e2a80, {{49.0, -18.3}, {304.0, 15.7}}, label: 'NOTES'
+                                        StaticText, 0x1095e2bc0, {{81.0, 9.3}, {209.0, 24.0}}, label: 'Weekly summary'
+                                          StaticText, 0x1095e2d00, {{81.0, 9.3}, {209.0, 24.0}}, label: 'Weekly summary'
+                                        Other, 0x1095e2e40, {{296.3, 12.1}, {50.4, 22.4}}
+                                          Switch, 0x1095e2f80, {{296.3, 12.1}, {50.4, 22.4}}, label: 'Weekly summary', value: 0
+                                        StaticText, 0x1095e30c0, {{49.0, 28.3}, {24.0, 24.0}}, label: ''
+                                          StaticText, 0x1095e3200, {{49.0, 28.3}, {24.0, 24.0}}, label: ''
+                                        StaticText, 0x1095e3340, {{81.0, 35.3}, {209.0, 36.0}}, label: 'Sunday evening: what you noted and what is still open'
+                                          StaticText, 0x1095e3480, {{81.0, 35.3}, {209.0, 36.0}}, label: 'Sunday evening: what you noted and what is still open'
+                                        Other, 0x1095e35c0, {{49.0, 91.3}, {304.0, 1.0}}
+                                        Button, 0x1095e3700, {{49.0, 108.3}, {304.0, 52.0}}, label: ', Trash, Deleted notes, kept for 30 days, '
+                                        Other, 0x1095e3840, {{49.0, 176.3}, {304.0, 1.0}}
+                                        Button, 0x1095e3980, {{49.0, 193.3}, {304.0, 52.0}}, label: ', Export notes, Markdown files in a ZIP, '
+                                        Other, 0x1095e3ac0, {{49.0, 261.3}, {304.0, 1.0}}
+                                        Button, 0x1095e3c00, {{49.0, 278.3}, {304.0, 52.0}}, label: ', Import notes, .md, .txt, .zip or Google Keep (Takeout), '
+                                        Other, 0x1095e3d40, {{32.0, 363.3}, {338.0, 262.7}}
+                                        StaticText, 0x1095e3e80, {{49.0, 380.3}, {91.0, 15.7}}, label: 'CLOUD SYNC'
+                                          StaticText, 0x1095f4000, {{49.0, 380.3}, {91.0, 15.7}}, label: 'CLOUD SYNC'
+                                        Button, 0x1095f4140, {{335.0, 383.3}, {18.0, 18.0}}, label: 'About cloud sync'
+                                        StaticText, 0x1095f4280, {{81.0, 412.0}, {201.0, 24.0}}, label: 'Sync'
+                                          StaticText, 0x1095f43c0, {{81.0, 412.0}, {201.0, 24.0}}, label: 'Sync'
+                                        Other, 0x1095f4500, {{296.3, 414.8}, {50.4, 22.4}}
+                                          Switch, 0x1095f4640, {{296.3, 414.8}, {50.4, 22.4}}, label: 'Sync', value: 1
+                                        StaticText, 0x1095f4780, {{49.0, 431.0}, {24.0, 24.0}}, label: ''
+                                          StaticText, 0x1095f48c0, {{49.0, 431.0}, {24.0, 24.0}}, label: ''
+                                        StaticText, 0x1095f4a00, {{81.0, 438.0}, {201.0, 36.0}}, label: 'On · end-to-end encrypted, only you can read it'
+                                          StaticText, 0x1095f4b40, {{81.0, 438.0}, {201.0, 36.0}}, label: 'On · end-to-end encrypted, only you can read it'
+                                        Other, 0x1095f4c80, {{49.0, 482.0}, {304.0, 1.0}}
+                                        Button, 0x1095f4dc0, {{49.0, 483.0}, {304.0, 78.0}}, label: '󰌋, Recovery key, Only on this phone · save a copy so you never lose your notes, '
+                                        Button, 0x1095f4f00, {{106.3, 565.0}, {189.3, 44.0}}, label: 'Turn off end-to-end encryption'
+                                        Other, 0x1095f5040, {{32.0, 642.0}, {338.0, 407.7}}
+                                        StaticText, 0x1095f5180, {{49.0, 659.0}, {304.0, 15.7}}, label: 'VOICE & AI'
+                                          StaticText, 0x1095f52c0, {{49.0, 659.0}, {304.0, 15.7}}, label: 'VOICE & AI'
+                                        StaticText, 0x1095f5400, {{49.0, 682.7}, {304.0, 54.0}}, label: 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.'
+                                          StaticText, 0x1095f5540, {{49.0, 682.7}, {304.0, 54.0}}, label: 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.'
+                                        StaticText, 0x1095f5680, {{49.0, 760.7}, {225.0, 24.0}}, label: 'Cloud AI permission'
+                                          StaticText, 0x1095f57c0, {{49.0, 760.7}, {225.0, 24.0}}, label: 'Cloud AI permission'
+                                        Other, 0x1095f5900, {{290.0, 760.7}, {63.0, 28.0}}
+                                          Switch, 0x1095f5a40, {{290.0, 760.7}, {63.0, 28.0}}, label: 'Cloud AI permission', value: 0
+                                        StaticText, 0x1095f5b80, {{49.0, 788.7}, {225.0, 18.0}}, label: 'Ask before sending audio or text.'
+                                          StaticText, 0x1095f5cc0, {{49.0, 788.7}, {225.0, 18.0}}, label: 'Ask before sending audio or text.'
+                                        Other, 0x1095f5e00, {{49.0, 822.7}, {304.0, 96.0}}, label: ', Work without internet, Speech and AI right on the phone, no internet needed · 3.3 GB, Work without internet', Disabled
+                                        Other, 0x1095f5f40, {{49.0, 918.7}, {304.0, 1.0}}
+                                        Button, 0x1095f6080, {{49.0, 919.7}, {304.0, 56.0}}, label: ', Models, '
+                                        Other, 0x1095f61c0, {{49.0, 975.7}, {304.0, 1.0}}
+                                        StaticText, 0x1095f6300, {{49.0, 992.7}, {24.0, 24.0}}, label: ''
+                                          StaticText, 0x1095f6440, {{49.0, 992.7}, {24.0, 24.0}}, label: ''
+                                        StaticText, 0x1095f6580, {{81.0, 996.0}, {152.0, 17.0}}, label: 'Speech language'
+                                          StaticText, 0x1095f66c0, {{81.0, 996.0}, {152.0, 17.0}}, label: 'Speech language'
+                                        Other, 0x1095f6800, {{241.0, 988.7}, {112.0, 32.0}}, label: 'Auto-Detect, '
+                                        Other, 0x1095f6940, {{32.0, 1081.7}, {338.0, 52.0}}, label: ', Sign Out'
+                                        Button, 0x1095f6a80, {{32.0, 1149.7}, {338.0, 44.0}}, label: 'Delete Account'
+                                        Other, 0x1095f6bc0, {{32.0, 1209.7}, {338.0, 44.0}}
+                                          Other, 0x1095f6d00, {{96.0, 1209.7}, {84.0, 18.0}}, label: 'Privacy Policy'
+                                          Other, 0x1095f6e40, {{204.0, 1209.7}, {102.0, 18.0}}, label: 'Terms of Service'
+                                          Other, 0x1095f6f80, {{158.7, 1235.7}, {84.7, 18.0}}, label: 'Vaulto v1.0.95'
+                                    Other, 0x1095f70c0, {{62.0, 841.0}, {278.0, 30.0}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                      Other, 0x1095f7200, {{65.0, 868.0}, {272.0, 3.0}}
+                                    Other, 0x1095f7340, {{62.0, 841.0}, {278.0, 30.0}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                      Other, 0x1095f7480, {{65.0, 868.0}, {272.0, 3.0}}
+                      Toolbar, 0x1095f75c0, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Toolbar', label: 'Toolbar'
+                        Other, 0x1095f7700, {{0.0, 0.0}, {402.0, 874.0}}
+Path to element:
+ →Application, 0x10566fac0, pid: 72720, label: 'Vaulto Note'
+Query chain:
+ →Find: Application 'com.vaultonotemobile'
+  Output: {
+    Application, 0x1095f7840, pid: 72720, label: 'Vaulto Note'
+  }

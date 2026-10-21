@@ -1042,5 +1042,16 @@
     "summaryFailed": "No se pudo redactar el acta. Puedes usar «Acta de reunión» en el menú de IA más tarde.",
     "title": "Reunión · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "cloudAIConsent": {
+    "title": "¿Usar IA en la nube?",
+    "gateway": "El audio, texto de notas y preguntas seleccionados se envían a Vaulto y OpenAI para procesar tu solicitud. Reciben contenido legible; la sincronización cifrada es independiente. Los modelos descargados procesan los datos en este dispositivo.",
+    "custom": "El audio, texto de notas y preguntas seleccionados se envían a {{host}}, tu servicio de IA elegido. Recibe contenido legible; la sincronización cifrada es independiente. Los modelos descargados trabajan en este dispositivo.",
+    "allow": "Permitir IA en la nube",
+    "required": "La IA en la nube necesita tu permiso. Tu nota sigue guardada.",
+    "settingTitle": "Permiso para IA en la nube",
+    "allowed": "Permitido para los servicios de IA aprobados. Desactívalo para preguntar de nuevo.",
+    "ask": "Preguntar antes de enviar audio o texto.",
+    "updateError": "No se pudo cambiar el permiso. Inténtalo de nuevo."
+  }
 }

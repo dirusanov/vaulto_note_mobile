@@ -1,8 +1,8 @@
 {
-  "status": "prepare_for_submission",
+  "status": "release_prepared_review_held_provider_credits_exhausted",
   "bundleId": "com.vaultonotemobile",
-  "version": "1.0.94",
-  "build": "94",
+  "version": "1.0.95",
+  "build": "95",
   "primaryLocale": "en-US",
   "name": "Vaulto: Private AI Voice Notes",
   "subtitle": "Voice to text. Local or cloud.",
@@ -21,15 +21,19 @@
     "freeAgreement": "active",
     "paidAgreement": "not_required_free_release",
     "storeAppRecord": "created_version_1.0.94",
-    "signedIpa": "built_1.0.94_build94_signature_valid",
-    "screenshots": "pending_native_run",
+    "signedIpa": "1.0.95_95_signature_valid_uploaded_2026-10-21",
+    "screenshots": "iPhone_medium_large_and_iPad13_uploaded",
     "appPrivacy": "published_2026-10-20",
-    "exportCompliance": "pending_encryption_questionnaire",
+    "exportCompliance": "standard_published_crypto_no_France_documentation_exempt_per_Apple",
     "territories": "148_selected_EU27_excluded_initial_release",
     "signing": "distribution_certificate_and_profile_ready",
     "reviewAccount": "email_verified_login_checked",
     "digitalServicesAct": "active_declared_no_EU_distribution",
-    "nativeIPhoneQA": "create_edit_encrypted_storage_relaunch_email_login_passed"
+    "nativeIPhoneQA": "write_persist_login_encrypted_storage_passed_cloud_permission_repeat_pending",
+    "nativeIPadQA": "recovery_key_restored_and_decrypted_phone_note_on_second_device_passed",
+    "cloudAIConsent": "native_cancel_revoke_reprompt_and_original_preservation_passed",
+    "cloudAIServer": "blocked_OpenAI_credit_balance_exhausted_2026-10-21",
+    "cloudAIActualSummary": "blocked_by_provider_credits_no_result_not_submitted"
   },
   "privacyDraft": {
     "tracking": false,
@@ -64,5 +68,15 @@
     "Review credentials and signing secrets are stored outside the repository."
   ],
   "appStoreConnectId": "6824942467",
-  "appleTeamId": "PC7H2H9BH5"
+  "appleTeamId": "PC7H2H9BH5",
+  "releaseHistory": [
+    {
+      "version": "1.0.94",
+      "build": "94",
+      "uploaded": "2026-10-20",
+      "appleProcessingState": "VALID",
+      "submittedForReview": false,
+      "supersededBy": "1.0.95"
+    }
+  ]
 }

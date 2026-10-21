@@ -190,7 +190,7 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
             <View style={styles.backdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+                <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} accessible={false} />
                 <KeyboardAvoidingView
                     behavior="padding"
                     style={styles.avoider}
@@ -204,7 +204,7 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
                         keyboardShouldPersistTaps="handled"
                         pointerEvents="box-none"
                     >
-                        <Pressable style={styles.cardPressable} pointerEvents="auto">
+                        <Pressable style={styles.cardPressable} pointerEvents="auto" accessible={false}>
                             <View style={styles.card}>
                                 <Text style={styles.title}>{t('settings.recovery.useTitle', 'Use Recovery Code')}</Text>
                                 <Text style={styles.subtitle}>

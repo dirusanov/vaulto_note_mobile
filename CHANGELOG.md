@@ -1,3 +1,11 @@
+# 1.0.95
+
+- Ask permission before iOS cloud AI uploads, identify the service, and allow revocation in Settings.
+- Declining cloud speech uses a downloaded local model when available.
+
+- Expose recovery-key inputs and editor modal actions separately to screen readers.
+- Give shared buttons their accessible role, label, disabled and loading states.
+
 # 1.0.94
 
 - Prepare the first free iOS release with email sign-in and no unavailable purchase entry points.

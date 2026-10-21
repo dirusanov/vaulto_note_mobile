@@ -1042,5 +1042,16 @@
     "summaryFailed": "Não foi possível escrever a ata. Você pode usar “Ata da reunião” no menu de IA depois.",
     "title": "Reunião · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "cloudAIConsent": {
+    "title": "Usar IA na nuvem?",
+    "gateway": "O áudio, o texto das notas e as perguntas selecionados são enviados ao Vaulto e à OpenAI para processar sua solicitação. Eles recebem conteúdo legível; a sincronização criptografada é separada. Os modelos baixados processam os dados neste dispositivo.",
+    "custom": "O áudio, o texto das notas e as perguntas selecionados são enviados a {{host}}, o serviço de IA escolhido. Ele recebe conteúdo legível; a sincronização criptografada é separada. Os modelos baixados funcionam neste dispositivo.",
+    "allow": "Permitir IA na nuvem",
+    "required": "A IA na nuvem precisa da sua permissão. Sua nota está salva.",
+    "settingTitle": "Permissão de IA na nuvem",
+    "allowed": "Permitida para os serviços de IA aprovados. Desative para perguntar novamente.",
+    "ask": "Perguntar antes de enviar áudio ou texto.",
+    "updateError": "Não foi possível alterar a permissão. Tente novamente."
+  }
 }

@@ -74,6 +74,7 @@ function transcription(options = {}) {
     '../utils/env': { API_URL: 'https://qa.invalid' },
     '../utils/storage': { storage: { getToken: async () => 'synthetic-token' }, getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getTranscriptionLanguage: async () => 'auto', getOpenAIApiKey: async () => 'synthetic-key', getOpenAIBaseUrl: async () => 'https://qa.invalid' },
     '../utils/featureFlags': { LOCAL_WHISPER_ENABLED: true },
+    './cloudAIConsent': { requireCloudAIConsent: async () => { if (state.consentDenied) { const error = new Error('Cloud permission required'); error.code = 'CLOUD_AI_CONSENT_REQUIRED'; throw error; } }, isCloudAIConsentError: error => error?.code === 'CLOUD_AI_CONSENT_REQUIRED' },
     '../utils/openaiCompat': { buildOpenAICompatibleUrl: (base, route) => base + route }, '../utils/richContent': {},
     '../utils/uuid': { generateUUID: async () => 'qa-request' },
     '../utils/authEvents': {}, '../api/tokenRefresh': {}, '../utils/deviceIdentity': {},
@@ -278,4 +279,18 @@ test('an incomplete encrypted meeting save preserves raw input and cleans only i
     exists: async () => false, onPart() {}, transcribe: async () => { requests++; },
   });
   assert.equal(missing.success, false); assert.equal(requests, 0);
+});
+
+
+test('declining cloud permission sends no audio and uses only an already downloaded speech model', async () => {
+  for (const provider of ['vaulto_ai', 'openai']) {
+    for (const downloaded of [false, true]) {
+      const { service, calls } = transcription({ provider, downloaded, consentDenied: true });
+      const result = await service.transcribeAudio('file://fictional.m4a');
+      assert.equal(calls.cloud, 0);
+      assert.equal(calls.local, downloaded ? 1 : 0);
+      assert.equal(result.success, downloaded);
+      if (!downloaded) assert.equal(result.errorKind, 'permission');
+    }
+  }
 });
