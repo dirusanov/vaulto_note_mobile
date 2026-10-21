@@ -20,20 +20,23 @@
     "developerMembership": "active_until_2027-10-20",
     "freeAgreement": "active",
     "paidAgreement": "not_required_free_release",
-    "storeAppRecord": "created_version_1.0.94",
+    "storeAppRecord": "version_1.0.95_ready_for_review_not_submitted",
     "signedIpa": "1.0.95_95_signature_valid_uploaded_2026-10-21",
     "screenshots": "iPhone_medium_large_and_iPad13_uploaded",
     "appPrivacy": "published_2026-10-20",
     "exportCompliance": "standard_published_crypto_no_France_documentation_exempt_per_Apple",
     "territories": "148_selected_EU27_excluded_initial_release",
     "signing": "distribution_certificate_and_profile_ready",
-    "reviewAccount": "email_verified_login_checked",
+    "reviewAccount": "email_verified_password_rotated_login_and_Apple_credentials_rechecked",
     "digitalServicesAct": "active_declared_no_EU_distribution",
-    "nativeIPhoneQA": "write_persist_login_encrypted_storage_passed_cloud_permission_repeat_pending",
-    "nativeIPadQA": "recovery_key_restored_and_decrypted_phone_note_on_second_device_passed",
+    "nativeIPhoneQA": "write_persist_login_encrypted_storage_and_permission_cancel_revoke_reprompt_passed",
+    "nativeIPadQA": "cross_device_recovery_and_same_device_reinstall_8_notes_restored_passed",
     "cloudAIConsent": "native_cancel_revoke_reprompt_and_original_preservation_passed",
     "cloudAIServer": "blocked_OpenAI_credit_balance_exhausted_2026-10-21",
-    "cloudAIActualSummary": "blocked_by_provider_credits_no_result_not_submitted"
+    "cloudAIActualSummary": "blocked_by_provider_credits_no_result_not_submitted",
+    "appleBuildProcessing": "95_VALID_selected",
+    "reviewSubmission": "READY_FOR_REVIEW_submittedDate_null",
+    "releaseType": "AFTER_APPROVAL"
   },
   "privacyDraft": {
     "tracking": false,
@@ -64,7 +67,7 @@
   },
   "notes": [
     "Initial availability excludes the 27 EU countries while trader/payment setup is deferred. Apple DSA option selected: not a trader OR no planned EU distribution. This records the no-EU distribution choice, not an assertion about business status.",
-    "No encryption exemption has been declared. Complete the questionnaire for the actual standard client-side algorithms before review.",
+    "Actual published client cryptography was assessed; France is excluded. Apple build 95 documentation exemption saved (usesNonExemptEncryption=false), not a claim of no encryption.",
     "Review credentials and signing secrets are stored outside the repository."
   ],
   "appStoreConnectId": "6824942467",
@@ -77,6 +80,17 @@
       "appleProcessingState": "VALID",
       "submittedForReview": false,
       "supersededBy": "1.0.95"
+    },
+    {
+      "version": "1.0.95",
+      "build": "95",
+      "uploaded": "2026-10-21",
+      "appleBuildId": "34fea49e-f8c6-470b-ad6d-05874aaa56a1",
+      "appleProcessingState": "VALID",
+      "selectedForVersion": true,
+      "submittedForReview": false,
+      "reviewState": "READY_FOR_REVIEW",
+      "holdReason": "production_OpenAI_credit_balance_exhausted"
     }
   ]
 }

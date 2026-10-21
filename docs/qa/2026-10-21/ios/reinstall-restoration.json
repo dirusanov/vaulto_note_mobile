@@ -1,0 +1,28 @@
+{
+  "checkedAtUTC": "2026-10-21T06:48:00Z",
+  "appVersion": "1.0.95",
+  "build": "95",
+  "environment": "iPad Pro 13-inch M5 simulator, iOS 27.0",
+  "nativeTest": "testConfirmReinstalledNoteIsReadable",
+  "testPassed": true,
+  "durationSeconds": 12.909,
+  "procedure": [
+    "Confirmed 8 synthetic notes were synced before uninstall",
+    "Uninstalled app and installed final build 95 simulator app",
+    "Confirmed retained system Keychain key; acknowledged recovery-key confirmation",
+    "Returned from Settings to notes list",
+    "Opened restored note and asserted its decrypted body",
+    "Terminated and relaunched app, asserted restored note is listed"
+  ],
+  "sqliteAfterReinstall": {
+    "notes": 8,
+    "synced": 8,
+    "dirty": 0,
+    "encryptedTitlePrefix": "v3m."
+  },
+  "limitations": [
+    "Same-device reinstall retained Keychain; separate fresh-device manual recovery test also passed",
+    "No claim of physical-device or iCloud testing",
+    "Cloud AI result remains blocked by provider credit exhaustion"
+  ]
+}

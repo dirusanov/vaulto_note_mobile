@@ -1,7 +1,8 @@
 # Initial App Store release — 21 October 2026
 
-Status: signed 1.0.95 is prepared and being uploaded; **review is held for a real
-provider outage**. OpenAI credits for the production key are exhausted.
+Status: signed 1.0.95 is uploaded, Apple processing is **VALID**, and build 95
+is selected in the review draft. **Review is held for a real provider outage**:
+OpenAI credits for the production key are exhausted.
 
 ## Version and source
 
@@ -45,6 +46,13 @@ and its unrelated changes remain untouched.
   vault, pulled the iPhone note and read its decrypted body. This is an actual
   cross-device recovery test. No iCloud synchronization or physical-device
   performance claim is made.
+- iPad uninstall/reinstall of the final 95 simulator app: all 8 server-backed
+  notes returned when opening the list; the sample note body was readable and
+  remained available after force-quit/relaunch. SQLite independently reports
+  8 notes, all synced, none dirty. This case retained the system Keychain key;
+  the separate cross-device case above verifies manual recovery without it.
+  The first automated attempt stayed in Settings behind a recovery confirmation;
+  a corrected navigation check passed in 12.909 seconds.
 - Review account server state: `enc_mode=e2ee`, epoch 1, no pending transition.
 - Native iOS cloud permission cancellation, revocation in Settings and the next
   request asking again all pass; original text stays intact. The actual cloud
@@ -52,7 +60,9 @@ and its unrelated changes remain untouched.
 - Final signed IPA 1.0.95 / 95 passes code-signature verification and was uploaded
   successfully on 21 October (delivery `34fea49e-f8c6-470b-ad6d-05874aaa56a1`).
 - Real app screenshots uploaded for iPhone medium/large and iPad 13-inch.
-- Apple build 94 processing: VALID; it remains available as an earlier upload.
+- Apple build 95 processing: VALID, selected for version 1.0.95. Review draft
+  and its single item are READY_FOR_REVIEW; submittedDate is null. Automatic
+  release remains AFTER_APPROVAL. Build 94 remains an earlier upload.
 
 ## Store and compliance
 
@@ -73,7 +83,10 @@ The iOS permission gate addresses Apple's requirement for explicit permission
 before sharing personal data with third-party AI in
 [Review Guideline 5.1.2(i)](https://developer.apple.com/app-store/review/guidelines/#data-use-and-sharing).
 Review credentials and the demonstration account recovery words are stored
-outside Git and only in Apple's private review instructions.
+outside Git and only in Apple's private review instructions. The dedicated
+review account password was rotated after appearing in diagnostic output; old
+login is rejected, new login succeeds, prior refresh sessions were revoked and
+Apple's private reviewer password was updated and read back successfully.
 
 ## Provider outage found before submission
 
@@ -91,7 +104,9 @@ The version must not be submitted with its main cloud path known to be failing.
 
 ## Remaining
 
-Permission withdrawal checks and the IPA upload are complete. Select build 95
-after Apple processing. After the owner restores the API
-balance, repeat the actual native summary/accept/original-switch case, then
-validate and submit the existing review draft. `submittedDate` remains null.
+Native permission checks, cross-device recovery, reinstall restoration, IPA
+upload, Apple processing and build selection are complete. After the owner
+restores the API balance, repeat the actual native summary/accept/original-switch
+case, then submit the existing review draft under the publication authorization
+already given. `submittedDate` remains null; the app is not yet in App Store
+review or publicly available through this initial iOS release.
