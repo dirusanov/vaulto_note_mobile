@@ -131,17 +131,17 @@ export const DeleteAccountModal = ({ visible, onClose, onConfirm, onManageSubscr
                                     <Text style={styles.warningText}>• {t('settings.deleteAccountDialog.itemKeys', 'Encryption keys')}</Text>
                                 </View>
 
-                                <Text style={styles.sectionLabel}>{t('settings.deleteAccountDialog.localTitle', 'Notes on this phone')}</Text>
+                                <Text style={styles.sectionLabel}>{t('settings.deleteAccountDialog.localTitle', 'Notes on this device')}</Text>
                                 <View style={styles.choices} accessibilityRole="radiogroup">
                                     {renderChoice(
                                         true,
-                                        t('settings.deleteAccountDialog.keepLocal', 'Keep them on this phone'),
+                                        t('settings.deleteAccountDialog.keepLocal', 'Keep them on this device'),
                                         t('settings.deleteAccountDialog.keepLocalDesc', 'You can keep using them without an account.'),
                                     )}
                                     {renderChoice(
                                         false,
                                         t('settings.deleteAccountDialog.eraseLocal', 'Erase them too'),
-                                        t('settings.deleteAccountDialog.eraseLocalDesc', 'All notes and recordings are removed from this phone.'),
+                                        t('settings.deleteAccountDialog.eraseLocalDesc', 'All notes and recordings are removed from this device.'),
                                     )}
                                 </View>
 

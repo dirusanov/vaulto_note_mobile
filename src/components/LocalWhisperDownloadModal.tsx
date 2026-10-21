@@ -108,8 +108,8 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                         <>
                             <Text style={styles.description}>
                                 {noSpace
-                                    ? t('settings.voice.offlineNoSpace', 'Not enough free space on this phone')
-                                    : t('edit.dictation.offlineDesc', 'Download once and recordings and dictation turn into text even without internet. The best model for this phone, {{size}}.', {
+                                    ? t('settings.voice.offlineNoSpace', 'Not enough free space on this device')
+                                    : t('edit.dictation.offlineDesc', 'Download once and recordings and dictation turn into text even without internet. The best model for this device, {{size}}.', {
                                         size: formatModelSize(sizeBytes, t),
                                     })}
                             </Text>

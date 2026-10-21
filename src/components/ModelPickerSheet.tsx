@@ -104,14 +104,14 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
                         <Text style={styles.rowTitle}>{tierLabel(kind, choice.tier)}</Text>
                         {choice.recommended && choice.supported ? (
                             <View style={styles.badge}>
-                                <Text style={styles.badgeText}>{t('settings.models.recommended', 'Best for this phone')}</Text>
+                                <Text style={styles.badgeText}>{t('settings.models.recommended', 'Best for this device')}</Text>
                             </View>
                         ) : null}
                     </View>
                     <Text style={styles.rowMeta}>
                         {choice.supported
                             ? `${choice.name} · ${formatModelSize(choice.sizeBytes, t)}${choice.current ? ` · ${t('settings.models.inUse', 'in use')}` : ''}`
-                            : t('settings.models.tooBig', '{{name}} · not enough memory on this phone', { name: choice.name })}
+                            : t('settings.models.tooBig', '{{name}} · not enough memory on this device', { name: choice.name })}
                     </Text>
                 </View>
             </TouchableOpacity>
@@ -121,7 +121,7 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
     const applyLabel = plan === undefined
         ? '…'
         : plan === null
-            ? t('settings.voice.offlineNoSpace', 'Not enough free space on this phone')
+            ? t('settings.voice.offlineNoSpace', 'Not enough free space on this device')
             : plan.downloadBytes > 0
                 ? t('settings.models.download', 'Download · {{size}}', { size: formatModelSize(plan.downloadBytes, t) })
                 : t('settings.models.switch', 'Switch');
@@ -133,7 +133,7 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
                     <TouchableWithoutFeedback>
                         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.m) }]}>
                             <View style={styles.header}>
-                                <Text style={styles.title}>{t('settings.models.title', 'Models on this phone')}</Text>
+                                <Text style={styles.title}>{t('settings.models.title', 'Models on this device')}</Text>
                                 <TouchableOpacity onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel={t('a11y.close', 'Close')}>
                                     <MaterialIcons name="close" size={22} color={colors.textSecondary} />
                                 </TouchableOpacity>
@@ -142,9 +142,9 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
                                 <Text style={styles.subtitle}>
                                     {privateMode
                                         ? privateVoiceOnly
-                                            ? t('settings.voice.privateVoiceDesc', 'Voice never leaves the phone, even online')
-                                            : t('settings.models.subtitlePrivate', 'Voice and AI run only on this phone.')
-                                        : t('settings.models.subtitle', 'Downloaded models work without internet. When you reconnect, new requests use the cloud again. Turn on “Only on this phone” to always process locally.')}
+                                            ? t('settings.voice.privateVoiceDesc', 'Voice never leaves the device, even online')
+                                            : t('settings.models.subtitlePrivate', 'Voice and AI run only on this device.')
+                                        : t('settings.models.subtitle', 'Downloaded models work without internet. When you reconnect, new requests use the cloud again. Turn on “Only on this device” to always process locally.')}
                                 </Text>
 
                                 {!choices ? (
@@ -195,7 +195,7 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
                                             <View style={styles.note}>
                                                 <MaterialIcons name="speed" size={20} color={colors.warning} />
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={styles.noteTitle}>{t('settings.models.heavyTitle', 'Heavy for this phone')}</Text>
+                                                    <Text style={styles.noteTitle}>{t('settings.models.heavyTitle', 'Heavy for this device')}</Text>
                                                     <Text style={styles.noteText}>
                                                         {privateMode
                                                             ? t('settings.models.heavyPrivate', 'It will work, but slower and with more battery. Vaulto cloud is faster and more accurate, and your notes stay encrypted.')

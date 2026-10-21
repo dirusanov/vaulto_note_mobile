@@ -105,14 +105,14 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                             <Text style={styles.backupOkText}>
                                 {Platform.OS === 'ios'
                                     ? t('settings.recovery.inIcloud', 'Saved in iCloud Keychain: your notes open on a new iPhone by themselves.')
-                                    : t('settings.recovery.inGoogle', 'Saved in your Google backup: your notes open on a new phone by themselves.')}
+                                    : t('settings.recovery.inGoogle', 'Saved in your Google backup: your notes open on a new device by themselves.')}
                             </Text>
                         </View>
                     ) : null}
                     <Text style={styles.warning}>
                         {backup?.cloud
                             ? t('settings.recovery.explainBackup', 'Keep a copy too, in case that backup is ever off: a password manager is ideal. Nobody, including Vaulto, can restore this key.')
-                            : t('settings.recovery.explain', 'Only this key opens your notes on a new phone. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.')}
+                            : t('settings.recovery.explain', 'Only this key opens your notes on a new device. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.')}
                     </Text>
                     {!backup?.cloud && Platform.OS === 'android' ? (
                         <TouchableOpacity

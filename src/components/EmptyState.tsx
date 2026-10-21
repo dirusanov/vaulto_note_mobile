@@ -43,7 +43,7 @@ export const EmptyState = ({ message, variant = 'plain' }: EmptyStateProps) => {
             {
                 icon: 'lock',
                 title: t('welcome.privacyTitle', 'Private by default'),
-                text: t('welcome.privacyText', 'Notes are encrypted on the phone and end-to-end when synced: only you can read them.'),
+                text: t('welcome.privacyText', 'Notes are encrypted on the device and end-to-end when synced: only you can read them.'),
             },
         ];
         return (

@@ -105,7 +105,7 @@ export const LimitModal: React.FC = () => {
 
     if (isGuestUser) {
         title = t('aux.guestMinutesUsedTitle', 'Free minutes used up');
-        message = t('aux.guestMinutesUsedDesc', 'Sign in to get more free minutes and sync your notes. Or turn speech into text right on this phone — free and offline.');
+        message = t('aux.guestMinutesUsedDesc', 'Sign in to get more free minutes and sync your notes. Or turn speech into text right on this device — free and offline.');
         iconName = 'stars';
         isTrial = true;
         isTranscriptionLimit = true;
@@ -178,7 +178,7 @@ export const LimitModal: React.FC = () => {
                                     accessibilityRole="button"
                                 >
                                     <MaterialIcons name="phonelink-lock" size={18} color={colors.primary} />
-                                    <Text style={styles.onDeviceText}>{t('aux.onDeviceFree', 'Transcribe free on this phone')}</Text>
+                                    <Text style={styles.onDeviceText}>{t('aux.onDeviceFree', 'Transcribe free on this device')}</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
