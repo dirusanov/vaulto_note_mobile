@@ -998,25 +998,29 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
                 if (serverBundle && isKeyBundle(serverBundle)) {
                     validServerBundleSeen = true;
                     let hasEncryptedRemoteNotes = false;
-                    try {
-                        const notesResponse = await notesApi.sync({ 
-                            changes: [], 
-                            improvement_changes: [],
-                            since_updated_at: '1970-01-01T00:00:00+00:00',
-                            vault_generation: await storage.getVaultGeneration(userId),
-                            transition_token: storedTransitionToken ?? undefined,
-                        });
+                    // Only an unknown server mode needs this probe, and it downloads
+                    // every note: a known mode decides on its own (see below).
+                    if (serverEncMode === null) {
+                        try {
+                            const notesResponse = await notesApi.sync({ 
+                                changes: [], 
+                                improvement_changes: [],
+                                since_updated_at: '1970-01-01T00:00:00+00:00',
+                                vault_generation: await storage.getVaultGeneration(userId),
+                                transition_token: storedTransitionToken ?? undefined,
+                            });
                         
-                        const isEnc = (n: any) => n.content_type === 'encrypted' || (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext));
+                            const isEnc = (n: any) => n.content_type === 'encrypted' || (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext));
                         
-                        const hasEncNotes = (notesResponse.server_changes || []).some(n => !n.deleted && isEnc(n)) || 
-                                           (notesResponse.updated || []).some(n => !n.deleted && isEnc(n));
-                        const hasEncImps = (notesResponse.improvement_changes || []).some(n => !n.deleted && (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext))) || 
-                                           (notesResponse.improvement_updates || []).some(n => !n.deleted && (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext)));
+                            const hasEncNotes = (notesResponse.server_changes || []).some(n => !n.deleted && isEnc(n)) || 
+                                               (notesResponse.updated || []).some(n => !n.deleted && isEnc(n));
+                            const hasEncImps = (notesResponse.improvement_changes || []).some(n => !n.deleted && (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext))) || 
+                                               (notesResponse.improvement_updates || []).some(n => !n.deleted && (typeof n.content_ciphertext === 'string' && isMasterCiphertext(n.content_ciphertext)));
                         
-                        hasEncryptedRemoteNotes = hasEncNotes || hasEncImps;
-                    } catch (e) {
-                        hasEncryptedRemoteNotes = false;
+                            hasEncryptedRemoteNotes = hasEncNotes || hasEncImps;
+                        } catch (e) {
+                            hasEncryptedRemoteNotes = false;
+                        }
                     }
 
                     // Adopt the server bundle when the account is authoritatively
@@ -1188,9 +1192,15 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         }
     }, [loadStateInner, userId, isAuthenticated, isGuest]);
 
+    // The account state `status` was last loaded for. Until the effect below
+    // starts a load, `status` still describes the previous one (no user yet at
+    // launch, or a guest), so it is reported as loading.
+    const stateKey = `${userId ?? ''}|${isAuthenticated}|${isGuest}`;
+    const [statusKey, setStatusKey] = useState<string | null>(null);
     useEffect(() => {
+        setStatusKey(stateKey);
         void loadState();
-    }, [loadState]);
+    }, [loadState, stateKey]);
 
     // When the server rejects a write because the account encryption mode changed
     // underneath us, or reports a new mode in an otherwise successful pull,
@@ -2172,7 +2182,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
     }, [userId, loadedForUser, status, bundle, resetRecoveryPending, unlock, setupWithRecoveryCode]);
 
     const value = useMemo(() => ({
-        status,
+        status: (statusKey === stateKey ? status : 'loading') as EncryptionStatus,
         mode,
         syncEnabled,
         syncLocked: status === 'locked' || (syncEnabled && !syncUnlocked),
@@ -2197,7 +2207,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         keepResetArchiveLocal,
         resumeStandardSyncAfterReset,
         lock,
-    }), [status, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, keyBackup, keyBackupChecked, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
+    }), [status, statusKey, stateKey, mode, syncEnabled, syncUnlocked, resetRecoveryPending, hasRemoteKeyBundle, bundle, recoveryCode, enableE2EE, enableE2EEWithRecoveryKey, recoveryKeyNeedsSaving, confirmRecoveryKeySaved, autoEncrypting, keyBackup, keyBackupChecked, setupWithRecoveryCode, unlock, changePin, setSyncEnabledPreference, resetSync, resetEncryption, forceResetEncryption, keepResetArchiveLocal, resumeStandardSyncAfterReset, lock]);
 
     return (
         <EncryptionContext.Provider value={value}>

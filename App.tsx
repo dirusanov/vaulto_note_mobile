@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import './src/i18n';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -16,23 +16,34 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from './src/hooks/useAuth';
 import { useEncryption } from './src/context/EncryptionContext';
 import { useNotesContext } from './src/contexts/NotesContext';
+import { hasMasterKey } from './src/crypto/e2ee';
 
-const MIN_SPLASH_MS = 1600;
+// Before the first render: called later, the native splash can already be gone and
+// the app shows a blank screen until it is ready.
+SplashScreen.preventAutoHideAsync().catch((error) => {
+    console.warn('[App] Failed to prevent auto hide of splash screen', error);
+});
+
 const BOOT_TIMEOUT_MS = 6000;
 
 const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
     const { isLoading, userId } = useAuth();
     const { status } = useEncryption();
-    const { isHydrated, isInitialSyncComplete } = useNotesContext();
+    const { notes, lockedCount, isHydrated, isInitialSyncComplete } = useNotesContext();
     const [splashHidden, setSplashHidden] = useState(false);
     const [bootTimedOut, setBootTimedOut] = useState(false);
-    const bootStartedAtRef = useRef(Date.now());
-    const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Notes already on the device are shown at once and the first sync carries on
+    // in the background; an empty device waits for it so it does not flash empty.
+    const hasLocalNotes = notes.length > 0 || lockedCount > 0;
+    // Read before the key was restored, the list is all locked; the key's arrival
+    // re-reads it (useNotes), so wait for that instead of showing an empty list.
+    const listAwaitsKey = notes.length === 0 && lockedCount > 0 && hasMasterKey();
     const appReady =
         !isLoading &&
         status !== 'loading' &&
         isHydrated &&
-        isInitialSyncComplete &&
+        (isInitialSyncComplete || hasLocalNotes) &&
+        (!listAwaitsKey || bootTimedOut) &&
         (!!userId || bootTimedOut);
 
     useEffect(() => {
@@ -54,10 +65,7 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
             return;
         }
 
-        const elapsed = Date.now() - bootStartedAtRef.current;
-        const remaining = Math.max(MIN_SPLASH_MS - elapsed, 0);
-
-        const hideSplash = async () => {
+        void (async () => {
             try {
                 await SplashScreen.hideAsync();
             } catch (error) {
@@ -65,27 +73,7 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
             } finally {
                 setSplashHidden(true);
             }
-        };
-
-        if (remaining === 0) {
-            void hideSplash();
-            return;
-        }
-
-        if (hideTimeoutRef.current) {
-            clearTimeout(hideTimeoutRef.current);
-        }
-        hideTimeoutRef.current = setTimeout(() => {
-            hideTimeoutRef.current = null;
-            void hideSplash();
-        }, remaining);
-
-        return () => {
-            if (hideTimeoutRef.current) {
-                clearTimeout(hideTimeoutRef.current);
-                hideTimeoutRef.current = null;
-            }
-        };
+        })();
     }, [appReady, splashHidden]);
 
     if (!splashHidden) {
@@ -96,18 +84,6 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
 };
 
 export default function App() {
-    useEffect(() => {
-        const prepare = async () => {
-            try {
-                await SplashScreen.preventAutoHideAsync();
-            } catch (error) {
-                console.warn('[App] Failed to prevent auto hide of splash screen', error);
-            }
-        };
-
-        void prepare();
-    }, []);
-
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider initialMetrics={initialWindowMetrics}>
