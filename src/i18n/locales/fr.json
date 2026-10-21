@@ -340,10 +340,11 @@
       "offlineConfirmTitle": "Télécharger les modèles ?",
       "offlineConfirmDesc": "Téléchargez {{size}} une fois pour travailler hors ligne. Avec internet, le cloud reste utilisé sauf si « Uniquement sur cet appareil » est activé.",
       "offlineModeOffTitle": "Supprimer les modèles téléchargés ?",
-      "offlineModeOffDesc": "Les modèles sont supprimés de l’appareil et libèrent {{size}}. Sans internet, les enregistrements sont conservés et transcrits au retour du réseau.",
       "routingHint": "Avec internet : le cloud. Hors ligne : les modèles téléchargés. Le changement est automatique. Le traitement cloud envoie le texte ou l’audio sélectionné au service.",
       "speechFirst": "La reconnaissance vocale fonctionne sans internet. L’IA locale est facultative et peut être lente sur un appareil avec peu de mémoire.",
-      "offlineHintSpeech": "Reconnaissance vocale sans internet · {{size}}"
+      "offlineHintSpeech": "Reconnaissance vocale sans internet · {{size}}",
+      "offlineOffKept": "Désactivé · les enregistrements passent par le cloud. Les modèles restent sur cet appareil, la réactivation est immédiate",
+      "removeModelsDesc": "Les modèles sont supprimés de l'appareil et libèrent {{size}}. Pour les réutiliser, il faudra les retélécharger."
     },
     "models": {
       "row": "Modèles",
@@ -369,7 +370,8 @@
       "speechOnly": "Voix uniquement",
       "speechOnlyHint": "Sans télécharger d’IA. L’IA cloud peut être choisie séparément avec internet.",
       "fastQualityHint": "Le petit modèle d’IA peut omettre des détails ou se tromper sur les faits. Vérifiez les améliorations ; privilégiez le cloud pour les notes complexes.",
-      "loadFailed": "Impossible de vérifier les modèles. Réessayez."
+      "loadFailed": "Impossible de vérifier les modèles. Réessayez.",
+      "remove": "Supprimer de cet appareil · {{size}}"
     }
   },
   "languages": {
@@ -671,6 +673,11 @@
       "transcriptExists": "Ce texte est déjà dans la note",
       "playerExists": "L’enregistrement est déjà dans la note",
       "playerInserted": "Enregistrement ajouté à la note"
+    },
+    "slowDevice": {
+      "message": "La transcription sur cet appareil est lente. Le cloud est plus rapide.",
+      "useCloud": "Utiliser le cloud",
+      "switched": "Les enregistrements passent désormais par le cloud. Sans internet, l'appareil transcrit toujours."
     }
   },
   "voice": {

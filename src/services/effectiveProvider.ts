@@ -1,4 +1,4 @@
-import { getAIProvider, getOnDeviceTranscription } from '../utils/storage';
+import { getAIProvider, getLocalModelsEnabled, getOnDeviceTranscription } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
 import { getLocalLLMModelStatus, isLocalLLMRuntimeAvailable } from './LocalLLMService';
@@ -7,9 +7,10 @@ type Provider = Awaited<ReturnType<typeof getAIProvider>>;
 
 const LOCAL_PROVIDERS = new Set(['local', 'local_llm']);
 
-/** Whether the on-device language model is downloaded and can run here. */
+/** Whether the on-device language model is downloaded, switched on and can run here. */
 export const isLocalLLMReady = async (): Promise<boolean> => {
     if (!LOCAL_MODELS_ENABLED || !isLocalLLMRuntimeAvailable()) return false;
+    if (!(await getLocalModelsEnabled())) return false;
     try {
         return (await getLocalLLMModelStatus()).isDownloaded;
     } catch {

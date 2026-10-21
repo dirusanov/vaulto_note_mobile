@@ -24,7 +24,7 @@ import { hasRoomForModel } from './modelDownload';
 import { getDeviceCapabilities } from './DeviceCapabilities';
 import { recommendOfflineAI, recommendSpeechModel } from './offlineModelPolicy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAIProvider, getOnDeviceTranscription, setAIProvider } from '../utils/storage';
+import { getAIProvider, getOnDeviceTranscription, setAIProvider, setLocalModelsEnabled } from '../utils/storage';
 
 /**
  * "Offline mode" is one switch: the best speech model and the best on-device AI
@@ -291,6 +291,9 @@ const runDownload = async (plan: OfflinePlan, onProgress?: OfflineProgress): Pro
             await setSelectedLocalLLMModel(plan.llmKey);
         }
     }
+
+    // Downloading is turning local models on (also a download resumed at app start).
+    await setLocalModelsEnabled(true);
 
     // "Only on this phone" was on with speech only: AI joins it now (also when
     // the download finished after the app was reopened, with Settings closed).

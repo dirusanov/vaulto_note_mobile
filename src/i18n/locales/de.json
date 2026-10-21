@@ -340,10 +340,11 @@
       "offlineConfirmTitle": "Modelle herunterladen?",
       "offlineConfirmDesc": "Lade einmal {{size}} für Offline-Verarbeitung herunter. Online bleibt die Cloud aktiv, außer „Nur auf diesem Gerät“ ist eingeschaltet.",
       "offlineModeOffTitle": "Heruntergeladene Modelle entfernen?",
-      "offlineModeOffDesc": "Die Modelle werden vom Gerät entfernt und geben {{size}} frei. Ohne Internet werden Aufnahmen gespeichert und später online zu Text.",
       "routingHint": "Mit Internet in der Cloud, offline mit heruntergeladenen Modellen. Der Wechsel erfolgt automatisch. Bei Cloud-Verarbeitung werden ausgewählte Audiodaten oder Texte an den Dienst gesendet.",
       "speechFirst": "Spracherkennung funktioniert offline. Lokale KI ist optional und kann auf Geräten mit wenig Arbeitsspeicher langsam sein.",
-      "offlineHintSpeech": "Spracherkennung ohne Internet · {{size}}"
+      "offlineHintSpeech": "Spracherkennung ohne Internet · {{size}}",
+      "offlineOffKept": "Aus · Aufnahmen gehen in die Cloud. Die Modelle bleiben auf diesem Gerät, Einschalten geht sofort",
+      "removeModelsDesc": "Die Modelle werden vom Gerät entfernt und geben {{size}} frei. Um sie wieder zu nutzen, werden sie neu heruntergeladen."
     },
     "models": {
       "row": "Modelle",
@@ -369,7 +370,8 @@
       "speechOnly": "Nur Spracherkennung",
       "speechOnlyHint": "Kein KI-Download. Cloud-KI ist online separat wählbar.",
       "fastQualityHint": "Das kleine KI-Modell kann Details übersehen oder Fakten verwechseln. Prüfe Textverbesserungen; für komplexe Notizen empfiehlt sich die Cloud.",
-      "loadFailed": "Die Modelle konnten nicht geprüft werden. Bitte versuche es erneut."
+      "loadFailed": "Die Modelle konnten nicht geprüft werden. Bitte versuche es erneut.",
+      "remove": "Von diesem Gerät entfernen · {{size}}"
     }
   },
   "languages": {
@@ -671,6 +673,11 @@
       "transcriptExists": "Dieser Text ist schon in der Notiz",
       "playerExists": "Die Aufnahme ist schon in der Notiz",
       "playerInserted": "Aufnahme zur Notiz hinzugefügt"
+    },
+    "slowDevice": {
+      "message": "Die Transkription auf diesem Gerät ist langsam. Die Cloud ist schneller.",
+      "useCloud": "Cloud nutzen",
+      "switched": "Aufnahmen gehen jetzt in die Cloud. Ohne Internet transkribiert weiterhin das Gerät."
     }
   },
   "voice": {

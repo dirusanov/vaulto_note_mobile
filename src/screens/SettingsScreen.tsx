@@ -26,6 +26,8 @@ import {
     setTranscriptionLanguage,
     getOnDeviceTranscription,
     setOnDeviceTranscription,
+    getLocalModelsEnabled,
+    setLocalModelsEnabled,
 } from '../utils/storage';
 import { formatModelSize } from '../components/OnDeviceModelSection';
 import { attachOfflineDownload, cancelOfflineDownload, downloadOfflineModels, getModelChoices, getOfflineDownloadProgress, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
@@ -406,7 +408,9 @@ export const SettingsScreen = () => {
     const [offlinePlan, setOfflinePlan] = useState<OfflinePlan | null>(null);
     // Non-null while offline mode downloads: bytes across both models.
     const [offlineProgress, setOfflineProgress] = useState<{ loaded: number; total: number } | null>(null);
-    const [showOfflineOffConfirm, setShowOfflineOffConfirm] = useState(false);
+    // Off keeps the downloaded models on the phone; they are just not used.
+    const [localModelsEnabled, setLocalModelsEnabledState] = useState(true);
+    const [showRemoveModelsConfirm, setShowRemoveModelsConfirm] = useState(false);
     const [showModelPicker, setShowModelPicker] = useState(false);
     // "Whisper Turbo · Qwen3.5 2B": the models in use, under the Models row.
     const [modelSummary, setModelSummary] = useState('');
@@ -430,8 +434,10 @@ export const SettingsScreen = () => {
     // downloads the best speech and AI models this phone can run; "Only on this
     // phone" then keeps voice (and AI) on the device even online.
     const offlineDownloading = offlineProgress !== null;
-    const offlineOn = !!offlineStatus?.speechReady || offlineDownloading;
-    const offlineAIMissing = !!offlineStatus?.speechReady && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady
+    const offlineOn = (localModelsEnabled && !!offlineStatus?.speechReady) || offlineDownloading;
+    // Switched off with the files still on the phone: switching on needs no download.
+    const offlineOffKept = !offlineOn && !!offlineStatus?.speechReady;
+    const offlineAIMissing = offlineOn && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady
         && !!offlinePlan?.llmKey && offlinePlan.downloadBytes > 0;
     const privateMode = usingLocalWhisper || onDeviceTranscription;
     const privateVoiceOnly = !offlineStatus?.aiReady;
@@ -444,6 +450,8 @@ export const SettingsScreen = () => {
                 ? `${formatModelSize(offlineProgress.loaded, t)} / ${formatModelSize(offlineProgress.total, t)}`
                 : '',
         ].filter(Boolean).join(' · ')
+        : offlineOffKept
+            ? t('settings.voice.offlineOffKept', 'Off · recordings go to the cloud. The models stay on this device, turning on is instant')
         : offlineStatus?.speechReady
             ? (offlineAIMissing
                 ? t('settings.voice.offlineAIMissing', 'Speech works offline. Tap to add AI ({{size}})', {
@@ -551,7 +559,8 @@ export const SettingsScreen = () => {
                 .finally(() => { setOfflineProgress(null); void refreshOffline(); });
         }
         try {
-            const [status, plan, choices] = await Promise.all([getOfflineStatus(), planOfflineModels(), getModelChoices()]);
+            const [status, plan, choices, enabled] = await Promise.all([getOfflineStatus(), planOfflineModels(), getModelChoices(), getLocalModelsEnabled()]);
+            setLocalModelsEnabledState(enabled);
             setOfflineStatus(status);
             setOfflinePlan(plan);
             setModelSummary([...choices.speech, ...choices.ai].filter((c) => c.current).map((c) => c.name).join(' · '));
@@ -776,6 +785,14 @@ export const SettingsScreen = () => {
 
     const handleToggleOffline = useCallback(async (on: boolean) => {
         if (on) {
+            if (offlineStatus?.speechReady) {
+                // The models are still on the phone: no download, no questions.
+                setLocalModelsEnabledState(true);
+                await setLocalModelsEnabled(true);
+                haptics.success();
+                await refreshOffline();
+                return;
+            }
             await handleEnableOffline();
             return;
         }
@@ -783,25 +800,28 @@ export const SettingsScreen = () => {
             await cancelOfflineDownload();
             return;
         }
-        setShowOfflineOffConfirm(true);
-    }, [handleEnableOffline, offlineProgress]);
-
-    // Off removes both models. Settings first, so a failed delete never leaves a
-    // phone-only setup without its models.
-    const handleDisableOffline = useCallback(async () => {
-        setShowOfflineOffConfirm(false);
+        // Off means "do not use them": everything goes back to the cloud and the
+        // files stay, so there is nothing to ask about.
+        setLocalModelsEnabledState(false);
+        await setLocalModelsEnabled(false);
         setOnDeviceTranscriptionState(false);
         await setOnDeviceTranscription(false);
         if (usingLocalWhisper) {
             await updateProvider('vaulto_ai');
         }
+        await refreshOffline();
+    }, [handleEnableOffline, offlineProgress, offlineStatus?.speechReady, usingLocalWhisper, refreshOffline]);
+
+    // Only from the Models sheet while local models are off: frees the space.
+    const handleRemoveModels = useCallback(async () => {
+        setShowRemoveModelsConfirm(false);
         try {
             await removeOfflineModels();
         } catch (error: any) {
             Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
         }
         await refreshOffline();
-    }, [usingLocalWhisper, refreshOffline, t]);
+    }, [refreshOffline, t]);
 
     const handleTogglePrivateMode = useCallback(async (on: boolean) => {
         setOnDeviceTranscriptionState(on);
@@ -1417,7 +1437,7 @@ export const SettingsScreen = () => {
                                 <Switch
                                     value={offlineOn}
                                     onValueChange={(value) => { void handleToggleOffline(value); }}
-                                    disabled={!offlineOn && !offlinePlan}
+                                    disabled={!offlineOn && !offlineOffKept && !offlinePlan}
                                     trackColor={{ false: colors.textTertiary, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
                                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
@@ -1438,7 +1458,7 @@ export const SettingsScreen = () => {
                                 </View>
                             )}
 
-                            {(!!offlineStatus?.speechReady || privateMode) && (
+                            {(offlineOn || privateMode) && (
                                 <>
                                     <View style={styles.separator} />
                                     <View style={[styles.preferenceRow, styles.voiceRow]}>
@@ -1759,17 +1779,19 @@ export const SettingsScreen = () => {
                 onClose={() => setShowModelPicker(false)}
                 onApply={(plan) => { void handleApplyModels(plan); }}
                 onUseCloud={() => { void handleTogglePrivateMode(false); }}
+                removableBytes={offlineOffKept && !offlineDownloading ? offlineStatus?.bytesOnPhone ?? 0 : 0}
+                onRemove={() => setShowRemoveModelsConfirm(true)}
             />
             <DeleteConfirmationDialog
-                visible={showOfflineOffConfirm}
+                visible={showRemoveModelsConfirm}
                 title={t('settings.voice.offlineModeOffTitle', 'Remove downloaded models?')}
                 message={t(
-                    'settings.voice.offlineModeOffDesc',
-                    'The models are removed from this device and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.',
+                    'settings.voice.removeModelsDesc',
+                    'The models are removed from this device and free {{size}}. To use them again, they are downloaded anew.',
                     { size: formatModelSize(offlineStatus?.bytesOnPhone ?? 0, t) }
                 )}
-                onConfirm={() => { void handleDisableOffline(); }}
-                onCancel={() => setShowOfflineOffConfirm(false)}
+                onConfirm={() => { void handleRemoveModels(); }}
+                onCancel={() => setShowRemoveModelsConfirm(false)}
             />
 
             <EnableSyncModal

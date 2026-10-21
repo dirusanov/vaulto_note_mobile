@@ -941,6 +941,29 @@ export const setOnDeviceTranscription = async (enabled: boolean): Promise<void> 
     }
 };
 
+const LOCAL_MODELS_ENABLED_KEY = 'vaulto_local_models_enabled_v1';
+
+/**
+ * Whether downloaded models may be used (offline fallback, "Only on this phone").
+ * Switching them off keeps the files, so switching back on needs no download.
+ * Unset counts as on: before this switch, models on the phone were always in use.
+ */
+export const getLocalModelsEnabled = async (): Promise<boolean> => {
+    try {
+        return (await AsyncStorage.getItem(LOCAL_MODELS_ENABLED_KEY)) !== 'false';
+    } catch {
+        return true;
+    }
+};
+
+export const setLocalModelsEnabled = async (enabled: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(LOCAL_MODELS_ENABLED_KEY, enabled ? 'true' : 'false');
+    } catch (e) {
+        console.error('Failed to save local models setting', e);
+    }
+};
+
 const ON_DEVICE_OFFER_SHOWN_KEY = 'vaulto_on_device_offer_shown_v1';
 const RECORDINGS_COUNT_KEY = 'vaulto_recordings_count_v1';
 

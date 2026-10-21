@@ -98,6 +98,7 @@ import {
     incrementRecordingsCount,
     setOnDeviceTranscription,
     getOnDeviceTranscription,
+    setAIProvider,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -150,6 +151,7 @@ import { rtlFlip } from '../i18n/direction';
 import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { getAIProvider, storage } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
+import { takeSlowTranscriptionHint } from '../services/localSpeechSpeed';
 import NetInfo from '@react-native-community/netinfo';
 import { scheduleTaskReminder } from '../services/notifications';
 
@@ -1075,6 +1077,12 @@ export const NoteEditScreen = () => {
     const hiddenVariantIdsRef = useRef<string[]>([]);
     hiddenVariantIdsRef.current = hiddenVariantIds;
     const [undoMessage, setUndoMessage] = useState<string | null>(null);
+    // "Slow on this phone, the cloud is faster": a passing bar, never a dialog.
+    const [slowDeviceHint, setSlowDeviceHint] = useState(false);
+    const slowDeviceHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (slowDeviceHintTimerRef.current) clearTimeout(slowDeviceHintTimerRef.current);
+    }, []);
     const [renameTarget, setRenameTarget] = useState<{ id: string; value: string } | null>(null);
     const [showSwipeHint, setShowSwipeHint] = useState(false);
     const pendingVariantDeleteRef = useRef<{ id: string; noteId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -1793,6 +1801,31 @@ export const NoteEditScreen = () => {
     }, [t]);
 
     offerOnDeviceTranscriptionRef.current = offerOnDeviceTranscription;
+
+    // The user chose the phone and it keeps being slow (see localSpeechSpeed):
+    // suggest the cloud once in a while. Not for protected notes or without
+    // internet, where the phone is the only option.
+    const suggestCloudIfSlow = useCallback(async () => {
+        if (isProtectedRef.current || !(await getOnDeviceTranscription())) return;
+        if (await isDeviceOffline()) return;
+        if (!(await takeSlowTranscriptionHint())) return;
+        if (slowDeviceHintTimerRef.current) clearTimeout(slowDeviceHintTimerRef.current);
+        setSlowDeviceHint(true);
+        slowDeviceHintTimerRef.current = setTimeout(() => setSlowDeviceHint(false), 10000);
+    }, []);
+
+    const switchToCloudTranscription = useCallback(async () => {
+        if (slowDeviceHintTimerRef.current) clearTimeout(slowDeviceHintTimerRef.current);
+        setSlowDeviceHint(false);
+        // Same as turning off "Only on this device": the models stay for offline use.
+        await setOnDeviceTranscription(false);
+        const provider = await getAIProvider();
+        if (provider === 'local' || provider === 'local_whisper' || provider === 'local_llm') {
+            await setAIProvider('vaulto_ai');
+        }
+        void getEffectiveAIProvider().then(setCurrentAIProvider).catch(() => undefined);
+        showToast(t('edit.slowDevice.switched', 'Recordings now go to the cloud. Without internet the device still transcribes.'), 3500);
+    }, [t]);
 
     const promptOnDeviceModelRequired = useCallback(() => {
         Alert.alert(
@@ -5307,6 +5340,7 @@ export const NoteEditScreen = () => {
             // Refresh profile to update balance in UI after deduction
             if (isTranscriptionSuccess) {
                 refreshProfile?.().catch(() => {});
+                if (onDeviceTranscription) void suggestCloudIfSlow();
                 if (!onDeviceTranscription && !protectedNote) {
                     void incrementRecordingsCount().then((count) => {
                         if (count >= 3) {
@@ -7367,6 +7401,13 @@ export const NoteEditScreen = () => {
             />
 
             <UndoSnackbar message={undoMessage} onUndo={undoVariantDelete} />
+            {!undoMessage && (
+                <UndoSnackbar
+                    message={slowDeviceHint ? t('edit.slowDevice.message', 'Transcription on this device is slow. The cloud is faster.') : null}
+                    onUndo={() => { void switchToCloudTranscription(); }}
+                    actionLabel={t('edit.slowDevice.useCloud', 'Use cloud')}
+                />
+            )}
 
             <DeleteConfirmationDialog
                 visible={recordingToDelete !== null}

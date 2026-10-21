@@ -21,6 +21,9 @@ interface ModelPickerSheetProps {
     onClose: () => void;
     onApply: (plan: OfflinePlan) => void;
     onUseCloud: () => void;
+    /** Bytes that can be freed: set only while local models are switched off. */
+    removableBytes?: number;
+    onRemove?: () => void;
 }
 
 /**
@@ -28,7 +31,7 @@ interface ModelPickerSheetProps {
  * gets a calm note in place (no alert), and with "Only on this phone" on, the
  * cloud is offered as the faster option.
  */
-export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = false, onClose, onApply, onUseCloud }: ModelPickerSheetProps) => {
+export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = false, onClose, onApply, onUseCloud, removableBytes = 0, onRemove }: ModelPickerSheetProps) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [choices, setChoices] = useState<{ speech: ModelChoice[]; ai: ModelChoice[] } | null>(null);
@@ -227,6 +230,17 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
                                     {loadFailed ? t('a11y.close', 'Close') : unchanged ? t('common.done', 'Done') : applyLabel}
                                 </Text>
                             </TouchableOpacity>
+                            {removableBytes > 0 && !!onRemove && (
+                                <TouchableOpacity
+                                    style={styles.removeButton}
+                                    onPress={() => { onClose(); onRemove(); }}
+                                    accessibilityRole="button"
+                                >
+                                    <Text style={styles.removeText}>
+                                        {t('settings.models.remove', 'Remove from this device · {{size}}', { size: formatModelSize(removableBytes, t) })}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </TouchableWithoutFeedback>
                 </View>
@@ -394,6 +408,15 @@ const styles = createStyles(() => ({
     },
     applyTextQuiet: {
         color: colors.text,
+    },
+    removeButton: {
+        minHeight: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    removeText: {
+        fontSize: 14,
+        color: colors.textSecondary,
     },
     loadError: {
         paddingVertical: spacing.l,

@@ -340,10 +340,11 @@
       "offlineConfirmTitle": "下载模型？",
       "offlineConfirmDesc": "一次下载 {{size}} 用于离线处理。除非开启“仅在本机”，联网时仍使用云端。",
       "offlineModeOffTitle": "删除已下载的模型？",
-      "offlineModeOffDesc": "模型将从设备删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后转成文字。",
       "routingHint": "有网络时使用云端，离线时使用已下载的模型，自动切换。云端处理会将所选音频或文本发送给服务。",
       "speechFirst": "语音识别可离线使用。本地 AI 为可选项，在内存较少的设备上可能较慢。",
-      "offlineHintSpeech": "离线语音识别 · {{size}}"
+      "offlineHintSpeech": "离线语音识别 · {{size}}",
+      "offlineOffKept": "已关闭 · 录音在云端转写。模型仍保留在此设备上，可随时立即开启",
+      "removeModelsDesc": "模型将从设备中删除，释放 {{size}}。如需再次使用，需要重新下载。"
     },
     "models": {
       "row": "模型",
@@ -369,7 +370,8 @@
       "speechOnly": "仅语音识别",
       "speechOnlyHint": "不下载 AI。联网时可另行选择云端 AI。",
       "fastQualityHint": "小型AI模型可能遗漏细节或弄错事实。请检查文本优化结果；复杂笔记建议使用云端。",
-      "loadFailed": "无法检查模型，请重试。"
+      "loadFailed": "无法检查模型，请重试。",
+      "remove": "从此设备删除 · {{size}}"
     }
   },
   "languages": {
@@ -671,6 +673,11 @@
       "transcriptExists": "这段文字已在笔记中",
       "playerExists": "录音已在笔记中",
       "playerInserted": "录音已添加到笔记"
+    },
+    "slowDevice": {
+      "message": "此设备上的转写速度较慢。云端更快。",
+      "useCloud": "使用云端",
+      "switched": "录音现在在云端转写。没有网络时仍由设备转写。"
     }
   },
   "voice": {

@@ -340,10 +340,11 @@
       "offlineConfirmTitle": "Baixar modelos?",
       "offlineConfirmDesc": "Baixe {{size}} uma vez para uso offline. Com internet, a nuvem continua sendo usada, a menos que «Só neste dispositivo» esteja ativado.",
       "offlineModeOffTitle": "Remover os modelos baixados?",
-      "offlineModeOffDesc": "Os modelos são removidos do dispositivo e liberam {{size}}. Sem internet, as gravações são salvas e viram texto quando a conexão voltar.",
       "routingHint": "Com internet, usa a nuvem; sem conexão, os modelos baixados. A troca é automática. O processamento na nuvem envia o áudio ou texto selecionado ao serviço.",
       "speechFirst": "O reconhecimento de voz funciona sem internet. A IA local é opcional e pode ser lenta em dispositivos com pouca memória.",
-      "offlineHintSpeech": "Voz sem internet · {{size}}"
+      "offlineHintSpeech": "Voz sem internet · {{size}}",
+      "offlineOffKept": "Desligado · as gravações vão para a nuvem. Os modelos ficam neste dispositivo; ligar é instantâneo",
+      "removeModelsDesc": "Os modelos são removidos do dispositivo e liberam {{size}}. Para usá-los de novo, será preciso baixá-los outra vez."
     },
     "models": {
       "row": "Modelos",
@@ -369,7 +370,8 @@
       "speechOnly": "Só voz",
       "speechOnlyHint": "Sem baixar IA. A IA na nuvem pode ser escolhida separadamente com internet.",
       "fastQualityHint": "O modelo pequeno de IA pode omitir detalhes ou errar fatos. Revise as melhorias de texto; considere a nuvem para notas complexas.",
-      "loadFailed": "Não foi possível verificar os modelos. Tente novamente."
+      "loadFailed": "Não foi possível verificar os modelos. Tente novamente.",
+      "remove": "Remover deste dispositivo · {{size}}"
     }
   },
   "languages": {
@@ -671,6 +673,11 @@
       "transcriptExists": "Este texto já está na nota",
       "playerExists": "A gravação já está na nota",
       "playerInserted": "Gravação adicionada à nota"
+    },
+    "slowDevice": {
+      "message": "A transcrição neste dispositivo está lenta. A nuvem é mais rápida.",
+      "useCloud": "Usar a nuvem",
+      "switched": "Agora as gravações vão para a nuvem. Sem internet, o dispositivo continua transcrevendo."
     }
   },
   "voice": {

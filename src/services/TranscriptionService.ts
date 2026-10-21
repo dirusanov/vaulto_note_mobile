@@ -13,6 +13,7 @@ import {
     getOpenAIBaseUrl,
     getTranscriptionLanguage,
     getOnDeviceTranscription,
+    getLocalModelsEnabled,
 } from '../utils/storage';
 import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL } from '../utils/openaiCompat';
@@ -23,6 +24,7 @@ import { refreshSession } from '../api/tokenRefresh';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 import { isDeviceOffline } from '../utils/connectivity';
+import { recordLocalTranscription } from './localSpeechSpeed';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -443,19 +445,27 @@ const formatAgentRequestError = (error: unknown): string => {
 };
 
 /**
- * Whether the next transcription runs on this phone: the user turned it on, or
- * there is no internet and the speech model is already downloaded (so a
- * recording made offline is still transcribed instead of waiting for a server).
+ * The speech model is on the phone and local models are switched on. Switched
+ * off, the files stay but recordings go to the server only (protected notes,
+ * which never leave the phone, still use the model).
  */
-export async function isOnDeviceTranscriptionActive(): Promise<boolean> {
+async function isLocalSpeechReady(): Promise<boolean> {
     if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web') return false;
-    let downloaded = false;
+    if (!(await getLocalModelsEnabled())) return false;
     try {
-        downloaded = (await getLocalWhisperModelStatus()).isDownloaded;
+        return (await getLocalWhisperModelStatus()).isDownloaded;
     } catch {
         return false;
     }
-    if (!downloaded) return false;
+}
+
+/**
+ * Whether the next transcription runs on this phone: the user turned it on, or
+ * there is no internet (airplane mode included) and the speech model is ready
+ * (so a recording made offline is still transcribed instead of waiting for a server).
+ */
+export async function isOnDeviceTranscriptionActive(): Promise<boolean> {
+    if (!(await isLocalSpeechReady())) return false;
     return (await getOnDeviceTranscription()) || (await isDeviceOffline());
 }
 
@@ -492,8 +502,7 @@ export async function transcribeAudio(
         options.onMode?.('cloud');
         // A downloaded model handles exhausted minutes or a lost connection.
         // Keep the cloud preference for the next request after reconnection.
-        const localReady = LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
-            && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
+        const localReady = await isLocalSpeechReady();
         const cloud = await transcribeViaBackend(audioUri, selectedLanguage, { announceLimit: !localReady, idempotencyKey: options.idempotencyKey });
         if (localReady && (cloud.error === USAGE_LIMIT_REACHED || cloud.errorKind === 'network')) {
             return local();
@@ -579,8 +588,7 @@ export async function transcribeAudio(
             // Connectivity may disappear after the initial check (or a Wi-Fi
             // network may have no internet). Keep the stored cloud choice so
             // the next recording uses it again when the connection returns.
-            if (isNetworkRequestError(error) && LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
-                && (await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded) {
+            if (isNetworkRequestError(error) && await isLocalSpeechReady()) {
                 return local();
             }
 
@@ -613,6 +621,9 @@ async function resolvePreferredLocalWhisperLanguage(language?: string): Promise<
     return storedLanguage === 'auto' ? 'auto' : storedLanguage;
 }
 
+const WAV_HEADER_BYTES = 44;
+const WAV_BYTES_PER_MS = 32;
+
 async function transcribeViaLocalWhisper(audioUri: string, language?: string): Promise<TranscriptionResult> {
     let preparedAudioUri: string | null = null;
     try {
@@ -633,9 +644,16 @@ async function transcribeViaLocalWhisper(audioUri: string, language?: string): P
             };
         }
 
+        const startedAt = Date.now();
         preparedAudioUri = await prepareAudioForLocalWhisper(audioUri);
         const resolvedLanguage = await resolvePreferredLocalWhisperLanguage(language);
         const text = await transcribeWithLocalWhisper(preparedAudioUri, { language: resolvedLanguage });
+        if (preparedAudioUri !== audioUri) {
+            // The converted file is 16 kHz mono 16-bit PCM: its size gives the length.
+            const wavInfo = await FileSystem.getInfoAsync(preparedAudioUri).catch(() => null);
+            const audioMs = wavInfo?.exists ? Math.max(0, wavInfo.size - WAV_HEADER_BYTES) / WAV_BYTES_PER_MS : 0;
+            await recordLocalTranscription(Date.now() - startedAt, audioMs);
+        }
         return {
             text,
             success: true,

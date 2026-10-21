@@ -340,10 +340,11 @@
       "offlineConfirmTitle": "Download models?",
       "offlineConfirmDesc": "Download {{size}} once for offline processing. Online keeps using your cloud service unless “Only on this device” is on.",
       "offlineModeOffTitle": "Remove downloaded models?",
-      "offlineModeOffDesc": "The models are removed from this device and free {{size}}. Without internet, recordings are saved and turned into text once you are back online.",
       "routingHint": "Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.",
       "speechFirst": "Speech works without internet. Local AI is optional: it can be slow on devices with little memory.",
-      "offlineHintSpeech": "Speech without internet · {{size}}"
+      "offlineHintSpeech": "Speech without internet · {{size}}",
+      "offlineOffKept": "Off · recordings go to the cloud. The models stay on this device, turning on is instant",
+      "removeModelsDesc": "The models are removed from this device and free {{size}}. To use them again, they are downloaded anew."
     },
     "models": {
       "row": "Models",
@@ -369,7 +370,8 @@
       "speechOnly": "Speech only",
       "speechOnlyHint": "Skip the AI download. Cloud AI is a separate choice when online.",
       "fastQualityHint": "The small AI model can miss details or get facts wrong. Check text improvements; consider the cloud for complex notes.",
-      "loadFailed": "Could not check the models. Please try again."
+      "loadFailed": "Could not check the models. Please try again.",
+      "remove": "Remove from this device · {{size}}"
     }
   },
   "languages": {
@@ -671,6 +673,11 @@
       "transcriptExists": "This text is already in the note",
       "playerExists": "The recording is already in the note",
       "playerInserted": "Recording added to the note"
+    },
+    "slowDevice": {
+      "message": "Transcription on this device is slow. The cloud is faster.",
+      "useCloud": "Use cloud",
+      "switched": "Recordings now go to the cloud. Without internet the device still transcribes."
     }
   },
   "voice": {

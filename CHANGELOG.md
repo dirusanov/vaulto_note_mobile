@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Turning off "Work without internet" no longer asks to remove the models: they stop being used (recordings go to the cloud) and stay on the device, so turning it back on is instant. Space can still be freed from Settings → Models while it is off.
+- When on-device transcription is chosen and keeps being slow on the device (two of the last three recordings took longer than the recording itself and at least 15 s), a short bar suggests the cloud with a one-tap switch. It shows at most once every two weeks, never for protected notes or without internet.
+
 ## [1.0.96] - 2026-10-21
 
 ### Fixed

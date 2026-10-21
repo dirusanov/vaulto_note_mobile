@@ -64,27 +64,28 @@ test('failed persistence rejects instead of promising a durable retry', async ()
   assert.equal((await store.restart().getPendingTranscriptions('a', 'n')).length, 0);
 });
 function transcription(options = {}) {
-  const state = { downloaded: false, offline: false, privateMode: false, limited: false, networkFailure: false, status: 200, provider: 'vaulto_ai', ...options };
-  const calls = { cloud: 0, local: 0, limit: 0, keys: [] };
+  const state = { downloaded: false, offline: false, privateMode: false, localEnabled: true, converted: false, limited: false, networkFailure: false, status: 200, provider: 'vaulto_ai', ...options };
+  const calls = { cloud: 0, local: 0, limit: 0, keys: [], timings: [] };
   const imports = {
     axios: { isAxiosError: () => false },
-    'expo-file-system/legacy': { getInfoAsync: async () => ({ exists: true, size: 100 }), deleteAsync: async () => {} },
+    'expo-file-system/legacy': { getInfoAsync: async (uri) => ({ exists: true, size: uri.endsWith('.wav') ? 44 + 32 * 5000 : 100 }), deleteAsync: async () => {} },
     'expo-file-system': { File: class File {} },
     'react-native': { Platform: { OS: 'android' } },
     '../utils/env': { API_URL: 'https://qa.invalid' },
-    '../utils/storage': { storage: { getToken: async () => 'synthetic-token' }, getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getTranscriptionLanguage: async () => 'auto', getOpenAIApiKey: async () => 'synthetic-key', getOpenAIBaseUrl: async () => 'https://qa.invalid' },
+    '../utils/storage': { storage: { getToken: async () => 'synthetic-token' }, getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getLocalModelsEnabled: async () => state.localEnabled, getTranscriptionLanguage: async () => 'auto', getOpenAIApiKey: async () => 'synthetic-key', getOpenAIBaseUrl: async () => 'https://qa.invalid' },
     '../utils/featureFlags': { LOCAL_WHISPER_ENABLED: true },
     '../utils/openaiCompat': { buildOpenAICompatibleUrl: (base, route) => base + route }, '../utils/richContent': {},
     '../utils/uuid': { generateUUID: async () => 'qa-request' },
     '../utils/authEvents': {}, '../api/tokenRefresh': {}, '../utils/deviceIdentity': {},
     '../utils/connectivity': { isDeviceOffline: async () => state.offline },
     '../utils/limitEvents': { onLimitReached: { emit: () => { calls.limit++; } } },
+    './localSpeechSpeed': { recordLocalTranscription: async (elapsedMs, audioMs) => { calls.timings.push({ elapsedMs, audioMs }); } },
     './LocalWhisperService': {
       getLocalWhisperModelStatus: async () => {
         if (state.modelStatusError) throw Error('Model storage is unavailable');
         return { isDownloaded: state.downloaded };
       },
-      prepareAudioForLocalWhisper: async (uri) => uri,
+      prepareAudioForLocalWhisper: async (uri) => (state.converted ? 'file://converted.wav' : uri),
       transcribeWithLocalWhisper: async () => { calls.local++; return 'Local transcript'; },
     },
   };
@@ -206,9 +207,9 @@ test('missing offline models and rejected HTTP requests are not disguised as suc
 });
 
 test('text improvements return to the chosen cloud after reconnecting and respect an explicit local choice', async () => {
-  const state = { provider: 'vaulto_ai', offline: false, downloaded: true, privateMode: false };
+  const state = { provider: 'vaulto_ai', offline: false, downloaded: true, privateMode: false, localEnabled: true };
   const { getEffectiveAIProvider } = load('src/services/effectiveProvider.ts', {
-    '../utils/storage': { getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode },
+    '../utils/storage': { getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getLocalModelsEnabled: async () => state.localEnabled },
     '../utils/connectivity': { isDeviceOffline: async () => state.offline },
     '../utils/featureFlags': { LOCAL_MODELS_ENABLED: true },
     './LocalLLMService': { isLocalLLMRuntimeAvailable: () => true, getLocalLLMModelStatus: async () => ({ isDownloaded: state.downloaded }) },
@@ -222,8 +223,44 @@ test('text improvements return to the chosen cloud after reconnecting and respec
   state.provider = 'vaulto_ai'; state.privateMode = true;
   assert.equal(await getEffectiveAIProvider(), 'local');
   state.privateMode = false;
+  // Local models switched off: the files stay, but offline AI does not use them.
+  state.offline = true; state.localEnabled = false;
+  assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
+  state.localEnabled = true;
   state.provider = 'vaulto_ai'; state.offline = true; state.downloaded = false;
   assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
+});
+
+test('the cloud is the default; downloaded models take over offline only while switched on', async () => {
+  // Fresh install: no models, online -> cloud.
+  let run = transcription();
+  assert.equal((await run.service.transcribeAudio('file://fictional.m4a')).text, 'Cloud transcript');
+  assert.equal(run.calls.local, 0);
+  // Models on the phone and online: still the cloud.
+  run = transcription({ downloaded: true });
+  assert.equal((await run.service.transcribeAudio('file://fictional.m4a')).text, 'Cloud transcript');
+  // Offline (airplane mode) with models: the phone, no upload attempt.
+  run = transcription({ downloaded: true, offline: true });
+  assert.equal((await run.service.transcribeAudio('file://fictional.m4a')).text, 'Local transcript');
+  assert.equal(run.calls.cloud, 0);
+  // Switched off: the files are kept but not used, offline or on a network failure.
+  run = transcription({ downloaded: true, offline: true, localEnabled: false });
+  assert.equal(await run.service.isOnDeviceTranscriptionActive(), false);
+  run = transcription({ downloaded: true, localEnabled: false, networkFailure: true });
+  await run.service.transcribeAudio('file://fictional.m4a');
+  assert.equal(run.calls.local, 0);
+  // Protected notes never upload, so they still use the model on the phone.
+  run = transcription({ downloaded: true, localEnabled: false });
+  assert.equal((await run.service.transcribeAudio('file://fictional.m4a', undefined, { onDeviceOnly: true })).text, 'Local transcript');
+  assert.equal(run.calls.cloud, 0);
+});
+
+test('on-device runs report how long they took against the recording length', async () => {
+  const run = transcription({ downloaded: true, privateMode: true, converted: true });
+  await run.service.transcribeAudio('file://fictional.m4a');
+  assert.equal(run.calls.timings.length, 1);
+  assert.equal(run.calls.timings[0].audioMs, 5000);
+  assert.ok(run.calls.timings[0].elapsedMs >= 0);
 });
 
 
@@ -278,4 +315,30 @@ test('an incomplete encrypted meeting save preserves raw input and cleans only i
     exists: async () => false, onPart() {}, transcribe: async () => { requests++; },
   });
   assert.equal(missing.success, false); assert.equal(requests, 0);
+});
+test('slow on-device transcription suggests the cloud only when it is really slow, and rarely', async () => {
+  const values = new Map();
+  const storage = { getItem: async (k) => values.get(k) ?? null, setItem: async (k, v) => { values.set(k, v); } };
+  const speed = load('src/services/localSpeechSpeed.ts', { '@react-native-async-storage/async-storage': storage });
+  // Short waits and faster-than-real-time runs are fine.
+  assert.equal(speed.isSlowRun(8000, 2000), false);
+  assert.equal(speed.isSlowRun(20000, 60000), false);
+  assert.equal(speed.isSlowRun(20000, 15000), true);
+  // One slow run is not enough (a hot phone); unknown length is not counted.
+  await speed.recordLocalTranscription(30000, 10000);
+  await speed.recordLocalTranscription(30000, 0);
+  assert.equal(await speed.takeSlowTranscriptionHint(1000), false);
+  await speed.recordLocalTranscription(30000, 10000);
+  const now = 15 * 24 * 3600 * 1000;
+  assert.equal(await speed.takeSlowTranscriptionHint(now), true);
+  // Shown once, then quiet for two weeks even if it stays slow.
+  await speed.recordLocalTranscription(30000, 10000);
+  await speed.recordLocalTranscription(30000, 10000);
+  assert.equal(await speed.takeSlowTranscriptionHint(now + 1000), false);
+  assert.equal(await speed.takeSlowTranscriptionHint(now + 15 * 24 * 3600 * 1000), true);
+  // Two fast runs push the slow ones out of the window.
+  await speed.recordLocalTranscription(30000, 10000);
+  await speed.recordLocalTranscription(3000, 10000);
+  await speed.recordLocalTranscription(3000, 10000);
+  assert.equal(await speed.takeSlowTranscriptionHint(now * 10), false);
 });

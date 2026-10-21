@@ -14,6 +14,7 @@ import {
 } from '../services/LocalWhisperService';
 import { planOfflineModels } from '../services/offlineMode';
 import { formatModelSize } from './OnDeviceModelSection';
+import { setLocalModelsEnabled } from '../utils/storage';
 import { createStyles } from '../theme/createStyles';
 
 interface Props {
@@ -61,6 +62,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
         if (!modelKey) return;
         if (alreadyOnPhone) {
             await setSelectedLocalWhisperModel(modelKey);
+            await setLocalModelsEnabled(true);
             onDownloadComplete();
             return;
         }
@@ -75,6 +77,8 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
                 setBytesTotal(total);
             });
             setIsDownloading(false);
+            // A model the user just asked for is in use right away.
+            await setLocalModelsEnabled(true);
             onDownloadComplete();
         } catch (e: any) {
             setIsDownloading(false);
