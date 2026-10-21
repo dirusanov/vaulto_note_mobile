@@ -23,6 +23,7 @@ interface MarkdownToolbarProps {
      * where that handler exists and local models are enabled for the build.
      */
     showDictate?: boolean;
+    showDraw?: boolean;
 }
 
 interface ToolbarButtonProps {
@@ -65,7 +66,7 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconNa
     );
 };
 
-export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle, showDictate = false }) => {
+export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle, showDictate = false, showDraw = false }) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -146,6 +147,15 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                         onPress={() => onFormat('dictate')}
                         iconName="mic"
                         accessibilityLabel={t('a11y.dictate', 'Dictate')}
+                    />
+                )}
+
+                {showDraw && (
+                    <ToolbarButton
+                        isActive={false}
+                        onPress={() => onFormat('draw')}
+                        iconName="gesture"
+                        accessibilityLabel={t('a11y.draw', 'Draw')}
                     />
                 )}
 

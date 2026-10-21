@@ -30,6 +30,12 @@ import {
     getAudioEmbedBridge,
 } from './richTextAudioBridge';
 import {
+    DrawingDocument,
+    buildDrawingCommandJs,
+    getDrawingBridge,
+    getDrawingRuntimeJs,
+} from '../drawing/drawingEmbeds';
+import {
     normalizeRichHighlightColors,
     richContentToEditorHtml,
 } from '../utils/richContent';
@@ -65,6 +71,8 @@ interface RichTextEditorProps {
      */
     contentBottomPadding?: number;
     onAudioAction?: (payload: AudioEmbedControlPayload) => void;
+    /** A drawing in the note was tapped. */
+    onDrawingOpen?: (doc: DrawingDocument) => void;
     /** A checklist box was ticked while the note was only being read. */
     onChecklistToggledWhileIdle?: () => void;
     /** Horizontal swipe while reading: 1 = next (swipe left), -1 = previous. */
@@ -77,6 +85,8 @@ export interface RichTextEditorHandle {
     setContent: (content: string) => void;
     insertAudioEmbed: (payload: InsertAudioEmbedPayload) => void;
     setAudioEmbedState: (payload: AudioEmbedRuntimeState) => void;
+    /** Inserts a new drawing, replaces the one with this id, or removes it (src null). */
+    applyDrawing: (command: { id: string; src: string | null }) => void;
     flushPendingChanges: () => Promise<string>;
     /** Current document as Markdown, serialized from the editor's own JSON. */
     getMarkdown: () => Promise<string>;
@@ -748,6 +758,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         showToolbar = false,
         contentBottomPadding = 72,
         onAudioAction,
+        onDrawingOpen,
         onChecklistToggledWhileIdle,
         onHorizontalSwipe,
     } = props;
@@ -810,7 +821,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     // keeps the later injectJS call from adding the listeners twice.
     const editorSourceHtml = useMemo(() => (
         injectEditorCssIntoSource(tentapEditorHtml, initialEditorCssRef.current || '')
-            .replace('</head>', `<script>${getTaskItemRefocusJs()}</script><script>${getAudioEmbedRuntimeJs()}</script></head>`)
+            .replace('</head>', `<script>${getTaskItemRefocusJs()}</script><script>${getAudioEmbedRuntimeJs()}</script><script>${getDrawingRuntimeJs()}</script></head>`)
     ), []);
     // The placeholder must be part of the initial extension config: tentap's
     // runtime setPlaceholder only swaps the option without redrawing, so a
@@ -825,8 +836,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             TaskListBridge.configureCSS(initialTaskListCssRef.current || ''),
             taskItemRefocusBridge,
             getAudioEmbedBridge(onAudioAction),
+            getDrawingBridge(onDrawingOpen),
         ]
-    ), [onAudioAction, taskItemRefocusBridge]);
+    ), [onAudioAction, onDrawingOpen, taskItemRefocusBridge]);
     const editorTheme = useMemo(() => ({
         webview: {
             backgroundColor: colors.background,
@@ -955,6 +967,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         );
         editorApi.injectJS?.(getTaskItemRefocusJs());
         editorApi.injectJS?.(getAudioEmbedRuntimeJs());
+        editorApi.injectJS?.(getDrawingRuntimeJs());
 
         const caretInset = Math.max(0, Math.round(contentBottomPadding));
         editorApi.injectJS?.(getCaretVisibilityJs());
@@ -1221,6 +1234,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 true;
             `);
         },
+        applyDrawing: (command: { id: string; src: string | null }) => {
+            editorApi.injectJS?.(buildDrawingCommandJs(command));
+        },
         flushPendingChanges: () => flushPendingContent(),
         getMarkdown: async () => tiptapDocumentToMarkdown(await editor.getJSON()),
         blur: () => {
@@ -1283,6 +1299,7 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.contentBottomPadding === next.contentBottomPadding &&
     prev.showToolbar === next.showToolbar &&
     prev.onAudioAction === next.onAudioAction &&
+    prev.onDrawingOpen === next.onDrawingOpen &&
     prev.onChange === next.onChange &&
     prev.onPlainTextChange === next.onPlainTextChange &&
     prev.onSelectionChange === next.onSelectionChange &&

@@ -10,6 +10,9 @@ export const LOCAL_WHISPER_ENABLED = true;
 // the private/offline case; the code stays so it can return with one switch.
 export const CUSTOM_AI_ENABLED = false;
 
+// Handwriting/drawing canvas in notes. Prototype: development builds only.
+export const DRAWING_ENABLED = typeof __DEV__ !== 'undefined' && __DEV__;
+
 export const isLocalAIProvider = (value: string | null | undefined): boolean => {
     return value === 'local' || value === 'local_whisper' || value === 'local_llm';
 };

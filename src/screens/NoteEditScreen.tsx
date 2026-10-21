@@ -32,7 +32,7 @@ import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEdit
 import { AudioEmbedControlPayload } from '../components/richTextAudioBridge';
 import { CommonActions, useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
@@ -108,7 +108,10 @@ import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
-import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { DRAWING_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { DrawingEditor } from '../drawing/DrawingEditor';
+import { DrawingDocument, buildDrawingSrc } from '../drawing/drawingEmbeds';
+import { generateUUID } from '../utils/uuid';
 import {
     appendPlainTextSnippetToRichContent,
     deriveAutoTitleFromPlainText,
@@ -3215,6 +3218,19 @@ export const NoteEditScreen = () => {
         }
     }, [clearInlineEditorAudio, handleInlineEditorPlaybackStatus, pushInlineEditorAudioState, resolveAudioUri]);
 
+    const [drawingDocument, setDrawingDocument] = useState<DrawingDocument | null>(null);
+    const handleNewDrawing = useCallback(async () => {
+        setDrawingDocument({ id: await generateUUID(), width: 0, strokes: [] });
+    }, []);
+    const handleDrawingSave = useCallback((doc: DrawingDocument) => {
+        setDrawingDocument(null);
+        editorRef.current?.applyDrawing({
+            id: doc.id,
+            src: doc.strokes.length ? buildDrawingSrc(doc) : null,
+        });
+    }, []);
+    const handleDrawingClose = useCallback(() => setDrawingDocument(null), []);
+
     const handleAudioActionFromEditor = useCallback(async (payload: AudioEmbedControlPayload) => {
         const targetPath = normalizeAttachedAudioPath(payload.path);
         if (!targetPath) {
@@ -5718,6 +5734,10 @@ export const NoteEditScreen = () => {
     }, []);
 
     const handleFormat = useCallback(async (type: MarkdownFormatType) => {
+        if (type === 'draw') {
+            await handleNewDrawing();
+            return;
+        }
         if (type === 'dictate') {
             if (!LOCAL_WHISPER_ENABLED) return;
 
@@ -5729,7 +5749,7 @@ export const NoteEditScreen = () => {
             return;
         }
         editorRef.current?.handleFormat(type);
-    }, [isRealtimeDictating, startRealtimeDictationSession, stopRealtimeDictation]);
+    }, [handleNewDrawing, isRealtimeDictating, startRealtimeDictationSession, stopRealtimeDictation]);
 
     // Leaving the screen must not leave the microphone and the Whisper job running.
     useEffect(() => {
@@ -6583,6 +6603,16 @@ export const NoteEditScreen = () => {
 
 
 
+                    {DRAWING_ENABLED && editMode === 'visual' && (
+                        <TouchableOpacity
+                            onPress={handleNewDrawing}
+                            style={styles.iconButton}
+                            accessibilityRole="button" accessibilityLabel={t("a11y.draw", "Draw")}
+                        >
+                            <MaterialCommunityIcons name="draw" size={24} color={colors.text} />
+                        </TouchableOpacity>
+                    )}
+
                     {/* Redo/Undo Buttons - Visible if there is history to navigate */}
                     {((variantHistories.current[activeVariantId]?.index > 0) || (variantHistories.current[activeVariantId]?.index < (variantHistories.current[activeVariantId]?.history?.length || 0) - 1)) && (
                         <>
@@ -7248,6 +7278,7 @@ export const NoteEditScreen = () => {
                             onHorizontalSwipe={handleEditorHorizontalSwipe}
                             placeholder={t('edit.placeholderVisual', 'Start typing...')}
                             onAudioAction={handleAudioActionFromEditor}
+                            onDrawingOpen={DRAWING_ENABLED ? setDrawingDocument : undefined}
                         />
                     )}
                 </View>
@@ -7265,6 +7296,7 @@ export const NoteEditScreen = () => {
                         <MarkdownToolbar
                             onFormat={handleFormat}
                             showDictate={LOCAL_WHISPER_ENABLED}
+                            showDraw={DRAWING_ENABLED}
                             activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
                             onColorPickerToggle={(visible) => {
                                 setIsColorPickerVisible(visible);
@@ -7374,6 +7406,15 @@ export const NoteEditScreen = () => {
                 versionText={showCompareVersions ? richContentToPlainText(content) : ''}
                 onClose={() => setShowCompareVersions(false)}
             />
+
+            {DRAWING_ENABLED && (
+                <DrawingEditor
+                    visible={!!drawingDocument}
+                    document={drawingDocument}
+                    onSave={handleDrawingSave}
+                    onClose={handleDrawingClose}
+                />
+            )}
 
             <UndoSnackbar message={undoMessage} onUndo={undoVariantDelete} />
             {!undoMessage && (
