@@ -14,6 +14,15 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Tablets and iPad: the app language picker, rename-version and recovery-key dialogs, the transcription language list, version comparison, the encryption banner, the selection bar, the undo snackbar, toasts and the QR-scanner button no longer stretch across a wide screen; the welcome cards keep the search bar's width.
+- Android tablets and unfolded foldables (600dp+) rotate on Android 12–15 too; phones stay portrait. Window resizes, and folding on most foldables, re-lay out the screen instead of restarting it; a narrow split-screen or desktop window is not locked to portrait.
+- The editor's "More" menu scrolls when it is taller than the window (tablets in landscape, large fonts), so Protect and Delete stay reachable.
+- The AI result preview resizes with the window instead of keeping its size from app start. On iPad the editor toolbar sits on the keyboard in Stage Manager windows and with a hardware keyboard (it used to rise by a whole hidden keyboard).
+- Editor messages shown while typing appear above the keyboard and the mic button instead of behind the keyboard.
+
 ## [1.0.93] - 2026-10-19
 
 ### Fixed

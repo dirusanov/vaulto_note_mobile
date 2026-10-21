@@ -19,6 +19,7 @@ import {
     Animated,
     AppState,
     Linking,
+    useWindowDimensions,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -163,6 +164,7 @@ const NEW_NOTE_AUTO_SCALE_DRAFT_ID = '__new_note_auto_scale_draft__';
 const FLOATING_MIC_BASE_BOTTOM_OFFSET = spacing.xxl + 20;
 const FLOATING_MIC_KEYBOARD_GAP = 28;
 const FLOATING_MIC_TOOLBAR_HEIGHT = 44;
+const FLOATING_MIC_BUTTON_SIZE = 56;
 // Breathing room below the last editor line so it clears the docked toolbar
 // (keyboard open) and the Android navigation bar (keyboard closed).
 const EDITOR_CONTENT_BOTTOM_GAP = 24;
@@ -6118,16 +6120,34 @@ export const NoteEditScreen = () => {
             }
 
             const keyboardFrame = event.endCoordinates;
-            const screenHeight = Dimensions.get('screen').height;
-            const measuredKeyboardHeight = Platform.OS === 'android' && typeof keyboardFrame?.screenY === 'number'
-                ? Math.max(0, screenHeight - keyboardFrame.screenY)
-                : (keyboardFrame?.height || 0);
+            let measuredKeyboardHeight = keyboardFrame?.height || 0;
+            if (typeof keyboardFrame?.screenY === 'number') {
+                measuredKeyboardHeight = Platform.OS === 'android'
+                    ? Math.max(0, Dimensions.get('screen').height - keyboardFrame.screenY)
+                    // iOS reports the frame in window coordinates, so only the part
+                    // that overlaps the window counts: an iPad Stage Manager window
+                    // need not reach the bottom of the screen, and with a hardware
+                    // keyboard the frame is mostly off-screen (only the shortcut bar
+                    // shows). Measured here, not in render: re-rendering this screen
+                    // on window-size changes drops editor focus during rotation.
+                    : Math.min(measuredKeyboardHeight, Math.max(0, Dimensions.get('window').height - keyboardFrame.screenY));
+            }
 
             keyboardVisibleRef.current = true;
             setKeyboardVisibleState(true);
             setKeyboardHeight(measuredKeyboardHeight);
             setIsEditing(true);
         });
+        // iOS: re-measure once the keyboard has settled. If a rotation's window-size
+        // update reached JS after keyboardWillShow, the first measure used the old
+        // window; an unchanged value does not re-render.
+        const didShowSub = Platform.OS === 'ios'
+            ? Keyboard.addListener('keyboardDidShow', (event) => {
+                const keyboardFrame = event.endCoordinates;
+                if (!keyboardVisibleRef.current || typeof keyboardFrame?.screenY !== 'number') return;
+                setKeyboardHeight(Math.min(keyboardFrame.height || 0, Math.max(0, Dimensions.get('window').height - keyboardFrame.screenY)));
+            })
+            : null;
         const hideSub = Keyboard.addListener(hideEvent, () => {
             keyboardVisibleRef.current = false;
             setKeyboardVisibleState(false);
@@ -6158,6 +6178,7 @@ export const NoteEditScreen = () => {
                 visualKeyboardHideTimeoutRef.current = null;
             }
             showSub.remove();
+            didShowSub?.remove();
             hideSub.remove();
         };
     }, [editMode, isColorPickerVisible]);
@@ -6596,13 +6617,13 @@ export const NoteEditScreen = () => {
                                 <Text style={styles.previewReviewHint}>
                                     {t('edit.improvePreview.reviewHint', 'Check names, amounts and dates. Accept creates a separate version; the original stays safe.')}
                                 </Text>
-                                <ScrollView style={styles.previewBody} keyboardShouldPersistTaps="handled">
+                                <PreviewBody>
                                     <MarkdownPreview
                                         content={improvementPreview?.resultText || ''}
                                         fontSize={fontSize}
                                         selectable
                                     />
-                                </ScrollView>
+                                </PreviewBody>
 
                                 {isPreviewRegenerating && (
                                     <View style={styles.previewLoadingRow}>
@@ -6934,7 +6955,10 @@ export const NoteEditScreen = () => {
             >
                 <TouchableWithoutFeedback accessible={false} onPress={() => setShowMenu(false)}>
                     <View style={styles.menuOverlay}>
-                        <View style={styles.menuContainer}>
+                        {/* Capped to the window and scrollable: in landscape on a tablet, or with a
+                            large font, the full menu is taller than the screen. Read on open. */}
+                        <View style={[styles.menuContainer, { maxHeight: Dimensions.get('window').height - 80 - Math.max(insets.bottom, spacing.m) }]}>
+                        <ScrollView style={styles.menuScroll} bounces={false} showsVerticalScrollIndicator>
                             <View style={styles.menuSectionHeader}>
                                 <Text style={styles.menuSectionTitle}>{t("edit.editorMode", "EDITOR MODE")}</Text>
                             </View>
@@ -7096,13 +7120,27 @@ export const NoteEditScreen = () => {
                                 <MaterialIcons name="delete-outline" size={20} color={colors.error} style={{ marginRight: 12 }} />
                                 <Text style={[styles.menuItemText, { color: colors.error }]}>{t("edit.deleteNote", "Delete Note")}</Text>
                             </TouchableOpacity>
+                        </ScrollView>
                         </View>
                     </View>
                 </TouchableWithoutFeedback>
             </Modal>
 
             {/* Custom Toast */}
-            <Animated.View style={[styles.toastContainer, { opacity: toastOpacity }]} pointerEvents="none">
+            <Animated.View
+                style={[
+                    styles.toastContainer,
+                    // With the keyboard open the fixed spot is behind it: sit above the
+                    // floating mic (visual mode) or just above the keyboard (raw mode).
+                    keyboardVisibleState && {
+                        bottom: editMode === 'visual'
+                            ? floatingMicBottomOffset + FLOATING_MIC_BUTTON_SIZE + spacing.s
+                            : keyboardHeight + spacing.m,
+                    },
+                    { opacity: toastOpacity },
+                ]}
+                pointerEvents="none"
+            >
                 <View style={styles.toastContent}>
                     <MaterialIcons name={toastIsError ? 'error-outline' : 'check-circle'} size={20} color={colors.background} style={{ marginRight: 8 }} />
                     <Text style={styles.toastText}>{toastMessage}</Text>
@@ -7644,6 +7682,18 @@ export const NoteEditScreen = () => {
     );
 };
 
+// The AI result gets 45% of the window. It reads the window size itself: the
+// editor screen must not re-render on rotation (that drops editor focus), but
+// the preview should still fit a rotated or resized window.
+const PreviewBody = ({ children }: { children: React.ReactNode }) => {
+    const { height } = useWindowDimensions();
+    return (
+        <ScrollView style={[styles.previewBody, { maxHeight: Math.round(height * 0.45) }]} keyboardShouldPersistTaps="handled">
+            {children}
+        </ScrollView>
+    );
+};
+
 const styles = createStyles(() => ({
     header: {
         flexDirection: 'row',
@@ -7703,6 +7753,9 @@ const styles = createStyles(() => ({
         elevation: 5,
         minWidth: 200,
     },
+    menuScroll: {
+        flexGrow: 0,
+    },
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -7737,15 +7790,15 @@ const styles = createStyles(() => ({
     toastContainer: {
         position: 'absolute',
         bottom: 180, // Moved up from 100
-        left: 0,
-        right: 0,
+        left: '6%',
+        right: '6%',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 9999,
     },
     toastContent: {
         backgroundColor: colors.text, // High contrast
-        maxWidth: '88%',
+        maxWidth: 560,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
@@ -7842,9 +7895,12 @@ const styles = createStyles(() => ({
         flex: 1,
         backgroundColor: colors.overlay,
         justifyContent: 'center',
+        alignItems: 'center',
         padding: spacing.l,
     },
     renameCard: {
+        width: '100%',
+        maxWidth: 400,
         backgroundColor: colors.surface,
         borderRadius: 16,
         padding: spacing.m,
@@ -8021,8 +8077,8 @@ const styles = createStyles(() => ({
         borderColor: colors.primaryLight,
     },
     micButton: {
-        width: 56,
-        height: 56,
+        width: FLOATING_MIC_BUTTON_SIZE,
+        height: FLOATING_MIC_BUTTON_SIZE,
         borderRadius: 28,
         backgroundColor: colors.primary,
         justifyContent: 'center',
@@ -8083,9 +8139,9 @@ const styles = createStyles(() => ({
         marginBottom: spacing.s,
     },
     previewBody: {
-        // The sheet itself is capped at 82%, so let the result use the room it
-        // has instead of scrolling a long suggestion inside a 280pt window.
-        maxHeight: Math.round(Dimensions.get('window').height * 0.45),
+        // The sheet itself is capped at 82%, so the result gets 45% of the window
+        // (maxHeight set by PreviewBody from the live window size) instead of a
+        // 280pt slot.
         backgroundColor: colors.background,
         borderRadius: 12,
         borderWidth: 1,

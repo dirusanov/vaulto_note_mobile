@@ -102,10 +102,13 @@ const styles = createStyles(() => ({
         position: 'absolute',
         left: spacing.m,
         right: spacing.m,
+        alignItems: 'center',
         zIndex: 1000,
         elevation: 12,
     },
     banner: {
+        width: '100%',
+        maxWidth: 760,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,

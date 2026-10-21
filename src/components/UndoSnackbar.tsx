@@ -46,6 +46,7 @@ const styles = createStyles(() => ({
     },
     bar: {
         width: '100%',
+        maxWidth: 560,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',

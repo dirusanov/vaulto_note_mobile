@@ -1178,6 +1178,10 @@ const styles = createStyles(() => ({
     },
     emptyContainer: {
         marginTop: spacing.xl,
+        // Same readable column as the search bar on tablets.
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
     },
     dockContainer: {
         position: 'absolute',

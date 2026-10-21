@@ -74,7 +74,11 @@ const styles = createStyles(() => ({
         flex: 1,
         backgroundColor: colors.background,
     },
+    // Header, legend and text share the editor's readable column on tablets.
     header: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: spacing.m,
@@ -102,6 +106,9 @@ const styles = createStyles(() => ({
         marginTop: 2,
     },
     legend: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         flexDirection: 'row',
         gap: spacing.s,
         paddingHorizontal: spacing.m,
@@ -115,6 +122,9 @@ const styles = createStyles(() => ({
         overflow: 'hidden',
     },
     body: {
+        width: '100%',
+        maxWidth: 760,
+        alignSelf: 'center',
         padding: spacing.m,
     },
     text: {
