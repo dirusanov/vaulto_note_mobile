@@ -233,30 +233,6 @@ const normalizeAttachedAudioPath = (value?: string | null): string | null => {
     return normalized;
 };
 
-const deriveTitleFromText = (text: string): string => {
-    // The source can be raw markdown from the model or editor HTML, and both used
-    // to leak syntax ("**Итоги:**") into the title field, which renders literally.
-    // Only the first block: sanitizeDisplayLabel folds newlines into spaces, so
-    // a heading and the list under it used to merge into one long "title".
-    const firstLine = richContentToPlainText(text || '')
-        .split('\n')
-        .map((line) => line.trim())
-        .find(Boolean) || '';
-    const cleaned = sanitizeDisplayLabel(firstLine);
-
-    if (!cleaned) return '';
-
-    const sentence = cleaned.split(/[.!?;\n]/)[0]?.trim() || '';
-    const source = sentence || cleaned;
-    if (!source) return '';
-
-    const words = source.split(' ').filter(Boolean).slice(0, 6);
-    if (words.length === 0) return '';
-
-    const title = words.join(' ').trim();
-    return title.length > 80 ? title.slice(0, 80).trim() : title;
-};
-
 type MicInputMode = 'agent' | 'force_text';
 
 const TODO_LIST_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/m;
@@ -1548,8 +1524,9 @@ export const NoteEditScreen = () => {
             // back (a download needs it), offer the model that works without it.
             const online = state.isConnected !== false && state.isInternetReachable !== false;
             // Right after Wi-Fi comes up reachability is still unknown; wait for a
-            // confirmed connection, and keep anything that fails for the next one.
-            if (state.isConnected === true && state.isInternetReachable === true) {
+            // verdict, and keep anything that fails for the next one. "Unreachable"
+            // also retries: the retry asks our server itself (isDeviceOffline).
+            if (state.isConnected === true && state.isInternetReachable !== null) {
                 void retryPendingTranscriptionsRef.current?.();
             }
             if (online && offlineOfferPendingRef.current) {
@@ -1919,10 +1896,8 @@ export const NoteEditScreen = () => {
         if (improvementTitle) {
             return improvementTitle;
         }
-        const improvementLabel = stripStoredTitleMarkdown(improvement?.label || '');
-        if (improvementLabel) {
-            return improvementLabel;
-        }
+        // Never the label: it names the step ("AI Agent", "Summarize"), and a
+        // version saved with it as its title showed that on the notes list.
         return existingNote?.title || '';
     }, [existingNote?.title, noteImprovements]);
 
@@ -4626,13 +4601,12 @@ export const NoteEditScreen = () => {
                         }
 
                         const agentTitle = sanitizeDisplayLabel(agentResult.suggestedTitle || '');
-                        const suggestedTitleRaw = titleMatchesContextScript(
+                        // Without a model title the note stays untitled and the list shows
+                        // its text: the first words cut mid-sentence made odd titles.
+                        const suggestedTitle = titleMatchesContextScript(
                             agentTitle,
                             `${contextContent || ''}\n${normalizedTaskText || ''}`
                         ) ? agentTitle : '';
-                        const suggestedTitle = suggestedTitleRaw || deriveTitleFromText(
-                            processedText || contextContent || originalText
-                        );
                         const hasStableTitle =
                             !!currentTitleRef.current.trim() ||
                             !!lastSavedTitle.current.trim() ||
@@ -5926,7 +5900,8 @@ export const NoteEditScreen = () => {
                     date: new Date().toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
                 }))
                 : '';
-            const improvementTitle = (meetingTitle || deriveTitleFromText(finalText) || title || existingNote?.title || '').trim();
+            // Other versions carry the note's title (the editor shows the note's anyway).
+            const improvementTitle = (meetingTitle || title || existingNote?.title || '').trim();
             const sourceStepLabel = variantAtRequestStart === 'original'
                 ? ''
                 : storedStepLabelOf(noteImprovements.find((imp) => imp.id === variantAtRequestStart), aiOptionsById);

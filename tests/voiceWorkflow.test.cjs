@@ -342,3 +342,29 @@ test('slow on-device transcription suggests the cloud only when it is really slo
   await speed.recordLocalTranscription(3000, 10000);
   assert.equal(await speed.takeSlowTranscriptionHint(now * 10), false);
 });
+test('"no internet" from Android is confirmed against our server before recordings skip the cloud', async () => {
+  const net = { isConnected: true, isInternetReachable: false };
+  const server = { up: true, probes: 0 };
+  const connectivity = () => load('src/utils/connectivity.ts', {
+    '@react-native-community/netinfo': { fetch: async () => net },
+    './env': { API_URL: 'https://qa.invalid' },
+  }, { fetch: async (url) => { server.probes++; assert.equal(url, 'https://qa.invalid/health'); if (!server.up) throw TypeError('Network request failed'); return { ok: true }; } });
+
+  // Google's check is blocked, our server answers: online, and the answer is reused.
+  let c = connectivity();
+  assert.equal(await c.isDeviceOffline(), false);
+  assert.equal(await c.isDeviceOffline(), false);
+  assert.equal(server.probes, 1);
+
+  server.up = false;
+  c = connectivity();
+  assert.equal(await c.isDeviceOffline(), true);
+
+  // No network at all or no verdict yet: no probe.
+  server.probes = 0;
+  net.isConnected = false;
+  assert.equal(await connectivity().isDeviceOffline(), true);
+  net.isConnected = true; net.isInternetReachable = null;
+  assert.equal(await connectivity().isDeviceOffline(), false);
+  assert.equal(server.probes, 0);
+});
