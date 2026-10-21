@@ -330,25 +330,25 @@
       "private": "Só neste celular",
       "privateDesc": "Voz e IA nunca saem do celular, mesmo online",
       "privateVoiceDesc": "A voz nunca sai do celular, mesmo online",
-      "offlineMode": "Modo offline",
+      "offlineMode": "Usar sem internet",
       "offlineHintAll": "Voz e IA no celular, sem internet · {{size}}",
       "offlineReadyAll": "Pronto · voz e IA funcionam sem internet",
       "offlineReadySpeech": "Pronto · a voz funciona sem internet",
       "offlineAIMissing": "A voz funciona offline. Toque para adicionar a IA ({{size}})",
       "offlineNoSpace": "Não há espaço livre suficiente no celular",
       "offlineNoSpaceTitle": "Sem espaço",
-      "offlineConfirmTitle": "Baixar o modo offline?",
+      "offlineConfirmTitle": "Baixar modelos?",
       "offlineConfirmDesc": "Baixe {{size}} uma vez para uso offline. Com internet, a nuvem continua sendo usada, a menos que «Só neste celular» esteja ativado.",
-      "offlineModeOffTitle": "Desativar o modo offline?",
+      "offlineModeOffTitle": "Remover os modelos baixados?",
       "offlineModeOffDesc": "Os modelos são removidos do celular e liberam {{size}}. Sem internet, as gravações são salvas e viram texto quando a conexão voltar.",
-      "routingHint": "Com internet, o serviço de nuvem escolhido é usado. Modelos offline são opcionais. O processamento na nuvem envia o áudio ou texto selecionado ao serviço.",
+      "routingHint": "Com internet, usa a nuvem; sem conexão, os modelos baixados. A troca é automática. O processamento na nuvem envia o áudio ou texto selecionado ao serviço.",
       "speechFirst": "O reconhecimento de voz funciona sem internet. A IA local é opcional e pode ser lenta em celulares com pouca memória.",
       "offlineHintSpeech": "Voz sem internet · {{size}}"
     },
     "models": {
       "row": "Modelos",
       "title": "Modelos neste celular",
-      "subtitle": "Modelos para uso offline. Com internet, usa-se a nuvem escolhida, a menos que «Só neste celular» esteja ativado.",
+      "subtitle": "Os modelos baixados funcionam sem internet. Quando a conexão voltar, novas solicitações usarão a nuvem novamente. Ative «Só neste telefone» para sempre processar localmente.",
       "subtitlePrivate": "Voz e IA funcionam só neste celular.",
       "speech": "Voz para texto",
       "ai": "IA: pedidos por voz, edição, chat",
@@ -367,7 +367,9 @@
       "useCloud": "Usar a nuvem da Vaulto",
       "fastNoRequests": "Sem internet, Rápido não atende pedidos por voz: as gravações ficam como texto. Equilibrado entende os pedidos.",
       "speechOnly": "Só voz",
-      "speechOnlyHint": "Sem baixar IA. A IA na nuvem pode ser escolhida separadamente com internet."
+      "speechOnlyHint": "Sem baixar IA. A IA na nuvem pode ser escolhida separadamente com internet.",
+      "fastQualityHint": "O modelo pequeno de IA pode omitir detalhes ou errar fatos. Revise as melhorias de texto; considere a nuvem para notas complexas.",
+      "loadFailed": "Não foi possível verificar os modelos. Tente novamente."
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "Gravação salva. Tente a transcrição novamente na lista de gravações.",
     "transcribingLocal": "Transcrevendo neste celular…",
     "slowOnDevice": "Esta gravação ainda está sendo processada no celular. Para as próximas, a nuvem pode ser mais rápida com internet.",
-    "processingSeconds": "{{seconds}} s"
+    "processingSeconds": "{{seconds}} s",
+    "transcribingCloud": "Transcrevendo na nuvem…",
+    "privateModelMissing": "O processamento só neste telefone está ativado, mas o modelo de voz não está disponível. A gravação foi salva no dispositivo. Baixe o modelo para transcrevê-la."
   },
   "aux": {
     "emailVerified": "E-mail verificado!",

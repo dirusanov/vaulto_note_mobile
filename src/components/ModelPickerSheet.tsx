@@ -16,6 +16,8 @@ interface ModelPickerSheetProps {
     visible: boolean;
     /** "Only on this phone" is on: the cloud is offered when a model is heavy. */
     privateMode: boolean;
+    /** Speech is local, but no text AI model has been downloaded. */
+    privateVoiceOnly?: boolean;
     onClose: () => void;
     onApply: (plan: OfflinePlan) => void;
     onUseCloud: () => void;
@@ -26,26 +28,32 @@ interface ModelPickerSheetProps {
  * gets a calm note in place (no alert), and with "Only on this phone" on, the
  * cloud is offered as the faster option.
  */
-export const ModelPickerSheet = ({ visible, privateMode, onClose, onApply, onUseCloud }: ModelPickerSheetProps) => {
+export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = false, onClose, onApply, onUseCloud }: ModelPickerSheetProps) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [choices, setChoices] = useState<{ speech: ModelChoice[]; ai: ModelChoice[] } | null>(null);
     const [speechKey, setSpeechKey] = useState<string | null>(null);
     const [aiKey, setAiKey] = useState<string | null>(null);
     const [plan, setPlan] = useState<OfflinePlan | null | undefined>(undefined);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [reload, setReload] = useState(0);
 
     useEffect(() => {
         if (!visible) return;
         let active = true;
         setChoices(null);
+        setSpeechKey(null);
+        setAiKey(null);
+        setPlan(undefined);
+        setLoadFailed(false);
         void getModelChoices().then((result) => {
             if (!active) return;
             setChoices(result);
             setSpeechKey((result.speech.find((c) => c.current) ?? result.speech.find((c) => c.recommended && c.supported))?.key ?? null);
             setAiKey((result.ai.find((c) => c.current) ?? result.ai.find((c) => c.recommended && c.supported))?.key ?? null);
-        });
+        }).catch(() => { if (active) setLoadFailed(true); });
         return () => { active = false; };
-    }, [visible]);
+    }, [visible, reload]);
 
     useEffect(() => {
         if (!speechKey) return;
@@ -62,7 +70,9 @@ export const ModelPickerSheet = ({ visible, privateMode, onClose, onApply, onUse
         ai: choices?.ai.find((c) => c.key === aiKey),
     }), [choices, speechKey, aiKey]);
     const heavy = !!selected.speech?.heavy || !!selected.ai?.heavy;
-    const unchanged = !!selected.speech?.current && (!choices?.ai.length || !!selected.ai?.current);
+    const unchanged = !!selected.speech?.current && (aiKey === null
+        ? !choices?.ai.some((choice) => choice.current)
+        : !!selected.ai?.current);
 
     const tierLabel = (kind: 'speech' | 'ai', tier: ModelTier) => {
         if (tier === 'fast') return t('settings.models.fast', 'Fast');
@@ -128,68 +138,84 @@ export const ModelPickerSheet = ({ visible, privateMode, onClose, onApply, onUse
                                     <MaterialIcons name="close" size={22} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
-                            <Text style={styles.subtitle}>
-                                {privateMode
-                                    ? t('settings.models.subtitlePrivate', 'Voice and AI run only on this phone.')
-                                    : t('settings.models.subtitle', 'Used without internet. Online, Vaulto cloud is used: it is faster and more accurate.')}
-                            </Text>
+                            <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: spacing.s }}>
+                                <Text style={styles.subtitle}>
+                                    {privateMode
+                                        ? privateVoiceOnly
+                                            ? t('settings.voice.privateVoiceDesc', 'Voice never leaves the phone, even online')
+                                            : t('settings.models.subtitlePrivate', 'Voice and AI run only on this phone.')
+                                        : t('settings.models.subtitle', 'Downloaded models work without internet. When you reconnect, new requests use the cloud again. Turn on “Only on this phone” to always process locally.')}
+                                </Text>
 
-                            {!choices ? (
-                                <ActivityIndicator style={{ marginVertical: spacing.xl }} color={colors.primary} />
-                            ) : (
-                                <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: spacing.s }}>
-                                    <Text style={styles.section}>{t('settings.models.speech', 'Speech to text')}</Text>
-                                    {choices.speech.map((c) => renderRow('speech', c))}
-                                    {choices.ai.length > 0 && (
-                                        <>
-                                            <Text style={styles.section}>{t('settings.models.ai', 'AI: voice requests, editing, chat')}</Text>
-                                            {!choices.ai.some((choice) => choice.current) && (
-                                                <TouchableOpacity
-                                                    style={[styles.row, aiKey === null && styles.rowSelected]}
-                                                    onPress={() => setAiKey(null)}
-                                                    accessibilityRole="radio"
-                                                    accessibilityState={{ selected: aiKey === null }}
-                                                >
-                                                    <MaterialIcons name={aiKey === null ? 'radio-button-checked' : 'radio-button-unchecked'} size={22} color={aiKey === null ? colors.primary : colors.textTertiary} />
-                                                    <View style={styles.rowText}>
-                                                        <Text style={styles.rowTitle}>{t('settings.models.speechOnly', 'Speech only')}</Text>
-                                                        <Text style={styles.rowMeta}>{t('settings.models.speechOnlyHint', 'Skip the AI download. Cloud AI is a separate choice when online.')}</Text>
-                                                    </View>
-                                                </TouchableOpacity>
-                                            )}
-                                            {choices.ai.map((c) => renderRow('ai', c))}
-                                            {!!aiKey && !modelUnderstandsRequests(aiKey) && (
-                                                <Text style={styles.hint}>
-                                                    {t('settings.models.fastNoRequests', 'Without internet, Fast does not take voice requests: recordings stay plain text. Balanced understands them.')}
-                                                </Text>
-                                            )}
-                                        </>
-                                    )}
-
-                                    {heavy && (
-                                        <View style={styles.note}>
-                                            <MaterialIcons name="speed" size={20} color={colors.warning} />
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.noteTitle}>{t('settings.models.heavyTitle', 'Heavy for this phone')}</Text>
-                                                <Text style={styles.noteText}>
-                                                    {privateMode
-                                                        ? t('settings.models.heavyPrivate', 'It will work, but slower and with more battery. Vaulto cloud is faster and more accurate, and your notes stay encrypted.')
-                                                        : t('settings.models.heavy', 'It will work without internet, but slower and with more battery. Online, Vaulto cloud is used anyway.')}
-                                                </Text>
-                                                {privateMode && (
-                                                    <TouchableOpacity onPress={() => { onClose(); onUseCloud(); }} accessibilityRole="button" hitSlop={8}>
-                                                        <Text style={styles.noteAction}>{t('settings.models.useCloud', 'Use Vaulto cloud')}</Text>
+                                {!choices ? (
+                                    loadFailed ? (
+                                        <View style={styles.loadError}>
+                                            <Text style={styles.hint}>{t('settings.models.loadFailed', 'Could not check the models. Please try again.')}</Text>
+                                            <TouchableOpacity onPress={() => setReload((value) => value + 1)} accessibilityRole="button" style={styles.retryButton}>
+                                                <Text style={styles.noteAction}>{t('voice.retry', 'Retry')}</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : <ActivityIndicator style={{ marginVertical: spacing.xl }} color={colors.primary} />
+                                ) : (
+                                    <>
+                                        <Text style={styles.section}>{t('settings.models.speech', 'Speech to text')}</Text>
+                                        {choices.speech.map((c) => renderRow('speech', c))}
+                                        {choices.ai.length > 0 && (
+                                            <>
+                                                <Text style={styles.section}>{t('settings.models.ai', 'AI: voice requests, editing, chat')}</Text>
+                                                {!choices.ai.some((choice) => choice.current) && (
+                                                    <TouchableOpacity
+                                                        style={[styles.row, aiKey === null && styles.rowSelected]}
+                                                        onPress={() => setAiKey(null)}
+                                                        accessibilityRole="radio"
+                                                        accessibilityState={{ selected: aiKey === null }}
+                                                    >
+                                                        <MaterialIcons name={aiKey === null ? 'radio-button-checked' : 'radio-button-unchecked'} size={22} color={aiKey === null ? colors.primary : colors.textTertiary} />
+                                                        <View style={styles.rowText}>
+                                                            <Text style={styles.rowTitle}>{t('settings.models.speechOnly', 'Speech only')}</Text>
+                                                            <Text style={styles.rowMeta}>{t('settings.models.speechOnlyHint', 'Skip the AI download. Cloud AI is a separate choice when online.')}</Text>
+                                                        </View>
                                                     </TouchableOpacity>
                                                 )}
+                                                {choices.ai.map((c) => renderRow('ai', c))}
+                                                {!!aiKey && !modelUnderstandsRequests(aiKey) && (
+                                                    <>
+                                                        <Text style={styles.hint}>
+                                                            {t('settings.models.fastQualityHint', 'The small AI model can miss details or get facts wrong. Check text improvements; consider the cloud for complex notes.')}
+                                                        </Text>
+                                                        <Text style={styles.hint}>
+                                                            {t('settings.models.fastNoRequests', 'Without internet, Fast does not take voice requests: recordings stay plain text. Balanced understands them.')}
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {heavy && (
+                                            <View style={styles.note}>
+                                                <MaterialIcons name="speed" size={20} color={colors.warning} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.noteTitle}>{t('settings.models.heavyTitle', 'Heavy for this phone')}</Text>
+                                                    <Text style={styles.noteText}>
+                                                        {privateMode
+                                                            ? t('settings.models.heavyPrivate', 'It will work, but slower and with more battery. Vaulto cloud is faster and more accurate, and your notes stay encrypted.')
+                                                            : t('settings.models.heavy', 'It will work without internet, but slower and with more battery. Online, Vaulto cloud is used anyway.')}
+                                                    </Text>
+                                                    {privateMode && (
+                                                        <TouchableOpacity onPress={() => { onClose(); onUseCloud(); }} accessibilityRole="button" hitSlop={8}>
+                                                            <Text style={styles.noteAction}>{t('settings.models.useCloud', 'Use Vaulto cloud')}</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
                                             </View>
-                                        </View>
-                                    )}
-                                </ScrollView>
-                            )}
+                                        )}
+                                    </>
+                                )}
+                            </ScrollView>
 
                             <TouchableOpacity
                                 style={[styles.applyButton, (!plan || unchanged) && styles.applyButtonQuiet]}
-                                disabled={!unchanged && !plan}
+                                disabled={!loadFailed && !unchanged && !plan}
                                 onPress={() => {
                                     if (unchanged || !plan) { onClose(); return; }
                                     onClose();
@@ -198,7 +224,7 @@ export const ModelPickerSheet = ({ visible, privateMode, onClose, onApply, onUse
                                 accessibilityRole="button"
                             >
                                 <Text style={[styles.applyText, (!plan || unchanged) && styles.applyTextQuiet]}>
-                                    {unchanged ? t('common.done', 'Done') : applyLabel}
+                                    {loadFailed ? t('a11y.close', 'Close') : unchanged ? t('common.done', 'Done') : applyLabel}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -230,25 +256,33 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: spacing.m,
+        gap: spacing.s,
     },
     title: {
+        flex: 1,
+        flexShrink: 1,
         fontSize: 18,
         fontWeight: '700',
         color: colors.text,
     },
     closeButton: {
         padding: spacing.xs,
+        minWidth: 48,
+        minHeight: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     subtitle: {
         fontSize: 14,
         lineHeight: 20,
         color: colors.textSecondary,
-        paddingHorizontal: spacing.m,
+        paddingHorizontal: spacing.s,
         marginTop: spacing.xs,
         marginBottom: spacing.s,
     },
     list: {
         paddingHorizontal: spacing.s,
+        flexShrink: 1,
     },
     section: {
         fontSize: 13,
@@ -276,6 +310,7 @@ const styles = createStyles(() => ({
     },
     rowText: {
         flex: 1,
+        minWidth: 0,
     },
     rowTop: {
         flexDirection: 'row',
@@ -284,6 +319,7 @@ const styles = createStyles(() => ({
         gap: spacing.xs,
     },
     rowTitle: {
+        flexShrink: 1,
         fontSize: 16,
         fontWeight: '600',
         color: colors.text,
@@ -294,6 +330,7 @@ const styles = createStyles(() => ({
         marginTop: 2,
     },
     badge: {
+        maxWidth: '100%',
         backgroundColor: colors.success + '22',
         borderRadius: 8,
         paddingHorizontal: 6,
@@ -343,6 +380,7 @@ const styles = createStyles(() => ({
         backgroundColor: colors.primary,
         borderRadius: 14,
         paddingVertical: 14,
+        paddingHorizontal: spacing.m,
         alignItems: 'center',
     },
     applyButtonQuiet: {
@@ -352,8 +390,17 @@ const styles = createStyles(() => ({
         fontSize: 16,
         fontWeight: '600',
         color: colors.onPrimary,
+        textAlign: 'center',
     },
     applyTextQuiet: {
         color: colors.text,
+    },
+    loadError: {
+        paddingVertical: spacing.l,
+    },
+    retryButton: {
+        minHeight: 48,
+        paddingHorizontal: spacing.s,
+        justifyContent: 'center',
     },
 }));

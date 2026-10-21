@@ -330,25 +330,25 @@
       "private": "仅在本机",
       "privateDesc": "即使联网，语音和 AI 也不会离开手机",
       "privateVoiceDesc": "即使联网，语音也不会离开手机",
-      "offlineMode": "离线模式",
+      "offlineMode": "离线使用",
       "offlineHintAll": "语音和 AI 直接在手机上运行，无需网络 · {{size}}",
       "offlineReadyAll": "已就绪 · 语音和 AI 无需网络",
       "offlineReadySpeech": "已就绪 · 语音识别无需网络",
       "offlineAIMissing": "语音已可离线使用。点按添加 AI（{{size}}）",
       "offlineNoSpace": "手机可用空间不足",
       "offlineNoSpaceTitle": "空间不足",
-      "offlineConfirmTitle": "下载离线模式？",
+      "offlineConfirmTitle": "下载模型？",
       "offlineConfirmDesc": "一次下载 {{size}} 用于离线处理。除非开启“仅在此手机上”，联网时仍使用云端。",
-      "offlineModeOffTitle": "关闭离线模式？",
+      "offlineModeOffTitle": "删除已下载的模型？",
       "offlineModeOffDesc": "模型将从手机删除并释放 {{size}}。没有网络时录音会被保存，恢复联网后转成文字。",
-      "routingHint": "联网时使用所选云服务。离线模型为可选项。云端处理会将所选音频或文本发送给服务。",
+      "routingHint": "有网络时使用云端，离线时使用已下载的模型，自动切换。云端处理会将所选音频或文本发送给服务。",
       "speechFirst": "语音识别可离线使用。本地 AI 为可选项，在内存较少的手机上可能较慢。",
       "offlineHintSpeech": "离线语音识别 · {{size}}"
     },
     "models": {
       "row": "模型",
       "title": "本机模型",
-      "subtitle": "用于离线工作的模型。除非开启“仅在此手机上”，联网时使用所选云服务。",
+      "subtitle": "已下载的模型可离线使用。网络恢复后，新请求会再次使用云端。如需始终在本机处理，请开启“仅在此手机上”。",
       "subtitlePrivate": "语音和 AI 仅在本机运行。",
       "speech": "语音转文字",
       "ai": "AI：语音指令、编辑、对话",
@@ -367,7 +367,9 @@
       "useCloud": "使用 Vaulto 云端",
       "fastNoRequests": "无网络时，“快速”不执行语音指令：录音保持为普通文字。“均衡”可以理解指令。",
       "speechOnly": "仅语音识别",
-      "speechOnlyHint": "不下载 AI。联网时可另行选择云端 AI。"
+      "speechOnlyHint": "不下载 AI。联网时可另行选择云端 AI。",
+      "fastQualityHint": "小型AI模型可能遗漏细节或弄错事实。请检查文本优化结果；复杂笔记建议使用云端。",
+      "loadFailed": "无法检查模型，请重试。"
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "录音已保存。请在录音列表中重试转写。",
     "transcribingLocal": "正在此手机上转写…",
     "slowOnDevice": "此录音仍在手机上处理。今后的录音在联网时使用云端处理可能更快。",
-    "processingSeconds": "{{seconds}} 秒"
+    "processingSeconds": "{{seconds}} 秒",
+    "transcribingCloud": "正在云端转写…",
+    "privateModelMissing": "已开启仅在本机处理，但语音识别模型不可用。录音已保存在设备上。请下载模型以转写文字。"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",

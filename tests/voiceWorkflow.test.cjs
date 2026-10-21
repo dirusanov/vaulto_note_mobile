@@ -63,7 +63,8 @@ test('failed persistence rejects instead of promising a durable retry', async ()
   await assert.rejects(store.restart().enqueuePendingTranscription('a', { noteId: 'n', recordingId: 'r', variantId: 'original' }), /storage full/);
   assert.equal((await store.restart().getPendingTranscriptions('a', 'n')).length, 0);
 });
-function transcription({ downloaded = false, offline = false, privateMode = false, limited = false } = {}) {
+function transcription(options = {}) {
+  const state = { downloaded: false, offline: false, privateMode: false, limited: false, networkFailure: false, status: 200, provider: 'vaulto_ai', ...options };
   const calls = { cloud: 0, local: 0, limit: 0, keys: [] };
   const imports = {
     axios: { isAxiosError: () => false },
@@ -71,24 +72,34 @@ function transcription({ downloaded = false, offline = false, privateMode = fals
     'expo-file-system': { File: class File {} },
     'react-native': { Platform: { OS: 'android' } },
     '../utils/env': { API_URL: 'https://qa.invalid' },
-    '../utils/storage': { storage: { getToken: async () => 'synthetic-token' }, getAIProvider: async () => 'vaulto_ai', getOnDeviceTranscription: async () => privateMode, getTranscriptionLanguage: async () => 'auto' },
+    '../utils/storage': { storage: { getToken: async () => 'synthetic-token' }, getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getTranscriptionLanguage: async () => 'auto', getOpenAIApiKey: async () => 'synthetic-key', getOpenAIBaseUrl: async () => 'https://qa.invalid' },
     '../utils/featureFlags': { LOCAL_WHISPER_ENABLED: true },
-    '../utils/openaiCompat': {}, '../utils/richContent': {},
+    '../utils/openaiCompat': { buildOpenAICompatibleUrl: (base, route) => base + route }, '../utils/richContent': {},
     '../utils/uuid': { generateUUID: async () => 'qa-request' },
     '../utils/authEvents': {}, '../api/tokenRefresh': {}, '../utils/deviceIdentity': {},
-    '../utils/connectivity': { isDeviceOffline: async () => offline },
+    '../utils/connectivity': { isDeviceOffline: async () => state.offline },
     '../utils/limitEvents': { onLimitReached: { emit: () => { calls.limit++; } } },
     './LocalWhisperService': {
-      getLocalWhisperModelStatus: async () => ({ isDownloaded: downloaded }),
+      getLocalWhisperModelStatus: async () => {
+        if (state.modelStatusError) throw Error('Model storage is unavailable');
+        return { isDownloaded: state.downloaded };
+      },
       prepareAudioForLocalWhisper: async (uri) => uri,
       transcribeWithLocalWhisper: async () => { calls.local++; return 'Local transcript'; },
     },
   };
   const service = load('src/services/TranscriptionService.ts', imports, {
+    Error, TypeError,
     FormData: class { append() {} },
-    fetch: async (_url, init) => { calls.cloud++; calls.keys.push(init.headers['Idempotency-Key']); return { status: limited ? 403 : 200, ok: !limited, json: async () => ({ text: 'Cloud transcript' }) }; },
+    fetch: async (_url, init) => {
+      calls.cloud++; calls.keys.push(init.headers['Idempotency-Key']);
+      if (state.networkFailure === 'timeout') { const error = new Error('Aborted'); error.name = 'AbortError'; throw error; }
+      if (state.networkFailure) throw new TypeError('Network request failed');
+      const status = state.limited ? 403 : state.status;
+      return { status, ok: status === 200, headers: { get: () => 'application/json' }, json: async () => ({ text: 'Cloud transcript', detail: 'Rejected request' }) };
+    },
   });
-  return { service, calls };
+  return { service, calls, state };
 }
 test('protected audio never falls back to the cloud, including when no model is available', async () => {
   for (const downloaded of [false, true]) {
@@ -99,6 +110,38 @@ test('protected audio never falls back to the cloud, including when no model is 
     assert.equal(calls.local, downloaded ? 1 : 0);
     if (!downloaded) assert.equal(result.error, service.ON_DEVICE_MODEL_REQUIRED);
   }
+});
+test('phone-only preference never uploads audio when the downloaded model becomes unavailable', async () => {
+  for (const provider of ['vaulto_ai', 'openai', 'local']) {
+    for (const unavailable of [{ downloaded: false }, { downloaded: true, modelStatusError: true }]) {
+      const { service, calls } = transcription({ privateMode: true, provider, ...unavailable });
+      const modes = [];
+      const result = await service.transcribeAudio('file://fictional.m4a', undefined, { onMode: mode => modes.push(mode) });
+      assert.equal(calls.cloud, 0, `Privacy preference must survive a missing model (${provider})`);
+      assert.equal(calls.local, 0);
+      assert.equal(result.success, false);
+      assert.equal(result.error, service.ON_DEVICE_MODEL_REQUIRED);
+      assert.deepEqual(modes, ['device']);
+    }
+  }
+});
+test('phone-only voice never selects the cloud command agent, even with only speech installed', async () => {
+  const state = { privateMode: false, offline: false, ready: true, model: 'qwen3.5-2b' };
+  const { resolveVoiceAgentRoute } = load('src/services/voiceAgent.ts', {
+    '../utils/storage': { getAIProvider: async () => 'vaulto_ai', getOnDeviceTranscription: async () => state.privateMode },
+    '../utils/connectivity': { isDeviceOffline: async () => state.offline },
+    './effectiveProvider': { isLocalLLMReady: async () => state.ready },
+    './LocalLLMService': { getSelectedLocalLLMModel: async () => ({ key: state.model }) },
+  });
+  assert.equal(await resolveVoiceAgentRoute({ signedIn: true }), 'cloud');
+  state.privateMode = true;
+  assert.equal(await resolveVoiceAgentRoute({ signedIn: true }), 'device');
+  state.model = 'qwen3.5-0.8b';
+  assert.equal(await resolveVoiceAgentRoute({ signedIn: true }), null);
+  state.ready = false;
+  assert.equal(await resolveVoiceAgentRoute({ signedIn: true }), null);
+  state.privateMode = false;
+  assert.equal(await resolveVoiceAgentRoute({ signedIn: true, protectedNote: true }), null);
 });
 test('a downloaded model stays a backup online, activates offline or by choice, and handles exhausted cloud minutes', async () => {
   for (const options of [ {}, { offline: true }, { privateMode: true }, { limited: true } ]) {
@@ -113,6 +156,74 @@ test('a downloaded model stays a backup online, activates offline or by choice, 
     assert.deepEqual(calls.keys, directLocal ? [] : ['recording-42']);
     assert.deepEqual(modes, directLocal ? ['device'] : options.limited ? ['cloud', 'device'] : ['cloud']);
   }
+});
+
+test('online → offline → online switches each new recording automatically without sticking to local processing', async () => {
+  const { service, calls, state } = transcription({ downloaded: true });
+  const modes = [];
+  for (const offline of [false, true, false]) {
+    state.offline = offline;
+    const result = await service.transcribeAudio('file://fictional.m4a', undefined, { onMode: mode => modes.push(mode) });
+    assert.equal(result.success, true);
+  }
+  assert.deepEqual(modes, ['cloud', 'device', 'cloud']);
+  assert.equal(calls.cloud, 2); assert.equal(calls.local, 1);
+  state.privateMode = true;
+  await service.transcribeAudio('file://fictional.m4a');
+  assert.equal(calls.cloud, 2); assert.equal(calls.local, 2);
+});
+
+test('a transport failure after the online check uses the downloaded model; reconnection restores cloud', async () => {
+  const { service, calls, state } = transcription({ downloaded: true, networkFailure: true });
+  const modes = [];
+  let result = await service.transcribeAudio('file://fictional.m4a', undefined, { onMode: mode => modes.push(mode) });
+  assert.equal(result.success, true); assert.equal(result.text, 'Local transcript');
+  assert.deepEqual(modes, ['cloud', 'device']);
+  state.networkFailure = false;
+  result = await service.transcribeAudio('file://fictional.m4a');
+  assert.equal(result.text, 'Cloud transcript');
+  assert.equal(calls.local, 1); assert.equal(calls.cloud, 2);
+});
+
+test('cloud timeouts and custom-service transport failures also fall back to downloaded speech', async () => {
+  for (const options of [{ networkFailure: 'timeout' }, { provider: 'openai', networkFailure: true }]) {
+    const { service, calls } = transcription({ downloaded: true, ...options });
+    const result = await service.transcribeAudio('file://fictional.m4a');
+    assert.equal(result.success, true); assert.equal(result.text, 'Local transcript');
+    assert.equal(calls.cloud, 1); assert.equal(calls.local, 1);
+  }
+});
+
+test('missing offline models and rejected HTTP requests are not disguised as successful local transcription', async () => {
+  const missing = transcription({ networkFailure: true });
+  const failed = await missing.service.transcribeAudio('file://fictional.m4a');
+  assert.equal(failed.success, false); assert.equal(failed.errorKind, 'network'); assert.equal(missing.calls.local, 0);
+  for (const status of [400, 422, 500]) {
+    const { service, calls } = transcription({ downloaded: true, status });
+    assert.equal((await service.transcribeAudio('file://fictional.m4a')).success, false);
+    assert.equal(calls.local, 0);
+  }
+});
+
+test('text improvements return to the chosen cloud after reconnecting and respect an explicit local choice', async () => {
+  const state = { provider: 'vaulto_ai', offline: false, downloaded: true, privateMode: false };
+  const { getEffectiveAIProvider } = load('src/services/effectiveProvider.ts', {
+    '../utils/storage': { getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode },
+    '../utils/connectivity': { isDeviceOffline: async () => state.offline },
+    '../utils/featureFlags': { LOCAL_MODELS_ENABLED: true },
+    './LocalLLMService': { isLocalLLMRuntimeAvailable: () => true, getLocalLLMModelStatus: async () => ({ isDownloaded: state.downloaded }) },
+  });
+  for (const offline of [false, true, false]) {
+    state.offline = offline;
+    assert.equal(await getEffectiveAIProvider(), offline ? 'local' : 'vaulto_ai');
+  }
+  state.provider = 'local';
+  assert.equal(await getEffectiveAIProvider(), 'local');
+  state.provider = 'vaulto_ai'; state.privateMode = true;
+  assert.equal(await getEffectiveAIProvider(), 'local');
+  state.privateMode = false;
+  state.provider = 'vaulto_ai'; state.offline = true; state.downloaded = false;
+  assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
 });
 
 

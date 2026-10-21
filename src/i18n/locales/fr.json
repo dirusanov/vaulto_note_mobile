@@ -330,25 +330,25 @@
       "private": "Uniquement sur ce téléphone",
       "privateDesc": "La voix et l’IA ne quittent jamais le téléphone, même en ligne",
       "privateVoiceDesc": "La voix ne quitte jamais le téléphone, même en ligne",
-      "offlineMode": "Mode hors ligne",
+      "offlineMode": "Utiliser hors ligne",
       "offlineHintAll": "Voix et IA sur le téléphone, sans internet · {{size}}",
       "offlineReadyAll": "Prêt · voix et IA fonctionnent sans internet",
       "offlineReadySpeech": "Prêt · la voix fonctionne sans internet",
       "offlineAIMissing": "La voix fonctionne hors ligne. Touchez pour ajouter l’IA ({{size}})",
       "offlineNoSpace": "Pas assez d’espace libre sur ce téléphone",
       "offlineNoSpaceTitle": "Espace insuffisant",
-      "offlineConfirmTitle": "Télécharger le mode hors ligne ?",
+      "offlineConfirmTitle": "Télécharger les modèles ?",
       "offlineConfirmDesc": "Téléchargez {{size}} une fois pour travailler hors ligne. Avec internet, le cloud reste utilisé sauf si « Sur ce téléphone uniquement » est activé.",
-      "offlineModeOffTitle": "Désactiver le mode hors ligne ?",
+      "offlineModeOffTitle": "Supprimer les modèles téléchargés ?",
       "offlineModeOffDesc": "Les modèles sont supprimés du téléphone et libèrent {{size}}. Sans internet, les enregistrements sont conservés et transcrits au retour du réseau.",
-      "routingHint": "En ligne, le service cloud choisi est utilisé. Les modèles hors ligne sont facultatifs. Le traitement cloud envoie le texte ou l’audio sélectionné au service.",
+      "routingHint": "Avec internet : le cloud. Hors ligne : les modèles téléchargés. Le changement est automatique. Le traitement cloud envoie le texte ou l’audio sélectionné au service.",
       "speechFirst": "La reconnaissance vocale fonctionne sans internet. L’IA locale est facultative et peut être lente sur un téléphone avec peu de mémoire.",
       "offlineHintSpeech": "Reconnaissance vocale sans internet · {{size}}"
     },
     "models": {
       "row": "Modèles",
       "title": "Modèles sur ce téléphone",
-      "subtitle": "Modèles pour travailler hors ligne. En ligne, le cloud choisi est utilisé sauf si « Sur ce téléphone uniquement » est activé.",
+      "subtitle": "Les modèles téléchargés fonctionnent hors ligne. Au retour de la connexion, les nouvelles demandes utilisent à nouveau le cloud. Activez « Uniquement sur ce téléphone » pour toujours traiter localement.",
       "subtitlePrivate": "La voix et l’IA fonctionnent uniquement sur ce téléphone.",
       "speech": "Voix en texte",
       "ai": "IA : demandes vocales, retouches, chat",
@@ -367,7 +367,9 @@
       "useCloud": "Utiliser le cloud Vaulto",
       "fastNoRequests": "Sans internet, Rapide ne traite pas les demandes vocales : les enregistrements restent du texte. Équilibré les comprend.",
       "speechOnly": "Voix uniquement",
-      "speechOnlyHint": "Sans télécharger d’IA. L’IA cloud peut être choisie séparément avec internet."
+      "speechOnlyHint": "Sans télécharger d’IA. L’IA cloud peut être choisie séparément avec internet.",
+      "fastQualityHint": "Le petit modèle d’IA peut omettre des détails ou se tromper sur les faits. Vérifiez les améliorations ; privilégiez le cloud pour les notes complexes.",
+      "loadFailed": "Impossible de vérifier les modèles. Réessayez."
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "Enregistrement sauvegardé. Relancez la transcription depuis la liste des enregistrements.",
     "transcribingLocal": "Transcription sur ce téléphone…",
     "slowOnDevice": "Cet enregistrement est encore traité sur le téléphone. Pour les suivants, le cloud peut être plus rapide avec internet.",
-    "processingSeconds": "{{seconds}} s"
+    "processingSeconds": "{{seconds}} s",
+    "transcribingCloud": "Transcription dans le cloud…",
+    "privateModelMissing": "Le traitement uniquement sur ce téléphone est activé, mais le modèle vocal est indisponible. L’enregistrement est conservé sur l’appareil. Téléchargez le modèle pour le transcrire."
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",

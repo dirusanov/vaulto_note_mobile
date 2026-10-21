@@ -41,6 +41,8 @@ export interface TranscriptionResult {
     text: string;
     success: boolean;
     error?: string;
+    /** A transport failure can use a downloaded speech model without changing settings. */
+    errorKind?: 'network';
 }
 
 /** How the returned content relates to the note it was built from. */
@@ -441,10 +443,6 @@ const formatAgentRequestError = (error: unknown): string => {
 };
 
 /**
- * Recordings are transcribed by the downloaded Whisper model; audio never leaves the
- * device. Same rule as the Settings switch: without the model file it is off.
- */
-/**
  * Whether the next transcription runs on this phone: the user turned it on, or
  * there is no internet and the speech model is already downloaded (so a
  * recording made offline is still transcribed instead of waiting for a server).
@@ -476,8 +474,9 @@ export async function transcribeAudio(
         options.onMode?.('device');
         return transcribeViaLocalWhisper(audioUri, selectedLanguage);
     };
-    if (options.onDeviceOnly) {
-        // Protected notes: the audio never leaves the device, whatever the settings.
+    if (options.onDeviceOnly || await getOnDeviceTranscription()) {
+        // Privacy is a routing restriction, independent of model availability.
+        // A missing model must ask for a download, never turn into an upload.
         const status = await getLocalWhisperModelStatus().catch(() => null);
         if (!LOCAL_WHISPER_ENABLED || Platform.OS === 'web' || !status?.isDownloaded) {
             options.onMode?.('device');
@@ -491,12 +490,12 @@ export async function transcribeAudio(
     const provider = await getAIProvider();
     if (provider === 'vaulto_ai') {
         options.onMode?.('cloud');
-        // Out of cloud minutes with the speech model on the phone: transcribe here
-        // instead of stopping at the limit sheet. The sheet shows only without one.
+        // A downloaded model handles exhausted minutes or a lost connection.
+        // Keep the cloud preference for the next request after reconnection.
         const localReady = LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
             && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
         const cloud = await transcribeViaBackend(audioUri, selectedLanguage, { announceLimit: !localReady, idempotencyKey: options.idempotencyKey });
-        if (localReady && cloud.error === USAGE_LIMIT_REACHED) {
+        if (localReady && (cloud.error === USAGE_LIMIT_REACHED || cloud.errorKind === 'network')) {
             return local();
         }
         return cloud;
@@ -576,6 +575,14 @@ export async function transcribeAudio(
         } catch (error) {
             lastError = error as Error;
             console.error(`Transcription attempt ${attempt + 1} failed:`, error);
+
+            // Connectivity may disappear after the initial check (or a Wi-Fi
+            // network may have no internet). Keep the stored cloud choice so
+            // the next recording uses it again when the connection returns.
+            if (isNetworkRequestError(error) && LOCAL_WHISPER_ENABLED && Platform.OS !== 'web'
+                && (await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded) {
+                return local();
+            }
 
             // Wait before retrying (exponential backoff)
             if (attempt < MAX_RETRIES - 1) {
@@ -707,7 +714,7 @@ async function transcribeViaBackend(
             : error instanceof Error
                 ? error.message
                 : 'Failed to get transcription from server';
-        return { text: '', success: false, error: message };
+        return { text: '', success: false, error: message, ...(isNetworkRequestError(error) ? { errorKind: 'network' as const } : {}) };
     }
 }
 

@@ -21,7 +21,7 @@ import { useNotesContext } from '../contexts/NotesContext';
 import { answerFromNotes, isOnDeviceAI } from '../services/AIService';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { deriveAutoTitleFromPlainText, richContentToPlainText } from '../utils/richContent';
+import { deriveAutoTitleFromPlainText, richContentToAgentMarkdown, richContentToPlainText } from '../utils/richContent';
 import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
 import { getPrivateAIAllowed } from '../utils/storage';
 import { useAuth } from '../hooks/useAuth';
@@ -68,11 +68,14 @@ export const AskNotesScreen = () => {
         .filter((note: any) => !note.deleted && !note.pending_delete && note.privacy !== 'hidden')
         .map((note: any) => {
             const active = (note.improvements || []).find((imp: any) => imp.is_active && !imp.deleted);
-            const text = richContentToPlainText(active?.content ?? note.content ?? '');
+            const content = active?.content ?? note.content ?? '';
+            // Markdown keeps checklist state ("- [x]"); plain text would make every
+            // task look open to "Which tasks are still open?".
+            const text = richContentToAgentMarkdown(content);
             // Same title the note card shows.
             const title = stripStoredTitleMarkdown(note.title || '').trim()
                 || stripStoredTitleMarkdown(active?.title || '').trim()
-                || deriveAutoTitleFromPlainText(text);
+                || deriveAutoTitleFromPlainText(richContentToPlainText(content));
             // Protected notes never reach a cloud AI; legacy local-only ones only with consent.
             const cloudAllowed = !note.is_protected && (privateAllowed || note.storage_scope !== 'local_only');
             return { id: note.id, title, text, updatedAt: note.updated_at, cloudAllowed };

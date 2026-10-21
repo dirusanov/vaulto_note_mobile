@@ -1,4 +1,4 @@
-import { getAIProvider } from '../utils/storage';
+import { getAIProvider, getOnDeviceTranscription } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import { isLocalLLMReady } from './effectiveProvider';
 import { generateWithLocalLLM, getSelectedLocalLLMModel } from './LocalLLMService';
@@ -34,7 +34,7 @@ export const resolveVoiceAgentRoute = async (options: {
         && modelUnderstandsRequests((await getSelectedLocalLLMModel().catch(() => null))?.key ?? '');
     // Protected notes never leave the phone.
     if (options.protectedNote) return deviceReady ? 'device' : null;
-    if (provider === 'local' || provider === 'local_llm') return deviceReady ? 'device' : null;
+    if (provider === 'local' || provider === 'local_llm' || await getOnDeviceTranscription()) return deviceReady ? 'device' : null;
     // Voice-only privacy (no AI model) and Custom AI have no agent.
     if (provider === 'local_whisper' || provider === 'openai') return null;
     if (options.signedIn && !(await isDeviceOffline())) return 'cloud';

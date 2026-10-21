@@ -96,6 +96,7 @@ import {
     setOnDeviceOfferShown,
     incrementRecordingsCount,
     setOnDeviceTranscription,
+    getOnDeviceTranscription,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -333,6 +334,16 @@ const extractChecklistItemTexts = (content: string): string[] => {
             return match ? normalizeChecklistCommandText(match[1] || '') : '';
         })
         .filter(Boolean);
+};
+
+/** Checklist items present before a change and gone after it, as written, for the confirmation. */
+const removedChecklistItems = (before: string, after: string): string[] => {
+    const remaining = new Set(extractChecklistItemTexts(after));
+    const comparable = isRichHtmlContent(before) ? richContentToAgentMarkdown(before) : before;
+    return (comparable || '')
+        .split(/\r?\n/)
+        .map((line) => (line.match(CHECKLIST_ITEM_LINE_REGEX)?.[1] || '').trim())
+        .filter((text) => text && !remaining.has(normalizeChecklistCommandText(text)));
 };
 
 const transcriptDirectlyMentionsChecklistItem = (content: string, transcript: string): boolean => {
@@ -1591,12 +1602,18 @@ export const NoteEditScreen = () => {
      * gated here. The backend flags them; nothing may be written until the user agrees.
      */
     const confirmAgentChange = useCallback(
-        async (kind?: string, serverMessage?: string | null): Promise<boolean> => {
+        async (kind?: string, serverMessage?: string | null, removedItems: string[] = []): Promise<boolean> => {
             const localizedKey = kind ? AGENT_CONFIRMATION_KEYS[kind] : undefined;
-            const question =
+            const baseQuestion =
                 (localizedKey ? t(localizedKey) : '') ||
                 (serverMessage || '').trim() ||
                 t('edit.agent.confirmTitle');
+            // Name what goes away, so the user can check it before applying.
+            const shownItems = removedItems.slice(0, 8).map((item) => `• ${item}`);
+            if (removedItems.length > shownItems.length) shownItems.push('…');
+            const question = shownItems.length > 0
+                ? `${baseQuestion}\n\n${shownItems.join('\n')}`
+                : baseQuestion;
 
             return await new Promise<boolean>((resolve) => {
                 Alert.alert(
@@ -1775,10 +1792,12 @@ export const NoteEditScreen = () => {
 
     offerOnDeviceTranscriptionRef.current = offerOnDeviceTranscription;
 
-    const promptOnDeviceModelForProtected = useCallback(() => {
+    const promptOnDeviceModelRequired = useCallback(() => {
         Alert.alert(
             t('edit.protected.modelTitle', 'Recording saved without text'),
-            t('edit.protected.modelDesc', 'Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.'),
+            isProtectedRef.current
+                ? t('edit.protected.modelDesc', 'Protected notes are transcribed only on the phone. Download the speech model once to get text from recordings.')
+                : t('voice.privateModelMissing', 'Phone-only processing is on, but the speech model is unavailable. Your recording is saved on this phone. Download the model to transcribe it.'),
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
@@ -4539,24 +4558,26 @@ export const NoteEditScreen = () => {
                                 updateHistory: false,
                             });
                             try {
-                                if (taskVariantId === 'original') {
-                                    await updateNote(localNoteIdRef.current, { title: explicitTitle });
+                                // The note keeps one title across its versions, so "rename the
+                                // note" renames the note whichever version the command came from.
+                                // A version's own title is never shown and is left alone.
+                                if (noteTitleSaveTimerRef.current) {
+                                    clearTimeout(noteTitleSaveTimerRef.current);
+                                    noteTitleSaveTimerRef.current = null;
+                                }
+                                noteTitleSavedByScreenRef.current = explicitTitle.trim();
+                                await updateNote(localNoteIdRef.current, { title: explicitTitle });
+                                setNoteTitle(explicitTitle);
+                                noteTitleRef.current = explicitTitle;
+                                lastSavedTitle.current = explicitTitle;
+                                titleLockRef.current = true;
+                                if (taskVariantId === 'original' || activeVariantIdRef.current === 'original') {
                                     setTitle(explicitTitle);
                                     currentTitleRef.current = explicitTitle;
-                                    lastSavedTitle.current = explicitTitle;
-                                    titleLockRef.current = true;
-                                } else {
-                                    await updateImprovement(localNoteIdRef.current, taskVariantId, {
-                                        title: explicitTitle,
-                                    });
-                                    improvementTitleDraftsRef.current[taskVariantId] = explicitTitle;
-                                    improvementTitleSavedRef.current[taskVariantId] = explicitTitle;
-                                    if (activeVariantIdRef.current === taskVariantId) {
-                                        setTitle(explicitTitle);
-                                        currentTitleRef.current = explicitTitle;
-                                    }
                                 }
-                                updateHistoryImmediate(explicitTitle, commandBaseContent, taskVariantId);
+                                if (taskVariantId === 'original') {
+                                    updateHistoryImmediate(explicitTitle, commandBaseContent, taskVariantId);
+                                }
                             } catch (titleError) {
                                 console.error('[NoteEditScreen] Failed to apply explicit agent title', titleError);
                             }
@@ -4582,9 +4603,14 @@ export const NoteEditScreen = () => {
                             !!lastSavedTitle.current.trim() ||
                             !!(existingNote?.title || '').trim();
 
+                        // An untitled note also gets the title when the agent only reshapes the
+                        // same words (format, list): otherwise the list card shows the version's
+                        // title while the note header stays a placeholder.
+                        const keepsNoteMeaning =
+                            agentResult.mode === 'format' || agentResult.mode === 'todo' || agentResult.mode === 'list';
                         if (
                             taskVariantId === 'original' &&
-                            !hasApplicableInstruction &&
+                            (!hasApplicableInstruction || keepsNoteMeaning) &&
                             !titleLockRef.current &&
                             !hasStableTitle &&
                             suggestedTitle &&
@@ -4619,9 +4645,10 @@ export const NoteEditScreen = () => {
                                     contentAlreadyContainsStructuredListBlock(commandBaseContent, processedText);
                                 // A note created by voice already holds the raw dictation. When
                                 // that dictation is the whole note and the agent turns it into a
-                                // list, the list replaces it instead of repeating it underneath.
+                                // list or formats it, the result replaces it instead of repeating
+                                // it underneath.
                                 const noteIsOnlyThisDictation =
-                                    isListResult &&
+                                    (isListResult || agentResult.mode === 'format') &&
                                     !!originalText &&
                                     areTextsEquivalent(richContentToPlainText(commandBaseContent), originalText);
                                 newText = duplicatesExistingStructuredBlock
@@ -4633,10 +4660,13 @@ export const NoteEditScreen = () => {
 
                             if (newText !== null && !areTextsEquivalent(newText, commandBaseContent)) {
                                 // Destructive results must be confirmed before anything is written.
-                                if (agentResult.needsConfirmation) {
+                                // On the original nothing is destroyed: the result becomes a
+                                // separate version (below), so there is nothing to confirm.
+                                if (agentResult.needsConfirmation && taskVariantId !== 'original') {
                                     const approved = await confirmAgentChange(
                                         agentResult.confirmationKind,
-                                        agentResult.confirmationMessage
+                                        agentResult.confirmationMessage,
+                                        removedChecklistItems(commandBaseContent, newText),
                                     );
                                     if (!approved) {
                                         clearTranscribedInsertionExpectation();
@@ -5185,7 +5215,7 @@ export const NoteEditScreen = () => {
 
             await appendAudioEmbedToVariant(targetVariantId, savedPath, recording.duration);
 
-            const onDeviceTranscription = await isOnDeviceTranscriptionActive();
+            const onDeviceTranscription = await getOnDeviceTranscription() || await isOnDeviceTranscriptionActive();
             const protectedNote = isProtectedRef.current;
             setTranscribingOnDevice(onDeviceTranscription || protectedNote);
             // Server for accounts online, the phone model otherwise (protected notes
@@ -5254,7 +5284,7 @@ export const NoteEditScreen = () => {
                         ? await transcribeMeetingSegments(meetingParts, protectedNote, voiceId, meetingPartsEncrypted)
                         : await transcribeAudio(recording.uri, undefined, { onDeviceOnly: protectedNote, idempotencyKey: voiceId, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
                     if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
-                        promptOnDeviceModelForProtected();
+                        promptOnDeviceModelRequired();
                     }
                 }
             } catch (err) {
@@ -6164,7 +6194,7 @@ export const NoteEditScreen = () => {
             || voiceRecordings.find((rec) => rec.id === playingRecordingId)
             || voiceRecordings[0];
         if (!targetRecording) return false;
-        const onDeviceOnly = isProtectedRef.current;
+        const onDeviceOnly = isProtectedRef.current || await getOnDeviceTranscription();
         setTranscribingOnDevice(onDeviceOnly || await isOnDeviceTranscriptionActive());
         // Local speech does not need permission to send text to a cloud AI.
         if (!onDeviceOnly && !(await isOnDeviceTranscriptionActive()) && !(await requestPrivateAIConsent())) return false;
@@ -6181,13 +6211,16 @@ export const NoteEditScreen = () => {
                 : await transcribeAudio(sourceUri!, undefined, { onDeviceOnly, idempotencyKey: targetRecording.id, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
 
             if (!transcription.success || !transcription.text) {
-                if (!options.silent && transcription.error === ON_DEVICE_MODEL_REQUIRED) promptOnDeviceModelForProtected();
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 if (!options.silent) {
-                    showPrettyQuotaNotification(
-                        transcription.error,
-                        getErrorMessage(transcription.error, 'Check internet connection')
-                    );
+                    if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
+                        promptOnDeviceModelRequired();
+                    } else {
+                        showPrettyQuotaNotification(
+                            transcription.error,
+                            getErrorMessage(transcription.error, 'Check internet connection')
+                        );
+                    }
                 }
                 return false;
             }
@@ -7407,9 +7440,10 @@ export const NoteEditScreen = () => {
                         return;
                     }
                     if (whisperModalPurpose === 'protected') {
-                        // Opened for a protected recording: nothing to start.
+                        // Complete the saved recording that needed this model.
                         setWhisperModalPurpose('dictate');
                         showToast(t('edit.protected.modelReady', 'Speech model ready'));
+                        void retryPendingTranscriptionsRef.current?.();
                         return;
                     }
                     handleFormat('dictate'); // Auto-start after download

@@ -330,25 +330,25 @@
       "private": "この端末だけで",
       "privateDesc": "オンラインでも、音声とAIは端末の外に出ません",
       "privateVoiceDesc": "オンラインでも、音声は端末の外に出ません",
-      "offlineMode": "オフラインモード",
+      "offlineMode": "オフラインで使う",
       "offlineHintAll": "音声とAIを端末上で、ネット不要 · {{size}}",
       "offlineReadyAll": "準備完了 · 音声とAIがオフラインで動作",
       "offlineReadySpeech": "準備完了 · 音声認識がオフラインで動作",
       "offlineAIMissing": "音声はオフラインで使えます。タップしてAIを追加（{{size}}）",
       "offlineNoSpace": "端末の空き容量が足りません",
       "offlineNoSpaceTitle": "容量不足",
-      "offlineConfirmTitle": "オフラインモードをダウンロードしますか？",
+      "offlineConfirmTitle": "モデルをダウンロードしますか？",
       "offlineConfirmDesc": "オフライン用に{{size}}を一度ダウンロードします。「この端末のみ」がオフの場合、接続時はクラウドを使います。",
-      "offlineModeOffTitle": "オフラインモードをオフにしますか？",
+      "offlineModeOffTitle": "ダウンロード済みモデルを削除しますか？",
       "offlineModeOffDesc": "モデルが端末から削除され、{{size}} が空きます。オフライン時の録音は保存され、オンラインに戻ると文字になります。",
-      "routingHint": "接続時は選択したクラウドを使用します。オフラインモデルは任意です。クラウド処理では選択した音声やテキストをサービスに送信します。",
+      "routingHint": "オンラインではクラウド、オフラインではダウンロード済みモデルを使用し、自動で切り替わります。クラウド処理では選択した音声やテキストがサービスに送信されます。",
       "speechFirst": "音声認識はオフラインで使えます。端末上のAIは任意で、メモリが少ない端末では遅くなる場合があります。",
       "offlineHintSpeech": "オフライン音声認識 · {{size}}"
     },
     "models": {
       "row": "モデル",
       "title": "この端末のモデル",
-      "subtitle": "オフライン用モデルです。「この端末のみ」がオフの場合、接続時は選択したクラウドを使います。",
+      "subtitle": "ダウンロード済みモデルはオフラインで動作します。接続が戻ると、新しいリクエストは再びクラウドを使用します。常に端末内で処理するには「この端末のみ」を有効にしてください。",
       "subtitlePrivate": "音声と AI はこの端末だけで動作します。",
       "speech": "音声の文字起こし",
       "ai": "AI：音声での依頼・編集・チャット",
@@ -367,7 +367,9 @@
       "useCloud": "Vaulto クラウドを使う",
       "fastNoRequests": "オフラインでは「高速」は音声での依頼を実行せず、録音はそのまま文字になります。「バランス」は依頼を理解します。",
       "speechOnly": "音声認識のみ",
-      "speechOnlyHint": "AIはダウンロードしません。接続時のクラウドAIは別途選択できます。"
+      "speechOnlyHint": "AIはダウンロードしません。接続時のクラウドAIは別途選択できます。",
+      "fastQualityHint": "小型AIモデルは詳細を見落としたり、事実を誤ったりすることがあります。文章の改善結果を確認し、複雑なメモにはクラウドの利用を検討してください。",
+      "loadFailed": "モデルを確認できませんでした。もう一度お試しください。"
     }
   },
   "languages": {
@@ -697,7 +699,9 @@
     "retryManually": "録音を保存しました。録音一覧から文字起こしを再試行してください。",
     "transcribingLocal": "この端末で文字起こし中…",
     "slowOnDevice": "この録音は端末上で処理中です。次回は、接続時にクラウドを使うと速くなる場合があります。",
-    "processingSeconds": "{{seconds}} 秒"
+    "processingSeconds": "{{seconds}} 秒",
+    "transcribingCloud": "クラウドで文字起こし中…",
+    "privateModelMissing": "この端末のみでの処理が有効ですが、音声認識モデルが利用できません。録音は端末に保存されています。文字起こしするにはモデルをダウンロードしてください。"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",

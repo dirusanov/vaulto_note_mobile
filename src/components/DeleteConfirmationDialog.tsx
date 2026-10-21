@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Modal, Animated, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Animated, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -26,6 +27,10 @@ export const DeleteConfirmationDialog = ({
     onCancel,
 }: DeleteConfirmationDialogProps) => {
     const { t } = useTranslation();
+    const { width, fontScale } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+    const compact = width < 360;
+    const stackedButtons = compact || fontScale > 1.3;
 
     const scaleAnim = useRef(new Animated.Value(0.85)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -59,7 +64,7 @@ export const DeleteConfirmationDialog = ({
             onRequestClose={onCancel}
             statusBarTranslucent
         >
-            <View style={styles.overlay}>
+            <View style={[styles.overlay, { paddingTop: insets.top + spacing.m, paddingBottom: insets.bottom + spacing.m }]}>
                 <Animated.View
                     style={[
                         styles.dialogContainer,
@@ -69,7 +74,7 @@ export const DeleteConfirmationDialog = ({
                         },
                     ]}
                 >
-                    <View style={styles.dialog}>
+                    <ScrollView style={styles.scroll} contentContainerStyle={[styles.dialog, compact && styles.dialogCompact]} bounces={false}>
                         {/* Status Bar Indicator */}
                         <View style={styles.topAccent} />
 
@@ -86,29 +91,31 @@ export const DeleteConfirmationDialog = ({
                         </Text>
 
                         {/* Message */}
-                        <Text style={styles.message}>
+                        <Text style={[styles.message, compact && styles.messageCompact]}>
                             {message || t("aux.permanentActionDesc")}
                         </Text>
 
                         {/* Actions */}
-                        <View style={styles.buttonRow}>
+                        <View style={[styles.buttonRow, stackedButtons && styles.buttonColumn]}>
                             <TouchableOpacity
-                                style={[styles.btn, styles.btnCancel]}
+                                style={[styles.btn, styles.btnCancel, stackedButtons && styles.btnStacked]}
                                 onPress={onCancel}
                                 activeOpacity={0.7}
+                                accessibilityRole="button"
                             >
                                 <Text style={styles.btnCancelText}>{t("aux.keepIt", "Keep it")}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.btn, styles.btnDelete]}
+                                style={[styles.btn, styles.btnDelete, stackedButtons && styles.btnStacked]}
                                 onPress={onConfirm}
                                 activeOpacity={0.9}
+                                accessibilityRole="button"
                             >
                                 <Text style={styles.btnDeleteText}>{t("aux.deleteBtn", "Delete")}</Text>
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </ScrollView>
                 </Animated.View>
             </View>
         </Modal>
@@ -125,6 +132,21 @@ const styles = createStyles(() => ({
     dialogContainer: {
         width: '88%',
         maxWidth: 360,
+        maxHeight: '100%',
+        flexShrink: 1,
+        borderRadius: 32,
+        backgroundColor: colors.surface,
+        overflow: 'hidden',
+    },
+    scroll: {
+        flexGrow: 0,
+    },
+    dialogCompact: {
+        padding: spacing.l,
+    },
+    messageCompact: {
+        paddingHorizontal: 0,
+        marginBottom: spacing.l,
     },
     dialog: {
         backgroundColor: colors.surface,
@@ -190,12 +212,21 @@ const styles = createStyles(() => ({
         gap: spacing.m,
         width: '100%',
     },
+    buttonColumn: {
+        flexDirection: 'column',
+    },
     btn: {
         flex: 1,
-        height: 56,
+        minHeight: 56,
+        paddingVertical: 12,
+        paddingHorizontal: spacing.s,
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    btnStacked: {
+        flex: 0,
+        width: '100%',
     },
     btnCancel: {
         backgroundColor: colors.backgroundSecondary,
@@ -204,6 +235,7 @@ const styles = createStyles(() => ({
         ...typography.button,
         color: colors.text,
         fontWeight: '600',
+        textAlign: 'center',
     },
     btnDelete: {
         backgroundColor: colors.error,
@@ -218,5 +250,6 @@ const styles = createStyles(() => ({
         ...typography.button,
         color: '#FFFFFF',
         fontWeight: '700',
+        textAlign: 'center',
     },
 }));
