@@ -1,0 +1,158 @@
+Attributes: Application, 0x107e41a40, pid: 76915, label: 'Vaulto Note'
+Element subtree:
+ →Application, 0x107e41a40, pid: 76915, label: 'Vaulto Note'
+    Window (Main), 0x107e41b80, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x107e41cc0, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x107e41e00, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x107e41f40, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x107e42080, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x107e421c0, {{0.0, 0.0}, {402.0, 874.0}}
+                Other, 0x107e42300, {{0.0, 0.0}, {402.0, 874.0}}
+                  Other, 0x107e42440, {{0.0, 0.0}, {402.0, 874.0}}
+                  Other, 0x107e42580, {{0.0, 0.0}, {402.0, 874.0}}
+                    Other, 0x107e426c0, {{0.0, 0.0}, {402.0, 874.0}}
+                      Other, 0x107e42800, {{0.0, 0.0}, {402.0, 874.0}}
+                        Other, 0x107e42940, {{0.0, 0.0}, {402.0, 874.0}}
+                          Other, 0x107e42a80, {{0.0, 0.0}, {402.0, 874.0}}
+                            Other, 0x107e42bc0, {{0.0, 0.0}, {402.0, 874.0}}
+                              Other, 0x107e42d00, {{0.0, 0.0}, {402.0, 874.0}}
+                                Other, 0x107e42e40, {{0.0, 62.0}, {402.0, 812.0}}
+                                Button, 0x107e42f80, {{4.0, 70.0}, {48.0, 48.0}}, label: 'Back'
+                                Button, 0x107e430c0, {{238.0, 70.0}, {48.0, 48.0}}, label: 'Text appearance'
+                                Button, 0x107e43200, {{294.0, 70.0}, {48.0, 48.0}}, label: 'Improve with AI'
+                                Button, 0x107e43340, {{350.0, 70.0}, {48.0, 48.0}}, label: 'More options'
+                                Other, 0x107e43480, {{16.0, 130.0}, {370.0, 744.0}}
+                                  Other, 0x107e435c0, {{16.0, 130.0}, {370.0, 28.7}}
+                                    TextView, 0x107e43700, {{16.0, 130.0}, {370.0, 28.7}}, value: Website launch mee...
+                                      Other, 0x107e43840, {{353.0, 130.0}, {30.0, 28.7}}, label: 'Vertical scroll bar, 2 pages', value: 100%
+                                        Other, 0x107e43980, {{380.0, 119.7}, {3.0, 36.0}}
+                                      Other, 0x107e43ac0, {{16.0, 141.3}, {370.0, 14.3}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                        Other, 0x107e43c00, {{19.0, 152.7}, {361.0, 3.0}}
+                                  StaticText, 0x107e43d40, {{16.0, 162.7}, {370.0, 14.3}}, label: 'October 21 at 09:58  |  302 characters'
+                                    StaticText, 0x107e43e80, {{16.0, 162.7}, {370.0, 14.3}}, label: 'October 21 at 09:58  |  302 characters'
+                                  Button, 0x104a6f700, {{16.0, 205.0}, {102.3, 40.0}}, label: 'Original version'
+                                  Other, 0x104a6d400, {{122.3, 201.0}, {205.0, 48.0}}
+                                    ScrollView, 0x107e24000, {{122.3, 201.0}, {205.0, 48.0}}
+                                      Other, 0x107880780, {{33.0, 201.0}, {294.3, 48.0}}
+                                        Other, 0x1078812c0, {{33.0, 201.0}, {294.3, 48.0}}
+                                          Button, 0x107883c00, {{33.0, 205.0}, {123.3, 40.0}}, label: 'Summarize'
+                                          Button, 0x107883d40, {{160.3, 205.0}, {135.0, 40.0}}, label: 'Summarize 2', Selected
+                                          Button, 0x107883840, {{291.3, 207.0}, {36.0, 36.0}}, label: 'Remove this version'
+                                      Other, 0x107881b80, {{294.3, 201.0}, {30.0, 48.0}}, label: 'Vertical scroll bar, 2 pages', value: 0%
+                                        Other, 0x107881cc0, {{321.3, 204.0}, {3.0, 42.0}}
+                                      Other, 0x107881900, {{294.3, 201.0}, {30.0, 48.0}}, label: 'Vertical scroll bar, 2 pages', value: 0%
+                                        Other, 0x107881400, {{321.3, 204.0}, {3.0, 42.0}}
+                                  Button, 0x107881180, {{331.3, 205.0}, {54.7, 40.0}}, label: 'All versions'
+                                  Other, 0x107880f00, {{16.0, 257.0}, {370.0, 40.0}}
+                                  Button, 0x107881a40, {{342.0, 257.0}, {40.0, 40.0}}, label: 'Close'
+                                  StaticText, 0x107881040, {{32.0, 269.0}, {16.0, 16.0}}, label: ''
+                                    StaticText, 0x107880500, {{32.0, 269.0}, {16.0, 16.0}}, label: ''
+                                  StaticText, 0x107d8b0c0, {{56.0, 269.0}, {278.0, 15.7}}, label: 'Swipe the text left or right to switch versions'
+                                    StaticText, 0x107d8b200, {{56.0, 269.0}, {278.0, 15.7}}, label: 'Swipe the text left or right to switch versions'
+                                  Other, 0x107d8af80, {{16.0, 313.0}, {370.0, 561.0}}
+                                  Other, 0x107d89b80, {{16.0, 313.0}, {370.0, 561.0}}
+                                    Other, 0x107d8a1c0, {{16.0, 313.0}, {370.0, 561.0}}
+                                      Other, 0x107d8a6c0, {{16.0, 313.0}, {370.0, 561.0}}
+                                        WebView, 0x107d8bc00, {{16.0, 313.0}, {370.0, 561.0}}
+                                          WebView, 0x107d8a580, {{16.0, 313.0}, {370.0, 561.0}}
+                                            WebView, 0x107d8bd40, {{16.0, 313.0}, {370.0, 561.0}}
+                                              Other, 0x107d8a300, {{0.0, 0.0}, {370.0, 561.0}}
+                                                Other, 0x107d8a440, {{0.0, 0.0}, {370.0, 561.0}}
+                                                  Other, 0x107d8bac0, {{16.0, 313.0}, {370.0, 561.0}}
+                                                    Other, 0x107d89680, {{16.0, 313.0}, {370.0, 561.0}}, label: 'RichTextEditor', Focused
+                                                      Other, 0x107d8b480, {{16.0, 313.0}, {370.0, 10.0}}, Focused
+                                                        TextView, 0x107d8b980, {{16.0, 313.0}, {370.0, 561.0}}, value: • Launch the new w..., Focused
+                                                          Other, 0x107d8be80, {{16.0, 313.0}, {370.0, 225.0}}, Focused
+                                                            Other, 0x107d8b340, {{37.0, 313.0}, {349.0, 25.0}}, label: 'Launch the new website next Friday.', Focused
+                                                              Other, 0x107da2440, {{19.0, 315.0}, {8.0, 21.0}}, label: '•', Focused
+                                                              Other, 0x107da2bc0, {{37.0, 313.0}, {349.0, 25.0}}, Focused
+                                                                StaticText, 0x107da0c80, {{37.0, 315.0}, {263.0, 21.0}}, label: 'Launch the new website next Friday.', value: • Launch the new w..., Focused
+                                                            Other, 0x107da0140, {{37.0, 338.0}, {349.0, 25.0}}, label: 'Maya will finish the illustrations by Tuesday.', Focused
+                                                              Other, 0x107da0280, {{19.0, 340.0}, {8.0, 21.0}}, label: '•', Focused
+                                                              Other, 0x107da08c0, {{37.0, 338.0}, {349.0, 25.0}}, Focused
+                                                                StaticText, 0x107da0dc0, {{37.0, 340.0}, {315.0, 21.0}}, label: 'Maya will finish the illustrations by Tuesday.', value: • Maya will finish..., Focused
+                                                            Other, 0x107da0f00, {{37.0, 363.0}, {349.0, 50.0}}, label: 'Alex will review the welcome page and check mobile layouts.', Focused
+                                                              Other, 0x107da0a00, {{19.0, 365.0}, {8.0, 21.0}}, label: '•', Focused
+                                                              Other, 0x107da12c0, {{37.0, 363.0}, {349.0, 50.0}}, Focused
+                                                                StaticText, 0x107da1040, {{37.0, 365.0}, {331.0, 46.0}}, label: 'Alex will review the welcome page and check mobile layouts.', value: • Alex will review..., Focused
+                                                            Other, 0x107da1680, {{37.0, 413.0}, {349.0, 50.0}}, label: 'I will prepare the announcement and collect feedback.', Focused
+                                                              Other, 0x107da1180, {{19.0, 415.0}, {8.0, 21.0}}, label: '•', Focused
+                                                              Other, 0x107da0640, {{37.0, 413.0}, {349.0, 50.0}}, Focused
+                                                                StaticText, 0x107da0780, {{37.0, 415.0}, {321.0, 46.0}}, label: 'I will prepare the announcement and collect feedback.', value: • I will prepare t..., Focused
+                                                            Other, 0x107da1540, {{37.0, 463.0}, {349.0, 50.0}}, label: 'Before launch, test the sign-up flow and make sure the support link works.', Focused
+                                                              Other, 0x107da0500, {{19.0, 465.0}, {8.0, 21.0}}, label: '•', Focused
+                                                              Other, 0x107da1400, {{37.0, 463.0}, {349.0, 50.0}}, Focused
+                                                                StaticText, 0x107da03c0, {{37.0, 465.0}, {338.0, 46.0}}, label: 'Before launch, test the sign-up flow and make sure the support link works.', value: • Before launch, t..., Focused
+                                                            Other, 0x107da0000, {{37.0, 513.0}, {349.0, 25.0}}, label: 'Next check-in is Wednesday morning.', Focused
+                                                              Other, 0x111550000, {{19.0, 515.0}, {8.0, 21.0}}, label: '•', Focused
+                                                              Other, 0x1115512c0, {{37.0, 513.0}, {349.0, 25.0}}, Focused
+                                                                StaticText, 0x111550140, {{37.0, 515.0}, {275.0, 21.0}}, label: 'Next check-in is Wednesday morning.', value: • Next check-in is..., Focused
+                                                          Other, 0x111551180, {{37.0, 313.0}, {349.0, 25.0}}, label: 'Launch the new website next Friday.', Focused
+                                                            Other, 0x1115521c0, {{19.0, 315.0}, {8.0, 21.0}}, label: '•', Focused
+                                                            Other, 0x111551f40, {{37.0, 313.0}, {349.0, 25.0}}, Focused
+                                                              StaticText, 0x111550280, {{37.0, 315.0}, {263.0, 21.0}}, label: 'Launch the new website next Friday.', value: • Launch the new w..., Focused
+                                                          Other, 0x1115503c0, {{19.0, 315.0}, {8.0, 21.0}}, label: '•', Focused
+                                                          Other, 0x111550500, {{37.0, 313.0}, {349.0, 25.0}}, Focused
+                                                            StaticText, 0x111551040, {{37.0, 315.0}, {263.0, 21.0}}, label: 'Launch the new website next Friday.', value: • Launch the new w..., Focused
+                                                          StaticText, 0x111551400, {{37.0, 315.0}, {263.0, 21.0}}, label: 'Launch the new website next Friday.', value: • Launch the new w..., Focused
+                                                          Other, 0x111550dc0, {{37.0, 338.0}, {349.0, 25.0}}, label: 'Maya will finish the illustrations by Tuesday.', Focused
+                                                            Other, 0x111550f00, {{19.0, 340.0}, {8.0, 21.0}}, label: '•', Focused
+                                                            Other, 0x111550b40, {{37.0, 338.0}, {349.0, 25.0}}, Focused
+                                                              StaticText, 0x111550c80, {{37.0, 340.0}, {315.0, 21.0}}, label: 'Maya will finish the illustrations by Tuesday.', value: • Maya will finish..., Focused
+                                                          Other, 0x1115508c0, {{19.0, 340.0}, {8.0, 21.0}}, label: '•', Focused
+                                                          Other, 0x111550a00, {{37.0, 338.0}, {349.0, 25.0}}, Focused
+                                                            StaticText, 0x111550640, {{37.0, 340.0}, {315.0, 21.0}}, label: 'Maya will finish the illustrations by Tuesday.', value: • Maya will finish..., Focused
+                                                          StaticText, 0x111550780, {{37.0, 340.0}, {315.0, 21.0}}, label: 'Maya will finish the illustrations by Tuesday.', value: • Maya will finish..., Focused
+                                                          Other, 0x111551cc0, {{37.0, 363.0}, {349.0, 50.0}}, label: 'Alex will review the welcome page and check mobile layouts.', Focused
+                                                            Other, 0x111551e00, {{19.0, 365.0}, {8.0, 21.0}}, label: '•', Focused
+                                                            Other, 0x111551a40, {{37.0, 363.0}, {349.0, 50.0}}, Focused
+                                                              StaticText, 0x111551b80, {{37.0, 365.0}, {331.0, 46.0}}, label: 'Alex will review the welcome page and check mobile layouts.', value: • Alex will review..., Focused
+                                                          Other, 0x1115517c0, {{19.0, 365.0}, {8.0, 21.0}}, label: '•', Focused
+                                                          Other, 0x111551680, {{37.0, 363.0}, {349.0, 50.0}}, Focused
+                                                            StaticText, 0x111551900, {{37.0, 365.0}, {331.0, 46.0}}, label: 'Alex will review the welcome page and check mobile layouts.', value: • Alex will review..., Focused
+                                                          StaticText, 0x111551540, {{37.0, 365.0}, {331.0, 46.0}}, label: 'Alex will review the welcome page and check mobile layouts.', value: • Alex will review..., Focused
+                                                          Other, 0x111552080, {{37.0, 413.0}, {349.0, 50.0}}, label: 'I will prepare the announcement and collect feedback.', Focused
+                                                            Other, 0x111552440, {{19.0, 415.0}, {8.0, 21.0}}, label: '•', Focused
+                                                            Other, 0x111552580, {{37.0, 413.0}, {349.0, 50.0}}, Focused
+                                                              StaticText, 0x111552300, {{37.0, 415.0}, {321.0, 46.0}}, label: 'I will prepare the announcement and collect feedback.', value: • I will prepare t..., Focused
+                                                          Other, 0x107e45a40, {{19.0, 415.0}, {8.0, 21.0}}, label: '•', Focused
+                                                          Other, 0x107e461c0, {{37.0, 413.0}, {349.0, 50.0}}, Focused
+                                                            StaticText, 0x107e47e80, {{37.0, 415.0}, {321.0, 46.0}}, label: 'I will prepare the announcement and collect feedback.', value: • I will prepare t..., Focused
+                                                          StaticText, 0x107e47c00, {{37.0, 415.0}, {321.0, 46.0}}, label: 'I will prepare the announcement and collect feedback.', value: • I will prepare t..., Focused
+                                                          Other, 0x107e47d40, {{37.0, 463.0}, {349.0, 50.0}}, label: 'Before launch, test the sign-up flow and make sure the support link works.', Focused
+                                                            Other, 0x107e47ac0, {{19.0, 465.0}, {8.0, 21.0}}, label: '•', Focused
+                                                            Other, 0x107e44780, {{37.0, 463.0}, {349.0, 50.0}}, Focused
+                                                              StaticText, 0x107e46e40, {{37.0, 465.0}, {338.0, 46.0}}, label: 'Before launch, test the sign-up flow and make sure the support link works.', value: • Before launch, t..., Focused
+                                                          Other, 0x107e47840, {{19.0, 465.0}, {8.0, 21.0}}, label: '•', Focused
+                                                          Other, 0x107e47480, {{37.0, 463.0}, {349.0, 50.0}}, Focused
+                                                            StaticText, 0x107e47200, {{37.0, 465.0}, {338.0, 46.0}}, label: 'Before launch, test the sign-up flow and make sure the support link works.', value: • Before launch, t..., Focused
+                                                          StaticText, 0x107e475c0, {{37.0, 465.0}, {338.0, 46.0}}, label: 'Before launch, test the sign-up flow and make sure the support link works.', value: • Before launch, t..., Focused
+                                                          Other, 0x107e47980, {{37.0, 513.0}, {349.0, 25.0}}, label: 'Next check-in is Wednesday morning.', Focused
+                                                            Other, 0x107e47340, {{19.0, 515.0}, {8.0, 21.0}}, label: '•', Focused
+                                                            Other, 0x107e466c0, {{37.0, 513.0}, {349.0, 25.0}}, Focused
+                                                              StaticText, 0x107e46f80, {{37.0, 515.0}, {275.0, 21.0}}, label: 'Next check-in is Wednesday morning.', value: • Next check-in is..., Focused
+                                                          Other, 0x107e44280, {{19.0, 515.0}, {8.0, 21.0}}, label: '•', Focused
+                                                          Other, 0x107e443c0, {{37.0, 513.0}, {349.0, 25.0}}, Focused
+                                                            StaticText, 0x107e44140, {{37.0, 515.0}, {275.0, 21.0}}, label: 'Next check-in is Wednesday morning.', value: • Next check-in is..., Focused
+                                                          StaticText, 0x107e45400, {{37.0, 515.0}, {275.0, 21.0}}, label: 'Next check-in is Wednesday morning.', value: • Next check-in is..., Focused
+                                            Other, 0x107e45680, {{353.0, 313.0}, {30.0, 515.0}}, label: 'Vertical scroll bar, 1 page', value: 0%
+                                              Other, 0x107e44500, {{380.0, 864.0}, {3.0, 7.0}}
+                                            Other, 0x107e44640, {{62.0, 841.0}, {278.0, 30.0}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                              Other, 0x107e46940, {{376.0, 868.0}, {7.0, 3.0}}
+                                            Other, 0x107e457c0, {{353.0, 313.0}, {30.0, 515.0}}, label: 'Vertical scroll bar, 1 page', value: 0%
+                                              Other, 0x107e46440, {{380.0, 864.0}, {3.0, 7.0}}
+                                            Other, 0x107e46800, {{62.0, 841.0}, {278.0, 30.0}}, label: 'Horizontal scroll bar, 1 page', value: 0%
+                                              Other, 0x107e45900, {{376.0, 868.0}, {7.0, 3.0}}
+                                Button, 0x107e452c0, {{314.0, 750.0}, {56.0, 56.0}}, label: 'Record voice note'
+                      Toolbar, 0x107e44f00, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Toolbar', label: 'Toolbar'
+                        Other, 0x107e45b80, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x107e44a00, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x107e44b40, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x107e45040, {{0.0, 0.0}, {402.0, 874.0}}
+Path to element:
+ →Application, 0x107e41a40, pid: 76915, label: 'Vaulto Note'
+Query chain:
+ →Find: Application 'com.vaultonotemobile'
+  Output: {
+    Application, 0x107e45540, pid: 76915, label: 'Vaulto Note'
+  }

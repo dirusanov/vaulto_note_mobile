@@ -1,0 +1,32 @@
+{
+  "checkedAtUTC": "2026-10-21T06:55:50.439532+00:00",
+  "loginStatus": 200,
+  "improve": {
+    "httpStatus": 200,
+    "elapsedSeconds": 2.0,
+    "response": {
+      "text": "We\u2019ll launch the website on Friday, with Alex reviewing the design and Maria testing the signup page.",
+      "model": "gpt-5.4-nano-2026-03-17",
+      "provider": "openai"
+    },
+    "passed": true
+  },
+  "transcribe": {
+    "httpStatus": 200,
+    "elapsedSeconds": 3.14,
+    "fixtureText": "Remember to buy apples and bread tomorrow. The meeting starts at ten in the morning.",
+    "response": {
+      "text": "Remember to buy apples and bread tomorrow, the meeting starts at ten in the morning.",
+      "languages": [
+        {
+          "code": "en"
+        }
+      ],
+      "usage": {
+        "type": "duration",
+        "seconds": 5
+      }
+    },
+    "passed": true
+  }
+}

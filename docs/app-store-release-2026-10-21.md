@@ -1,8 +1,9 @@
 # Initial App Store release — 21 October 2026
 
-Status: signed 1.0.95 is uploaded, Apple processing is **VALID**, and build 95
-is selected in the review draft. **Review is held for a real provider outage**:
-OpenAI credits for the production key are exhausted.
+Status: **1.0.95 / 95 submitted to Apple at 06:59:11 UTC on 21 October 2026**.
+Independent API readback confirms **WAITING_FOR_REVIEW**. The owner replenished
+OpenAI credits; cloud checks passed before submission. Automatic release after
+approval remains enabled. The app is not yet approved or publicly released.
 
 ## Version and source
 
@@ -56,13 +57,14 @@ and its unrelated changes remain untouched.
 - Review account server state: `enc_mode=e2ee`, epoch 1, no pending transition.
 - Native iOS cloud permission cancellation, revocation in Settings and the next
   request asking again all pass; original text stays intact. The actual cloud
-  summary/accept scenario is blocked by the provider outage described below.
+  summary/accept scenario initially hit the provider outage described below;
+  the repeat after replenishment passed (see the recovery record below).
 - Final signed IPA 1.0.95 / 95 passes code-signature verification and was uploaded
   successfully on 21 October (delivery `34fea49e-f8c6-470b-ad6d-05874aaa56a1`).
 - Real app screenshots uploaded for iPhone medium/large and iPad 13-inch.
 - Apple build 95 processing: VALID, selected for version 1.0.95. Review draft
-  and its single item are READY_FOR_REVIEW; submittedDate is null. Automatic
-  release remains AFTER_APPROVAL. Build 94 remains an earlier upload.
+  and its single item were READY_FOR_REVIEW before submission. Submission is
+  now WAITING_FOR_REVIEW; automatic release remains AFTER_APPROVAL. Build 94 remains an earlier upload.
 
 ## Store and compliance
 
@@ -102,11 +104,29 @@ The owner was asked to replenish the API balance. No funds were added, no paymen
 was made, no production key was replaced and no unrelated service was restarted.
 The version must not be submitted with its main cloud path known to be failing.
 
-## Remaining
+## Recovery and submission
 
-Native permission checks, cross-device recovery, reinstall restoration, IPA
-upload, Apple processing and build selection are complete. After the owner
-restores the API balance, repeat the actual native summary/accept/original-switch
-case, then submit the existing review draft under the publication authorization
-already given. `submittedDate` remains null; the app is not yet in App Store
-review or publicly available through this initial iOS release.
+After the owner reported replenishing the API credits, fresh checks at 06:55 UTC
+returned HTTP 200 for both `/ai/improve` and `/ai/transcribe` through the public
+production gateway using the free demonstration account. A short synthetic
+English recording was transcribed correctly, including apples, bread, the
+meeting and morning. Text improvement returned a coherent summary. These are
+real provider calls, not mocks. The earlier outage evidence is retained.
+
+On the final Release iPhone simulator app, the complete native test passed in
+39.726 seconds: cancel cloud permission without losing the original, request
+again, approve, obtain a real cloud summary, accept it as a separate version,
+switch back to the unchanged original, and revoke consent in Settings. An earlier
+automation attempt selected the explanatory sentence containing “Accept” instead
+of the action; narrowing the private test selector fixed the test. App source and
+the already uploaded build were unchanged. A separate acceptance/original check
+also passed in 13.668 seconds. This does not claim physical-device performance or
+a full native audio-import flow; transcription was checked against the server.
+
+The reviewer email/password, private recovery instructions and contact were
+independently checked in Apple's API without printing them. Build 95 remained
+VALID and selected. Under the owner's existing publication authorization,
+review submission `fd95a50c-b3be-4acf-b7c4-601469a4dff5` was submitted at
+`2026-10-21T06:59:11.62Z`. A separate GET confirmed `WAITING_FOR_REVIEW` and the
+non-null submission date. Release mode is `AFTER_APPROVAL`. Apple approval and
+public store availability remain pending; submission is not publication.

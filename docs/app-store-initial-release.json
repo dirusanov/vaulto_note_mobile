@@ -1,5 +1,5 @@
 {
-  "status": "release_prepared_review_held_provider_credits_exhausted",
+  "status": "submitted_waiting_for_Apple_review",
   "bundleId": "com.vaultonotemobile",
   "version": "1.0.95",
   "build": "95",
@@ -20,7 +20,7 @@
     "developerMembership": "active_until_2027-10-20",
     "freeAgreement": "active",
     "paidAgreement": "not_required_free_release",
-    "storeAppRecord": "version_1.0.95_ready_for_review_not_submitted",
+    "storeAppRecord": "version_1.0.95_submitted_waiting_for_review",
     "signedIpa": "1.0.95_95_signature_valid_uploaded_2026-10-21",
     "screenshots": "iPhone_medium_large_and_iPad13_uploaded",
     "appPrivacy": "published_2026-10-20",
@@ -32,11 +32,12 @@
     "nativeIPhoneQA": "write_persist_login_encrypted_storage_and_permission_cancel_revoke_reprompt_passed",
     "nativeIPadQA": "cross_device_recovery_and_same_device_reinstall_8_notes_restored_passed",
     "cloudAIConsent": "native_cancel_revoke_reprompt_and_original_preservation_passed",
-    "cloudAIServer": "blocked_OpenAI_credit_balance_exhausted_2026-10-21",
-    "cloudAIActualSummary": "blocked_by_provider_credits_no_result_not_submitted",
+    "cloudAIServer": "recovered_after_owner_replenished_credits_HTTP_200_2026-10-21",
+    "cloudAIActualSummary": "native_consent_summary_accept_separate_version_original_switch_revoke_passed",
     "appleBuildProcessing": "95_VALID_selected",
-    "reviewSubmission": "READY_FOR_REVIEW_submittedDate_null",
-    "releaseType": "AFTER_APPROVAL"
+    "reviewSubmission": "WAITING_FOR_REVIEW_independently_verified",
+    "releaseType": "AFTER_APPROVAL",
+    "cloudTranscription": "public_production_API_synthetic_English_audio_HTTP_200_recognition_passed"
   },
   "privacyDraft": {
     "tracking": false,
@@ -88,9 +89,12 @@
       "appleBuildId": "34fea49e-f8c6-470b-ad6d-05874aaa56a1",
       "appleProcessingState": "VALID",
       "selectedForVersion": true,
-      "submittedForReview": false,
-      "reviewState": "READY_FOR_REVIEW",
-      "holdReason": "production_OpenAI_credit_balance_exhausted"
+      "submittedForReview": true,
+      "reviewState": "WAITING_FOR_REVIEW",
+      "submittedAtUTC": "2026-10-21T06:59:11.62Z",
+      "earlierHold": "production_OpenAI_credit_balance_exhausted_resolved_after_owner_replenishment"
     }
-  ]
+  ],
+  "submittedAtUTC": "2026-10-21T06:59:11.62Z",
+  "reviewSubmissionId": "fd95a50c-b3be-4acf-b7c4-601469a4dff5"
 }
