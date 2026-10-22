@@ -519,7 +519,18 @@ export const forceReencryptionLocal = async (
     }
 };
 
-export const saveNoteLocal = async (userId: string, note: Note): Promise<void> => {
+export const saveNoteLocal = async (
+    userId: string,
+    note: Note,
+    options: {
+        /**
+         * Rethrow a failed write. The sync engine needs to know, so it keeps its
+         * cursor behind a server change it could not store (e.g. "database is
+         * locked") instead of skipping that change for good.
+         */
+        throwOnError?: boolean;
+    } = {},
+): Promise<void> => {
     if (!userId || !note || !note.id) return;
 
     if (Platform.OS === 'web') {
@@ -630,6 +641,9 @@ export const saveNoteLocal = async (userId: string, note: Note): Promise<void> =
         ));
     } catch (e) {
         console.error('[DatabaseService] Failed to save note', e);
+        if (options.throwOnError) {
+            throw e;
+        }
     }
 };
 

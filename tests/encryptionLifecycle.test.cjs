@@ -326,3 +326,25 @@ test('reading a legacy plaintext voice transcript migrates it without rewriting 
         assert.equal(a.database.prepare('SELECT transcription FROM voice_recordings WHERE id = ?').get('bob-r').transcription, 'Legacy bob');
     } finally { a.database.close(); }
 });
+
+test('a failed note write is reported to sync, so its cursor does not skip the change', async () => {
+    const a = app();
+    try {
+        const db = a.load('src/services/DatabaseService.ts');
+        await db.saveNoteLocal('alice', { id: 'n1', title: 'First', content: 'stored', synced: 1 });
+        const prepare = a.database.prepare.bind(a.database);
+        a.database.prepare = (sql) => {
+            if (/insert|update/i.test(sql) && /notes/i.test(sql)) {
+                throw new Error('database is locked');
+            }
+            return prepare(sql);
+        };
+        // UI saves keep their old behaviour (logged, not thrown)...
+        await db.saveNoteLocal('alice', { id: 'n2', content: 'ui save', synced: 0 });
+        // ...but the sync engine learns the server change was not stored.
+        await assert.rejects(
+            db.saveNoteLocal('alice', { id: 'n3', content: 'from server', synced: 1 }, { throwOnError: true }),
+            /database is locked/,
+        );
+    } finally { a.database.close(); }
+});

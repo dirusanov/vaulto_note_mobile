@@ -41,14 +41,17 @@ class MainActivity : ReactActivity() {
     applyOrientationPolicy(newConfig)
   }
 
-  // The manifest locks portrait for phones; tablets and unfolded foldables
-  // (600dp+) rotate freely, as Android 16 already does on large screens.
+  // Phones are kept in portrait; tablets and unfolded foldables (600dp+) rotate
+  // freely, as Android 16 already does on large screens. The manifest does not
+  // lock the orientation: a manifest lock made Android 15 and older start a
+  // tablet in a letterboxed phone-shaped frame, whose configuration then also
+  // looked like a phone. So the size is read from the display, not the window.
   // Only decided when the app owns the whole display: in split screen or a
-  // desktop/ChromeOS window the configuration describes the window, and a
-  // narrow window must not lock the app into a phone-shaped portrait frame.
+  // desktop/ChromeOS window a narrow window must not lock the app to portrait.
+  @Suppress("UNUSED_PARAMETER")
   private fun applyOrientationPolicy(config: Configuration) {
     if (isInMultiWindowMode) return
-    val orientation = if (config.smallestScreenWidthDp >= 600) {
+    val orientation = if (displaySmallestWidthDp() >= 600) {
       ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     } else {
       ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -56,6 +59,19 @@ class MainActivity : ReactActivity() {
     if (requestedOrientation != orientation) {
       requestedOrientation = orientation
     }
+  }
+
+  private fun displaySmallestWidthDp(): Int {
+    val density = resources.displayMetrics.density
+    val (width, height) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      val bounds = windowManager.maximumWindowMetrics.bounds
+      bounds.width() to bounds.height()
+    } else {
+      @Suppress("DEPRECATION")
+      val metrics = android.util.DisplayMetrics().also { windowManager.defaultDisplay.getRealMetrics(it) }
+      metrics.widthPixels to metrics.heightPixels
+    }
+    return (minOf(width, height) / density).toInt()
   }
 
   override fun onNewIntent(intent: Intent) {

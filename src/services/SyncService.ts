@@ -37,7 +37,7 @@ import {
     encryptAudioBase64ForSync,
     decryptAudioBase64FromSync,
 } from '../crypto/encryption';
-import { hasMasterKey } from '../crypto/e2ee';
+import { hasMasterKey, subscribeMasterKey } from '../crypto/e2ee';
 import { storage, hasPendingDecryptSync, clearPendingDecryptSync } from '../utils/storage';
 import {
     isRetryableSyncConflict,
@@ -107,6 +107,14 @@ class SyncService {
     constructor() {
         // App State Listener
         AppState.addEventListener('change', this.handleAppStateChange);
+        // At launch the first syncs run before the E2EE key is restored from
+        // secure storage and are skipped; run the skipped sync once it is there.
+        subscribeMasterKey(() => {
+            if (this.skippedWhileLocked && hasMasterKey()) {
+                this.skippedWhileLocked = false;
+                this.syncNow('auto');
+            }
+        });
         // Register callback so DatabaseService can trigger immediate re-sync
         // when stuck E2EE notes are detected in local mode after disable.
         registerResyncCallback(() => this.scheduleAutoSync());
@@ -178,6 +186,8 @@ class SyncService {
         this.currentTransitionToken = token;
     }
 
+    /** A sync was skipped because the E2EE key was not loaded yet. */
+    private skippedWhileLocked = false;
     /** Last fully-applied server cursor used to fence encryption transitions. */
     public getServerSeqSnapshot(): number {
         return Number.isFinite(this.lastSyncSeq) ? Math.max(0, this.lastSyncSeq as number) : 0;
@@ -544,6 +554,7 @@ class SyncService {
         }
         if (getCryptoMode() === 'e2ee' && !hasMasterKey()) {
             console.log('[SyncService] Encryption locked. Skipping sync.');
+            this.skippedWhileLocked = true;
             if (throwOnError) throw new Error('Encryption is locked.');
             return;
         }
@@ -1469,7 +1480,12 @@ class SyncService {
                         synced: 1,
                         dirty: false,
                     } as any;
-                    await saveNoteLocal(this.currentUserId, placeholder);
+                    try {
+                        await saveNoteLocal(this.currentUserId, placeholder, { throwOnError: true });
+                    } catch {
+                        if (serverNote.server_seq != null) deferredSeqs.push(serverNote.server_seq);
+                        continue;
+                    }
                     processed += 1;
                     continue;
                 }
@@ -1526,7 +1542,15 @@ class SyncService {
                 pending_server_delete: false,
             };
 
-            await saveNoteLocal(this.currentUserId, merged);
+            try {
+                await saveNoteLocal(this.currentUserId, merged, { throwOnError: true });
+            } catch {
+                // Not stored locally: pull it again next time instead of letting
+                // the cursor move past it (the device would never get it otherwise).
+                console.warn(`[SyncService] Could not store note ${serverNote.id}; it will be pulled again.`);
+                if (serverNote.server_seq != null) deferredSeqs.push(serverNote.server_seq);
+                continue;
+            }
             localMap.set(serverNote.id, merged);
             processed += 1;
             if (processed % YIELD_EVERY === 0) {
