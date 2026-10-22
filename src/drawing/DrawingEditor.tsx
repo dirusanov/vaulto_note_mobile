@@ -1,14 +1,32 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+    Alert,
+    Keyboard,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
+} from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, isDarkScheme } from '../theme/colors';
 import { createStyles } from '../theme/createStyles';
-import { DrawingCanvas, PaperTemplate } from './DrawingCanvas';
-import { DrawingDocument } from './drawingEmbeds';
-import { INK_COLORS, INK_DEFAULT_COLOR, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool, strokeHit } from './ink';
+import { CanvasMode, DrawingCanvas, DrawingCanvasHandle, TextTap } from './DrawingCanvas';
+import { ColorPanel } from './ColorPanel';
+import { DrawingDocument } from './drawingFormat';
+import { DrawingAction, drawingReducer, emptyContent, initialDrawingState } from './drawingModel';
+import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool } from './ink';
+import { DEFAULT_PAPER, PaperStyle } from './paper';
+import { PaperPicker } from './PaperPicker';
+import { pushRecentColor } from './colorMath';
+import { measureText } from './textLayout';
 
 type Props = {
     visible: boolean;
@@ -18,7 +36,24 @@ type Props = {
     onClose: () => void;
 };
 
-type ToolSettings = Record<InkTool, { color: string; sizeIndex: number }>;
+type ActiveTool = InkTool | 'eraser' | 'text';
+type SettingsKey = InkTool | 'text';
+type ToolSettings = Record<SettingsKey, { color: string; sizeIndex: number }>;
+
+/** A label being typed: `index` null for a new one. */
+type TextEdit = {
+    index: number | null;
+    x: number;
+    y: number;
+    screenX: number;
+    screenY: number;
+    scale: number;
+    value: string;
+};
+
+const TEXT_SIZES = [14, 18, 24, 32, 44];
+/** Palette colours are always on screen, so only other colours go to "Recent". */
+const INK_COLOR_SET = new Set(INK_COLORS);
 
 const TOOL_ICONS: Record<InkTool, keyof typeof MaterialCommunityIcons.glyphMap> = {
     fountain: 'fountain-pen-tip',
@@ -28,23 +63,20 @@ const TOOL_ICONS: Record<InkTool, keyof typeof MaterialCommunityIcons.glyphMap> 
     marker: 'marker',
 };
 
-const TEMPLATE_ORDER: PaperTemplate[] = ['blank', 'lines', 'grid', 'dots'];
-const TEMPLATE_ICONS: Record<PaperTemplate, keyof typeof MaterialCommunityIcons.glyphMap> = {
-    blank: 'checkbox-blank-outline',
-    lines: 'notebook-outline',
-    grid: 'grid',
-    dots: 'dots-grid',
+const initialSettings = (): ToolSettings => {
+    const settings = INK_TOOL_ORDER.reduce((acc, tool) => {
+        acc[tool] = { color: INK_DEFAULT_COLOR[tool], sizeIndex: 1 };
+        return acc;
+    }, {} as ToolSettings);
+    settings.text = { color: '#1D1D1F', sizeIndex: 1 };
+    return settings;
 };
-
-const initialSettings = (): ToolSettings => INK_TOOL_ORDER.reduce((acc, tool) => {
-    acc[tool] = { color: INK_DEFAULT_COLOR[tool], sizeIndex: 1 };
-    return acc;
-}, {} as ToolSettings);
 
 // Settings survive closing the canvas, like a pen case.
 let rememberedSettings: ToolSettings | null = null;
-let rememberedTool: InkTool = 'fountain';
-let rememberedTemplate: PaperTemplate = 'blank';
+let rememberedTool: ActiveTool = 'fountain';
+let rememberedPaper: PaperStyle = DEFAULT_PAPER;
+let rememberedRecent: string[] = [];
 
 export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onClose }) => {
     const { t } = useTranslation();
@@ -52,101 +84,168 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
     const isTablet = Math.min(width, height) >= 600;
     const dark = isDarkScheme();
 
-    const [strokes, setStrokes] = useState<InkStroke[]>([]);
-    const [undoStack, setUndoStack] = useState<InkStroke[][]>([]);
-    const [redoStack, setRedoStack] = useState<InkStroke[][]>([]);
+    const [state, dispatch] = useReducer(drawingReducer, undefined, () => initialDrawingState());
+    const { strokes, texts, paper } = state.content;
     const [settings, setSettings] = useState<ToolSettings>(() => rememberedSettings || initialSettings());
-    const [tool, setTool] = useState<InkTool>(rememberedTool);
-    const [erasing, setErasing] = useState(false);
-    const [popover, setPopover] = useState(false);
-    const [template, setTemplate] = useState<PaperTemplate>(rememberedTemplate);
+    const [activeTool, setActiveTool] = useState<ActiveTool>(rememberedTool);
+    const [recent, setRecent] = useState<string[]>(rememberedRecent);
+    const [popover, setPopover] = useState<'tool' | 'paper' | null>(null);
     const [stylusSeen, setStylusSeen] = useState(false);
     const [stylusOnly, setStylusOnly] = useState(false);
     // 0 until the canvas has measured itself (a new drawing takes its width).
     const [docWidth, setDocWidth] = useState(0);
-    const strokesRef = useRef<InkStroke[]>([]);
-    const eraseSnapshot = useRef<InkStroke[] | null>(null);
+    const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
+    const customColorUsed = useRef(false);
+    const canvasRef = useRef<DrawingCanvasHandle>(null);
+    const canvasAreaRef = useRef<View>(null);
+    /** Screen y of the keyboard's top edge while it is open. */
+    const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+
+    useEffect(() => {
+        const show = Keyboard.addListener('keyboardDidShow', (event) => setKeyboardTop(event.endCoordinates.screenY));
+        const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardTop(null));
+        return () => {
+            show.remove();
+            hide.remove();
+        };
+    }, []);
 
     useEffect(() => {
         if (!visible) {
             return;
         }
-        const initial = document?.strokes || [];
-        strokesRef.current = initial;
-        setStrokes(initial);
-        setUndoStack([]);
-        setRedoStack([]);
-        setPopover(false);
-        setErasing(false);
-        // A new drawing uses the whole canvas; the note shrinks it to its column.
+        dispatch({
+            type: 'load',
+            content: document
+                ? { strokes: document.strokes, texts: document.texts || [], paper: document.paper || DEFAULT_PAPER }
+                : emptyContent(rememberedPaper),
+        });
+        setPopover(null);
+        setTextEdit(null);
         setDocWidth(document?.width || 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, document]);
 
     useEffect(() => {
         rememberedSettings = settings;
-        rememberedTool = tool;
-        rememberedTemplate = template;
-    }, [settings, tool, template]);
+        rememberedTool = activeTool;
+        rememberedRecent = recent;
+    }, [settings, activeTool, recent]);
 
-    const replaceStrokes = useCallback((next: InkStroke[], pushUndo: InkStroke[] | null) => {
-        if (pushUndo) {
-            setUndoStack((stack) => [...stack.slice(-99), pushUndo]);
-            setRedoStack([]);
-        }
-        strokesRef.current = next;
-        setStrokes(next);
-    }, []);
+    const textBoxes = useMemo(() => texts.map(measureText), [texts]);
 
-    const handleCommit = useCallback((stroke: InkStroke) => {
-        const prev = strokesRef.current;
-        replaceStrokes([...prev, stroke], prev);
-        setPopover(false);
-    }, [replaceStrokes]);
-
-    const handleErase = useCallback((x: number, y: number, radius: number) => {
-        const prev = strokesRef.current;
-        const next = prev.filter((stroke) => !strokeHit(stroke, x, y, radius));
-        if (next.length === prev.length) {
+    // A label typed low on the page would sit under the keyboard: scroll the page
+    // up until the field (and a line below it) is visible, as notebook apps do.
+    const editingLines = textEdit ? textEdit.value.split('\n').length : 0;
+    useEffect(() => {
+        if (!textEdit || keyboardTop === null || !canvasAreaRef.current) {
             return;
         }
-        // One undo step per eraser drag, however many strokes it removes.
-        const first = eraseSnapshot.current === null;
-        if (first) {
-            eraseSnapshot.current = prev;
+        canvasAreaRef.current.measureInWindow((_x, areaY) => {
+            const lineHeight = (TEXT_SIZES[settings.text.sizeIndex] ?? 18) * INK_TEXT_LINE_HEIGHT * textEdit.scale;
+            const fieldBottom = areaY + textEdit.screenY + lineHeight * (editingLines + 1) + 16;
+            const overlap = fieldBottom - keyboardTop;
+            if (overlap > 0) {
+                const applied = canvasRef.current?.panBy(-overlap) ?? 0;
+                if (applied) {
+                    setTextEdit((edit) => (edit ? { ...edit, screenY: edit.screenY + applied } : edit));
+                }
+            }
+        });
+    // Re-check when the keyboard opens, the label grows a line or its size changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [keyboardTop, editingLines, settings.text.sizeIndex, textEdit?.index, textEdit?.x, textEdit?.y]);
+
+    const settingsKey: SettingsKey = activeTool === 'text' ? 'text' : activeTool === 'eraser' ? 'fountain' : activeTool;
+    const current = settings[settingsKey];
+    const inkTool: InkTool = activeTool === 'text' || activeTool === 'eraser' ? 'fountain' : activeTool;
+    const sizes = activeTool === 'text' ? TEXT_SIZES : INK_TOOLS[inkTool].sizes;
+    const size = sizes[current.sizeIndex] ?? sizes[1];
+    const mode: CanvasMode = activeTool === 'eraser' ? 'erase' : activeTool === 'text' ? 'text' : 'ink';
+
+    /** The action that stores the label being typed, if any. */
+    const textEditAction = useCallback((edit: TextEdit | null): DrawingAction | null => {
+        if (!edit) {
+            return null;
         }
-        replaceStrokes(next, first ? prev : null);
-    }, [replaceStrokes]);
+        const style = { size: TEXT_SIZES[settings.text.sizeIndex] ?? 18, color: settings.text.color };
+        return edit.index === null
+            ? { type: 'addText', text: { x: edit.x, y: edit.y, text: edit.value, ...style } }
+            : { type: 'updateText', index: edit.index, patch: { text: edit.value, ...style } };
+    }, [settings.text]);
 
-    const handleEraseEnd = useCallback(() => {
-        eraseSnapshot.current = null;
-    }, []);
+    const commitTextEdit = useCallback(() => {
+        const action = textEditAction(textEdit);
+        if (action) {
+            dispatch(action);
+        }
+        setTextEdit(null);
+    }, [textEdit, textEditAction]);
 
-    const handleUndo = useCallback(() => {
-        setUndoStack((stack) => {
-            if (!stack.length) {
-                return stack;
-            }
-            const previous = stack[stack.length - 1];
-            setRedoStack((redo) => [...redo, strokesRef.current]);
-            strokesRef.current = previous;
-            setStrokes(previous);
-            return stack.slice(0, -1);
+    const closePopover = useCallback(() => {
+        if (customColorUsed.current) {
+            customColorUsed.current = false;
+            setRecent((list) => pushRecentColor(list, settings[settingsKey].color));
+        }
+        setPopover(null);
+    }, [settings, settingsKey]);
+
+    const handleCommit = useCallback((stroke: InkStroke) => {
+        dispatch({ type: 'addStroke', stroke });
+        closePopover();
+    }, [closePopover]);
+
+    const handleErase = useCallback((x: number, y: number, radius: number) => {
+        dispatch({ type: 'eraseAt', x, y, radius, boxes: textBoxes });
+    }, [textBoxes]);
+
+    const handleEraseEnd = useCallback(() => dispatch({ type: 'eraseEnd' }), []);
+    const handleUndo = useCallback(() => dispatch({ type: 'undo' }), []);
+    const handleRedo = useCallback(() => dispatch({ type: 'redo' }), []);
+
+    const handleTextTap = useCallback((tap: TextTap) => {
+        if (textEdit) {
+            // The first tap outside the field finishes the label being typed.
+            commitTextEdit();
+            return;
+        }
+        closePopover();
+        if (tap.index >= 0) {
+            const item = texts[tap.index];
+            setSettings((prev) => ({
+                ...prev,
+                text: { color: item.color, sizeIndex: Math.max(0, TEXT_SIZES.indexOf(item.size)) },
+            }));
+            setTextEdit({
+                index: tap.index,
+                x: item.x,
+                y: item.y,
+                screenX: tap.screenX - (tap.x - item.x) * tap.scale,
+                screenY: tap.screenY - (tap.y - item.y) * tap.scale,
+                scale: tap.scale,
+                value: item.text,
+            });
+            return;
+        }
+        const textSize = TEXT_SIZES[settings.text.sizeIndex] ?? 18;
+        // Put the first line where the finger is, not below it.
+        const lift = (textSize * INK_TEXT_LINE_HEIGHT) / 2;
+        setTextEdit({
+            index: null,
+            x: tap.x,
+            y: tap.y - lift,
+            screenX: tap.screenX,
+            screenY: tap.screenY - lift * tap.scale,
+            scale: tap.scale,
+            value: '',
         });
-    }, []);
+    }, [textEdit, commitTextEdit, closePopover, texts, settings.text.sizeIndex]);
 
-    const handleRedo = useCallback(() => {
-        setRedoStack((stack) => {
-            if (!stack.length) {
-                return stack;
-            }
-            const next = stack[stack.length - 1];
-            setUndoStack((undo) => [...undo, strokesRef.current]);
-            strokesRef.current = next;
-            setStrokes(next);
-            return stack.slice(0, -1);
-        });
-    }, []);
+    const handleTextMove = useCallback((index: number, dx: number, dy: number) => {
+        const item = texts[index];
+        if (item) {
+            dispatch({ type: 'updateText', index, patch: { x: item.x + dx, y: item.y + dy } });
+        }
+    }, [texts]);
 
     const handleStylus = useCallback(() => {
         setStylusSeen((seen) => {
@@ -158,26 +257,55 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         });
     }, []);
 
-    const handleToolPress = (next: InkTool) => {
-        if (!erasing && next === tool) {
-            setPopover((open) => !open);
-            return;
-        }
-        setTool(next);
-        setErasing(false);
-        setPopover(false);
-    };
-
     const handleMeasure = useCallback((canvasWidth: number) => {
-        setDocWidth((current) => current || Math.round(canvasWidth));
+        setDocWidth((value) => value || Math.round(canvasWidth));
     }, []);
 
+    const selectTool = (next: ActiveTool) => {
+        if (textEdit) {
+            commitTextEdit();
+        }
+        if (next === activeTool && next !== 'eraser') {
+            if (popover === 'tool') {
+                closePopover();
+            } else {
+                setPopover('tool');
+            }
+            return;
+        }
+        closePopover();
+        setActiveTool(next);
+    };
+
+    const setColor = (color: string, source: 'swatch' | 'custom') => {
+        if (source === 'custom') {
+            customColorUsed.current = true;
+        } else {
+            setRecent((list) => (INK_COLOR_SET.has(color) ? list : pushRecentColor(list, color)));
+        }
+        setSettings((prev) => ({ ...prev, [settingsKey]: { ...prev[settingsKey], color } }));
+    };
+
+    const setSizeIndex = (index: number) => {
+        setSettings((prev) => ({ ...prev, [settingsKey]: { ...prev[settingsKey], sizeIndex: index } }));
+    };
+
+    const setPaper = (next: PaperStyle) => {
+        rememberedPaper = next;
+        dispatch({ type: 'setPaper', paper: next });
+    };
+
     const handleDone = () => {
-        onSave({ id: document?.id || '', width: docWidth || width, strokes: strokesRef.current });
+        // Include the label still being typed: the reducer is pure, so the final
+        // content can be computed right here instead of waiting for a render.
+        const action = textEditAction(textEdit);
+        const content = action ? drawingReducer(state, action).content : state.content;
+        onSave({ id: document?.id || '', width: docWidth || width, ...content });
     };
 
     const handleClose = () => {
-        if (!undoStack.length) {
+        const changed = state.undo.length > 0 || !!textEdit?.value.trim();
+        if (!changed) {
             onClose();
             return;
         }
@@ -191,40 +319,53 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         );
     };
 
-    const current = settings[tool];
-    const sizes = INK_TOOLS[tool].sizes;
-    const size = sizes[current.sizeIndex] ?? sizes[1];
+    const editingTextSize = TEXT_SIZES[settings.text.sizeIndex] ?? 18;
 
     const toolPalette = (
         <View style={[styles.palette, isTablet ? styles.paletteFloating : styles.paletteDocked]}>
-            {INK_TOOL_ORDER.map((inkTool) => {
-                const active = !erasing && tool === inkTool;
+            {INK_TOOL_ORDER.map((inkToolOption) => {
+                const active = activeTool === inkToolOption;
                 return (
                     <TouchableOpacity
-                        key={inkTool}
-                        onPress={() => handleToolPress(inkTool)}
+                        key={inkToolOption}
+                        onPress={() => selectTool(inkToolOption)}
                         style={[styles.toolButton, active && styles.toolButtonActive]}
                         accessibilityRole="button"
                         accessibilityState={{ selected: active }}
-                        accessibilityLabel={t(`drawing.tool.${inkTool}`, inkTool)}
+                        accessibilityLabel={t(`drawing.tool.${inkToolOption}`, inkToolOption)}
                     >
-                        <MaterialCommunityIcons name={TOOL_ICONS[inkTool]} size={24} color={active ? colors.primary : colors.textSecondary} />
-                        <View style={[styles.toolInk, { backgroundColor: settings[inkTool].color }]} />
+                        <MaterialCommunityIcons name={TOOL_ICONS[inkToolOption]} size={24} color={active ? colors.primary : colors.textSecondary} />
+                        <View style={[styles.toolInk, { backgroundColor: settings[inkToolOption].color }]} />
                     </TouchableOpacity>
                 );
             })}
             <TouchableOpacity
-                onPress={() => { setErasing(true); setPopover(false); }}
-                style={[styles.toolButton, erasing && styles.toolButtonActive]}
+                onPress={() => selectTool('text')}
+                style={[styles.toolButton, activeTool === 'text' && styles.toolButtonActive]}
                 accessibilityRole="button"
-                accessibilityState={{ selected: erasing }}
+                accessibilityState={{ selected: activeTool === 'text' }}
+                accessibilityLabel={t('drawing.tool.text', 'Text')}
+            >
+                <MaterialCommunityIcons name="format-text" size={24} color={activeTool === 'text' ? colors.primary : colors.textSecondary} />
+                <View style={[styles.toolInk, { backgroundColor: settings.text.color }]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => selectTool('eraser')}
+                style={[styles.toolButton, activeTool === 'eraser' && styles.toolButtonActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeTool === 'eraser' }}
                 accessibilityLabel={t('drawing.eraser', 'Eraser')}
             >
-                <MaterialCommunityIcons name="eraser" size={24} color={erasing ? colors.primary : colors.textSecondary} />
+                <MaterialCommunityIcons name="eraser" size={24} color={activeTool === 'eraser' ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
             <View style={styles.paletteDivider} />
             <TouchableOpacity
-                onPress={() => { setErasing(false); setPopover((open) => !open); }}
+                onPress={() => {
+                    if (activeTool === 'eraser') {
+                        setActiveTool('fountain');
+                    }
+                    setPopover((open) => (open === 'tool' ? null : 'tool'));
+                }}
                 style={styles.toolButton}
                 accessibilityRole="button"
                 accessibilityLabel={t('drawing.colorAndSize', 'Colour and size')}
@@ -234,51 +375,61 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         </View>
     );
 
-    const toolPopover = popover && !erasing && (
-        <View style={[styles.popover, isTablet ? styles.popoverTablet : styles.popoverPhone]}>
-            <View style={styles.sizeRow}>
-                {sizes.map((value, index) => {
-                    const active = index === current.sizeIndex;
-                    const dot = 5 + (23 * index) / (sizes.length - 1);
-                    return (
-                        <TouchableOpacity
-                            key={value}
-                            onPress={() => setSettings((prev) => ({ ...prev, [tool]: { ...prev[tool], sizeIndex: index } }))}
-                            style={[styles.sizeButton, active && styles.sizeButtonActive]}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: active }}
-                            accessibilityLabel={`${t('drawing.size', 'Size')} ${index + 1}`}
-                        >
+    const sizeRow = (
+        <View style={styles.sizeRow}>
+            {sizes.map((value, index) => {
+                const active = index === current.sizeIndex;
+                const dot = 5 + (23 * index) / (sizes.length - 1);
+                return (
+                    <TouchableOpacity
+                        key={value}
+                        onPress={() => setSizeIndex(index)}
+                        style={[styles.sizeButton, active && styles.sizeButtonActive]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`${t('drawing.size', 'Size')} ${index + 1}`}
+                    >
+                        {activeTool === 'text' ? (
+                            <Text style={{ fontSize: 11 + index * 4, color: current.color, fontWeight: '600' }}>A</Text>
+                        ) : (
                             <View
                                 style={{
                                     width: dot,
                                     height: dot,
                                     borderRadius: 15,
                                     backgroundColor: current.color,
-                                    opacity: INK_TOOLS[tool].opacity < 1 ? 0.6 : 1,
+                                    opacity: INK_TOOLS[inkTool].opacity < 1 ? 0.6 : 1,
                                 }}
                             />
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
-            <View style={styles.colorGrid}>
-                {INK_COLORS.map((swatch) => {
-                    const active = swatch === current.color;
-                    return (
-                        <TouchableOpacity
-                            key={swatch}
-                            onPress={() => setSettings((prev) => ({ ...prev, [tool]: { ...prev[tool], color: swatch } }))}
-                            style={[styles.swatchRing, active && { borderColor: colors.primary }]}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: active }}
-                            accessibilityLabel={swatch}
-                        >
-                            <View style={[styles.swatch, { backgroundColor: swatch }]} />
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
+                        )}
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+
+    const popoverContent = popover === 'tool' && activeTool !== 'eraser'
+        ? (
+            <>
+                {sizeRow}
+                <ColorPanel color={current.color} recent={recent} onChange={setColor} />
+            </>
+        )
+        : popover === 'paper'
+            ? <PaperPicker paper={paper} onChange={setPaper} />
+            : null;
+
+    const popoverView = popoverContent && (
+        <View
+            style={[
+                styles.popover,
+                isTablet ? (popover === 'paper' ? styles.popoverTabletRight : styles.popoverTablet) : styles.popoverPhone,
+                !isTablet && { maxHeight: height * 0.6 },
+            ]}
+        >
+            <ScrollView contentContainerStyle={styles.popoverScroll} keyboardShouldPersistTaps="handled" bounces={false}>
+                {popoverContent}
+            </ScrollView>
         </View>
     );
 
@@ -290,11 +441,11 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
                         <TouchableOpacity onPress={handleClose} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.close', 'Close')}>
                             <MaterialIcons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleUndo} disabled={!undoStack.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.undo', 'Undo')}>
-                            <MaterialIcons name="undo" size={24} color={undoStack.length ? colors.text : colors.textMuted} />
+                        <TouchableOpacity onPress={handleUndo} disabled={!state.undo.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.undo', 'Undo')}>
+                            <MaterialIcons name="undo" size={24} color={state.undo.length ? colors.text : colors.textMuted} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleRedo} disabled={!redoStack.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.redo', 'Redo')}>
-                            <MaterialIcons name="redo" size={24} color={redoStack.length ? colors.text : colors.textMuted} />
+                        <TouchableOpacity onPress={handleRedo} disabled={!state.redo.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.redo', 'Redo')}>
+                            <MaterialIcons name="redo" size={24} color={state.redo.length ? colors.text : colors.textMuted} />
                         </TouchableOpacity>
                         <View style={styles.headerSpacer} />
                         {stylusSeen && (
@@ -309,50 +460,81 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
-                            onPress={() => setTemplate((value) => TEMPLATE_ORDER[(TEMPLATE_ORDER.indexOf(value) + 1) % TEMPLATE_ORDER.length])}
-                            style={styles.headerButton}
+                            onPress={() => (popover === 'paper' ? closePopover() : setPopover('paper'))}
+                            style={[styles.headerButton, popover === 'paper' && styles.toolButtonActive]}
                             accessibilityRole="button"
-                            accessibilityLabel={t('drawing.paper', 'Paper')}
+                            accessibilityState={{ expanded: popover === 'paper' }}
+                            accessibilityLabel={t('drawing.paper.title', 'Paper')}
                         >
-                            <MaterialCommunityIcons name={TEMPLATE_ICONS[template]} size={22} color={colors.textSecondary} />
+                            <MaterialCommunityIcons name="notebook-outline" size={22} color={popover === 'paper' ? colors.primary : colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={handleDone} style={[styles.doneButton, { backgroundColor: colors.primary }]} accessibilityRole="button" accessibilityLabel={t('a11y.done', 'Done')}>
                             <Text style={[styles.doneText, { color: colors.onPrimary }]}>{t('drawing.done', 'Done')}</Text>
                         </TouchableOpacity>
                     </View>
 
-                    <View style={styles.root}>
+                    <View ref={canvasAreaRef} style={styles.root} collapsable={false}>
                         <DrawingCanvas
+                            ref={canvasRef}
+                            bottomInset={textEdit && keyboardTop !== null ? height - keyboardTop : 0}
                             strokes={strokes}
+                            texts={texts}
+                            textBoxes={textBoxes}
+                            paper={paper}
                             docWidth={docWidth}
                             onMeasure={handleMeasure}
-                            tool={tool}
+                            mode={mode}
+                            tool={inkTool}
                             color={current.color}
                             size={size}
-                            erasing={erasing}
                             stylusOnly={stylusOnly}
-                            template={template}
+                            editingText={textEdit?.index ?? null}
                             dark={dark}
-                            paperColor={colors.background}
+                            themePaperColor={colors.background}
+                            themeLineColor={colors.border}
                             deskColor={colors.backgroundSecondary}
-                            lineColor={colors.border}
                             onCommit={handleCommit}
                             onErase={handleErase}
                             onEraseEnd={handleEraseEnd}
+                            onTextTap={handleTextTap}
+                            onTextMove={handleTextMove}
                             onStylus={handleStylus}
                             onUndo={handleUndo}
                             onRedo={handleRedo}
                         />
+                        {textEdit && (
+                            <TextInput
+                                autoFocus
+                                multiline
+                                value={textEdit.value}
+                                onChangeText={(value) => setTextEdit((edit) => (edit ? { ...edit, value } : edit))}
+                                onBlur={commitTextEdit}
+                                placeholder={t('drawing.textPlaceholder', 'Type here')}
+                                placeholderTextColor={colors.textMuted}
+                                style={[
+                                    styles.textField,
+                                    {
+                                        left: Math.max(4, textEdit.screenX - 6),
+                                        top: Math.max(4, textEdit.screenY - 4),
+                                        maxWidth: width - Math.max(4, textEdit.screenX - 6) - 12,
+                                        fontSize: editingTextSize * textEdit.scale,
+                                        lineHeight: editingTextSize * textEdit.scale * INK_TEXT_LINE_HEIGHT,
+                                        color: paper.color || !dark ? settings.text.color : colors.text,
+                                    },
+                                ]}
+                            />
+                        )}
                         {isTablet && (
                             <View pointerEvents="box-none" style={styles.floatingLayer}>
                                 {toolPalette}
-                                {toolPopover}
+                                {popover === 'tool' && popoverView}
                             </View>
                         )}
+                        {isTablet && popover === 'paper' && popoverView}
                         {!isTablet && popover && (
-                            <Pressable style={StyleSheet.absoluteFill} onPress={() => setPopover(false)} accessibilityLabel={t('a11y.close', 'Close')} />
+                            <Pressable style={StyleSheet.absoluteFill} onPress={closePopover} accessibilityLabel={t('a11y.close', 'Close')} />
                         )}
-                        {!isTablet && toolPopover}
+                        {!isTablet && popoverView}
                     </View>
                     {!isTablet && toolPalette}
                 </SafeAreaView>
@@ -401,15 +583,13 @@ const styles = createStyles(() => ({
         borderTopColor: colors.border,
     },
     paletteDivider: { width: StyleSheet.hairlineWidth, height: 28, backgroundColor: colors.border, marginHorizontal: 4 },
-    toolButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+    toolButton: { width: 46, height: 48, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
     toolButtonActive: { backgroundColor: colors.backgroundSecondary },
     toolInk: { position: 'absolute', bottom: 7, width: 14, height: 3, borderRadius: 2 },
     colorDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.border },
     popover: {
         backgroundColor: colors.surface,
         borderRadius: 20,
-        padding: 14,
-        gap: 14,
         shadowColor: '#000',
         shadowOpacity: 0.18,
         shadowRadius: 16,
@@ -417,13 +597,25 @@ const styles = createStyles(() => ({
         elevation: 8,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
+        overflow: 'hidden',
     },
-    popoverTablet: { marginTop: 10, width: 340 },
+    popoverScroll: { padding: 14, gap: 14 },
+    popoverTablet: { marginTop: 10, width: 372, maxHeight: 560 },
+    popoverTabletRight: { position: 'absolute', top: 8, right: 12, width: 372, maxHeight: 600 },
     popoverPhone: { position: 'absolute', left: 12, right: 12, bottom: 8 },
     sizeRow: { flexDirection: 'row', justifyContent: 'space-between' },
     sizeButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
     sizeButtonActive: { backgroundColor: colors.backgroundSecondary },
-    colorGrid: { flexDirection: 'row', flexWrap: 'wrap', alignSelf: 'center', width: 6 * 44 + 5 * 8, gap: 8 },
-    swatchRing: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
-    swatch: { width: 32, height: 32, borderRadius: 16 },
+    textField: {
+        position: 'absolute',
+        minWidth: 180,
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        borderColor: colors.primary,
+        borderRadius: 6,
+        backgroundColor: 'transparent',
+        textAlignVertical: 'top',
+    },
 }));

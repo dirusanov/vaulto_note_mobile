@@ -13,6 +13,17 @@ export type InkStroke = {
     points: number[];
 };
 
+/** A typed label on the canvas; (x, y) is its top-left corner in document coordinates. */
+export type InkText = {
+    x: number;
+    y: number;
+    text: string;
+    size: number;
+    color: string;
+};
+
+export const INK_TEXT_LINE_HEIGHT = 1.25;
+
 export type InkToolSpec = {
     /** How much pressure changes the width (0 = constant width). */
     thinning: number;
@@ -40,8 +51,9 @@ export const INK_TOOL_ORDER: InkTool[] = ['fountain', 'ballpoint', 'pencil', 'br
 // Colours are authored for light paper; dark mode shows the drawing through a
 // smart-invert filter (black ink turns white, hues are kept).
 export const INK_COLORS = [
-    '#1D1D1F', '#6B7280', '#E53935', '#FB8C00', '#FDD835', '#43A047',
-    '#00897B', '#1E88E5', '#3949AB', '#8E24AA', '#D81B60', '#6D4C41',
+    '#1D1D1F', '#5F6368', '#9AA0A6', '#FFFFFF', '#B71C1C', '#E53935', '#F06292', '#D81B60',
+    '#8E24AA', '#5E35B1', '#3949AB', '#1E88E5', '#039BE5', '#00ACC1', '#00897B', '#43A047',
+    '#7CB342', '#C0CA33', '#FDD835', '#FFB300', '#FB8C00', '#F4511E', '#6D4C41', '#A1887F',
 ];
 
 export const INK_DEFAULT_COLOR: Record<InkTool, string> = {

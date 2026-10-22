@@ -3232,7 +3232,8 @@ export const NoteEditScreen = () => {
         setDrawingDocument(null);
         editorRef.current?.applyDrawing({
             id: doc.id,
-            src: doc.strokes.length ? buildDrawingSrc(doc) : null,
+            // Nothing drawn or typed left: remove the drawing from the note.
+            src: doc.strokes.length || doc.texts?.length ? buildDrawingSrc(doc) : null,
         });
     }, []);
     const handleDrawingClose = useCallback(() => setDrawingDocument(null), []);

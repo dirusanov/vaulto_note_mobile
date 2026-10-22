@@ -95,3 +95,32 @@ test('note text, previews and AI context ignore the drawing', () => {
     assert.equal(richContentToPreviewText(html).replace(/\s+/g, ' ').trim(), 'Before After');
     assert.ok(!richContentToAgentMarkdown(html).includes('svg'));
 });
+
+test('typed labels and the paper survive the round trip and show in the preview', () => {
+    const doc = {
+        id: 't1',
+        width: 760,
+        strokes: [],
+        texts: [{ x: 40.5, y: 100, text: 'Купить <молоко> & "хлеб" #1\nвторая строка', size: 24, color: '#E53935' }],
+        paper: { pattern: 'margin', color: '#FFF8E7' },
+    };
+    const src = buildDrawingSrc(doc);
+    const parsed = parseDrawingSrc(src);
+    assert.deepEqual(parsed.texts, doc.texts);
+    assert.deepEqual(parsed.paper, doc.paper);
+    const svg = decodeURIComponent(src.slice(0, src.indexOf(DRAWING_MARKER)));
+    assert.ok(svg.includes("class='vp'"));
+    assert.ok(svg.includes("fill='url(#p)'"));
+    assert.ok(svg.includes('&lt;молоко&gt; &amp;'));
+    assert.ok(svg.includes('вторая строка'));
+    assert.ok(!/[<>"&]/.test(src));
+});
+
+test('drawings without paper keep the compact, cropped preview', () => {
+    const src = buildDrawingSrc({ id: 'p0', width: 400, strokes: [{ tool: 'ballpoint', color: '#1D1D1F', size: 2, points: [10, 300, 0.5, 60, 320, 0.5] }] });
+    const parsed = parseDrawingSrc(src);
+    assert.deepEqual(parsed.paper, { pattern: 'blank', color: null });
+    assert.deepEqual(parsed.texts, []);
+    assert.ok(!src.includes('pattern'));
+    assert.ok(!src.includes("'vp'"));
+});

@@ -18,6 +18,10 @@ const buildDrawingCss = () => `
     border-radius: 12px;
     ${isDarkScheme() ? 'filter: invert(1) hue-rotate(180deg);' : ''}
   }
+  /* A sheet with its own colour keeps its colours in dark mode. */
+  img[src*="${DRAWING_MARKER}"][src*="class='vp'"] {
+    filter: none;
+  }
   img[src*="${DRAWING_MARKER}"].ProseMirror-selectednode {
     outline: 2px solid #4A6FA5;
     outline-offset: 2px;

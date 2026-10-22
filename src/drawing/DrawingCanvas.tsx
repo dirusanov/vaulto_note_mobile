@@ -1,39 +1,81 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import { Canvas, Circle, ColorMatrix, FractalNoise, Group, Paint, Path, Rect, Skia, SkPath } from '@shopify/react-native-skia';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { AppState, LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import {
+    Canvas,
+    Circle,
+    ColorMatrix,
+    FractalNoise,
+    Group,
+    Paint,
+    Path,
+    Rect,
+    Skia,
+    SkPath,
+    Text as SkiaText,
+} from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, PointerType } from 'react-native-gesture-handler';
 import { runOnJS, runOnUI, useDerivedValue, useSharedValue } from 'react-native-reanimated';
-import { INK_TOOLS, InkStroke, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, strokeBounds, strokeOutline, strokeOutlineFor } from './ink';
+import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, strokeOutline, strokeOutlineFor } from './ink';
+import { TextBox } from './drawingModel';
+import { drawingBounds } from './drawingFormat';
+import { PAPER_MARGIN_COLOR, PAPER_MARGIN_X, PaperStyle, paperDotRadius, paperGeometry, paperLineColor } from './paper';
+import { fontFor, lineBaseline, textLines } from './textLayout';
 
-export type PaperTemplate = 'blank' | 'lines' | 'grid' | 'dots';
+export type CanvasMode = 'ink' | 'erase' | 'text';
+
+/** Where a tap in text mode landed, in document and screen coordinates. */
+export type TextTap = {
+    x: number;
+    y: number;
+    /** Label under the finger, or -1 for empty paper. */
+    index: number;
+    screenX: number;
+    screenY: number;
+    /** Document → screen scale at the moment of the tap. */
+    scale: number;
+};
+
+export type DrawingCanvasHandle = {
+    /** Scrolls the page by `dy` screen pixels (negative = content up); returns the distance applied. */
+    panBy: (dy: number) => number;
+};
 
 type Props = {
+    /** Extra room to scroll past the content, e.g. the keyboard over a label being typed. */
+    bottomInset: number;
     strokes: InkStroke[];
+    texts: InkText[];
+    textBoxes: TextBox[];
+    paper: PaperStyle;
     /** Width of the drawing's coordinate space; 0 for a new drawing (see onMeasure). */
     docWidth: number;
     onMeasure: (canvasWidth: number) => void;
+    mode: CanvasMode;
     tool: InkTool;
     color: string;
     size: number;
-    erasing: boolean;
     /** Once a pen has touched the canvas, fingers scroll instead of drawing. */
     stylusOnly: boolean;
-    template: PaperTemplate;
+    /** Label being edited in the text field overlay; the canvas does not draw it. */
+    editingText: number | null;
     dark: boolean;
-    paperColor: string;
+    themePaperColor: string;
+    themeLineColor: string;
     deskColor: string;
-    lineColor: string;
     onCommit: (stroke: InkStroke) => void;
     onErase: (x: number, y: number, radius: number) => void;
     onEraseEnd: () => void;
+    onTextTap: (tap: TextTap) => void;
+    onTextMove: (index: number, dx: number, dy: number) => void;
     onStylus: () => void;
     onUndo: () => void;
     onRedo: () => void;
 };
 
 const MAX_ZOOM = 4;
-const PAPER_STEP = 32;
 const ERASER_SCREEN_RADIUS = 14;
+/** Screen distance a text-mode touch must travel before it drags the label. */
+const DRAG_SLOP = 6;
 
 const outlineToSkPath = (outline: number[]): SkPath => {
     'worklet';
@@ -52,28 +94,26 @@ const outlineToSkPath = (outline: number[]): SkPath => {
     return path.build();
 };
 
-const buildPaperPath = (template: PaperTemplate, width: number, height: number): SkPath | null => {
-    if (template === 'blank') {
-        return null;
-    }
-    const path = Skia.PathBuilder.Make();
-    for (let y = PAPER_STEP * 2; y < height; y += PAPER_STEP) {
-        if (template === 'dots') {
-            for (let x = PAPER_STEP; x < width; x += PAPER_STEP) {
-                path.addCircle(x, y, 1.3);
-            }
-        } else {
-            path.moveTo(0, y);
-            path.lineTo(width, y);
+const buildPaperPaths = (paper: PaperStyle, width: number, height: number) => {
+    const { lines, dots } = paperGeometry(paper.pattern, width, height);
+    let linePath: SkPath | null = null;
+    let dotPath: SkPath | null = null;
+    if (lines.length) {
+        const builder = Skia.PathBuilder.Make();
+        for (let i = 0; i < lines.length; i += 4) {
+            builder.moveTo(lines[i], lines[i + 1]);
+            builder.lineTo(lines[i + 2], lines[i + 3]);
         }
+        linePath = builder.build();
     }
-    if (template === 'grid') {
-        for (let x = PAPER_STEP; x < width; x += PAPER_STEP) {
-            path.moveTo(x, 0);
-            path.lineTo(x, height);
+    if (dots.length) {
+        const builder = Skia.PathBuilder.Make();
+        for (let i = 0; i < dots.length; i += 2) {
+            builder.addCircle(dots[i], dots[i + 1], paperDotRadius);
         }
+        dotPath = builder.build();
     }
-    return path.build();
+    return { linePath, dotPath };
 };
 
 // Graphite texture: fractal noise mapped to the ink colour's alpha. The noise is
@@ -95,19 +135,43 @@ const pathFor = (stroke: InkStroke): SkPath => {
     return path;
 };
 
-export const DrawingCanvas: React.FC<Props> = ({
-    strokes, docWidth: docWidthProp, onMeasure, tool, color, size, erasing, stylusOnly, template, dark, paperColor, deskColor, lineColor,
-    onCommit, onErase, onEraseEnd, onStylus, onUndo, onRedo,
-}) => {
+const Label: React.FC<{ item: InkText }> = ({ item }) => {
+    const font = fontFor(item.size);
+    return (
+        <>
+            {textLines(item.text).map((line, index) => (line ? (
+                <SkiaText key={index} x={item.x} y={item.y + lineBaseline(item.size, index)} text={line} font={font} color={item.color} />
+            ) : null))}
+        </>
+    );
+};
+
+export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
+    bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly,
+    editingText, dark, themePaperColor, themeLineColor, deskColor,
+    onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
+}, ref) => {
     const [view, setView] = useState({ width: 0, height: 0 });
+    // Android drops the GPU surface while the app is in the background and Skia
+    // does not repaint an unchanged scene, so the sheet came back blank. A fresh
+    // Canvas on return repaints it.
+    const [surfaceKey, setSurfaceKey] = useState(0);
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (next) => {
+            if (next === 'active') {
+                setSurfaceKey((key) => key + 1);
+            }
+        });
+        return () => subscription.remove();
+    }, []);
     const docWidth = docWidthProp || view.width || 1;
     useEffect(() => {
         if (!docWidthProp && view.width > 0) {
             onMeasure(view.width);
         }
     }, [docWidthProp, view.width, onMeasure]);
-    // The page is the note's column: shown 1:1 on a tablet (with margins), fitted
-    // to the screen on a phone. What you write is the size it has in the note.
+    // A drawing is shown at its own width, fitted to the screen when it is wider
+    // (one started on a tablet, opened on a phone) and centred when narrower.
     const baseScale = view.width > 0 ? Math.min(1, view.width / docWidth) : 1;
 
     const zoom = useSharedValue(1);
@@ -118,18 +182,36 @@ export const DrawingCanvas: React.FC<Props> = ({
     const viewW = useSharedValue(0);
     const viewH = useSharedValue(0);
     const contentBottom = useSharedValue(0);
+    const bottomInsetSV = useSharedValue(0);
+    // The JS thread does not see a shared value it wrote in the same tick, so
+    // panBy (JS) reads the inset from a ref; worklets read the shared value.
+    const bottomInsetRef = useRef(bottomInset);
+    bottomInsetRef.current = bottomInset;
 
     const live = useSharedValue<number[]>([]);
     const liveId = useSharedValue(0);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
-    const mode = useSharedValue<'draw' | 'erase' | 'scroll' | 'none'>('none');
+    const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
     const hover = useSharedValue({ x: -100, y: -100, visible: false });
+    const textBoxesSV = useSharedValue<number[]>([]);
+    const textGesture = useSharedValue({ index: -1, startX: 0, startY: 0, screenX: 0, screenY: 0, moved: false });
+    const dragOffset = useSharedValue({ dx: 0, dy: 0 });
+    /** A second finger joined (pinch/scroll): the one-finger action it interrupted is void. */
+    const multiTouch = useSharedValue(false);
+    const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-    const toolSV = useSharedValue({ tool, color, size, erasing, stylusOnly });
+    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly });
     useEffect(() => {
-        toolSV.value = { tool, color, size, erasing, stylusOnly };
-    }, [tool, color, size, erasing, stylusOnly, toolSV]);
+        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly };
+    }, [canvasMode, tool, color, size, stylusOnly, toolSV]);
+
+    useEffect(() => {
+        textBoxesSV.value = texts.flatMap((item, index) => {
+            const box = textBoxes[index] || { width: 0, height: 0 };
+            return [item.x, item.y, box.width, box.height];
+        });
+    }, [texts, textBoxes, textBoxesSV]);
 
     useEffect(() => {
         scaleSV.value = baseScale;
@@ -141,10 +223,21 @@ export const DrawingCanvas: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [baseScale, view, docWidth]);
 
-    const bounds = useMemo(() => strokeBounds(strokes), [strokes]);
+    const bounds = useMemo(() => drawingBounds(strokes, texts), [strokes, texts]);
     useEffect(() => {
         contentBottom.value = bounds ? bounds.maxY : 0;
     }, [bounds, contentBottom]);
+
+    /**
+     * Lowest scroll offset: past the content by 60% of a screen (room to keep
+     * writing), never less than one screen of page, plus the bottom inset (the
+     * keyboard) so any visible spot can be lifted above it.
+     */
+    const minScrollY = (z: number, inset: number) => {
+        'worklet';
+        const pageHeight = Math.max(contentBottom.value * scaleSV.value * z + viewH.value * 0.6, viewH.value);
+        return -Math.max(0, pageHeight + inset - viewH.value);
+    };
 
     const clampPan = () => {
         'worklet';
@@ -155,10 +248,25 @@ export const DrawingCanvas: React.FC<Props> = ({
         } else {
             tx.value = Math.min(0, Math.max(viewW.value - pageWidth, tx.value));
         }
-        const contentHeight = contentBottom.value * scaleSV.value * z + viewH.value * 0.6;
-        const minTy = -Math.max(0, contentHeight - viewH.value);
-        ty.value = Math.min(0, Math.max(minTy, ty.value));
+        ty.value = Math.min(0, Math.max(minScrollY(z, bottomInsetSV.value), ty.value));
     };
+
+    useEffect(() => {
+        bottomInsetSV.value = bottomInset;
+        runOnUI(clampPan)();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bottomInset]);
+
+    useImperativeHandle(ref, () => ({
+        panBy: (dy: number) => {
+            // Applied on the JS thread so the caller gets the clamped distance back
+            // at once; the shared values carry it to the UI thread.
+            const before = ty.value;
+            const next = Math.min(0, Math.max(minScrollY(zoom.value, bottomInsetRef.current), before + dy));
+            ty.value = next;
+            return next - before;
+        },
+    }), [zoom, contentBottom, scaleSV, viewH, bottomInsetSV, ty]);
 
     const commitLive = useCallback((points: number[], id: number, strokeTool: InkTool, strokeColor: string, strokeSize: number) => {
         onCommit({ tool: strokeTool, color: strokeColor, size: strokeSize, points });
@@ -171,10 +279,31 @@ export const DrawingCanvas: React.FC<Props> = ({
         });
     }, [onCommit, live, liveId]);
 
+    const finishTextDrag = useCallback((index: number, dx: number, dy: number) => {
+        onTextMove(index, dx, dy);
+        requestAnimationFrame(() => {
+            setDragIndex(null);
+            dragOffset.value = { dx: 0, dy: 0 };
+        });
+    }, [onTextMove, dragOffset]);
+
     const toDoc = (x: number, y: number) => {
         'worklet';
         const s = scaleSV.value * zoom.value;
         return { x: (x - tx.value) / s, y: (y - ty.value) / s };
+    };
+
+    const hitTextAt = (x: number, y: number, slop: number) => {
+        'worklet';
+        const boxes = textBoxesSV.value;
+        for (let i = boxes.length / 4 - 1; i >= 0; i--) {
+            const bx = boxes[i * 4];
+            const by = boxes[i * 4 + 1];
+            if (x >= bx - slop && x <= bx + boxes[i * 4 + 2] + slop && y >= by - slop && y <= by + boxes[i * 4 + 3] + slop) {
+                return i;
+            }
+        }
+        return -1;
     };
 
     const draw = Gesture.Pan()
@@ -187,42 +316,70 @@ export const DrawingCanvas: React.FC<Props> = ({
                 runOnJS(onStylus)();
             }
             const cfg = toolSV.value;
-            if (cfg.stylusOnly && !isStylus) {
-                mode.value = 'scroll';
+            // Typing a label is fine with a finger; drawing obeys pen-only mode.
+            if (cfg.stylusOnly && !isStylus && cfg.mode !== 'text') {
+                gestureMode.value = 'scroll';
                 return;
             }
             hover.value = { x: -100, y: -100, visible: false };
+            multiTouch.value = false;
             const pt = toDoc(e.x, e.y);
-            if (cfg.erasing) {
-                mode.value = 'erase';
-                eraser.value = { x: e.x, y: e.y, visible: true };
-                runOnJS(onErase)(pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
+            const scale = scaleSV.value * zoom.value;
+            if (cfg.mode === 'text') {
+                gestureMode.value = 'text';
+                textGesture.value = {
+                    index: hitTextAt(pt.x, pt.y, 8 / scale),
+                    startX: pt.x,
+                    startY: pt.y,
+                    screenX: e.x,
+                    screenY: e.y,
+                    moved: false,
+                };
                 return;
             }
-            mode.value = 'draw';
+            if (cfg.mode === 'erase') {
+                gestureMode.value = 'erase';
+                eraser.value = { x: e.x, y: e.y, visible: true };
+                runOnJS(onErase)(pt.x, pt.y, ERASER_SCREEN_RADIUS / scale);
+                return;
+            }
+            gestureMode.value = 'draw';
             const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
             lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
             liveId.value += 1;
             live.value = [pt.x, pt.y, pressure];
         })
         .onChange((e) => {
-            if (mode.value === 'scroll') {
+            if (gestureMode.value === 'scroll') {
                 tx.value += e.changeX;
                 ty.value += e.changeY;
                 clampPan();
             }
         })
         .onUpdate((e) => {
-            if (mode.value === 'scroll') {
+            const current = gestureMode.value;
+            if (current === 'scroll' || current === 'none') {
                 return;
             }
             const pt = toDoc(e.x, e.y);
-            if (mode.value === 'erase') {
-                eraser.value = { x: e.x, y: e.y, visible: true };
-                runOnJS(onErase)(pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
+            if (current === 'text') {
+                const g = textGesture.value;
+                if (g.index < 0) {
+                    return;
+                }
+                if (!g.moved && Math.hypot(e.x - g.screenX, e.y - g.screenY) < DRAG_SLOP) {
+                    return;
+                }
+                if (!g.moved) {
+                    textGesture.value = { ...g, moved: true };
+                    runOnJS(setDragIndex)(g.index);
+                }
+                dragOffset.value = { dx: pt.x - g.startX, dy: pt.y - g.startY };
                 return;
             }
-            if (mode.value !== 'draw') {
+            if (current === 'erase') {
+                eraser.value = { x: e.x, y: e.y, visible: true };
+                runOnJS(onErase)(pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
                 return;
             }
             let pressure: number;
@@ -244,9 +401,28 @@ export const DrawingCanvas: React.FC<Props> = ({
                 return points;
             });
         })
-        .onFinalize((_e, success) => {
-            const current = mode.value;
-            mode.value = 'none';
+        // `success` is not used: a touch that never moves (a tap, the dot over an
+        // "i") ends without the pan activating, yet it is a real tap or dot.
+        .onFinalize(() => {
+            const current = gestureMode.value;
+            gestureMode.value = 'none';
+            if (current === 'text') {
+                const g = textGesture.value;
+                if (g.moved) {
+                    const offset = dragOffset.value;
+                    runOnJS(finishTextDrag)(g.index, offset.dx, offset.dy);
+                } else if (!multiTouch.value) {
+                    runOnJS(onTextTap)({
+                        x: g.startX,
+                        y: g.startY,
+                        index: g.index,
+                        screenX: g.screenX,
+                        screenY: g.screenY,
+                        scale: scaleSV.value * zoom.value,
+                    });
+                }
+                return;
+            }
             if (current === 'erase') {
                 eraser.value = { x: -100, y: -100, visible: false };
                 runOnJS(onEraseEnd)();
@@ -257,7 +433,7 @@ export const DrawingCanvas: React.FC<Props> = ({
             }
             const points = live.value.slice();
             // A second finger landing (pinch) cancels the stroke it interrupted.
-            if (!success && points.length < 9) {
+            if (multiTouch.value) {
                 live.value = [];
                 return;
             }
@@ -268,6 +444,8 @@ export const DrawingCanvas: React.FC<Props> = ({
     const pinchStart = useSharedValue({ zoom: 1, tx: 0, ty: 0 });
     const pinch = Gesture.Pinch()
         .onStart(() => {
+            // Active only once two fingers are down (onBegin fires on the first).
+            multiTouch.value = true;
             pinchStart.value = { zoom: zoom.value, tx: tx.value, ty: ty.value };
         })
         .onUpdate((e) => {
@@ -282,6 +460,9 @@ export const DrawingCanvas: React.FC<Props> = ({
 
     const scroll = Gesture.Pan()
         .minPointers(2)
+        .onStart(() => {
+            multiTouch.value = true;
+        })
         .onChange((e) => {
             pinchStart.value = {
                 zoom: pinchStart.value.zoom,
@@ -319,6 +500,10 @@ export const DrawingCanvas: React.FC<Props> = ({
         { translateY: ty.value },
         { scale: scaleSV.value * zoom.value },
     ]);
+    const dragTransform = useDerivedValue(() => [
+        { translateX: dragOffset.value.dx },
+        { translateY: dragOffset.value.dy },
+    ]);
 
     const livePath = useDerivedValue(() => {
         const cfg = toolSV.value;
@@ -333,15 +518,23 @@ export const DrawingCanvas: React.FC<Props> = ({
     const hoverY = useDerivedValue(() => hover.value.y);
     const hoverRadius = useDerivedValue(() => {
         const cfg = toolSV.value;
-        return cfg.erasing ? ERASER_SCREEN_RADIUS : Math.max(2, (cfg.size / 2) * scaleSV.value * zoom.value);
+        if (cfg.mode === 'erase') {
+            return ERASER_SCREEN_RADIUS;
+        }
+        return Math.max(2, (cfg.mode === 'text' ? 3 : cfg.size / 2) * scaleSV.value * zoom.value);
     });
     const hoverOpacity = useDerivedValue(() => (hover.value.visible ? 0.45 : 0));
 
     const paperHeight = Math.ceil(((bounds?.maxY ?? 0) + (view.height / baseScale) * 3) / 512) * 512;
-    const paperPath = useMemo(
-        () => buildPaperPath(template, docWidth, paperHeight),
-        [template, docWidth, paperHeight]
+    const { linePath, dotPath } = useMemo(
+        () => buildPaperPaths(paper, docWidth, paperHeight),
+        [paper, docWidth, paperHeight]
     );
+    const sheetColor = paper.color || themePaperColor;
+    const lineColor = paperLineColor(paper.color, themeLineColor);
+    // The theme's own paper flips with dark mode, and so does the ink on it; a
+    // sheet with its own colour keeps true colours, as it will in the note.
+    const invertInk = dark && !paper.color;
 
     const strokePaths = strokes.map((stroke, index) => (
         <Path
@@ -353,14 +546,18 @@ export const DrawingCanvas: React.FC<Props> = ({
             {INK_TOOLS[stroke.tool]?.grain && <PencilGrain color={stroke.color} />}
         </Path>
     ));
+    const labels = texts.map((item, index) => (
+        index === editingText || index === dragIndex ? null : <Label key={index} item={item} />
+    ));
 
     const liveOpacity = INK_TOOLS[tool]?.opacity ?? 1;
-    const liveGrain = !erasing && INK_TOOLS[tool]?.grain;
-    const inkLayer = dark ? (
+    const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
+    const inkLayer = invertInk ? (
         <Paint>
             <ColorMatrix matrix={SMART_INVERT_MATRIX} />
         </Paint>
     ) : undefined;
+    const sheetClip = { x: 0, y: -4000, width: docWidth, height: paperHeight + 8000 };
 
     const handleLayout = (event: LayoutChangeEvent) => {
         const { width, height } = event.nativeEvent.layout;
@@ -371,32 +568,38 @@ export const DrawingCanvas: React.FC<Props> = ({
         <GestureDetector gesture={gesture}>
             <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
                 {view.width > 0 && (
-                    <Canvas style={styles.fill}>
+                    <Canvas key={surfaceKey} style={styles.fill}>
                         <Group transform={transform}>
-                            <Rect x={0} y={-4000} width={docWidth} height={paperHeight + 8000} color={paperColor} />
-                            {paperPath && (
-                                <Path
-                                    path={paperPath}
-                                    color={lineColor}
-                                    style={template === 'dots' ? 'fill' : 'stroke'}
-                                    strokeWidth={1 / baseScale}
-                                />
-                            )}
-                            <Group layer={inkLayer} clip={{ x: 0, y: -4000, width: docWidth, height: paperHeight + 8000 }}>
+                            <Rect {...sheetClip} color={sheetColor} />
+                            <Group clip={sheetClip}>
+                                {linePath && <Path path={linePath} color={lineColor} style="stroke" strokeWidth={1 / baseScale} />}
+                                {dotPath && <Path path={dotPath} color={lineColor} />}
+                                {paper.pattern === 'margin' && (
+                                    <Rect x={PAPER_MARGIN_X - 0.5} y={sheetClip.y} width={1 / baseScale} height={sheetClip.height} color={PAPER_MARGIN_COLOR} />
+                                )}
+                            </Group>
+                            <Group layer={inkLayer} clip={sheetClip}>
                                 {strokePaths}
                                 <Path path={livePath} color={color} opacity={liveOpacity}>
                                     {liveGrain && <PencilGrain color={color} />}
                                 </Path>
+                                {labels}
+                                {dragIndex !== null && texts[dragIndex] && (
+                                    <Group transform={dragTransform}>
+                                        <Label item={texts[dragIndex]} />
+                                    </Group>
+                                )}
                             </Group>
                         </Group>
                         <Circle cx={eraserX} cy={eraserY} r={ERASER_SCREEN_RADIUS} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
-                        <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={dark ? '#FFFFFF' : color} opacity={hoverOpacity} />
+                        <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
                     </Canvas>
                 )}
             </View>
         </GestureDetector>
     );
-};
+});
+DrawingCanvas.displayName = 'DrawingCanvas';
 
 const styles = StyleSheet.create({
     fill: { flex: 1 },
