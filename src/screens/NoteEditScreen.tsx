@@ -110,7 +110,7 @@ import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 import { DRAWING_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { DrawingEditor } from '../drawing/DrawingEditor';
-import { DrawingDocument, buildDrawingSrc } from '../drawing/drawingEmbeds';
+import { DRAWING_MARKER, DrawingDocument, buildDrawingSrc } from '../drawing/drawingEmbeds';
 import { generateUUID } from '../utils/uuid';
 import {
     appendPlainTextSnippetToRichContent,
@@ -2063,6 +2063,12 @@ export const NoteEditScreen = () => {
         }
 
         const latestContent = await flushVisualEditorContent();
+        // Markdown has no form for a drawing: editing the text there would save
+        // the note without it.
+        if (latestContent.includes(DRAWING_MARKER)) {
+            showToast(t('drawing.noMarkdown', 'Notes with drawings can\'t be edited as Markdown yet.'), 3500);
+            return;
+        }
         let markdown = richContentToMarkdown(latestContent);
         if (isRichHtmlContent(latestContent) && editorRef.current) {
             try {
@@ -2074,7 +2080,7 @@ export const NoteEditScreen = () => {
 
         showRawMarkdown(markdown, latestContent);
         setEditMode('raw');
-    }, [editMode, flushVisualEditorContent, showRawMarkdown]);
+    }, [editMode, flushVisualEditorContent, showRawMarkdown, t]);
 
     const handleRawTextChange = useCallback((text: string) => {
         rawSourceContentRef.current = stripAudioEmbedsFromRichContent(text);

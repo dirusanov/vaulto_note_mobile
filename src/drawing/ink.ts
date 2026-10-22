@@ -223,20 +223,38 @@ export function strokeOutlineFor(stroke: InkStroke, complete: boolean = true): n
     return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper, complete, spec.nib);
 }
 
-/** SVG path data with quadratic smoothing through the polygon's midpoints. */
-export const outlineToSvgPath = (outline: number[]): string => {
+/**
+ * Compact SVG path data: integer coordinates in units of 1/`scale` px, relative
+ * line segments, and samples closer than one unit dropped. The outline is dense
+ * enough that straight segments look smooth, at a fraction of the size.
+ */
+export const outlineToSvgPath = (outline: number[], scale: number = 2): string => {
     const n = outline.length / 2;
     if (n < 3) {
         return '';
     }
-    const r = (value: number) => Math.round(value * 10) / 10;
-    const midX = (i: number) => (outline[(i % n) * 2] + outline[((i + 1) % n) * 2]) / 2;
-    const midY = (i: number) => (outline[(i % n) * 2 + 1] + outline[((i + 1) % n) * 2 + 1]) / 2;
-    let d = `M${r(midX(0))} ${r(midY(0))}`;
-    for (let i = 1; i <= n; i++) {
-        d += `Q${r(outline[(i % n) * 2])} ${r(outline[(i % n) * 2 + 1])} ${r(midX(i))} ${r(midY(i))}`;
+    let px = Math.round(outline[0] * scale);
+    let py = Math.round(outline[1] * scale);
+    let d = `M${px} ${py}l`;
+    let segments = 0;
+    for (let i = 1; i < n; i++) {
+        const x = Math.round(outline[i * 2] * scale);
+        const y = Math.round(outline[i * 2 + 1] * scale);
+        const dx = x - px;
+        const dy = y - py;
+        if (Math.abs(dx) + Math.abs(dy) < 2 && i < n - 1) {
+            continue;
+        }
+        if (dx === 0 && dy === 0) {
+            continue;
+        }
+        // A minus sign separates numbers on its own.
+        d += `${segments && dx >= 0 ? ' ' : ''}${dx}${dy >= 0 ? ' ' : ''}${dy}`;
+        px = x;
+        py = y;
+        segments += 1;
     }
-    return `${d}Z`;
+    return segments >= 2 ? `${d}z` : '';
 };
 
 export const strokeBounds = (strokes: InkStroke[]): { minY: number; maxY: number } | null => {

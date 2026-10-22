@@ -10,8 +10,10 @@ export const LOCAL_WHISPER_ENABLED = true;
 // the private/offline case; the code stays so it can return with one switch.
 export const CUSTOM_AI_ENABLED = false;
 
-// Handwriting/drawing canvas in notes. Prototype: development builds only.
-export const DRAWING_ENABLED = typeof __DEV__ !== 'undefined' && __DEV__;
+// Handwriting/drawing canvas in notes. Prototype: development builds and the
+// `drawing-preview` test build (EAS profile) only.
+export const DRAWING_ENABLED = (typeof __DEV__ !== 'undefined' && __DEV__)
+    || process.env.EXPO_PUBLIC_DRAWING_ENABLED === '1';
 
 export const isLocalAIProvider = (value: string | null | undefined): boolean => {
     return value === 'local' || value === 'local_whisper' || value === 'local_llm';
