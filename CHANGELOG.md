@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.97] - 2026-10-21
+
 ### Changed
 - Turning off "Work without internet" no longer asks to remove the models: they stop being used (recordings go to the cloud) and stay on the device, so turning it back on is instant. Space can still be freed from Settings → Models while it is off.
 - When on-device transcription is chosen and keeps being slow on the device (two of the last three recordings took longer than the recording itself and at least 15 s), a short bar suggests the cloud with a one-tap switch. It shows at most once every two weeks, never for protected notes or without internet.
+
+### Fixed
+- The app opens faster: notes already on the device appear as soon as they are readable, and the first sync continues in the background. Launch no longer downloads every note to check for encryption, has no fixed minimum splash, and no longer shows an empty list or a blank screen before the notes.
+- Voice notes no longer get a made-up title: without a model title the note stays untitled instead of being called "AI Agent" or taking the first words cut mid-sentence.
+- On networks that block Google's connectivity check, recordings are no longer kept offline: our own server is asked first, and pending recordings retry.
 
 ## [1.0.96] - 2026-10-21
 

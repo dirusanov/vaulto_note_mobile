@@ -47,10 +47,15 @@ export const useNotes = () => {
     const [error, setError] = useState<string | null>(null);
     const [isHydrated, setIsHydrated] = useState(false);
     const [isInitialSyncComplete, setIsInitialSyncComplete] = useState(false);
+    // The account the two flags above were last reset for. Until the reset below
+    // runs, they still describe the previous one (e.g. no user yet at launch).
+    const bootstrapKey = `${userId ?? ''}|${isAuthenticated}`;
+    const [flagsKey, setFlagsKey] = useState<string | null>(null);
     const notesRef = useRef<Note[]>([]);
     const allNotesRef = useRef<Note[]>([]);
     const notesSignatureRef = useRef<string>('');
     const hydratedRef = useRef(false);
+    const refreshSeqRef = useRef(0);
     const initialSyncRef = useRef(false);
     const lastBootstrapSyncAtRef = useRef<number | null>(null);
     const suppressSyncRefreshRef = useRef(true);
@@ -319,9 +324,13 @@ export const useNotes = () => {
             return [];
         }
 
+        const refreshSeq = ++refreshSeqRef.current;
         const localNotes = await getNotesLocal(userId);
-        setLockedCount(localNotes.filter((n) => n.locked && !n.deleted && !n.pending_delete).length);
         const visibleMain = await filterAndCleanupNotes(localNotes);
+        // Reads overlap (key restored, sync finished): an older read must not
+        // replace a newer one.
+        if (refreshSeq !== refreshSeqRef.current) return visibleMain;
+        setLockedCount(localNotes.filter((n) => n.locked && !n.deleted && !n.pending_delete).length);
 
         const nextSignature = buildNotesSignature(visibleMain);
         const prevSignature = notesSignatureRef.current;
@@ -344,9 +353,10 @@ export const useNotes = () => {
             if (!available) {
                 return;
             }
+            // Not held back by the first sync: the list is already on screen and
+            // must not stay empty until the sync ends. Read again after it too.
             if (suppressSyncRefreshRef.current) {
                 pendingSyncRefreshRef.current = true;
-                return;
             }
             void refreshFromLocal();
         });
@@ -377,6 +387,7 @@ export const useNotes = () => {
         pendingSyncRefreshRef.current = false;
         setIsHydrated(false);
         setIsInitialSyncComplete(false);
+        setFlagsKey(bootstrapKey);
         lastBootstrapSyncAtRef.current = null;
 
         const bootstrap = async () => {
@@ -437,7 +448,7 @@ export const useNotes = () => {
         return () => {
             cancelled = true;
         };
-    }, [isAuthenticated, markInitialSyncComplete, refreshFromLocal, userId]);
+    }, [isAuthenticated, markInitialSyncComplete, refreshFromLocal, userId, bootstrapKey]);
 
     // Periodic Sync Interval (30s)
     useEffect(() => {
@@ -1299,8 +1310,8 @@ export const useNotes = () => {
         notes,
         loading,
         error,
-        isHydrated,
-        isInitialSyncComplete,
+        isHydrated: isHydrated && flagsKey === bootstrapKey,
+        isInitialSyncComplete: isInitialSyncComplete && flagsKey === bootstrapKey,
         fetchNotes,
         createNote,
         updateNote,
