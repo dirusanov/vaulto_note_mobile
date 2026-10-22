@@ -28,9 +28,6 @@ const TOOL_ICONS: Record<InkTool, keyof typeof MaterialCommunityIcons.glyphMap> 
     marker: 'marker',
 };
 
-/** Max width of the note editor column (NoteEditScreen). */
-const DRAWING_PAGE_WIDTH = 760;
-
 const TEMPLATE_ORDER: PaperTemplate[] = ['blank', 'lines', 'grid', 'dots'];
 const TEMPLATE_ICONS: Record<PaperTemplate, keyof typeof MaterialCommunityIcons.glyphMap> = {
     blank: 'checkbox-blank-outline',
@@ -65,7 +62,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
     const [template, setTemplate] = useState<PaperTemplate>(rememberedTemplate);
     const [stylusSeen, setStylusSeen] = useState(false);
     const [stylusOnly, setStylusOnly] = useState(false);
-    const [docWidth, setDocWidth] = useState(800);
+    // 0 until the canvas has measured itself (a new drawing takes its width).
+    const [docWidth, setDocWidth] = useState(0);
     const strokesRef = useRef<InkStroke[]>([]);
     const eraseSnapshot = useRef<InkStroke[] | null>(null);
 
@@ -80,8 +78,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         setRedoStack([]);
         setPopover(false);
         setErasing(false);
-        // New drawings are as wide as the note column they will be shown in.
-        setDocWidth(document?.width || Math.min(width, DRAWING_PAGE_WIDTH));
+        // A new drawing uses the whole canvas; the note shrinks it to its column.
+        setDocWidth(document?.width || 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, document]);
 
@@ -170,8 +168,12 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         setPopover(false);
     };
 
+    const handleMeasure = useCallback((canvasWidth: number) => {
+        setDocWidth((current) => current || Math.round(canvasWidth));
+    }, []);
+
     const handleDone = () => {
-        onSave({ id: document?.id || '', width: docWidth, strokes: strokesRef.current });
+        onSave({ id: document?.id || '', width: docWidth || width, strokes: strokesRef.current });
     };
 
     const handleClose = () => {
@@ -323,6 +325,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
                         <DrawingCanvas
                             strokes={strokes}
                             docWidth={docWidth}
+                            onMeasure={handleMeasure}
                             tool={tool}
                             color={current.color}
                             size={size}

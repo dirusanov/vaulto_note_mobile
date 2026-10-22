@@ -9,7 +9,9 @@ export type PaperTemplate = 'blank' | 'lines' | 'grid' | 'dots';
 
 type Props = {
     strokes: InkStroke[];
+    /** Width of the drawing's coordinate space; 0 for a new drawing (see onMeasure). */
     docWidth: number;
+    onMeasure: (canvasWidth: number) => void;
     tool: InkTool;
     color: string;
     size: number;
@@ -94,10 +96,16 @@ const pathFor = (stroke: InkStroke): SkPath => {
 };
 
 export const DrawingCanvas: React.FC<Props> = ({
-    strokes, docWidth, tool, color, size, erasing, stylusOnly, template, dark, paperColor, deskColor, lineColor,
+    strokes, docWidth: docWidthProp, onMeasure, tool, color, size, erasing, stylusOnly, template, dark, paperColor, deskColor, lineColor,
     onCommit, onErase, onEraseEnd, onStylus, onUndo, onRedo,
 }) => {
     const [view, setView] = useState({ width: 0, height: 0 });
+    const docWidth = docWidthProp || view.width || 1;
+    useEffect(() => {
+        if (!docWidthProp && view.width > 0) {
+            onMeasure(view.width);
+        }
+    }, [docWidthProp, view.width, onMeasure]);
     // The page is the note's column: shown 1:1 on a tablet (with margins), fitted
     // to the screen on a phone. What you write is the size it has in the note.
     const baseScale = view.width > 0 ? Math.min(1, view.width / docWidth) : 1;
