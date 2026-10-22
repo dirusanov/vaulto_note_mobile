@@ -23,6 +23,11 @@ export type DrawingDocument = {
     strokes: InkStroke[];
     texts?: InkText[];
     paper?: PaperStyle;
+    /**
+     * Where the tapped drawing sits in the editor document (not stored). A
+     * pasted copy has the same id, so the edit goes back to this exact node.
+     */
+    pos?: number;
 };
 
 /** Pattern line colour of the theme paper in the SVG (light theme; dark mode inverts the image). */
@@ -58,7 +63,18 @@ const escapeForSrc = (text: string): string =>
         .replace(/</g, '%3C')
         .replace(/>/g, '%3E')
         .replace(/&/g, '%26');
+
+// The JSON payload carries label text verbatim: a raw ' in it could read as an
+// attribute to the legacy audio regexes that scan whole <img> tags. (The SVG
+// part needs no such escape: its text is XML-escaped, ' included.)
+const escapePayload = (text: string): string => escapeForSrc(text).replace(/'/g, '%27');
 const MIN_HEIGHT = 120;
+
+/** The stored number, or the fallback when it is missing (0 is a real value). */
+const num = (value: unknown, fallback: number): number => {
+    const parsed = Number(value);
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(parsed) ? parsed : fallback;
+};
 
 // Points are stored as deltas in tenths of a pixel and pressure in hundredths:
 // about a third of the size of plain JSON numbers.
@@ -87,12 +103,12 @@ const decodeStroke = (raw: unknown): InkStroke | null => {
     for (let i = 3; i + 2 < raw.length; i += 3) {
         x += Number(raw[i]) || 0;
         y += Number(raw[i + 1]) || 0;
-        points.push(x / 10, y / 10, (Number(raw[i + 2]) || 50) / 100);
+        points.push(x / 10, y / 10, num(raw[i + 2], 50) / 100);
     }
     return {
         tool,
         color: typeof raw[1] === 'string' ? raw[1] : '#1D1D1F',
-        size: (Number(raw[2]) || 20) / 10,
+        size: num(raw[2], 20) / 10,
         points,
     };
 };
@@ -112,7 +128,7 @@ export const parseDrawingSrc = (src: string | null | undefined): DrawingDocument
             .map((raw: any[]) => ({
                 x: (Number(raw[0]) || 0) / 10,
                 y: (Number(raw[1]) || 0) / 10,
-                size: (Number(raw[2]) || 180) / 10,
+                size: num(raw[2], 180) / 10,
                 color: typeof raw[3] === 'string' ? raw[3] : '#1D1D1F',
                 text: raw[4],
             }));
@@ -204,5 +220,30 @@ export const buildDrawingSrc = (doc: DrawingDocument): string => {
             ? { p: [PAPER_PATTERNS.indexOf(doc.paper.pattern), doc.paper.color] }
             : {}),
     };
-    return `data:image/svg+xml;charset=utf-8,${escapeForSrc(buildDrawingSvg(doc))}${DRAWING_MARKER}${escapeForSrc(JSON.stringify(payload))}`;
+    return `data:image/svg+xml;charset=utf-8,${escapeForSrc(buildDrawingSvg(doc))}${DRAWING_MARKER}${escapePayload(JSON.stringify(payload))}`;
+};
+
+/**
+ * Puts a drawing into note HTML without the editor: replaces the <img> of the
+ * drawing with this id, or appends it. Used to save a drawing straight to the
+ * note when the app goes to the background, where the editor WebView may not
+ * answer in time. `src` null removes the drawing.
+ */
+export const upsertDrawingInHtml = (html: string, id: string, src: string | null): string => {
+    let replaced = false;
+    const next = html.replace(/<img\b[^>]*>/gi, (tag) => {
+        if (replaced) {
+            return tag;
+        }
+        const match = /\ssrc=(["'])(.*?)\1/i.exec(tag);
+        if (!match || !match[2].includes(DRAWING_MARKER) || parseDrawingSrc(match[2])?.id !== id) {
+            return tag;
+        }
+        replaced = true;
+        return src ? tag.replace(match[0], ` src="${src}"`) : '';
+    });
+    if (replaced || !src) {
+        return next;
+    }
+    return `${html}<img src="${src}"><p></p>`;
 };

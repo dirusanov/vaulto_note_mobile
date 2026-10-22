@@ -111,6 +111,7 @@ import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 import { DRAWING_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { DrawingEditor } from '../drawing/DrawingEditor';
 import { DRAWING_MARKER, DrawingDocument, buildDrawingSrc } from '../drawing/drawingEmbeds';
+import { upsertDrawingInHtml } from '../drawing/drawingFormat';
 import { generateUUID } from '../utils/uuid';
 import {
     appendPlainTextSnippetToRichContent,
@@ -3228,14 +3229,18 @@ export const NoteEditScreen = () => {
     const handleNewDrawing = useCallback(async () => {
         setDrawingDocument({ id: await generateUUID(), width: 0, strokes: [] });
     }, []);
-    const handleDrawingSave = useCallback((doc: DrawingDocument) => {
-        setDrawingDocument(null);
+    const applyDrawingToNote = useCallback((doc: DrawingDocument) => {
         editorRef.current?.applyDrawing({
             id: doc.id,
+            pos: doc.pos,
             // Nothing drawn or typed left: remove the drawing from the note.
             src: doc.strokes.length || doc.texts?.length ? buildDrawingSrc(doc) : null,
         });
     }, []);
+    const handleDrawingSave = useCallback((doc: DrawingDocument) => {
+        setDrawingDocument(null);
+        applyDrawingToNote(doc);
+    }, [applyDrawingToNote]);
     const handleDrawingClose = useCallback(() => setDrawingDocument(null), []);
 
     const handleAudioActionFromEditor = useCallback(async (payload: AudioEmbedControlPayload) => {
@@ -3534,8 +3539,17 @@ export const NoteEditScreen = () => {
         }
     }, [activeVariantId, localNoteId, resolveImprovementVariantTitle, updateImprovement]);
 
-    const saveNote = useCallback(async () => {
-        await flushVisualEditorContent();
+    const saveNote = useCallback(async (options?: {
+        /**
+         * Save currentContentRef as it is, without asking the editor WebView
+         * first. In the background Android pauses the WebView and the frame-based
+         * timers, so that request would only finish once the app is back.
+         */
+        skipEditorFlush?: boolean;
+    }) => {
+        if (!options?.skipEditorFlush) {
+            await flushVisualEditorContent();
+        }
 
         const activeVariant = activeVariantIdRef.current;
         if (activeVariant !== 'original') {
@@ -3668,6 +3682,22 @@ export const NoteEditScreen = () => {
             }
         }
     }, [bindCreatedDraftToRoute, createNote, deleteNote, flushVisualEditorContent, handleCreatedNoteAutoScale, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
+
+    // App going to the background with the drawing canvas open: Android may end
+    // the app, so the drawing goes into the note and is saved right away. The
+    // editor gets it too (its next change must not drop it); the HTML is also
+    // patched directly in case the editor WebView does not answer in time.
+    const handleDrawingAutosave = useCallback((doc: DrawingDocument) => {
+        const src = doc.strokes.length || doc.texts?.length ? buildDrawingSrc(doc) : null;
+        if (!src) {
+            return;
+        }
+        applyDrawingToNote(doc);
+        currentContentRef.current = upsertDrawingInHtml(currentContentRef.current, doc.id, src);
+        saveNote({ skipEditorFlush: true }).catch((error) => {
+            console.error('Failed to save the drawing in the background:', error);
+        });
+    }, [applyDrawingToNote, saveNote]);
 
     useEffect(() => {
         saveNoteRef.current = saveNote;
@@ -3902,8 +3932,15 @@ export const NoteEditScreen = () => {
         if (editMode !== 'raw' || content === rawSourceContentRef.current) {
             return;
         }
+        // A version with a drawing has no Markdown form; typing into the raw
+        // view would save it without the drawing. Go back to the visual editor.
+        if (content.includes(DRAWING_MARKER)) {
+            setEditMode('visual');
+            showToast(t('drawing.noMarkdown', 'Notes with drawings can\'t be edited as Markdown yet.'), 3500);
+            return;
+        }
         showRawMarkdown(richContentToMarkdown(content), content);
-    }, [content, editMode, showRawMarkdown]);
+    }, [content, editMode, showRawMarkdown, t]);
 
     const handleVariantSelect = useCallback(async (variantId: string) => {
         if (variantId === activeVariantId) {
@@ -7419,6 +7456,7 @@ export const NoteEditScreen = () => {
                     visible={!!drawingDocument}
                     document={drawingDocument}
                     onSave={handleDrawingSave}
+                    onAutosave={handleDrawingAutosave}
                     onClose={handleDrawingClose}
                 />
             )}

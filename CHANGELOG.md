@@ -10,6 +10,7 @@
 - Text labels on drawings: tap to type in place, tap a label to edit, drag to move; the page scrolls a label above the keyboard.
 - Paper: blank, dots, grid, fine grid, lined, wide lines or notebook, in seven sheet colors; saved with the drawing and shown in the note.
 - Drawings are part of the note: they sync and are end-to-end encrypted like the text. The ink follows the pen with a short predicted tip.
+- A drawing in progress is saved into the note when the app goes to the background, so it survives Android closing the app. Labels in Japanese, Chinese, Hindi, Arabic and emoji render with the system fonts.
 
 ### Fixed
 - Android tablets on Android 15 and older no longer start in a narrow phone-shaped window: the orientation is decided from the screen size, not locked in the manifest.

@@ -40,6 +40,14 @@ const DRAWING_RUNTIME_JS = `
     const image = target && typeof target.closest === 'function' ? target.closest('img') : null;
     return image && (image.getAttribute('src') || '').indexOf(MARKER) !== -1 ? image : null;
   };
+  const positionOf = (image) => {
+    try {
+      const view = document.querySelector('.ProseMirror')?.editor?.view;
+      return view ? view.posAtDOM(image, 0) : null;
+    } catch (error) {
+      return null;
+    }
+  };
   // A drawing opens the canvas on tap; it must not focus the editor (keyboard).
   document.addEventListener('mousedown', (event) => {
     if (drawingImage(event.target)) {
@@ -54,7 +62,7 @@ const DRAWING_RUNTIME_JS = `
     event.stopPropagation();
     window.ReactNativeWebView?.postMessage(JSON.stringify({
       type: ${JSON.stringify(DRAWING_OPEN_MESSAGE_TYPE)},
-      payload: { src: image.getAttribute('src') || '' },
+      payload: { src: image.getAttribute('src') || '', pos: positionOf(image) },
     }));
   }, true);
   return true;
@@ -65,13 +73,14 @@ export const getDrawingRuntimeJs = (): string => DRAWING_RUNTIME_JS;
 
 export const getDrawingBridge = (onOpen?: (doc: DrawingDocument) => void) => new BridgeExtension({
     forceName: 'vaultoDrawingBridge',
-    onEditorMessage: (message: { type?: string; payload?: { src?: string } }) => {
+    onEditorMessage: (message: { type?: string; payload?: { src?: string; pos?: number | null } }) => {
         if (message?.type !== DRAWING_OPEN_MESSAGE_TYPE) {
             return false;
         }
         const doc = parseDrawingSrc(message.payload?.src);
         if (doc && onOpen) {
-            onOpen(doc);
+            const pos = message.payload?.pos;
+            onOpen(typeof pos === 'number' ? { ...doc, pos } : doc);
         }
         return true;
     },
@@ -84,7 +93,7 @@ export const getDrawingBridge = (onOpen?: (doc: DrawingDocument) => void) => new
  * the tiptap instance (tiptap keeps it on the ProseMirror DOM node), so the change
  * is a real document transaction and reaches the note through the usual update.
  */
-export const buildDrawingCommandJs = (command: { id: string; src: string | null }): string => `
+export const buildDrawingCommandJs = (command: { id: string; src: string | null; pos?: number }): string => `
 (() => {
   try {
     const editor = document.querySelector('.ProseMirror')?.editor;
@@ -92,7 +101,29 @@ export const buildDrawingCommandJs = (command: { id: string; src: string | null 
     const command = ${JSON.stringify(command)};
     const marker = ${JSON.stringify(DRAWING_MARKER)};
     let found = null;
-    editor.state.doc.descendants((node, pos) => {
+    const idAt = (node) => {
+      if (!node || node.type.name !== 'image') return null;
+      const src = node.attrs.src || '';
+      const index = src.indexOf(marker);
+      if (index === -1) return null;
+      try {
+        return JSON.parse(decodeURIComponent(src.slice(index + marker.length))).id;
+      } catch (e) {
+        return null;
+      }
+    };
+    // The node that was tapped, if the document has not moved it since.
+    if (typeof command.pos === 'number') {
+      for (const pos of [command.pos, command.pos - 1]) {
+        if (pos < 0 || pos >= editor.state.doc.content.size) continue;
+        const node = editor.state.doc.nodeAt(pos);
+        if (idAt(node) === command.id) {
+          found = { node, pos };
+          break;
+        }
+      }
+    }
+    if (!found) editor.state.doc.descendants((node, pos) => {
       if (found || node.type.name !== 'image') return !found;
       const src = node.attrs.src || '';
       const index = src.indexOf(marker);

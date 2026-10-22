@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
     Alert,
+    AppState,
     Keyboard,
     Modal,
     Pressable,
@@ -33,6 +34,11 @@ type Props = {
     /** Existing drawing to edit, or a fresh one (no strokes). */
     document: DrawingDocument | null;
     onSave: (doc: DrawingDocument) => void;
+    /**
+     * Stores the drawing in the note without closing the canvas: called when
+     * the app goes to the background, where Android may end it at any time.
+     */
+    onAutosave: (doc: DrawingDocument) => void;
     onClose: () => void;
 };
 
@@ -78,13 +84,15 @@ let rememberedTool: ActiveTool = 'fountain';
 let rememberedPaper: PaperStyle = DEFAULT_PAPER;
 let rememberedRecent: string[] = [];
 
-export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onClose }) => {
+export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAutosave, onClose }) => {
     const { t } = useTranslation();
     const { width, height } = useWindowDimensions();
     const isTablet = Math.min(width, height) >= 600;
     const dark = isDarkScheme();
 
     const [state, dispatch] = useReducer(drawingReducer, undefined, () => initialDrawingState());
+    const stateRef = useRef(state);
+    stateRef.current = state;
     const { strokes, texts, paper } = state.content;
     const [settings, setSettings] = useState<ToolSettings>(() => rememberedSettings || initialSettings());
     const [activeTool, setActiveTool] = useState<ActiveTool>(rememberedTool);
@@ -117,7 +125,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         dispatch({
             type: 'load',
             content: document
-                ? { strokes: document.strokes, texts: document.texts || [], paper: document.paper || DEFAULT_PAPER }
+                // A parsed drawing always carries its paper; a new one (no paper
+                // yet) starts on the paper used last.
+                ? { strokes: document.strokes, texts: document.texts || [], paper: document.paper ?? rememberedPaper }
                 : emptyContent(rememberedPaper),
         });
         setPopover(null);
@@ -295,12 +305,43 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
         dispatch({ type: 'setPaper', paper: next });
     };
 
-    const handleDone = () => {
+    const currentDocument = (): DrawingDocument => {
         // Include the label still being typed: the reducer is pure, so the final
         // content can be computed right here instead of waiting for a render.
         const action = textEditAction(textEdit);
         const content = action ? drawingReducer(state, action).content : state.content;
-        onSave({ id: document?.id || '', width: docWidth || width, ...content });
+        return { id: document?.id || '', width: docWidth || width, pos: document?.pos, ...content };
+    };
+    const latestDocument = useRef(currentDocument);
+    latestDocument.current = currentDocument;
+    const savedUndoDepth = useRef(0);
+    useEffect(() => {
+        if (visible) {
+            savedUndoDepth.current = 0;
+        }
+    }, [visible, document]);
+    useEffect(() => {
+        if (!visible) {
+            return;
+        }
+        const subscription = AppState.addEventListener('change', (next) => {
+            if (next !== 'background') {
+                return;
+            }
+            const doc = latestDocument.current();
+            const hasContent = doc.strokes.length > 0 || (doc.texts?.length ?? 0) > 0;
+            // Only when something changed since opening (or since the last
+            // autosave), and never to delete: an empty canvas is not a draft.
+            if (hasContent && stateRef.current.undo.length !== savedUndoDepth.current) {
+                savedUndoDepth.current = stateRef.current.undo.length;
+                onAutosave(doc);
+            }
+        });
+        return () => subscription.remove();
+    }, [visible, onAutosave]);
+
+    const handleDone = () => {
+        onSave(currentDocument());
     };
 
     const handleClose = () => {

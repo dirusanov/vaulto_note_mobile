@@ -124,3 +124,48 @@ test('drawings without paper keep the compact, cropped preview', () => {
     assert.ok(!src.includes('pattern'));
     assert.ok(!src.includes("'vp'"));
 });
+
+test('zero pressure and size survive, and quotes in labels stay inside the payload', () => {
+    const doc = {
+        id: 'q1',
+        width: 400,
+        strokes: [{ tool: 'ballpoint', color: '#000000', size: 0, points: [10, 20, 0, 30, 40, 0] }],
+        texts: [{ x: 1, y: 2, size: 18, color: '#000000', text: "title='vaulto-audio:x' data-audio-path='y'" }],
+    };
+    const src = buildDrawingSrc(doc);
+    const parsed = parseDrawingSrc(src);
+    assert.equal(parsed.strokes[0].size, 0);
+    assert.deepEqual(parsed.strokes[0].points.filter((_, i) => i % 3 === 2), [0, 0]);
+    assert.equal(parsed.texts[0].text, doc.texts[0].text);
+    const payload = src.slice(src.indexOf(DRAWING_MARKER));
+    assert.ok(!payload.includes("'"));
+    assert.ok(!src.includes("title='vaulto-audio"));
+});
+
+test('a label that looks like audio attributes does not turn the drawing into an audio card', () => {
+    const { richContentToEditorHtml } = require('../.test-build/drawing/utils/richContent');
+    const src = buildDrawingSrc({
+        id: 'q2',
+        width: 400,
+        strokes: [],
+        texts: [{ x: 1, y: 2, size: 18, color: '#000000', text: "title='vaulto-audio:x'" }],
+    });
+    const html = richContentToEditorHtml(`<p>a</p><img src="${src}"><p>b</p>`);
+    assert.ok(html.includes(DRAWING_MARKER), 'the drawing is still there');
+    assert.ok(!html.includes('data-audio-player'), 'no audio card was made of it');
+});
+
+test('a drawing can be put into note HTML without the editor', () => {
+    const { upsertDrawingInHtml } = require('../.test-build/drawing/drawing/drawingFormat');
+    const a1 = buildDrawingSrc({ id: 'a', width: 300, strokes: [{ tool: 'ballpoint', color: '#000000', size: 2, points: [1, 2, 0.5, 3, 4, 0.5] }] });
+    const a2 = buildDrawingSrc({ id: 'a', width: 300, strokes: [{ tool: 'ballpoint', color: '#E53935', size: 2, points: [5, 6, 0.5, 7, 8, 0.5] }] });
+    const b = buildDrawingSrc({ id: 'b', width: 300, strokes: [] });
+    const html = `<p>x</p><img src="${b}"><img src="${a1}"><p>y</p>`;
+    const updated = upsertDrawingInHtml(html, 'a', a2);
+    assert.ok(updated.includes(a2) && !updated.includes(a1) && updated.includes(b));
+    assert.ok(updated.startsWith('<p>x</p>') && updated.endsWith('<p>y</p>'));
+    const added = upsertDrawingInHtml('<p>x</p>', 'c', a2);
+    assert.equal(added, `<p>x</p><img src="${a2}"><p></p>`);
+    assert.equal(upsertDrawingInHtml(html, 'a', null), `<p>x</p><img src="${b}"><p>y</p>`);
+    assert.equal(upsertDrawingInHtml('<p>x</p>', 'zzz', null), '<p>x</p>');
+});

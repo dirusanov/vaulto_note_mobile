@@ -12,7 +12,7 @@ import {
     Rect,
     Skia,
     SkPath,
-    Text as SkiaText,
+    Paragraph,
 } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, PointerType } from 'react-native-gesture-handler';
 import { runOnJS, runOnUI, useDerivedValue, useSharedValue } from 'react-native-reanimated';
@@ -20,7 +20,7 @@ import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrai
 import { TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
 import { PAPER_MARGIN_COLOR, PAPER_MARGIN_X, PaperStyle, paperDotRadius, paperGeometry, paperLineColor } from './paper';
-import { fontFor, lineBaseline, textLines } from './textLayout';
+import { LABEL_LAYOUT_WIDTH, paragraphFor } from './textLayout';
 
 export type CanvasMode = 'ink' | 'erase' | 'text';
 
@@ -144,16 +144,9 @@ const pathFor = (stroke: InkStroke): SkPath => {
     return path;
 };
 
-const Label: React.FC<{ item: InkText }> = ({ item }) => {
-    const font = fontFor(item.size);
-    return (
-        <>
-            {textLines(item.text).map((line, index) => (line ? (
-                <SkiaText key={index} x={item.x} y={item.y + lineBaseline(item.size, index)} text={line} font={font} color={item.color} />
-            ) : null))}
-        </>
-    );
-};
+const Label: React.FC<{ item: InkText }> = ({ item }) => (
+    <Paragraph paragraph={paragraphFor(item)} x={item.x} y={item.y} width={LABEL_LAYOUT_WIDTH} />
+);
 
 export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly,

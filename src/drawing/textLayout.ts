@@ -1,44 +1,50 @@
 import { Platform } from 'react-native';
-import { matchFont, SkFont } from '@shopify/react-native-skia';
+import { Skia, SkParagraph } from '@shopify/react-native-skia';
 import { INK_TEXT_LINE_HEIGHT, InkText } from './ink';
 import { TextBox } from './drawingModel';
 
-// Labels are drawn with the platform's system sans-serif, the same family the
-// SVG preview asks for (Roboto on Android, Helvetica on iOS).
-const FONT_FAMILY = Platform.select({ ios: 'Helvetica Neue', default: 'sans-serif' });
+// Labels are laid out with Skia's paragraph engine over the system fonts, so
+// scripts the base font lacks (CJK, Devanagari, Arabic, emoji) fall back to
+// another system font and are shaped, as in the text field they were typed in.
+// The family matches what the SVG preview asks for (Roboto / Helvetica).
+const FONT_FAMILIES = Platform.select({ ios: ['Helvetica Neue'], default: ['sans-serif'] });
 
-const fonts = new Map<number, SkFont>();
+/** Wide enough that a label only breaks where its text has a newline. */
+const LAYOUT_WIDTH = 100000;
 
-export const fontFor = (size: number): SkFont => {
-    const key = Math.round(size * 2) / 2;
-    let font = fonts.get(key);
-    if (!font) {
-        font = matchFont({ fontFamily: FONT_FAMILY, fontSize: key, fontWeight: 'normal' });
-        fonts.set(key, font);
+const cache = new Map<string, SkParagraph>();
+const CACHE_LIMIT = 300;
+
+export const paragraphFor = (item: InkText): SkParagraph => {
+    const key = `${item.size}|${item.color}|${item.text}`;
+    let paragraph = cache.get(key);
+    if (!paragraph) {
+        const builder = Skia.ParagraphBuilder.Make();
+        builder.pushStyle({
+            color: Skia.Color(item.color),
+            fontSize: item.size,
+            fontFamilies: FONT_FAMILIES,
+            heightMultiplier: INK_TEXT_LINE_HEIGHT,
+            halfLeading: true,
+        });
+        builder.addText(item.text);
+        builder.pop();
+        paragraph = builder.build();
+        paragraph.layout(LAYOUT_WIDTH);
+        if (cache.size >= CACHE_LIMIT) {
+            cache.delete(cache.keys().next().value as string);
+        }
+        cache.set(key, paragraph);
     }
-    return font;
+    return paragraph;
 };
 
-export const textLines = (text: string): string[] => text.split('\n');
-
-/** Baseline of line `index`, relative to the label's top edge (matches the SVG preview). */
-export const lineBaseline = (size: number, index: number): number => size * (0.82 + index * INK_TEXT_LINE_HEIGHT);
+export const LABEL_LAYOUT_WIDTH = LAYOUT_WIDTH;
 
 export const measureText = (item: InkText): TextBox => {
-    const font = fontFor(item.size);
-    const lines = textLines(item.text);
-    const width = lines.reduce((max, line) => Math.max(max, line ? font.measureText(line).width : 0), 0);
-    return { width: Math.max(width, item.size * 0.6), height: lines.length * item.size * INK_TEXT_LINE_HEIGHT };
-};
-
-/** Index of the topmost label under the point, or -1. */
-export const hitText = (texts: InkText[], boxes: TextBox[], x: number, y: number, slop: number): number => {
-    for (let index = texts.length - 1; index >= 0; index--) {
-        const item = texts[index];
-        const box = boxes[index];
-        if (box && x >= item.x - slop && x <= item.x + box.width + slop && y >= item.y - slop && y <= item.y + box.height + slop) {
-            return index;
-        }
-    }
-    return -1;
+    const paragraph = paragraphFor(item);
+    return {
+        width: Math.max(paragraph.getLongestLine(), item.size * 0.6),
+        height: Math.max(paragraph.getHeight(), item.size * INK_TEXT_LINE_HEIGHT),
+    };
 };

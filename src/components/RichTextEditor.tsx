@@ -86,7 +86,7 @@ export interface RichTextEditorHandle {
     insertAudioEmbed: (payload: InsertAudioEmbedPayload) => void;
     setAudioEmbedState: (payload: AudioEmbedRuntimeState) => void;
     /** Inserts a new drawing, replaces the one with this id, or removes it (src null). */
-    applyDrawing: (command: { id: string; src: string | null }) => void;
+    applyDrawing: (command: { id: string; src: string | null; pos?: number }) => void;
     flushPendingChanges: () => Promise<string>;
     /** Current document as Markdown, serialized from the editor's own JSON. */
     getMarkdown: () => Promise<string>;
@@ -1234,7 +1234,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 true;
             `);
         },
-        applyDrawing: (command: { id: string; src: string | null }) => {
+        applyDrawing: (command: { id: string; src: string | null; pos?: number }) => {
             editorApi.injectJS?.(buildDrawingCommandJs(command));
         },
         flushPendingChanges: () => flushPendingContent(),
