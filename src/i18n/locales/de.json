@@ -893,7 +893,8 @@
     "protected": "Geschützte Notiz",
     "onThisPhoneOnly": "Nur auf diesem Gerät",
     "accountSettings": "Konto und Einstellungen",
-    "voiceRecordings": "Sprachaufnahmen"
+    "voiceRecordings": "Sprachaufnahmen",
+    "draw": "Zeichnen"
   },
   "ask": {
     "title": "Notizen fragen",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "Das Protokoll konnte nicht erstellt werden. Du kannst später „Meeting-Protokoll“ im KI-Menü starten.",
     "title": "Meeting · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "Fertig",
+    "eraser": "Radierer",
+    "colorAndSize": "Farbe und Stärke",
+    "size": "Stärke",
+    "fingerDrawing": "Mit dem Finger zeichnen",
+    "textPlaceholder": "Hier tippen",
+    "discardTitle": "Änderungen verwerfen?",
+    "discardBody": "Deine Änderungen an dieser Zeichnung gehen verloren.",
+    "keepEditing": "Weiter bearbeiten",
+    "discard": "Verwerfen",
+    "noMarkdown": "Notizen mit Zeichnungen können noch nicht als Markdown bearbeitet werden.",
+    "tool": {
+      "fountain": "Füller",
+      "ballpoint": "Kugelschreiber",
+      "pencil": "Bleistift",
+      "brush": "Pinsel",
+      "marker": "Textmarker",
+      "text": "Text"
+    },
+    "color": {
+      "palette": "Palette",
+      "custom": "Eigene",
+      "recent": "Zuletzt"
+    },
+    "paper": {
+      "title": "Papier",
+      "pattern": "Muster",
+      "color": "Papierfarbe",
+      "themeColor": "Wie die App",
+      "blank": "Leer",
+      "dots": "Punkte",
+      "grid": "Kariert",
+      "smallGrid": "Fein kariert",
+      "lines": "Liniert",
+      "wideLines": "Breite Linien",
+      "margin": "Heft"
+    }
+  }
 }

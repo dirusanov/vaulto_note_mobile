@@ -368,7 +368,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onCl
                 }}
                 style={styles.toolButton}
                 accessibilityRole="button"
-                accessibilityLabel={t('drawing.colorAndSize', 'Colour and size')}
+                accessibilityLabel={t('drawing.colorAndSize', 'Color and size')}
             >
                 <View style={[styles.colorDot, { backgroundColor: current.color }]} />
             </TouchableOpacity>

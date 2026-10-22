@@ -893,7 +893,8 @@
     "protected": "सुरक्षित नोट",
     "onThisPhoneOnly": "सिर्फ़ इस डिवाइस पर",
     "accountSettings": "खाता और सेटिंग्स",
-    "voiceRecordings": "वॉइस रिकॉर्डिंग"
+    "voiceRecordings": "वॉइस रिकॉर्डिंग",
+    "draw": "ड्रॉ करें"
   },
   "ask": {
     "title": "अपने नोट्स से पूछें",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "मीटिंग सारांश नहीं बन सका। बाद में AI मेनू से “मीटिंग सारांश” चलाएँ।",
     "title": "मीटिंग · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "हो गया",
+    "eraser": "इरेज़र",
+    "colorAndSize": "रंग और मोटाई",
+    "size": "मोटाई",
+    "fingerDrawing": "उंगली से ड्रॉ करें",
+    "textPlaceholder": "यहाँ लिखें",
+    "discardTitle": "बदलाव छोड़ें?",
+    "discardBody": "इस ड्रॉइंग में किए गए बदलाव खो जाएँगे।",
+    "keepEditing": "एडिट जारी रखें",
+    "discard": "छोड़ें",
+    "noMarkdown": "ड्रॉइंग वाले नोट्स को अभी Markdown में एडिट नहीं किया जा सकता।",
+    "tool": {
+      "fountain": "फ़ाउंटेन पेन",
+      "ballpoint": "बॉलपॉइंट पेन",
+      "pencil": "पेंसिल",
+      "brush": "ब्रश",
+      "marker": "हाइलाइटर",
+      "text": "टेक्स्ट"
+    },
+    "color": {
+      "palette": "पैलेट",
+      "custom": "कस्टम",
+      "recent": "हाल के"
+    },
+    "paper": {
+      "title": "काग़ज़",
+      "pattern": "पैटर्न",
+      "color": "काग़ज़ का रंग",
+      "themeColor": "ऐप जैसा",
+      "blank": "सादा",
+      "dots": "बिंदु",
+      "grid": "ग्रिड",
+      "smallGrid": "बारीक ग्रिड",
+      "lines": "लाइन वाला",
+      "wideLines": "चौड़ी लाइनें",
+      "margin": "नोटबुक"
+    }
+  }
 }

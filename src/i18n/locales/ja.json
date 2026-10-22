@@ -893,7 +893,8 @@
     "protected": "保護されたノート",
     "onThisPhoneOnly": "この端末のみ",
     "accountSettings": "アカウントと設定",
-    "voiceRecordings": "音声録音"
+    "voiceRecordings": "音声録音",
+    "draw": "描く"
   },
   "ask": {
     "title": "ノートに質問",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "議事録を作成できませんでした。後で AI メニューの「議事録」から実行できます。",
     "title": "会議 · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "完了",
+    "eraser": "消しゴム",
+    "colorAndSize": "色と太さ",
+    "size": "太さ",
+    "fingerDrawing": "指で描く",
+    "textPlaceholder": "ここに入力",
+    "discardTitle": "変更を破棄しますか？",
+    "discardBody": "この絵への変更は失われます。",
+    "keepEditing": "編集を続ける",
+    "discard": "破棄",
+    "noMarkdown": "絵を含むメモはまだMarkdownで編集できません。",
+    "tool": {
+      "fountain": "万年筆",
+      "ballpoint": "ボールペン",
+      "pencil": "鉛筆",
+      "brush": "筆",
+      "marker": "蛍光ペン",
+      "text": "テキスト"
+    },
+    "color": {
+      "palette": "パレット",
+      "custom": "カスタム",
+      "recent": "最近"
+    },
+    "paper": {
+      "title": "用紙",
+      "pattern": "パターン",
+      "color": "用紙の色",
+      "themeColor": "アプリと同じ",
+      "blank": "無地",
+      "dots": "ドット",
+      "grid": "方眼",
+      "smallGrid": "細かい方眼",
+      "lines": "罫線",
+      "wideLines": "広い罫線",
+      "margin": "ノート"
+    }
+  }
 }

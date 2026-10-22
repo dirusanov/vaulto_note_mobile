@@ -893,7 +893,8 @@
     "protected": "Nota protegida",
     "onThisPhoneOnly": "Só neste dispositivo",
     "accountSettings": "Conta e ajustes",
-    "voiceRecordings": "Gravações de voz"
+    "voiceRecordings": "Gravações de voz",
+    "draw": "Desenhar"
   },
   "ask": {
     "title": "Pergunte às suas notas",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "Não foi possível escrever a ata. Você pode usar “Ata da reunião” no menu de IA depois.",
     "title": "Reunião · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "Concluído",
+    "eraser": "Borracha",
+    "colorAndSize": "Cor e espessura",
+    "size": "Espessura",
+    "fingerDrawing": "Desenhar com o dedo",
+    "textPlaceholder": "Digite aqui",
+    "discardTitle": "Descartar alterações?",
+    "discardBody": "As alterações neste desenho serão perdidas.",
+    "keepEditing": "Continuar editando",
+    "discard": "Descartar",
+    "noMarkdown": "Notas com desenhos ainda não podem ser editadas como Markdown.",
+    "tool": {
+      "fountain": "Caneta-tinteiro",
+      "ballpoint": "Caneta esferográfica",
+      "pencil": "Lápis",
+      "brush": "Pincel",
+      "marker": "Marca-texto",
+      "text": "Texto"
+    },
+    "color": {
+      "palette": "Paleta",
+      "custom": "Personalizada",
+      "recent": "Recentes"
+    },
+    "paper": {
+      "title": "Papel",
+      "pattern": "Padrão",
+      "color": "Cor do papel",
+      "themeColor": "Como o app",
+      "blank": "Em branco",
+      "dots": "Pontos",
+      "grid": "Quadriculado",
+      "smallGrid": "Quadriculado fino",
+      "lines": "Pautado",
+      "wideLines": "Linhas largas",
+      "margin": "Caderno"
+    }
+  }
 }

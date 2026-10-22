@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.98] - 2026-10-22
+
+### Added
+- Drawing in notes: the pen button opens a full-screen canvas; the drawing is inserted into the note and opens again on tap. Five pens (fountain pen with a slanted nib, ballpoint, grainy pencil, pressure brush, highlighter) with five widths each, an eraser, undo/redo (also two- and three-finger taps) and pinch zoom. Pressure and tilt from a stylus are used; with a stylus, fingers scroll instead of drawing (can be switched off).
+- Colors: a 24-color palette, a custom color picker and recent colors; every pen keeps its own color and width.
+- Text labels on drawings: tap to type in place, tap a label to edit, drag to move; the page scrolls a label above the keyboard.
+- Paper: blank, dots, grid, fine grid, lined, wide lines or notebook, in seven sheet colors; saved with the drawing and shown in the note.
+- Drawings are part of the note: they sync and are end-to-end encrypted like the text. The ink follows the pen with a short predicted tip.
+
+### Fixed
+- Android tablets on Android 15 and older no longer start in a narrow phone-shaped window: the orientation is decided from the screen size, not locked in the manifest.
+- Sync: a change from another device that failed to save locally ("database is locked") was skipped for good; it is now downloaded again on the next sync. A sync requested at launch while the encryption key was still loading is no longer dropped.
+- Notes with drawings are not switched to Markdown editing, which would have removed the drawing.
+
 ## [1.0.97] - 2026-10-21
 
 ### Changed

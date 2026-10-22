@@ -893,7 +893,8 @@
     "protected": "Nota protegida",
     "onThisPhoneOnly": "Solo en este dispositivo",
     "accountSettings": "Cuenta y ajustes",
-    "voiceRecordings": "Grabaciones de voz"
+    "voiceRecordings": "Grabaciones de voz",
+    "draw": "Dibujar"
   },
   "ask": {
     "title": "Pregunta a tus notas",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "No se pudo redactar el acta. Puedes usar «Acta de reunión» en el menú de IA más tarde.",
     "title": "Reunión · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "Listo",
+    "eraser": "Borrador",
+    "colorAndSize": "Color y grosor",
+    "size": "Grosor",
+    "fingerDrawing": "Dibujar con el dedo",
+    "textPlaceholder": "Escribe aquí",
+    "discardTitle": "¿Descartar cambios?",
+    "discardBody": "Se perderán los cambios de este dibujo.",
+    "keepEditing": "Seguir editando",
+    "discard": "Descartar",
+    "noMarkdown": "Las notas con dibujos aún no se pueden editar como Markdown.",
+    "tool": {
+      "fountain": "Pluma estilográfica",
+      "ballpoint": "Bolígrafo",
+      "pencil": "Lápiz",
+      "brush": "Pincel",
+      "marker": "Resaltador",
+      "text": "Texto"
+    },
+    "color": {
+      "palette": "Paleta",
+      "custom": "Personalizado",
+      "recent": "Recientes"
+    },
+    "paper": {
+      "title": "Papel",
+      "pattern": "Patrón",
+      "color": "Color del papel",
+      "themeColor": "Como la app",
+      "blank": "En blanco",
+      "dots": "Puntos",
+      "grid": "Cuadrícula",
+      "smallGrid": "Cuadrícula fina",
+      "lines": "Rayado",
+      "wideLines": "Rayas anchas",
+      "margin": "Cuaderno"
+    }
+  }
 }

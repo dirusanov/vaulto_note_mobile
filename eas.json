@@ -33,12 +33,6 @@
       "android": {
         "buildType": "apk"
       }
-    },
-    "drawing-preview": {
-      "extends": "production-apk",
-      "env": {
-        "EXPO_PUBLIC_DRAWING_ENABLED": "1"
-      }
     }
   },
   "submit": {

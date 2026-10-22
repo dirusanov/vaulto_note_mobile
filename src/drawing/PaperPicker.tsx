@@ -96,7 +96,7 @@ export const PaperPicker: React.FC<Props> = ({ paper, onChange }) => {
                     );
                 })}
             </View>
-            <Text style={styles.heading}>{t('drawing.paper.color', 'Paper colour')}</Text>
+            <Text style={styles.heading}>{t('drawing.paper.color', 'Paper color')}</Text>
             <View style={styles.colors}>
                 {PAPER_COLORS.map((value) => {
                     const active = value === paper.color;

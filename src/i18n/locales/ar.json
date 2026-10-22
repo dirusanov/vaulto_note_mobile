@@ -893,7 +893,8 @@
     "protected": "ملاحظة محمية",
     "onThisPhoneOnly": "على هذا الجهاز فقط",
     "accountSettings": "الحساب والإعدادات",
-    "voiceRecordings": "التسجيلات الصوتية"
+    "voiceRecordings": "التسجيلات الصوتية",
+    "draw": "رسم"
   },
   "ask": {
     "title": "اسأل ملاحظاتك",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "تعذّر كتابة المحضر. يمكنك تشغيل «محضر الاجتماع» من قائمة الذكاء الاصطناعي لاحقًا.",
     "title": "اجتماع · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "تم",
+    "eraser": "ممحاة",
+    "colorAndSize": "اللون والسُمك",
+    "size": "السُمك",
+    "fingerDrawing": "الرسم بالإصبع",
+    "textPlaceholder": "اكتب هنا",
+    "discardTitle": "تجاهل التغييرات؟",
+    "discardBody": "ستفقد تغييراتك على هذا الرسم.",
+    "keepEditing": "متابعة التحرير",
+    "discard": "تجاهل",
+    "noMarkdown": "لا يمكن بعد تعديل الملاحظات التي تحتوي على رسومات بتنسيق Markdown.",
+    "tool": {
+      "fountain": "قلم حبر",
+      "ballpoint": "قلم جاف",
+      "pencil": "قلم رصاص",
+      "brush": "فرشاة",
+      "marker": "قلم تمييز",
+      "text": "نص"
+    },
+    "color": {
+      "palette": "لوحة الألوان",
+      "custom": "مخصص",
+      "recent": "الأخيرة"
+    },
+    "paper": {
+      "title": "الورق",
+      "pattern": "النمط",
+      "color": "لون الورق",
+      "themeColor": "مثل التطبيق",
+      "blank": "فارغ",
+      "dots": "نقاط",
+      "grid": "شبكة",
+      "smallGrid": "شبكة دقيقة",
+      "lines": "مسطر",
+      "wideLines": "أسطر عريضة",
+      "margin": "دفتر"
+    }
+  }
 }

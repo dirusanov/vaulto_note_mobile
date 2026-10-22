@@ -895,7 +895,8 @@
     "protected": "Protected note",
     "onThisPhoneOnly": "Only on this device",
     "accountSettings": "Account and settings",
-    "voiceRecordings": "Voice recordings"
+    "voiceRecordings": "Voice recordings",
+    "draw": "Draw"
   },
   "ask": {
     "title": "Ask your notes",
@@ -1050,5 +1051,44 @@
     "summaryFailed": "Could not write the meeting notes. You can run \"Meeting notes\" from the AI menu later.",
     "title": "Meeting · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "Done",
+    "eraser": "Eraser",
+    "colorAndSize": "Color and size",
+    "size": "Size",
+    "fingerDrawing": "Draw with finger",
+    "textPlaceholder": "Type here",
+    "discardTitle": "Discard changes?",
+    "discardBody": "Your changes to this drawing will be lost.",
+    "keepEditing": "Keep editing",
+    "discard": "Discard",
+    "noMarkdown": "Notes with drawings can't be edited as Markdown yet.",
+    "tool": {
+      "fountain": "Fountain pen",
+      "ballpoint": "Ballpoint pen",
+      "pencil": "Pencil",
+      "brush": "Brush",
+      "marker": "Highlighter",
+      "text": "Text"
+    },
+    "color": {
+      "palette": "Palette",
+      "custom": "Custom",
+      "recent": "Recent"
+    },
+    "paper": {
+      "title": "Paper",
+      "pattern": "Pattern",
+      "color": "Paper color",
+      "themeColor": "Same as the app",
+      "blank": "Blank",
+      "dots": "Dots",
+      "grid": "Grid",
+      "smallGrid": "Fine grid",
+      "lines": "Lined",
+      "wideLines": "Wide lines",
+      "margin": "Notebook"
+    }
+  }
 }

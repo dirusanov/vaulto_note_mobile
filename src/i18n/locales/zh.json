@@ -893,7 +893,8 @@
     "protected": "受保护的笔记",
     "onThisPhoneOnly": "仅在本机",
     "accountSettings": "账户和设置",
-    "voiceRecordings": "语音录音"
+    "voiceRecordings": "语音录音",
+    "draw": "绘图"
   },
   "ask": {
     "title": "询问笔记",
@@ -1048,5 +1049,44 @@
     "summaryFailed": "未能生成会议纪要，稍后可在 AI 菜单中运行“会议纪要”。",
     "title": "会议 · {{date}}"
   },
-  "paywall": {}
+  "paywall": {},
+  "drawing": {
+    "done": "完成",
+    "eraser": "橡皮擦",
+    "colorAndSize": "颜色和粗细",
+    "size": "粗细",
+    "fingerDrawing": "用手指绘图",
+    "textPlaceholder": "在此输入",
+    "discardTitle": "放弃更改？",
+    "discardBody": "对此绘图的更改将会丢失。",
+    "keepEditing": "继续编辑",
+    "discard": "放弃",
+    "noMarkdown": "包含绘图的笔记暂时无法以 Markdown 编辑。",
+    "tool": {
+      "fountain": "钢笔",
+      "ballpoint": "圆珠笔",
+      "pencil": "铅笔",
+      "brush": "画笔",
+      "marker": "荧光笔",
+      "text": "文本"
+    },
+    "color": {
+      "palette": "调色板",
+      "custom": "自定义",
+      "recent": "最近"
+    },
+    "paper": {
+      "title": "纸张",
+      "pattern": "图案",
+      "color": "纸张颜色",
+      "themeColor": "与应用一致",
+      "blank": "空白",
+      "dots": "点阵",
+      "grid": "方格",
+      "smallGrid": "细方格",
+      "lines": "横线",
+      "wideLines": "宽横线",
+      "margin": "笔记本"
+    }
+  }
 }
