@@ -4,6 +4,7 @@ import {
     Canvas,
     Circle,
     ColorMatrix,
+    Fill,
     FractalNoise,
     Group,
     Paint,
@@ -199,6 +200,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const dragOffset = useSharedValue({ dx: 0, dy: 0 });
     /** A second finger joined (pinch/scroll): the one-finger action it interrupted is void. */
     const multiTouch = useSharedValue(false);
+    const stylusSeen = useSharedValue(false);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
 
     const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly });
@@ -312,7 +314,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         .averageTouches(false)
         .onBegin((e) => {
             const isStylus = e.pointerType === PointerType.STYLUS;
-            if (isStylus) {
+            if (isStylus && !stylusSeen.value) {
+                // Only the first contact matters to the editor; later ones would
+                // just add a JS call to the start of every stroke.
+                stylusSeen.value = true;
                 runOnJS(onStylus)();
             }
             const cfg = toolSV.value;
@@ -568,7 +573,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         <GestureDetector gesture={gesture}>
             <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
                 {view.width > 0 && (
-                    <Canvas key={surfaceKey} style={styles.fill}>
+                    // Opaque puts the canvas on a SurfaceView on Android, which reaches the
+                    // screen a composition step sooner than the default TextureView; it
+                    // then paints the desk itself.
+                    <Canvas key={surfaceKey} style={styles.fill} opaque>
+                        <Fill color={deskColor} />
                         <Group transform={transform}>
                             <Rect {...sheetClip} color={sheetColor} />
                             <Group clip={sheetClip}>

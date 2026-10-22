@@ -138,8 +138,9 @@ export function strokeOutline(
         ys.push(sy);
         rs.push(Math.max(minRadius, (size / 2) * (1 + thinning * (sp - 0.5) * 1.6)));
     }
-    if (complete && count > 1) {
-        // The streamlined line lags the pen; finish exactly where it lifted.
+    if (count > 1) {
+        // The streamlined line lags the pen; end exactly under it, both while
+        // drawing (the tip follows the pen) and where it lifted.
         xs.push(points[(count - 1) * 3]);
         ys.push(points[(count - 1) * 3 + 1]);
         rs.push(rs[rs.length - 1]);
