@@ -74,6 +74,14 @@ type Props = {
 };
 
 const MAX_ZOOM = 4;
+/**
+ * How far ahead of the last sample the live stroke is drawn, in ms. Input,
+ * rendering and display take a couple of frames; drawing where the pen will
+ * be by then makes the ink look attached to it (what notebook apps do).
+ */
+const PREDICT_MS = 20;
+/** Upper bound of the prediction on screen, so a flick cannot overshoot visibly. */
+const PREDICT_MAX_SCREEN = 28;
 const ERASER_SCREEN_RADIUS = 14;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
@@ -192,6 +200,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const live = useSharedValue<number[]>([]);
     const liveId = useSharedValue(0);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
+    /** Pen velocity in document units per ms (smoothed) and the predicted tip it gives. */
+    const motion = useSharedValue({ x: 0, y: 0, t: 0, vx: 0, vy: 0 });
+    const predicted = useSharedValue<number[]>([]);
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
     const hover = useSharedValue({ x: -100, y: -100, visible: false });
@@ -289,6 +300,19 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         });
     }, [onTextMove, dragOffset]);
 
+    // Gestures are built once (below): rebuilding them on every render made
+    // RNGH re-attach handlers after each committed stroke, and a stroke that
+    // began during that re-attach was dropped. Worklets call back into JS
+    // through one stable function that reads the latest handlers.
+    const jsHandlers = {
+        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex,
+    };
+    const jsHandlersRef = useRef(jsHandlers);
+    jsHandlersRef.current = jsHandlers;
+    const callJs = useCallback(<K extends keyof typeof jsHandlers>(name: K, ...args: Parameters<typeof jsHandlers[K]>) => {
+        (jsHandlersRef.current[name] as (...a: unknown[]) => void)(...args);
+    }, []);
+
     const toDoc = (x: number, y: number) => {
         'worklet';
         const s = scaleSV.value * zoom.value;
@@ -308,197 +332,219 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         return -1;
     };
 
-    const draw = Gesture.Pan()
-        .maxPointers(1)
-        .minDistance(0)
-        .averageTouches(false)
-        .onBegin((e) => {
-            const isStylus = e.pointerType === PointerType.STYLUS;
-            if (isStylus && !stylusSeen.value) {
-                // Only the first contact matters to the editor; later ones would
-                // just add a JS call to the start of every stroke.
-                stylusSeen.value = true;
-                runOnJS(onStylus)();
-            }
-            const cfg = toolSV.value;
-            // Typing a label is fine with a finger; drawing obeys pen-only mode.
-            if (cfg.stylusOnly && !isStylus && cfg.mode !== 'text') {
-                gestureMode.value = 'scroll';
-                return;
-            }
-            hover.value = { x: -100, y: -100, visible: false };
-            multiTouch.value = false;
-            const pt = toDoc(e.x, e.y);
-            const scale = scaleSV.value * zoom.value;
-            if (cfg.mode === 'text') {
-                gestureMode.value = 'text';
-                textGesture.value = {
-                    index: hitTextAt(pt.x, pt.y, 8 / scale),
-                    startX: pt.x,
-                    startY: pt.y,
-                    screenX: e.x,
-                    screenY: e.y,
-                    moved: false,
+    const pinchStart = useSharedValue({ zoom: 1, tx: 0, ty: 0 });
+    // Shared values and callJs are stable, so the gestures never need rebuilding.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const gesture = useMemo(() => {
+        const draw = Gesture.Pan()
+            .maxPointers(1)
+            .minDistance(0)
+            .averageTouches(false)
+            .onBegin((e) => {
+                const isStylus = e.pointerType === PointerType.STYLUS;
+                if (isStylus && !stylusSeen.value) {
+                    // Only the first contact matters to the editor; later ones would
+                    // just add a JS call to the start of every stroke.
+                    stylusSeen.value = true;
+                    runOnJS(callJs)('onStylus');
+                }
+                const cfg = toolSV.value;
+                // Typing a label is fine with a finger; drawing obeys pen-only mode.
+                if (cfg.stylusOnly && !isStylus && cfg.mode !== 'text') {
+                    gestureMode.value = 'scroll';
+                    return;
+                }
+                hover.value = { x: -100, y: -100, visible: false };
+                multiTouch.value = false;
+                const pt = toDoc(e.x, e.y);
+                const scale = scaleSV.value * zoom.value;
+                if (cfg.mode === 'text') {
+                    gestureMode.value = 'text';
+                    textGesture.value = {
+                        index: hitTextAt(pt.x, pt.y, 8 / scale),
+                        startX: pt.x,
+                        startY: pt.y,
+                        screenX: e.x,
+                        screenY: e.y,
+                        moved: false,
+                    };
+                    return;
+                }
+                if (cfg.mode === 'erase') {
+                    gestureMode.value = 'erase';
+                    eraser.value = { x: e.x, y: e.y, visible: true };
+                    runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / scale);
+                    return;
+                }
+                gestureMode.value = 'draw';
+                const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
+                lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
+                motion.value = { x: pt.x, y: pt.y, t: Date.now(), vx: 0, vy: 0 };
+                predicted.value = [];
+                liveId.value += 1;
+                live.value = [pt.x, pt.y, pressure];
+            })
+            .onChange((e) => {
+                if (gestureMode.value === 'scroll') {
+                    tx.value += e.changeX;
+                    ty.value += e.changeY;
+                    clampPan();
+                }
+            })
+            .onUpdate((e) => {
+                const current = gestureMode.value;
+                if (current === 'scroll' || current === 'none') {
+                    return;
+                }
+                const pt = toDoc(e.x, e.y);
+                if (current === 'text') {
+                    const g = textGesture.value;
+                    if (g.index < 0) {
+                        return;
+                    }
+                    if (!g.moved && Math.hypot(e.x - g.screenX, e.y - g.screenY) < DRAG_SLOP) {
+                        return;
+                    }
+                    if (!g.moved) {
+                        textGesture.value = { ...g, moved: true };
+                        runOnJS(callJs)('setDragIndex', g.index);
+                    }
+                    dragOffset.value = { dx: pt.x - g.startX, dy: pt.y - g.startY };
+                    return;
+                }
+                if (current === 'erase') {
+                    eraser.value = { x: e.x, y: e.y, visible: true };
+                    runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
+                    return;
+                }
+                let pressure: number;
+                if (e.pointerType === PointerType.STYLUS && e.stylusData && e.stylusData.pressure >= 0) {
+                    pressure = e.stylusData.pressure;
+                } else {
+                    // A finger has no pressure: faster movement draws thinner, like ink.
+                    const now = Date.now();
+                    const prev = lastSample.value;
+                    const dt = Math.max(1, now - prev.t);
+                    const speed = Math.hypot(e.x - prev.x, e.y - prev.y) / dt;
+                    const target = Math.min(0.9, Math.max(0.2, 0.85 - speed * 0.22));
+                    pressure = prev.p + (target - prev.p) * 0.3;
+                    lastSample.value = { x: e.x, y: e.y, t: now, p: pressure };
+                }
+                live.modify((points) => {
+                    'worklet';
+                    points.push(pt.x, pt.y, pressure);
+                    return points;
+                });
+                // Predict the tip from the smoothed velocity; it is drawn, never stored.
+                const now = Date.now();
+                const m = motion.value;
+                const dt = Math.max(1, now - m.t);
+                const vx = m.vx * 0.5 + ((pt.x - m.x) / dt) * 0.5;
+                const vy = m.vy * 0.5 + ((pt.y - m.y) / dt) * 0.5;
+                motion.value = { x: pt.x, y: pt.y, t: now, vx, vy };
+                const scale = scaleSV.value * zoom.value;
+                let ahead = Math.hypot(vx, vy) * PREDICT_MS;
+                const maxAhead = PREDICT_MAX_SCREEN / scale;
+                const factor = ahead > maxAhead ? maxAhead / ahead : 1;
+                ahead *= factor;
+                predicted.value = ahead > 0.5 / scale
+                    ? [pt.x + vx * PREDICT_MS * factor, pt.y + vy * PREDICT_MS * factor, pressure]
+                    : [];
+            })
+            // `success` is not used: a touch that never moves (a tap, the dot over an
+            // "i") ends without the pan activating, yet it is a real tap or dot.
+            .onFinalize(() => {
+                const current = gestureMode.value;
+                gestureMode.value = 'none';
+                predicted.value = [];
+                if (current === 'text') {
+                    const g = textGesture.value;
+                    if (g.moved) {
+                        const offset = dragOffset.value;
+                        runOnJS(callJs)('finishTextDrag', g.index, offset.dx, offset.dy);
+                    } else if (!multiTouch.value) {
+                        runOnJS(callJs)('onTextTap', {
+                            x: g.startX,
+                            y: g.startY,
+                            index: g.index,
+                            screenX: g.screenX,
+                            screenY: g.screenY,
+                            scale: scaleSV.value * zoom.value,
+                        });
+                    }
+                    return;
+                }
+                if (current === 'erase') {
+                    eraser.value = { x: -100, y: -100, visible: false };
+                    runOnJS(callJs)('onEraseEnd');
+                    return;
+                }
+                if (current !== 'draw') {
+                    return;
+                }
+                const points = live.value.slice();
+                // A second finger landing (pinch) cancels the stroke it interrupted.
+                if (multiTouch.value) {
+                    live.value = [];
+                    return;
+                }
+                const cfg = toolSV.value;
+                runOnJS(callJs)('commitLive', points, liveId.value, cfg.tool, cfg.color, cfg.size);
+            });
+
+        const pinch = Gesture.Pinch()
+            .onStart(() => {
+                // Active only once two fingers are down (onBegin fires on the first).
+                multiTouch.value = true;
+                pinchStart.value = { zoom: zoom.value, tx: tx.value, ty: ty.value };
+            })
+            .onUpdate((e) => {
+                const start = pinchStart.value;
+                const next = Math.min(MAX_ZOOM, Math.max(1, start.zoom * e.scale));
+                const ratio = next / start.zoom;
+                zoom.value = next;
+                tx.value = e.focalX - (e.focalX - start.tx) * ratio;
+                ty.value = e.focalY - (e.focalY - start.ty) * ratio;
+                clampPan();
+            });
+
+        const scroll = Gesture.Pan()
+            .minPointers(2)
+            .onStart(() => {
+                multiTouch.value = true;
+            })
+            .onChange((e) => {
+                pinchStart.value = {
+                    zoom: pinchStart.value.zoom,
+                    tx: pinchStart.value.tx + e.changeX,
+                    ty: pinchStart.value.ty + e.changeY,
                 };
-                return;
-            }
-            if (cfg.mode === 'erase') {
-                gestureMode.value = 'erase';
-                eraser.value = { x: e.x, y: e.y, visible: true };
-                runOnJS(onErase)(pt.x, pt.y, ERASER_SCREEN_RADIUS / scale);
-                return;
-            }
-            gestureMode.value = 'draw';
-            const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
-            lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
-            liveId.value += 1;
-            live.value = [pt.x, pt.y, pressure];
-        })
-        .onChange((e) => {
-            if (gestureMode.value === 'scroll') {
                 tx.value += e.changeX;
                 ty.value += e.changeY;
                 clampPan();
-            }
-        })
-        .onUpdate((e) => {
-            const current = gestureMode.value;
-            if (current === 'scroll' || current === 'none') {
-                return;
-            }
-            const pt = toDoc(e.x, e.y);
-            if (current === 'text') {
-                const g = textGesture.value;
-                if (g.index < 0) {
-                    return;
-                }
-                if (!g.moved && Math.hypot(e.x - g.screenX, e.y - g.screenY) < DRAG_SLOP) {
-                    return;
-                }
-                if (!g.moved) {
-                    textGesture.value = { ...g, moved: true };
-                    runOnJS(setDragIndex)(g.index);
-                }
-                dragOffset.value = { dx: pt.x - g.startX, dy: pt.y - g.startY };
-                return;
-            }
-            if (current === 'erase') {
-                eraser.value = { x: e.x, y: e.y, visible: true };
-                runOnJS(onErase)(pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
-                return;
-            }
-            let pressure: number;
-            if (e.pointerType === PointerType.STYLUS && e.stylusData && e.stylusData.pressure >= 0) {
-                pressure = e.stylusData.pressure;
-            } else {
-                // A finger has no pressure: faster movement draws thinner, like ink.
-                const now = Date.now();
-                const prev = lastSample.value;
-                const dt = Math.max(1, now - prev.t);
-                const speed = Math.hypot(e.x - prev.x, e.y - prev.y) / dt;
-                const target = Math.min(0.9, Math.max(0.2, 0.85 - speed * 0.22));
-                pressure = prev.p + (target - prev.p) * 0.3;
-                lastSample.value = { x: e.x, y: e.y, t: now, p: pressure };
-            }
-            live.modify((points) => {
-                'worklet';
-                points.push(pt.x, pt.y, pressure);
-                return points;
             });
-        })
-        // `success` is not used: a touch that never moves (a tap, the dot over an
-        // "i") ends without the pan activating, yet it is a real tap or dot.
-        .onFinalize(() => {
-            const current = gestureMode.value;
-            gestureMode.value = 'none';
-            if (current === 'text') {
-                const g = textGesture.value;
-                if (g.moved) {
-                    const offset = dragOffset.value;
-                    runOnJS(finishTextDrag)(g.index, offset.dx, offset.dy);
-                } else if (!multiTouch.value) {
-                    runOnJS(onTextTap)({
-                        x: g.startX,
-                        y: g.startY,
-                        index: g.index,
-                        screenX: g.screenX,
-                        screenY: g.screenY,
-                        scale: scaleSV.value * zoom.value,
-                    });
-                }
-                return;
+
+        const undoTap = Gesture.Tap().minPointers(2).maxDuration(250).onEnd((e, success) => {
+            if (success && e.numberOfPointers === 2) {
+                runOnJS(callJs)('onUndo');
             }
-            if (current === 'erase') {
-                eraser.value = { x: -100, y: -100, visible: false };
-                runOnJS(onEraseEnd)();
-                return;
+        });
+        const redoTap = Gesture.Tap().minPointers(3).maxDuration(250).onEnd((e, success) => {
+            if (success && e.numberOfPointers >= 3) {
+                runOnJS(callJs)('onRedo');
             }
-            if (current !== 'draw') {
-                return;
-            }
-            const points = live.value.slice();
-            // A second finger landing (pinch) cancels the stroke it interrupted.
-            if (multiTouch.value) {
-                live.value = [];
-                return;
-            }
-            const cfg = toolSV.value;
-            runOnJS(commitLive)(points, liveId.value, cfg.tool, cfg.color, cfg.size);
         });
 
-    const pinchStart = useSharedValue({ zoom: 1, tx: 0, ty: 0 });
-    const pinch = Gesture.Pinch()
-        .onStart(() => {
-            // Active only once two fingers are down (onBegin fires on the first).
-            multiTouch.value = true;
-            pinchStart.value = { zoom: zoom.value, tx: tx.value, ty: ty.value };
-        })
-        .onUpdate((e) => {
-            const start = pinchStart.value;
-            const next = Math.min(MAX_ZOOM, Math.max(1, start.zoom * e.scale));
-            const ratio = next / start.zoom;
-            zoom.value = next;
-            tx.value = e.focalX - (e.focalX - start.tx) * ratio;
-            ty.value = e.focalY - (e.focalY - start.ty) * ratio;
-            clampPan();
-        });
+        const hoverGesture = Gesture.Hover()
+            .onUpdate((e) => {
+                hover.value = { x: e.x, y: e.y, visible: true };
+            })
+            .onEnd(() => {
+                hover.value = { x: -100, y: -100, visible: false };
+            });
 
-    const scroll = Gesture.Pan()
-        .minPointers(2)
-        .onStart(() => {
-            multiTouch.value = true;
-        })
-        .onChange((e) => {
-            pinchStart.value = {
-                zoom: pinchStart.value.zoom,
-                tx: pinchStart.value.tx + e.changeX,
-                ty: pinchStart.value.ty + e.changeY,
-            };
-            tx.value += e.changeX;
-            ty.value += e.changeY;
-            clampPan();
-        });
-
-    const undoTap = Gesture.Tap().minPointers(2).maxDuration(250).onEnd((e, success) => {
-        if (success && e.numberOfPointers === 2) {
-            runOnJS(onUndo)();
-        }
-    });
-    const redoTap = Gesture.Tap().minPointers(3).maxDuration(250).onEnd((e, success) => {
-        if (success && e.numberOfPointers >= 3) {
-            runOnJS(onRedo)();
-        }
-    });
-
-    const hoverGesture = Gesture.Hover()
-        .onUpdate((e) => {
-            hover.value = { x: e.x, y: e.y, visible: true };
-        })
-        .onEnd(() => {
-            hover.value = { x: -100, y: -100, visible: false };
-        });
-
-    const gesture = Gesture.Simultaneous(draw, pinch, scroll, undoTap, redoTap, hoverGesture);
+        return Gesture.Simultaneous(draw, pinch, scroll, undoTap, redoTap, hoverGesture);
+    }, []);
 
     const transform = useDerivedValue(() => [
         { translateX: tx.value },
@@ -513,7 +559,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const livePath = useDerivedValue(() => {
         const cfg = toolSV.value;
         const spec = INK_TOOLS[cfg.tool];
-        return outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, false, spec.nib));
+        const tip = predicted.value;
+        const points = tip.length ? live.value.concat(tip) : live.value;
+        return outlineToSkPath(strokeOutline(points, cfg.size, spec.thinning, spec.streamline, spec.taper, false, spec.nib));
     });
 
     const eraserX = useDerivedValue(() => eraser.value.x);
