@@ -684,7 +684,11 @@
       "switched": "録音はクラウドで文字起こしされます。インターネットがないときは引き続きデバイスで処理します。"
     },
     "customInstructionPlaceholder": "例：もっと短くして、英語に翻訳して",
-    "customInstructionCollapsed": "自分で指示を書く…"
+    "customInstructionCollapsed": "自分で指示を書く…",
+    "textStyleTitle": "タイトル",
+    "textStyleHeading": "見出し",
+    "textStyleSubheading": "小見出し",
+    "textStyleBody": "本文"
   },
   "voice": {
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",
@@ -906,7 +910,13 @@
     "onThisPhoneOnly": "この端末のみ",
     "accountSettings": "アカウントと設定",
     "voiceRecordings": "音声録音",
-    "draw": "描く"
+    "draw": "描く",
+    "textFormatting": "テキストの書式",
+    "numberedList": "番号付きリスト",
+    "indent": "インデントを増やす",
+    "outdent": "インデントを減らす",
+    "quote": "引用",
+    "hideKeyboard": "キーボードを閉じる"
   },
   "ask": {
     "title": "ノートに質問",

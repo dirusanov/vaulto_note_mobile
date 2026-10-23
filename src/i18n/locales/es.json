@@ -684,7 +684,11 @@
       "switched": "Ahora las grabaciones van a la nube. Sin internet, el dispositivo sigue transcribiendo."
     },
     "customInstructionPlaceholder": "Por ejemplo: hazlo más corto o tradúcelo al inglés",
-    "customInstructionCollapsed": "Escribe tu propia instrucción…"
+    "customInstructionCollapsed": "Escribe tu propia instrucción…",
+    "textStyleTitle": "Título",
+    "textStyleHeading": "Encabezado",
+    "textStyleSubheading": "Subtítulo",
+    "textStyleBody": "Texto"
   },
   "voice": {
     "modelNotDownloaded": "Modelo no descargado. Revisa los ajustes.",
@@ -906,7 +910,13 @@
     "onThisPhoneOnly": "Solo en este dispositivo",
     "accountSettings": "Cuenta y ajustes",
     "voiceRecordings": "Grabaciones de voz",
-    "draw": "Dibujar"
+    "draw": "Dibujar",
+    "textFormatting": "Formato de texto",
+    "numberedList": "Lista numerada",
+    "indent": "Aumentar sangría",
+    "outdent": "Reducir sangría",
+    "quote": "Cita",
+    "hideKeyboard": "Ocultar teclado"
   },
   "ask": {
     "title": "Pregunta a tus notas",

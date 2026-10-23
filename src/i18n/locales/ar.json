@@ -684,7 +684,11 @@
       "switched": "تُرسل التسجيلات الآن إلى السحابة. بدون إنترنت يواصل الجهاز التفريغ."
     },
     "customInstructionPlaceholder": "مثلًا: اجعله أقصر، أو ترجمه إلى الإنجليزية",
-    "customInstructionCollapsed": "اكتب تعليماتك الخاصة…"
+    "customInstructionCollapsed": "اكتب تعليماتك الخاصة…",
+    "textStyleTitle": "عنوان",
+    "textStyleHeading": "عنوان رئيسي",
+    "textStyleSubheading": "عنوان فرعي",
+    "textStyleBody": "نص"
   },
   "voice": {
     "modelNotDownloaded": "النموذج غير مُنزَّل. تحقق من الإعدادات.",
@@ -906,7 +910,13 @@
     "onThisPhoneOnly": "على هذا الجهاز فقط",
     "accountSettings": "الحساب والإعدادات",
     "voiceRecordings": "التسجيلات الصوتية",
-    "draw": "رسم"
+    "draw": "رسم",
+    "textFormatting": "تنسيق النص",
+    "numberedList": "قائمة مرقّمة",
+    "indent": "زيادة المسافة البادئة",
+    "outdent": "إنقاص المسافة البادئة",
+    "quote": "اقتباس",
+    "hideKeyboard": "إخفاء لوحة المفاتيح"
   },
   "ask": {
     "title": "اسأل ملاحظاتك",

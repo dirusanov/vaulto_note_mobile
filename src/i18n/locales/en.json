@@ -684,7 +684,11 @@
       "switched": "Recordings now go to the cloud. Without internet the device still transcribes."
     },
     "customInstructionPlaceholder": "For example: make it shorter, or translate to Spanish",
-    "customInstructionCollapsed": "Write your own instruction…"
+    "customInstructionCollapsed": "Write your own instruction…",
+    "textStyleTitle": "Title",
+    "textStyleHeading": "Heading",
+    "textStyleSubheading": "Subheading",
+    "textStyleBody": "Body"
   },
   "voice": {
     "modelNotDownloaded": "Model not downloaded. Check Settings.",
@@ -908,7 +912,13 @@
     "onThisPhoneOnly": "Only on this device",
     "accountSettings": "Account and settings",
     "voiceRecordings": "Voice recordings",
-    "draw": "Draw"
+    "draw": "Draw",
+    "textFormatting": "Text formatting",
+    "numberedList": "Numbered list",
+    "indent": "Increase indent",
+    "outdent": "Decrease indent",
+    "quote": "Quote",
+    "hideKeyboard": "Hide keyboard"
   },
   "ask": {
     "title": "Ask your notes",

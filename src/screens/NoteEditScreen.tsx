@@ -1862,6 +1862,8 @@ export const NoteEditScreen = () => {
     const [keyboardVisibleState, setKeyboardVisibleState] = useState(false);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
+    // Measured, since the toolbar grows while its Aa panel is open.
+    const [toolbarHeight, setToolbarHeight] = useState(FLOATING_MIC_TOOLBAR_HEIGHT);
     const editorRef = useRef<RichTextEditorHandle>(null);
     const titleInputRef = useRef<TextInput>(null);
     const rawEditorRef = useRef<TextInput>(null);
@@ -6180,7 +6182,7 @@ export const NoteEditScreen = () => {
     const canShareOrExport = effectiveStorageScope !== 'local_only' && !isProtected;
     const micHintText = t('edit.micHintHold', 'Hold: no agent');
     const floatingMicBottomOffset = editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible)
-        ? (keyboardVisibleState ? keyboardHeight : insets.bottom) + FLOATING_MIC_TOOLBAR_HEIGHT + FLOATING_MIC_KEYBOARD_GAP
+        ? (keyboardVisibleState ? keyboardHeight : insets.bottom) + toolbarHeight + FLOATING_MIC_KEYBOARD_GAP
         : FLOATING_MIC_BASE_BOTTOM_OFFSET;
     // Reserve scroll room below the content so the last line can always be
     // scrolled into view. The editor WebView/TextInput stays full-height while the
@@ -6197,7 +6199,7 @@ export const NoteEditScreen = () => {
     const editorContentBottomPadding = Math.round(
         keyboardVisibleState
             ? editorKeyboardInset
-                + FLOATING_MIC_TOOLBAR_HEIGHT
+                + toolbarHeight
                 + EDITOR_CONTENT_BOTTOM_GAP
             : insets.bottom
                 + (isColorPickerVisible ? FLOATING_MIC_TOOLBAR_HEIGHT : 0)
@@ -7329,15 +7331,8 @@ export const NoteEditScreen = () => {
                         <MarkdownToolbar
                             onFormat={handleFormat}
                             showDictate={LOCAL_WHISPER_ENABLED}
-                            showDraw={DRAWING_ENABLED}
                             activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
-                            onColorPickerToggle={(visible) => {
-                                setIsColorPickerVisible(visible);
-                                if (!visible && !keyboardVisibleRef.current) {
-                                    editorRef.current?.blur();
-                                    setIsEditing(false);
-                                }
-                            }}
+                            onHeightChange={setToolbarHeight}
                         />
                     </View>
                 </View>

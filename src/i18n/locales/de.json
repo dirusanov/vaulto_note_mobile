@@ -684,7 +684,11 @@
       "switched": "Aufnahmen gehen jetzt in die Cloud. Ohne Internet transkribiert weiterhin das Gerät."
     },
     "customInstructionPlaceholder": "Zum Beispiel: mach es kürzer oder übersetze es ins Englische",
-    "customInstructionCollapsed": "Schreib deine eigene Anweisung…"
+    "customInstructionCollapsed": "Schreib deine eigene Anweisung…",
+    "textStyleTitle": "Titel",
+    "textStyleHeading": "Überschrift",
+    "textStyleSubheading": "Untertitel",
+    "textStyleBody": "Text"
   },
   "voice": {
     "modelNotDownloaded": "Modell nicht heruntergeladen. Prüfe die Einstellungen.",
@@ -906,7 +910,13 @@
     "onThisPhoneOnly": "Nur auf diesem Gerät",
     "accountSettings": "Konto und Einstellungen",
     "voiceRecordings": "Sprachaufnahmen",
-    "draw": "Zeichnen"
+    "draw": "Zeichnen",
+    "textFormatting": "Textformatierung",
+    "numberedList": "Nummerierte Liste",
+    "indent": "Einzug vergrößern",
+    "outdent": "Einzug verkleinern",
+    "quote": "Zitat",
+    "hideKeyboard": "Tastatur ausblenden"
   },
   "ask": {
     "title": "Notizen fragen",

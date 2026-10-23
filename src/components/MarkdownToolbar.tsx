@@ -1,109 +1,113 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { EdgeFade } from './EdgeFade';
+import { View, TouchableOpacity, ScrollView, Platform, Text, Keyboard, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { haptics } from '../utils/haptics';
 import {
     findHighlightPaletteEntry,
     highlightPalette,
-    normalizeHighlightColorForCss,
 } from '../utils/highlightColors';
 import { createStyles } from '../theme/createStyles';
 
-export type MarkdownFormatType = 'bold' | 'italic' | 'strikethrough' | 'underline' | 'list' | 'todo' | 'h1' | 'h2' | 'h3' | 'highlight' | 'dictate' | string;
+export type MarkdownFormatType =
+    | 'bold' | 'italic' | 'strikethrough' | 'underline'
+    | 'list' | 'ordered' | 'todo' | 'indent' | 'outdent' | 'quote'
+    | 'h1' | 'h2' | 'h3' | 'paragraph'
+    | 'highlight' | 'dictate' | 'dismiss'
+    | string;
 
 interface MarkdownToolbarProps {
     onFormat: (type: MarkdownFormatType) => void;
+    /** Styles at the caret, plus 'can-indent' / 'can-outdent' availability. */
     activeFormats?: MarkdownFormatType[];
-    onColorPickerToggle?: (visible: boolean) => void;
     /**
      * Dictation runs on the on-device Whisper model, so the button is only shown
      * where that handler exists and local models are enabled for the build.
      */
     showDictate?: boolean;
-    showDraw?: boolean;
+    /** Height grows while the Aa panel is open; the screen reserves room for it. */
+    onHeightChange?: (height: number) => void;
 }
+
+type IconName = keyof typeof MaterialIcons.glyphMap;
+
+// 44dp is the smallest comfortable target (Apple HIG); icons stay at 24dp.
+const BUTTON_SIZE = 44;
+const ICON_SIZE = 24;
+
+const HIGHLIGHT_ORDER = ['white', 'yellow', 'green', 'blue', 'red'] as const;
 
 interface ToolbarButtonProps {
-    isActive: boolean;
-    onPress: () => void;
-    iconName?: keyof typeof MaterialIcons.glyphMap;
-    label?: string;
+    iconName: IconName;
     accessibilityLabel: string;
-    children?: React.ReactNode;
+    onPress: () => void;
+    isActive?: boolean;
+    disabled?: boolean;
+    /** Fills the cell of a segmented group instead of a fixed square. */
+    grow?: boolean;
 }
 
-const ToolbarButton: React.FC<ToolbarButtonProps> = ({ isActive, onPress, iconName, label, accessibilityLabel, children }) => {
-    return (
-        <TouchableOpacity
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel}
-            accessibilityState={{ selected: isActive }}
-            style={[styles.button, isActive && styles.activeButton]}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            activeOpacity={0.6}
-        >
-            {iconName && (
-                <MaterialIcons
-                    name={iconName}
-                    size={22}
-                    color={isActive ? colors.primary : colors.textSecondary}
-                />
-            )}
-            {label && (
-                <Text style={[
-                    styles.textIcon,
-                    { color: isActive ? colors.primary : colors.textSecondary }
-                ]}>
-                    {label}
-                </Text>
-            )}
-            {children}
-        </TouchableOpacity>
-    );
-};
+const ToolbarButton: React.FC<ToolbarButtonProps> = ({ iconName, accessibilityLabel, onPress, isActive = false, disabled = false, grow = false }) => (
+    <TouchableOpacity
+        onPress={onPress}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ selected: isActive, disabled }}
+        style={[styles.button, grow && styles.buttonGrow, isActive && styles.buttonActive, disabled && styles.buttonDisabled]}
+        activeOpacity={0.6}
+    >
+        <MaterialIcons
+            name={iconName}
+            size={ICON_SIZE}
+            color={isActive ? colors.primary : colors.text}
+        />
+    </TouchableOpacity>
+);
 
-export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], onColorPickerToggle, showDictate = false, showDraw = false }) => {
+/**
+ * The bar docked above the keyboard. Like Apple Notes it keeps one calm row of
+ * the actions used on almost every note; the rest (text styles, underline,
+ * strikethrough, highlight, numbered lists, indent, quote) sit in the Aa panel,
+ * which opens above the row without closing the keyboard.
+ */
+export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, activeFormats = [], showDictate = false, onHeightChange }) => {
     const { t } = useTranslation();
-    const insets = useSafeAreaInsets();
-    const [showColorPicker, setShowColorPicker] = useState(false);
-    // A fade at the trailing edge while more buttons are hidden there, so the
-    // row reads as scrollable instead of cut off.
-    const [viewportWidth, setViewportWidth] = useState(0);
-    const [contentWidth, setContentWidth] = useState(0);
-    const [scrolledToEnd, setScrolledToEnd] = useState(false);
-    const hasMoreAtEnd = contentWidth > viewportWidth + 1 && !scrolledToEnd;
-    const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-        setScrolledToEnd(contentOffset.x + layoutMeasurement.width >= contentSize.width - 8);
-    };
-
-    React.useEffect(() => {
-        onColorPickerToggle?.(showColorPicker);
-    }, [showColorPicker, onColorPickerToggle]);
+    const [panelOpen, setPanelOpen] = useState(false);
 
     const isActive = (type: MarkdownFormatType) => activeFormats.includes(type);
+    const format = (type: MarkdownFormatType) => {
+        haptics.selection();
+        onFormat(type);
+    };
 
-    // Check if any highlight is active
-    const highlightColors = highlightPalette.filter((color) => (
-        color.name === 'yellow'
-        || color.name === 'green'
-        || color.name === 'blue'
-        || color.name === 'red'
-        || color.name === 'white'
-    ));
+    const togglePanel = () => {
+        haptics.selection();
+        setPanelOpen((open) => !open);
+    };
 
-    const activeHighlight = activeFormats.find(f => f.startsWith('highlight:'));
-    const activeHighlightValue = activeHighlight ? activeHighlight.slice('highlight:'.length) : 'white';
-    const activeHighlightEntry = findHighlightPaletteEntry(activeHighlightValue);
-    const activeHighlightColor = activeHighlightEntry?.hex
-        || normalizeHighlightColorForCss(activeHighlightValue, colors.highlight.white);
-    const isHighlightActive = activeFormats.includes('highlight') || !!activeHighlight;
+    const dismissKeyboard = () => {
+        onFormat('dismiss');
+        Keyboard.dismiss();
+    };
 
+    const headingLevel = isActive('h1') ? 1 : isActive('h2') ? 2 : isActive('h3') ? 3 : 0;
+    const textStyles: { type: MarkdownFormatType; label: string; level: number; textStyle: object }[] = [
+        { type: 'h1', level: 1, label: t('edit.textStyleTitle', 'Title'), textStyle: styles.styleTitle },
+        { type: 'h2', level: 2, label: t('edit.textStyleHeading', 'Heading'), textStyle: styles.styleHeading },
+        { type: 'h3', level: 3, label: t('edit.textStyleSubheading', 'Subheading'), textStyle: styles.styleSubheading },
+        { type: 'paragraph', level: 0, label: t('edit.textStyleBody', 'Body'), textStyle: styles.styleBody },
+    ];
+
+    const activeHighlight = activeFormats.find((f) => f.startsWith('highlight:'));
+    const activeHighlightName = activeHighlight
+        ? findHighlightPaletteEntry(activeHighlight.slice('highlight:'.length))?.name
+        : 'white';
+    const highlightColors = HIGHLIGHT_ORDER
+        .map((name) => highlightPalette.find((color) => color.name === name))
+        .filter((color): color is NonNullable<typeof color> => !!color);
     const getHighlightColorLabel = (colorName: string) => {
         switch (colorName) {
             case 'yellow': return t('a11y.colorYellow', 'Yellow');
@@ -115,187 +119,124 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
         }
     };
 
-    const handleHighlightPress = () => {
-        setShowColorPicker(true);
-    };
-
-    const applyHighlight = (colorName: string) => {
-        const selectedColor = highlightColors.find((color) => color.name === colorName);
-        if (!selectedColor) {
-            return;
-        }
-
-        onFormat(`highlight:${selectedColor.name === 'white' ? 'white' : selectedColor.hex}` as MarkdownFormatType);
-        setShowColorPicker(false);
+    const handleLayout = (event: LayoutChangeEvent) => {
+        onHeightChange?.(Math.round(event.nativeEvent.layout.height));
     };
 
     return (
-        <View style={styles.container}>
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="always"
-                onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
-                onContentSizeChange={(width) => setContentWidth(width)}
-                onScroll={handleScroll}
-                scrollEventThrottle={32}
-            >
-                {/* Structure */}
-                <ToolbarButton
-                    isActive={isActive('todo')}
-                    onPress={() => onFormat('todo')}
-                    iconName="checklist"
-                    accessibilityLabel={t('a11y.checklist', 'Checklist')}
-                />
+        <View style={styles.container} onLayout={handleLayout}>
+            {panelOpen && (
+                <View style={styles.panel}>
+                    {/* Text style of the current line */}
+                    <View style={[styles.segment, styles.panelRow]}>
+                        {textStyles.map((item) => {
+                            const selected = headingLevel === item.level;
+                            return (
+                                <TouchableOpacity
+                                    key={item.type}
+                                    onPress={() => {
+                                        if (!selected) format(item.type);
+                                    }}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected }}
+                                    style={[styles.styleChip, selected && styles.buttonActive]}
+                                    activeOpacity={0.6}
+                                >
+                                    <Text
+                                        numberOfLines={1}
+                                        adjustsFontSizeToFit
+                                        minimumFontScale={0.75}
+                                        style={[item.textStyle, { color: selected ? colors.primary : colors.text }]}
+                                    >
+                                        {item.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
 
-                <ToolbarButton
-                    isActive={isActive('list')}
-                    onPress={() => onFormat('list')}
-                    iconName="format-list-bulleted"
-                    accessibilityLabel={t('a11y.bulletList', 'Bulleted list')}
-                />
-
-                {showDictate && (
-                    <ToolbarButton
-                        isActive={isActive('dictate')}
-                        onPress={() => onFormat('dictate')}
-                        iconName="mic"
-                        accessibilityLabel={t('a11y.dictate', 'Dictate')}
-                    />
-                )}
-
-                {showDraw && (
-                    <ToolbarButton
-                        isActive={false}
-                        onPress={() => onFormat('draw')}
-                        iconName="gesture"
-                        accessibilityLabel={t('a11y.draw', 'Draw')}
-                    />
-                )}
-
-                <View style={styles.spacer} />
-
-                {/* Text styles. Ordered before the headings so the actions used
-                    on almost every note stay reachable without scrolling the
-                    toolbar on a narrow phone. */}
-                <ToolbarButton
-                    isActive={isActive('bold')}
-                    onPress={() => onFormat('bold')}
-                    iconName="format-bold"
-                    accessibilityLabel={t('a11y.bold', 'Bold')}
-                />
-
-                <ToolbarButton
-                    isActive={isActive('italic')}
-                    onPress={() => onFormat('italic')}
-                    iconName="format-italic"
-                    accessibilityLabel={t('a11y.italic', 'Italic')}
-                />
-
-                <ToolbarButton
-                    isActive={isActive('underline')}
-                    onPress={() => onFormat('underline')}
-                    iconName="format-underlined"
-                    accessibilityLabel={t('a11y.underline', 'Underline')}
-                />
-
-                <ToolbarButton
-                    isActive={isActive('strikethrough')}
-                    onPress={() => onFormat('strikethrough')}
-                    iconName="format-strikethrough"
-                    accessibilityLabel={t('a11y.strikethrough', 'Strikethrough')}
-                />
-
-                {/* Highlight */}
-                <TouchableOpacity
-                    style={[styles.button, isHighlightActive && styles.activeButton]}
-                    onPress={handleHighlightPress}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('a11y.highlight', 'Highlight')}
-                    accessibilityState={{ selected: isHighlightActive }}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                    <MaterialIcons
-                        name="border-color"
-                        size={20} // Slightly smaller optical size for this icon
-                        color={isHighlightActive ? colors.primary : colors.textSecondary}
-                    />
-                    <View style={[
-                        styles.colorDot,
-                        { backgroundColor: activeHighlightColor },
-                        // specific tweak for correct visual
-                        activeHighlightColor.toLowerCase() === colors.highlight.white.toLowerCase()
-                        && { borderWidth: 1, borderColor: colors.border }
-                    ]} />
-                </TouchableOpacity>
-
-                <View style={styles.spacer} />
-
-                {/* Headings */}
-                <ToolbarButton
-                    isActive={isActive('h1')}
-                    onPress={() => onFormat('h1')}
-                    label="H1"
-                    accessibilityLabel={t('a11y.heading', 'Heading {{level}}', { level: 1 })}
-                />
-
-                <ToolbarButton
-                    isActive={isActive('h2')}
-                    onPress={() => onFormat('h2')}
-                    label="H2"
-                    accessibilityLabel={t('a11y.heading', 'Heading {{level}}', { level: 2 })}
-                />
-
-                <ToolbarButton
-                    isActive={isActive('h3')}
-                    onPress={() => onFormat('h3')}
-                    label="H3"
-                    accessibilityLabel={t('a11y.heading', 'Heading {{level}}', { level: 3 })}
-                />
-
-            </ScrollView>
-            {hasMoreAtEnd && <EdgeFade side="end" color={colors.surface} width={40} />}
-
-            <Modal
-                transparent
-                visible={showColorPicker}
-                animationType="fade"
-                onRequestClose={() => setShowColorPicker(false)}
-            >
-                <TouchableWithoutFeedback onPress={() => setShowColorPicker(false)}>
-                    <View style={styles.modalOverlay}>
-                        <View style={[styles.colorPickerContainer, { paddingBottom: Math.max(insets.bottom, 20) + spacing.l }]}>
-                            <Text style={styles.colorPickerTitle}>{t('aux.highlightColor', 'Highlight Color')}</Text>
-                            <View style={styles.colorsGrid}>
-                                {highlightColors.map((color) => (
+                    {/* Character styles and highlight. Wraps onto two lines on a
+                        narrow phone instead of shrinking the targets. */}
+                    <View style={[styles.panelRow, styles.wrapRow]}>
+                        <View style={[styles.segment, styles.characterGroup]}>
+                            <ToolbarButton grow iconName="format-bold" isActive={isActive('bold')} onPress={() => format('bold')} accessibilityLabel={t('a11y.bold', 'Bold')} />
+                            <ToolbarButton grow iconName="format-italic" isActive={isActive('italic')} onPress={() => format('italic')} accessibilityLabel={t('a11y.italic', 'Italic')} />
+                            <ToolbarButton grow iconName="format-underlined" isActive={isActive('underline')} onPress={() => format('underline')} accessibilityLabel={t('a11y.underline', 'Underline')} />
+                            <ToolbarButton grow iconName="format-strikethrough" isActive={isActive('strikethrough')} onPress={() => format('strikethrough')} accessibilityLabel={t('a11y.strikethrough', 'Strikethrough')} />
+                        </View>
+                        <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel={t('a11y.highlight', 'Highlight')}>
+                            {highlightColors.map((color) => {
+                                const selected = activeHighlightName === color.name;
+                                const isNone = color.name === 'white';
+                                return (
                                     <TouchableOpacity
                                         key={color.name}
-                                        style={[
-                                            styles.colorOption,
-                                            { backgroundColor: color.hex },
-                                            activeHighlightColor.toLowerCase() === color.hex.toLowerCase() && styles.activeColorOption
-                                        ]}
-                                        onPress={() => applyHighlight(color.name)}
-                                        activeOpacity={0.8}
-                                        accessibilityRole="button"
+                                        onPress={() => format(`highlight:${isNone ? 'white' : color.hex}`)}
+                                        accessibilityRole="radio"
                                         accessibilityLabel={getHighlightColorLabel(color.name)}
-                                        accessibilityState={{ selected: activeHighlightEntry?.name === color.name }}
+                                        accessibilityState={{ selected }}
+                                        style={styles.swatchTarget}
+                                        activeOpacity={0.7}
                                     >
-                                        {activeHighlightEntry?.name === color.name && (
-                                            <MaterialIcons
-                                                name="check"
-                                                size={20}
-                                                color={colors.text}
-                                            />
-                                        )}
+                                        <View style={[
+                                            styles.swatch,
+                                            { backgroundColor: isNone ? colors.surface : color.hex },
+                                            selected && styles.swatchSelected,
+                                        ]}>
+                                            {isNone && (
+                                                <MaterialIcons name="format-color-reset" size={16} color={colors.textSecondary} />
+                                            )}
+                                        </View>
                                     </TouchableOpacity>
-                                ))}
-                            </View>
+                                );
+                            })}
                         </View>
                     </View>
-                </TouchableWithoutFeedback>
-            </Modal>
+
+                    {/* Lists and paragraph structure */}
+                    <View style={[styles.segment, styles.panelRow]}>
+                        <ToolbarButton grow iconName="format-list-bulleted" isActive={isActive('list')} onPress={() => format('list')} accessibilityLabel={t('a11y.bulletList', 'Bulleted list')} />
+                        <ToolbarButton grow iconName="format-list-numbered" isActive={isActive('ordered')} onPress={() => format('ordered')} accessibilityLabel={t('a11y.numberedList', 'Numbered list')} />
+                        <ToolbarButton grow iconName="format-indent-decrease" disabled={!isActive('can-outdent')} onPress={() => format('outdent')} accessibilityLabel={t('a11y.outdent', 'Decrease indent')} />
+                        <ToolbarButton grow iconName="format-indent-increase" disabled={!isActive('can-indent')} onPress={() => format('indent')} accessibilityLabel={t('a11y.indent', 'Increase indent')} />
+                        <ToolbarButton grow iconName="format-quote" isActive={isActive('quote')} onPress={() => format('quote')} accessibilityLabel={t('a11y.quote', 'Quote')} />
+                    </View>
+                </View>
+            )}
+
+            <View style={styles.row}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="always"
+                    style={styles.rowScroll}
+                    contentContainerStyle={styles.rowContent}
+                >
+                    <TouchableOpacity
+                        onPress={togglePanel}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.textFormatting', 'Text formatting')}
+                        accessibilityState={{ expanded: panelOpen }}
+                        style={[styles.button, panelOpen && styles.buttonActive]}
+                        activeOpacity={0.6}
+                    >
+                        <Text style={[styles.aaLabel, { color: panelOpen ? colors.primary : colors.text }]}>Aa</Text>
+                    </TouchableOpacity>
+                    <ToolbarButton iconName="format-bold" isActive={isActive('bold')} onPress={() => format('bold')} accessibilityLabel={t('a11y.bold', 'Bold')} />
+                    <ToolbarButton iconName="format-italic" isActive={isActive('italic')} onPress={() => format('italic')} accessibilityLabel={t('a11y.italic', 'Italic')} />
+                    <ToolbarButton iconName="checklist" isActive={isActive('todo')} onPress={() => format('todo')} accessibilityLabel={t('a11y.checklist', 'Checklist')} />
+                    <ToolbarButton iconName="format-list-bulleted" isActive={isActive('list')} onPress={() => format('list')} accessibilityLabel={t('a11y.bulletList', 'Bulleted list')} />
+                    {showDictate && (
+                        <ToolbarButton iconName="mic-none" isActive={isActive('dictate')} onPress={() => format('dictate')} accessibilityLabel={t('a11y.dictate', 'Dictate')} />
+                    )}
+                </ScrollView>
+                <View style={styles.divider} />
+                <ToolbarButton
+                    iconName="keyboard-hide"
+                    onPress={dismissKeyboard}
+                    accessibilityLabel={t('a11y.hideKeyboard', 'Hide keyboard')}
+                />
+            </View>
         </View>
     );
 };
@@ -303,122 +244,139 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
 const styles = createStyles(() => ({
     container: {
         backgroundColor: colors.surface,
-        borderTopWidth: 1,
+        borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
-        paddingVertical: spacing.xs,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: -3 },
-                shadowOpacity: 0.08,
-                shadowRadius: 5,
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: 0.06,
+                shadowRadius: 4,
                 zIndex: 10,
             },
             android: {
-                elevation: 12,
+                elevation: 8,
             },
         }),
     },
-    scrollContent: {
-        flexGrow: 1,
-        justifyContent: 'flex-start',
-        paddingHorizontal: spacing.m,
+    row: {
+        flexDirection: 'row',
         alignItems: 'center',
-        height: 44,
-        gap: 4, // Material Design dense toolbar gap
+        height: BUTTON_SIZE + spacing.s,
+        paddingRight: spacing.xs,
+    },
+    rowScroll: {
+        flex: 1,
+    },
+    rowContent: {
+        alignItems: 'center',
+        paddingHorizontal: spacing.xs,
+        gap: spacing.xxs,
+    },
+    divider: {
+        width: StyleSheet.hairlineWidth,
+        height: 24,
+        backgroundColor: colors.border,
+        marginHorizontal: spacing.xs,
     },
     button: {
-        width: 40,
-        height: 40,
+        width: BUTTON_SIZE,
+        height: BUTTON_SIZE,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 10, // Modern rounded square
-        backgroundColor: 'transparent',
+        borderRadius: 10,
     },
-    activeButton: {
-        backgroundColor: colors.backgroundSecondary,
+    buttonGrow: {
+        flex: 1,
+        width: undefined,
     },
-    spacer: {
-        width: 4,
+    buttonActive: {
+        backgroundColor: colors.primaryLight,
     },
-    textIcon: {
-        fontSize: 15,
-        fontWeight: '700',
+    buttonDisabled: {
+        opacity: 0.3,
+    },
+    aaLabel: {
+        fontSize: 19,
+        fontWeight: '600',
         includeFontPadding: false,
     },
-    colorDot: {
-        position: 'absolute',
-        bottom: 4,
-        right: 4,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        justifyContent: 'flex-end',
-    },
-    colorPickerContainer: {
-        backgroundColor: colors.surface,
-        borderTopLeftRadius: 24,
+    panel: {
+        paddingHorizontal: spacing.s,
+        paddingTop: spacing.s,
+        gap: spacing.s,
+        // Keep the groups at phone width on a tablet instead of stretching.
         width: '100%',
-        maxWidth: 640,
-        alignSelf: 'center',
-        borderTopRightRadius: 24,
-        padding: spacing.l,
-        paddingBottom: Platform.OS === 'ios' ? 40 : spacing.l,
-        ...Platform.select({
-            ios: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: -4 },
-                shadowOpacity: 0.1,
-                shadowRadius: 10,
-            },
-            android: {
-                elevation: 20,
-            },
-        }),
+        maxWidth: 520,
     },
-    colorPickerTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: spacing.l,
-        textAlign: 'center',
-        opacity: 0.8,
-    },
-    colorsGrid: {
+    panelRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: spacing.m,
+        alignItems: 'center',
     },
-    colorOption: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    wrapRow: {
+        flexWrap: 'wrap',
+        columnGap: spacing.s,
+        rowGap: spacing.s,
+    },
+    segment: {
+        backgroundColor: colors.background,
+        borderRadius: 12,
+        padding: spacing.xxs,
+    },
+    characterGroup: {
+        flexDirection: 'row',
+        flexGrow: 1,
+        // With 32dp swatch cells this keeps the row on one line at 360dp.
+        minWidth: 4 * 42,
+    },
+    styleChip: {
+        flex: 1,
+        height: BUTTON_SIZE,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        ...Platform.select({
-            ios: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 3,
-            },
-            android: {
-                elevation: 2,
-            },
-        }),
+        paddingHorizontal: spacing.xs,
     },
-    activeColorOption: {
+    // Each style label previews itself, as in Apple Notes.
+    styleTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    styleHeading: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    styleSubheading: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    styleBody: {
+        fontSize: 14,
+        fontWeight: '400',
+    },
+    swatches: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexGrow: 1,
+        justifyContent: 'space-between',
+    },
+    swatchTarget: {
+        width: 32,
+        height: BUTTON_SIZE,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    swatch: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.borderHover,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    swatchSelected: {
         borderWidth: 2,
         borderColor: colors.primary,
-        transform: [{ scale: 1.1 }],
     },
 }));

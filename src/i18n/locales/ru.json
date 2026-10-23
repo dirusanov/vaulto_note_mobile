@@ -684,7 +684,11 @@
       "switched": "Теперь записи распознаются в облаке. Без интернета по-прежнему работает устройство."
     },
     "customInstructionPlaceholder": "Например: сделай короче или переведи на английский",
-    "customInstructionCollapsed": "Напишите свою инструкцию…"
+    "customInstructionCollapsed": "Напишите свою инструкцию…",
+    "textStyleTitle": "Название",
+    "textStyleHeading": "Заголовок",
+    "textStyleSubheading": "Подзаголовок",
+    "textStyleBody": "Текст"
   },
   "voice": {
     "modelNotDownloaded": "Модель не загружена. Проверьте настройки.",
@@ -910,7 +914,13 @@
     "onThisPhoneOnly": "Только на этом устройстве",
     "accountSettings": "Аккаунт и настройки",
     "voiceRecordings": "Голосовые записи",
-    "draw": "Рисовать"
+    "draw": "Рисовать",
+    "textFormatting": "Форматирование текста",
+    "numberedList": "Нумерованный список",
+    "indent": "Увеличить отступ",
+    "outdent": "Уменьшить отступ",
+    "quote": "Цитата",
+    "hideKeyboard": "Скрыть клавиатуру"
   },
   "ask": {
     "title": "Вопросы по заметкам",

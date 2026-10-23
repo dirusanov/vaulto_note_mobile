@@ -103,10 +103,16 @@ const mapEditorStateToFormats = (state: Record<string, any>): MarkdownFormatType
     if (state.isUnderlineActive) styles.push('underline');
     if (state.isStrikeActive) styles.push('strikethrough');
     if (state.isTaskListActive) styles.push('todo');
-    if (state.isBulletListActive || state.isOrderedListActive) styles.push('list');
+    if (state.isBulletListActive) styles.push('list');
+    if (state.isOrderedListActive) styles.push('ordered');
+    if (state.isBlockquoteActive) styles.push('quote');
     if (state.headingLevel === 1) styles.push('h1');
     if (state.headingLevel === 2) styles.push('h2');
     if (state.headingLevel === 3) styles.push('h3');
+    // Not styles but availability, so the toolbar can dim indent/outdent
+    // outside a list item.
+    if (state.canSink || state.canSinkTaskListItem) styles.push('can-indent');
+    if (state.canLift || state.canLiftTaskListItem) styles.push('can-outdent');
 
     if (typeof state.activeHighlight === 'string' && state.activeHighlight.length > 0) {
         styles.push('highlight');
@@ -877,7 +883,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const pendingProgrammaticHtmlRef = useRef<string | null>(null);
     const pendingFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFocusedRef = useRef(false);
-    const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
     const editorApi = editor as typeof editor & {
         setPlaceholder?: (value: string) => void;
         injectCSS?: (css: string, tag?: string) => void;
@@ -1172,6 +1177,50 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             return;
         }
 
+        if (type === 'ordered') {
+            editor.toggleOrderedList();
+            return;
+        }
+
+        if (type === 'quote') {
+            editor.toggleBlockquote();
+            return;
+        }
+
+        // Checklist items are their own node type, so they nest through the
+        // task-list commands; bullets and numbers through the list-item ones.
+        if (type === 'indent') {
+            if (editorState.canSinkTaskListItem) {
+                editor.sinkTaskListItem();
+            } else {
+                editor.sink();
+            }
+            return;
+        }
+
+        if (type === 'outdent') {
+            if (editorState.canLiftTaskListItem) {
+                editor.liftTaskListItem();
+            } else {
+                editor.lift();
+            }
+            return;
+        }
+
+        // Body text: undo whichever heading the line has.
+        if (type === 'paragraph') {
+            const level = Number(editorState.headingLevel);
+            if (level >= 1 && level <= 6) {
+                editor.toggleHeading(level as 1 | 2 | 3 | 4 | 5 | 6);
+            }
+            return;
+        }
+
+        if (type === 'dismiss') {
+            editor.blur();
+            return;
+        }
+
         if (type === 'h1') {
             editor.toggleHeading(1);
             return;
@@ -1277,7 +1326,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 overScrollMode="never"
                 style={styles.webview}
             />
-            {(showToolbar || isColorPickerVisible) && (
+            {showToolbar && (
                 Platform.OS === 'ios' ? (
                     <KeyboardAvoidingView
                         behavior="padding"
@@ -1288,7 +1337,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                             <MarkdownToolbar
                                 onFormat={applyFormat}
                                 activeFormats={activeFormats}
-                                onColorPickerToggle={setIsColorPickerVisible}
                             />
                         </View>
                     </KeyboardAvoidingView>
@@ -1298,7 +1346,6 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                             <MarkdownToolbar
                                 onFormat={applyFormat}
                                 activeFormats={activeFormats}
-                                onColorPickerToggle={setIsColorPickerVisible}
                             />
                         </View>
                     </View>

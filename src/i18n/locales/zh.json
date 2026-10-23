@@ -684,7 +684,11 @@
       "switched": "录音现在在云端转写。没有网络时仍由设备转写。"
     },
     "customInstructionPlaceholder": "例如：写得更简短，或翻译成英文",
-    "customInstructionCollapsed": "写下你自己的指令…"
+    "customInstructionCollapsed": "写下你自己的指令…",
+    "textStyleTitle": "标题",
+    "textStyleHeading": "小标题",
+    "textStyleSubheading": "副标题",
+    "textStyleBody": "正文"
   },
   "voice": {
     "modelNotDownloaded": "模型尚未下载，请检查设置。",
@@ -906,7 +910,13 @@
     "onThisPhoneOnly": "仅在本机",
     "accountSettings": "账户和设置",
     "voiceRecordings": "语音录音",
-    "draw": "绘图"
+    "draw": "绘图",
+    "textFormatting": "文本格式",
+    "numberedList": "编号列表",
+    "indent": "增加缩进",
+    "outdent": "减少缩进",
+    "quote": "引用",
+    "hideKeyboard": "隐藏键盘"
   },
   "ask": {
     "title": "询问笔记",

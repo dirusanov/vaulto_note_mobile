@@ -684,7 +684,11 @@
       "switched": "अब रिकॉर्डिंग क्लाउड में जाती हैं। इंटरनेट न होने पर डिवाइस ही ट्रांसक्राइब करता है।"
     },
     "customInstructionPlaceholder": "उदाहरण: इसे छोटा करें या अंग्रेज़ी में अनुवाद करें",
-    "customInstructionCollapsed": "अपना निर्देश लिखें…"
+    "customInstructionCollapsed": "अपना निर्देश लिखें…",
+    "textStyleTitle": "शीर्षक",
+    "textStyleHeading": "हेडिंग",
+    "textStyleSubheading": "उप-हेडिंग",
+    "textStyleBody": "मुख्य टेक्स्ट"
   },
   "voice": {
     "modelNotDownloaded": "मॉडल डाउनलोड नहीं हुआ है। सेटिंग्स जांचें।",
@@ -906,7 +910,13 @@
     "onThisPhoneOnly": "सिर्फ़ इस डिवाइस पर",
     "accountSettings": "खाता और सेटिंग्स",
     "voiceRecordings": "वॉइस रिकॉर्डिंग",
-    "draw": "ड्रॉ करें"
+    "draw": "ड्रॉ करें",
+    "textFormatting": "टेक्स्ट फ़ॉर्मैटिंग",
+    "numberedList": "क्रमांकित सूची",
+    "indent": "इंडेंट बढ़ाएँ",
+    "outdent": "इंडेंट घटाएँ",
+    "quote": "उद्धरण",
+    "hideKeyboard": "कीबोर्ड छिपाएँ"
   },
   "ask": {
     "title": "अपने नोट्स से पूछें",
