@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Text,
     TextInput,
@@ -11,7 +11,7 @@ import {
     StyleSheet,
 } from 'react-native';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 
@@ -28,14 +28,30 @@ import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
 import { GoogleLogo } from '../components/GoogleLogo';
 import { appAlert } from '../components/AppAlert';
+import { storage } from '../utils/storage';
+
+// Trial minutes a new account gets: the registration plan on the gateway
+// (subscription_plans.apply_on_registration, 30 on prod; see also auth.signUpPerk).
+const NEW_ACCOUNT_MINUTES = 30;
 
 export const SignInScreen = () => {
     const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
+    const route = useRoute<any>();
     const { signIn } = useAuth();
     const { signInWithGoogle, loading: googleLoading } = useGoogleOAuth();
 
-    const [email, setEmail] = useState('');
+    // Coming from email verification, or signed out with notes kept on the device:
+    // that person has an account, so "welcome back" fits. Everyone else is most
+    // likely a guest deciding whether an account is worth it.
+    const verifiedEmail: string | undefined = route.params?.email;
+    const [keptAfterSignOut, setKeptAfterSignOut] = useState(false);
+    useEffect(() => {
+        void storage.getKeepLocalNotes().then(setKeptAfterSignOut).catch(() => setKeptAfterSignOut(false));
+    }, []);
+    const returning = !!verifiedEmail || keptAfterSignOut;
+
+    const [email, setEmail] = useState(verifiedEmail ?? '');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -104,10 +120,42 @@ export const SignInScreen = () => {
                     </TouchableOpacity>
 
                     <View style={styles.content}>
-                        <Text style={styles.title}>{t("auth.welcomeBack", "Welcome Back")}</Text>
-                        <Text style={styles.subtitle}>{t("auth.signInToContinue", "Sign in to continue")}</Text>
+                        {returning ? (
+                            <>
+                                <Text style={styles.title}>{t("auth.welcomeBack", "Welcome Back")}</Text>
+                                <Text style={styles.subtitle}>{t("auth.signInToContinue", "Sign in to continue")}</Text>
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.title}>
+                                    {t("auth.newUserTitle", "Keep your notes and get {{minutes}} free minutes", { minutes: NEW_ACCOUNT_MINUTES })}
+                                </Text>
+                                <Text style={styles.subtitleTight}>
+                                    {t("auth.newUserSubtitle", "A free account. The minutes come with a new one.")}
+                                </Text>
+                                <View style={styles.benefits}>
+                                    <Benefit icon="auto-awesome" text={t("auth.benefitAI", "AI tidies up text, finds tasks and answers questions about your notes")} />
+                                    <Benefit icon="lock-outline" text={t("auth.benefitSync", "Sync across your devices with end-to-end encryption")} />
+                                    <Benefit icon="move-to-inbox" text={t("auth.benefitKeepNotes", "Notes you made without an account come with you")} />
+                                </View>
+                            </>
+                        )}
 
                         <View style={styles.buttonContainer}>
+                            {/* One tap beats typing a password: Google first. */}
+                            <AuthProviderButton
+                                title="Google"
+                                icon={<GoogleLogo size={20} />}
+                                onPress={handleGoogleSignIn}
+                                loading={googleLoading}
+                            />
+
+                            <View style={styles.separator}>
+                                <View style={styles.separatorLine} />
+                                <Text style={styles.separatorText}>{t("auth.orWithEmail", "or with email")}</Text>
+                                <View style={styles.separatorLine} />
+                            </View>
+
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>{t("auth.email")}</Text>
                                 <TextInput
@@ -163,19 +211,6 @@ export const SignInScreen = () => {
                                 </Text>
                             </TouchableOpacity>
 
-                            <View style={styles.separator}>
-                                <View style={styles.separatorLine} />
-                                <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
-                                <View style={styles.separatorLine} />
-                            </View>
-
-                            <AuthProviderButton
-                                title="Google"
-                                icon={<GoogleLogo size={20} />}
-                                onPress={handleGoogleSignIn}
-                                loading={googleLoading}
-                            />
-
                             <TouchableOpacity
                                 style={styles.signUpButton}
                                 onPress={() => navigation.navigate('SignUp')}
@@ -184,6 +219,15 @@ export const SignInScreen = () => {
                                     {t("auth.dontHaveAccount", "Don't have an account?")} <Text style={styles.signUpLink}>{t("auth.signUp", "Sign Up")}</Text>
                                 </Text>
                             </TouchableOpacity>
+
+                            {/* Without an account the app keeps working: say so plainly. */}
+                            <TouchableOpacity
+                                style={styles.notNowButton}
+                                onPress={() => navigation.goBack()}
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.notNowText}>{t("common.notNow", "Not now")}</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </ScrollView>
@@ -191,6 +235,15 @@ export const SignInScreen = () => {
         </ScreenContainer>
     );
 };
+
+const Benefit = ({ icon, text }: { icon: keyof typeof MaterialIcons.glyphMap; text: string }) => (
+    <View style={styles.benefitRow}>
+        <View style={styles.benefitIcon}>
+            <MaterialIcons name={icon} size={18} color={colors.primary} />
+        </View>
+        <Text style={styles.benefitText}>{text}</Text>
+    </View>
+);
 
 const styles = createStyles(() => ({
     container: {
@@ -231,6 +284,35 @@ const styles = createStyles(() => ({
         lineHeight: 22,
         color: colors.textSecondary,
         marginBottom: spacing.xl,
+    },
+    subtitleTight: {
+        fontSize: 15,
+        lineHeight: 21,
+        color: colors.textSecondary,
+        marginBottom: spacing.l,
+    },
+    benefits: {
+        gap: spacing.s,
+        marginBottom: spacing.xl,
+    },
+    benefitRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    benefitIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.primaryLight,
+    },
+    benefitText: {
+        flex: 1,
+        fontSize: 15,
+        lineHeight: 21,
+        color: colors.text,
     },
     buttonContainer: {
         gap: spacing.s,
@@ -329,5 +411,15 @@ const styles = createStyles(() => ({
     signUpLink: {
         color: colors.primary,
         fontWeight: '600',
+    },
+    notNowButton: {
+        minHeight: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    notNowText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: colors.textSecondary,
     },
 }));

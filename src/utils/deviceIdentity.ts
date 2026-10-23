@@ -2,8 +2,10 @@
  * Device Identity Utility
  * 
  * Generates and persists a unique device ID using secure storage.
- * - iOS: Uses Keychain (persists across reinstalls)
- * - Android: Uses Keystore (persists across reinstalls on most devices)
+ * - iOS: Keychain, which usually survives an uninstall and reinstall.
+ * - Android: an encrypted value whose key lives in the Keystore. Uninstalling the
+ *   app deletes both, so a reinstall (or cleared app data) gets a new ID — and,
+ *   as a guest, a new free-minute allowance.
  */
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
@@ -13,7 +15,7 @@ const DEVICE_ID_KEY = 'vaulto_device_id';
 
 /**
  * Get or create a persistent device ID.
- * This ID survives app reinstalls on most devices.
+ * It lasts as long as the app's data does (on iOS usually across reinstalls).
  */
 export async function getDeviceId(): Promise<string> {
     try {

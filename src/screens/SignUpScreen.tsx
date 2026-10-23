@@ -123,6 +123,20 @@ export const SignUpScreen = () => {
                     </View>
 
                     <View style={styles.form}>
+                        {/* One tap beats typing a password: Google first. */}
+                        <AuthProviderButton
+                            title="Google"
+                            icon={<GoogleLogo size={20} />}
+                            onPress={handleGoogle}
+                            loading={googleLoading}
+                        />
+
+                        <View style={styles.separator}>
+                            <View style={styles.separatorLine} />
+                            <Text style={styles.separatorText}>{t("auth.orWithEmail", "or with email")}</Text>
+                            <View style={styles.separatorLine} />
+                        </View>
+
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>{t("auth.email")}</Text>
                             <TextInput
@@ -227,19 +241,6 @@ export const SignUpScreen = () => {
                                 {loading ? t("auth.creatingAccount", "Creating account...") : t("auth.signUp", "Sign Up")}
                             </Text>
                         </TouchableOpacity>
-
-                        <View style={styles.separator}>
-                            <View style={styles.separatorLine} />
-                            <Text style={styles.separatorText}>{t("auth.orContinueWith", "or continue with")}</Text>
-                            <View style={styles.separatorLine} />
-                        </View>
-
-                        <AuthProviderButton
-                            title="Google"
-                            icon={<GoogleLogo size={20} />}
-                            onPress={handleGoogle}
-                            loading={googleLoading}
-                        />
                     </View>
 
                     <View style={styles.footer}>

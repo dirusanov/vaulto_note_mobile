@@ -28,17 +28,27 @@ import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSubscription } from '../context/SubscriptionContext';
+import { getAIProvider, getOnDeviceTranscription, getTranscriptionEnabled } from '../utils/storage';
+import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
 
 const SEARCH_BAR_HEIGHT = 60;
+// Tag chips (36) and the gap under them: the row folds away with the search bar.
+const TAG_ROW_HEIGHT = 44;
 const DOCK_HEIGHT = 68;
+// Free cloud minutes are mentioned by the record button only when few are left.
+const LOW_MINUTES_SECONDS = 5 * 60;
+const UNLIMITED_SECONDS = 360000;
+const PROFILE_REFRESH_MS = 20000;
 
 export const NotesListScreen = () => {
     const { t } = useTranslation();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
-    const { userId, isAuthenticated, isGuest, user } = useAuth();
+    const { userId, isAuthenticated, isGuest, user, refreshProfile } = useAuth();
+    const { isPro } = useSubscription();
     // Account avatar in the search bar (as in Keep/Gmail): the initial of the name
     // or e-mail when signed in, a person icon for guests.
     const signedIn = isAuthenticated && !isGuest;
@@ -96,6 +106,9 @@ export const NotesListScreen = () => {
     const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
     const pendingDeleteRef = useRef<string[] | null>(null);
     const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Being moved to the trash: they stay hidden until that finishes, instead
+    // of reappearing for a few seconds once the Undo bar has gone.
+    const [committingDeleteIds, setCommittingDeleteIds] = useState<string[]>([]);
 
     // true = Mic is Center (Primary), Note is Right (Secondary)
     // false = Note is Center (Primary), Mic is Right (Secondary)
@@ -120,6 +133,35 @@ export const NotesListScreen = () => {
             lastFetchAtRef.current = now;
             fetchNotes();
         }, [fetchNotes, userId])
+    );
+
+    // Free minutes: whether the next recording goes to the cloud is read on
+    // focus (Settings may have changed it), and the balance is refreshed at
+    // most every few seconds, not on every render.
+    const [cloudTranscription, setCloudTranscription] = useState(false);
+    const lastProfileRefreshRef = useRef(0);
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            void (async () => {
+                try {
+                    const [provider, onDeviceChosen, enabled, onDeviceActive] = await Promise.all([
+                        getAIProvider(),
+                        getOnDeviceTranscription(),
+                        getTranscriptionEnabled(),
+                        isOnDeviceTranscriptionActive(),
+                    ]);
+                    if (!cancelled) setCloudTranscription(provider === 'vaulto_ai' && enabled && !onDeviceChosen && !onDeviceActive);
+                } catch {
+                    if (!cancelled) setCloudTranscription(false);
+                }
+            })();
+            if (!isPro && Date.now() - lastProfileRefreshRef.current > PROFILE_REFRESH_MS) {
+                lastProfileRefreshRef.current = Date.now();
+                void refreshProfile();
+            }
+            return () => { cancelled = true; };
+        }, [isPro, refreshProfile])
     );
 
     useEffect(() => {
@@ -331,7 +373,10 @@ export const NotesListScreen = () => {
         if (!ids) return;
         pendingDeleteRef.current = null;
         setPendingDeleteIds(null);
-        batchDeleteNotes(ids).catch((error) => console.error('[NotesList] Delete failed', error));
+        setCommittingDeleteIds(prev => [...prev, ...ids]);
+        batchDeleteNotes(ids)
+            .catch((error) => console.error('[NotesList] Delete failed', error))
+            .finally(() => setCommittingDeleteIds(prev => prev.filter(id => !ids.includes(id))));
     };
     const commitPendingDeleteRef = useRef(commitPendingDelete);
     commitPendingDeleteRef.current = commitPendingDelete;
@@ -362,6 +407,17 @@ export const NotesListScreen = () => {
     // Leaving the screen commits a pending delete instead of dropping it.
     useEffect(() => () => commitPendingDeleteRef.current(), []);
 
+    // While encryption is locked nothing uploads (SyncService skips the sync), so a
+    // pull to refresh says so briefly instead of looking like a sync that worked.
+    const [lockedSyncNotice, setLockedSyncNotice] = useState(false);
+    const lockedSyncNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (lockedSyncNoticeTimerRef.current) clearTimeout(lockedSyncNoticeTimerRef.current);
+    }, []);
+    useEffect(() => {
+        if (!syncLocked) setLockedSyncNotice(false);
+    }, [syncLocked]);
+
     const onRefresh = useCallback(async () => {
         if (isRefreshing) return;
         setIsRefreshing(true);
@@ -370,7 +426,12 @@ export const NotesListScreen = () => {
         } finally {
             setIsRefreshing(false);
         }
-    }, [isRefreshing, syncNotes]);
+        if (isAuthenticated && !isGuest && syncLocked) {
+            if (lockedSyncNoticeTimerRef.current) clearTimeout(lockedSyncNoticeTimerRef.current);
+            setLockedSyncNotice(true);
+            lockedSyncNoticeTimerRef.current = setTimeout(() => setLockedSyncNotice(false), UNDO_WINDOW_MS);
+        }
+    }, [isAuthenticated, isGuest, isRefreshing, syncLocked, syncNotes]);
 
 
 
@@ -450,7 +511,7 @@ export const NotesListScreen = () => {
 
     // Filter out empty notes (no title, content, or audio)
     const filteredNotes = notes.filter(n => {
-        if (pendingDeleteIds?.includes(n.id)) return false;
+        if (pendingDeleteIds?.includes(n.id) || committingDeleteIds.includes(n.id)) return false;
         const activeChild = n.improvements?.find(imp => imp.is_active);
         const displayTitle = (activeChild?.title || activeChild?.label || n.title || '').trim();
         const displayContent = activeChild?.content || n.content || '';
@@ -523,10 +584,37 @@ export const NotesListScreen = () => {
     prevListKeyRef.current = listKey;
 
     // Masonry columns: two on phones, three or four on tablets.
-    const noteColumns: (typeof sortedNotes)[] = Array.from({ length: columnCount }, () => []);
-    orderedNotes.forEach((note, index) => {
-        noteColumns[index % columnCount].push(note);
-    });
+    const toColumns = (list: typeof sortedNotes) => {
+        const columns: (typeof sortedNotes)[] = Array.from({ length: columnCount }, () => []);
+        list.forEach((note, index) => {
+            columns[index % columnCount].push(note);
+        });
+        return columns;
+    };
+    // Like Keep: with anything pinned, "Pinned" and "Others" head two grids.
+    const pinnedNotes = orderedNotes.filter(note => note.is_pinned);
+    const otherNotes = pinnedNotes.length > 0 ? orderedNotes.filter(note => !note.is_pinned) : orderedNotes;
+    const noteSections: { key: string; title: string | null; columns: (typeof sortedNotes)[] }[] = pinnedNotes.length > 0
+        ? [
+            { key: 'pinned', title: t('notes.sectionPinned', 'Pinned'), columns: toColumns(pinnedNotes) },
+            ...(otherNotes.length > 0
+                ? [{ key: 'others', title: t('notes.sectionOthers', 'Others'), columns: toColumns(otherNotes) }]
+                : []),
+        ]
+        : [{ key: 'all', title: null, columns: toColumns(otherNotes) }];
+
+    // Guests and free accounts: "N min left" by the record button once the
+    // free cloud minutes run low, and only while recordings go to the cloud.
+    const remainingSeconds = user?.transcription_remaining_seconds;
+    const backendPro = (user as any)?.is_pro === true || String((user as any)?.plan ?? '').toLowerCase() === 'pro';
+    const minutesHint = !isPro && !backendPro && cloudTranscription && !!user
+        && typeof remainingSeconds === 'number'
+        && (user.transcription_total_seconds ?? 0) <= UNLIMITED_SECONDS
+        && remainingSeconds <= LOW_MINUTES_SECONDS
+        ? (remainingSeconds > 0
+            ? t('notes.freeMinutesLeft', '{{minutes}} min left', { minutes: Math.max(1, Math.round(remainingSeconds / 60)) })
+            : t('notes.freeMinutesUsed', 'Free minutes used up'))
+        : null;
 
     // Check if all selected notes are pinned
     const selectedNotes = sortedNotes.filter(n => selectedNoteIds.has(n.id));
@@ -701,6 +789,8 @@ export const NotesListScreen = () => {
                                 {encryptionBundle?.secret_mode === 'recovery_code'
                                     ? t("notes.unlockWithKey", "Enter your recovery key to show them on this device.")
                                     : t("notes.unlockToRestore")}
+                                {/* Nothing uploads while locked: new notes stay on this phone only. */}
+                                {` ${t('notes.lockedNotBackedUp', 'Until then, new notes are not backed up.')}`}
                             </Text>
                         </View>
                     </View>
@@ -767,7 +857,16 @@ export const NotesListScreen = () => {
                 </Animated.View>
             )}
             {/* Tag filter: one tap narrows the list to a #tag, like Keep's labels. */}
+            {/* Folds away together with the search bar: left alone, the chips
+                floated over cards cut off under them. */}
             {!isSelectionMode && allTags.length > 0 && (
+                <Animated.View
+                    style={{
+                        overflow: 'hidden',
+                        height: searchBarHeight.interpolate({ inputRange: [0, SEARCH_BAR_HEIGHT], outputRange: [0, TAG_ROW_HEIGHT] }),
+                        opacity: searchBarHeight.interpolate({ inputRange: [0, SEARCH_BAR_HEIGHT], outputRange: [0, 1] }),
+                    }}
+                >
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -796,6 +895,7 @@ export const NotesListScreen = () => {
                         );
                     })}
                 </ScrollView>
+                </Animated.View>
             )}
 
             </View>
@@ -853,22 +953,35 @@ export const NotesListScreen = () => {
                             {activeTag ? `#${activeTag}` : t('notes.listTitle', 'Notes')}
                         </Text>
                     )}
-                    <View style={styles.masonryContainer}>
-                        {noteColumns.map((columnNotes, columnIndex) => (
-                            <View key={columnIndex} style={styles.column}>
-                                {columnNotes.map(note => (
-                                    <NoteCard
-                                        key={note.id}
-                                        note={note}
-                                        onPress={() => handleNotePress(note)}
-                                        onLongPress={() => handleNoteLongPress(note)}
-                                        isSelectionMode={isSelectionMode}
-                                        isSelected={selectedNoteIds.has(note.id)}
-                                    />
+                    {noteSections.map((section, sectionIndex) => (
+                        <React.Fragment key={section.key}>
+                            {section.title && (
+                                <Text
+                                    style={[styles.sectionTitle, sectionIndex > 0 && styles.sectionTitleFollowing]}
+                                    accessibilityRole="header"
+                                    numberOfLines={1}
+                                >
+                                    {section.title}
+                                </Text>
+                            )}
+                            <View style={styles.masonryContainer}>
+                                {section.columns.map((columnNotes, columnIndex) => (
+                                    <View key={columnIndex} style={styles.column}>
+                                        {columnNotes.map(note => (
+                                            <NoteCard
+                                                key={note.id}
+                                                note={note}
+                                                onPress={() => handleNotePress(note)}
+                                                onLongPress={() => handleNoteLongPress(note)}
+                                                isSelectionMode={isSelectionMode}
+                                                isSelected={selectedNoteIds.has(note.id)}
+                                            />
+                                        ))}
+                                    </View>
                                 ))}
                             </View>
-                        ))}
-                    </View>
+                        </React.Fragment>
+                    ))}
                     </>
                 )}
                 {/* Room for the floating dock, so the last cards can scroll clear of it. */}
@@ -894,6 +1007,26 @@ export const NotesListScreen = () => {
                             {'\u00A0'}
                             <MaterialIcons name="south" size={16} color={colors.primary} />
                         </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Few free minutes left: one quiet line above the record button; tap for Settings. */}
+            {!!minutesHint && !isWelcomeEmpty && !isSelectionMode && !isVoiceRecorderVisible && (
+                <View
+                    pointerEvents="box-none"
+                    style={[styles.minutesHintContainer, { bottom: Math.max(insets.bottom, spacing.m) + spacing.m + DOCK_HEIGHT + spacing.s }]}
+                >
+                    <TouchableOpacity
+                        style={styles.minutesHint}
+                        onPress={handleSettingsPress}
+                        activeOpacity={0.7}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={minutesHint}
+                    >
+                        <MaterialIcons name="graphic-eq" size={14} color={colors.textSecondary} />
+                        <Text style={styles.minutesHintText} numberOfLines={1}>{minutesHint}</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -937,6 +1070,18 @@ export const NotesListScreen = () => {
                     : null}
                 onUndo={handleUndoDelete}
             />
+            {!pendingDeleteIds && (
+                <UndoSnackbar
+                    message={lockedSyncNotice
+                        ? t('notes.lockedSyncNotice', 'Not synced: unlock encryption to back up new notes.')
+                        : null}
+                    onUndo={() => {
+                        setLockedSyncNotice(false);
+                        setShowUnlockSyncModal(true);
+                    }}
+                    actionLabel={t('settings.ui.unlock')}
+                />
+            )}
             <UnlockSyncModal
                 visible={showUnlockSyncModal}
                 errorMessage={unlockErrorMessage}
@@ -1188,6 +1333,49 @@ const styles = createStyles(() => ({
         width: '100%',
         maxWidth: 1200,
         alignSelf: 'center',
+    },
+    // Keep-style group labels above the pinned notes and the rest.
+    sectionTitle: {
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: '600',
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        color: colors.textSecondary,
+        // Lined up with the "Notes" title and the card edges.
+        paddingHorizontal: spacing.xs,
+        marginBottom: spacing.s,
+        width: '100%',
+        maxWidth: 1200,
+        alignSelf: 'center',
+    },
+    sectionTitleFollowing: {
+        marginTop: spacing.m,
+    },
+    minutesHintContainer: {
+        position: 'absolute',
+        left: spacing.m,
+        right: spacing.m,
+        alignItems: 'center',
+        zIndex: 19,
+        elevation: 19,
+    },
+    minutesHint: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        minHeight: 28,
+        paddingHorizontal: 12,
+        borderRadius: 14,
+        backgroundColor: isDarkScheme() ? colors.surfaceElevated : colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.borderHover : colors.border,
+    },
+    minutesHintText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: colors.textSecondary,
+        fontVariant: ['tabular-nums'],
     },
     masonryContainer: {
         flexDirection: 'row',

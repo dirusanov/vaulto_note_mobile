@@ -253,14 +253,27 @@ export const SettingsScreen = () => {
     const scrollRef = useRef<ScrollView>(null);
     const voiceSectionYRef = useRef<number | null>(null);
     const requestedSectionRef = useRef<string | undefined>(route.params?.section);
+    // "Set up AI on this device" opens Settings at the voice group: the models sheet
+    // then opens by itself with an AI model chosen, so the next step is one button.
+    const aiSetupRef = useRef(route.params?.section === 'voice');
+    const [modelPickerForAI, setModelPickerForAI] = useState(false);
     // Opened for a specific group (e.g. "set up AI on this device"): scroll to it
     // once its position is known.
     const scrollToRequestedSection = useCallback(() => {
         if (requestedSectionRef.current !== 'voice' || voiceSectionYRef.current === null) return;
         requestedSectionRef.current = undefined;
+        // Consumed: a remount (e.g. a theme switch) must not scroll or open the sheet again.
+        navigation.setParams({ section: undefined });
         const y = Math.max(0, voiceSectionYRef.current - spacing.m);
         setTimeout(() => scrollRef.current?.scrollTo({ y, animated: true }), 250);
-    }, []);
+        if (aiSetupRef.current && LOCAL_WHISPER_ENABLED) {
+            setTimeout(() => {
+                if (!navigation.isFocused()) return;
+                setModelPickerForAI(true);
+                setShowModelPicker(true);
+            }, 650);
+        }
+    }, [navigation]);
     const { t, i18n } = useTranslation();
     const [showAppLanguageModal, setShowAppLanguageModal] = useState(false);
     const { preference: themePreference, setPreference: setThemePreference } = useTheme();
@@ -865,8 +878,45 @@ export const SettingsScreen = () => {
         }
     }, [offlineStatus?.aiReady]);
 
+    // After "set up AI on this device": a guest has no cloud AI, so the downloaded
+    // model is only used with "Only on this device" on. Offer that switch once.
+    const modelApplyingRef = useRef(false);
+    const offerOnDeviceAIForGuest = useCallback(async () => {
+        if (!aiSetupRef.current) return;
+        if (isAuthenticated && !isGuest) {
+            aiSetupRef.current = false;
+            return;
+        }
+        const status = await getOfflineStatus().catch(() => null);
+        if (!status?.aiReady) return;
+        aiSetupRef.current = false;
+        if (await getOnDeviceTranscription()) return;
+        appAlert(
+            t('settings.models.aiReadyTitle', 'AI on this device is ready'),
+            t('settings.models.aiReadyGuest', 'Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.', {
+                option: t('settings.voice.private', 'Only on this device'),
+            }),
+            [
+                { text: t('common.notNow', 'Not now'), style: 'cancel' },
+                {
+                    text: t('settings.models.turnOn', 'Turn on'),
+                    // Same as the switch, but the AI model is known to be there now
+                    // (the switch's own copy of the status may predate the download).
+                    onPress: () => {
+                        void (async () => {
+                            setOnDeviceTranscriptionState(true);
+                            await setOnDeviceTranscription(true);
+                            await updateProvider('local');
+                        })();
+                    },
+                },
+            ],
+        );
+    }, [isAuthenticated, isGuest, t]);
+
     // The user's own pick from the Models sheet: same download path as offline mode.
     const handleApplyModels = useCallback(async (plan: OfflinePlan) => {
+        modelApplyingRef.current = false;
         if (offlineProgress !== null) return;
         setOfflineProgress({ loaded: 0, total: plan.downloadBytes });
         try {
@@ -876,6 +926,7 @@ export const SettingsScreen = () => {
             if (after?.aiReady && onDeviceTranscription && !usingLocalWhisper) {
                 await updateProvider('local');
             }
+            await offerOnDeviceAIForGuest();
         } catch (error: any) {
             if (!String(error?.message ?? '').toLowerCase().includes('cancel')) {
                 appAlert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
@@ -884,7 +935,7 @@ export const SettingsScreen = () => {
             setOfflineProgress(null);
             await refreshOffline();
         }
-    }, [offlineProgress, onDeviceTranscription, usingLocalWhisper, refreshOffline, t]);
+    }, [offlineProgress, onDeviceTranscription, usingLocalWhisper, refreshOffline, offerOnDeviceAIForGuest, t]);
 
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
@@ -1633,7 +1684,20 @@ export const SettingsScreen = () => {
                 visible={showModelPicker}
                 privateMode={privateMode}
                 privateVoiceOnly={privateVoiceOnly}
-                onClose={() => setShowModelPicker(false)}
+                preferAI={modelPickerForAI}
+                onClose={() => {
+                    setShowModelPicker(false);
+                    setModelPickerForAI(false);
+                    // "Done" with the AI model already on the phone: the switch may still be off.
+                    // The sheet calls onApply right after onClose when it starts a download.
+                    modelApplyingRef.current = true;
+                    setTimeout(() => {
+                        if (modelApplyingRef.current) {
+                            modelApplyingRef.current = false;
+                            void offerOnDeviceAIForGuest();
+                        }
+                    }, 0);
+                }}
                 onApply={(plan) => { void handleApplyModels(plan); }}
                 onUseCloud={() => { void handleTogglePrivateMode(false); }}
                 removableBytes={offlineOffKept && !offlineDownloading ? offlineStatus?.bytesOnPhone ?? 0 : 0}

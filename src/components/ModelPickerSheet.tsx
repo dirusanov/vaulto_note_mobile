@@ -24,6 +24,8 @@ interface ModelPickerSheetProps {
     /** Bytes that can be freed: set only while local models are switched off. */
     removableBytes?: number;
     onRemove?: () => void;
+    /** Opened to set up on-device AI: preselect an AI model instead of "Speech only". */
+    preferAI?: boolean;
 }
 
 /**
@@ -31,7 +33,7 @@ interface ModelPickerSheetProps {
  * gets a calm note in place (no alert), and with "Only on this phone" on, the
  * cloud is offered as the faster option.
  */
-export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = false, onClose, onApply, onUseCloud, removableBytes = 0, onRemove }: ModelPickerSheetProps) => {
+export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = false, onClose, onApply, onUseCloud, removableBytes = 0, onRemove, preferAI = false }: ModelPickerSheetProps) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [choices, setChoices] = useState<{ speech: ModelChoice[]; ai: ModelChoice[] } | null>(null);
@@ -53,10 +55,14 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
             if (!active) return;
             setChoices(result);
             setSpeechKey((result.speech.find((c) => c.current) ?? result.speech.find((c) => c.recommended && c.supported))?.key ?? null);
-            setAiKey((result.ai.find((c) => c.current) ?? result.ai.find((c) => c.recommended && c.supported))?.key ?? null);
+            // Asked for AI: the recommended model, else the lightest one that loads here
+            // (the list is lightest first; a heavy pick shows its note below).
+            const suggestedAI = result.ai.find((c) => c.recommended && c.supported)
+                ?? (preferAI ? result.ai.find((c) => c.supported) : undefined);
+            setAiKey((result.ai.find((c) => c.current) ?? suggestedAI)?.key ?? null);
         }).catch(() => { if (active) setLoadFailed(true); });
         return () => { active = false; };
-    }, [visible, reload]);
+    }, [visible, reload, preferAI]);
 
     useEffect(() => {
         if (!speechKey) return;

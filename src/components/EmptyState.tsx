@@ -6,6 +6,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
+import { useAuth } from '../hooks/useAuth';
 
 interface EmptyStateProps {
     message: string;
@@ -19,6 +20,8 @@ interface EmptyStateProps {
 
 export const EmptyState = ({ message, variant = 'plain' }: EmptyStateProps) => {
     const { t } = useTranslation();
+    const { isAuthenticated, isGuest } = useAuth();
+    const guest = !isAuthenticated || isGuest;
 
     if (variant === 'search') {
         return (
@@ -30,15 +33,19 @@ export const EmptyState = ({ message, variant = 'plain' }: EmptyStateProps) => {
     }
 
     if (variant === 'welcome') {
-        // What the app does, in three numbered steps.
+        // What the app does, in three numbered steps. Only promises that hold on
+        // first launch: offline speech needs a model download, and a guest gets AI
+        // with a free account or an on-device model.
         const points: { title: string; text: string }[] = [
             {
                 title: t('welcome.voiceTitle', 'Speak, get text'),
-                text: t('welcome.voiceText', 'Recordings turn into text, even without internet.'),
+                text: t('welcome.voiceTextOffline', 'Recordings turn into text — offline too, after a one-time download.'),
             },
             {
                 title: t('welcome.aiTitle', 'AI tidies it up'),
-                text: t('welcome.aiText', 'Improve the text, find tasks, ask about your notes.'),
+                text: guest
+                    ? t('welcome.aiTextGuest', 'Improve the text, find tasks, ask about your notes — with a free account or AI on this device.')
+                    : t('welcome.aiText', 'Improve the text, find tasks, ask about your notes.'),
             },
             {
                 title: t('welcome.privacyTitle', 'Private by default'),

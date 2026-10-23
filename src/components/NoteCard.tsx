@@ -33,6 +33,34 @@ const comparableLine = (value: string): string => value
     .trim()
     .toLocaleLowerCase();
 
+/** "  ☑ Milk" -> indent, box, text: a ticked item reads as done. */
+const CHECKED_LINE = /^(\s*)(☑ )(.*)$/;
+const TASK_LINE = /^\s*[☐☑] /;
+
+/**
+ * Unticked items first within each checklist, the ticked ones after them,
+ * as Keep and Apple Notes list them. Other lines keep their place.
+ */
+const uncheckedFirst = (preview: string): string => {
+    const lines = preview.split('\n');
+    const out: string[] = [];
+    let run: string[] = [];
+    const flush = () => {
+        out.push(...run.filter(line => !CHECKED_LINE.test(line)), ...run.filter(line => CHECKED_LINE.test(line)));
+        run = [];
+    };
+    lines.forEach(line => {
+        if (TASK_LINE.test(line)) {
+            run.push(line);
+        } else {
+            flush();
+            out.push(line);
+        }
+    });
+    flush();
+    return out.join('\n');
+};
+
 const formatVoiceDuration = (seconds?: number | null): string => {
     if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '';
     const total = Math.round(seconds);
@@ -92,8 +120,13 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // Extract title
     const title = buildTitle();
 
-    // Line breaks and checklist state survive, so a list reads as a list.
-    const fullPreview = richContentToPreviewText(content);
+    // Line breaks and checklist state survive, so a list reads as a list. A
+    // checklist with ticked items is read further, so moving those items to
+    // the end does not hide unticked ones that come after them.
+    const basePreview = richContentToPreviewText(content);
+    const fullPreview = basePreview.includes('☑')
+        ? uncheckedFirst(richContentToPreviewText(content, 40, 1200))
+        : basePreview;
     // An untitled note's title is its first line; don't print that line twice.
     const hasStoredTitle = !!activeChildTitle || !!note.title?.trim();
     // Older voice notes saved the first words as the title ("Call Anna about
@@ -145,6 +178,33 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
         }
     };
 
+    // Ticked items past the card's lines fold into "+N checked", like Keep.
+    const previewLineBudget = titleIsCutFirstLine ? 5 : 4;
+    const previewLines = previewString ? previewString.split('\n') : [];
+    const hiddenLines = previewLines.slice(previewLineBudget - 1);
+    const foldedChecked = previewLines.length > previewLineBudget
+        && hiddenLines.every(line => CHECKED_LINE.test(line))
+        ? hiddenLines.length
+        : 0;
+    const shownPreviewLines = foldedChecked ? previewLines.slice(0, previewLineBudget - 1) : previewLines;
+
+    /** A preview line with its #tags coloured; a ticked item is struck through and muted. */
+    const renderLine = (line: string, key: string | number) => {
+        const checked = line.match(CHECKED_LINE);
+        const body = checked ? checked[3] : line;
+        const parts = splitTags(body).map((part, index) => (
+            part.tag
+                ? <Text key={index} style={styles.tagText}>{part.text}</Text>
+                : part.text
+        ));
+        if (!checked) return <React.Fragment key={key}>{parts}</React.Fragment>;
+        return (
+            <Text key={key} style={styles.checkedItem}>
+                {checked[1]}{checked[2]}<Text style={styles.checkedItemText}>{parts}</Text>
+            </Text>
+        );
+    };
+
     const isEmpty = !title && !hasMeaningfulRichContent(content);
     const isVoiceOnly = !title && !!hasAudio;
     // A handwritten note has no text to show: say what it is instead of an empty card.
@@ -153,6 +213,29 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // A thumbnail shows what is drawn; the stored preview picture is reused.
     const drawingSvg = useMemo(() => (hasDrawing ? firstDrawingSvg(content) : null), [hasDrawing, content]);
     const voiceDuration = hasAudio ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
+
+    const dateLabel = formatDate(note.updated_at || note.created_at || '');
+    const voiceLabel = [t('notes.voiceRecording'), voiceDuration].filter(Boolean).join(', ');
+    // Read aloud without the box glyphs; a ticked item says so.
+    const spokenLine = (line: string) => {
+        const text = line.replace(/^\s*[☐☑]\s*/, '').trim();
+        return CHECKED_LINE.test(line) ? `${text}, ${t('a11y.checked', 'checked')}` : text;
+    };
+    // One spoken summary for the whole card: what it is first ("Voice
+    // recording, 0:18", "Drawing" or its text), then its date and badges.
+    const cardLabel = [
+        isVoiceOnly ? voiceLabel : isDrawingOnly ? t('notes.drawing', 'Drawing') : spokenLine(titleIsCutFirstLine ? leadLine : title),
+        !isEmpty && previewString && (titleIsCutFirstLine || previewString !== title)
+            ? shownPreviewLines.map(spokenLine).filter(Boolean).join(', ').slice(0, 200)
+            : '',
+        foldedChecked ? t('notes.checkedMore', '+{{count}} checked', { count: foldedChecked }) : '',
+        hasAudio && !isVoiceOnly ? voiceLabel : '',
+        hasDrawing && !isDrawingOnly ? t('notes.drawing', 'Drawing') : '',
+        dateLabel,
+        note.is_protected ? t('a11y.protected', 'Protected note') : isEncrypted ? t('a11y.encrypted', 'End-to-end encrypted') : '',
+        storageScope === 'local_only' ? t('a11y.onThisPhoneOnly', 'Only on this device') : '',
+        note.is_pinned ? t('a11y.pinned', 'Pinned') : '',
+    ].map(part => part.trim()).filter(Boolean).join(', ');
 
     // The card sinks slightly under the finger, like Keep and Apple Notes.
     const pressScale = useRef(new Animated.Value(1)).current;
@@ -168,9 +251,10 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
             onPressIn={() => animatePress(0.98)}
             onPressOut={() => animatePress(1)}
             accessibilityRole="button"
+            accessibilityLabel={cardLabel}
             accessibilityState={isSelectionMode ? { selected: isSelected } : undefined}
         >
-        <Animated.View style={[styles.card, isSelected && styles.selectedCard, { transform: [{ scale: pressScale }] }]}>
+        <Animated.View style={[styles.card, { transform: [{ scale: pressScale }] }]}>
             {isSelectionMode && (
                 <View style={styles.selectionIndicator}>
                     <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
@@ -187,7 +271,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     <View
                         style={[styles.voiceRow, isSelectionMode && { paddingEnd: 28 }]}
                         accessible
-                        accessibilityLabel={[t("notes.voiceRecording"), voiceDuration].filter(Boolean).join(', ')}
+                        accessibilityLabel={voiceLabel}
                     >
                         <View style={styles.voiceIcon}>
                             <MaterialIcons name="mic" size={18} color={colors.primary} />
@@ -214,11 +298,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     </View>
                 ) : titleIsCutFirstLine ? (
                     <Text style={[styles.title, textAlignFor(leadLine), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={3}>
-                        {splitTags(leadLine).map((part, index) => (
-                            part.tag
-                                ? <Text key={index} style={styles.tagText}>{part.text}</Text>
-                                : part.text
-                        ))}
+                        {renderLine(leadLine, 'lead')}
                     </Text>
                 ) : (
                     <Text style={[styles.title, textAlignFor(title), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
@@ -226,37 +306,43 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     </Text>
                 )}
                 {(!isEmpty && previewString && (titleIsCutFirstLine || previewString !== title)) && (
-                    <Text
-                        style={[styles.preview, textAlignFor(previewString)]}
-                        numberOfLines={titleIsCutFirstLine ? 5 : 4}
-                    >
-                        {splitTags(previewString).map((part, index) => (
-                            part.tag
-                                ? <Text key={index} style={styles.tagText}>{part.text}</Text>
-                                : part.text
-                        ))}
-                    </Text>
+                    <>
+                        <Text
+                            style={[styles.preview, textAlignFor(previewString)]}
+                            numberOfLines={foldedChecked ? previewLineBudget - 1 : previewLineBudget}
+                        >
+                            {shownPreviewLines.map((line, index) => (
+                                <React.Fragment key={index}>
+                                    {index > 0 ? '\n' : null}
+                                    {renderLine(line, index)}
+                                </React.Fragment>
+                            ))}
+                        </Text>
+                        {foldedChecked > 0 && (
+                            <Text style={[styles.preview, styles.checkedMore, textAlignFor(previewString)]} numberOfLines={1}>
+                                {t('notes.checkedMore', '+{{count}} checked', { count: foldedChecked })}
+                            </Text>
+                        )}
+                    </>
                 )}
                 {drawingSvg && !isDrawingOnly && <DrawingThumbnail svg={drawingSvg} />}
             </View>
             <View style={styles.footer}>
-                <Text style={styles.date}>
-                    {formatDate(note.updated_at || note.created_at || '')}
-                </Text>
+                <Text style={styles.date}>{dateLabel}</Text>
                 <View style={styles.iconsRow}>
                     {!!hasAudio && !isVoiceOnly && (
                         // A note with text and a recording says so, with its length.
                         <View
                             style={styles.audioChip}
                             accessible
-                            accessibilityLabel={[t('notes.voiceRecording'), voiceDuration].filter(Boolean).join(', ')}
+                            accessibilityLabel={voiceLabel}
                         >
                             <MaterialIcons name="mic-none" size={14} color={colors.textSecondary} />
                             {voiceDuration ? <Text style={styles.audioChipText}>{voiceDuration}</Text> : null}
                         </View>
                     )}
                     {hasDrawing && !drawingSvg && !isDrawingOnly && (
-                        <MaterialIcons name="gesture" size={15} color={colors.textTertiary} style={styles.footerIcon} />
+                        <MaterialIcons name="gesture" size={15} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t('notes.drawing', 'Drawing')} />
                     )}
                     {note.is_protected ? (
                         <MaterialIcons name="shield" size={14} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t("a11y.protected", "Protected note")} />
@@ -267,10 +353,12 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         <MaterialIcons name="smartphone" size={14} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t("a11y.onThisPhoneOnly", "Only on this device")} />
                     )}
                     {!!note.is_pinned && (
-                        <MaterialIcons name="push-pin" size={14} color={colors.textSecondary} style={styles.footerIcon} />
+                        <MaterialIcons name="push-pin" size={14} color={colors.textSecondary} style={styles.footerIcon} accessibilityLabel={t('a11y.pinned', 'Pinned')} />
                     )}
                 </View>
             </View>
+            {/* Drawn over the card's edge, so selecting it does not shift the content. */}
+            {isSelected && <View style={styles.selectedOutline} pointerEvents="none" />}
         </Animated.View>
         </Pressable>
     );
@@ -286,10 +374,16 @@ const styles = createStyles(() => ({
         borderColor: isDarkScheme() ? colors.surface : colors.border,
         position: 'relative',
     },
-    selectedCard: {
+    selectedOutline: {
+        position: 'absolute',
+        top: -StyleSheet.hairlineWidth,
+        left: -StyleSheet.hairlineWidth,
+        right: -StyleSheet.hairlineWidth,
+        bottom: -StyleSheet.hairlineWidth,
+        borderRadius: 14,
         borderWidth: 2,
         borderColor: colors.primary,
-        backgroundColor: colors.surface,
+        zIndex: 11,
     },
     selectionIndicator: {
         position: 'absolute',
@@ -331,6 +425,17 @@ const styles = createStyles(() => ({
     },
     tagText: {
         color: colors.primary,
+    },
+    checkedItem: {
+        color: colors.textTertiary,
+        fontWeight: '400',
+    },
+    checkedItemText: {
+        textDecorationLine: 'line-through',
+    },
+    checkedMore: {
+        color: colors.textTertiary,
+        marginTop: 2,
     },
     footer: {
         paddingHorizontal: 14,

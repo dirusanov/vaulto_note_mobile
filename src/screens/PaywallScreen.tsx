@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, ScrollView, Linking, Platform } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { spacing } from '../theme/spacing';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { createStyles } from '../theme/createStyles';
-import { CUSTOM_AI_ENABLED } from '../utils/featureFlags';
+import { CUSTOM_AI_ENABLED, DRAWING_ENABLED } from '../utils/featureFlags';
 import { haptics } from '../utils/haptics';
 import { appAlert } from '../components/AppAlert';
 
@@ -48,6 +48,36 @@ export const PaywallScreen = () => {
     }, [packages, selectedId, yearlyPack]);
     const selectedPack = packages.find((pack) => pack.identifier === selectedId) ?? null;
 
+    // The store's own trial or intro price, if the product carries one (Google Play:
+    // the default subscription option; App Store: introPrice). Null when there is none.
+    const describeOffer = (pack: MergedPackage, regularPrice: string): { text: string; free: boolean } | null => {
+        const trialText = (unit: string, units: number) => {
+            if (unit === 'DAY') return t('paywall.trialDays', { count: units, price: regularPrice });
+            if (unit === 'WEEK') return t('paywall.trialDays', { count: units * 7, price: regularPrice });
+            if (unit === 'MONTH') return t('paywall.trialMonths', { count: units, price: regularPrice });
+            if (unit === 'YEAR') return t('paywall.trialMonths', { count: units * 12, price: regularPrice });
+            return null;
+        };
+        const option = pack.product.defaultOption;
+        if (option?.freePhase) {
+            const period = option.freePhase.billingPeriod;
+            const text = trialText(String(period.unit), period.value * (option.freePhase.billingCycleCount ?? 1));
+            if (text) return { text, free: true };
+        }
+        if (option?.introPhase) {
+            return { text: t('paywall.introOffer', { intro: option.introPhase.price.formatted, price: regularPrice }), free: false };
+        }
+        const intro = pack.product.introPrice;
+        if (intro) {
+            if (intro.price === 0) {
+                const text = trialText(intro.periodUnit, intro.periodNumberOfUnits * Math.max(intro.cycles, 1));
+                if (text) return { text, free: true };
+            }
+            return { text: t('paywall.introOffer', { intro: intro.priceString, price: regularPrice }), free: false };
+        }
+        return null;
+    };
+
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
             appAlert(t("voice.signInRequired"), t("aux.purchaseProRequired"));
@@ -73,8 +103,13 @@ export const PaywallScreen = () => {
                     <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
-                {/* Offer and button sit together, centred in the free height. */}
-                <View style={styles.body}>
+                {/* Offer and button sit together, centred in the free height; they scroll
+                    on short screens and with large text. */}
+                <ScrollView
+                    style={styles.scroll}
+                    contentContainerStyle={styles.body}
+                    showsVerticalScrollIndicator={false}
+                >
                 <View>
                     <View style={styles.heroSection}>
                         {/* The mark is a transparent glyph, tinted to the text colour. */}
@@ -84,16 +119,21 @@ export const PaywallScreen = () => {
                             resizeMode="contain"
                             accessibilityIgnoresInvertColors
                         />
-                        <Text style={styles.heroTitle}>{t("aux.proAccess", "Vaulto Pro")}</Text>
+                        <Text style={styles.heroTitle}>{t("paywall.headline", "Record without watching the clock")}</Text>
                         <Text style={styles.heroSubtitle}>
-                            {t("aux.unlockFullPotential")}
+                            {t("paywall.subtitle", "Vaulto Pro: fresh minutes every month and AI without limits.")}
                         </Text>
                     </View>
 
+                    {/* What Pro adds, then what any account already has: sync and
+                        handwriting are not Pro-only, so they are not sold as such. */}
                     <View style={styles.featuresList}>
                         <FeatureItem text={t("aux.minsMonthTranscription", { minutes: transcriptionMinutes })} />
-                        <FeatureItem text={t("aux.unlimitedCloudSync")} />
+                        <FeatureItem text={t("paywall.benefitAI", "AI without monthly limits: tidy up text, find tasks, ask your notes")} />
                         {CUSTOM_AI_ENABLED && <FeatureItem text={t("aux.customApiKeyServer")} />}
+                        <Text style={styles.includedLabel}>{t("paywall.includedLabel", "Plus everything in your free account")}</Text>
+                        <FeatureItem quiet text={t("paywall.benefitSync", "Sync and end-to-end encryption on all your devices")} />
+                        {DRAWING_ENABLED && <FeatureItem quiet text={t("paywall.benefitHandwriting", "Handwriting and drawings in notes")} />}
                     </View>
 
                     {isLoading ? (
@@ -141,6 +181,7 @@ export const PaywallScreen = () => {
                                 // The feature list already names the minutes; a plan repeats them only if it differs.
                                 const planMinutes = backendPlan?.transcription_minutes;
                                 const minutesToDisplay = planMinutes && planMinutes !== transcriptionMinutes ? planMinutes : 0;
+                                const offer = describeOffer(pack, price);
 
                                 return (
                                     <TouchableOpacity
@@ -171,6 +212,7 @@ export const PaywallScreen = () => {
                                                     {t("aux.vaultoAiMinsMonth", { minutes: minutesToDisplay })}
                                                 </Text>
                                             )}
+                                            {offer && <Text style={styles.planOffer}>{offer.text}</Text>}
                                         </View>
                                         <View style={styles.planPriceColumn}>
                                             <Text style={styles.planPrice}>{price}</Text>
@@ -196,12 +238,28 @@ export const PaywallScreen = () => {
                             activeOpacity={0.85}
                             accessibilityRole="button"
                         >
-                            <Text style={styles.ctaText}>{t("auth.continue", "Continue")}</Text>
+                            <Text style={styles.ctaText}>
+                                {describeOffer(selectedPack, selectedPack.product.priceString)?.free
+                                    ? t("paywall.startTrial", "Start free trial")
+                                    : t("auth.continue", "Continue")}
+                            </Text>
                         </TouchableOpacity>
                     )}
                     <Text style={styles.termsText}>
-                        {t("aux.autoRenewable")}
+                        {Platform.OS === 'ios'
+                            ? t("paywall.cancelAppStore", "Renews automatically. Cancel anytime in your App Store settings.")
+                            : t("paywall.cancelGooglePlay", "Renews automatically. Cancel anytime in Google Play.")}
                     </Text>
+                    {/* Same documents as Settings and sign-up. */}
+                    <View style={styles.legalRow}>
+                        <TouchableOpacity onPress={() => { void Linking.openURL('https://vaultonote.com/terms'); }} hitSlop={8} accessibilityRole="link">
+                            <Text style={styles.legalLink}>{t("paywall.terms", "Terms of Use")}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.legalDot}>·</Text>
+                        <TouchableOpacity onPress={() => { void Linking.openURL('https://vaultonote.com/privacy'); }} hitSlop={8} accessibilityRole="link">
+                            <Text style={styles.legalLink}>{t("paywall.privacy", "Privacy Policy")}</Text>
+                        </TouchableOpacity>
+                    </View>
                     <TouchableOpacity
                         onPress={() => {
                             if (!canPurchase) {
@@ -218,16 +276,16 @@ export const PaywallScreen = () => {
                         <Text style={styles.restoreButtonText}>{t("aux.restorePurchases")}</Text>
                     </TouchableOpacity>
                 </View>
-                </View>
+                </ScrollView>
             </View>
         </SafeAreaView>
     );
 };
 
-const FeatureItem = ({ text }: { text: string }) => (
+const FeatureItem = ({ text, quiet = false }: { text: string; quiet?: boolean }) => (
     <View style={styles.featureRow}>
-        <MaterialIcons name="check" size={18} color={colors.primary} />
-        <Text style={styles.featureText}>{text}</Text>
+        <MaterialIcons name="check" size={18} color={quiet ? colors.textTertiary : colors.primary} />
+        <Text style={[styles.featureText, quiet && styles.featureTextQuiet]}>{text}</Text>
     </View>
 );
 
@@ -254,9 +312,13 @@ const styles = createStyles(() => ({
         backgroundColor: colors.backgroundSecondary,
         alignSelf: 'flex-start',
     },
-    body: {
+    scroll: {
         flex: 1,
+    },
+    body: {
+        flexGrow: 1,
         justifyContent: 'center',
+        paddingTop: spacing.s,
         paddingBottom: spacing.l,
     },
     heroSection: {
@@ -295,6 +357,36 @@ const styles = createStyles(() => ({
         fontSize: 15,
         lineHeight: 20,
         color: colors.text,
+    },
+    featureTextQuiet: {
+        color: colors.textSecondary,
+    },
+    includedLabel: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textTertiary,
+        marginTop: spacing.xs,
+    },
+    planOffer: {
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    legalRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    legalLink: {
+        fontSize: 12,
+        lineHeight: 16,
+        color: colors.textSecondary,
+        textDecorationLine: 'underline',
+    },
+    legalDot: {
+        fontSize: 12,
+        color: colors.textTertiary,
     },
     packagesContainer: {
         gap: 10,

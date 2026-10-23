@@ -39,6 +39,12 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     const isExpired = remainingSeconds <= 0;
     const isLowBalance = remainingSeconds > 0 && remainingSeconds <= 120; // Less than 2 minutes
 
+    // Guests transcribe from a small free allowance; signing in adds more.
+    const guestMinutesLeft = Math.max(1, Math.round(remainingSeconds / 60));
+    const guestNote = isExpired
+        ? t('settings.ui.guestMinutesUsed', 'Free minutes are used up. Sign in to get more, or turn on "Work without internet" below.')
+        : t('settings.ui.guestMinutesLeft', 'Free speech-to-text left: {{minutes}} min. Sign in to get more and sync your notes.', { minutes: guestMinutesLeft });
+
     // Formatting helpers
     const formatTimeMMSS = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -79,9 +85,9 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                 : isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance');
         const value = isUnlimited
             ? t("aux.unlimitedAccess", "Unlimited Access")
-            : isGuest ? null : `\u2066${formatTimeMMSS(usedSeconds)} / ${formatTimeMMSS(totalSeconds)}\u2069`;
+            : isGuest ? `\u2066${formatTimeMMSS(remainingSeconds)}\u2069` : `\u2066${formatTimeMMSS(usedSeconds)} / ${formatTimeMMSS(totalSeconds)}\u2069`;
         const note = isGuest
-            ? t('aux.createAccountTranscribe', 'Create an account to enable transcription.')
+            ? guestNote
             : isUnlimited ? null
                 : isExpired
                     ? (isPro
@@ -153,15 +159,13 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             <View style={embedded ? styles.embeddedWrap : styles.card}>
                 <View style={styles.headerRow}>
                     <View style={styles.titleRow}>
-                        <View style={[styles.iconContainer, { backgroundColor: colors.warning + '15' }]}>
-                            <MaterialIcons name="lock-outline" size={20} color={colors.warning} />
+                        <View style={[styles.iconContainer, { backgroundColor: getProgressColor() + '15' }]}>
+                            <MaterialIcons name="graphic-eq" size={20} color={getProgressColor()} />
                         </View>
                         <Text style={styles.title}>{t('settings.ai.transcription', 'Transcription')}</Text>
                     </View>
                 </View>
-                <Text style={styles.guestText}>
-                    {t('aux.createAccountTranscribe', 'Create an account to enable transcription.')}
-                </Text>
+                <Text style={styles.guestText}>{guestNote}</Text>
             </View>
         );
     }
