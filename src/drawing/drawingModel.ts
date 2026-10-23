@@ -154,9 +154,12 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
                     });
             }
             strokesChanged = strokesChanged || keptStrokes.length !== strokes.length;
+            // A label is one piece: rubbing out part of it takes the eraser over it,
+            // not just its edge brushing the box.
+            const textReach = action.mode === 'stroke' ? action.radius : 0;
             const keptTexts = texts.filter((item, index) => {
                 for (let c = 0; c + 1 < centres.length; c += 2) {
-                    if (textHit(item, action.boxes[index], centres[c], centres[c + 1], action.radius)) {
+                    if (textHit(item, action.boxes[index], centres[c], centres[c + 1], textReach)) {
                         return false;
                     }
                 }

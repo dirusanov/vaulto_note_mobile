@@ -11,9 +11,11 @@ type Props = {
     color: string;
     recent: string[];
     onChange: (color: string, source: 'swatch' | 'custom') => void;
+    /** How a colour looks on the canvas (dark mode shows ink inverted). */
+    display?: (color: string) => string;
 };
 
-const Swatch: React.FC<{ value: string; active: boolean; onPress: () => void }> = ({ value, active, onPress }) => (
+const Swatch: React.FC<{ value: string; active: boolean; onPress: () => void; shown: string }> = ({ value, active, onPress, shown }) => (
     <TouchableOpacity
         onPress={onPress}
         style={[styles.ring, active && styles.ringActive]}
@@ -21,8 +23,8 @@ const Swatch: React.FC<{ value: string; active: boolean; onPress: () => void }> 
         accessibilityState={{ selected: active }}
         accessibilityLabel={value}
     >
-        <View style={[styles.swatch, { backgroundColor: value }]}>
-            {active && <MaterialIcons name="check" size={16} color={isLight(value) ? '#1D1D1F' : '#FFFFFF'} />}
+        <View style={[styles.swatch, { backgroundColor: shown }]}>
+            {active && <MaterialIcons name="check" size={16} color={isLight(shown) ? '#1D1D1F' : '#FFFFFF'} />}
         </View>
     </TouchableOpacity>
 );
@@ -33,7 +35,7 @@ const isLight = (hex: string) => {
 };
 
 /** Ready-made palette, recently used colours and a full custom picker. */
-export const ColorPanel: React.FC<Props> = ({ color, recent, onChange }) => {
+export const ColorPanel: React.FC<Props> = ({ color, recent, onChange, display = (value) => value }) => {
     const { t } = useTranslation();
     const [tab, setTab] = useState<'palette' | 'custom'>('palette');
     const current = color.toUpperCase();
@@ -54,13 +56,13 @@ export const ColorPanel: React.FC<Props> = ({ color, recent, onChange }) => {
                         </Text>
                     </TouchableOpacity>
                 ))}
-                <View style={[styles.preview, { backgroundColor: current }]} />
+                <View style={[styles.preview, { backgroundColor: display(current) }]} />
             </View>
 
             {tab === 'palette' ? (
                 <View style={styles.grid}>
                     {INK_COLORS.map((value) => (
-                        <Swatch key={value} value={value} active={value === current} onPress={() => onChange(value, 'swatch')} />
+                        <Swatch key={value} value={value} shown={display(value)} active={value === current} onPress={() => onChange(value, 'swatch')} />
                     ))}
                 </View>
             ) : (
@@ -72,7 +74,7 @@ export const ColorPanel: React.FC<Props> = ({ color, recent, onChange }) => {
                     <Text style={styles.heading}>{t('drawing.color.recent', 'Recent')}</Text>
                     <View style={styles.grid}>
                         {recent.map((value) => (
-                            <Swatch key={value} value={value} active={value === current} onPress={() => onChange(value, 'swatch')} />
+                            <Swatch key={value} value={value} shown={display(value)} active={value === current} onPress={() => onChange(value, 'swatch')} />
                         ))}
                     </View>
                 </>

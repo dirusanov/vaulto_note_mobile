@@ -286,6 +286,14 @@ test('a stroke held at the end becomes the clean shape it resembles', () => {
     assert.ok(straight, 'line recognised');
     assert.ok(ysOf(straight).every((y) => y === straight[1]), 'levelled');
 
+    // A small "o" (a letter) held still stays handwriting.
+    const letter = [];
+    for (let i = 0; i <= 30; i++) {
+        const a = (i / 30) * Math.PI * 2;
+        letter.push(100 + Math.cos(a) * 14, 100 + Math.sin(a) * 16, 0.5);
+    }
+    assert.equal(recognizeShape(letter), null);
+
     // Handwriting is left alone.
     const scribble = [];
     for (let i = 0; i <= 80; i++) {

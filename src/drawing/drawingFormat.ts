@@ -260,7 +260,7 @@ export const buildDrawingSvg = (doc: DrawingDocument): string => {
         }
         const spec = INK_TOOLS[stroke.tool];
         const opacity = spec?.opacity ?? 1;
-        return `<path d='${d}' fill='${stroke.color}'${opacity < 1 ? ` fill-opacity='${opacity}'` : ''}${spec?.grain ? " filter='url(#g)'" : ''}/>`;
+        return `<path d='${d}' fill='${stroke.color}'${opacity < 1 ? ` fill-opacity='${opacity}'` : ''}${spec?.grain ? " filter='url(#g)'" : ''}${stroke.tool === 'marker' ? " style='mix-blend-mode:multiply'" : ''}/>`;
     }).join('');
     // Same graphite grain as the canvas: noise as an alpha mask over the ink.
     const grain = doc.strokes.some((stroke) => INK_TOOLS[stroke.tool]?.grain)

@@ -23,7 +23,7 @@ import { CanvasMode, DrawingCanvas, DrawingCanvasHandle, TextTap } from './Drawi
 import { ColorPanel } from './ColorPanel';
 import { DrawingDocument } from './drawingFormat';
 import { DrawingAction, EMPTY_SELECTION, EraseMode, Selection, drawingReducer, emptyContent, initialDrawingState, selectInLasso } from './drawingModel';
-import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool } from './ink';
+import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool, invertedInkColor } from './ink';
 import { DEFAULT_PAPER, PaperStyle } from './paper';
 import { PaperPicker } from './PaperPicker';
 import { pushRecentColor } from './colorMath';
@@ -425,6 +425,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     };
 
     const editingTextSize = TEXT_SIZES[settings.text.sizeIndex] ?? 18;
+    // The canvas shows ink inverted in dark mode on the theme paper: the toolbar
+    // shows each colour the same way, so black reads as the white it draws.
+    const shown = useCallback((value: string) => (dark && !paper.color ? invertedInkColor(value) : value), [dark, paper.color]);
 
     // Swatches always at hand in the bar, each in a fixed place (a colour picked
     // from the full palette takes the last one); the palette opens from the button after them.
@@ -444,7 +447,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                         accessibilityLabel={t(`drawing.tool.${inkToolOption}`, inkToolOption)}
                     >
                         <MaterialCommunityIcons name={TOOL_ICONS[inkToolOption]} size={22} color={active ? colors.primary : colors.textSecondary} />
-                        <View style={[styles.toolInk, { backgroundColor: settings[inkToolOption].color }]} />
+                        <View style={[styles.toolInk, { backgroundColor: shown(settings[inkToolOption].color) }]} />
                     </TouchableOpacity>
                 );
             })}
@@ -456,7 +459,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                 accessibilityLabel={t('drawing.tool.text', 'Text')}
             >
                 <MaterialCommunityIcons name="format-text" size={22} color={activeTool === 'text' ? colors.primary : colors.textSecondary} />
-                <View style={[styles.toolInk, { backgroundColor: settings.text.color }]} />
+                <View style={[styles.toolInk, { backgroundColor: shown(settings.text.color) }]} />
             </TouchableOpacity>
             <TouchableOpacity
                 onPress={() => selectTool('eraser')}
@@ -529,7 +532,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                 width: dot,
                                 height: dot,
                                 borderRadius: 10,
-                                backgroundColor: current.color,
+                                backgroundColor: shown(current.color),
+                                borderWidth: StyleSheet.hairlineWidth,
+                                borderColor: colors.border,
                                 opacity: INK_TOOLS[inkTool].opacity < 1 ? 0.6 : 1,
                             }}
                         />
@@ -570,7 +575,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                             accessibilityState={{ selected: active }}
                             accessibilityLabel={value}
                         >
-                            <View style={[styles.swatch, { backgroundColor: value }, active && { borderColor: colors.primary, borderWidth: 2.5 }]} />
+                            <View style={[styles.swatch, { backgroundColor: shown(value) }, active && { borderColor: colors.primary, borderWidth: 2.5 }]} />
                         </TouchableOpacity>
                     );
                 })}
@@ -596,7 +601,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             accessibilityRole="button"
             accessibilityLabel={value}
         >
-            <View style={[styles.swatch, { backgroundColor: value }]} />
+            <View style={[styles.swatch, { backgroundColor: shown(value) }]} />
         </TouchableOpacity>
     ));
 
@@ -635,7 +640,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     );
 
     const popoverContent = popover === 'tool' && activeTool !== 'eraser'
-        ? <ColorPanel color={current.color} recent={recent} onChange={setColor} />
+        ? <ColorPanel color={current.color} recent={recent} onChange={setColor} display={shown} />
         : popover === 'paper'
             ? <PaperPicker paper={paper} onChange={setPaper} />
             : null;
@@ -815,9 +820,10 @@ const styles = createStyles(() => ({
     headerSpacer: { flex: 1 },
     doneButton: { paddingHorizontal: 18, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
     doneText: { fontSize: 15, fontWeight: '600' },
-    headerTools: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+    // Left-aligned: the tools keep their places when the options after them change.
+    headerTools: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 2, paddingStart: 16 },
     toolRow: { height: 50, borderBottomWidth: StyleSheet.hairlineWidth, backgroundColor: colors.surface },
-    toolRowContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, gap: 2 },
+    toolRowContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 8, gap: 2 },
     paletteDivider: { width: StyleSheet.hairlineWidth, height: 26, backgroundColor: colors.border, marginHorizontal: 6 },
     toolButton: { width: 40, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     toolButtonActive: { backgroundColor: colors.backgroundSecondary },
@@ -839,9 +845,10 @@ const styles = createStyles(() => ({
     popoverScroll: { padding: 14, gap: 14 },
     popoverTablet: { position: 'absolute', top: 8, width: 372, maxHeight: 600 },
     popoverPhone: { position: 'absolute', left: 12, right: 12, top: 8 },
+    // At the bottom, away from what is usually selected (it is drawn from the top down).
     selectionBar: {
         position: 'absolute',
-        top: 12,
+        bottom: 20,
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
@@ -862,7 +869,7 @@ const styles = createStyles(() => ({
     disabled: { opacity: 0.35 },
     tip: {
         position: 'absolute',
-        bottom: 24,
+        top: 12,
         alignSelf: 'center',
         maxWidth: '90%',
         paddingHorizontal: 14,

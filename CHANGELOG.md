@@ -6,9 +6,19 @@
 
 ### Fixed
 - Drawing with a pen no longer falls seconds behind: the stroke being drawn is redrawn at most once a frame instead of for every one of the hundreds of pen samples a second.
+- Drawing toolbar buttons stay in place when switching tools, so a tap always lands on the tool you aim at.
+- A small letter ("o", "l") no longer turns into a shape when the pen rests for a moment; shapes need a longer hold.
+- In dark mode the toolbar shows colours as the ink appears on the page.
+- The drawing in the note is as smooth as on the canvas (curves instead of straight segments).
+- After editing a tall drawing the note shows its top instead of the blank bottom.
+- The eraser takes a typed label only when it passes over it, not when its edge brushes the label.
 
 ### Added
-- Notes with a drawing show a small picture of it in the notes list.
+- Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
+
+### Changed
+- The highlighter darkens what is under it, as on paper: ink under it stays readable.
+- The lasso actions sit at the bottom, away from the selection; the page counter appears once a second page has ink.
 
 ## [1.0.101] - 2026-10-23
 

@@ -135,6 +135,24 @@ export const buildDrawingCommandJs = (command: { id: string; src: string | null;
       } catch (e) {}
       return false;
     });
+    // Back from the canvas, the note shows the top of the drawing. Without this
+    // the caret after a tall drawing scrolled the note to its blank bottom, and
+    // the drawing looked lost.
+    const reveal = () => {
+      requestAnimationFrame(() => {
+        let pos = null;
+        editor.state.doc.descendants((node, at) => {
+          if (pos === null && idAt(node) === command.id) pos = at;
+          return pos === null;
+        });
+        if (pos === null) return;
+        const dom = editor.view.nodeDOM(pos);
+        const image = dom && (dom.tagName === 'IMG' ? dom : dom.querySelector && dom.querySelector('img'));
+        if (!image) return;
+        const show = () => image.scrollIntoView({ block: 'start' });
+        if (image.complete) show(); else image.addEventListener('load', show, { once: true });
+      });
+    };
     if (found) {
       const tr = editor.state.tr;
       if (command.src) {
@@ -143,6 +161,7 @@ export const buildDrawingCommandJs = (command: { id: string; src: string | null;
         tr.delete(found.pos, found.pos + found.node.nodeSize);
       }
       editor.view.dispatch(tr);
+      if (command.src) reveal();
       return;
     }
     if (!command.src) return;
@@ -152,6 +171,7 @@ export const buildDrawingCommandJs = (command: { id: string; src: string | null;
       { type: 'image', attrs: { src: command.src } },
       { type: 'paragraph' },
     ]).run();
+    reveal();
   } catch (error) {
     console.warn('Drawing command failed', error);
   }

@@ -1,6 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { AppState, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import {
+    BlendMode,
     Canvas,
     Circle,
     ColorMatrix,
@@ -133,7 +134,7 @@ const LIVE_FRAME_MS = 7;
 /** Shortest interval over which finger speed (and so ink width) is measured. */
 const SPEED_WINDOW_MS = 8;
 /** How long the pen rests at the end of a stroke before it becomes a shape. */
-const SHAPE_HOLD_MS = 550;
+const SHAPE_HOLD_MS = 700;
 /** Screen distance the pen may wander while resting. */
 const SHAPE_STILL_PX = 6;
 /** Screen distance a text-mode touch must travel before it drags the label. */
@@ -275,6 +276,11 @@ const makeInkPaint = (stroke: InkStroke): SkPaint => {
         paint.setColorFilter(Skia.ColorFilter.MakeMatrix(matrix));
     } else {
         paint.setAlphaf(spec.opacity);
+    }
+    if (stroke.tool === 'marker') {
+        // A highlighter darkens what is under it, as on paper, instead of washing
+        // the ink out: black text stays black under yellow.
+        paint.setBlendMode(BlendMode.Multiply);
     }
     return paint;
 };
@@ -1151,7 +1157,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                             <Group layer={inkLayer} clip={pageClip}>
                                 <Picture picture={inkPicture} />
                                 <Picture picture={pendingPicture} />
-                                <Path path={livePath} color={color} opacity={liveOpacity}>
+                                <Path path={livePath} color={color} opacity={liveOpacity} blendMode={tool === 'marker' ? 'multiply' : 'srcOver'}>
                                     {liveGrain && <PencilGrain color={color} />}
                                 </Path>
                                 {labels}
@@ -1184,7 +1190,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                         <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
                     </Canvas>
                 )}
-                {isPages && pageCount > 1 && (
+                {/* One blank page always follows the last one written on: count once there are two with ink. */}
+                {isPages && pageCount > 2 && (
                     <View pointerEvents="none" style={styles.pageBadge}>
                         <Text style={styles.pageBadgeText}>{`${Math.min(currentPage, pageCount - 1) + 1} / ${pageCount}`}</Text>
                     </View>

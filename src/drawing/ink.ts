@@ -79,6 +79,18 @@ export const SMART_INVERT_MATRIX = [
     0, 0, 0, 1, 0,
 ];
 
+/** How an ink colour looks on the canvas through SMART_INVERT_MATRIX (dark mode, theme paper). */
+export const invertedInkColor = (hex: string): string => {
+    const value = parseInt(hex.replace('#', ''), 16) || 0;
+    const rgb = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((v) => v / 255);
+    const out = [0, 1, 2].map((row) => {
+        const m = SMART_INVERT_MATRIX.slice(row * 5, row * 5 + 5);
+        const v = m[0] * rgb[0] + m[1] * rgb[1] + m[2] * rgb[2] + m[4];
+        return Math.round(Math.min(1, Math.max(0, v)) * 255);
+    });
+    return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+};
+
 /**
  * Colour matrix applied to fractal noise to get pencil graphite: the ink colour
  * with alpha taken from the noise, so the paper shows through in a grain.
@@ -255,37 +267,46 @@ export function strokeOutlineFor(stroke: InkStroke): number[] {
 }
 
 /**
- * Compact SVG path data: integer coordinates in units of 1/`scale` px, relative
- * line segments, and samples closer than one unit dropped. The outline is dense
- * enough that straight segments look smooth, at a fraction of the size.
+ * Compact SVG path data with the same curve as the canvas: quadratic segments
+ * through the midpoints of the outline points (see outlineToSkPath), so the
+ * picture in the note is as smooth as the ink was. Integer coordinates in
+ * units of 1/`scale` px, relative commands, points closer than one unit dropped.
  */
 export const outlineToSvgPath = (outline: number[], scale: number = 2): string => {
-    const n = outline.length / 2;
+    const count = outline.length / 2;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let i = 0; i < count; i++) {
+        const x = Math.round(outline[i * 2] * scale);
+        const y = Math.round(outline[i * 2 + 1] * scale);
+        const last = xs.length - 1;
+        if (last >= 0 && Math.abs(x - xs[last]) + Math.abs(y - ys[last]) < 2) {
+            continue;
+        }
+        xs.push(x);
+        ys.push(y);
+    }
+    const n = xs.length;
     if (n < 3) {
         return '';
     }
-    let px = Math.round(outline[0] * scale);
-    let py = Math.round(outline[1] * scale);
-    let d = `M${px} ${py}l`;
-    let segments = 0;
-    for (let i = 1; i < n; i++) {
-        const x = Math.round(outline[i * 2] * scale);
-        const y = Math.round(outline[i * 2 + 1] * scale);
-        const dx = x - px;
-        const dy = y - py;
-        if (Math.abs(dx) + Math.abs(dy) < 2 && i < n - 1) {
-            continue;
-        }
-        if (dx === 0 && dy === 0) {
-            continue;
-        }
-        // A minus sign separates numbers on its own.
-        d += `${segments && dx >= 0 ? ' ' : ''}${dx}${dy >= 0 ? ' ' : ''}${dy}`;
-        px = x;
-        py = y;
-        segments += 1;
+    // Midpoints in doubled units keep them integers.
+    const mx = (i: number) => xs[i % n] + xs[(i + 1) % n];
+    const my = (i: number) => ys[i % n] + ys[(i + 1) % n];
+    const num = (value: number, first: boolean) => (first || value < 0 ? '' : ' ') + (value / 2);
+    let px = mx(0);
+    let py = my(0);
+    let d = `M${px / 2} ${py / 2}q`;
+    for (let i = 1; i <= n; i++) {
+        const cx = xs[i % n] * 2;
+        const cy = ys[i % n] * 2;
+        const ex = mx(i);
+        const ey = my(i);
+        d += num(cx - px, i === 1) + num(cy - py, false) + num(ex - px, false) + num(ey - py, false);
+        px = ex;
+        py = ey;
     }
-    return segments >= 2 ? `${d}z` : '';
+    return `${d}z`;
 };
 
 export type InkBounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -538,6 +559,9 @@ const polylineError = (xs: number[], ys: number[], corners: number[]): number =>
     return total / xs.length;
 };
 
+/** Smallest stroke (diagonal of its box, document units) that may become a shape. */
+const SHAPE_MIN_SIZE = 56;
+
 /** Angles within this of horizontal, vertical or a diagonal are snapped to it. */
 const SNAP_ANGLE = (4 * Math.PI) / 180;
 
@@ -606,7 +630,8 @@ export function recognizeShape(points: number[]): number[] | null {
     }
     pressure /= count;
     const size = Math.hypot(maxX - minX, maxY - minY);
-    if (size < 12) {
+    // Letters are small: an "o" or an "l" held for a moment stays handwriting.
+    if (size < SHAPE_MIN_SIZE) {
         return null;
     }
     const spacing = 2;
@@ -669,7 +694,7 @@ export function recognizeShape(points: number[]): number[] | null {
             }
         }
         if (ellipseError < 0.1) {
-            if (Math.abs(rx - ry) < Math.max(rx, ry) * 0.15) {
+            if (Math.abs(rx - ry) < Math.max(rx, ry) * 0.08) {
                 rx = (rx + ry) / 2;
                 ry = rx;
             }
