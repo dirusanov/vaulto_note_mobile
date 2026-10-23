@@ -287,18 +287,41 @@ export const outlineToSvgPath = (outline: number[], scale: number = 2): string =
 
 export type InkBounds = { minX: number; minY: number; maxX: number; maxY: number };
 
-export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    strokes.forEach((stroke) => {
+const boundsCache = new WeakMap<InkStroke, InkBounds | null>();
+
+/** Box of one stroke's samples grown by its width; cached, strokes are never mutated. */
+const boundsOf = (stroke: InkStroke): InkBounds | null => {
+    let bounds = boundsCache.get(stroke);
+    if (bounds === undefined) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
         const pts = stroke.points;
         for (let i = 0; i + 1 < pts.length; i += 3) {
             minX = Math.min(minX, pts[i] - stroke.size);
             maxX = Math.max(maxX, pts[i] + stroke.size);
             minY = Math.min(minY, pts[i + 1] - stroke.size);
             maxY = Math.max(maxY, pts[i + 1] + stroke.size);
+        }
+        bounds = Number.isFinite(minY) ? { minX, minY, maxX, maxY } : null;
+        boundsCache.set(stroke, bounds);
+    }
+    return bounds;
+};
+
+export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    strokes.forEach((stroke) => {
+        const box = boundsOf(stroke);
+        if (box) {
+            minX = Math.min(minX, box.minX);
+            maxX = Math.max(maxX, box.maxX);
+            minY = Math.min(minY, box.minY);
+            maxY = Math.max(maxY, box.maxY);
         }
     });
     return Number.isFinite(minY) ? { minX, minY, maxX, maxY } : null;
@@ -345,16 +368,6 @@ const eraseReach = (stroke: InkStroke, radius: number): number => radius + strok
 
 // The eraser runs over every stroke many times a second; a box test skips the
 // strokes it is nowhere near without walking their points.
-const boundsCache = new WeakMap<InkStroke, InkBounds | null>();
-const boundsOf = (stroke: InkStroke): InkBounds | null => {
-    let bounds = boundsCache.get(stroke);
-    if (bounds === undefined) {
-        bounds = strokeBounds([stroke]);
-        boundsCache.set(stroke, bounds);
-    }
-    return bounds;
-};
-
 /** True when the eraser circle at (x, y) may touch the stroke (its box, grown by the circle). */
 const nearStroke = (stroke: InkStroke, x: number, y: number, radius: number): boolean => {
     const box = boundsOf(stroke);

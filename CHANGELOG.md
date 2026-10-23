@@ -10,6 +10,7 @@
 - Fast handwriting no longer makes the previous strokes vanish for a moment.
 - A palm resting on the screen while writing with a pen no longer cuts the stroke or zooms (Android).
 - The end of a finger stroke is no longer cut short.
+- A fast eraser stroke erases everything along its path, not only where the touch samples landed.
 
 ### Changed
 - The dot shown under a hovering pen is fainter.

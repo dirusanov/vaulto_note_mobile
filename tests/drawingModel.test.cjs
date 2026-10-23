@@ -101,3 +101,12 @@ test('partial erasing leaves untouched strokes as they were and removes covered 
     assert.equal(after.content.strokes[0], far, 'same object, so its cached path is reused');
     assert.equal(drawingReducer(after, { type: 'undo' }).content.strokes.length, 3);
 });
+
+test('a fast eraser move erases along its whole path, not only where samples landed', () => {
+    const across = { tool: 'ballpoint', color: '#000', size: 2, points: [0, 50, 0.5, 100, 50, 0.5] };
+    const s = run([{ type: 'addStroke', stroke: across }]);
+    const missed = drawingReducer(s, { type: 'eraseAt', x: 50, y: 0, radius: 5, boxes: [] });
+    assert.equal(missed.content, s.content, 'one centre far from the line erases nothing');
+    const swept = drawingReducer(s, { type: 'eraseAt', x: 50, y: 0, path: [50, 25, 50, 50, 50, 75, 50, 100], radius: 5, boxes: [] });
+    assert.equal(swept.content.strokes.length, 2);
+});

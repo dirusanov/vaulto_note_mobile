@@ -217,8 +217,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         closePopover();
     }, [closePopover]);
 
-    const handleErase = useCallback((x: number, y: number, radius: number) => {
-        dispatch({ type: 'eraseAt', x, y, radius, boxes: textBoxes, mode: eraser.mode });
+    const handleErase = useCallback((x: number, y: number, radius: number, path?: number[]) => {
+        dispatch({ type: 'eraseAt', x, y, path, radius, boxes: textBoxes, mode: eraser.mode });
     }, [textBoxes, eraser.mode]);
 
     const handleEraseEnd = useCallback(() => dispatch({ type: 'eraseEnd' }), []);
@@ -375,8 +375,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
 
     const editingTextSize = TEXT_SIZES[settings.text.sizeIndex] ?? 18;
 
-    /** Swatches always at hand in the bar; the full palette opens from the colour button. */
-    // They keep their places; a colour from the palette takes the last one.
+    // Swatches always at hand in the bar, each in a fixed place (a colour picked
+    // from the full palette takes the last one); the palette opens from the button after them.
     const quickColors = QUICK_COLORS.includes(current.color) ? QUICK_COLORS : [...QUICK_COLORS.slice(0, -1), current.color];
 
     const toolButtons = (
@@ -506,7 +506,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                     style={[styles.swatchButton, popover === 'tool' && styles.toolButtonActive]}
                     accessibilityRole="button"
                     accessibilityState={{ expanded: popover === 'tool' }}
-                    accessibilityLabel={t('drawing.colorAndSize', 'Color and size')}
+                    accessibilityLabel={t('drawing.color.palette', 'Palette')}
                 >
                     <MaterialCommunityIcons name="palette-outline" size={22} color={popover === 'tool' ? colors.primary : colors.textSecondary} />
                 </TouchableOpacity>
@@ -592,6 +592,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                     <MaterialCommunityIcons name={stylusOnly ? 'hand-back-right-off' : 'hand-back-right'} size={22} color={stylusOnly ? colors.textSecondary : colors.primary} />
                                 </TouchableOpacity>
                             )}
+                            {/* Its place is kept, so the tools do not shift when the first pen touch adds it. */}
+                            {!stylusSeen && inlineTools && <View style={styles.headerButton} />}
                             <TouchableOpacity
                                 onPress={() => (popover === 'paper' ? closePopover() : setPopover('paper'))}
                                 style={[styles.headerButton, popover === 'paper' && styles.toolButtonActive]}

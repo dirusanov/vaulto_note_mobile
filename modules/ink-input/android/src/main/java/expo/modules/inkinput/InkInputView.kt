@@ -73,7 +73,12 @@ class InkInputView(context: Context, appContext: AppContext) : ExpoView(context,
       Stream.PEN -> {
         val index = event.findPointerIndex(penId)
         if (index < 0) {
-          stream = Stream.NONE
+          // The pen vanished without lifting: end what it started.
+          val cancel = MotionEvent.obtain(event)
+          cancel.action = MotionEvent.ACTION_CANCEL
+          super.dispatchTouchEvent(cancel)
+          cancel.recycle()
+          stream = Stream.IGNORE
           return true
         }
         when (action) {

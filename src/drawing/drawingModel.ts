@@ -28,7 +28,8 @@ export type EraseMode = 'partial' | 'stroke';
 export type DrawingAction =
     | { type: 'load'; content: DrawingContent }
     | { type: 'addStroke'; stroke: InkStroke }
-    | { type: 'eraseAt'; x: number; y: number; radius: number; boxes: TextBox[]; mode?: EraseMode }
+        /** `path`: further eraser centres [x, y, ...] of the same pass, so a fast move leaves no gaps. */
+    | { type: 'eraseAt'; x: number; y: number; path?: number[]; radius: number; boxes: TextBox[]; mode?: EraseMode }
     | { type: 'eraseEnd' }
     | { type: 'addText'; text: InkText }
     | { type: 'updateText'; index: number; patch: Partial<InkText> }
@@ -71,20 +72,32 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
             return commit(state, { ...state.content, strokes: [...state.content.strokes, action.stroke] });
         case 'eraseAt': {
             const { strokes, texts } = state.content;
+            const centres = [action.x, action.y, ...(action.path || [])];
             let strokesChanged = false;
-            const keptStrokes = action.mode === 'stroke'
-                ? strokes.filter((stroke) => !strokeHit(stroke, action.x, action.y, action.radius))
-                : strokes.flatMap((stroke) => {
-                    // Untouched strokes stay the same objects: their cached paths are reused.
-                    const pieces = eraseStroke(stroke, action.x, action.y, action.radius);
-                    if (!pieces) {
-                        return [stroke];
-                    }
-                    strokesChanged = true;
-                    return pieces;
-                });
+            let keptStrokes = strokes;
+            for (let c = 0; c + 1 < centres.length; c += 2) {
+                const [x, y] = [centres[c], centres[c + 1]];
+                keptStrokes = action.mode === 'stroke'
+                    ? keptStrokes.filter((stroke) => !strokeHit(stroke, x, y, action.radius))
+                    : keptStrokes.flatMap((stroke) => {
+                        // Untouched strokes stay the same objects: their cached paths are reused.
+                        const pieces = eraseStroke(stroke, x, y, action.radius);
+                        if (!pieces) {
+                            return [stroke];
+                        }
+                        strokesChanged = true;
+                        return pieces;
+                    });
+            }
             strokesChanged = strokesChanged || keptStrokes.length !== strokes.length;
-            const keptTexts = texts.filter((item, index) => !textHit(item, action.boxes[index], action.x, action.y, action.radius));
+            const keptTexts = texts.filter((item, index) => {
+                for (let c = 0; c + 1 < centres.length; c += 2) {
+                    if (textHit(item, action.boxes[index], centres[c], centres[c + 1], action.radius)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
             if (!strokesChanged && keptTexts.length === texts.length) {
                 return state;
             }

@@ -91,7 +91,8 @@ type Props = {
     themeLineColor: string;
     deskColor: string;
     onCommit: (stroke: InkStroke) => void;
-    onErase: (x: number, y: number, radius: number) => void;
+    /** Eraser at (x, y), then along `path` [x, y, ...] (document coordinates). */
+    onErase: (x: number, y: number, radius: number, path?: number[]) => void;
     onEraseEnd: () => void;
     onTextTap: (tap: TextTap) => void;
     onTextMove: (index: number, dx: number, dy: number) => void;
@@ -482,8 +483,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         onCommit(stroke);
     }, [onCommit]);
     // After each render: strokes now in the ink picture stop being drawn as
-    // pending, one frame later so the picture is on screen first. A stroke that
-    // never shows up (undone at once) is dropped after one more render.
+    // pending. Skia sent the new picture to the UI thread in the layout effect
+    // of this commit, so this removal lands after it: never a frame without
+    // the stroke, and no frame with it twice (a highlighter would darken).
+    // A stroke that never shows up (undone at once) is dropped one render later.
     useEffect(() => {
         if (!awaiting.current.length) {
             return;
@@ -505,12 +508,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             return true;
         });
         if (done.length) {
-            requestAnimationFrame(() => {
-                runOnUI((ids: number[]) => {
-                    'worklet';
-                    pending.value = pending.value.filter((entry) => !ids.includes(entry.id));
-                })(done);
-            });
+            runOnUI((ids: number[]) => {
+                'worklet';
+                pending.value = pending.value.filter((entry) => !ids.includes(entry.id));
+            })(done);
         }
     });
 
@@ -658,12 +659,21 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (current === 'erase') {
                     eraser.value = { x: e.x, y: e.y, visible: true };
                     const at = lastErase.value;
-                    // Every pen sample arrives now; erasing runs on the JS thread over
-                    // all strokes, so it waits until the eraser has moved a little
-                    // (far less than its radius, so nothing in between is skipped).
-                    if (Math.hypot(e.x - at.x, e.y - at.y) >= ERASE_STEP) {
+                    // Erasing runs on the JS thread over all strokes, so it waits until
+                    // the eraser has moved a little. A long jump between two samples is
+                    // filled in, so the ink between them is erased too.
+                    const distance = Math.hypot(e.x - at.x, e.y - at.y);
+                    if (distance >= ERASE_STEP) {
+                        const radius = toolSV.value.eraserRadius;
+                        const steps = Math.ceil(distance / Math.max(ERASE_STEP, radius / 2));
+                        const path: number[] = [];
+                        for (let i = 1; i < steps; i++) {
+                            const between = toDoc(at.x + ((e.x - at.x) * i) / steps, at.y + ((e.y - at.y) * i) / steps);
+                            path.push(between.x, between.y);
+                        }
+                        path.push(pt.x, pt.y);
                         lastErase.value = { x: e.x, y: e.y };
-                        runOnJS(callJs)('onErase', pt.x, pt.y, toolSV.value.eraserRadius / (scaleSV.value * zoom.value));
+                        runOnJS(callJs)('onErase', path[0], path[1], radius / (scaleSV.value * zoom.value), path.slice(2));
                     }
                     return;
                 }
@@ -692,14 +702,28 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return points;
                 });
             })
-            .onEnd((e) => {
+            .onEnd((e, success) => {
                 if (gestureMode.value === 'scroll') {
                     fling(e.velocityX, e.velocityY);
+                }
+                // The lift-off point ends the line, even when no move reported it.
+                // Only on a real lift: a stroke cut short by a second finger ends
+                // where it was, not at that finger.
+                if (gestureMode.value === 'draw' && success) {
+                    const end = toDoc(e.x, e.y);
+                    live.modify((points) => {
+                        'worklet';
+                        const n = points.length;
+                        if (n >= 3 && Math.hypot(end.x - points[n - 3], end.y - points[n - 2]) > 0.5) {
+                            points.push(end.x, end.y, points[n - 1]);
+                        }
+                        return points;
+                    });
                 }
             })
             // `success` is not used: a touch that never moves (a tap, the dot over an
             // "i") ends without the pan activating, yet it is a real tap or dot.
-            .onFinalize((e) => {
+            .onFinalize(() => {
                 const current = gestureMode.value;
                 gestureMode.value = 'none';
                 if (current === 'text') {
@@ -733,12 +757,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return;
                 }
                 const points = live.value.slice();
-                // The lift-off point ends the line, even when no move reported it.
-                const end = toDoc(e.x, e.y);
-                const n = points.length;
-                if (n >= 3 && Math.hypot(end.x - points[n - 3], end.y - points[n - 2]) > 0.5) {
-                    points.push(end.x, end.y, points[n - 1]);
-                }
                 const cfg = toolSV.value;
                 const id = liveId.value;
                 const stroke: InkStroke = { tool: cfg.tool, color: cfg.color, size: cfg.size, points };
