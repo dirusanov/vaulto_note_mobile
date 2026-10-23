@@ -89,3 +89,16 @@ credentials.json
 
 # Local release bundles
 /build-*.aab
+
+# Internal notes: kept on the maintainers' machines, not published.
+# Marketing and analytics, user feedback, ideas, QA and release reports.
+/marketing/
+/docs/IDEAS.md
+/docs/USER_FEEDBACK.md
+/docs/qa/
+/docs/qa-*.md
+/docs/encryption-recovery-qa-*.md
+/docs/local-changes-audit-*.md
+/docs/release-*.md
+/docs/app-store-*
+/docs/pro-trial-draft-*

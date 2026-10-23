@@ -1,5 +1,0 @@
-{
-  "parent": "t1_pekzb1c",
-  "parentAuthor": "befittingswimmer66",
-  "body": "Thanks, I've added the forgotten-idea scenario to my feedback notes. I haven't verified that weeks-later, vague-question case yet.\n\nThe short first-run explanation is a useful suggestion. I'd keep local processing, cloud AI and sync separate: local inference processes the content on the phone; cloud AI sends the selected input for processing; encrypted sync is a separate option. Saying it stays on the phone unless sync is enabled would miss the cloud-AI path.\n\nFor that forgotten idea, would a few likely notes with quoted snippets be useful, or would you expect one direct answer?"
-}

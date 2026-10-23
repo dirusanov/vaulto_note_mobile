@@ -6,6 +6,9 @@ Before planning or making product/UX improvements, read `docs/USER_FEEDBACK.md`
 and its linked source records. Preserve dated feedback and distinguish suggestions,
 user-reported trials, reproduced defects and verified fixes. Do not treat our own
 Reddit replies/votes as organic feedback or mix Cards extension analytics into mobile.
+Product ideas not yet planned for a release are listed in `docs/IDEAS.md`.
+These notes, `marketing/` and QA/release reports are local only (gitignored):
+the repository is public, so never commit them back.
 
 ## Releasing to Google Play
 
