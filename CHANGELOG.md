@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.100] - 2026-10-23
+
+### Changed
+- A calmer, clearer design across the app: one accent colour, grouped rows, pill buttons, sentence-case labels and sheets with the title on the left. Dialogs on Android are drawn in the app's style instead of the system's teal capitals.
+- First launch: no search bar until there is a note; the "Tap the microphone" hint sits right above the button and starts recording when tapped.
+- A new note opens with the keyboard up; an untitled note shows a plain "Title" hint instead of a grey copy of its first line.
+- The recorder takes the place of the bottom bar, finishes with a check mark, says what will happen to the recording, and asks for a second tap before deleting one longer than 5 seconds.
+- Note versions: one segmented switch with fading edges; renaming and deleting moved to All versions, so a stray tap no longer removes a version. Undo stays for 8 seconds.
+- The AI sign-in prompt offers "Set up AI on this device"; Ask your notes opens with what it does, privacy as a footnote.
+- Paywall prices say their period; speech languages are listed in their own names; Visual/Markdown editing moved into Text appearance.
+- Cards for handwritten notes say "Drawing" instead of showing an empty card.
+
+### Fixed
+- Android Back leaves selection, a tag filter or a search instead of closing the app.
+
 ## [1.0.99] - 2026-10-23
 
 ### Added
