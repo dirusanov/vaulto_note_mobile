@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-23",
+  "version": "1.0.100",
+  "build": "100",
+  "environment": "iOS Release simulator build from corrected source; signed device IPA inspected separately",
+  "simulator": "iPhone 18 Pro",
+  "physicalDeviceTested": false,
+  "productMicrophoneOrAIHooksUsed": false,
+  "emailSignIn": "passed_with_current_review_account",
+  "foregroundAudio": {
+    "result": "passed",
+    "steps": [
+      "create_unique_note",
+      "record",
+      "pause",
+      "resume",
+      "finish_and_save",
+      "relaunch_application",
+      "reopen_saved_note",
+      "select_recording",
+      "play",
+      "pause_playback"
+    ],
+    "testDurationSeconds": 51.084,
+    "savedAudio": {
+      "existsAfterRelaunch": true,
+      "bytes": 386141,
+      "durationSeconds": 10.0,
+      "createdAtUTC": "2026-10-23T07:53:59.096Z",
+      "sha256": "d72ec33d51ea35ecd6c4873f752a8028d6c7d7117a48085d05d7e4909496db63"
+    }
+  },
+  "cloudSummary": {
+    "result": "passed",
+    "testDurationSeconds": 39.063,
+    "steps": [
+      "cancel_cloud_consent",
+      "allow_cloud_consent",
+      "real_production_summary",
+      "accept_separate_version",
+      "return_to_original",
+      "revoke_cloud_permission"
+    ]
+  },
+  "pilotHarnessCorrections": [
+    "pace credential typing",
+    "dismiss system password prompt",
+    "wait for microphone readiness",
+    "use a unique note title",
+    "open and select the recording before playback"
+  ],
+  "newProductRuntimeChangesRequired": false
+}

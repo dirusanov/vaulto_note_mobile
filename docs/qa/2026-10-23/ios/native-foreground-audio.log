@@ -1,0 +1,258 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project /private/tmp/vaulto-ios-qa-runner/VaultoSmoke.xcodeproj -scheme VaultoSmoke -destination "platform=iOS Simulator,id=4CD0FD78-FEC9-4070-A0B2-72C1BA70814E" -derivedDataPath /private/tmp/vaulto-ios-qa-runner/DerivedData "-only-testing:VaultoSmoke/VaultoSmoke/testForegroundAudioAfterReviewCorrection" -resultBundlePath /private/tmp/vaulto-ios-release-secrets/native-audio-100-verified.xcresult -parallel-testing-enabled NO
+
+Writing result bundle at path:
+	/private/tmp/vaulto-ios-release-secrets/native-audio-100-verified.xcresult
+
+2026-10-23 10:53:23.513 xcodebuild[40029:30176697] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-23 10:53:26.258521+0300 VaultoSmoke-Runner[40039:30177172] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-10-23 10:53:29.625.
+Test Suite 'VaultoSmoke.xctest' started at 2026-10-23 10:53:29.626.
+Test Suite 'VaultoSmoke' started at 2026-10-23 10:53:29.626.
+Test Case '-[VaultoSmoke.VaultoSmoke testForegroundAudioAfterReviewCorrection]' started.
+    t =     0.00s Start Test at 2026-10-23 10:53:29.628
+    t =     0.06s Set Up
+    t =     0.06s Open com.vaultonotemobile
+    t =     0.06s     Launch com.vaultonotemobile
+    t =     0.06s         Terminate com.vaultonotemobile:39193
+objc[40039]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A434/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x101ec8398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A434/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x101fbc310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     1.17s         Setting up automation session
+    t =     2.83s         Wait for com.vaultonotemobile to idle
+    t =     4.17s Waiting 30.0s for "Account and settings" Button to exist
+    t =     5.25s     Checking `Expect predicate `existsNoRetry == 1` for object "Account and settings" Button`
+    t =     5.25s         Checking existence of `"Account and settings" Button`
+    t =     5.29s         Capturing element debug description
+    t =     6.25s     Checking `Expect predicate `existsNoRetry == 1` for object "Account and settings" Button`
+    t =     6.25s         Checking existence of `"Account and settings" Button`
+    t =     6.29s Tap "Account and settings" Button
+    t =     6.29s     Wait for com.vaultonotemobile to idle
+    t =     6.29s     Find the "Account and settings" Button
+    t =     6.30s     Check for interrupting elements affecting "Account and settings" Button
+    t =     6.34s     Synthesize event
+    t =     6.65s     Wait for com.vaultonotemobile to idle
+    t =     7.10s Waiting 5.0s for "<PRIVATE>" StaticText to exist
+    t =     8.17s     Checking `Expect predicate `existsNoRetry == 1` for object "<PRIVATE>" StaticText`
+    t =     8.17s         Checking existence of `"<PRIVATE>" StaticText`
+    t =     8.19s Tap "Back" Button
+    t =     8.19s     Wait for com.vaultonotemobile to idle
+    t =     8.20s     Find the "Back" Button
+    t =     8.22s     Check for interrupting elements affecting "Back" Button
+    t =     8.25s     Synthesize event
+    t =     8.54s     Wait for com.vaultonotemobile to idle
+    t =     8.88s Waiting 3.0s for "I saved the key" Button to exist
+    t =     9.96s     Checking `Expect predicate `existsNoRetry == 1` for object "I saved the key" Button`
+    t =     9.96s         Checking existence of `"I saved the key" Button`
+    t =    10.00s         Capturing element debug description
+    t =    10.96s     Checking `Expect predicate `existsNoRetry == 1` for object "I saved the key" Button`
+    t =    10.96s         Checking existence of `"I saved the key" Button`
+    t =    10.98s         Capturing element debug description
+    t =    11.89s     Checking `Expect predicate `existsNoRetry == 1` for object "I saved the key" Button`
+    t =    11.89s         Checking existence of `"I saved the key" Button`
+    t =    11.91s         Capturing element debug description
+    t =    11.92s     Checking existence of `"I saved the key" Button`
+    t =    11.93s Collecting debug information to assist test failure triage
+    t =    11.93s     Requesting snapshot of accessibility hierarchy for app with pid 40119
+    t =    11.96s Waiting 35.0s for "New note" Button to exist
+    t =    13.02s     Checking `Expect predicate `existsNoRetry == 1` for object "New note" Button`
+    t =    13.02s         Checking existence of `"New note" Button`
+    t =    13.04s Tap "New note" Button
+    t =    13.04s     Wait for com.vaultonotemobile to idle
+    t =    13.05s     Find the "New note" Button
+    t =    13.06s     Check for interrupting elements affecting "New note" Button
+    t =    13.07s     Synthesize event
+    t =    13.36s     Wait for com.vaultonotemobile to idle
+    t =    13.58s Waiting 15.0s for "Title" TextView to exist
+    t =    14.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Title" TextView`
+    t =    14.65s         Checking existence of `"Title" TextView`
+    t =    14.67s Tap "Title" TextView
+    t =    14.67s     Wait for com.vaultonotemobile to idle
+    t =    14.67s     Find the "Title" TextView
+    t =    14.68s     Check for interrupting elements affecting "Title" TextView
+    t =    14.73s Ignoring failure to get hierarchy for remote element in process 40196 (Error getting main window kAXErrorServerNotFound)
+    t =    14.73s     Synthesize event
+    t =    15.02s     Wait for com.vaultonotemobile to idle
+    t =    15.32s Type 'Foreground audio Q...' into "Title" TextView
+    t =    15.32s     Wait for com.vaultonotemobile to idle
+    t =    15.65s     Find the "Title" TextView
+    t =    15.67s     Check for interrupting elements affecting "Title" TextView
+    t =    15.84s Ignoring failure to get hierarchy for remote element in process 40196 (Error getting main window kAXErrorCannotComplete)
+    t =    15.85s     Synthesize event
+    t =    16.63s     Wait for com.vaultonotemobile to idle
+    t =    16.63s Checking existence of `"Done editing" Button`
+    t =    16.66s Ignoring failure to get hierarchy for remote element in process 40314 (Error getting main window kAXErrorServerNotFound)
+    t =    16.66s Tap "Done editing" Button
+    t =    16.66s     Wait for com.vaultonotemobile to idle
+    t =    16.66s     Find the "Done editing" Button
+    t =    16.68s Ignoring failure to get hierarchy for remote element in process 40314 (Error getting main window kAXErrorServerNotFound)
+    t =    16.68s     Check for interrupting elements affecting "Done editing" Button
+    t =    16.70s Ignoring failure to get hierarchy for remote element in process 40314 (Error getting main window kAXErrorServerNotFound)
+    t =    16.70s     Synthesize event
+    t =    16.99s     Wait for com.vaultonotemobile to idle
+    t =    17.24s Waiting 10.0s for "Record voice note" Button to exist
+    t =    18.27s     Checking `Expect predicate `existsNoRetry == 1` for object "Record voice note" Button`
+    t =    18.27s         Checking existence of `"Record voice note" Button`
+    t =    18.32s Tap "Record voice note" Button
+    t =    18.32s     Wait for com.vaultonotemobile to idle
+    t =    18.32s     Find the "Record voice note" Button
+    t =    18.34s     Check for interrupting elements affecting "Record voice note" Button
+    t =    18.35s     Synthesize event
+    t =    18.64s     Wait for com.vaultonotemobile to idle
+    t =    19.00s Waiting 15.0s for "Pause recording" Button to exist
+    t =    20.04s     Checking `Expect predicate `existsNoRetry == 1` for object "Pause recording" Button`
+    t =    20.04s         Checking existence of `"Pause recording" Button`
+    t =    21.10s Checking `Expect predicate `enabled == 1` for object "Pause recording" Button`
+    t =    21.10s     Find the "Pause recording" Button
+    t =    21.12s Checking existence of `"Transcribe" Switch`
+    t =    21.14s Find the "Transcribe" Switch
+    t =    24.16s Tap "Pause recording" Button
+    t =    24.16s     Wait for com.vaultonotemobile to idle
+    t =    24.16s     Find the "Pause recording" Button
+    t =    24.19s     Check for interrupting elements affecting "Pause recording" Button
+    t =    24.21s     Synthesize event
+    t =    24.50s     Wait for com.vaultonotemobile to idle
+    t =    24.51s Waiting 10.0s for "Resume recording" Button to exist
+    t =    25.54s     Checking `Expect predicate `existsNoRetry == 1` for object "Resume recording" Button`
+    t =    25.55s         Checking existence of `"Resume recording" Button`
+    t =    25.58s Find the Application 'com.vaultonotemobile'
+    t =    25.67s Added attachment named 'foreground-recording-paused-100'
+    t =    25.67s Requesting snapshot of accessibility hierarchy for app with pid 40119
+    t =    25.81s Requesting snapshot of accessibility hierarchy for app with pid 40119
+    t =    25.83s Added attachment named 'foreground-recording-paused-100-accessibility'
+    t =    25.83s Tap "Resume recording" Button
+    t =    25.83s     Wait for com.vaultonotemobile to idle
+    t =    25.84s     Find the "Resume recording" Button
+    t =    25.85s     Check for interrupting elements affecting "Resume recording" Button
+    t =    25.87s     Synthesize event
+    t =    26.18s     Wait for com.vaultonotemobile to idle
+    t =    26.18s Waiting 10.0s for "Pause recording" Button to exist
+    t =    27.22s     Checking `Expect predicate `existsNoRetry == 1` for object "Pause recording" Button`
+    t =    27.22s         Checking existence of `"Pause recording" Button`
+    t =    29.24s Tap "Finish and send recording" Button
+    t =    29.24s     Wait for com.vaultonotemobile to idle
+    t =    29.24s     Find the "Finish and send recording" Button
+    t =    29.26s     Check for interrupting elements affecting "Finish and send recording" Button
+    t =    29.28s     Synthesize event
+    t =    29.58s     Wait for com.vaultonotemobile to idle
+    t =    29.93s Waiting 3.0s for Button (First Match) to exist
+    t =    30.97s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    30.97s         Checking existence of `Button (First Match)`
+    t =    30.99s         Capturing element debug description
+    t =    32.03s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    32.03s         Checking existence of `Button (First Match)`
+    t =    32.05s         Capturing element debug description
+    t =    32.94s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    32.94s         Checking existence of `Button (First Match)`
+    t =    32.97s         Capturing element debug description
+    t =    32.97s     Checking existence of `Button (First Match)`
+    t =    32.99s Collecting debug information to assist test failure triage
+    t =    32.99s     Requesting snapshot of accessibility hierarchy for app with pid 40119
+    t =    33.01s Waiting 20.0s for "Record voice note" Button to exist
+    t =    34.04s     Checking `Expect predicate `existsNoRetry == 1` for object "Record voice note" Button`
+    t =    34.04s         Checking existence of `"Record voice note" Button`
+    t =    34.06s Find the Application 'com.vaultonotemobile'
+    t =    34.14s Added attachment named 'foreground-recording-saved-100'
+    t =    34.14s Requesting snapshot of accessibility hierarchy for app with pid 40119
+    t =    34.38s Requesting snapshot of accessibility hierarchy for app with pid 40119
+    t =    34.40s Added attachment named 'foreground-recording-saved-100-accessibility'
+    t =    34.41s Tap "Back" Button
+    t =    34.41s     Wait for com.vaultonotemobile to idle
+    t =    34.41s     Find the "Back" Button
+    t =    34.43s     Check for interrupting elements affecting "Back" Button
+    t =    34.44s     Synthesize event
+    t =    34.74s     Wait for com.vaultonotemobile to idle
+    t =    35.11s Waiting 15.0s for Button (First Match) to exist
+    t =    36.15s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    36.15s         Checking existence of `Button (First Match)`
+    t =    36.17s Terminate com.vaultonotemobile:40119
+    t =    37.23s Open com.vaultonotemobile
+    t =    37.23s     Launch com.vaultonotemobile
+    t =    37.28s         Setting up automation session
+    t =    39.31s         Wait for com.vaultonotemobile to idle
+    t =    40.66s Waiting 30.0s for Button (First Match) to exist
+    t =    41.69s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    41.70s         Checking existence of `Button (First Match)`
+    t =    41.72s         Capturing element debug description
+    t =    42.74s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    42.74s         Checking existence of `Button (First Match)`
+    t =    42.76s Tap Button (First Match)
+    t =    42.76s     Wait for com.vaultonotemobile to idle
+    t =    42.77s     Find the Button (First Match)
+    t =    42.78s     Check for interrupting elements affecting "Foreground audio QA 100 1792742024, 10:54, , End-to-end encrypted" Button
+    t =    42.81s     Synthesize event
+    t =    43.10s     Wait for com.vaultonotemobile to idle
+    t =    43.10s Waiting 15.0s for "Voice recordings" Button to exist
+    t =    44.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Voice recordings" Button`
+    t =    44.13s         Checking existence of `"Voice recordings" Button`
+    t =    44.15s Tap "Voice recordings" Button
+    t =    44.15s     Wait for com.vaultonotemobile to idle
+    t =    44.15s     Find the "Voice recordings" Button
+    t =    44.15s     Check for interrupting elements affecting "Voice recordings" Button
+    t =    44.23s Ignoring failure to get hierarchy for remote element in process 40507 (Error getting main window kAXErrorServerNotFound)
+    t =    44.24s     Synthesize event
+    t =    44.53s     Wait for com.vaultonotemobile to idle
+    t =    44.88s Waiting 10.0s for Other (First Match) to exist
+    t =    45.90s     Checking `Expect predicate `existsNoRetry == 1` for object Other (First Match)`
+    t =    45.90s         Checking existence of `Other (First Match)`
+    t =    45.91s Tap Other (First Match)[0.08, 0.30]
+    t =    45.91s     Wait for com.vaultonotemobile to idle
+    t =    45.92s     Find the Other (First Match)
+    t =    45.92s     Check for interrupting elements affecting ", 0:10 , Oct 23, 2026, , Add, , Transcribe, Delete" Other
+    t =    45.94s Ignoring failure to get hierarchy for remote element in process 40510 (Error getting main window kAXErrorServerNotFound)
+    t =    45.94s     Synthesize event
+    t =    45.94s         Find the ", 0:10 , Oct 23, 2026, , Add, , Transcribe, Delete" Other
+    t =    45.95s         Find the ", 0:10 , Oct 23, 2026, , Add, , Transcribe, Delete" Other
+    t =    45.97s         Find the ", 0:10 , Oct 23, 2026, , Add, , Transcribe, Delete" Other
+    t =    46.26s     Wait for com.vaultonotemobile to idle
+    t =    46.26s Waiting 15.0s for "Play" Button to exist
+    t =    47.29s     Checking `Expect predicate `existsNoRetry == 1` for object "Play" Button`
+    t =    47.29s         Checking existence of `"Play" Button`
+    t =    47.30s Tap "Play" Button
+    t =    47.30s     Wait for com.vaultonotemobile to idle
+    t =    47.30s     Find the "Play" Button
+    t =    47.30s     Check for interrupting elements affecting "Play" Button
+    t =    47.34s     Synthesize event
+    t =    47.64s     Wait for com.vaultonotemobile to idle
+    t =    47.64s Waiting 5.0s for "Pause" Button to exist
+    t =    48.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Pause" Button`
+    t =    48.67s         Checking existence of `"Pause" Button`
+    t =    48.68s Find the Application 'com.vaultonotemobile'
+    t =    48.78s Added attachment named 'foreground-recording-playing-after-relaunch-100'
+    t =    48.78s Requesting snapshot of accessibility hierarchy for app with pid 40409
+    t =    49.03s Requesting snapshot of accessibility hierarchy for app with pid 40409
+    t =    49.06s Added attachment named 'foreground-recording-playing-after-relaunch-100-accessibility'
+    t =    49.06s Tap "Pause" Button
+    t =    49.06s     Wait for com.vaultonotemobile to idle
+    t =    49.06s     Find the "Pause" Button
+    t =    49.06s     Check for interrupting elements affecting "Pause" Button
+    t =    49.08s     Synthesize event
+    t =    49.37s     Wait for com.vaultonotemobile to idle
+    t =    49.38s Waiting 5.0s for "Play" Button to exist
+    t =    50.41s     Checking `Expect predicate `existsNoRetry == 1` for object "Play" Button`
+    t =    50.41s         Checking existence of `"Play" Button`
+    t =    50.42s Find the Application 'com.vaultonotemobile'
+    t =    50.49s Added attachment named 'foreground-recording-after-relaunch-100'
+    t =    50.49s Requesting snapshot of accessibility hierarchy for app with pid 40409
+    t =    50.76s Requesting snapshot of accessibility hierarchy for app with pid 40409
+    t =    50.79s Added attachment named 'foreground-recording-after-relaunch-100-accessibility'
+    t =    50.79s Tear Down
+Test Case '-[VaultoSmoke.VaultoSmoke testForegroundAudioAfterReviewCorrection]' passed (51.084 seconds).
+Test Suite 'VaultoSmoke' passed at 2026-10-23 10:54:20.713.
+	 Executed 1 test, with 0 failures (0 unexpected) in 51.084 (51.087) seconds
+Test Suite 'VaultoSmoke.xctest' passed at 2026-10-23 10:54:20.715.
+	 Executed 1 test, with 0 failures (0 unexpected) in 51.084 (51.089) seconds
+Test Suite 'Selected tests' passed at 2026-10-23 10:54:20.715.
+	 Executed 1 test, with 0 failures (0 unexpected) in 51.084 (51.090) seconds
+2026-10-23 10:54:20.775 xcodebuild[40029:30176697] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-23 10:54:20.782 xcodebuild[40029:30176697] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-23 10:54:20.802 xcodebuild[40029:30176697] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-23 10:54:21.065 xcodebuild[40029:30176697] [MT] IDETestOperationsObserverDebug: 57.628 elapsed -- Testing started completed.
+2026-10-23 10:54:21.065 xcodebuild[40029:30176697] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-23 10:54:21.065 xcodebuild[40029:30176697] [MT] IDETestOperationsObserverDebug: 57.628 sec, +57.628 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/vaulto-ios-release-secrets/native-audio-100-verified.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

@@ -30,10 +30,48 @@ those parallel release branches. No Android build or publication is performed.
 
 ## Validation and resubmission
 
-Source/config validation passed: native and introspected Info.plist contain no
-background audio mode, microphone purpose remains, all version declarations are
-1.0.100 / 100. Full automated checks, native audio smoke, final signed IPA checks,
-Apple upload and resubmission will be recorded after completion.
+Validation completed:
+
+- `npm test` passed (typecheck and the full project unit suite).
+- Tracked, introspected and signed-IPA Info.plist contain no background audio
+  mode; the microphone purpose remains. Version declarations and embedded Expo
+  config are 1.0.100 / 100. Strict signature verification passed.
+- Native Release simulator smoke passed: current review-account sign-in,
+  recording, pause, resume, save, application relaunch, reopen, play and pause.
+  The latest recording persisted as a nonempty file and database row. No fake
+  microphone or AI hooks were added to the product.
+- A real production cloud summary passed in the corrected simulator build:
+  consent cancellation, consent allowance, separate result version, switch back
+  to the preserved original, and permission revocation in Settings.
+
+The simulator harness needed paced credential input, handling of the system
+password prompt, waiting for microphone readiness, unique note titles and correct
+recording-row selection. These were harness changes outside the repository; no
+application runtime correction was needed. Simulator QA is not a claim of testing
+the signed device IPA on physical hardware. The signed device IPA was inspected
+independently.
+
+Signed IPA: 28,088,518 bytes; SHA-256
+`87a92df04097384e12d0d17b26cfe0dad394839e747d71b33d2c590a86123e93`.
+Apple processed build `344247fd-c3eb-456c-97ae-85c3f9871776` as `VALID`.
+The existing standard-cryptography / no-France documentation exemption was
+preserved; this is not a claim that the app has no encryption.
+
+The existing App Store version record was updated to **1.0.100**, build **100**
+was selected, and private review notes explain the capability removal and how to
+record and play foreground audio. Existing reviewer credentials and recovery
+instructions were verified without adding them to Git.
+
+The rejected item was marked resolved and the same submission
+`fd95a50c-b3be-4acf-b7c4-601469a4dff5` was resubmitted at
+**2026-10-23 07:55:01.444 UTC (10:55 Moscow)**. Independent API reads at
+07:55:05 UTC confirmed version **1.0.100**, selected build **100**, version and
+submission state **WAITING_FOR_REVIEW**, and release type **AFTER_APPROVAL**.
+The app is awaiting Apple's decision and is not yet public in the App Store.
+
+Evidence: [QA results and screenshots](qa/2026-10-23/ios/), including the signed
+artifact inspection, passing native test logs, persisted audio check and public
+submission snapshot. Earlier dated release reports remain historical records.
 
 References:
 - [expo-audio plugin settings](https://docs.expo.dev/versions/latest/sdk/audio/#configurable-properties)

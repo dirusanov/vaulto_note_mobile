@@ -130,3 +130,12 @@ review submission `fd95a50c-b3be-4acf-b7c4-601469a4dff5` was submitted at
 `2026-10-21T06:59:11.62Z`. A separate GET confirmed `WAITING_FOR_REVIEW` and the
 non-null submission date. Release mode is `AFTER_APPROVAL`. Apple approval and
 public store availability remain pending; submission is not publication.
+
+
+## Follow-up — 23 October 2026
+
+Apple subsequently rejected 1.0.95 (95) under Guideline 2.5.4 for the unused
+background audio declaration. Corrected version 1.0.100 (100) was resubmitted on
+23 October and independently verified as WAITING_FOR_REVIEW. See the
+[dated correction and validation report](app-store-correction-2026-10-23.md).
+The measurements and submission record above describe 21 October.

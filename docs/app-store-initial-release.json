@@ -1,8 +1,8 @@
 {
   "status": "submitted_waiting_for_Apple_review",
   "bundleId": "com.vaultonotemobile",
-  "version": "1.0.95",
-  "build": "95",
+  "version": "1.0.100",
+  "build": "100",
   "primaryLocale": "en-US",
   "name": "Vaulto: Private AI Voice Notes",
   "subtitle": "Voice to text. Local or cloud.",
@@ -20,8 +20,8 @@
     "developerMembership": "active_until_2027-10-20",
     "freeAgreement": "active",
     "paidAgreement": "not_required_free_release",
-    "storeAppRecord": "version_1.0.95_submitted_waiting_for_review",
-    "signedIpa": "1.0.95_95_signature_valid_uploaded_2026-10-21",
+    "storeAppRecord": "version_1.0.100_resubmitted_waiting_for_review",
+    "signedIpa": "1.0.100_100_signature_valid_uploaded_2026-10-23",
     "screenshots": "iPhone_medium_large_and_iPad13_uploaded",
     "appPrivacy": "published_2026-10-20",
     "exportCompliance": "standard_published_crypto_no_France_documentation_exempt_per_Apple",
@@ -33,11 +33,13 @@
     "nativeIPadQA": "cross_device_recovery_and_same_device_reinstall_8_notes_restored_passed",
     "cloudAIConsent": "native_cancel_revoke_reprompt_and_original_preservation_passed",
     "cloudAIServer": "recovered_after_owner_replenished_credits_HTTP_200_2026-10-21",
-    "cloudAIActualSummary": "native_consent_summary_accept_separate_version_original_switch_revoke_passed",
-    "appleBuildProcessing": "95_VALID_selected",
-    "reviewSubmission": "WAITING_FOR_REVIEW_independently_verified",
+    "cloudAIActualSummary": "native_consent_summary_separate_version_original_switch_revoke_passed_2026-10-23",
+    "appleBuildProcessing": "100_VALID_selected",
+    "reviewSubmission": "WAITING_FOR_REVIEW_independently_verified_2026-10-23",
     "releaseType": "AFTER_APPROVAL",
-    "cloudTranscription": "public_production_API_synthetic_English_audio_HTTP_200_recognition_passed"
+    "cloudTranscription": "public_production_API_synthetic_English_audio_HTTP_200_recognition_passed",
+    "nativeForegroundAudio": "record_pause_resume_save_relaunch_play_pause_passed_2026-10-23",
+    "backgroundAudioCapability": "unused_mode_removed_for_guideline_2.5.4_native_and_signed_IPA_verified"
   },
   "privacyDraft": {
     "tracking": false,
@@ -69,7 +71,8 @@
   "notes": [
     "Initial availability excludes the 27 EU countries while trader/payment setup is deferred. Apple DSA option selected: not a trader OR no planned EU distribution. This records the no-EU distribution choice, not an assertion about business status.",
     "Actual published client cryptography was assessed; France is excluded. Apple build 95 documentation exemption saved (usesNonExemptEncryption=false), not a claim of no encryption.",
-    "Review credentials and signing secrets are stored outside the repository."
+    "Review credentials and signing secrets are stored outside the repository.",
+    "23 October: version 1.0.95 rejected under Guideline 2.5.4 for an unused audio background declaration. Corrected version 1.0.100 (100) resubmitted; foreground recording and persisted playback passed on the iOS simulator. See docs/app-store-correction-2026-10-23.md."
   ],
   "appStoreConnectId": "6824942467",
   "appleTeamId": "PC7H2H9BH5",
@@ -88,13 +91,31 @@
       "uploaded": "2026-10-21",
       "appleBuildId": "34fea49e-f8c6-470b-ad6d-05874aaa56a1",
       "appleProcessingState": "VALID",
+      "selectedForVersion": false,
+      "submittedForReview": true,
+      "reviewState": "REJECTED",
+      "submittedAtUTC": "2026-10-21T06:59:11.62Z",
+      "earlierHold": "production_OpenAI_credit_balance_exhausted_resolved_after_owner_replenishment",
+      "rejectionDate": "2026-10-23",
+      "rejectionGuideline": "2.5.4",
+      "rejectionReason": "Unused UIBackgroundModes audio declaration",
+      "supersededBy": "1.0.100"
+    },
+    {
+      "version": "1.0.100",
+      "build": "100",
+      "uploaded": "2026-10-23",
+      "appleBuildId": "344247fd-c3eb-456c-97ae-85c3f9871776",
+      "appleProcessingState": "VALID",
       "selectedForVersion": true,
       "submittedForReview": true,
       "reviewState": "WAITING_FOR_REVIEW",
-      "submittedAtUTC": "2026-10-21T06:59:11.62Z",
-      "earlierHold": "production_OpenAI_credit_balance_exhausted_resolved_after_owner_replenishment"
+      "submittedAtUTC": "2026-10-23T07:55:01.444Z",
+      "correction": "Removed unused background audio capability for Guideline 2.5.4",
+      "releaseType": "AFTER_APPROVAL"
     }
   ],
-  "submittedAtUTC": "2026-10-21T06:59:11.62Z",
-  "reviewSubmissionId": "fd95a50c-b3be-4acf-b7c4-601469a4dff5"
+  "submittedAtUTC": "2026-10-23T07:55:01.444Z",
+  "reviewSubmissionId": "fd95a50c-b3be-4acf-b7c4-601469a4dff5",
+  "lastVerifiedAtUTC": "2026-10-23T07:55:05.009Z"
 }

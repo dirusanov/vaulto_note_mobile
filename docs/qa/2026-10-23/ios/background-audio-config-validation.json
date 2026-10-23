@@ -1,0 +1,22 @@
+{
+  "version": "1.0.100",
+  "build": "100",
+  "reviewGuideline": "2.5.4",
+  "previousVersion": "1.0.95",
+  "previousBuild": "95",
+  "installedExpoAudioBackgroundPlaybackDefault": true,
+  "runtimeBackgroundPlaybackEnabled": false,
+  "runtimeBackgroundRecordingEnabled": false,
+  "pluginBackgroundPlayback": false,
+  "pluginBackgroundRecording": false,
+  "trackedNativeBackgroundAudioMode": false,
+  "introspectedBackgroundAudioMode": false,
+  "microphonePermissionPreserved": true,
+  "appRecordingCodeChanged": false,
+  "unitAndTypecheck": "passed",
+  "signedIpaInspection": "passed",
+  "nativeAudioSmoke": "passed_record_pause_resume_save_relaunch_play_pause",
+  "appleBuildProcessing": "VALID",
+  "appleBuildId": "344247fd-c3eb-456c-97ae-85c3f9871776",
+  "nativeCloudSummarySmoke": "passed_consent_summary_separate_version_original_revoke"
+}

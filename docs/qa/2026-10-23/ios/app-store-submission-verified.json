@@ -1,0 +1,24 @@
+{
+  "checkedAtUTC": "2026-10-23T07:55:05.009Z",
+  "appId": "6824942467",
+  "versionId": "22cb1f20-8967-4c0e-9bcf-f4488623bf72",
+  "version": "1.0.100",
+  "appStoreState": "WAITING_FOR_REVIEW",
+  "releaseType": "AFTER_APPROVAL",
+  "build": "100",
+  "buildId": "344247fd-c3eb-456c-97ae-85c3f9871776",
+  "processingState": "VALID",
+  "usesNonExemptEncryption": false,
+  "submissionId": "fd95a50c-b3be-4acf-b7c4-601469a4dff5",
+  "submission": {
+    "platform": "IOS",
+    "submittedDate": "2026-10-23T07:55:01.444Z",
+    "state": "WAITING_FOR_REVIEW"
+  },
+  "items": [
+    {
+      "id": "ZmQ5NWE1MGMtYjNiZS00YWNmLWI3YzQtNjAxNDY5YTRkZmY1fDZ8ODkzNTI1ODM2",
+      "state": "READY_FOR_REVIEW"
+    }
+  ]
+}

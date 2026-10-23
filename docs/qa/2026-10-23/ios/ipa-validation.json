@@ -1,0 +1,16 @@
+{
+  "version": "1.0.100",
+  "build": "100",
+  "bundleId": "com.vaultonotemobile",
+  "backgroundModes": [],
+  "microphonePurposePresent": true,
+  "signatureVerified": true,
+  "bytes": 28088518,
+  "sha256": "87a92df04097384e12d0d17b26cfe0dad394839e747d71b33d2c590a86123e93",
+  "embeddedAppConfigs": [
+    {
+      "file": "EXConstants.bundle/app.config",
+      "version": "1.0.100"
+    }
+  ]
+}
