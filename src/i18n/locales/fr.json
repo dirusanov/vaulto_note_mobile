@@ -1059,6 +1059,9 @@
     "shapes": "Formes",
     "shapesOn": "Dessinez une forme et gardez le stylet immobile pour la redresser",
     "shapesOff": "Les formes restent telles que dessinées",
+    "duplicate": "Dupliquer",
+    "delete": "Supprimer",
+    "deselect": "Désélectionner",
     "colorAndSize": "Couleur et épaisseur",
     "size": "Épaisseur",
     "fingerDrawing": "Dessiner au doigt",
@@ -1074,7 +1077,8 @@
       "pencil": "Crayon",
       "brush": "Pinceau",
       "marker": "Surligneur",
-      "text": "Texte"
+      "text": "Texte",
+      "lasso": "Lasso"
     },
     "color": {
       "palette": "Palette",

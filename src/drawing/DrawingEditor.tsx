@@ -23,7 +23,7 @@ import { createStyles } from '../theme/createStyles';
 import { CanvasMode, DrawingCanvas, DrawingCanvasHandle, TextTap } from './DrawingCanvas';
 import { ColorPanel } from './ColorPanel';
 import { DrawingDocument } from './drawingFormat';
-import { DrawingAction, EraseMode, drawingReducer, emptyContent, initialDrawingState } from './drawingModel';
+import { DrawingAction, EMPTY_SELECTION, EraseMode, Selection, drawingReducer, emptyContent, initialDrawingState, selectInLasso } from './drawingModel';
 import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool } from './ink';
 import { DEFAULT_PAPER, PaperStyle } from './paper';
 import { PaperPicker } from './PaperPicker';
@@ -43,7 +43,7 @@ type Props = {
     onClose: () => void;
 };
 
-type ActiveTool = InkTool | 'eraser' | 'text';
+type ActiveTool = InkTool | 'eraser' | 'text' | 'lasso';
 type SettingsKey = InkTool | 'text';
 type ToolSettings = Record<SettingsKey, { color: string; sizeIndex: number }>;
 
@@ -112,6 +112,10 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     const [snapShapes, setSnapShapes] = useState(rememberedSnapShapes);
     /** A short tip over the canvas, e.g. how shapes are drawn. */
     const [tip, setTip] = useState<string | null>(null);
+    const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+    const selectionRef = useRef(selection);
+    selectionRef.current = selection;
+    const hasSelection = selection.strokes.length > 0 || selection.texts.length > 0;
     const [popover, setPopover] = useState<'tool' | 'paper' | null>(null);
     const [stylusSeen, setStylusSeen] = useState(false);
     const [stylusOnly, setStylusOnly] = useState(false);
@@ -147,6 +151,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         });
         setPopover(null);
         setTextEdit(null);
+        setSelection(EMPTY_SELECTION);
         setDocWidth(document?.width || 0);
     }, [visible, document]);
 
@@ -191,12 +196,12 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [keyboardTop, editingLines, settings.text.sizeIndex, textEdit?.index, textEdit?.x, textEdit?.y]);
 
-    const settingsKey: SettingsKey = activeTool === 'text' ? 'text' : activeTool === 'eraser' ? 'fountain' : activeTool;
+    const settingsKey: SettingsKey = activeTool === 'text' ? 'text' : activeTool === 'eraser' || activeTool === 'lasso' ? 'fountain' : activeTool;
     const current = settings[settingsKey];
-    const inkTool: InkTool = activeTool === 'text' || activeTool === 'eraser' ? 'fountain' : activeTool;
+    const inkTool: InkTool = activeTool === 'text' || activeTool === 'eraser' || activeTool === 'lasso' ? 'fountain' : activeTool;
     const sizes = activeTool === 'text' ? TEXT_SIZES : INK_TOOLS[inkTool].sizes;
     const size = sizes[current.sizeIndex] ?? sizes[1];
-    const mode: CanvasMode = activeTool === 'eraser' ? 'erase' : activeTool === 'text' ? 'text' : 'ink';
+    const mode: CanvasMode = activeTool === 'eraser' ? 'erase' : activeTool === 'text' ? 'text' : activeTool === 'lasso' ? 'select' : 'ink';
 
     /** The action that stores the label being typed, if any. */
     const textEditAction = useCallback((edit: TextEdit | null): DrawingAction | null => {
@@ -231,12 +236,44 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     }, [closePopover]);
 
     const handleErase = useCallback((x: number, y: number, radius: number, path?: number[]) => {
+        setSelection(EMPTY_SELECTION);
         dispatch({ type: 'eraseAt', x, y, path, radius, boxes: textBoxes, mode: eraser.mode });
     }, [textBoxes, eraser.mode]);
 
     const handleEraseEnd = useCallback(() => dispatch({ type: 'eraseEnd' }), []);
-    const handleUndo = useCallback(() => dispatch({ type: 'undo' }), []);
-    const handleRedo = useCallback(() => dispatch({ type: 'redo' }), []);
+    // Indices in a selection stop meaning the same items once history moves.
+    const handleUndo = useCallback(() => {
+        setSelection(EMPTY_SELECTION);
+        dispatch({ type: 'undo' });
+    }, []);
+    const handleRedo = useCallback(() => {
+        setSelection(EMPTY_SELECTION);
+        dispatch({ type: 'redo' });
+    }, []);
+
+    const handleLasso = useCallback((polygon: number[]) => {
+        setSelection(selectInLasso(stateRef.current.content, textBoxes, polygon));
+    }, [textBoxes]);
+    const handleSelectionMove = useCallback((dx: number, dy: number) => {
+        dispatch({ type: 'moveSelection', selection: selectionRef.current, dx, dy });
+    }, []);
+    const duplicateSelection = () => {
+        const { strokes: allStrokes, texts: allTexts } = stateRef.current.content;
+        const copied = {
+            strokes: selection.strokes.filter((index) => allStrokes[index]).length,
+            texts: selection.texts.filter((index) => allTexts[index]).length,
+        };
+        dispatch({ type: 'duplicateSelection', selection, dx: 24, dy: 24 });
+        // The copies are the last items: they become the selection, ready to be moved.
+        setSelection({
+            strokes: Array.from({ length: copied.strokes }, (_, i) => allStrokes.length + i),
+            texts: Array.from({ length: copied.texts }, (_, i) => allTexts.length + i),
+        });
+    };
+    const deleteSelection = () => {
+        dispatch({ type: 'deleteSelection', selection });
+        setSelection(EMPTY_SELECTION);
+    };
 
     const handleTextTap = useCallback((tap: TextTap) => {
         if (textEdit) {
@@ -301,7 +338,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         if (textEdit) {
             commitTextEdit();
         }
-        if (next === activeTool && next !== 'eraser') {
+        if (next === activeTool && next !== 'eraser' && next !== 'lasso') {
             if (popover === 'tool') {
                 closePopover();
             } else {
@@ -310,6 +347,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             return;
         }
         closePopover();
+        setSelection(EMPTY_SELECTION);
         setActiveTool(next);
     };
 
@@ -430,6 +468,15 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                 <MaterialCommunityIcons name="eraser" size={22} color={activeTool === 'eraser' ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
             <TouchableOpacity
+                onPress={() => selectTool('lasso')}
+                style={[styles.toolButton, activeTool === 'lasso' && styles.toolButtonActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeTool === 'lasso' }}
+                accessibilityLabel={t('drawing.tool.lasso', 'Lasso')}
+            >
+                <MaterialCommunityIcons name="lasso" size={22} color={activeTool === 'lasso' ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
                 onPress={() => {
                     const next = !snapShapes;
                     setSnapShapes(next);
@@ -539,14 +586,52 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             </>
         );
 
-    const toolBarContent = (
-        <>
-            {toolButtons}
-            <View style={styles.paletteDivider} />
-            {sizeButtons}
-            <View style={styles.paletteDivider} />
-            {colorButtons}
-        </>
+    // With the lasso the swatches recolour what is selected.
+    const recolorButtons = QUICK_COLORS.map((value) => (
+        <TouchableOpacity
+            key={value}
+            onPress={() => dispatch({ type: 'recolorSelection', selection, color: value })}
+            disabled={!hasSelection}
+            style={[styles.swatchButton, !hasSelection && styles.disabled]}
+            accessibilityRole="button"
+            accessibilityLabel={value}
+        >
+            <View style={[styles.swatch, { backgroundColor: value }]} />
+        </TouchableOpacity>
+    ));
+
+    const toolBarContent = activeTool === 'lasso'
+        ? (
+            <>
+                {toolButtons}
+                <View style={styles.paletteDivider} />
+                {recolorButtons}
+            </>
+        )
+        : (
+            <>
+                {toolButtons}
+                <View style={styles.paletteDivider} />
+                {sizeButtons}
+                <View style={styles.paletteDivider} />
+                {colorButtons}
+            </>
+        );
+
+    const selectionBar = hasSelection && (
+        <View style={styles.selectionBar}>
+            <TouchableOpacity onPress={duplicateSelection} style={styles.selectionButton} accessibilityRole="button" accessibilityLabel={t('drawing.duplicate', 'Duplicate')}>
+                <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
+                <Text style={[styles.selectionText, { color: colors.text }]}>{t('drawing.duplicate', 'Duplicate')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={deleteSelection} style={styles.selectionButton} accessibilityRole="button" accessibilityLabel={t('drawing.delete', 'Delete')}>
+                <MaterialCommunityIcons name="delete-outline" size={20} color={colors.error} />
+                <Text style={[styles.selectionText, { color: colors.error }]}>{t('drawing.delete', 'Delete')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setSelection(EMPTY_SELECTION)} style={styles.selectionButton} accessibilityRole="button" accessibilityLabel={t('drawing.deselect', 'Deselect')}>
+                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+        </View>
     );
 
     const popoverContent = popover === 'tool' && activeTool !== 'eraser'
@@ -672,6 +757,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                 onStylus={handleStylus}
                                 onUndo={handleUndo}
                                 onRedo={handleRedo}
+                                selection={selection}
+                                onLasso={handleLasso}
+                                onSelectionMove={handleSelectionMove}
                             />
                             {textEdit && (
                                 <TextInput
@@ -695,6 +783,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                     ]}
                                 />
                             )}
+                            {selectionBar}
                             {tip && (
                                 <View pointerEvents="none" style={styles.tip}>
                                     <Text style={styles.tipText}>{tip}</Text>
@@ -750,9 +839,30 @@ const styles = createStyles(() => ({
     popoverScroll: { padding: 14, gap: 14 },
     popoverTablet: { position: 'absolute', top: 8, width: 372, maxHeight: 600 },
     popoverPhone: { position: 'absolute', left: 12, right: 12, top: 8 },
-    tip: {
+    selectionBar: {
         position: 'absolute',
         top: 12,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 6,
+        borderRadius: 22,
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+        shadowColor: '#000',
+        shadowOpacity: 0.14,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 5,
+    },
+    selectionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, paddingHorizontal: 12, borderRadius: 22 },
+    selectionText: { fontSize: 14, fontWeight: '600' },
+    disabled: { opacity: 0.35 },
+    tip: {
+        position: 'absolute',
+        bottom: 24,
         alignSelf: 'center',
         maxWidth: '90%',
         paddingHorizontal: 14,

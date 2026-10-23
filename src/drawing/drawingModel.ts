@@ -25,6 +25,55 @@ export type TextBox = { width: number; height: number };
 /** The eraser rubs out the ink under it, or takes whole strokes it touches. */
 export type EraseMode = 'partial' | 'stroke';
 
+/** Strokes and labels picked with the lasso, by index. */
+export type Selection = { strokes: number[]; texts: number[] };
+
+export const EMPTY_SELECTION: Selection = { strokes: [], texts: [] };
+
+const pointInPolygon = (x: number, y: number, polygon: number[]): boolean => {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 2; i < polygon.length; j = i, i += 2) {
+        const [xi, yi, xj, yj] = [polygon[i], polygon[i + 1], polygon[j], polygon[j + 1]];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+    }
+    return inside;
+};
+
+/**
+ * What a lasso loop [x, y, ...] encloses: strokes with most of their samples
+ * inside (a stroke only grazed by the loop stays out) and labels whose centre is.
+ */
+export const selectInLasso = (content: DrawingContent, boxes: TextBox[], polygon: number[]): Selection => {
+    if (polygon.length < 6) {
+        return EMPTY_SELECTION;
+    }
+    const strokes: number[] = [];
+    content.strokes.forEach((stroke, index) => {
+        const pts = stroke.points;
+        let inside = 0;
+        let total = 0;
+        for (let i = 0; i + 1 < pts.length; i += 3) {
+            total += 1;
+            if (pointInPolygon(pts[i], pts[i + 1], polygon)) {
+                inside += 1;
+            }
+        }
+        if (total > 0 && inside / total > 0.5) {
+            strokes.push(index);
+        }
+    });
+    const texts: number[] = [];
+    content.texts.forEach((item, index) => {
+        const box = boxes[index] || { width: 0, height: 0 };
+        if (pointInPolygon(item.x + box.width / 2, item.y + box.height / 2, polygon)) {
+            texts.push(index);
+        }
+    });
+    return { strokes, texts };
+};
+
 export type DrawingAction =
     | { type: 'load'; content: DrawingContent }
     | { type: 'addStroke'; stroke: InkStroke }
@@ -35,6 +84,12 @@ export type DrawingAction =
     | { type: 'updateText'; index: number; patch: Partial<InkText> }
     | { type: 'removeText'; index: number }
     | { type: 'setPaper'; paper: PaperStyle }
+    /** Moves the selected strokes and labels by (dx, dy). */
+    | { type: 'moveSelection'; selection: Selection; dx: number; dy: number }
+    | { type: 'deleteSelection'; selection: Selection }
+    /** Copies the selection, offset by (dx, dy), to the top; the copies are the last items. */
+    | { type: 'duplicateSelection'; selection: Selection; dx: number; dy: number }
+    | { type: 'recolorSelection'; selection: Selection; color: string }
     | { type: 'undo' }
     | { type: 'redo' };
 
@@ -62,6 +117,15 @@ const textHit = (item: InkText, box: TextBox | undefined, x: number, y: number, 
     }
     return x >= item.x - radius && x <= item.x + box.width + radius
         && y >= item.y - radius && y <= item.y + box.height + radius;
+};
+
+const shiftStroke = (stroke: InkStroke, dx: number, dy: number): InkStroke => {
+    const points = stroke.points.slice();
+    for (let i = 0; i + 1 < points.length; i += 3) {
+        points[i] += dx;
+        points[i + 1] += dy;
+    }
+    return { ...stroke, points };
 };
 
 export const drawingReducer = (state: DrawingState, action: DrawingAction): DrawingState => {
@@ -145,6 +209,57 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
                 return state;
             }
             return commit(state, { ...state.content, paper: action.paper });
+        case 'moveSelection': {
+            const { selection, dx, dy } = action;
+            if ((!dx && !dy) || (!selection.strokes.length && !selection.texts.length)) {
+                return state;
+            }
+            const pickedStrokes = new Set(selection.strokes);
+            const pickedTexts = new Set(selection.texts);
+            return commit(state, {
+                ...state.content,
+                strokes: state.content.strokes.map((stroke, index) => (pickedStrokes.has(index) ? shiftStroke(stroke, dx, dy) : stroke)),
+                texts: state.content.texts.map((item, index) => (pickedTexts.has(index) ? { ...item, x: item.x + dx, y: item.y + dy } : item)),
+            });
+        }
+        case 'deleteSelection': {
+            const pickedStrokes = new Set(action.selection.strokes);
+            const pickedTexts = new Set(action.selection.texts);
+            if (!pickedStrokes.size && !pickedTexts.size) {
+                return state;
+            }
+            return commit(state, {
+                ...state.content,
+                strokes: state.content.strokes.filter((_stroke, index) => !pickedStrokes.has(index)),
+                texts: state.content.texts.filter((_item, index) => !pickedTexts.has(index)),
+            });
+        }
+        case 'duplicateSelection': {
+            const { selection, dx, dy } = action;
+            if (!selection.strokes.length && !selection.texts.length) {
+                return state;
+            }
+            const { strokes, texts } = state.content;
+            return commit(state, {
+                ...state.content,
+                strokes: [...strokes, ...selection.strokes.filter((index) => strokes[index]).map((index) => shiftStroke(strokes[index], dx, dy))],
+                texts: [...texts, ...selection.texts.filter((index) => texts[index]).map((index) => ({ ...texts[index], x: texts[index].x + dx, y: texts[index].y + dy }))],
+            });
+        }
+        case 'recolorSelection': {
+            const pickedStrokes = new Set(action.selection.strokes);
+            const pickedTexts = new Set(action.selection.texts);
+            const { strokes, texts } = state.content;
+            if (![...pickedStrokes].some((index) => strokes[index] && strokes[index].color !== action.color)
+                && ![...pickedTexts].some((index) => texts[index] && texts[index].color !== action.color)) {
+                return state;
+            }
+            return commit(state, {
+                ...state.content,
+                strokes: strokes.map((stroke, index) => (pickedStrokes.has(index) ? { ...stroke, color: action.color } : stroke)),
+                texts: texts.map((item, index) => (pickedTexts.has(index) ? { ...item, color: action.color } : item)),
+            });
+        }
         case 'undo': {
             const previous = state.undo[state.undo.length - 1];
             if (!previous) {

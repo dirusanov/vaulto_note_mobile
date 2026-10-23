@@ -1061,6 +1061,9 @@
     "shapes": "Shapes",
     "shapesOn": "Draw a shape and hold the pen still to straighten it",
     "shapesOff": "Shapes stay as drawn",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "deselect": "Deselect",
     "colorAndSize": "Color and size",
     "size": "Size",
     "fingerDrawing": "Draw with finger",
@@ -1076,7 +1079,8 @@
       "pencil": "Pencil",
       "brush": "Brush",
       "marker": "Highlighter",
-      "text": "Text"
+      "text": "Text",
+      "lasso": "Lasso"
     },
     "color": {
       "palette": "Palette",

@@ -1059,6 +1059,9 @@
     "shapes": "Formen",
     "shapesOn": "Form zeichnen und Stift kurz halten, um sie zu begradigen",
     "shapesOff": "Formen bleiben wie gezeichnet",
+    "duplicate": "Duplizieren",
+    "delete": "Löschen",
+    "deselect": "Auswahl aufheben",
     "colorAndSize": "Farbe und Stärke",
     "size": "Stärke",
     "fingerDrawing": "Mit dem Finger zeichnen",
@@ -1074,7 +1077,8 @@
       "pencil": "Bleistift",
       "brush": "Pinsel",
       "marker": "Textmarker",
-      "text": "Text"
+      "text": "Text",
+      "lasso": "Lasso"
     },
     "color": {
       "palette": "Palette",

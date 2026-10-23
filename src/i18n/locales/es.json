@@ -1059,6 +1059,9 @@
     "shapes": "Formas",
     "shapesOn": "Dibuja una forma y mantén el lápiz quieto para enderezarla",
     "shapesOff": "Las formas quedan como se dibujan",
+    "duplicate": "Duplicar",
+    "delete": "Eliminar",
+    "deselect": "Deseleccionar",
     "colorAndSize": "Color y grosor",
     "size": "Grosor",
     "fingerDrawing": "Dibujar con el dedo",
@@ -1074,7 +1077,8 @@
       "pencil": "Lápiz",
       "brush": "Pincel",
       "marker": "Resaltador",
-      "text": "Texto"
+      "text": "Texto",
+      "lasso": "Lazo"
     },
     "color": {
       "palette": "Paleta",

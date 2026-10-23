@@ -1059,6 +1059,9 @@
     "shapes": "図形",
     "shapesOn": "図形を描いてペンを止めると整った形になります",
     "shapesOff": "図形は描いたままになります",
+    "duplicate": "複製",
+    "delete": "削除",
+    "deselect": "選択解除",
     "colorAndSize": "色と太さ",
     "size": "太さ",
     "fingerDrawing": "指で描く",
@@ -1074,7 +1077,8 @@
       "pencil": "鉛筆",
       "brush": "筆",
       "marker": "蛍光ペン",
-      "text": "テキスト"
+      "text": "テキスト",
+      "lasso": "なげなわ"
     },
     "color": {
       "palette": "パレット",

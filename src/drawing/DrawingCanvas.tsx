@@ -4,6 +4,7 @@ import {
     Canvas,
     Circle,
     ColorMatrix,
+    DashPathEffect,
     Fill,
     FilterMode,
     FractalNoise,
@@ -17,6 +18,7 @@ import {
     SkPath,
     SkPicture,
     Paragraph,
+    Rect,
     TileMode,
 } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, PointerType } from 'react-native-gesture-handler';
@@ -33,7 +35,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
 import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, strokeOutline, strokeOutlineFor } from './ink';
-import { TextBox } from './drawingModel';
+import { Selection, TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
 import {
     PAGE_GAP,
@@ -49,7 +51,7 @@ import {
 } from './paper';
 import { LABEL_LAYOUT_WIDTH, paragraphFor } from './textLayout';
 
-export type CanvasMode = 'ink' | 'erase' | 'text';
+export type CanvasMode = 'ink' | 'erase' | 'text' | 'select';
 
 /** Where a tap in text mode landed, in document and screen coordinates. */
 export type TextTap = {
@@ -97,6 +99,12 @@ type Props = {
     onCommit: (stroke: InkStroke) => void;
     /** Eraser at (x, y), then along `path` [x, y, ...] (document coordinates). */
     onErase: (x: number, y: number, radius: number, path?: number[]) => void;
+    /** Strokes and labels picked with the lasso: drawn on top, movable as one. */
+    selection: Selection;
+    /** A lasso loop was drawn: [x, y, ...] in document coordinates. */
+    onLasso: (polygon: number[]) => void;
+    /** The selection was dragged by (dx, dy) document units. */
+    onSelectionMove: (dx: number, dy: number) => void;
     onEraseEnd: () => void;
     onTextTap: (tap: TextTap) => void;
     onTextMove: (index: number, dx: number, dy: number) => void;
@@ -312,6 +320,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes,
     editingText, dark, themePaperColor, themeLineColor, deskColor,
     onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
+    selection, onLasso, onSelectionMove,
 }, ref) => {
     const [view, setView] = useState({ width: 0, height: 0 });
     // Android drops the GPU surface while the app is in the background and Skia
@@ -379,7 +388,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const still = useSharedValue({ x: 0, y: 0, t: 0 });
     const snapped = useSharedValue(false);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
-    const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
+    const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'lasso' | 'move' | 'none'>('none');
+    /** The lasso loop being drawn, in document coordinates. */
+    const lasso = useSharedValue<number[]>([]);
+    /** Box around the selection (document units), or null; and how far it is being dragged. */
+    const selectionBox = useSharedValue<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
+    const selectionDrag = useSharedValue({ dx: 0, dy: 0, startX: 0, startY: 0 });
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
     /** Screen point of the last erase pass in the current drag. */
     const lastErase = useSharedValue({ x: 0, y: 0 });
@@ -526,6 +540,22 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         }
     });
 
+    // The dragged selection keeps its offset until the moved strokes are rendered.
+    const movePending = useRef(false);
+    const finishMove = useCallback((dx: number, dy: number) => {
+        movePending.current = true;
+        onSelectionMove(dx, dy);
+    }, [onSelectionMove]);
+    useEffect(() => {
+        if (movePending.current) {
+            movePending.current = false;
+            runOnUI(() => {
+                'worklet';
+                selectionDrag.value = { dx: 0, dy: 0, startX: 0, startY: 0 };
+            })();
+        }
+    }, [strokes, texts, selectionDrag]);
+
     const finishTextDrag = useCallback((index: number, dx: number, dy: number) => {
         onTextMove(index, dx, dy);
         requestAnimationFrame(() => {
@@ -557,6 +587,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // through one stable function that reads the latest handlers.
     const jsHandlers = {
         onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex, watchShapes,
+        onLasso, finishMove,
     };
     const jsHandlersRef = useRef(jsHandlers);
     jsHandlersRef.current = jsHandlers;
@@ -643,6 +674,18 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     };
                     return;
                 }
+                if (cfg.mode === 'select' && !penErases) {
+                    const box = selectionBox.value;
+                    const pad = 12 / scale;
+                    if (box && pt.x >= box.minX - pad && pt.x <= box.maxX + pad && pt.y >= box.minY - pad && pt.y <= box.maxY + pad) {
+                        gestureMode.value = 'move';
+                        selectionDrag.value = { dx: 0, dy: 0, startX: pt.x, startY: pt.y };
+                    } else {
+                        gestureMode.value = 'lasso';
+                        lasso.value = [pt.x, pt.y];
+                    }
+                    return;
+                }
                 if (cfg.mode === 'erase' || penErases) {
                     gestureMode.value = 'erase';
                     eraser.value = { x: e.x, y: e.y, visible: true };
@@ -687,6 +730,23 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                         runOnJS(callJs)('setDragIndex', g.index);
                     }
                     dragOffset.value = { dx: pt.x - g.startX, dy: pt.y - g.startY };
+                    return;
+                }
+                if (current === 'lasso') {
+                    const points = lasso.value;
+                    const n = points.length;
+                    if (Math.hypot(pt.x - points[n - 2], pt.y - points[n - 1]) * scaleSV.value * zoom.value >= 3) {
+                        lasso.modify((loop) => {
+                            'worklet';
+                            loop.push(pt.x, pt.y);
+                            return loop;
+                        });
+                    }
+                    return;
+                }
+                if (current === 'move') {
+                    const drag = selectionDrag.value;
+                    selectionDrag.value = { ...drag, dx: pt.x - drag.startX, dy: pt.y - drag.startY };
                     return;
                 }
                 if (current === 'erase') {
@@ -787,6 +847,23 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (current === 'erase') {
                     eraser.value = { x: -100, y: -100, visible: false };
                     runOnJS(callJs)('onEraseEnd');
+                    return;
+                }
+                if (current === 'lasso') {
+                    const loop = lasso.value.slice();
+                    lasso.value = [];
+                    if (!multiTouch.value) {
+                        runOnJS(callJs)('onLasso', loop);
+                    }
+                    return;
+                }
+                if (current === 'move') {
+                    const drag = selectionDrag.value;
+                    if (multiTouch.value || (!drag.dx && !drag.dy)) {
+                        selectionDrag.value = { dx: 0, dy: 0, startX: 0, startY: 0 };
+                        return;
+                    }
+                    runOnJS(callJs)('finishMove', drag.dx, drag.dy);
                     return;
                 }
                 if (current !== 'draw') {
@@ -940,15 +1017,75 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         return builder.build();
     }, [isPages, sheets]);
 
+    // Selected strokes are drawn apart from the rest, on top, so they can move together.
+    const selectedStrokes = useMemo(() => new Set(selection.strokes.filter((index) => index < strokes.length)), [selection.strokes, strokes.length]);
+    const selectedTexts = useMemo(() => new Set(selection.texts.filter((index) => index < texts.length)), [selection.texts, texts.length]);
+    const baseStrokes = useMemo(
+        () => (selectedStrokes.size ? strokes.filter((_stroke, index) => !selectedStrokes.has(index)) : strokes),
+        [strokes, selectedStrokes]
+    );
     const inkCache = useRef<InkCache>({ strokes: [], picture: null, depth: 0 });
     const inkPicture = useMemo(() => {
-        inkCache.current = buildInkPicture(inkCache.current, strokes);
+        inkCache.current = buildInkPicture(inkCache.current, baseStrokes);
         return inkCache.current.picture as SkPicture;
-    }, [strokes]);
+    }, [baseStrokes]);
+    const selectionPicture = useMemo(() => {
+        if (!selectedStrokes.size) {
+            return null;
+        }
+        return buildInkPicture({ strokes: [], picture: null, depth: 0 }, strokes.filter((_stroke, index) => selectedStrokes.has(index))).picture;
+    }, [strokes, selectedStrokes]);
+    useEffect(() => {
+        const picked = strokes.filter((_stroke, index) => selectedStrokes.has(index));
+        const box = picked.length || selectedTexts.size
+            ? drawingBounds(picked, texts.filter((_item, index) => selectedTexts.has(index)))
+            : null;
+        // Labels are measured: their real box, not the estimate drawingBounds makes.
+        if (box) {
+            selectedTexts.forEach((index) => {
+                const item = texts[index];
+                const measured = textBoxes[index];
+                if (item && measured) {
+                    box.maxX = Math.max(box.maxX, item.x + measured.width);
+                    box.maxY = Math.max(box.maxY, item.y + measured.height);
+                }
+            });
+        }
+        selectionBox.value = box;
+    }, [strokes, texts, textBoxes, selectedStrokes, selectedTexts, selectionBox]);
 
     const labels = texts.map((item, index) => (
-        index === editingText || index === dragIndex ? null : <Label key={index} item={item} />
+        index === editingText || index === dragIndex || selectedTexts.has(index) ? null : <Label key={index} item={item} />
     ));
+    const selectedLabels = [...selectedTexts].map((index) => <Label key={index} item={texts[index]} />);
+    const selectionTransform = useDerivedValue(() => [
+        { translateX: selectionDrag.value.dx },
+        { translateY: selectionDrag.value.dy },
+    ]);
+    const selectionRect = useDerivedValue(() => {
+        const box = selectionBox.value;
+        const pad = 6 / (scaleSV.value * zoom.value);
+        return box
+            ? Skia.XYWHRect(box.minX - pad, box.minY - pad, box.maxX - box.minX + pad * 2, box.maxY - box.minY + pad * 2)
+            : Skia.XYWHRect(0, 0, 0, 0);
+    });
+    const selectionStroke = useDerivedValue(() => 1.5 / (scaleSV.value * zoom.value));
+    const dash = useDerivedValue(() => {
+        const unit = 6 / (scaleSV.value * zoom.value);
+        return [unit, unit];
+    });
+    const lassoPath = useDerivedValue(() => {
+        const loop = lasso.value;
+        const builder = Skia.PathBuilder.Make();
+        if (loop.length >= 4) {
+            builder.moveTo(loop[0], loop[1]);
+            for (let i = 2; i + 1 < loop.length; i += 2) {
+                builder.lineTo(loop[i], loop[i + 1]);
+            }
+            builder.close();
+        }
+        return builder.build();
+    });
 
     const liveOpacity = INK_TOOLS[tool]?.opacity ?? 1;
     const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
@@ -987,7 +1124,25 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                                         <Label item={texts[dragIndex]} />
                                     </Group>
                                 )}
+                                {(selectionPicture || selectedLabels.length > 0) && (
+                                    <Group transform={selectionTransform}>
+                                        {selectionPicture && <Picture picture={selectionPicture} />}
+                                        {selectedLabels}
+                                    </Group>
+                                )}
                             </Group>
+                            {(selectionPicture || selectedLabels.length > 0) && (
+                                <Group transform={selectionTransform}>
+                                    <Rect rect={selectionRect} color="rgba(30,136,229,0.06)" />
+                                    <Rect rect={selectionRect} color="#1E88E5" style="stroke" strokeWidth={selectionStroke}>
+                                        <DashPathEffect intervals={dash} />
+                                    </Rect>
+                                </Group>
+                            )}
+                            <Path path={lassoPath} color="rgba(30,136,229,0.08)" />
+                            <Path path={lassoPath} color="#1E88E5" style="stroke" strokeWidth={selectionStroke}>
+                                <DashPathEffect intervals={dash} />
+                            </Path>
                         </Group>
                         <Circle cx={eraserX} cy={eraserY} r={eraserR} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
                         <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { drawingReducer, initialDrawingState } = require('../.test-build/drawing/drawing/drawingModel');
+const { drawingReducer, initialDrawingState, selectInLasso } = require('../.test-build/drawing/drawing/drawingModel');
 
 const stroke = (y) => ({ tool: 'ballpoint', color: '#000', size: 2, points: [10, y, 0.5, 50, y, 0.5] });
 const label = (text, y = 100) => ({ x: 20, y, text, size: 20, color: '#000' });
@@ -109,4 +109,39 @@ test('a fast eraser move erases along its whole path, not only where samples lan
     assert.equal(missed.content, s.content, 'one centre far from the line erases nothing');
     const swept = drawingReducer(s, { type: 'eraseAt', x: 50, y: 0, path: [50, 25, 50, 50, 50, 75, 50, 100], radius: 5, boxes: [] });
     assert.equal(swept.content.strokes.length, 2);
+});
+
+test('the lasso picks what it encloses; moving, copying, recolouring and deleting it are undoable', () => {
+    let s = run([
+        { type: 'addStroke', stroke: stroke(10) },
+        { type: 'addStroke', stroke: stroke(200) },
+        { type: 'addText', text: label('hi', 40) },
+    ]);
+    const boxes = [{ width: 30, height: 20 }];
+    // A loop around the top: the first stroke and the label, not the stroke at y = 200.
+    const loop = [0, 0, 100, 0, 100, 100, 0, 100];
+    const picked = selectInLasso(s.content, boxes, loop);
+    assert.deepEqual(picked, { strokes: [0], texts: [0] });
+    // A loop that only crosses part of a stroke leaves it out.
+    assert.deepEqual(selectInLasso(s.content, boxes, [0, 0, 20, 0, 20, 300, 0, 300]).strokes, []);
+
+    s = drawingReducer(s, { type: 'moveSelection', selection: picked, dx: 5, dy: 7 });
+    assert.deepEqual(s.content.strokes[0].points, [15, 17, 0.5, 55, 17, 0.5]);
+    assert.equal(s.content.texts[0].y, 47);
+    assert.equal(s.content.strokes[1], drawingReducer(s, { type: 'undo' }).content.strokes[1], 'others untouched');
+
+    s = drawingReducer(s, { type: 'duplicateSelection', selection: picked, dx: 20, dy: 20 });
+    assert.equal(s.content.strokes.length, 3);
+    assert.deepEqual(s.content.strokes[2].points, [35, 37, 0.5, 75, 37, 0.5]);
+    assert.equal(s.content.texts.length, 2);
+
+    s = drawingReducer(s, { type: 'recolorSelection', selection: picked, color: '#E53935' });
+    assert.equal(s.content.strokes[0].color, '#E53935');
+    assert.equal(s.content.strokes[1].color, '#000');
+
+    s = drawingReducer(s, { type: 'deleteSelection', selection: picked });
+    assert.equal(s.content.strokes.length, 2);
+    assert.equal(s.content.texts.length, 1);
+    s = drawingReducer(s, { type: 'undo' });
+    assert.equal(s.content.strokes.length, 3);
 });
