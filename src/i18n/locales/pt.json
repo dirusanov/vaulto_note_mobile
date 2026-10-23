@@ -519,7 +519,8 @@
       "commandLimit": "Limite de IA atingido, então este pedido não foi executado: “{{text}}”",
       "commandFailed": "Não foi possível executar este pedido: “{{text}}”",
       "limitNotice": "Limite de IA deste mês atingido: as gravações são adicionadas como texto simples, sem ajuste da IA.",
-      "insertAsText": "Inserir como texto"
+      "insertAsText": "Inserir como texto",
+      "guestRequestHint": "Entre na sua conta e a IA vai transformar pedidos como este em uma lista de tarefas"
     },
     "improvePreview": {
       "title": "Sugestão da IA",
@@ -745,7 +746,8 @@
     "privateModelMissing": "O processamento só neste dispositivo está ativado, mas o modelo de voz não está disponível. A gravação foi salva no dispositivo. Baixe o modelo para transcrevê-la.",
     "toTextHint": "Ao terminar, a gravação vira texto",
     "audioOnlyHint": "Salvo só como áudio, sem texto",
-    "discardConfirmHint": "Toque na lixeira de novo para apagar a gravação"
+    "discardConfirmHint": "Toque na lixeira de novo para apagar a gravação",
+    "instructionHint": "Quando terminar, a instrução aparece no campo"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -947,7 +949,8 @@
     "indent": "Aumentar recuo",
     "outdent": "Diminuir recuo",
     "quote": "Citação",
-    "hideKeyboard": "Ocultar teclado"
+    "hideKeyboard": "Ocultar teclado",
+    "dictateInstruction": "Ditar a instrução"
   },
   "ask": {
     "title": "Pergunte às suas notas",

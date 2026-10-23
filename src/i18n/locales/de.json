@@ -519,7 +519,8 @@
       "commandLimit": "KI-Limit erreicht, deshalb wurde diese Anweisung nicht ausgeführt: „{{text}}“",
       "commandFailed": "Diese Anweisung konnte nicht ausgeführt werden: „{{text}}“",
       "limitNotice": "KI-Limit für diesen Monat erreicht: Aufnahmen werden als reiner Text eingefügt, ohne KI-Bearbeitung.",
-      "insertAsText": "Als Text einfügen"
+      "insertAsText": "Als Text einfügen",
+      "guestRequestHint": "Melde dich an, und die KI macht aus solchen Bitten eine Checkliste"
     },
     "improvePreview": {
       "title": "KI-Vorschlag",
@@ -745,7 +746,8 @@
     "privateModelMissing": "Die Verarbeitung nur auf diesem Gerät ist aktiviert, aber das Sprachmodell ist nicht verfügbar. Die Aufnahme ist auf dem Gerät gespeichert. Lade das Modell zur Transkription herunter.",
     "toTextHint": "Wenn du fertig bist, wird die Aufnahme zu Text",
     "audioOnlyHint": "Wird nur als Audio gespeichert, ohne Text",
-    "discardConfirmHint": "Tippe noch einmal auf den Papierkorb, um die Aufnahme zu löschen"
+    "discardConfirmHint": "Tippe noch einmal auf den Papierkorb, um die Aufnahme zu löschen",
+    "instructionHint": "Wenn du fertig bist, erscheint die Anweisung im Feld"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -947,7 +949,8 @@
     "indent": "Einzug vergrößern",
     "outdent": "Einzug verkleinern",
     "quote": "Zitat",
-    "hideKeyboard": "Tastatur ausblenden"
+    "hideKeyboard": "Tastatur ausblenden",
+    "dictateInstruction": "Anweisung sprechen"
   },
   "ask": {
     "title": "Notizen fragen",

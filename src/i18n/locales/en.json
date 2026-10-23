@@ -519,7 +519,8 @@
       "commandLimit": "AI limit reached, so this request was not carried out: “{{text}}”",
       "commandFailed": "Could not carry out this request: “{{text}}”",
       "limitNotice": "AI limit reached for this month: recordings are added as plain text, without AI cleanup.",
-      "insertAsText": "Insert as text"
+      "insertAsText": "Insert as text",
+      "guestRequestHint": "Sign in and the AI will turn requests like this into a checklist"
     },
     "improvePreview": {
       "title": "AI suggestion",
@@ -745,7 +746,8 @@
     "privateModelMissing": "Device-only processing is on, but the speech model is unavailable. Your recording is saved on this device. Download the model to transcribe it.",
     "toTextHint": "When you finish, the recording becomes text",
     "audioOnlyHint": "Saved as audio only, without text",
-    "discardConfirmHint": "Tap the bin again to delete the recording"
+    "discardConfirmHint": "Tap the bin again to delete the recording",
+    "instructionHint": "When you finish, the instruction appears in the field"
   },
   "aux": {
     "emailVerified": "Email verified!",
@@ -949,7 +951,8 @@
     "indent": "Increase indent",
     "outdent": "Decrease indent",
     "quote": "Quote",
-    "hideKeyboard": "Hide keyboard"
+    "hideKeyboard": "Hide keyboard",
+    "dictateInstruction": "Say the instruction"
   },
   "ask": {
     "title": "Ask your notes",

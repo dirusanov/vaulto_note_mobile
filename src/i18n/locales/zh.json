@@ -519,7 +519,8 @@
       "commandLimit": "已达到 AI 使用上限，此指令未执行：“{{text}}”",
       "commandFailed": "无法执行此指令：“{{text}}”",
       "limitNotice": "本月已达到 AI 使用上限：录音将以纯文本添加，不经 AI 整理。",
-      "insertAsText": "作为文本插入"
+      "insertAsText": "作为文本插入",
+      "guestRequestHint": "登录后，AI 会把这样的请求变成清单"
     },
     "improvePreview": {
       "title": "AI 建议",
@@ -745,7 +746,8 @@
     "privateModelMissing": "已开启仅在本机处理，但语音识别模型不可用。录音已保存在设备上。请下载模型以转写文字。",
     "toTextHint": "结束后，录音会转成文字",
     "audioOnlyHint": "仅保存音频，不转文字",
-    "discardConfirmHint": "再次点按垃圾桶即可删除录音"
+    "discardConfirmHint": "再次点按垃圾桶即可删除录音",
+    "instructionHint": "说完后，指令会出现在输入框中"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -947,7 +949,8 @@
     "indent": "增加缩进",
     "outdent": "减少缩进",
     "quote": "引用",
-    "hideKeyboard": "隐藏键盘"
+    "hideKeyboard": "隐藏键盘",
+    "dictateInstruction": "说出指令"
   },
   "ask": {
     "title": "询问笔记",

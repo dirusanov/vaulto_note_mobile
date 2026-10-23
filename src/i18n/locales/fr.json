@@ -519,7 +519,8 @@
       "commandLimit": "Limite IA atteinte, cette demande n’a donc pas été exécutée : « {{text}} »",
       "commandFailed": "Impossible d’exécuter cette demande : « {{text}} »",
       "limitNotice": "Limite IA du mois atteinte : les enregistrements sont ajoutés en texte brut, sans retouche par l’IA.",
-      "insertAsText": "Insérer comme texte"
+      "insertAsText": "Insérer comme texte",
+      "guestRequestHint": "Connectez-vous et l'IA transformera ce genre de demande en liste de tâches"
     },
     "improvePreview": {
       "title": "Suggestion de l'IA",
@@ -745,7 +746,8 @@
     "privateModelMissing": "Le traitement uniquement sur cet appareil est activé, mais le modèle vocal est indisponible. L’enregistrement est conservé sur l’appareil. Téléchargez le modèle pour le transcrire.",
     "toTextHint": "À la fin, l’enregistrement devient du texte",
     "audioOnlyHint": "Enregistré en audio seulement, sans texte",
-    "discardConfirmHint": "Appuyez à nouveau sur la corbeille pour supprimer l’enregistrement"
+    "discardConfirmHint": "Appuyez à nouveau sur la corbeille pour supprimer l’enregistrement",
+    "instructionHint": "Quand vous avez fini, l'instruction apparaît dans le champ"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -947,7 +949,8 @@
     "indent": "Augmenter le retrait",
     "outdent": "Diminuer le retrait",
     "quote": "Citation",
-    "hideKeyboard": "Masquer le clavier"
+    "hideKeyboard": "Masquer le clavier",
+    "dictateInstruction": "Dicter l'instruction"
   },
   "ask": {
     "title": "Interroger vos notes",

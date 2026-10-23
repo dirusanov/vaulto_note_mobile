@@ -137,6 +137,8 @@ const {
     richContentToMarkdown,
     richContentToPreviewText,
     normalizeModelMarkdownForEditor,
+    isEditorEchoOf,
+    isEditorRenderingOf,
     titleMatchesContextScript,
     deriveAutoTitleFromPlainText,
 } = require('../.test-build/md/utils/richContent');
@@ -208,7 +210,22 @@ check('plain markdown passes through', richContentToMarkdown('- [ ] task'), '- [
 check(
     'blank lines around headings and lists are dropped',
     normalizeModelMarkdownForEditor('## Title\n\n\n**List:**\n\n- a\n- b\n\nOne.\n\nTwo.\n'),
-    '## Title\n**List:**\n- a\n- b\nOne.\n\nTwo.'
+    '## Title\n**List:**\n- a\n- b\nOne.\nTwo.'
+);
+check(
+    'a single blank line between paragraphs is only a separator',
+    markdownToTiptapHtml(normalizeModelMarkdownForEditor('First paragraph.\n\nSecond paragraph.\n\nThird.')),
+    '<p>First paragraph.</p><p>Second paragraph.</p><p>Third.</p>'
+);
+check(
+    'two blank lines keep one deliberate empty line',
+    normalizeModelMarkdownForEditor('One.\n\n\nTwo.\n\n\n\nThree.'),
+    'One.\n\nTwo.\n\nThree.'
+);
+check(
+    'empty lines typed in the editor are not touched by the editor conversion',
+    markdownToTiptapHtml('One.\n\nTwo.'),
+    '<p>One.</p><p><br></p><p>Two.</p>'
 );
 check(
     'code fences keep their blank lines',
@@ -216,6 +233,48 @@ check(
     '```\na\n\nb\n```'
 );
 check('html results are left alone', normalizeModelMarkdownForEditor('<p>x</p>'), '<p>x</p>');
+
+// --- undo history: the editor's HTML echo of loaded Markdown is not a step ---
+check(
+    'editor html of loaded markdown is an echo',
+    isEditorEchoOf(
+        '## Plan\nIntro.\n\n- [ ] Milk\n- [x] Bread',
+        '<h2>Plan</h2><p>Intro.</p><p></p><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Milk</p></div></li><li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked="checked"><span></span></label><div><p>Bread</p></div></li></ul>'
+    ),
+    true
+);
+check(
+    'a ticked box is a real change, not an echo',
+    isEditorEchoOf(
+        '- [ ] Milk',
+        '<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked="checked"><span></span></label><div><p>Milk</p></div></li></ul>'
+    ),
+    false
+);
+check('typed text is a real change', isEditorEchoOf('Hello', '<p>Hello!</p>'), false);
+check('html to html is never treated as an echo', isEditorEchoOf('<p><mark data-color="red">a</mark></p>', '<p><mark data-color="blue">a</mark></p>'), false);
+const LOADED_FROM_MARKDOWN = markdownToTiptapHtml('## Plan\nIntro.\n\n- [ ] Milk');
+check(
+    "tiptap's rewrite of loaded markdown counts as its rendering",
+    isEditorRenderingOf(
+        LOADED_FROM_MARKDOWN,
+        '<h2>Plan</h2><p>Intro.</p><p></p><ul data-type="taskList"><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div><p>Milk</p></div></li></ul>'
+    ),
+    true
+);
+check(
+    'the previous text still on screen is not the rendering',
+    isEditorRenderingOf(LOADED_FROM_MARKDOWN, '<p>Old note</p>'),
+    false
+);
+check(
+    'a box ticked after loading is not the rendering',
+    isEditorRenderingOf(
+        LOADED_FROM_MARKDOWN,
+        '<h2>Plan</h2><p>Intro.</p><p></p><ul data-type="taskList"><li data-checked="true" data-type="taskItem"><label><input type="checkbox" checked="checked"><span></span></label><div><p>Milk</p></div></li></ul>'
+    ),
+    false
+);
 
 // --- note card preview ------------------------------------------------------
 check(

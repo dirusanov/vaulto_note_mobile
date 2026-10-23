@@ -109,7 +109,7 @@ import { LimitModal } from '../components/LimitModal';
 import { InlineNotice, InlineNoticeAction } from '../components/InlineNotice';
 import { isAiLimitKnown, noteAccountPlan, takeAiLimitNotice } from '../utils/aiLimitState';
 import { isLimitSheetOpen } from '../utils/limitEvents';
-import { looksLikeVoiceCommand } from '../utils/voiceCommand';
+import { looksLikeVoiceCommand, shouldHintAiForRequest } from '../utils/voiceCommand';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
@@ -122,6 +122,7 @@ import {
     appendPlainTextSnippetToRichContent,
     extractEmbeddedAudioPaths,
     hasMeaningfulRichContent,
+    isEditorEchoOf,
     isRichHtmlContent,
     removeAudioFromRichContent,
     normalizeModelMarkdownForEditor,
@@ -181,6 +182,8 @@ const FLOATING_MIC_BUTTON_SIZE = 56;
 // Breathing room below the last editor line so it clears the docked toolbar
 // (keyboard open) and the Android navigation bar (keyboard closed).
 const EDITOR_CONTENT_BOTTOM_GAP = 24;
+/** The "sign in and the AI will act on requests" hint shows once per app session. */
+let guestRequestHintShown = false;
 
 const normalizeTextForComparison = (value: string): string =>
     value.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim();
@@ -1181,7 +1184,8 @@ export const NoteEditScreen = () => {
     // A voice request the agent could not carry out (kept out of the note, with
     // Retry), or the once-per-session note that the AI allowance is used up.
     const [agentNotice, setAgentNotice] = useState<{
-        kind: 'command' | 'limit';
+        // 'aiHint': a guest dictated a request; it went in as text (once per session).
+        kind: 'command' | 'limit' | 'aiHint';
         message: string;
         text?: string;
         variantId?: string;
@@ -1200,10 +1204,10 @@ export const NoteEditScreen = () => {
             insertPendingCommandRef.current?.(pending.text, pending.variantId);
         }
         setAgentNotice(notice);
-        // It never blocks the note. The limit note goes away on its own; a request
-        // that was not carried out stays until the person inserts it, retries or
-        // closes it, so nothing they said disappears by itself.
-        if (notice.kind === 'limit') {
+        // It never blocks the note. The limit and AI hints go away on their own; a
+        // request that was not carried out stays until the person inserts it,
+        // retries or closes it, so nothing they said disappears by itself.
+        if (notice.kind !== 'command') {
             agentNoticeTimerRef.current = setTimeout(() => {
                 agentNoticeTimerRef.current = null;
                 setAgentNotice(null);
@@ -1363,6 +1367,9 @@ export const NoteEditScreen = () => {
     // History for Undo/Redo - separate for each variant
     const variantHistories = useRef<Record<string, VariantHistory>>({});
     const historyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // The history lives in a ref; this re-renders the Undo/Redo buttons when a
+    // debounced step lands without any other state change (e.g. a ticked box).
+    const [, setHistoryRevision] = useState(0);
 
     // Initialize history for original variant
     if (!variantHistories.current['original']) {
@@ -2643,6 +2650,17 @@ export const NoteEditScreen = () => {
                     titleSaved[imp.id] = titleValue;
                 }
 
+                // A version that is open when the note loads had no Undo baseline:
+                // its first change (a ticked box) only became the baseline, so it
+                // could not be undone. Start its history at the loaded text.
+                if (!variantHistories.current[imp.id] && drafts[imp.id] !== undefined) {
+                    variantHistories.current[imp.id] = {
+                        history: [{ title: titleDrafts[imp.id] ?? titleValue, content: drafts[imp.id] }],
+                        index: 0,
+                    };
+                    if (hasMeaningfulRichContent(drafts[imp.id])) loadedWithTextRef.current.add(imp.id);
+                }
+
                 if (!shouldDeferExternalContentSync && activeVariantId === imp.id && drafts[imp.id] !== undefined) {
                     syncVisibleContent(drafts[imp.id]);
                     syncVisibleTitle(titleDrafts[imp.id] ?? titleValue);
@@ -2809,6 +2827,20 @@ export const NoteEditScreen = () => {
                 history: [],
                 index: -1
             };
+            const hadUndo = currentHistory.index > 0;
+            const hadRedo = currentHistory.index < currentHistory.history.length - 1;
+
+            // The editor reporting back the Markdown it was just given (a new or
+            // reopened version) is the same text, not an edit: it replaces the
+            // step instead of adding one Undo would "undo" without a visible change.
+            const currentEntry = currentHistory.history[currentHistory.index];
+            // Identical text is not an echo: that is a title edit, a step of its own.
+            if (currentEntry && currentEntry.content !== newContent && isEditorEchoOf(currentEntry.content, newContent)) {
+                const nextHistory = [...currentHistory.history];
+                nextHistory[currentHistory.index] = { title: newTitle, content: newContent };
+                variantHistories.current[variantId] = { history: nextHistory, index: currentHistory.index };
+                return;
+            }
 
             const newHistory = currentHistory.history.slice(0, currentHistory.index + 1);
             newHistory.push({ title: newTitle, content: newContent });
@@ -2823,6 +2855,9 @@ export const NoteEditScreen = () => {
                 history: newHistory,
                 index: currentHistory.index
             };
+            if (!hadUndo || hadRedo) {
+                setHistoryRevision(prev => prev + 1);
+            }
         }, 500); // 500ms debounce
     };
 
@@ -4991,6 +5026,7 @@ export const NoteEditScreen = () => {
                                         history: [{ title: improvementTitle, content: newText }],
                                         index: 0,
                                     };
+                                    loadedWithTextRef.current.add(improvement.id);
 
                                     // Optionally keep user on Original even when instruction produced an improvement.
                                     const shouldStayOnOriginal = !!task.preserveOriginalOnInstruction;
@@ -5452,6 +5488,16 @@ export const NoteEditScreen = () => {
         setShowVoiceRecorder(false);
         recordingFlowsInFlightRef.current++;
         setIsRecordingFlowActive(true);
+        // Saving and encrypting the audio takes a moment before the request goes
+        // out; say "Transcribing" right away instead of showing nothing for ~1.5 s.
+        // Cleared below if it turns out nothing is transcribed (offline, no consent).
+        const showsTranscribingEarly = transcribe;
+        // Until the transcription step owns the indicator, any early exit clears it.
+        let earlyTranscribingShown = showsTranscribingEarly;
+        if (showsTranscribingEarly) {
+            setTranscribingOnDevice(isProtectedRef.current || await getOnDeviceTranscription().catch(() => false));
+            setTrackedIsTranscribing(true);
+        }
         try {
             const targetVariantId = activeVariantIdRef.current;
             const wasNewNoteCreation = !localNoteIdRef.current;
@@ -5597,10 +5643,14 @@ export const NoteEditScreen = () => {
             }
 
             // 1. TRY TO TRANSCRIBE (But don't fail if it doesn't work)
+            earlyTranscribingShown = false;
             try {
                 if (!shouldTranscribe) {
-                    // Skip transcription if user opted out
-                    console.log('[NoteEditScreen] Transcription skipped (Toggle OFF)');
+                    const skipReason = skippedOffline
+                        ? 'offline, queued for later'
+                        : transcribe ? 'no consent for cloud transcription' : 'To text toggle off';
+                    console.log(`[NoteEditScreen] Transcription skipped (${skipReason})`);
+                    if (showsTranscribingEarly) setTrackedIsTranscribing(false);
                     transcription = { success: false, text: '', error: 'Transcription disabled' };
                 } else {
                     setTrackedIsTranscribing(true);
@@ -5765,6 +5815,24 @@ export const NoteEditScreen = () => {
                     if (recording.meeting) {
                         void runMeetingSummaryRef.current(transcribedText);
                     }
+                    // Without any voice AI a request ("make a checklist: …") stays
+                    // text; say once that signing in (or the phone model) would act on it.
+                    if (
+                        !recording.meeting
+                        && !shouldBypassAgentForThisRecording
+                        && shouldHintAiForRequest({
+                            transcript: transcribedText,
+                            signedIn: isAuthenticated && !isGuest,
+                            agentAvailable: agentRoute !== null,
+                            alreadyHinted: guestRequestHintShown,
+                        })
+                    ) {
+                        guestRequestHintShown = true;
+                        showAgentNotice({
+                            kind: 'aiHint',
+                            message: t('edit.agent.guestRequestHint', 'Sign in and the AI will turn requests like this into a checklist'),
+                        });
+                    }
                     const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
                     setRecordingOutcomeStatus(voiceId, status);
                     showVoiceResultStatus(status, voiceId);
@@ -5795,6 +5863,7 @@ export const NoteEditScreen = () => {
             setErrorShowSettingsAction(false);
             setErrorModalVisible(true);
         } finally {
+            if (earlyTranscribingShown) setTrackedIsTranscribing(false);
             recordingFlowsInFlightRef.current--;
             setIsRecordingFlowActive(recordingFlowsInFlightRef.current > 0);
         }
@@ -6241,10 +6310,13 @@ export const NoteEditScreen = () => {
             improvementSavedRef.current[improvement.id] = finalText;
             improvementTitleDraftsRef.current[improvement.id] = improvementTitle;
             improvementTitleSavedRef.current[improvement.id] = improvementTitle;
+            // A new version starts with a clean history (Undo off), as one that is
+            // switched to does; the editor's echo of this text is not a step.
             variantHistories.current[improvement.id] = {
                 history: [{ title: improvementTitle, content: finalText }],
                 index: 0
             };
+            loadedWithTextRef.current.add(improvement.id);
 
             setActiveVariantId(improvement.id);
             activeVariantIdRef.current = improvement.id;
@@ -6450,6 +6522,23 @@ export const NoteEditScreen = () => {
                 },
             },
         );
+    } else if (agentNotice?.kind === 'aiHint') {
+        agentNoticeActions.push({
+            label: t('auth.signIn', 'Sign in'),
+            onPress: () => {
+                dismissAgentNotice();
+                navigation.navigate('SignIn');
+            },
+        });
+        if (LOCAL_MODELS_ENABLED) {
+            agentNoticeActions.push({
+                label: t('alerts.aiSetUpOnDevice', 'Set up AI on this device'),
+                onPress: () => {
+                    dismissAgentNotice();
+                    navigation.navigate('Settings', { section: 'voice' });
+                },
+            });
+        }
     } else if (agentNotice?.kind === 'limit' && isAuthenticated && !isGuest && !user?.is_pro && (user?.plan || '').toLowerCase() !== 'pro') {
         agentNoticeActions.push({
             label: t('aux.upgrade', 'Upgrade'),
@@ -7163,6 +7252,8 @@ export const NoteEditScreen = () => {
                                             <TouchableOpacity
                                                 style={styles.customMicHeaderButton}
                                                 onPress={handleVoiceInstructionStart}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={t('a11y.dictateInstruction', 'Say the instruction')}
                                             >
                                                 <MaterialIcons name="mic-none" size={22} color={colors.textSecondary} />
                                             </TouchableOpacity>
@@ -7843,6 +7934,7 @@ export const NoteEditScreen = () => {
                 autoStart
                 micMode={pendingMicInputMode}
                 isMainScreen={false}
+                purpose={isRecordingInstruction ? 'instruction' : 'note'}
                 onFinish={(rec, transcribe) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);

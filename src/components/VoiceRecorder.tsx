@@ -32,6 +32,11 @@ interface VoiceRecorderProps {
     autoStart?: boolean;
     micMode?: 'agent' | 'force_text';
     isMainScreen?: boolean;
+    /**
+     * 'instruction': a spoken AI instruction that only fills a text field, so the
+     * Meeting and To text choices do not apply and are hidden.
+     */
+    purpose?: 'note' | 'instruction';
 }
 
 
@@ -52,7 +57,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     autoStart = false,
     micMode = 'agent',
     isMainScreen = false,
+    purpose = 'note',
 }) => {
+    const isInstruction = purpose === 'instruction';
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [isRecording, setIsRecording] = useState(false);
@@ -72,7 +79,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const warningOpacity = useRef(new Animated.Value(0)).current;
     const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     // Meeting mode: up to an hour, transcribed as is (no agent), then summarised.
-    const [meetingMode, setMeetingMode] = useState(false);
+    const [meetingModeChosen, setMeetingMode] = useState(false);
+    // A spoken instruction is never a meeting, whatever was chosen for notes.
+    const meetingMode = meetingModeChosen && !isInstruction;
     const meetingSegmentsRef = useRef<string[]>([]);
     // Once a meeting has finished parts, it cannot be turned back into a note.
     const [meetingLocked, setMeetingLocked] = useState(false);
@@ -596,6 +605,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             >
                 <View style={styles.container} pointerEvents="box-none">
                     {/* Toggles Row */}
+                    {!isInstruction && (
                     <View style={styles.togglesRow}>
                         {/* Joining meeting parts is Android-only for now (native AudioConcat). */}
                         {micMode !== 'force_text' && Platform.OS === 'android' && (
@@ -670,6 +680,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             </>
                         )}
                     </View>
+                    )}
 
                     {/* What happens on Done, so the chips above explain themselves. */}
                     <Text
@@ -679,6 +690,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     >
                         {confirmDiscard
                             ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording")
+                            : isInstruction
+                                ? t("voice.instructionHint", "When you finish, the instruction appears in the field")
                             : meetingMode
                                 ? t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")
                                 : transcribe || micMode === 'force_text'

@@ -20,7 +20,7 @@ function load(file) {
 }
 
 const limit = load('src/utils/aiLimitState.ts');
-const { looksLikeVoiceCommand } = load('src/utils/voiceCommand.ts');
+const { looksLikeVoiceCommand, shouldHintAiForRequest } = load('src/utils/voiceCommand.ts');
 
 test('only the AI code (or a codeless 403 from an AI endpoint) means the AI allowance', () => {
   assert.equal(limit.isLlmLimitReason('llm_tokens_exhausted'), true);
@@ -81,4 +81,14 @@ test('dictation is not mistaken for a request', () => {
   assert.equal(looksLikeVoiceCommand('Добавь'), false, 'one word is not enough');
   assert.equal(looksLikeVoiceCommand(`Add ${'word '.repeat(30)}`), false, 'long text is dictation');
   assert.equal(looksLikeVoiceCommand(''), false);
+});
+
+test('a guest dictating a request gets the AI hint once', () => {
+  const guest = { signedIn: false, agentAvailable: false, alreadyHinted: false };
+  assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Сделай чек-лист: молоко, хлеб, яйца' }), true);
+  assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Make a checklist: milk, bread, eggs' }), true);
+  assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Make a checklist', alreadyHinted: true }), false, 'once per session');
+  assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Купить молоко, хлеб и кофе' }), false, 'plain dictation');
+  assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Make a checklist', signedIn: true }), false);
+  assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Make a checklist', agentAvailable: true }), false, 'the on-device agent handles it');
 });

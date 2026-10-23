@@ -468,16 +468,19 @@ export const titleMatchesContextScript = (title: string, context: string): boole
 const STRUCTURAL_MARKDOWN_LINE_REGEX = /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>)/;
 
 /**
- * Model output is CommonMark, where a blank line merely separates blocks. The
- * editor adapter maps every blank line to an empty paragraph, so a heading
- * followed by "\n\n" rendered with a visible gap the preview did not have.
- * Blank lines next to headings, list items and quotes are dropped; a single
- * blank line between two plain paragraphs is kept as their separator.
- */
 /** Trailing spaces of every line (Markdown hard breaks) in model output; HTML is left alone. */
 export const stripTrailingLineSpaces = (text: string): string =>
     !text || isRichHtmlContent(text) ? (text || '') : text.replace(/[ \t]+$/gm, '');
 
+/**
+ * Model output is CommonMark, where a blank line merely separates blocks. The
+ * editor adapter makes every line its own paragraph (with the paragraph's own
+ * spacing) and every blank line an empty paragraph, so "One.\n\nTwo." showed a
+ * double gap the preview did not have. A single blank line is only a separator
+ * and is dropped; a run of two or more blank lines between plain paragraphs is
+ * deliberate spacing and keeps one empty line. Blank lines next to headings,
+ * list items and quotes are always dropped.
+ */
 export const normalizeModelMarkdownForEditor = (markdown: string): string => {
     if (!markdown || isRichHtmlContent(markdown)) {
         return markdown || '';
@@ -513,10 +516,43 @@ export const normalizeModelMarkdownForEditor = (markdown: string): string => {
             return;
         }
 
-        result.push('');
+        // Only the second blank line of a run counts: one is a mere separator.
+        const followedByBlank = index + 1 < lines.length && lines[index + 1].trim() === '';
+        if (followedByBlank) {
+            result.push('');
+        }
     });
 
     return result.join('\n');
+};
+
+/**
+ * Whether the HTML the editor reports is its rendering of the HTML it was just
+ * given. Tiptap rewrites what it loads (task items gain a checkbox, attribute
+ * order and empty paragraphs change), so for Markdown-born content, such as an
+ * accepted AI version, the two never matched exactly and every later edit was
+ * held back as "still loading": a ticked box was neither saved nor undoable.
+ */
+export const isEditorRenderingOf = (expectedHtml: string, reportedHtml: string): boolean =>
+    expectedHtml === reportedHtml
+    || richContentToMarkdown(expectedHtml) === richContentToMarkdown(reportedHtml);
+
+/**
+ * Whether `next` is only the editor's own rendering of `previous`: Markdown
+ * loaded into the visual editor comes back as HTML with the same document.
+ * Recording that echo as an undo step made Undo right after a new version
+ * "do nothing" (it went back to the same text in Markdown form). Only a
+ * Markdown -> HTML pair can be an echo; HTML carries details (highlight colours,
+ * drawings) that the Markdown comparison would not see.
+ */
+export const isEditorEchoOf = (previous: string, next: string): boolean => {
+    if (previous === next) {
+        return true;
+    }
+    if (!previous || !next || isRichHtmlContent(previous) || !isRichHtmlContent(next)) {
+        return false;
+    }
+    return richContentToMarkdown(richContentToEditorHtml(previous)) === richContentToMarkdown(next);
 };
 
 export const hasMeaningfulRichContent = (content: string): boolean => {

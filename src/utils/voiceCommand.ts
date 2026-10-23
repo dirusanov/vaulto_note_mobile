@@ -47,3 +47,21 @@ export const looksLikeVoiceCommand = (transcript: string): boolean => {
     while (index < all.length && index < 3 && LEADING_FILLER.has(all[index])) index += 1;
     return COMMAND_VERBS.has(all[index] ?? '');
 };
+
+/**
+ * Whether to tell someone without voice AI (a guest with no on-device model
+ * ready) that what they just dictated reads like a request the AI could carry
+ * out. Their words still go into the note as text; this only decides the one
+ * calm hint per session.
+ */
+export const shouldHintAiForRequest = (options: {
+    transcript: string;
+    signedIn: boolean;
+    /** A voice agent (cloud or on-device) handled this recording. */
+    agentAvailable: boolean;
+    alreadyHinted: boolean;
+}): boolean =>
+    !options.signedIn
+    && !options.agentAvailable
+    && !options.alreadyHinted
+    && looksLikeVoiceCommand(options.transcript);

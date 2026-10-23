@@ -519,7 +519,8 @@
       "commandLimit": "AI の上限に達したため、この指示は実行されませんでした:「{{text}}」",
       "commandFailed": "この指示を実行できませんでした:「{{text}}」",
       "limitNotice": "今月の AI の上限に達しました。録音は AI による整形なしで、そのままテキストとして追加されます。",
-      "insertAsText": "テキストとして挿入"
+      "insertAsText": "テキストとして挿入",
+      "guestRequestHint": "サインインすると、このような依頼を AI がチェックリストに変えます"
     },
     "improvePreview": {
       "title": "AI の提案",
@@ -745,7 +746,8 @@
     "privateModelMissing": "この端末のみでの処理が有効ですが、音声認識モデルが利用できません。録音は端末に保存されています。文字起こしするにはモデルをダウンロードしてください。",
     "toTextHint": "終了すると、録音がテキストになります",
     "audioOnlyHint": "音声のみ保存され、テキストにはなりません",
-    "discardConfirmHint": "もう一度ゴミ箱をタップすると録音を削除します"
+    "discardConfirmHint": "もう一度ゴミ箱をタップすると録音を削除します",
+    "instructionHint": "終了すると、指示が入力欄に表示されます"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -947,7 +949,8 @@
     "indent": "インデントを増やす",
     "outdent": "インデントを減らす",
     "quote": "引用",
-    "hideKeyboard": "キーボードを閉じる"
+    "hideKeyboard": "キーボードを閉じる",
+    "dictateInstruction": "指示を音声で入力"
   },
   "ask": {
     "title": "ノートに質問",

@@ -36,6 +36,7 @@ import {
     getDrawingRuntimeJs,
 } from '../drawing/drawingEmbeds';
 import {
+    isEditorRenderingOf,
     normalizeRichHighlightColors,
     richContentToEditorHtml,
 } from '../utils/richContent';
@@ -948,7 +949,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         }
 
         if (pendingProgrammaticHtmlRef.current !== null) {
-            if (pendingProgrammaticHtmlRef.current === nextHtml) {
+            if (isEditorRenderingOf(pendingProgrammaticHtmlRef.current, nextHtml)) {
                 pendingProgrammaticHtmlRef.current = null;
             }
             lastHtmlRef.current = nextHtml;
@@ -1046,7 +1047,8 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         const normalizedEditorHtml = currentEditorHtml;
         latestHtmlRef.current = normalizedEditorHtml;
         if (pendingProgrammaticHtmlRef.current !== null) {
-            if (pendingProgrammaticHtmlRef.current === normalizedEditorHtml) {
+            // Tiptap's rendering of what it was given, not an edit.
+            if (isEditorRenderingOf(pendingProgrammaticHtmlRef.current, normalizedEditorHtml)) {
                 pendingProgrammaticHtmlRef.current = null;
                 lastHtmlRef.current = normalizedEditorHtml;
             }
