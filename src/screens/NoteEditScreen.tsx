@@ -160,6 +160,7 @@ import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { getAIProvider, storage } from '../utils/storage';
+import { getOfflineStatus } from '../services/offlineMode';
 import { isDeviceOffline } from '../utils/connectivity';
 import { takeSlowTranscriptionHint } from '../services/localSpeechSpeed';
 import NetInfo from '@react-native-community/netinfo';
@@ -972,6 +973,9 @@ const subscribeNoteProcessingState = (
 };
 
 export const NoteEditScreen = () => {
+    // On a phone all header buttons (with Undo/Redo shown) only fit without gaps.
+    const { width: windowWidth } = useWindowDimensions();
+    const compactHeader = windowWidth < 480;
     const { t, i18n } = useTranslation();
     const AGENT_HISTORY_LIMIT = 5;
     // Outer safety net only. It must stay above the inner deadlines
@@ -1765,6 +1769,32 @@ export const NoteEditScreen = () => {
         }
 
         if (isGuest && !isLocalAiProvider) {
+            // A guest who already downloaded the on-device model gets it in one
+            // tap instead of a sign-in prompt that sends them round in a circle.
+            const offline = await getOfflineStatus().catch(() => null);
+            if (offline?.aiReady && isLocalLLMRuntimeAvailable()) {
+                appAlert(
+                    t('settings.models.aiReadyTitle', 'AI on this device is ready'),
+                    t('settings.models.aiReadyGuest', 'Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.', {
+                        option: t('settings.voice.private', 'Only on this device'),
+                    }),
+                    [
+                        { text: t('common.notNow', 'Not now'), style: 'cancel' },
+                        {
+                            text: t('settings.models.turnOn', 'Turn on'),
+                            onPress: () => {
+                                void (async () => {
+                                    await setOnDeviceTranscription(true);
+                                    await setAIProvider('local');
+                                    setCurrentAIProvider('local');
+                                    callback();
+                                })();
+                            },
+                        },
+                    ],
+                );
+                return;
+            }
             setShowAiAuthModal(true);
             return;
         }
@@ -4144,7 +4174,12 @@ export const NoteEditScreen = () => {
     }, [deleteImprovement]);
 
     // Leaving the note must not resurrect a version the user already removed.
-    useEffect(() => () => finalizePendingVariantDelete(), [finalizePendingVariantDelete]);
+    // Only on leaving: the callback's identity changes with the notes context
+    // (e.g. a renewed guest session), and running this cleanup then finalized
+    // the delete before its Undo window was over.
+    const finalizePendingVariantDeleteRef = useRef(finalizePendingVariantDelete);
+    finalizePendingVariantDeleteRef.current = finalizePendingVariantDelete;
+    useEffect(() => () => finalizePendingVariantDeleteRef.current(), []);
 
     const requestDeleteVariant = useCallback(async (improvementId: string) => {
         const noteId = localNoteIdRef.current;
@@ -6864,7 +6899,7 @@ export const NoteEditScreen = () => {
                 <TouchableOpacity onPress={handleBack} style={[styles.iconButton, styles.headerEdgeLeft]} accessibilityRole="button" accessibilityLabel={t("a11y.back", "Back")}>
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
-                <View style={styles.headerRight}>
+                <View style={[styles.headerRight, compactHeader && styles.headerRightCompact]}>
                     {/* Text Appearance Button */}
                     <TouchableOpacity
                         onPress={() => setShowAppearanceModal(true)}
@@ -8109,6 +8144,9 @@ const styles = createStyles(() => ({
         gap: spacing.s,
         // Icons line up with the text edge while their 48dp boxes overhang it.
         marginRight: -12,
+    },
+    headerRightCompact: {
+        gap: 0,
     },
     headerEdgeLeft: {
         marginLeft: -12,
