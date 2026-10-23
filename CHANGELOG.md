@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.0.102] - 2026-10-23
+
+### Fixed
+- Drawing with a pen no longer falls seconds behind: the stroke being drawn is redrawn at most once a frame instead of for every one of the hundreds of pen samples a second.
+
+### Added
+- Notes with a drawing show a small picture of it in the notes list.
+
 ## [1.0.101] - 2026-10-23
 
 ### Added
