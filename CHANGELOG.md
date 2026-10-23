@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.99] - 2026-10-23
+
+### Added
+- Drawing layouts: notebook pages (one under another; a new blank page always follows the last one written on, with a page counter) or an endless canvas that moves in every direction and zooms out to an overview. Chosen in the paper menu; drawings made before keep their endless sheet.
+
+### Changed
+- Handwriting feels natural: what is already written no longer changes shape while the stroke continues or when the pen lifts, the line stays under the nib, and letters keep their curves (lighter smoothing, no predicted tip).
+- On Android every pen sample is delivered to the canvas instead of one per screen frame, so fast writing is smooth instead of angular.
+- Scrolling and panning glide on after a swipe; large drawings render faster.
+
 ## [1.0.98] - 2026-10-22
 
 ### Added
