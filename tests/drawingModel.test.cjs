@@ -65,8 +65,11 @@ test('an update that changes nothing is not an undo step', () => {
 });
 
 test('paper is part of the content and its change can be undone', () => {
-    let s = run([{ type: 'setPaper', paper: { pattern: 'grid', color: '#FFF8E7' } }]);
-    assert.deepEqual(s.content.paper, { pattern: 'grid', color: '#FFF8E7' });
+    let s = run([{ type: 'setPaper', paper: { pattern: 'grid', color: '#FFF8E7', layout: 'pages' } }]);
+    assert.deepEqual(s.content.paper, { pattern: 'grid', color: '#FFF8E7', layout: 'pages' });
+    s = drawingReducer(s, { type: 'setPaper', paper: { pattern: 'grid', color: '#FFF8E7', layout: 'canvas' } });
+    assert.equal(s.content.paper.layout, 'canvas');
     s = drawingReducer(s, { type: 'undo' });
-    assert.deepEqual(s.content.paper, { pattern: 'blank', color: null });
+    s = drawingReducer(s, { type: 'undo' });
+    assert.deepEqual(s.content.paper, { pattern: 'blank', color: null, layout: 'pages' });
 });

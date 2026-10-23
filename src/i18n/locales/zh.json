@@ -1086,7 +1086,12 @@
       "smallGrid": "细方格",
       "lines": "横线",
       "wideLines": "宽横线",
-      "margin": "笔记本"
+      "margin": "笔记本",
+      "layout": "版式",
+      "pages": "页面",
+      "canvas": "画布",
+      "pagesHint": "像笔记本一样逐页书写",
+      "canvasHint": "向各个方向无限延伸"
     }
   }
 }

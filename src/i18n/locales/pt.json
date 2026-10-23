@@ -1086,7 +1086,12 @@
       "smallGrid": "Quadriculado fino",
       "lines": "Pautado",
       "wideLines": "Linhas largas",
-      "margin": "Caderno"
+      "margin": "Caderno",
+      "layout": "Formato",
+      "pages": "Páginas",
+      "canvas": "Tela",
+      "pagesHint": "Página por página, como um caderno",
+      "canvasHint": "Infinita em todas as direções"
     }
   }
 }

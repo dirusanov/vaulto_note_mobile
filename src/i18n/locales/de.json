@@ -1086,7 +1086,12 @@
       "smallGrid": "Fein kariert",
       "lines": "Liniert",
       "wideLines": "Breite Linien",
-      "margin": "Heft"
+      "margin": "Heft",
+      "layout": "Format",
+      "pages": "Seiten",
+      "canvas": "Leinwand",
+      "pagesHint": "Seite für Seite, wie ein Heft",
+      "canvasHint": "Endlos in alle Richtungen"
     }
   }
 }

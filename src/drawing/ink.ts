@@ -38,12 +38,14 @@ export type InkToolSpec = {
     sizes: number[];
 };
 
+// Light smoothing only: a pen is precise, and heavy smoothing rounded letters
+// off and made the line trail behind the nib.
 export const INK_TOOLS: Record<InkTool, InkToolSpec> = {
-    fountain: { thinning: 0.55, streamline: 0.45, taper: true, opacity: 1, nib: 0.6, grain: false, sizes: [2, 3.2, 4.8, 7, 10] },
-    ballpoint: { thinning: 0.12, streamline: 0.4, taper: false, opacity: 1, nib: 0, grain: false, sizes: [1.2, 1.9, 2.8, 4, 5.5] },
-    pencil: { thinning: 0.35, streamline: 0.3, taper: true, opacity: 0.9, nib: 0, grain: true, sizes: [1.4, 2.2, 3.2, 4.6, 6.5] },
-    marker: { thinning: 0, streamline: 0.55, taper: false, opacity: 0.38, nib: 0, grain: false, sizes: [10, 14, 20, 28, 38] },
-    brush: { thinning: 1.15, streamline: 0.55, taper: true, opacity: 1, nib: 0, grain: false, sizes: [5, 8, 12, 18, 26] },
+    fountain: { thinning: 0.55, streamline: 0.18, taper: true, opacity: 1, nib: 0.6, grain: false, sizes: [2, 3.2, 4.8, 7, 10] },
+    ballpoint: { thinning: 0.12, streamline: 0.15, taper: false, opacity: 1, nib: 0, grain: false, sizes: [1.2, 1.9, 2.8, 4, 5.5] },
+    pencil: { thinning: 0.35, streamline: 0.12, taper: true, opacity: 0.9, nib: 0, grain: true, sizes: [1.4, 2.2, 3.2, 4.6, 6.5] },
+    marker: { thinning: 0, streamline: 0.25, taper: false, opacity: 0.38, nib: 0, grain: false, sizes: [10, 14, 20, 28, 38] },
+    brush: { thinning: 1.15, streamline: 0.25, taper: true, opacity: 1, nib: 0, grain: false, sizes: [5, 8, 12, 18, 26] },
 };
 
 export const INK_TOOL_ORDER: InkTool[] = ['fountain', 'ballpoint', 'pencil', 'brush', 'marker'];
@@ -93,8 +95,11 @@ const CAP_STEPS = 8;
 
 /**
  * Filled outline of a pressure-sensitive stroke as a flat [x, y, ...] polygon.
- * `complete` is false while the stroke is still being drawn: its end then
- * stays at full width instead of tapering, so the tip does not jump.
+ *
+ * Every step only looks backwards (smoothing, pressure, the taper at the start,
+ * the nib direction), so the outline of a stroke's beginning never changes as
+ * the stroke grows: the line you wrote stays exactly as it appeared, and
+ * lifting the pen changes nothing. Only the last sample or two follow the pen.
  */
 export function strokeOutline(
     points: number[],
@@ -102,7 +107,6 @@ export function strokeOutline(
     thinning: number,
     streamline: number,
     taper: boolean,
-    complete: boolean,
     nib: number = 0
 ): number[] {
     'worklet';
@@ -114,59 +118,58 @@ export function strokeOutline(
     const xs: number[] = [];
     const ys: number[] = [];
     const rs: number[] = [];
+    const dist: number[] = [];
     const minRadius = size * 0.08;
+    const taperLength = size * 2.5;
+    // Direction for the nib is taken over this much of the line behind a point,
+    // so hand tremor does not flicker the width.
+    const nibReach = Math.max(1.5, size * 0.6);
     let sx = points[0];
     let sy = points[1];
     let sp = points[2];
+    let travelled = 0;
     for (let i = 0; i < count; i++) {
-        const x = points[i * 3];
-        const y = points[i * 3 + 1];
-        const p = points[i * 3 + 2];
         if (i > 0) {
-            sx += (x - sx) * (1 - streamline);
-            sy += (y - sy) * (1 - streamline);
-            sp += (p - sp) * 0.35;
+            sx += (points[i * 3] - sx) * (1 - streamline);
+            sy += (points[i * 3 + 1] - sy) * (1 - streamline);
+            sp += (points[i * 3 + 2] - sp) * 0.35;
             const last = xs.length - 1;
             const dx = sx - xs[last];
             const dy = sy - ys[last];
+            const step2 = dx * dx + dy * dy;
             // Dense samples add nothing but outline points.
-            if (dx * dx + dy * dy < 0.6 && i < count - 1) {
+            if (step2 < 0.6) {
                 continue;
             }
+            travelled += Math.sqrt(step2);
+        }
+        let r = Math.max(minRadius, (size / 2) * (1 + thinning * (sp - 0.5) * 1.6));
+        if (taper && travelled < taperLength) {
+            // Ease-out so the tip narrows quickly and then holds.
+            const t = travelled / taperLength;
+            r = Math.max(minRadius, r * (0.3 + 0.7 * (1 - (1 - t) * (1 - t))));
         }
         xs.push(sx);
         ys.push(sy);
-        rs.push(Math.max(minRadius, (size / 2) * (1 + thinning * (sp - 0.5) * 1.6)));
+        rs.push(r);
+        dist.push(travelled);
     }
     if (count > 1) {
-        // The streamlined line lags the pen; end exactly under it, both while
-        // drawing (the tip follows the pen) and where it lifted.
-        xs.push(points[(count - 1) * 3]);
-        ys.push(points[(count - 1) * 3 + 1]);
-        rs.push(rs[rs.length - 1]);
+        // The smoothed line lags the pen by a fraction of a sample: end exactly
+        // under it, so the ink stays attached to the nib.
+        const lx = points[(count - 1) * 3];
+        const ly = points[(count - 1) * 3 + 1];
+        const last = xs.length - 1;
+        const gap = Math.hypot(lx - xs[last], ly - ys[last]);
+        if (gap > 0.05) {
+            xs.push(lx);
+            ys.push(ly);
+            rs.push(rs[last]);
+            dist.push(dist[last] + gap);
+        }
     }
 
     const n = xs.length;
-    if (taper && n > 2) {
-        let total = 0;
-        const dist: number[] = [0];
-        for (let i = 1; i < n; i++) {
-            total += Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
-            dist.push(total);
-        }
-        const taperLength = Math.min(size * 3, total / 2);
-        if (taperLength > 0) {
-            for (let i = 0; i < n; i++) {
-                const fromStart = Math.min(1, dist[i] / taperLength);
-                const fromEnd = complete ? Math.min(1, (total - dist[i]) / taperLength) : 1;
-                const t = Math.min(fromStart, fromEnd);
-                // Ease-out so the tip narrows quickly and then holds.
-                const eased = 1 - (1 - t) * (1 - t);
-                rs[i] = Math.max(minRadius, rs[i] * (0.25 + 0.75 * eased));
-            }
-        }
-    }
-
     const outline: number[] = [];
     if (n === 1) {
         const r = rs[0];
@@ -181,6 +184,7 @@ export function strokeOutline(
     const right: number[] = [];
     const dirX: number[] = [];
     const dirY: number[] = [];
+    let back = 0;
     for (let i = 0; i < n; i++) {
         const a = Math.max(0, i - 1);
         const b = Math.min(n - 1, i + 1);
@@ -192,7 +196,15 @@ export function strokeOutline(
         if (nib > 0) {
             // Width follows the angle between the stroke and a 45° nib edge:
             // thick downstrokes, hairline diagonals, like a real fountain pen.
-            const across = Math.abs(dx * 0.7071 + dy * 0.7071);
+            while (back < i && dist[i] - dist[back + 1] >= nibReach) {
+                back += 1;
+            }
+            const j = back < i ? back : 0;
+            const k = back < i ? i : Math.min(n - 1, 1);
+            const ndx = xs[k] - xs[j];
+            const ndy = ys[k] - ys[j];
+            const nl = Math.hypot(ndx, ndy) || 1;
+            const across = Math.abs((ndx / nl) * 0.7071 + (ndy / nl) * 0.7071);
             rs[i] = Math.max(minRadius, rs[i] * (1 - nib + nib * 1.25 * across));
         }
         dirX.push(dx);
@@ -230,10 +242,10 @@ export function strokeOutline(
     return outline;
 }
 
-export function strokeOutlineFor(stroke: InkStroke, complete: boolean = true): number[] {
+export function strokeOutlineFor(stroke: InkStroke): number[] {
     'worklet';
     const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
-    return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper, complete, spec.nib);
+    return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper, spec.nib);
 }
 
 /**
@@ -270,16 +282,23 @@ export const outlineToSvgPath = (outline: number[], scale: number = 2): string =
     return segments >= 2 ? `${d}z` : '';
 };
 
-export const strokeBounds = (strokes: InkStroke[]): { minY: number; maxY: number } | null => {
+export type InkBounds = { minX: number; minY: number; maxX: number; maxY: number };
+
+export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
+    let minX = Infinity;
     let minY = Infinity;
+    let maxX = -Infinity;
     let maxY = -Infinity;
     strokes.forEach((stroke) => {
-        for (let i = 1; i < stroke.points.length; i += 3) {
-            minY = Math.min(minY, stroke.points[i] - stroke.size);
-            maxY = Math.max(maxY, stroke.points[i] + stroke.size);
+        const pts = stroke.points;
+        for (let i = 0; i + 1 < pts.length; i += 3) {
+            minX = Math.min(minX, pts[i] - stroke.size);
+            maxX = Math.max(maxX, pts[i] + stroke.size);
+            minY = Math.min(minY, pts[i + 1] - stroke.size);
+            maxY = Math.max(maxY, pts[i + 1] + stroke.size);
         }
     });
-    return Number.isFinite(minY) ? { minY, maxY } : null;
+    return Number.isFinite(minY) ? { minX, minY, maxX, maxY } : null;
 };
 
 /** True when the eraser circle at (x, y) touches the stroke. */

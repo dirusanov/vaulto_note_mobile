@@ -102,7 +102,7 @@ test('typed labels and the paper survive the round trip and show in the preview'
         width: 760,
         strokes: [],
         texts: [{ x: 40.5, y: 100, text: 'Купить <молоко> & "хлеб" #1\nвторая строка', size: 24, color: '#E53935' }],
-        paper: { pattern: 'margin', color: '#FFF8E7' },
+        paper: { pattern: 'margin', color: '#FFF8E7', layout: 'canvas' },
     };
     const src = buildDrawingSrc(doc);
     const parsed = parseDrawingSrc(src);
@@ -119,7 +119,7 @@ test('typed labels and the paper survive the round trip and show in the preview'
 test('drawings without paper keep the compact, cropped preview', () => {
     const src = buildDrawingSrc({ id: 'p0', width: 400, strokes: [{ tool: 'ballpoint', color: '#1D1D1F', size: 2, points: [10, 300, 0.5, 60, 320, 0.5] }] });
     const parsed = parseDrawingSrc(src);
-    assert.deepEqual(parsed.paper, { pattern: 'blank', color: null });
+    assert.deepEqual(parsed.paper, { pattern: 'blank', color: null, layout: 'pages' });
     assert.deepEqual(parsed.texts, []);
     assert.ok(!src.includes('pattern'));
     assert.ok(!src.includes("'vp'"));
@@ -168,4 +168,61 @@ test('a drawing can be put into note HTML without the editor', () => {
     assert.equal(added, `<p>x</p><img src="${a2}"><p></p>`);
     assert.equal(upsertDrawingInHtml(html, 'a', null), `<p>x</p><img src="${b}"><p>y</p>`);
     assert.equal(upsertDrawingInHtml('<p>x</p>', 'zzz', null), '<p>x</p>');
+});
+
+test('a drawing saved before pages existed opens as a canvas', () => {
+    const src = buildDrawingSrc({ id: 'old', width: 400, strokes: [] });
+    const at = src.indexOf(DRAWING_MARKER) + DRAWING_MARKER.length;
+    const payload = JSON.parse(decodeURIComponent(src.slice(at)));
+    assert.deepEqual(payload.p, [0, null, 0]);
+    delete payload.p;
+    const legacy = src.slice(0, at) + encodeURIComponent(JSON.stringify(payload));
+    assert.equal(parseDrawingSrc(legacy).paper.layout, 'canvas');
+});
+
+test('a canvas preview frames the drawing wherever it is', () => {
+    const src = buildDrawingSrc({
+        id: 'c1',
+        width: 800,
+        strokes: [{ tool: 'ballpoint', color: '#000000', size: 2, points: [-300, -200, 0.5, -100, -150, 0.5] }],
+        paper: { pattern: 'grid', color: null, layout: 'canvas' },
+    });
+    const svg = decodeURIComponent(src.slice(0, src.indexOf(DRAWING_MARKER)));
+    const [, x, y, w] = /viewBox='(-?\d+) (-?\d+) (\d+)/.exec(svg).map(Number);
+    assert.ok(x < -600 && y < -400, svg.slice(0, 200));
+    assert.ok(w < 600);
+});
+
+test('pages in the preview are separate sheets, each pattern starting at its page top', () => {
+    const src = buildDrawingSrc({
+        id: 'pg',
+        width: 400,
+        // Something on the second page (pitch = 566 + 24).
+        strokes: [{ tool: 'ballpoint', color: '#000000', size: 2, points: [20, 700, 0.5, 80, 720, 0.5] }],
+        paper: { pattern: 'lines', color: '#FFF8E7', layout: 'pages' },
+    });
+    const svg = decodeURIComponent(src.slice(0, src.indexOf(DRAWING_MARKER)));
+    assert.ok(svg.includes("id='p0'") && svg.includes("id='p1'"));
+    assert.ok(svg.includes(`y='${590 * 2}'`));
+    assert.equal(parseDrawingSrc(src).paper.layout, 'pages');
+});
+
+test('ink already drawn keeps its shape while the stroke goes on', () => {
+    const { strokeOutline, INK_TOOLS } = require('../.test-build/drawing/drawing/ink');
+    // A wavy handwriting-like stroke with changing pressure.
+    const points = [];
+    for (let i = 0; i < 160; i++) {
+        points.push(i * 1.7, 40 + Math.sin(i / 6) * 18, 0.4 + 0.3 * Math.sin(i / 9));
+    }
+    for (const tool of Object.keys(INK_TOOLS)) {
+        const spec = INK_TOOLS[tool];
+        const full = strokeOutline(points, 6, spec.thinning, spec.streamline, spec.taper, spec.nib);
+        for (const cut of [20, 60, 120]) {
+            const part = strokeOutline(points.slice(0, cut * 3), 6, spec.thinning, spec.streamline, spec.taper, spec.nib);
+            // Left edge comes first in the outline; all but the last few samples
+            // (the tip under the pen) must match the finished stroke exactly.
+            const stable = (cut - 4) * 2;
+            assert.deepEqual(part.slice(0, stable), full.slice(0, stable), `${tool} at ${cut}`);
+        }
+    }
 });

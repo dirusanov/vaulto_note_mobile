@@ -1088,7 +1088,12 @@
       "smallGrid": "Fine grid",
       "lines": "Lined",
       "wideLines": "Wide lines",
-      "margin": "Notebook"
+      "margin": "Notebook",
+      "layout": "Layout",
+      "pages": "Pages",
+      "canvas": "Canvas",
+      "pagesHint": "Page by page, like a notebook",
+      "canvasHint": "Endless in every direction"
     }
   }
 }

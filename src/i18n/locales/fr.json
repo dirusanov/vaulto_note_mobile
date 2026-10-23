@@ -1086,7 +1086,12 @@
       "smallGrid": "Petits carreaux",
       "lines": "Ligné",
       "wideLines": "Lignes larges",
-      "margin": "Cahier"
+      "margin": "Cahier",
+      "layout": "Format",
+      "pages": "Pages",
+      "canvas": "Toile",
+      "pagesHint": "Page par page, comme un cahier",
+      "canvasHint": "Infini dans toutes les directions"
     }
   }
 }

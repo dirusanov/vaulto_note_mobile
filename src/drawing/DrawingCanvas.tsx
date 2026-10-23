@@ -1,25 +1,50 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { AppState, LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { AppState, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import {
     Canvas,
     Circle,
     ColorMatrix,
     Fill,
+    FilterMode,
     FractalNoise,
     Group,
     Paint,
+    PaintStyle,
     Path,
-    Rect,
+    Picture,
     Skia,
+    SkPaint,
     SkPath,
+    SkPicture,
     Paragraph,
+    TileMode,
 } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, PointerType } from 'react-native-gesture-handler';
-import { runOnJS, runOnUI, useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import {
+    cancelAnimation,
+    runOnJS,
+    runOnUI,
+    useAnimatedReaction,
+    useDerivedValue,
+    useSharedValue,
+    withDecay,
+} from 'react-native-reanimated';
+import { InkInputView } from '../../modules/ink-input';
 import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, strokeOutline, strokeOutlineFor } from './ink';
 import { TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
-import { PAPER_MARGIN_COLOR, PAPER_MARGIN_X, PaperStyle, paperDotRadius, paperGeometry, paperLineColor } from './paper';
+import {
+    PAGE_GAP,
+    PAPER_MARGIN_COLOR,
+    PAPER_MARGIN_X,
+    PaperStyle,
+    pageCountFor,
+    pageHeight,
+    pagePitch,
+    paperDotRadius,
+    paperLineColor,
+    paperStep,
+} from './paper';
 import { LABEL_LAYOUT_WIDTH, paragraphFor } from './textLayout';
 
 export type CanvasMode = 'ink' | 'erase' | 'text';
@@ -73,15 +98,13 @@ type Props = {
     onRedo: () => void;
 };
 
-const MAX_ZOOM = 4;
-/**
- * How far ahead of the last sample the live stroke is drawn, in ms. Input,
- * rendering and display take a couple of frames; drawing where the pen will
- * be by then makes the ink look attached to it (what notebook apps do).
- */
-const PREDICT_MS = 20;
-/** Upper bound of the prediction on screen, so a flick cannot overshoot visibly. */
-const PREDICT_MAX_SCREEN = 28;
+/** Zoom range relative to the fitted width: pages zoom out to an overview, a canvas much further. */
+const PAGES_ZOOM = [0.5, 5];
+const CANVAS_ZOOM = [0.15, 8];
+/** Desk visible above the first page and below the last, in screen pixels. */
+const PAGE_MARGIN = 12;
+/** How far a canvas extends; far beyond anything drawn by hand. */
+const CANVAS_EXTENT = 1e6;
 const ERASER_SCREEN_RADIUS = 14;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
@@ -103,26 +126,87 @@ const outlineToSkPath = (outline: number[]): SkPath => {
     return path.build();
 };
 
-const buildPaperPaths = (paper: PaperStyle, width: number, height: number) => {
-    const { lines, dots } = paperGeometry(paper.pattern, width, height);
-    let linePath: SkPath | null = null;
-    let dotPath: SkPath | null = null;
-    if (lines.length) {
-        const builder = Skia.PathBuilder.Make();
-        for (let i = 0; i < lines.length; i += 4) {
-            builder.moveTo(lines[i], lines[i + 1]);
-            builder.lineTo(lines[i + 2], lines[i + 3]);
-        }
-        linePath = builder.build();
+const pictureBounds = Skia.XYWHRect(-CANVAS_EXTENT, -CANVAS_EXTENT, CANVAS_EXTENT * 2, CANVAS_EXTENT * 2);
+
+/** One cell of the paper pattern, repeated by a shader: any number of pages costs the same. */
+const buildPatternTile = (paper: PaperStyle, lineColor: string, lineWidth: number): SkPicture | null => {
+    const step = paperStep(paper.pattern);
+    if (!step) {
+        return null;
     }
-    if (dots.length) {
-        const builder = Skia.PathBuilder.Make();
-        for (let i = 0; i < dots.length; i += 2) {
-            builder.addCircle(dots[i], dots[i + 1], paperDotRadius);
+    const recorder = Skia.PictureRecorder();
+    const canvas = recorder.beginRecording(Skia.XYWHRect(0, 0, step, step));
+    const paint = Skia.Paint();
+    paint.setAntiAlias(true);
+    paint.setColor(Skia.Color(lineColor));
+    const half = step / 2;
+    if (paper.pattern === 'dots') {
+        canvas.drawCircle(half, half, paperDotRadius, paint);
+    } else {
+        paint.setStrokeWidth(lineWidth);
+        canvas.drawLine(0, half, step, half, paint);
+        if (paper.pattern === 'grid' || paper.pattern === 'smallGrid') {
+            canvas.drawLine(half, 0, half, step, paint);
         }
-        dotPath = builder.build();
     }
-    return { linePath, dotPath };
+    return recorder.finishRecordingAsPicture();
+};
+
+const patternPaint = (tile: SkPicture, step: number, originY: number): SkPaint => {
+    const paint = Skia.Paint();
+    const matrix = Skia.Matrix();
+    matrix.translate(0, originY);
+    paint.setShader(tile.makeShader(TileMode.Repeat, TileMode.Repeat, FilterMode.Linear, matrix, Skia.XYWHRect(0, 0, step, step)));
+    return paint;
+};
+
+type Sheet = { x: number; y: number; width: number; height: number };
+
+/**
+ * The paper as two pictures: the sheets (colour, page edges) and the pattern on
+ * them, which fades out when zoomed so far out that it would only shimmer.
+ */
+const buildPaper = (
+    paper: PaperStyle,
+    sheets: Sheet[],
+    sheetColor: string,
+    lineColor: string,
+    lineWidth: number,
+): { sheet: SkPicture; pattern: SkPicture | null } => {
+    const sheetRecorder = Skia.PictureRecorder();
+    const sheetCanvas = sheetRecorder.beginRecording(pictureBounds);
+    const fill = Skia.Paint();
+    fill.setColor(Skia.Color(sheetColor));
+    const edge = Skia.Paint();
+    edge.setAntiAlias(true);
+    edge.setColor(Skia.Color('rgba(0,0,0,0.10)'));
+    edge.setStyle(PaintStyle.Stroke);
+    edge.setStrokeWidth(lineWidth);
+    sheets.forEach((rect) => {
+        sheetCanvas.drawRect(Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height), fill);
+        if (sheets.length > 1 || rect.width < CANVAS_EXTENT) {
+            sheetCanvas.drawRect(Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height), edge);
+        }
+    });
+    const sheet = sheetRecorder.finishRecordingAsPicture();
+
+    const tile = buildPatternTile(paper, lineColor, lineWidth);
+    if (!tile) {
+        return { sheet, pattern: null };
+    }
+    const step = paperStep(paper.pattern);
+    const patternRecorder = Skia.PictureRecorder();
+    const patternCanvas = patternRecorder.beginRecording(pictureBounds);
+    const margin = Skia.Paint();
+    margin.setColor(Skia.Color(PAPER_MARGIN_COLOR));
+    sheets.forEach((rect) => {
+        // Each page starts its pattern at its own top edge, as printed paper does.
+        patternCanvas.drawRect(Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height), patternPaint(tile, step, rect.y));
+        if (paper.pattern === 'margin') {
+            patternCanvas.drawRect(Skia.XYWHRect(PAPER_MARGIN_X - lineWidth / 2, rect.y, lineWidth, rect.height), margin);
+        }
+    });
+    return { sheet, pattern: patternRecorder.finishRecordingAsPicture() };
 };
 
 // Graphite texture: fractal noise mapped to the ink colour's alpha. The noise is
@@ -142,6 +226,59 @@ const pathFor = (stroke: InkStroke): SkPath => {
         pathCache.set(stroke, path);
     }
     return path;
+};
+
+const paintCache = new Map<string, SkPaint>();
+const grainShader = Skia.Shader.MakeFractalNoise(0.9, 0.9, 2, 3, 0, 0);
+const paintFor = (stroke: InkStroke): SkPaint => {
+    const key = `${stroke.tool}|${stroke.color}`;
+    let paint = paintCache.get(key);
+    if (!paint) {
+        const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
+        paint = Skia.Paint();
+        paint.setAntiAlias(true);
+        paint.setColor(Skia.Color(stroke.color));
+        if (spec.grain) {
+            // Same graphite as the live stroke (PencilGrain), opacity folded into the alpha row.
+            const matrix = pencilGrainMatrix(stroke.color);
+            for (let i = 15; i < 20; i++) {
+                matrix[i] *= spec.opacity;
+            }
+            paint.setShader(grainShader);
+            paint.setColorFilter(Skia.ColorFilter.MakeMatrix(matrix));
+        } else {
+            paint.setAlphaf(spec.opacity);
+        }
+        paintCache.set(key, paint);
+    }
+    return paint;
+};
+
+type InkCache = { strokes: InkStroke[]; picture: SkPicture | null; depth: number };
+/** Pictures nested by appending before the chain is flattened again. */
+const MAX_PICTURE_DEPTH = 24;
+
+/**
+ * Finished strokes as one picture: one node for Skia to draw instead of a node
+ * per stroke for React to diff. A new stroke on top of the previous ones (the
+ * usual case) just draws the previous picture and the new path.
+ */
+const buildInkPicture = (cache: InkCache, strokes: InkStroke[]): InkCache => {
+    const recorder = Skia.PictureRecorder();
+    const canvas = recorder.beginRecording(pictureBounds);
+    const previous = cache.strokes;
+    let start = 0;
+    let depth = 0;
+    if (cache.picture && previous.length > 0 && strokes.length > previous.length && cache.depth < MAX_PICTURE_DEPTH
+        && previous.every((stroke, index) => strokes[index] === stroke)) {
+        canvas.drawPicture(cache.picture);
+        start = previous.length;
+        depth = cache.depth + 1;
+    }
+    for (let i = start; i < strokes.length; i++) {
+        canvas.drawPath(pathFor(strokes[i]), paintFor(strokes[i]));
+    }
+    return { strokes, picture: recorder.finishRecordingAsPicture(), depth };
 };
 
 const Label: React.FC<{ item: InkText }> = ({ item }) => (
@@ -175,15 +312,33 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // A drawing is shown at its own width, fitted to the screen when it is wider
     // (one started on a tablet, opened on a phone) and centred when narrower.
     const baseScale = view.width > 0 ? Math.min(1, view.width / docWidth) : 1;
+    const isPages = paper.layout !== 'canvas';
+
+    const bounds = useMemo(() => drawingBounds(strokes, texts), [strokes, texts]);
+    const pageCount = isPages ? pageCountFor(docWidth, bounds ? bounds.maxY : null) : 0;
+    const pitch = pagePitch(docWidth);
+    const sheets = useMemo<Sheet[]>(() => {
+        if (!isPages) {
+            return [{ x: -CANVAS_EXTENT, y: -CANVAS_EXTENT, width: CANVAS_EXTENT * 2, height: CANVAS_EXTENT * 2 }];
+        }
+        return Array.from({ length: pageCount }, (_, index) => ({
+            x: 0,
+            y: index * pitch,
+            width: docWidth,
+            height: pageHeight(docWidth),
+        }));
+    }, [isPages, pageCount, pitch, docWidth]);
 
     const zoom = useSharedValue(1);
     const tx = useSharedValue(0);
-    const ty = useSharedValue(0);
+    const ty = useSharedValue(PAGE_MARGIN);
     const scaleSV = useSharedValue(baseScale);
     const docW = useSharedValue(docWidth);
     const viewW = useSharedValue(0);
     const viewH = useSharedValue(0);
-    const contentBottom = useSharedValue(0);
+    /** Height of all pages in document units; 0 for a canvas, which has no edges. */
+    const pagesHeight = useSharedValue(0);
+    const pitchSV = useSharedValue(pitch);
     const bottomInsetSV = useSharedValue(0);
     // The JS thread does not see a shared value it wrote in the same tick, so
     // panBy (JS) reads the inset from a ref; worklets read the shared value.
@@ -193,9 +348,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const live = useSharedValue<number[]>([]);
     const liveId = useSharedValue(0);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
-    /** Pen velocity in document units per ms (smoothed) and the predicted tip it gives. */
-    const motion = useSharedValue({ x: 0, y: 0, t: 0, vx: 0, vy: 0 });
-    const predicted = useSharedValue<number[]>([]);
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
     const hover = useSharedValue({ x: -100, y: -100, visible: false });
@@ -206,6 +358,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const multiTouch = useSharedValue(false);
     const stylusSeen = useSharedValue(false);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
+    const [currentPage, setCurrentPage] = useState(0);
 
     const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly });
     useEffect(() => {
@@ -219,43 +372,49 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         });
     }, [texts, textBoxes, textBoxesSV]);
 
+    /** Where the view may scroll to: pages stop at the first and last sheet, a canvas never does. */
+    const scrollLimits = (z: number, inset: number) => {
+        'worklet';
+        if (pagesHeight.value <= 0) {
+            return { minX: -CANVAS_EXTENT, maxX: CANVAS_EXTENT, minY: -CANVAS_EXTENT, maxY: CANVAS_EXTENT };
+        }
+        const s = scaleSV.value * z;
+        const pageWidth = docW.value * s;
+        const centred = (viewW.value - pageWidth) / 2;
+        const minX = pageWidth <= viewW.value ? centred : viewW.value - pageWidth;
+        const maxX = pageWidth <= viewW.value ? centred : 0;
+        const minY = Math.min(PAGE_MARGIN, viewH.value - inset - pagesHeight.value * s - PAGE_MARGIN);
+        return { minX, maxX, minY, maxY: PAGE_MARGIN };
+    };
+
+    const zoomLimits = () => {
+        'worklet';
+        return pagesHeight.value > 0 ? PAGES_ZOOM : CANVAS_ZOOM;
+    };
+
+    const clampPan = () => {
+        'worklet';
+        const limits = scrollLimits(zoom.value, bottomInsetSV.value);
+        tx.value = Math.min(limits.maxX, Math.max(limits.minX, tx.value));
+        ty.value = Math.min(limits.maxY, Math.max(limits.minY, ty.value));
+    };
+
     useEffect(() => {
         scaleSV.value = baseScale;
         viewW.value = view.width;
         viewH.value = view.height;
         docW.value = docWidth;
+        pagesHeight.value = isPages ? pageCount * pitch - PAGE_GAP : 0;
+        pitchSV.value = pitch;
         // On the UI thread, where the values written above are already visible.
-        runOnUI(clampPan)();
+        runOnUI(() => {
+            'worklet';
+            const [minZoom, maxZoom] = zoomLimits();
+            zoom.value = Math.min(maxZoom, Math.max(minZoom, zoom.value));
+            clampPan();
+        })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [baseScale, view, docWidth]);
-
-    const bounds = useMemo(() => drawingBounds(strokes, texts), [strokes, texts]);
-    useEffect(() => {
-        contentBottom.value = bounds ? bounds.maxY : 0;
-    }, [bounds, contentBottom]);
-
-    /**
-     * Lowest scroll offset: past the content by 60% of a screen (room to keep
-     * writing), never less than one screen of page, plus the bottom inset (the
-     * keyboard) so any visible spot can be lifted above it.
-     */
-    const minScrollY = (z: number, inset: number) => {
-        'worklet';
-        const pageHeight = Math.max(contentBottom.value * scaleSV.value * z + viewH.value * 0.6, viewH.value);
-        return -Math.max(0, pageHeight + inset - viewH.value);
-    };
-
-    const clampPan = () => {
-        'worklet';
-        const z = zoom.value;
-        const pageWidth = docW.value * scaleSV.value * z;
-        if (pageWidth <= viewW.value) {
-            tx.value = (viewW.value - pageWidth) / 2;
-        } else {
-            tx.value = Math.min(0, Math.max(viewW.value - pageWidth, tx.value));
-        }
-        ty.value = Math.min(0, Math.max(minScrollY(z, bottomInsetSV.value), ty.value));
-    };
+    }, [baseScale, view, docWidth, isPages, pageCount, pitch]);
 
     useEffect(() => {
         bottomInsetSV.value = bottomInset;
@@ -268,11 +427,30 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             // Applied on the JS thread so the caller gets the clamped distance back
             // at once; the shared values carry it to the UI thread.
             const before = ty.value;
-            const next = Math.min(0, Math.max(minScrollY(zoom.value, bottomInsetRef.current), before + dy));
+            const limits = scrollLimits(zoom.value, bottomInsetRef.current);
+            const next = Math.min(limits.maxY, Math.max(limits.minY, before + dy));
             ty.value = next;
             return next - before;
         },
-    }), [zoom, contentBottom, scaleSV, viewH, bottomInsetSV, ty]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), []);
+
+    // Page number for the indicator, reported to JS only when it changes.
+    useAnimatedReaction(
+        () => {
+            if (pagesHeight.value <= 0) {
+                return 0;
+            }
+            const s = scaleSV.value * zoom.value;
+            const middle = (viewH.value / 2 - ty.value) / s;
+            return Math.max(0, Math.floor(middle / pitchSV.value));
+        },
+        (page, previous) => {
+            if (page !== previous) {
+                runOnJS(setCurrentPage)(page);
+            }
+        }
+    );
 
     const commitLive = useCallback((points: number[], id: number, strokeTool: InkTool, strokeColor: string, strokeSize: number) => {
         onCommit({ tool: strokeTool, color: strokeColor, size: strokeSize, points });
@@ -325,6 +503,24 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         return -1;
     };
 
+    const stopFling = () => {
+        'worklet';
+        cancelAnimation(tx);
+        cancelAnimation(ty);
+    };
+
+    /** Lets the page glide on after a scroll, as scroll views do. */
+    const fling = (velocityX: number, velocityY: number) => {
+        'worklet';
+        const limits = scrollLimits(zoom.value, bottomInsetSV.value);
+        if (limits.maxX > limits.minX) {
+            tx.value = withDecay({ velocity: velocityX, clamp: [limits.minX, limits.maxX], deceleration: 0.997 });
+        }
+        if (limits.maxY > limits.minY) {
+            ty.value = withDecay({ velocity: velocityY, clamp: [limits.minY, limits.maxY], deceleration: 0.997 });
+        }
+    };
+
     const pinchStart = useSharedValue({ zoom: 1, tx: 0, ty: 0 });
     // Shared values and callJs are stable, so the gestures never need rebuilding.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -334,6 +530,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             .minDistance(0)
             .averageTouches(false)
             .onBegin((e) => {
+                // A touch stops a gliding page, wherever it lands.
+                stopFling();
                 const isStylus = e.pointerType === PointerType.STYLUS;
                 if (isStylus && !stylusSeen.value) {
                     // Only the first contact matters to the editor; later ones would
@@ -372,8 +570,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 gestureMode.value = 'draw';
                 const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
                 lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
-                motion.value = { x: pt.x, y: pt.y, t: Date.now(), vx: 0, vy: 0 };
-                predicted.value = [];
                 liveId.value += 1;
                 live.value = [pt.x, pt.y, pressure];
             })
@@ -428,28 +624,17 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     points.push(pt.x, pt.y, pressure);
                     return points;
                 });
-                // Predict the tip from the smoothed velocity; it is drawn, never stored.
-                const now = Date.now();
-                const m = motion.value;
-                const dt = Math.max(1, now - m.t);
-                const vx = m.vx * 0.5 + ((pt.x - m.x) / dt) * 0.5;
-                const vy = m.vy * 0.5 + ((pt.y - m.y) / dt) * 0.5;
-                motion.value = { x: pt.x, y: pt.y, t: now, vx, vy };
-                const scale = scaleSV.value * zoom.value;
-                let ahead = Math.hypot(vx, vy) * PREDICT_MS;
-                const maxAhead = PREDICT_MAX_SCREEN / scale;
-                const factor = ahead > maxAhead ? maxAhead / ahead : 1;
-                ahead *= factor;
-                predicted.value = ahead > 0.5 / scale
-                    ? [pt.x + vx * PREDICT_MS * factor, pt.y + vy * PREDICT_MS * factor, pressure]
-                    : [];
+            })
+            .onEnd((e) => {
+                if (gestureMode.value === 'scroll') {
+                    fling(e.velocityX, e.velocityY);
+                }
             })
             // `success` is not used: a touch that never moves (a tap, the dot over an
             // "i") ends without the pan activating, yet it is a real tap or dot.
             .onFinalize(() => {
                 const current = gestureMode.value;
                 gestureMode.value = 'none';
-                predicted.value = [];
                 if (current === 'text') {
                     const g = textGesture.value;
                     if (g.moved) {
@@ -489,11 +674,13 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             .onStart(() => {
                 // Active only once two fingers are down (onBegin fires on the first).
                 multiTouch.value = true;
+                stopFling();
                 pinchStart.value = { zoom: zoom.value, tx: tx.value, ty: ty.value };
             })
             .onUpdate((e) => {
                 const start = pinchStart.value;
-                const next = Math.min(MAX_ZOOM, Math.max(1, start.zoom * e.scale));
+                const [minZoom, maxZoom] = zoomLimits();
+                const next = Math.min(maxZoom, Math.max(minZoom, start.zoom * e.scale));
                 const ratio = next / start.zoom;
                 zoom.value = next;
                 tx.value = e.focalX - (e.focalX - start.tx) * ratio;
@@ -505,6 +692,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             .minPointers(2)
             .onStart(() => {
                 multiTouch.value = true;
+                stopFling();
             })
             .onChange((e) => {
                 pinchStart.value = {
@@ -515,6 +703,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 tx.value += e.changeX;
                 ty.value += e.changeY;
                 clampPan();
+            })
+            .onEnd((e) => {
+                fling(e.velocityX, e.velocityY);
             });
 
         const undoTap = Gesture.Tap().minPointers(2).maxDuration(250).onEnd((e, success) => {
@@ -552,9 +743,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const livePath = useDerivedValue(() => {
         const cfg = toolSV.value;
         const spec = INK_TOOLS[cfg.tool];
-        const tip = predicted.value;
-        const points = tip.length ? live.value.concat(tip) : live.value;
-        return outlineToSkPath(strokeOutline(points, cfg.size, spec.thinning, spec.streamline, spec.taper, false, spec.nib));
+        return outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib));
     });
 
     const eraserX = useDerivedValue(() => eraser.value.x);
@@ -571,27 +760,38 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     });
     const hoverOpacity = useDerivedValue(() => (hover.value.visible ? 0.45 : 0));
 
-    const paperHeight = Math.ceil(((bounds?.maxY ?? 0) + (view.height / baseScale) * 3) / 512) * 512;
-    const { linePath, dotPath } = useMemo(
-        () => buildPaperPaths(paper, docWidth, paperHeight),
-        [paper, docWidth, paperHeight]
-    );
     const sheetColor = paper.color || themePaperColor;
     const lineColor = paperLineColor(paper.color, themeLineColor);
     // The theme's own paper flips with dark mode, and so does the ink on it; a
     // sheet with its own colour keeps true colours, as it will in the note.
     const invertInk = dark && !paper.color;
 
-    const strokePaths = strokes.map((stroke, index) => (
-        <Path
-            key={index}
-            path={pathFor(stroke)}
-            color={stroke.color}
-            opacity={INK_TOOLS[stroke.tool]?.opacity ?? 1}
-        >
-            {INK_TOOLS[stroke.tool]?.grain && <PencilGrain color={stroke.color} />}
-        </Path>
-    ));
+    const paperPictures = useMemo(
+        () => buildPaper(paper, sheets, sheetColor, lineColor, 1 / baseScale),
+        [paper, sheets, sheetColor, lineColor, baseScale]
+    );
+    // The pattern fades out once its cells are only a few pixels on screen.
+    const step = paperStep(paper.pattern);
+    const patternOpacity = useDerivedValue(() => {
+        const cell = step * scaleSV.value * zoom.value;
+        return Math.min(1, Math.max(0, (cell - 5) / 5));
+    });
+    // Pages clip the ink at their edges, like paper; a canvas has none.
+    const pageClip = useMemo(() => {
+        if (!isPages) {
+            return undefined;
+        }
+        const builder = Skia.PathBuilder.Make();
+        sheets.forEach((rect) => builder.addRect(Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height)));
+        return builder.build();
+    }, [isPages, sheets]);
+
+    const inkCache = useRef<InkCache>({ strokes: [], picture: null, depth: 0 });
+    const inkPicture = useMemo(() => {
+        inkCache.current = buildInkPicture(inkCache.current, strokes);
+        return inkCache.current.picture as SkPicture;
+    }, [strokes]);
+
     const labels = texts.map((item, index) => (
         index === editingText || index === dragIndex ? null : <Label key={index} item={item} />
     ));
@@ -603,7 +803,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             <ColorMatrix matrix={SMART_INVERT_MATRIX} />
         </Paint>
     ) : undefined;
-    const sheetClip = { x: 0, y: -4000, width: docWidth, height: paperHeight + 8000 };
 
     const handleLayout = (event: LayoutChangeEvent) => {
         const { width, height } = event.nativeEvent.layout;
@@ -611,46 +810,58 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     };
 
     return (
-        <GestureDetector gesture={gesture}>
-            <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
-                {view.width > 0 && (
-                    // Opaque puts the canvas on a SurfaceView on Android, which reaches the
-                    // screen a composition step sooner than the default TextureView; it
-                    // then paints the desk itself.
-                    <Canvas key={surfaceKey} style={styles.fill} opaque>
-                        <Fill color={deskColor} />
-                        <Group transform={transform}>
-                            <Rect {...sheetClip} color={sheetColor} />
-                            <Group clip={sheetClip}>
-                                {linePath && <Path path={linePath} color={lineColor} style="stroke" strokeWidth={1 / baseScale} />}
-                                {dotPath && <Path path={dotPath} color={lineColor} />}
-                                {paper.pattern === 'margin' && (
-                                    <Rect x={PAPER_MARGIN_X - 0.5} y={sheetClip.y} width={1 / baseScale} height={sheetClip.height} color={PAPER_MARGIN_COLOR} />
-                                )}
+        <InkInputView style={styles.fill} collapsable={false}>
+            <GestureDetector gesture={gesture}>
+                <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
+                    {view.width > 0 && (
+                        // Opaque puts the canvas on a SurfaceView on Android, which reaches the
+                        // screen a composition step sooner than the default TextureView; it
+                        // then paints the desk itself.
+                        <Canvas key={surfaceKey} style={styles.fill} opaque>
+                            <Fill color={deskColor} />
+                            <Group transform={transform}>
+                                <Picture picture={paperPictures.sheet} />
+                                {paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
+                                <Group layer={inkLayer} clip={pageClip}>
+                                    <Picture picture={inkPicture} />
+                                    <Path path={livePath} color={color} opacity={liveOpacity}>
+                                        {liveGrain && <PencilGrain color={color} />}
+                                    </Path>
+                                    {labels}
+                                    {dragIndex !== null && texts[dragIndex] && (
+                                        <Group transform={dragTransform}>
+                                            <Label item={texts[dragIndex]} />
+                                        </Group>
+                                    )}
+                                </Group>
                             </Group>
-                            <Group layer={inkLayer} clip={sheetClip}>
-                                {strokePaths}
-                                <Path path={livePath} color={color} opacity={liveOpacity}>
-                                    {liveGrain && <PencilGrain color={color} />}
-                                </Path>
-                                {labels}
-                                {dragIndex !== null && texts[dragIndex] && (
-                                    <Group transform={dragTransform}>
-                                        <Label item={texts[dragIndex]} />
-                                    </Group>
-                                )}
-                            </Group>
-                        </Group>
-                        <Circle cx={eraserX} cy={eraserY} r={ERASER_SCREEN_RADIUS} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
-                        <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
-                    </Canvas>
-                )}
-            </View>
-        </GestureDetector>
+                            <Circle cx={eraserX} cy={eraserY} r={ERASER_SCREEN_RADIUS} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
+                            <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
+                        </Canvas>
+                    )}
+                    {isPages && pageCount > 1 && (
+                        <View pointerEvents="none" style={styles.pageBadge}>
+                            <Text style={styles.pageBadgeText}>{`${Math.min(currentPage, pageCount - 1) + 1} / ${pageCount}`}</Text>
+                        </View>
+                    )}
+                </View>
+            </GestureDetector>
+        </InkInputView>
     );
 });
 DrawingCanvas.displayName = 'DrawingCanvas';
 
 const styles = StyleSheet.create({
     fill: { flex: 1 },
+    pageBadge: {
+        position: 'absolute',
+        right: 12,
+        bottom: 12,
+        paddingHorizontal: 10,
+        height: 26,
+        borderRadius: 13,
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    pageBadgeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

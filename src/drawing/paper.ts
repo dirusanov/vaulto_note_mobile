@@ -9,12 +9,41 @@ export const PAPER_PATTERNS: PaperPattern[] = ['blank', 'dots', 'grid', 'smallGr
 /** `null` is the app's own paper: it follows the theme and inverts with it. */
 export const PAPER_COLORS: (string | null)[] = [null, '#FFFFFF', '#FFF8E7', '#F1F3F5', '#EAF6EC', '#E8F1FB', '#2B2F36'];
 
+/**
+ * `pages`: sheets of a fixed size one under another, like a notebook; a blank
+ * page always follows the last one written on. `canvas`: an unbounded sheet
+ * that pans in every direction, for sketches and diagrams.
+ */
+export type PaperLayout = 'pages' | 'canvas';
+
+export const PAPER_LAYOUTS: PaperLayout[] = ['pages', 'canvas'];
+
 export type PaperStyle = {
     pattern: PaperPattern;
     color: string | null;
+    layout: PaperLayout;
 };
 
-export const DEFAULT_PAPER: PaperStyle = { pattern: 'blank', color: null };
+export const DEFAULT_PAPER: PaperStyle = { pattern: 'blank', color: null, layout: 'pages' };
+
+/** Drawings saved before pages existed were one endless sheet: they open as a canvas. */
+export const LEGACY_PAPER: PaperStyle = { pattern: 'blank', color: null, layout: 'canvas' };
+
+/** A page has the proportions of A4 at the width the drawing was started on. */
+export const PAGE_RATIO = Math.SQRT2;
+export const PAGE_GAP = 24;
+
+export const pageHeight = (width: number): number => Math.round(width * PAGE_RATIO);
+/** Distance from the top of one page to the top of the next. */
+export const pagePitch = (width: number): number => pageHeight(width) + PAGE_GAP;
+
+/** Pages up to the last one with content, plus a blank one to go on writing. */
+export const pageCountFor = (width: number, contentBottom: number | null): number => {
+    if (contentBottom === null || contentBottom <= 0) {
+        return 1;
+    }
+    return Math.floor(contentBottom / pagePitch(width)) + 2;
+};
 
 export const PAPER_MARGIN_X = 72;
 export const PAPER_MARGIN_COLOR = '#E57373';

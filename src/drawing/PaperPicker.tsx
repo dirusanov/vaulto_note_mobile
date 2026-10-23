@@ -1,14 +1,17 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Canvas, Circle, Path, Rect, Skia } from '@shopify/react-native-skia';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
 import { createStyles } from '../theme/createStyles';
 import {
     PAPER_COLORS,
+    PAPER_LAYOUTS,
     PAPER_MARGIN_COLOR,
     PAPER_MARGIN_X,
     PAPER_PATTERNS,
+    PaperLayout,
     PaperPattern,
     PaperStyle,
     paperDotRadius,
@@ -34,6 +37,11 @@ const PATTERN_LABELS: Record<PaperPattern, string> = {
     lines: 'Lined',
     wideLines: 'Wide lines',
     margin: 'Notebook',
+};
+
+const LAYOUTS: Record<PaperLayout, { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; hint: string }> = {
+    pages: { icon: 'book-open-page-variant-outline', label: 'Pages', hint: 'Page by page, like a notebook' },
+    canvas: { icon: 'arrow-expand-all', label: 'Canvas', hint: 'Endless in every direction' },
 };
 
 const PatternPreview: React.FC<{ pattern: PaperPattern; sheet: string; line: string }> = ({ pattern, sheet, line }) => {
@@ -73,6 +81,28 @@ export const PaperPicker: React.FC<Props> = ({ paper, onChange }) => {
 
     return (
         <View style={styles.root}>
+            <Text style={styles.heading}>{t('drawing.paper.layout', 'Layout')}</Text>
+            <View style={styles.layouts}>
+                {PAPER_LAYOUTS.map((layout) => {
+                    const active = layout === paper.layout;
+                    const spec = LAYOUTS[layout];
+                    return (
+                        <TouchableOpacity
+                            key={layout}
+                            onPress={() => onChange({ ...paper, layout })}
+                            style={[styles.layout, active && styles.layoutActive]}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                        >
+                            <MaterialCommunityIcons name={spec.icon} size={22} color={active ? colors.primary : colors.textSecondary} />
+                            <View style={styles.layoutText}>
+                                <Text style={[styles.layoutLabel, active && styles.patternLabelActive]}>{t(`drawing.paper.${layout}`, spec.label)}</Text>
+                                <Text style={styles.layoutHint} numberOfLines={2}>{t(`drawing.paper.${layout}Hint`, spec.hint)}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
             <Text style={styles.heading}>{t('drawing.paper.pattern', 'Pattern')}</Text>
             <View style={styles.patterns}>
                 {PAPER_PATTERNS.map((pattern) => {
@@ -123,6 +153,21 @@ export const PaperPicker: React.FC<Props> = ({ paper, onChange }) => {
 const styles = createStyles(() => ({
     root: { gap: 10 },
     heading: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    layouts: { flexDirection: 'row', gap: 8 },
+    layout: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 10,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: colors.border,
+    },
+    layoutActive: { borderColor: colors.primary },
+    layoutText: { flex: 1 },
+    layoutLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
+    layoutHint: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
     patterns: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     patternItem: { alignItems: 'center', width: TILE_W + 8 },
     tile: { borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: colors.border },

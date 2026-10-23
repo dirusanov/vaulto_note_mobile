@@ -1,10 +1,14 @@
-import { INK_TEXT_LINE_HEIGHT, INK_TOOLS, INK_TOOL_ORDER, InkStroke, InkText, InkTool, outlineToSvgPath, strokeBounds, strokeOutlineFor } from './ink';
+import { INK_TEXT_LINE_HEIGHT, INK_TOOLS, INK_TOOL_ORDER, InkBounds, InkStroke, InkText, InkTool, outlineToSvgPath, strokeBounds, strokeOutlineFor } from './ink';
 import {
     DEFAULT_PAPER,
+    LEGACY_PAPER,
+    PAPER_LAYOUTS,
     PAPER_MARGIN_COLOR,
     PAPER_MARGIN_X,
     PAPER_PATTERNS,
     PaperStyle,
+    pageHeight,
+    pagePitch,
     paperDotRadius,
     paperLineColor,
     paperStep,
@@ -36,17 +40,21 @@ const SVG_THEME_LINE = '#DEE2E6';
 const escapeXml = (text: string): string =>
     text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&apos;');
 
-/** Vertical extent of everything drawn or typed. */
-export const drawingBounds = (strokes: InkStroke[], texts: InkText[] = []): { minY: number; maxY: number } | null => {
-    const strokeBox = strokeBounds(strokes);
-    let minY = strokeBox ? strokeBox.minY : Infinity;
-    let maxY = strokeBox ? strokeBox.maxY : -Infinity;
+/**
+ * Extent of everything drawn or typed. Label widths are estimated (the font is
+ * not known here): good enough to frame a preview, not to hit-test.
+ */
+export const drawingBounds = (strokes: InkStroke[], texts: InkText[] = []): InkBounds | null => {
+    const box = strokeBounds(strokes) || { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
     texts.forEach((item) => {
-        const lines = Math.max(1, item.text.split('\n').length);
-        minY = Math.min(minY, item.y);
-        maxY = Math.max(maxY, item.y + lines * item.size * INK_TEXT_LINE_HEIGHT);
+        const lines = item.text.split('\n');
+        const longest = lines.reduce((max, line) => Math.max(max, line.length), 1);
+        box.minX = Math.min(box.minX, item.x);
+        box.maxX = Math.max(box.maxX, item.x + longest * item.size * 0.6);
+        box.minY = Math.min(box.minY, item.y);
+        box.maxY = Math.max(box.maxY, item.y + Math.max(1, lines.length) * item.size * INK_TEXT_LINE_HEIGHT);
     });
-    return Number.isFinite(minY) ? { minY, maxY } : null;
+    return Number.isFinite(box.minY) ? box : null;
 };
 
 const PADDING = 16;
@@ -136,8 +144,9 @@ export const parseDrawingSrc = (src: string | null | undefined): DrawingDocument
             ? {
                 pattern: PAPER_PATTERNS[Number(parsed.p[0])] || DEFAULT_PAPER.pattern,
                 color: typeof parsed.p[1] === 'string' ? parsed.p[1] : null,
+                layout: PAPER_LAYOUTS[Number(parsed.p[2])] || LEGACY_PAPER.layout,
             }
-            : DEFAULT_PAPER;
+            : LEGACY_PAPER;
         return {
             id: parsed.id,
             width: Number(parsed.w) || 800,
@@ -150,34 +159,79 @@ export const parseDrawingSrc = (src: string | null | undefined): DrawingDocument
     }
 };
 
+/** SVG pattern tile of the paper, its origin at (0, y) in document coordinates. */
+const patternDef = (id: string, paper: PaperStyle, y: number): string => {
+    const step = paperStep(paper.pattern);
+    const S = SVG_SCALE;
+    const line = paper.color ? paperLineColor(paper.color, SVG_THEME_LINE) : SVG_THEME_LINE;
+    const t = step * S;
+    const half = t / 2;
+    const tile = paper.pattern === 'dots'
+        ? `<circle cx='${half}' cy='${half}' r='${paperDotRadius * S}' fill='${line}'/>`
+        : `<path d='M0 ${half}H${t}${paper.pattern === 'grid' || paper.pattern === 'smallGrid' ? `M${half} 0V${t}` : ''}' stroke='${line}' stroke-width='${S}' fill='none'/>`;
+    return `<pattern id='${id}'${y ? ` y='${Math.round(y * S)}'` : ''} width='${t}' height='${t}' patternUnits='userSpaceOnUse'>${tile}</pattern>`;
+};
+
+/** Paper of the rectangle (document coordinates) as SVG: sheet colour, pattern, margin line. */
+const sheetSvg = (paper: PaperStyle, id: string, x: number, y: number, width: number, height: number): string => {
+    const S = SVG_SCALE;
+    const rect = `x='${Math.round(x * S)}' y='${Math.round(y * S)}' width='${Math.round(width * S)}' height='${Math.round(height * S)}'`;
+    let out = paper.color ? `<rect ${rect} fill='${paper.color}'/>` : '';
+    if (paperStep(paper.pattern)) {
+        out += `<rect ${rect} fill='url(#${id})'/>`;
+        if (paper.pattern === 'margin' && x <= PAPER_MARGIN_X && x + width >= PAPER_MARGIN_X) {
+            out += `<path d='M${PAPER_MARGIN_X * S} ${Math.round(y * S)}v${Math.round(height * S)}' stroke='${PAPER_MARGIN_COLOR}' stroke-width='${S}'/>`;
+        }
+    }
+    return out;
+};
+
 export const buildDrawingSvg = (doc: DrawingDocument): string => {
     const texts = doc.texts || [];
     const paper = doc.paper || DEFAULT_PAPER;
     const hasSheet = !!paper.color || paper.pattern !== 'blank';
     const bounds = drawingBounds(doc.strokes, texts);
-    // A drawing on visible paper keeps its full width of sheet from the top,
-    // like a page; plain ink is cropped to what was drawn.
-    const top = bounds && !hasSheet ? Math.max(0, Math.floor(bounds.minY - PADDING)) : 0;
-    const height = Math.max(MIN_HEIGHT, bounds ? Math.ceil(bounds.maxY + PADDING) - top : MIN_HEIGHT);
-    const width = Math.round(doc.width);
     const S = SVG_SCALE;
+    let left: number;
+    let top: number;
+    let width: number;
+    let height: number;
+    if (paper.layout === 'canvas') {
+        // An unbounded sheet: frame what was drawn, wherever it is.
+        left = bounds ? Math.floor(bounds.minX - PADDING) : 0;
+        top = bounds ? Math.floor(bounds.minY - PADDING) : 0;
+        width = bounds ? Math.ceil(bounds.maxX + PADDING) - left : Math.round(doc.width);
+        height = Math.max(MIN_HEIGHT, bounds ? Math.ceil(bounds.maxY + PADDING) - top : MIN_HEIGHT);
+    } else {
+        // Pages keep their full width and, on visible paper, start at the top of
+        // the first page; plain ink is cropped to what was drawn.
+        left = 0;
+        width = Math.round(doc.width);
+        top = bounds && !hasSheet ? Math.max(0, Math.floor(bounds.minY - PADDING)) : 0;
+        height = Math.max(MIN_HEIGHT, bounds ? Math.ceil(bounds.maxY + PADDING) - top : MIN_HEIGHT);
+    }
     let sheet = '';
     let sheetDefs = '';
-    if (paper.color) {
-        sheet += `<rect x='0' y='${top * S}' width='${width * S}' height='${height * S}' fill='${paper.color}'/>`;
-    }
-    const step = paperStep(paper.pattern);
-    if (step) {
-        const line = paper.color ? paperLineColor(paper.color, SVG_THEME_LINE) : SVG_THEME_LINE;
-        const t = step * S;
-        const half = t / 2;
-        const tile = paper.pattern === 'dots'
-            ? `<circle cx='${half}' cy='${half}' r='${paperDotRadius * S}' fill='${line}'/>`
-            : `<path d='M0 ${half}H${t}${paper.pattern === 'grid' || paper.pattern === 'smallGrid' ? `M${half} 0V${t}` : ''}' stroke='${line}' stroke-width='${S}' fill='none'/>`;
-        sheetDefs = `<pattern id='p' width='${t}' height='${t}' patternUnits='userSpaceOnUse'>${tile}</pattern>`;
-        sheet += `<rect x='0' y='${top * S}' width='${width * S}' height='${height * S}' fill='url(#p)'/>`;
-        if (paper.pattern === 'margin') {
-            sheet += `<path d='M${PAPER_MARGIN_X * S} ${top * S}V${(top + height) * S}' stroke='${PAPER_MARGIN_COLOR}' stroke-width='${S}'/>`;
+    if (hasSheet) {
+        if (paper.layout === 'canvas') {
+            sheetDefs = paperStep(paper.pattern) ? patternDef('p', paper, 0) : '';
+            sheet = sheetSvg(paper, 'p', left, top, width, height);
+        } else {
+            // Each page is its own sheet, the pattern starting at its top edge.
+            const pitch = pagePitch(doc.width);
+            const sheetHeight = pageHeight(doc.width);
+            for (let page = Math.floor(top / pitch); page * pitch < top + height; page++) {
+                const pageTop = page * pitch;
+                const y = Math.max(top, pageTop);
+                const bottom = Math.min(top + height, pageTop + sheetHeight);
+                if (bottom <= y) {
+                    continue;
+                }
+                if (paperStep(paper.pattern)) {
+                    sheetDefs += patternDef(`p${page}`, paper, pageTop);
+                }
+                sheet += sheetSvg(paper, `p${page}`, 0, y, width, bottom - y);
+            }
         }
     }
     const textNodes = texts.map((item) => item.text.split('\n').map((lineText, index) => {
@@ -204,7 +258,7 @@ export const buildDrawingSvg = (doc: DrawingDocument): string => {
         : '';
     const defs = grain || sheetDefs ? `<defs>${sheetDefs}${grain}</defs>` : '';
     // class='vp': a sheet with its own colour must not be inverted in dark mode (see drawingEmbeds).
-    return `<svg xmlns='http://www.w3.org/2000/svg'${paper.color ? " class='vp'" : ''} width='${width}' height='${height}' viewBox='0 ${top * S} ${width * S} ${height * S}'>${defs}${sheet}${paths}${textNodes}</svg>`;
+    return `<svg xmlns='http://www.w3.org/2000/svg'${paper.color ? " class='vp'" : ''} width='${width}' height='${height}' viewBox='${left * S} ${top * S} ${width * S} ${height * S}'>${defs}${sheet}${paths}${textNodes}</svg>`;
 };
 
 export const buildDrawingSrc = (doc: DrawingDocument): string => {
@@ -216,9 +270,12 @@ export const buildDrawingSrc = (doc: DrawingDocument): string => {
         ...(doc.texts && doc.texts.length
             ? { t: doc.texts.map((item) => [Math.round(item.x * 10), Math.round(item.y * 10), Math.round(item.size * 10), item.color, item.text]) }
             : {}),
-        ...(doc.paper && (doc.paper.color || doc.paper.pattern !== 'blank')
-            ? { p: [PAPER_PATTERNS.indexOf(doc.paper.pattern), doc.paper.color] }
-            : {}),
+        // Always stored: a drawing without `p` predates pages and opens as a canvas.
+        p: [
+            PAPER_PATTERNS.indexOf((doc.paper || DEFAULT_PAPER).pattern),
+            (doc.paper || DEFAULT_PAPER).color,
+            PAPER_LAYOUTS.indexOf((doc.paper || DEFAULT_PAPER).layout),
+        ],
     };
     return `data:image/svg+xml;charset=utf-8,${escapeForSrc(buildDrawingSvg(doc))}${DRAWING_MARKER}${escapePayload(JSON.stringify(payload))}`;
 };

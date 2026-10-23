@@ -1086,7 +1086,12 @@
       "smallGrid": "細かい方眼",
       "lines": "罫線",
       "wideLines": "広い罫線",
-      "margin": "ノート"
+      "margin": "ノート",
+      "layout": "レイアウト",
+      "pages": "ページ",
+      "canvas": "キャンバス",
+      "pagesHint": "ノートのように1ページずつ",
+      "canvasHint": "どの方向にも無限"
     }
   }
 }

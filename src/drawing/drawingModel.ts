@@ -112,7 +112,8 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
                 texts: state.content.texts.filter((_item, index) => index !== action.index),
             });
         case 'setPaper':
-            if (state.content.paper.pattern === action.paper.pattern && state.content.paper.color === action.paper.color) {
+            const { pattern, color, layout } = state.content.paper;
+            if (pattern === action.paper.pattern && color === action.paper.color && layout === action.paper.layout) {
                 return state;
             }
             return commit(state, { ...state.content, paper: action.paper });
