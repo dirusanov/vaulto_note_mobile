@@ -16,6 +16,8 @@
 - The end of a finger stroke is no longer cut short.
 - A fast eraser stroke erases everything along its path, not only where the touch samples landed.
 
+- The launch screen in dark mode shows a light logo on the dark background instead of a white square around it.
+
 ### Changed
 - The dot shown under a hovering pen is fainter.
 
