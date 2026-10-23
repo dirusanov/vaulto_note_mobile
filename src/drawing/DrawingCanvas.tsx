@@ -26,11 +26,13 @@ import {
     runOnUI,
     useAnimatedReaction,
     useDerivedValue,
+    useFrameCallback,
     useSharedValue,
     withDecay,
 } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
-import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, strokeOutline, strokeOutlineFor } from './ink';
+import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, strokeOutline, strokeOutlineFor } from './ink';
 import { TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
 import {
@@ -84,6 +86,8 @@ type Props = {
     stylusOnly: boolean;
     /** Eraser radius in screen pixels. */
     eraserRadius: number;
+    /** A stroke held still at its end becomes the clean shape it resembles. */
+    snapShapes: boolean;
     /** Label being edited in the text field overlay; the canvas does not draw it. */
     editingText: number | null;
     dark: boolean;
@@ -112,6 +116,10 @@ const CANVAS_EXTENT = 1e6;
 const ERASE_STEP = 3;
 /** Shortest interval over which finger speed (and so ink width) is measured. */
 const SPEED_WINDOW_MS = 8;
+/** How long the pen rests at the end of a stroke before it becomes a shape. */
+const SHAPE_HOLD_MS = 550;
+/** Screen distance the pen may wander while resting. */
+const SHAPE_STILL_PX = 6;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
 
@@ -301,7 +309,7 @@ const Label: React.FC<{ item: InkText }> = ({ item }) => (
 );
 
 export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
-    bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius,
+    bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes,
     editingText, dark, themePaperColor, themeLineColor, deskColor,
     onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
 }, ref) => {
@@ -367,6 +375,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // the stroke only in `live`, the next stroke replaced it on screen before
     // the JS thread caught up, and fast handwriting flickered.
     const pending = useSharedValue<PendingStroke[]>([]);
+    /** Where and since when the pen has rested; whether the stroke became a shape. */
+    const still = useSharedValue({ x: 0, y: 0, t: 0 });
+    const snapped = useSharedValue(false);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
@@ -382,10 +393,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
 
-    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius });
+    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
     useEffect(() => {
-        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly, eraserRadius };
-    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, toolSV]);
+        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes };
+    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, toolSV]);
 
     useEffect(() => {
         textBoxesSV.value = texts.flatMap((item, index) => {
@@ -523,12 +534,29 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         });
     }, [onTextMove, dragOffset]);
 
+    // Watches a stroke for the pen coming to rest, only while one is drawn.
+    const shapeWatch = useFrameCallback(() => {
+        if (gestureMode.value !== 'draw' || snapped.value || Date.now() - still.value.t < SHAPE_HOLD_MS) {
+            return;
+        }
+        const shape = recognizeShape(live.value);
+        if (shape) {
+            snapped.value = true;
+            live.value = shape;
+            runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
+        } else {
+            // Not a shape: try again only after the pen moves and rests anew.
+            still.value = { ...still.value, t: Number.MAX_SAFE_INTEGER };
+        }
+    }, false);
+    const watchShapes = useCallback((active: boolean) => shapeWatch.setActive(active), [shapeWatch]);
+
     // Gestures are built once (below): rebuilding them on every render made
     // RNGH re-attach handlers after each committed stroke, and a stroke that
     // began during that re-attach was dropped. Worklets call back into JS
     // through one stable function that reads the latest handlers.
     const jsHandlers = {
-        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex,
+        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex, watchShapes,
     };
     const jsHandlersRef = useRef(jsHandlers);
     jsHandlersRef.current = jsHandlers;
@@ -627,6 +655,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
                 liveId.value += 1;
                 live.value = [pt.x, pt.y, pressure];
+                snapped.value = false;
+                still.value = { x: e.x, y: e.y, t: Date.now() };
+                if (cfg.snapShapes) {
+                    runOnJS(callJs)('watchShapes', true);
+                }
             })
             .onChange((e) => {
                 if (gestureMode.value === 'scroll') {
@@ -677,6 +710,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     }
                     return;
                 }
+                if (snapped.value) {
+                    // The shape stays as it snapped until the pen lifts.
+                    return;
+                }
+                const rest = still.value;
+                if (Math.hypot(e.x - rest.x, e.y - rest.y) > SHAPE_STILL_PX) {
+                    still.value = { x: e.x, y: e.y, t: Date.now() };
+                }
                 let pressure: number;
                 if (e.pointerType === PointerType.STYLUS && e.stylusData && e.stylusData.pressure >= 0) {
                     pressure = e.stylusData.pressure;
@@ -709,7 +750,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 // The lift-off point ends the line, even when no move reported it.
                 // Only on a real lift: a stroke cut short by a second finger ends
                 // where it was, not at that finger.
-                if (gestureMode.value === 'draw' && success) {
+                if (gestureMode.value === 'draw' && success && !snapped.value) {
                     const end = toDoc(e.x, e.y);
                     live.modify((points) => {
                         'worklet';
@@ -751,6 +792,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (current !== 'draw') {
                     return;
                 }
+                if (toolSV.value.snapShapes) {
+                    runOnJS(callJs)('watchShapes', false);
+                }
                 // A second finger landing (pinch) cancels the stroke it interrupted.
                 if (multiTouch.value) {
                     live.value = [];
@@ -759,7 +803,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 const points = live.value.slice();
                 const cfg = toolSV.value;
                 const id = liveId.value;
-                const stroke: InkStroke = { tool: cfg.tool, color: cfg.color, size: cfg.size, points };
+                const stroke: InkStroke = snapped.value
+                    ? { tool: cfg.tool, color: cfg.color, size: cfg.size, points, cut: true }
+                    : { tool: cfg.tool, color: cfg.color, size: cfg.size, points };
                 pending.value = [...pending.value, { id, stroke }];
                 live.value = [];
                 runOnJS(callJs)('commitLive', stroke, id);
@@ -838,7 +884,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const livePath = useDerivedValue(() => {
         const cfg = toolSV.value;
         const spec = INK_TOOLS[cfg.tool];
-        return outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib));
+        return outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper && !snapped.value, spec.nib));
     });
 
     // Strokes are pending only for a frame or two, so rebuilding this on each

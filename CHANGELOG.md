@@ -4,6 +4,7 @@
 
 ### Added
 - Eraser that rubs out only the ink under it, cutting strokes where it passes (or, as before, whole strokes); three eraser sizes. A pen's eraser end or side button erases with any tool (Android).
+- Shapes: draw a line, circle, ellipse, rectangle, triangle or other polygon and hold the pen still for a moment, and it is straightened (lines level out near horizontal, vertical and 45°); a toolbar switch turns this off.
 - Thickness and quick colours right in the drawing toolbar; the toolbar sits above the canvas (in the header on wide screens) and can be hidden.
 
 ### Fixed

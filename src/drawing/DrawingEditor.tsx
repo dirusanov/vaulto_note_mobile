@@ -90,13 +90,14 @@ let rememberedPaper: PaperStyle = DEFAULT_PAPER;
 let rememberedRecent: string[] = [];
 let rememberedEraser: EraserSettings = { sizeIndex: 1, mode: 'partial' };
 let rememberedToolsHidden = false;
+let rememberedSnapShapes = true;
 
 export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAutosave, onClose }) => {
     const { t } = useTranslation();
     const { width, height } = useWindowDimensions();
     const isTablet = Math.min(width, height) >= 600;
     /** Wide enough for the tools to sit in the header row itself. */
-    const inlineTools = width >= 1080;
+    const inlineTools = width >= 1150;
     const dark = isDarkScheme();
 
     const [state, dispatch] = useReducer(drawingReducer, undefined, () => initialDrawingState());
@@ -108,6 +109,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     const [recent, setRecent] = useState<string[]>(rememberedRecent);
     const [eraser, setEraser] = useState<EraserSettings>(rememberedEraser);
     const [toolsHidden, setToolsHidden] = useState(rememberedToolsHidden);
+    const [snapShapes, setSnapShapes] = useState(rememberedSnapShapes);
+    /** A short tip over the canvas, e.g. how shapes are drawn. */
+    const [tip, setTip] = useState<string | null>(null);
     const [popover, setPopover] = useState<'tool' | 'paper' | null>(null);
     const [stylusSeen, setStylusSeen] = useState(false);
     const [stylusOnly, setStylusOnly] = useState(false);
@@ -152,7 +156,16 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         rememberedRecent = recent;
         rememberedEraser = eraser;
         rememberedToolsHidden = toolsHidden;
-    }, [settings, activeTool, recent, eraser, toolsHidden]);
+        rememberedSnapShapes = snapShapes;
+    }, [settings, activeTool, recent, eraser, toolsHidden, snapShapes]);
+
+    useEffect(() => {
+        if (!tip) {
+            return;
+        }
+        const timer = setTimeout(() => setTip(null), 3000);
+        return () => clearTimeout(timer);
+    }, [tip]);
 
     const textBoxes = useMemo(() => texts.map(measureText), [texts]);
 
@@ -416,6 +429,19 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             >
                 <MaterialCommunityIcons name="eraser" size={22} color={activeTool === 'eraser' ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => {
+                    const next = !snapShapes;
+                    setSnapShapes(next);
+                    setTip(next ? t('drawing.shapesOn', 'Draw a shape and hold the pen still to straighten it') : t('drawing.shapesOff', 'Shapes stay as drawn'));
+                }}
+                style={[styles.toolButton, snapShapes && styles.toolButtonActive]}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: snapShapes }}
+                accessibilityLabel={t('drawing.shapes', 'Shapes')}
+            >
+                <MaterialCommunityIcons name="shape-outline" size={22} color={snapShapes ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
         </>
     );
 
@@ -632,6 +658,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                 size={size}
                                 stylusOnly={stylusOnly}
                                 eraserRadius={ERASER_SIZES[eraser.sizeIndex] ?? ERASER_SIZES[1]}
+                            snapShapes={snapShapes}
                                 editingText={textEdit?.index ?? null}
                                 dark={dark}
                                 themePaperColor={colors.background}
@@ -667,6 +694,11 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                         },
                                     ]}
                                 />
+                            )}
+                            {tip && (
+                                <View pointerEvents="none" style={styles.tip}>
+                                    <Text style={styles.tipText}>{tip}</Text>
+                                </View>
                             )}
                             {!isTablet && popover && (
                                 <Pressable style={StyleSheet.absoluteFill} onPress={closePopover} accessibilityLabel={t('a11y.close', 'Close')} />
@@ -718,6 +750,17 @@ const styles = createStyles(() => ({
     popoverScroll: { padding: 14, gap: 14 },
     popoverTablet: { position: 'absolute', top: 8, width: 372, maxHeight: 600 },
     popoverPhone: { position: 'absolute', left: 12, right: 12, top: 8 },
+    tip: {
+        position: 'absolute',
+        top: 12,
+        alignSelf: 'center',
+        maxWidth: '90%',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 16,
+        backgroundColor: 'rgba(0,0,0,0.72)',
+    },
+    tipText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500', textAlign: 'center' },
     modeButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, borderRadius: 12, paddingHorizontal: 10 },
     modeText: { fontSize: 14, fontWeight: '600' },
     sizeButton: { width: 36, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
