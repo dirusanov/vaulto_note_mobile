@@ -387,6 +387,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     /** Where and since when the pen has rested; whether the stroke became a shape. */
     const still = useSharedValue({ x: 0, y: 0, t: 0 });
     const snapped = useSharedValue(false);
+    /** The frame callback that watches for a resting pen is running. */
+    const watching = useSharedValue(false);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'lasso' | 'move' | 'none'>('none');
     /** The lasso loop being drawn, in document coordinates. */
@@ -566,7 +568,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
 
     // Watches a stroke for the pen coming to rest, only while one is drawn.
     const shapeWatch = useFrameCallback(() => {
-        if (gestureMode.value !== 'draw' || snapped.value || Date.now() - still.value.t < SHAPE_HOLD_MS) {
+        if (gestureMode.value !== 'draw' || snapped.value || !toolSV.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
             return;
         }
         const shape = recognizeShape(live.value);
@@ -701,6 +703,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 snapped.value = false;
                 still.value = { x: e.x, y: e.y, t: Date.now() };
                 if (cfg.snapShapes) {
+                    watching.value = true;
                     runOnJS(callJs)('watchShapes', true);
                 }
             })
@@ -869,7 +872,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (current !== 'draw') {
                     return;
                 }
-                if (toolSV.value.snapShapes) {
+                if (watching.value) {
+                    watching.value = false;
                     runOnJS(callJs)('watchShapes', false);
                 }
                 // A second finger landing (pinch) cancels the stroke it interrupted.
