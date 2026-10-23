@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback, useSyncExternalStore } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform, StyleSheet, BackHandler } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
@@ -8,6 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { SelectionActionPanel } from '../components/SelectionActionPanel';
 import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
+import { createPendingDeleteStore } from '../utils/pendingDelete';
 import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -42,6 +43,14 @@ const DOCK_HEIGHT = 68;
 const LOW_MINUTES_SECONDS = 5 * 60;
 const UNLIMITED_SECONDS = 360000;
 const PROFILE_REFRESH_MS = 20000;
+
+// Notes deleted from the list wait here for the Undo window to close. Kept
+// outside the screen so a remount (a theme change remounts the whole tree) or
+// a re-render can never move them to the trash before the window is over.
+const listPendingDelete = createPendingDeleteStore({
+    windowMs: UNDO_WINDOW_MS,
+    onError: (error) => console.error('[NotesList] Delete failed', error),
+});
 
 export const NotesListScreen = () => {
     const { t } = useTranslation();
@@ -103,12 +112,12 @@ export const NotesListScreen = () => {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
     // Deleted from the list at once, committed after the Undo window closes.
-    const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
-    const pendingDeleteRef = useRef<string[] | null>(null);
-    const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // Being moved to the trash: they stay hidden until that finishes, instead
-    // of reappearing for a few seconds once the Undo bar has gone.
-    const [committingDeleteIds, setCommittingDeleteIds] = useState<string[]>([]);
+    // Hidden ids include those being moved to the trash, so they do not
+    // reappear for a moment once the Undo bar has gone.
+    const { undoableIds: pendingDeleteIds, hiddenIds: hiddenDeleteIds } = useSyncExternalStore(
+        listPendingDelete.subscribe,
+        listPendingDelete.getSnapshot,
+    );
 
     // true = Mic is Center (Primary), Note is Right (Secondary)
     // false = Note is Center (Primary), Mic is Right (Secondary)
@@ -179,7 +188,10 @@ export const NotesListScreen = () => {
                 // the camera permission prompt also sends the app to the background.
                 setShowUnlockingOverlay(false);
                 setUnlockProgress(null);
-                commitPendingDeleteRef.current();
+                // Only a real trip to the background (the app may be killed
+                // there) ends the Undo window early; "inactive" is also the
+                // notification shade or a system prompt on iOS.
+                if (nextState === 'background') listPendingDelete.flush();
                 setIsSelectionMode(false);
                 setSelectedNoteIds(new Set());
                 return;
@@ -258,15 +270,15 @@ export const NotesListScreen = () => {
         navigation.navigate('Settings');
     };
 
+    // Not tied to selection mode: the header stays laid out under the
+    // selection bar so the cards do not move.
     const shouldShowLockBanner =
-        !isSelectionMode &&
         isAuthenticated &&
         !isGuest &&
         syncLocked &&
         !lockBannerDismissed;
     const shouldShowResetRecoveryBanner =
-        !isSelectionMode
-        && isAuthenticated
+        isAuthenticated
         && !isGuest
         && resetRecoveryPending;
 
@@ -364,48 +376,20 @@ export const NotesListScreen = () => {
         handleExitSelectionMode();
     };
 
-    const commitPendingDelete = () => {
-        if (pendingDeleteTimerRef.current) {
-            clearTimeout(pendingDeleteTimerRef.current);
-            pendingDeleteTimerRef.current = null;
-        }
-        const ids = pendingDeleteRef.current;
-        if (!ids) return;
-        pendingDeleteRef.current = null;
-        setPendingDeleteIds(null);
-        setCommittingDeleteIds(prev => [...prev, ...ids]);
-        batchDeleteNotes(ids)
-            .catch((error) => console.error('[NotesList] Delete failed', error))
-            .finally(() => setCommittingDeleteIds(prev => prev.filter(id => !ids.includes(id))));
-    };
-    const commitPendingDeleteRef = useRef(commitPendingDelete);
-    commitPendingDeleteRef.current = commitPendingDelete;
-
     // Like Gmail and Keep: no confirmation, the notes leave the list at once
     // and an Undo bar stays for a few seconds before anything is erased.
+    // A second delete inside the window joins the same batch (one Undo brings
+    // all of them back); a repeated tap on Delete adds nothing.
     const handleBatchDelete = () => {
-        commitPendingDelete();
         const ids = Array.from(selectedNoteIds);
-        if (ids.length === 0) return;
-        haptics.warning();
-        pendingDeleteRef.current = ids;
-        setPendingDeleteIds(ids);
-        pendingDeleteTimerRef.current = setTimeout(() => commitPendingDeleteRef.current(), UNDO_WINDOW_MS);
         handleExitSelectionMode();
+        if (ids.length === 0) return;
+        if (listPendingDelete.schedule(ids, batchDeleteNotes)) haptics.warning();
     };
 
     const handleUndoDelete = () => {
-        if (pendingDeleteTimerRef.current) {
-            clearTimeout(pendingDeleteTimerRef.current);
-            pendingDeleteTimerRef.current = null;
-        }
-        pendingDeleteRef.current = null;
-        setPendingDeleteIds(null);
-        haptics.light();
+        if (listPendingDelete.undo()) haptics.light();
     };
-
-    // Leaving the screen commits a pending delete instead of dropping it.
-    useEffect(() => () => commitPendingDeleteRef.current(), []);
 
     // While encryption is locked nothing uploads (SyncService skips the sync), so a
     // pull to refresh says so briefly instead of looking like a sync that worked.
@@ -511,7 +495,7 @@ export const NotesListScreen = () => {
 
     // Filter out empty notes (no title, content, or audio)
     const filteredNotes = notes.filter(n => {
-        if (pendingDeleteIds?.includes(n.id) || committingDeleteIds.includes(n.id)) return false;
+        if (hiddenDeleteIds.includes(n.id)) return false;
         const activeChild = n.improvements?.find(imp => imp.is_active);
         const displayTitle = (activeChild?.title || activeChild?.label || n.title || '').trim();
         const displayContent = activeChild?.content || n.content || '';
@@ -694,22 +678,20 @@ export const NotesListScreen = () => {
 
     return (
         <ScreenContainer>
-            {isSelectionMode ? (
-                <SelectionActionPanel
-                    selectedCount={selectedNoteIds.size}
-                    onPin={handleBatchPin}
-                    onUnpin={handleBatchPin}
-                    onDelete={handleBatchDelete}
-                    onClose={handleExitSelectionMode}
-                    allPinned={allSelectedPinned}
-                />
-            ) : (
-                <View style={styles.topBar} />
-            )}
+            {/* Selection mode lays the action bar over the header instead of
+                swapping it out, so the cards stay exactly where they were. */}
+            <View>
+            <View
+                style={isSelectionMode && styles.headerHidden}
+                pointerEvents={isSelectionMode ? 'none' : 'auto'}
+                accessibilityElementsHidden={isSelectionMode}
+                importantForAccessibility={isSelectionMode ? 'no-hide-descendants' : 'auto'}
+            >
+            <View style={styles.topBar} />
             {/* Banners and search keep a readable width on tablets. */}
             <View style={styles.headerColumn}>
             {/* Offline: say that nothing is lost, sync just waits for the network. */}
-            {isOffline && !isSelectionMode && (
+            {isOffline && (
                 <View style={styles.offlinePill} accessibilityLiveRegion="polite">
                     <MaterialIcons name="cloud-off" size={14} color={colors.textTertiary} />
                     <Text style={styles.offlineText} numberOfLines={2}>
@@ -720,7 +702,7 @@ export const NotesListScreen = () => {
                 </View>
             )}
             {/* Signed out but notes were kept: they are on the phone, just not readable yet. */}
-            {!signedIn && lockedCount > 0 && !isSelectionMode && (
+            {!signedIn && lockedCount > 0 && (
                 <View style={styles.lockBanner}>
                     <View style={styles.lockBannerHeader}>
                         <View style={styles.lockBannerTextWrap}>
@@ -814,52 +796,50 @@ export const NotesListScreen = () => {
                     </View>
                 </View>
             )}
-            {!isSelectionMode && (
-                <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, SEARCH_BAR_HEIGHT], outputRange: [0, 1] }) }]}>
-                    <View style={[styles.searchBar, isWelcomeEmpty && styles.searchBarBare]}>
-                        {!isWelcomeEmpty && (
-                            <>
-                                <MaterialIcons name="search" size={20} color={colors.textSecondary} />
-                                <TextInput
-                                    style={styles.searchInput}
-                                    placeholder={t("common.search")}
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={searchQuery}
-                                    onChangeText={handleSearch}
-                                />
-                            </>
-                        )}
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity
-                                onPress={() => handleSearch('')}
-                                style={styles.searchBarButton}
-                                accessibilityRole="button"
-                                accessibilityLabel={t("a11y.close", "Close")}
-                            >
-                                <MaterialIcons name="close" size={20} color={colors.textTertiary} />
-                            </TouchableOpacity>
-                        )}
+            <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, SEARCH_BAR_HEIGHT], outputRange: [0, 1] }) }]}>
+                <View style={[styles.searchBar, isWelcomeEmpty && styles.searchBarBare]}>
+                    {!isWelcomeEmpty && (
+                        <>
+                            <MaterialIcons name="search" size={20} color={colors.textSecondary} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder={t("common.search")}
+                                placeholderTextColor={colors.textTertiary}
+                                value={searchQuery}
+                                onChangeText={handleSearch}
+                            />
+                        </>
+                    )}
+                    {searchQuery.length > 0 && (
                         <TouchableOpacity
-                            onPress={handleSettingsPress}
+                            onPress={() => handleSearch('')}
                             style={styles.searchBarButton}
                             accessibilityRole="button"
-                            accessibilityLabel={t("a11y.accountSettings", "Account and settings")}
+                            accessibilityLabel={t("a11y.close", "Close")}
                         >
-                            <View style={[styles.avatar, !avatarInitial && styles.avatarGuest]}>
-                                {avatarInitial ? (
-                                    <Text style={styles.avatarText}>{avatarInitial}</Text>
-                                ) : (
-                                    <MaterialIcons name="person" size={20} color={colors.textSecondary} />
-                                )}
-                            </View>
+                            <MaterialIcons name="close" size={20} color={colors.textTertiary} />
                         </TouchableOpacity>
-                    </View>
-                </Animated.View>
-            )}
+                    )}
+                    <TouchableOpacity
+                        onPress={handleSettingsPress}
+                        style={styles.searchBarButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("a11y.accountSettings", "Account and settings")}
+                    >
+                        <View style={[styles.avatar, !avatarInitial && styles.avatarGuest]}>
+                            {avatarInitial ? (
+                                <Text style={styles.avatarText}>{avatarInitial}</Text>
+                            ) : (
+                                <MaterialIcons name="person" size={20} color={colors.textSecondary} />
+                            )}
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </Animated.View>
             {/* Tag filter: one tap narrows the list to a #tag, like Keep's labels. */}
             {/* Folds away together with the search bar: left alone, the chips
                 floated over cards cut off under them. */}
-            {!isSelectionMode && allTags.length > 0 && (
+            {allTags.length > 0 && (
                 <Animated.View
                     style={{
                         overflow: 'hidden',
@@ -899,6 +879,20 @@ export const NotesListScreen = () => {
             )}
 
             </View>
+            </View>
+            {isSelectionMode && (
+                <View style={styles.selectionPanelOverlay}>
+                    <SelectionActionPanel
+                        selectedCount={selectedNoteIds.size}
+                        onPin={handleBatchPin}
+                        onUnpin={handleBatchPin}
+                        onDelete={handleBatchDelete}
+                        onClose={handleExitSelectionMode}
+                        allPinned={allSelectedPinned}
+                    />
+                </View>
+            )}
+            </View>
 
             <ScrollView
                 ref={listScrollRef}
@@ -915,9 +909,10 @@ export const NotesListScreen = () => {
                     <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                 }
             >
-                {searchQuery.trim().length > 0 && !isSelectionMode && (
+                {searchQuery.trim().length > 0 && (
                     <TouchableOpacity
                         style={styles.askRow}
+                        disabled={isSelectionMode}
                         onPress={() => navigation.navigate('AskNotes', { question: searchQuery.trim() })}
                         accessibilityRole="button"
                     >
@@ -948,7 +943,7 @@ export const NotesListScreen = () => {
                     </View>
                 ) : (
                     <>
-                    {!isSelectionMode && !searchQuery.trim() && (
+                    {!searchQuery.trim() && (
                         <Text style={styles.listTitle} accessibilityRole="header" numberOfLines={1}>
                             {activeTag ? `#${activeTag}` : t('notes.listTitle', 'Notes')}
                         </Text>
@@ -1171,6 +1166,18 @@ const styles = createStyles(() => ({
         fontSize: 14,
         fontWeight: '500',
         color: colors.text,
+    },
+    // Kept in the layout (only invisible) while the selection bar covers it.
+    headerHidden: {
+        opacity: 0,
+    },
+    selectionPanelOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 30,
+        elevation: 4,
     },
     topBar: {
         paddingTop: spacing.s, // Slight padding to push search bar down a bit
