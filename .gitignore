@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+node_modules
 .test-build/
 *.tgz
 npm-debug.log*
@@ -35,7 +35,7 @@ android/build/
 *.jks
 
 # iOS
-ios/Pods/
+ios/Pods
 ios/build/
 ios/DerivedData/
 ios/*.xcworkspace/xcuserdata/
