@@ -293,3 +293,13 @@ test('a stroke held at the end becomes the clean shape it resembles', () => {
     }
     assert.equal(recognizeShape(scribble), null);
 });
+
+test('the notes list can show the first drawing of a note as a thumbnail', () => {
+    const { firstDrawingSvg } = require('../.test-build/drawing/drawing/drawingFormat');
+    const src = buildDrawingSrc({ id: 'thumb', width: 400, strokes: [{ tool: 'fountain', color: '#000', size: 3, points: [10, 10, 0.5, 90, 40, 0.5] }] });
+    const svg = firstDrawingSvg(`<p>Shopping</p><img src="${src}"><p>more</p>`);
+    assert.ok(svg.startsWith('<svg'));
+    assert.ok(svg.endsWith('</svg>'));
+    assert.ok(svg.includes('<path'));
+    assert.equal(firstDrawingSvg('<p>no drawing</p>'), null);
+});

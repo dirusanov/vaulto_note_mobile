@@ -122,6 +122,14 @@ const PAGE_MARGIN = 12;
 const CANVAS_EXTENT = 1e6;
 /** Screen distance the eraser moves between two erase passes: well under its smallest radius. */
 const ERASE_STEP = 3;
+/** Shortest time between two erase passes; the path between them is filled in. */
+const ERASE_INTERVAL_MS = 24;
+/**
+ * Shortest time between two redraws of the stroke being drawn. A pen reports
+ * 240-500 samples a second; rebuilding the stroke for each of them cost more
+ * than the time between them, and the ink fell seconds behind the pen.
+ */
+const LIVE_FRAME_MS = 7;
 /** Shortest interval over which finger speed (and so ink width) is measured. */
 const SPEED_WINDOW_MS = 8;
 /** How long the pen rests at the end of a stroke before it becomes a shape. */
@@ -398,7 +406,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const selectionDrag = useSharedValue({ dx: 0, dy: 0, startX: 0, startY: 0 });
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
     /** Screen point of the last erase pass in the current drag. */
-    const lastErase = useSharedValue({ x: 0, y: 0 });
+    const lastErase = useSharedValue({ x: 0, y: 0, t: 0 });
+    /** When the live stroke was last redrawn, and how many samples it had then. */
+    const liveShown = useSharedValue({ t: 0, length: 0 });
+    /** How long the last rebuild of the live stroke took (ms): a long stroke is redrawn less often. */
+    const liveCost = useSharedValue(0);
     const hover = useSharedValue({ x: -100, y: -100, visible: false });
     const textBoxesSV = useSharedValue<number[]>([]);
     const textGesture = useSharedValue({ index: -1, startX: 0, startY: 0, screenX: 0, screenY: 0, moved: false });
@@ -566,9 +578,18 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         });
     }, [onTextMove, dragOffset]);
 
-    // Watches a stroke for the pen coming to rest, only while one is drawn.
-    const shapeWatch = useFrameCallback(() => {
-        if (gestureMode.value !== 'draw' || snapped.value || !toolSV.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
+    // Runs each frame while a stroke is drawn: shows samples that arrived after
+    // the last redraw (the pen slowed or stopped), and watches for the pen
+    // coming to rest to straighten the stroke into a shape.
+    const strokeFrame = useFrameCallback(() => {
+        if (gestureMode.value !== 'draw') {
+            return;
+        }
+        if (live.value.length !== liveShown.value.length) {
+            liveShown.value = { t: Date.now(), length: live.value.length };
+            live.modify(undefined, true);
+        }
+        if (snapped.value || !toolSV.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
             return;
         }
         const shape = recognizeShape(live.value);
@@ -581,14 +602,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             still.value = { ...still.value, t: Number.MAX_SAFE_INTEGER };
         }
     }, false);
-    const watchShapes = useCallback((active: boolean) => shapeWatch.setActive(active), [shapeWatch]);
+    const watchStroke = useCallback((active: boolean) => strokeFrame.setActive(active), [strokeFrame]);
 
     // Gestures are built once (below): rebuilding them on every render made
     // RNGH re-attach handlers after each committed stroke, and a stroke that
     // began during that re-attach was dropped. Worklets call back into JS
     // through one stable function that reads the latest handlers.
     const jsHandlers = {
-        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex, watchShapes,
+        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex, watchStroke,
         onLasso, finishMove,
     };
     const jsHandlersRef = useRef(jsHandlers);
@@ -691,7 +712,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (cfg.mode === 'erase' || penErases) {
                     gestureMode.value = 'erase';
                     eraser.value = { x: e.x, y: e.y, visible: true };
-                    lastErase.value = { x: e.x, y: e.y };
+                    lastErase.value = { x: e.x, y: e.y, t: Date.now() };
                     runOnJS(callJs)('onErase', pt.x, pt.y, cfg.eraserRadius / scale);
                     return;
                 }
@@ -700,11 +721,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
                 liveId.value += 1;
                 live.value = [pt.x, pt.y, pressure];
+                liveShown.value = { t: Date.now(), length: 3 };
                 snapped.value = false;
                 still.value = { x: e.x, y: e.y, t: Date.now() };
-                if (cfg.snapShapes) {
+                if (!watching.value) {
                     watching.value = true;
-                    runOnJS(callJs)('watchShapes', true);
+                    runOnJS(callJs)('watchStroke', true);
                 }
             })
             .onChange((e) => {
@@ -759,7 +781,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     // the eraser has moved a little. A long jump between two samples is
                     // filled in, so the ink between them is erased too.
                     const distance = Math.hypot(e.x - at.x, e.y - at.y);
-                    if (distance >= ERASE_STEP) {
+                    if (distance >= ERASE_STEP && Date.now() - at.t >= ERASE_INTERVAL_MS) {
                         const radius = toolSV.value.eraserRadius;
                         const steps = Math.ceil(distance / Math.max(ERASE_STEP, radius / 2));
                         const path: number[] = [];
@@ -768,7 +790,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                             path.push(between.x, between.y);
                         }
                         path.push(pt.x, pt.y);
-                        lastErase.value = { x: e.x, y: e.y };
+                        lastErase.value = { x: e.x, y: e.y, t: Date.now() };
                         runOnJS(callJs)('onErase', path[0], path[1], radius / (scaleSV.value * zoom.value), path.slice(2));
                     }
                     return;
@@ -800,11 +822,18 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                         pressure = prev.p;
                     }
                 }
+                // Every sample is kept; the stroke is redrawn at most every
+                // LIVE_FRAME_MS (and by strokeFrame once the pen slows down).
+                const now = Date.now();
+                const redraw = now - liveShown.value.t >= Math.max(LIVE_FRAME_MS, liveCost.value * 2);
                 live.modify((points) => {
                     'worklet';
                     points.push(pt.x, pt.y, pressure);
                     return points;
-                });
+                }, redraw);
+                if (redraw) {
+                    liveShown.value = { t: now, length: live.value.length };
+                }
             })
             .onEnd((e, success) => {
                 if (gestureMode.value === 'scroll') {
@@ -874,7 +903,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 }
                 if (watching.value) {
                     watching.value = false;
-                    runOnJS(callJs)('watchShapes', false);
+                    runOnJS(callJs)('watchStroke', false);
                 }
                 // A second finger landing (pinch) cancels the stroke it interrupted.
                 if (multiTouch.value) {
@@ -965,7 +994,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const livePath = useDerivedValue(() => {
         const cfg = toolSV.value;
         const spec = INK_TOOLS[cfg.tool];
-        return outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper && !snapped.value, spec.nib));
+        const started = performance.now();
+        const path = outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper && !snapped.value, spec.nib));
+        liveCost.value = performance.now() - started;
+        return path;
     });
 
     // Strokes are pending only for a frame or two, so rebuilding this on each

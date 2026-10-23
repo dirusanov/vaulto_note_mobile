@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -14,7 +14,8 @@ import { createStyles } from '../theme/createStyles';
 import { textAlignFor } from '../i18n/direction';
 import { splitTags } from '../utils/tags';
 import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
-import { DRAWING_MARKER } from '../drawing/drawingFormat';
+import { DRAWING_MARKER, firstDrawingSvg } from '../drawing/drawingFormat';
+import { DrawingThumbnail } from '../drawing/DrawingThumbnail';
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
 
@@ -149,6 +150,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // A handwritten note has no text to show: say what it is instead of an empty card.
     const hasDrawing = content.includes(DRAWING_MARKER);
     const isDrawingOnly = !isVoiceOnly && hasDrawing && !title && !fullPreview.trim();
+    // A thumbnail shows what is drawn; the stored preview picture is reused.
+    const drawingSvg = useMemo(() => (hasDrawing ? firstDrawingSvg(content) : null), [hasDrawing, content]);
     const voiceDuration = isVoiceOnly ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
 
     // The card sinks slightly under the finger, like Keep and Apple Notes.
@@ -196,6 +199,10 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         </View>
                         {voiceDuration ? <Text style={styles.voiceDuration}>{voiceDuration}</Text> : null}
                     </View>
+                ) : isDrawingOnly && drawingSvg ? (
+                    <View style={isSelectionMode ? { paddingEnd: 28 } : undefined}>
+                        <DrawingThumbnail svg={drawingSvg} />
+                    </View>
                 ) : isDrawingOnly ? (
                     <View style={[styles.voiceRow, isSelectionMode && { paddingEnd: 28 }]}>
                         <View style={styles.voiceIcon}>
@@ -228,6 +235,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         ))}
                     </Text>
                 )}
+                {drawingSvg && !isDrawingOnly && <DrawingThumbnail svg={drawingSvg} />}
             </View>
             <View style={styles.footer}>
                 <Text style={styles.date}>
@@ -237,7 +245,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     {!!hasAudio && !isVoiceOnly && (
                         <MaterialIcons name="mic-none" size={15} color={colors.textTertiary} />
                     )}
-                    {hasDrawing && !isDrawingOnly && (
+                    {hasDrawing && !drawingSvg && !isDrawingOnly && (
                         <MaterialIcons name="gesture" size={15} color={colors.textTertiary} style={styles.footerIcon} />
                     )}
                     {note.is_protected ? (

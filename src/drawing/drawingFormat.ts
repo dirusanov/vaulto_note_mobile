@@ -297,6 +297,26 @@ export const buildDrawingSrc = (doc: DrawingDocument): string => {
 };
 
 /**
+ * A picture of the first drawing in note HTML for a thumbnail in the notes
+ * list, framed tightly around what is drawn (a page keeps its full width in
+ * the note, which would make the thumbnail tiny); null when there is none.
+ */
+export const firstDrawingSvg = (html: string): string | null => {
+    const markerAt = html.indexOf(DRAWING_MARKER);
+    if (markerAt === -1) {
+        return null;
+    }
+    const start = html.lastIndexOf('data:image/svg+xml', markerAt);
+    const quote = start > 0 ? html[start - 1] : '"';
+    const end = html.indexOf(quote === "'" ? "'" : '"', markerAt);
+    const doc = start === -1 ? null : parseDrawingSrc(html.slice(start, end === -1 ? undefined : end));
+    if (!doc || (!doc.strokes.length && !(doc.texts && doc.texts.length))) {
+        return null;
+    }
+    return buildDrawingSvg({ ...doc, paper: { ...(doc.paper || DEFAULT_PAPER), layout: 'canvas' } });
+};
+
+/**
  * Puts a drawing into note HTML without the editor: replaces the <img> of the
  * drawing with this id, or appends it. Used to save a drawing straight to the
  * note when the app goes to the background, where the editor WebView may not
