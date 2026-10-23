@@ -11,127 +11,132 @@ import { createStyles } from '../theme/createStyles';
 
 export interface LanguageOption {
     key: string;
+    /** English name: kept for search. */
     label: string;
+    /** The language's own name, shown in the list (as the app-language picker does). */
+    native?: string;
 }
 
 export const WHISPER_LANGUAGES: LanguageOption[] = [
     { key: 'auto', label: 'Auto-Detect' },
     { key: 'en', label: 'English' },
-    { key: 'zh', label: 'Chinese' },
-    { key: 'de', label: 'German' },
-    { key: 'es', label: 'Spanish' },
-    { key: 'ru', label: 'Russian' },
-    { key: 'ko', label: 'Korean' },
-    { key: 'fr', label: 'French' },
-    { key: 'ja', label: 'Japanese' },
-    { key: 'pt', label: 'Portuguese' },
-    { key: 'tr', label: 'Turkish' },
-    { key: 'pl', label: 'Polish' },
-    { key: 'ca', label: 'Catalan' },
-    { key: 'nl', label: 'Dutch' },
-    { key: 'ar', label: 'Arabic' },
-    { key: 'sv', label: 'Swedish' },
-    { key: 'it', label: 'Italian' },
-    { key: 'id', label: 'Indonesian' },
-    { key: 'hi', label: 'Hindi' },
-    { key: 'fi', label: 'Finnish' },
-    { key: 'vi', label: 'Vietnamese' },
-    { key: 'he', label: 'Hebrew' },
-    { key: 'uk', label: 'Ukrainian' },
-    { key: 'el', label: 'Greek' },
-    { key: 'ms', label: 'Malay' },
-    { key: 'cs', label: 'Czech' },
-    { key: 'ro', label: 'Romanian' },
-    { key: 'da', label: 'Danish' },
-    { key: 'hu', label: 'Hungarian' },
-    { key: 'ta', label: 'Tamil' },
-    { key: 'no', label: 'Norwegian' },
-    { key: 'th', label: 'Thai' },
-    { key: 'ur', label: 'Urdu' },
-    { key: 'hr', label: 'Croatian' },
-    { key: 'bg', label: 'Bulgarian' },
-    { key: 'lt', label: 'Lithuanian' },
-    { key: 'la', label: 'Latin' },
-    { key: 'mi', label: 'Maori' },
-    { key: 'ml', label: 'Malayalam' },
-    { key: 'cy', label: 'Welsh' },
-    { key: 'sk', label: 'Slovak' },
-    { key: 'te', label: 'Telugu' },
-    { key: 'fa', label: 'Persian' },
-    { key: 'lv', label: 'Latvian' },
-    { key: 'bn', label: 'Bengali' },
-    { key: 'sr', label: 'Serbian' },
-    { key: 'az', label: 'Azerbaijani' },
-    { key: 'sl', label: 'Slovenian' },
-    { key: 'kn', label: 'Kannada' },
-    { key: 'et', label: 'Estonian' },
-    { key: 'mk', label: 'Macedonian' },
-    { key: 'br', label: 'Breton' },
-    { key: 'eu', label: 'Basque' },
-    { key: 'is', label: 'Icelandic' },
-    { key: 'hy', label: 'Armenian' },
-    { key: 'ne', label: 'Nepali' },
-    { key: 'mn', label: 'Mongolian' },
-    { key: 'bs', label: 'Bosnian' },
-    { key: 'kk', label: 'Kazakh' },
-    { key: 'sq', label: 'Albanian' },
-    { key: 'sw', label: 'Swahili' },
-    { key: 'gl', label: 'Galician' },
-    { key: 'mr', label: 'Marathi' },
-    { key: 'pa', label: 'Punjabi' },
-    { key: 'si', label: 'Sinhala' },
-    { key: 'km', label: 'Khmer' },
-    { key: 'sn', label: 'Shona' },
-    { key: 'yo', label: 'Yoruba' },
-    { key: 'so', label: 'Somali' },
+    { key: 'zh', label: 'Chinese', native: '中文' },
+    { key: 'de', label: 'German', native: 'Deutsch' },
+    { key: 'es', label: 'Spanish', native: 'Español' },
+    { key: 'ru', label: 'Russian', native: 'Русский' },
+    { key: 'ko', label: 'Korean', native: '한국어' },
+    { key: 'fr', label: 'French', native: 'Français' },
+    { key: 'ja', label: 'Japanese', native: '日本語' },
+    { key: 'pt', label: 'Portuguese', native: 'Português' },
+    { key: 'tr', label: 'Turkish', native: 'Türkçe' },
+    { key: 'pl', label: 'Polish', native: 'Polski' },
+    { key: 'ca', label: 'Catalan', native: 'Català' },
+    { key: 'nl', label: 'Dutch', native: 'Nederlands' },
+    { key: 'ar', label: 'Arabic', native: 'العربية' },
+    { key: 'sv', label: 'Swedish', native: 'Svenska' },
+    { key: 'it', label: 'Italian', native: 'Italiano' },
+    { key: 'id', label: 'Indonesian', native: 'Bahasa Indonesia' },
+    { key: 'hi', label: 'Hindi', native: 'हिन्दी' },
+    { key: 'fi', label: 'Finnish', native: 'Suomi' },
+    { key: 'vi', label: 'Vietnamese', native: 'Tiếng Việt' },
+    { key: 'he', label: 'Hebrew', native: 'עברית' },
+    { key: 'uk', label: 'Ukrainian', native: 'Українська' },
+    { key: 'el', label: 'Greek', native: 'Ελληνικά' },
+    { key: 'ms', label: 'Malay', native: 'Bahasa Melayu' },
+    { key: 'cs', label: 'Czech', native: 'Čeština' },
+    { key: 'ro', label: 'Romanian', native: 'Română' },
+    { key: 'da', label: 'Danish', native: 'Dansk' },
+    { key: 'hu', label: 'Hungarian', native: 'Magyar' },
+    { key: 'ta', label: 'Tamil', native: 'தமிழ்' },
+    { key: 'no', label: 'Norwegian', native: 'Norsk' },
+    { key: 'th', label: 'Thai', native: 'ไทย' },
+    { key: 'ur', label: 'Urdu', native: 'اردو' },
+    { key: 'hr', label: 'Croatian', native: 'Hrvatski' },
+    { key: 'bg', label: 'Bulgarian', native: 'Български' },
+    { key: 'lt', label: 'Lithuanian', native: 'Lietuvių' },
+    { key: 'la', label: 'Latin', native: 'Latina' },
+    { key: 'mi', label: 'Maori', native: 'Māori' },
+    { key: 'ml', label: 'Malayalam', native: 'മലയാളം' },
+    { key: 'cy', label: 'Welsh', native: 'Cymraeg' },
+    { key: 'sk', label: 'Slovak', native: 'Slovenčina' },
+    { key: 'te', label: 'Telugu', native: 'తెలుగు' },
+    { key: 'fa', label: 'Persian', native: 'فارسی' },
+    { key: 'lv', label: 'Latvian', native: 'Latviešu' },
+    { key: 'bn', label: 'Bengali', native: 'বাংলা' },
+    { key: 'sr', label: 'Serbian', native: 'Српски' },
+    { key: 'az', label: 'Azerbaijani', native: 'Azərbaycan' },
+    { key: 'sl', label: 'Slovenian', native: 'Slovenščina' },
+    { key: 'kn', label: 'Kannada', native: 'ಕನ್ನಡ' },
+    { key: 'et', label: 'Estonian', native: 'Eesti' },
+    { key: 'mk', label: 'Macedonian', native: 'Македонски' },
+    { key: 'br', label: 'Breton', native: 'Brezhoneg' },
+    { key: 'eu', label: 'Basque', native: 'Euskara' },
+    { key: 'is', label: 'Icelandic', native: 'Íslenska' },
+    { key: 'hy', label: 'Armenian', native: 'Հայերեն' },
+    { key: 'ne', label: 'Nepali', native: 'नेपाली' },
+    { key: 'mn', label: 'Mongolian', native: 'Монгол' },
+    { key: 'bs', label: 'Bosnian', native: 'Bosanski' },
+    { key: 'kk', label: 'Kazakh', native: 'Қазақ' },
+    { key: 'sq', label: 'Albanian', native: 'Shqip' },
+    { key: 'sw', label: 'Swahili', native: 'Kiswahili' },
+    { key: 'gl', label: 'Galician', native: 'Galego' },
+    { key: 'mr', label: 'Marathi', native: 'मराठी' },
+    { key: 'pa', label: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
+    { key: 'si', label: 'Sinhala', native: 'සිංහල' },
+    { key: 'km', label: 'Khmer', native: 'ខ្មែរ' },
+    { key: 'sn', label: 'Shona', native: 'ChiShona' },
+    { key: 'yo', label: 'Yoruba', native: 'Yorùbá' },
+    { key: 'so', label: 'Somali', native: 'Soomaali' },
     { key: 'af', label: 'Afrikaans' },
     { key: 'oc', label: 'Occitan' },
-    { key: 'ka', label: 'Georgian' },
-    { key: 'be', label: 'Belarusian' },
-    { key: 'tg', label: 'Tajik' },
-    { key: 'sd', label: 'Sindhi' },
-    { key: 'gu', label: 'Gujarati' },
-    { key: 'am', label: 'Amharic' },
-    { key: 'yi', label: 'Yiddish' },
-    { key: 'lo', label: 'Lao' },
-    { key: 'uz', label: 'Uzbek' },
-    { key: 'fo', label: 'Faroese' },
-    { key: 'ht', label: 'Haitian Creole' },
-    { key: 'ps', label: 'Pashto' },
-    { key: 'tk', label: 'Turkmen' },
+    { key: 'ka', label: 'Georgian', native: 'ქართული' },
+    { key: 'be', label: 'Belarusian', native: 'Беларуская' },
+    { key: 'tg', label: 'Tajik', native: 'Тоҷикӣ' },
+    { key: 'sd', label: 'Sindhi', native: 'سنڌي' },
+    { key: 'gu', label: 'Gujarati', native: 'ગુજરાતી' },
+    { key: 'am', label: 'Amharic', native: 'አማርኛ' },
+    { key: 'yi', label: 'Yiddish', native: 'ייִדיש' },
+    { key: 'lo', label: 'Lao', native: 'ລາວ' },
+    { key: 'uz', label: 'Uzbek', native: 'Oʻzbek' },
+    { key: 'fo', label: 'Faroese', native: 'Føroyskt' },
+    { key: 'ht', label: 'Haitian Creole', native: 'Kreyòl ayisyen' },
+    { key: 'ps', label: 'Pashto', native: 'پښتو' },
+    { key: 'tk', label: 'Turkmen', native: 'Türkmen' },
     { key: 'nn', label: 'Nynorsk' },
-    { key: 'mt', label: 'Maltese' },
-    { key: 'sa', label: 'Sanskrit' },
-    { key: 'lb', label: 'Luxembourgish' },
-    { key: 'my', label: 'Myanmar' },
-    { key: 'bo', label: 'Tibetan' },
+    { key: 'mt', label: 'Maltese', native: 'Malti' },
+    { key: 'sa', label: 'Sanskrit', native: 'संस्कृतम्' },
+    { key: 'lb', label: 'Luxembourgish', native: 'Lëtzebuergesch' },
+    { key: 'my', label: 'Myanmar', native: 'မြန်မာ' },
+    { key: 'bo', label: 'Tibetan', native: 'བོད་སྐད' },
     { key: 'tl', label: 'Tagalog' },
     { key: 'mg', label: 'Malagasy' },
-    { key: 'as', label: 'Assamese' },
-    { key: 'tt', label: 'Tatar' },
-    { key: 'haw', label: 'Hawaiian' },
-    { key: 'ln', label: 'Lingala' },
+    { key: 'as', label: 'Assamese', native: 'অসমীয়া' },
+    { key: 'tt', label: 'Tatar', native: 'Татар' },
+    { key: 'haw', label: 'Hawaiian', native: 'ʻŌlelo Hawaiʻi' },
+    { key: 'ln', label: 'Lingala', native: 'Lingála' },
     { key: 'ha', label: 'Hausa' },
-    { key: 'ba', label: 'Bashkir' },
-    { key: 'jw', label: 'Javanese' },
-    { key: 'su', label: 'Sundanese' },
+    { key: 'ba', label: 'Bashkir', native: 'Башҡорт' },
+    { key: 'jw', label: 'Javanese', native: 'Basa Jawa' },
+    { key: 'su', label: 'Sundanese', native: 'Basa Sunda' },
 ];
 
 
 interface SearchableLanguageSelectorProps {
     value: TranscriptionLanguage;
     onChange: (value: TranscriptionLanguage) => void;
+    /** Draws a custom control in place of the default pill, e.g. a whole settings row. */
+    renderTrigger?: (open: () => void, selectedLabel: string) => React.ReactNode;
 }
 
-export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProps> = ({ value, onChange }) => {
+export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProps> = ({ value, onChange, renderTrigger }) => {
     const { t } = useTranslation();
 
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Language names stay as-is; only the "auto" entry is app UI copy.
+    // Each language in its own name, whatever the app language; only "auto" is UI copy.
     const getLanguageLabel = (lang: LanguageOption) =>
-        lang.key === 'auto' ? t('aux.autoDetect', 'Auto-Detect') : lang.label;
+        lang.key === 'auto' ? t('aux.autoDetect', 'Auto-Detect') : (lang.native ?? lang.label);
 
     const selectedLanguageLabel = useMemo(() => {
         const selected = WHISPER_LANGUAGES.find(l => l.key === value);
@@ -143,6 +148,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
         const lowerQuery = searchQuery.toLowerCase();
         return WHISPER_LANGUAGES.filter(
             lang => lang.label.toLowerCase().includes(lowerQuery)
+                || (lang.native ?? '').toLowerCase().includes(lowerQuery)
                 || getLanguageLabel(lang).toLowerCase().includes(lowerQuery)
                 || lang.key.toLowerCase().includes(lowerQuery)
         );
@@ -156,14 +162,16 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
 
     return (
         <View>
-            <TouchableOpacity 
-                style={styles.selectorButton}
-                activeOpacity={0.8}
-                onPress={() => setModalVisible(true)}
-            >
-                <Text style={styles.selectorText}>{selectedLanguageLabel}</Text>
-                <MaterialIcons name="arrow-drop-down" size={16} color={colors.primary} />
-            </TouchableOpacity>
+            {renderTrigger ? renderTrigger(() => setModalVisible(true), selectedLanguageLabel) : (
+                <TouchableOpacity
+                    style={styles.selectorButton}
+                    activeOpacity={0.8}
+                    onPress={() => setModalVisible(true)}
+                >
+                    <Text style={styles.selectorText}>{selectedLanguageLabel}</Text>
+                    <MaterialIcons name="arrow-drop-down" size={16} color={colors.primary} />
+                </TouchableOpacity>
+            )}
 
             <Modal
                 visible={modalVisible}
@@ -172,17 +180,18 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                 onRequestClose={() => setModalVisible(false)}
             >
                 <SafeAreaView style={styles.modalContainer}>
+                    {/* Same header as the app's sheets: title on the start side, round close button. */}
                     <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle} accessibilityRole="header">{t("aux.selectLanguage", "Select Language")}</Text>
                         <TouchableOpacity
                             style={styles.closeButton}
                             onPress={() => setModalVisible(false)}
+                            hitSlop={8}
                             accessibilityRole="button"
                             accessibilityLabel={t('a11y.close', 'Close')}
                         >
-                            <MaterialIcons name="close" size={24} color={colors.text} />
+                            <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
-                        <Text style={styles.modalTitle}>{t("aux.selectLanguage", "Select Language")}</Text>
-                        <View style={{ width: 44 }} />
                     </View>
 
                     {/* Search and list keep a readable width on tablets. */}
@@ -190,6 +199,7 @@ export const SearchableLanguageSelector: React.FC<SearchableLanguageSelectorProp
                     <View style={styles.searchContainer}>
                         <MaterialIcons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
                         <TextInput
+                            containerStyle={styles.searchField}
                             style={styles.searchInput}
                             placeholder={t('aux.searchLanguage', 'Search language...')}
                             placeholderTextColor={colors.textSecondary}
@@ -259,10 +269,8 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: spacing.m,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + spacing.s : spacing.s,
-        paddingBottom: spacing.s,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + spacing.m : spacing.m,
+        paddingBottom: spacing.xs,
     },
     modalBody: {
         flex: 1,
@@ -271,12 +279,20 @@ const styles = createStyles(() => ({
         alignSelf: 'center',
     },
     modalTitle: {
-        ...typography.h3,
+        flexShrink: 1,
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
         color: colors.text,
     },
     closeButton: {
-        padding: spacing.xs,
-        marginLeft: -spacing.xs,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.backgroundSecondary,
     },
     searchContainer: {
         flexDirection: 'row',
@@ -285,17 +301,20 @@ const styles = createStyles(() => ({
         margin: spacing.m,
         paddingHorizontal: spacing.s,
         borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
     },
     searchIcon: {
         marginRight: spacing.xs,
     },
-    searchInput: {
+    searchField: {
         flex: 1,
+        marginBottom: 0,
+    },
+    searchInput: {
+        minHeight: 48,
         borderWidth: 0,
         backgroundColor: 'transparent',
-        paddingVertical: 12,
+        paddingHorizontal: spacing.xs,
+        paddingVertical: 0,
         ...typography.body,
         color: colors.text,
     },
@@ -319,8 +338,7 @@ const styles = createStyles(() => ({
         color: colors.text,
     },
     languageTextActive: {
-        color: colors.primary,
-        fontWeight: 'bold',
+        fontWeight: '600',
     },
     emptyContainer: {
         padding: spacing.xl,

@@ -4,6 +4,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -19,7 +20,7 @@ import { MarkdownPreview } from '../components/MarkdownPreview';
 import { LimitModal } from '../components/LimitModal';
 import { useNotesContext } from '../contexts/NotesContext';
 import { answerFromNotes, isOnDeviceAI } from '../services/AIService';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, richContentToAgentMarkdown, richContentToPlainText } from '../utils/richContent';
 import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
@@ -175,19 +176,17 @@ export const AskNotesScreen = () => {
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     style={styles.iconButton}
+                    activeOpacity={0.6}
+                    hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={t('a11y.back', 'Back')}
                 >
-                    <MaterialIcons name="arrow-back" size={26} color={colors.text} style={rtlFlip} />
+                    <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
-                <View style={styles.headerText}>
-                    <Text style={styles.title}>{t('ask.title', 'Ask your notes')}</Text>
-                    <Text style={styles.subtitle} numberOfLines={2}>
-                        {onDeviceAI
-                            ? t('ask.privacyNoteLocal', 'Runs entirely on this device, offline — nothing is sent anywhere.')
-                            : t('ask.privacyNote', 'Notes are searched on this device; only the matching excerpts are sent to AI.')}
-                    </Text>
-                </View>
+                {/* Once the chat starts, the large title has scrolled away: keep a small one. */}
+                {messages.length > 0 && (
+                    <Text style={styles.title} numberOfLines={1}>{t('ask.title', 'Ask your notes')}</Text>
+                )}
             </View>
 
             <KeyboardAvoidingView
@@ -203,20 +202,34 @@ export const AskNotesScreen = () => {
                 >
                     {messages.length === 0 && (
                         <View style={styles.empty}>
-                            <View style={styles.emptyIcon}>
-                                <MaterialIcons name="auto-awesome" size={28} color={colors.primary} />
+                            <Text style={styles.emptyHeading} accessibilityRole="header">{t('ask.title', 'Ask your notes')}</Text>
+                            <Text style={styles.subtitle}>
+                                {t('ask.subtitle', 'Answers from everything you have written down, with links to the notes.')}
+                            </Text>
+                            <Text style={styles.emptyTitle}>{t('ask.examplesLabel', 'Try asking')}</Text>
+                            <View style={styles.examples}>
+                                {examples.map((example, index) => (
+                                    <TouchableOpacity
+                                        key={example}
+                                        style={[styles.example, index > 0 && styles.exampleDivided]}
+                                        onPress={() => { void ask(example); }}
+                                        activeOpacity={0.6}
+                                        accessibilityRole="button"
+                                    >
+                                        <Text style={styles.exampleText}>{example}</Text>
+                                        <MaterialIcons name="arrow-upward" size={18} color={colors.textTertiary} />
+                                    </TouchableOpacity>
+                                ))}
                             </View>
-                            <Text style={styles.emptyTitle}>{t('ask.emptyTitle', 'Ask anything about your notes')}</Text>
-                            {examples.map((example) => (
-                                <TouchableOpacity
-                                    key={example}
-                                    style={styles.example}
-                                    onPress={() => { void ask(example); }}
-                                    accessibilityRole="button"
-                                >
-                                    <Text style={styles.exampleText}>{example}</Text>
-                                </TouchableOpacity>
-                            ))}
+                            {/* How privacy works, as a footnote rather than the first thing said. */}
+                            <View style={styles.privacyFootnote}>
+                                <MaterialIcons name="lock-outline" size={14} color={colors.textTertiary} />
+                                <Text style={styles.privacyFootnoteText}>
+                                    {onDeviceAI
+                                        ? t('ask.privacyNoteLocal', 'Runs entirely on this device, offline — nothing is sent anywhere.')
+                                        : t('ask.privacyNote', 'Notes are searched on this device; only the matching excerpts are sent to AI.')}
+                                </Text>
+                            </View>
                         </View>
                     )}
                     {messages.map((message) => {
@@ -326,28 +339,28 @@ const styles = createStyles(() => ({
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: spacing.s,
-        gap: spacing.s,
+        gap: spacing.xs,
+        paddingTop: spacing.s,
+        height: 52,
     },
     iconButton: {
-        width: 48,
-        height: 48,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: -spacing.s,
-    },
-    headerText: {
-        flex: 1,
+        marginStart: -spacing.s,
     },
     title: {
-        fontSize: 20,
-        fontWeight: '700',
+        flex: 1,
+        fontSize: 17,
+        fontWeight: '600',
         color: colors.text,
     },
     subtitle: {
-        fontSize: 12,
+        fontSize: 15,
+        lineHeight: 21,
         color: colors.textSecondary,
-        marginTop: 2,
     },
     messages: {
         width: '100%',
@@ -358,40 +371,60 @@ const styles = createStyles(() => ({
         flexGrow: 1,
     },
     empty: {
-        alignItems: 'center',
-        paddingTop: spacing.xl,
-        gap: spacing.s,
+        gap: spacing.xs,
     },
-    emptyIcon: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primaryLight,
-        marginBottom: spacing.s,
+    emptyHeading: {
+        fontSize: 32,
+        lineHeight: 38,
+        fontWeight: '700',
+        letterSpacing: -0.8,
+        color: colors.text,
     },
     emptyTitle: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: colors.text,
-        textAlign: 'center',
-        marginBottom: spacing.s,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+        marginTop: spacing.l,
+        marginBottom: spacing.xxs,
+        paddingHorizontal: spacing.xs,
+    },
+    privacyFootnote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing.xs,
+        marginTop: spacing.m,
+        paddingHorizontal: spacing.xs,
+    },
+    privacyFootnoteText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textTertiary,
+    },
+    examples: {
+        borderRadius: 16,
+        backgroundColor: colors.surface,
+        borderWidth: isDarkScheme() ? 0 : StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+        overflow: 'hidden',
     },
     example: {
-        minHeight: 48,
-        justifyContent: 'center',
-        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        minHeight: 52,
+        paddingVertical: 12,
         paddingHorizontal: spacing.m,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
+    },
+    exampleDivided: {
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors.border,
     },
     exampleText: {
-        fontSize: 14,
+        flex: 1,
+        fontSize: 16,
+        lineHeight: 22,
         color: colors.text,
-        textAlign: 'center',
     },
     userBubble: {
         alignSelf: 'flex-end',
@@ -411,7 +444,7 @@ const styles = createStyles(() => ({
         alignSelf: 'stretch',
         backgroundColor: colors.surface,
         borderRadius: 16,
-        borderWidth: 1,
+        borderWidth: isDarkScheme() ? 0 : StyleSheet.hairlineWidth,
         borderColor: colors.border,
         padding: spacing.m,
     },
@@ -471,7 +504,7 @@ const styles = createStyles(() => ({
         justifyContent: 'center',
         paddingHorizontal: spacing.m,
         marginVertical: -spacing.s,
-        borderRadius: 12,
+        borderRadius: 24,
         backgroundColor: colors.primary,
     },
     signInText: {
@@ -503,8 +536,8 @@ const styles = createStyles(() => ({
         maxHeight: 120,
         minHeight: 48,
         borderRadius: 24,
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
         backgroundColor: colors.surface,
         paddingHorizontal: spacing.m,
         paddingVertical: 10,

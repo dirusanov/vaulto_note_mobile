@@ -6,10 +6,10 @@ import {
     Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
+    StyleSheet,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
-import { typography } from '../theme/typography';
+import { colors, isDarkScheme } from '../theme/colors';
+import { spacing } from '../theme/spacing';
 import { createStyles } from '../theme/createStyles';
 
 interface SignInRequiredModalProps {
@@ -20,6 +20,9 @@ interface SignInRequiredModalProps {
     onSignIn: () => void;
     signInLabel?: string;
     cancelLabel?: string;
+    /** Optional way forward without an account, shown under Sign in. */
+    secondaryLabel?: string;
+    onSecondary?: () => void;
 }
 
 export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
@@ -30,6 +33,8 @@ export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
     onSignIn,
     signInLabel,
     cancelLabel,
+    secondaryLabel,
+    onSecondary,
 }) => {
     const { t } = useTranslation();
     const displayTitle = title || t("voice.signInRequired", "Sign in required");
@@ -46,23 +51,20 @@ export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
                         <View style={styles.modal}>
-                            <View style={styles.iconContainer}>
-                                <MaterialIcons
-                                    name="lock-outline"
-                                    size={28}
-                                    color={colors.primary}
-                                />
-                            </View>
-
                             <Text style={styles.title}>{displayTitle}</Text>
                             <Text style={styles.message}>{message}</Text>
 
                             <View style={styles.actionsRow}>
-                                <TouchableOpacity onPress={onClose} activeOpacity={0.8} style={styles.cancelButton}>
-                                    <Text style={styles.cancelText}>{displayCancelLabel}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={onSignIn} activeOpacity={0.85} style={styles.primaryButton}>
+                                <TouchableOpacity onPress={onSignIn} activeOpacity={0.85} style={styles.primaryButton} accessibilityRole="button">
                                     <Text style={styles.primaryText}>{displaySignInLabel}</Text>
+                                </TouchableOpacity>
+                                {secondaryLabel && onSecondary ? (
+                                    <TouchableOpacity onPress={onSecondary} activeOpacity={0.6} style={styles.secondaryButton} accessibilityRole="button">
+                                        <Text style={styles.secondaryText}>{secondaryLabel}</Text>
+                                    </TouchableOpacity>
+                                ) : null}
+                                <TouchableOpacity onPress={onClose} activeOpacity={0.6} style={styles.cancelButton} accessibilityRole="button">
+                                    <Text style={styles.cancelText}>{displayCancelLabel}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -76,79 +78,75 @@ export const SignInRequiredModal: React.FC<SignInRequiredModalProps> = ({
 const styles = createStyles(() => ({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.38)',
+        backgroundColor: colors.overlay,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 0,
+        padding: spacing.l,
     },
     modal: {
         backgroundColor: colors.surface,
         borderRadius: 20,
-        padding: 12,
-        width: '90%',
-        maxWidth: 320,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.12,
-        shadowRadius: 22,
-        elevation: 10,
-        borderWidth: 1,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.l,
+        paddingBottom: spacing.s,
+        width: '100%',
+        maxWidth: 340,
+        borderWidth: isDarkScheme() ? StyleSheet.hairlineWidth : 0,
         borderColor: colors.border,
-    },
-    iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: `${colors.primary}12`,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
     },
     title: {
-        ...typography.h3,
-        textAlign: 'center',
-        marginBottom: 4,
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
         color: colors.text,
+        marginBottom: spacing.s,
     },
     message: {
-        ...typography.body,
-        textAlign: 'center',
+        fontSize: 15,
+        lineHeight: 21,
         color: colors.textSecondary,
-        marginBottom: 8,
-        lineHeight: 20,
+        marginBottom: spacing.l,
     },
     actionsRow: {
-        flexDirection: 'column',
         width: '100%',
-        gap: 4,
-    },
-    cancelButton: {
-        width: '100%',
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.backgroundSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    cancelText: {
-        ...typography.button,
-        color: colors.textSecondary,
-        fontSize: 14,
+        gap: spacing.xs,
     },
     primaryButton: {
-        width: '100%',
-        height: 44,
-        borderRadius: 12,
+        minHeight: 48,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.primary,
     },
     primaryText: {
-        ...typography.button,
+        fontSize: 16,
+        fontWeight: '600',
         color: colors.onPrimary,
-        fontSize: 14,
+    },
+    secondaryButton: {
+        minHeight: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: spacing.m,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.borderHover,
+    },
+    secondaryText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+        textAlign: 'center',
+    },
+    cancelButton: {
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: colors.textSecondary,
     },
 }));

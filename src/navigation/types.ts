@@ -12,7 +12,8 @@ export type RootStackParamList = {
         /** Text shared from another app ("Share -> Vaulto"). */
         sharedText?: string;
     };
-    Settings: undefined;
+    /** section: scroll to that group on open (the AI sign-in prompt links to Voice & AI). */
+    Settings: { section?: 'voice' } | undefined;
     Trash: undefined;
     AskNotes: { question?: string; recentDays?: number } | undefined;
 };

@@ -61,7 +61,8 @@
     "deletedCount": "Placées dans la corbeille : {{count}}",
     "offlineSync": "Hors ligne. Les modifications sont enregistrées et seront synchronisées plus tard.",
     "offline": "Hors ligne. Les notes et les fonctions sur l’appareil restent disponibles.",
-    "unlockWithKey": "Saisissez votre clé de récupération pour les afficher sur cet appareil."
+    "unlockWithKey": "Saisissez votre clé de récupération pour les afficher sur cet appareil.",
+    "listTitle": "Notes"
   },
   "settings": {
     "title": "Paramètres",
@@ -665,7 +666,8 @@
       "inNote": "Dans la note",
       "add": "Ajouter",
       "transcribe": "Transcrire",
-      "view": "Voir"
+      "view": "Voir",
+      "addAudio": "Ajouter l’audio"
     },
     "toast": {
       "audioMissing": "Le fichier de l’enregistrement est absent de cet appareil",
@@ -678,7 +680,9 @@
       "message": "La transcription sur cet appareil est lente. Le cloud est plus rapide.",
       "useCloud": "Utiliser le cloud",
       "switched": "Les enregistrements passent désormais par le cloud. Sans internet, l'appareil transcrit toujours."
-    }
+    },
+    "customInstructionPlaceholder": "Par exemple : raccourcis-le ou traduis-le en anglais",
+    "customInstructionCollapsed": "Écrivez votre propre consigne…"
   },
   "voice": {
     "modelNotDownloaded": "Modèle non téléchargé. Vérifiez les paramètres.",
@@ -708,7 +712,10 @@
     "slowOnDevice": "Cet enregistrement est encore traité sur l’appareil. Pour les suivants, le cloud peut être plus rapide avec internet.",
     "processingSeconds": "{{seconds}} s",
     "transcribingCloud": "Transcription dans le cloud…",
-    "privateModelMissing": "Le traitement uniquement sur cet appareil est activé, mais le modèle vocal est indisponible. L’enregistrement est conservé sur l’appareil. Téléchargez le modèle pour le transcrire."
+    "privateModelMissing": "Le traitement uniquement sur cet appareil est activé, mais le modèle vocal est indisponible. L’enregistrement est conservé sur l’appareil. Téléchargez le modèle pour le transcrire.",
+    "toTextHint": "À la fin, l’enregistrement devient du texte",
+    "audioOnlyHint": "Enregistré en audio seulement, sans texte",
+    "discardConfirmHint": "Appuyez à nouveau sur la corbeille pour supprimer l’enregistrement"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -728,8 +735,8 @@
     "newPassword": "Nouveau mot de passe",
     "confirmPassword": "Confirmer le mot de passe",
     "oneLastStep": "Une dernière étape",
-    "proAccess": "ACCÈS PRO",
-    "unlockFullPotential": "Libérez tout le potentiel.",
+    "proAccess": "Vaulto Pro",
+    "unlockFullPotential": "Plus de minutes de dictée et vos notes sur tous vos appareils.",
     "bestValue": "MEILLEURE OFFRE",
     "restorePurchases": "Restaurer les achats",
     "autoRenewable": "Renouvellement automatique. Annulable à tout moment.",
@@ -798,13 +805,13 @@
     "unableDownloadWhisper": "Impossible de télécharger le modèle Whisper.",
     "purchaseProRequired": "Créez un compte pour acheter Pro.",
     "unlimitedCloudSync": "Synchronisation cloud illimitée",
-    "minsMonthTranscription": "{{minutes}} min/mois de transcription avec Vaulto AI",
+    "minsMonthTranscription": "{{minutes}} minutes de transcription vocale par mois",
     "customApiKeyServer": "Clé API et serveur personnalisés",
     "signInRestorePurchases": "Connectez-vous pour restaurer vos achats.",
     "yearlyPlan": "Forfait annuel",
     "monthlyPlan": "Forfait mensuel",
-    "savePercentage": "ÉCONOMISEZ {{percentage}} %",
-    "vaultoAiMinsMonth": "{{minutes}} minutes Vaulto AI / mois",
+    "savePercentage": "Économisez {{percentage}} %",
+    "vaultoAiMinsMonth": "{{minutes}} minutes par mois",
     "switchToVaultoAI": "Passer à Vaulto AI",
     "searchLanguage": "Rechercher une langue...",
     "confirmAndDelete": "Oui, tout supprimer",
@@ -841,7 +848,10 @@
     "onDeviceFree": "Transcrire gratuitement sur cet appareil",
     "perMonth": "{{price}} par mois",
     "guestMinutesUsedTitle": "Minutes gratuites épuisées",
-    "guestMinutesUsedDesc": "Connectez-vous pour obtenir plus de minutes gratuites et synchroniser vos notes. Ou transcrivez directement sur cet appareil, gratuitement et hors ligne."
+    "guestMinutesUsedDesc": "Connectez-vous pour obtenir plus de minutes gratuites et synchroniser vos notes. Ou transcrivez directement sur cet appareil, gratuitement et hors ligne.",
+    "perYear": "{{price}} par an",
+    "markdownSource": "Modifier en Markdown",
+    "markdownSourceDesc": "La mise en forme apparaît en caractères simples, comme **gras**."
   },
   "a11y": {
     "back": "Retour",
@@ -915,7 +925,9 @@
     "signIn": "Se connecter",
     "privacyNoteLocal": "Fonctionne entièrement sur cet appareil, hors ligne — rien n’est envoyé.",
     "offlineHint": "L’IA sur l’appareil fonctionne sans internet.",
-    "setUpOnDevice": "Configurer"
+    "setUpOnDevice": "Configurer",
+    "subtitle": "Des réponses tirées de tout ce que vous avez noté, avec des liens vers les notes.",
+    "examplesLabel": "Essayez de demander"
   },
   "localAI": {
     "modelMissingTitle": "Téléchargez le modèle d’IA",
@@ -994,7 +1006,8 @@
     "deletePromptText": "Il sera retiré de votre liste.",
     "recordingsEmpty": "Aucun enregistrement pour l’instant.",
     "promptIcon": "Icône",
-    "promptHelper": "Écrivez {text} là où le texte de la note doit aller."
+    "promptHelper": "Écrivez {text} là où le texte de la note doit aller.",
+    "aiSetUpOnDevice": "Configurer l’IA sur l’appareil"
   },
   "trash": {
     "title": "Corbeille",

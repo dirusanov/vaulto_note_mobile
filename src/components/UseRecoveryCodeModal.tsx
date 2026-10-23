@@ -8,7 +8,6 @@ import {
     Pressable,
     ScrollView,
     TouchableOpacity,
-    Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useEncryption } from '../context/EncryptionContext';
@@ -26,6 +25,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import jpeg from 'jpeg-js';
 import jsQR from 'jsqr';
 import { createStyles } from '../theme/createStyles';
+import { appAlert } from './AppAlert';
 
 interface UseRecoveryCodeModalProps {
     visible: boolean;
@@ -112,7 +112,7 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
         if (!permission || !permission.granted) {
             const res = await requestPermission();
             if (!res.granted) {
-                Alert.alert(t('common.permission', 'Permission'), t('settings.recovery.cameraPermissionRequired', 'Camera permission required to scan QR code.'));
+                appAlert(t('common.permission', 'Permission'), t('settings.recovery.cameraPermissionRequired', 'Camera permission required to scan QR code.'));
                 return;
             }
         }
@@ -148,15 +148,15 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
                 const qrCode = jsQR(new Uint8ClampedArray(decoded.data), decoded.width, decoded.height);
                 if (qrCode && qrCode.data) {
                     setCode(qrCode.data);
-                    Alert.alert(t('common.success', 'Success'), t('settings.recovery.qrScannedMsg', 'QR code successfully read!'));
+                    appAlert(t('common.success', 'Success'), t('settings.recovery.qrScannedMsg', 'QR code successfully read!'));
                 } else {
-                    Alert.alert(t('common.error', 'Error'), t('settings.recovery.noQrFound', 'No QR code found in this image.'));
+                    appAlert(t('common.error', 'Error'), t('settings.recovery.noQrFound', 'No QR code found in this image.'));
                 }
             } else {
-                Alert.alert(t('common.error', 'Error'), t('settings.recovery.decodeFailed', 'Failed to decode image data.'));
+                appAlert(t('common.error', 'Error'), t('settings.recovery.decodeFailed', 'Failed to decode image data.'));
             }
         } catch (e: any) {
-            Alert.alert(t('common.error', 'Error'), e.message || t('settings.recovery.errorProcessingImage', 'Failed to process image.'));
+            appAlert(t('common.error', 'Error'), e.message || t('settings.recovery.errorProcessingImage', 'Failed to process image.'));
         } finally {
             if (convertedUri) await FileSystem.deleteAsync(convertedUri, { idempotent: true }).catch(() => {});
         }

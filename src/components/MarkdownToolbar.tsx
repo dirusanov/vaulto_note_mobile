@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, I18nManager, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,6 +71,16 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const [showColorPicker, setShowColorPicker] = useState(false);
+    // A fade at the trailing edge while more buttons are hidden there, so the
+    // row reads as scrollable instead of cut off.
+    const [viewportWidth, setViewportWidth] = useState(0);
+    const [contentWidth, setContentWidth] = useState(0);
+    const [scrolledToEnd, setScrolledToEnd] = useState(false);
+    const hasMoreAtEnd = contentWidth > viewportWidth + 1 && !scrolledToEnd;
+    const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+        setScrolledToEnd(contentOffset.x + layoutMeasurement.width >= contentSize.width - 8);
+    };
 
     React.useEffect(() => {
         onColorPickerToggle?.(showColorPicker);
@@ -125,12 +136,16 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="always"
+                onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+                onContentSizeChange={(width) => setContentWidth(width)}
+                onScroll={handleScroll}
+                scrollEventThrottle={32}
             >
                 {/* Structure */}
                 <ToolbarButton
                     isActive={isActive('todo')}
                     onPress={() => onFormat('todo')}
-                    iconName="check-box"
+                    iconName="checklist"
                     accessibilityLabel={t('a11y.checklist', 'Checklist')}
                 />
 
@@ -240,6 +255,19 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                 />
 
             </ScrollView>
+            {hasMoreAtEnd && (
+                <View pointerEvents="none" style={styles.edgeFade}>
+                    <Svg width="100%" height="100%">
+                        <Defs>
+                            <LinearGradient id="toolbarEdgeFade" x1={I18nManager.isRTL ? '1' : '0'} y1="0" x2={I18nManager.isRTL ? '0' : '1'} y2="0">
+                                <Stop offset="0" stopColor={colors.surface} stopOpacity="0" />
+                                <Stop offset="1" stopColor={colors.surface} stopOpacity="1" />
+                            </LinearGradient>
+                        </Defs>
+                        <Rect width="100%" height="100%" fill="url(#toolbarEdgeFade)" />
+                    </Svg>
+                </View>
+            )}
 
             <Modal
                 transparent
@@ -302,6 +330,13 @@ const styles = createStyles(() => ({
                 elevation: 12,
             },
         }),
+    },
+    edgeFade: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        end: 0,
+        width: 40,
     },
     scrollContent: {
         flexGrow: 1,

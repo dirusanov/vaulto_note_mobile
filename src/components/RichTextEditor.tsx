@@ -8,7 +8,7 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
 import {
     BridgeExtension,
     PlaceholderBridge,
@@ -77,6 +77,8 @@ interface RichTextEditorProps {
     onChecklistToggledWhileIdle?: () => void;
     /** Horizontal swipe while reading: 1 = next (swipe left), -1 = previous. */
     onHorizontalSwipe?: (direction: 1 | -1) => void;
+    /** Put the caret in the text (and raise the keyboard) once the editor loads. */
+    autoFocus?: boolean;
 }
 
 export interface RichTextEditorHandle {
@@ -761,6 +763,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         onDrawingOpen,
         onChecklistToggledWhileIdle,
         onHorizontalSwipe,
+        autoFocus = false,
     } = props;
 
     const onChecklistToggledWhileIdleRef = useRef(onChecklistToggledWhileIdle);
@@ -985,6 +988,24 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             clearTimeout(thresholdTimer);
         };
     }, [baseFontSize, checklistScaleFactor, contentBottomPadding, editor, editorApi, editorState.isReady, resolvedPlaceholder]);
+
+    // Once per editor: a fresh note opens ready to type. Android does not raise
+    // the keyboard for a WebView focused from code, so (as tentap's own autofocus
+    // does) a hidden input takes focus first and the editor then inherits the
+    // open keyboard. The delay lets the screen transition finish.
+    const [autoFocusPending, setAutoFocusPending] = useState(autoFocus);
+    useEffect(() => {
+        if (!autoFocusPending || !editorState.isReady) {
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setAutoFocusPending(false);
+            editor.focus('end');
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [autoFocusPending, editor, editorState.isReady]);
 
 
     useEffect(() => {
@@ -1246,6 +1267,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
 
     return (
         <View style={styles.editorShell}>
+            {autoFocusPending && Platform.OS === 'android' && (
+                <TextInput autoFocus style={styles.keyboardPrimer} importantForAccessibility="no" />
+            )}
             <RichText
                 editor={editor}
                 androidLayerType={Platform.OS === 'android' ? 'software' : undefined}
@@ -1307,7 +1331,8 @@ export const RichTextEditor = memo(RichTextEditorComponent, (prev, next) => (
     prev.onFocus === next.onFocus &&
     prev.onBlur === next.onBlur &&
     prev.onChecklistToggledWhileIdle === next.onChecklistToggledWhileIdle &&
-    prev.onHorizontalSwipe === next.onHorizontalSwipe
+    prev.onHorizontalSwipe === next.onHorizontalSwipe &&
+    prev.autoFocus === next.autoFocus
 ));
 
 const styles = createStyles(() => ({
@@ -1319,6 +1344,12 @@ const styles = createStyles(() => ({
     webview: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    keyboardPrimer: {
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        opacity: 0,
     },
     toolbarAvoiding: {
         position: 'absolute',

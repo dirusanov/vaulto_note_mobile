@@ -12,6 +12,7 @@ import { NotesProvider } from './src/contexts/NotesContext';
 import { RecoveryKeyPrompt } from './src/components/RecoveryKeyPrompt';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { EncryptionGate } from './src/components/EncryptionGate';
+import { AppAlertHost } from './src/components/AppAlert';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from './src/hooks/useAuth';
 import { useEncryption } from './src/context/EncryptionContext';
@@ -97,6 +98,7 @@ export default function App() {
                                             <RootNavigator />
                                             <RecoveryKeyPrompt />
                                         </EncryptionGate>
+                                        <AppAlertHost />
                                     </ThemeProvider>
                                 </AppBootstrap>
                             </NotesProvider>

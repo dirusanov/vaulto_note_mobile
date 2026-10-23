@@ -2,7 +2,6 @@ import React, { ReactNode } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
 
 interface Props {
@@ -35,7 +34,7 @@ export const AuthProviderButton = ({ title, icon, loading = false, onPress }: Pr
 const styles = createStyles(() => ({
     button: {
         height: 52,
-        borderRadius: 12,
+        borderRadius: 26,
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
@@ -51,8 +50,9 @@ const styles = createStyles(() => ({
         alignItems: 'center',
     },
     title: {
-        ...typography.button,
+        fontSize: 16,
+        fontWeight: '600',
         color: colors.text,
-        marginLeft: spacing.s,
+        marginStart: spacing.s,
     },
 }));

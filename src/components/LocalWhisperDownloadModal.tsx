@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
@@ -16,6 +16,7 @@ import { planOfflineModels } from '../services/offlineMode';
 import { formatModelSize } from './OnDeviceModelSection';
 import { setLocalModelsEnabled } from '../utils/storage';
 import { createStyles } from '../theme/createStyles';
+import { appAlert } from './AppAlert';
 
 interface Props {
     visible: boolean;
@@ -83,7 +84,7 @@ export const LocalWhisperDownloadModal: React.FC<Props> = ({ visible, onClose, o
         } catch (e: any) {
             setIsDownloading(false);
             if (e?.message !== 'Download cancelled') {
-                Alert.alert(t('edit.dictation.downloadFailed', 'Download failed'), e?.message || '');
+                appAlert(t('edit.dictation.downloadFailed', 'Download failed'), e?.message || '');
             }
         }
     };

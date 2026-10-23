@@ -1,7 +1,6 @@
 import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, StyleProp, TextStyle } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
 
 interface ButtonProps {
@@ -57,9 +56,6 @@ export const Button = ({
                     backgroundColor: getBackgroundColor(),
                     borderColor: getBorderColor(),
                     borderWidth: getBorderWidth(),
-                    // Remove shadow/elevation for transparent buttons to avoid gray frame
-                    elevation: (variant === 'destructive' || variant === 'outline') ? 0 : 2,
-                    shadowOpacity: (variant === 'destructive' || variant === 'outline') ? 0 : 0.05,
                 },
                 style,
             ]}
@@ -77,24 +73,17 @@ export const Button = ({
 };
 
 const styles = createStyles(() => ({
+    // Flat pill: the fill or the outline carries it, no shadow.
     button: {
-        height: 50,
-        borderRadius: 12,
+        minHeight: 50,
+        borderRadius: 25,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: spacing.l,
         marginVertical: spacing.s,
-        // Shadow for depth
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.05,
-        shadowRadius: 3.84,
-        elevation: 2,
     },
     text: {
-        ...typography.button,
+        fontSize: 16,
+        fontWeight: '600',
     },
 }));

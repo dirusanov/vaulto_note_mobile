@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
-    Alert,
     Text,
     TextInput,
     TouchableOpacity,
@@ -10,6 +9,7 @@ import {
     Platform,
     ScrollView,
     Linking,
+    StyleSheet,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,6 +26,7 @@ import { GoogleLogo } from '../components/GoogleLogo';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
+import { appAlert } from '../components/AppAlert';
 
 export const SignUpScreen = () => {
     const { t } = useTranslation();
@@ -56,23 +57,23 @@ export const SignUpScreen = () => {
             await signIn(result.access_token, result.refresh_token);
             navigation.navigate('NotesList');
         } catch (err) {
-            Alert.alert(t("auth.googleSignInFailed"), getErrorMessage(err, t("auth.googleSignInFailed")));
+            appAlert(t("auth.googleSignInFailed"), getErrorMessage(err, t("auth.googleSignInFailed")));
         }
     };
 
     const handleSignUp = async () => {
         if (!email || !password || !confirmPassword) {
-            Alert.alert(t("common.errorTitle"), t("common.fillFields"));
+            appAlert(t("common.errorTitle"), t("common.fillFields"));
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert(t("common.errorTitle"), t("common.passwordsMatchError"));
+            appAlert(t("common.errorTitle"), t("common.passwordsMatchError"));
             return;
         }
 
         if (!termsAccepted) {
-            Alert.alert(t("common.errorTitle"), t("common.agreeToTerms"));
+            appAlert(t("common.errorTitle"), t("common.agreeToTerms"));
             return;
         }
 
@@ -82,7 +83,7 @@ export const SignUpScreen = () => {
             navigation.navigate('EmailVerification', { email, password });
         } catch (err: any) {
             const message = getErrorMessage(err, 'Registration failed');
-            Alert.alert(t("auth.registrationFailed", "Registration Failed"), message);
+            appAlert(t("auth.registrationFailed", "Registration Failed"), message);
         } finally {
             setLoading(false);
         }
@@ -94,10 +95,10 @@ export const SignUpScreen = () => {
             if (supported) {
                 await Linking.openURL(url);
             } else {
-                Alert.alert(t("common.errorTitle"), `Don't know how to open this URL: ${url}`);
+                appAlert(t("common.errorTitle"), `Don't know how to open this URL: ${url}`);
             }
         } catch (error) {
-            Alert.alert(t("common.errorTitle"), t("common.failedOpenLink", "An error occurred while trying to open the link."));
+            appAlert(t("common.errorTitle"), t("common.failedOpenLink", "An error occurred while trying to open the link."));
         }
     };
 
@@ -113,7 +114,7 @@ export const SignUpScreen = () => {
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
                     >
-                        <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
+                        <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>
 
                     <View style={styles.header}>
@@ -264,33 +265,35 @@ const styles = createStyles(() => ({
         flexGrow: 1,
     },
     backButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.surface,
-        marginTop: spacing.l,
-        marginLeft: spacing.l,
+        marginTop: spacing.s,
+        marginStart: spacing.s,
         alignSelf: 'flex-start',
     },
     header: {
         marginTop: spacing.xl,
-        paddingHorizontal: spacing.l,
+        paddingHorizontal: spacing.m,
         marginBottom: spacing.xl,
     },
     title: {
-        ...typography.h1,
-        marginBottom: spacing.xs,
+        fontSize: 30,
+        lineHeight: 36,
+        fontWeight: '700',
+        letterSpacing: -0.7,
+        color: colors.text,
+        marginBottom: 6,
     },
     subtitle: {
-        ...typography.body,
+        fontSize: 16,
+        lineHeight: 22,
         color: colors.textSecondary,
     },
     form: {
-        paddingHorizontal: spacing.l,
+        paddingHorizontal: spacing.m,
     },
     separator: {
         flexDirection: 'row',
@@ -299,28 +302,30 @@ const styles = createStyles(() => ({
     },
     separatorLine: {
         flex: 1,
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         backgroundColor: colors.border,
     },
     separatorText: {
-        ...typography.caption,
-        color: colors.textSecondary,
+        fontSize: 13,
+        color: colors.textTertiary,
         paddingHorizontal: spacing.m,
     },
     inputGroup: {
         marginBottom: spacing.l,
     },
     label: {
-        ...typography.caption,
-        color: colors.text,
-        marginBottom: spacing.s,
-        fontWeight: '600',
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
+        color: colors.textSecondary,
+        marginBottom: 6,
     },
     input: {
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: 12,
+        borderRadius: 14,
+        minHeight: 52,
         paddingHorizontal: spacing.m,
         paddingVertical: spacing.s,
         color: colors.text,
@@ -366,18 +371,20 @@ const styles = createStyles(() => ({
     },
     button: {
         backgroundColor: colors.primary,
-        borderRadius: 12,
-        padding: spacing.m,
+        borderRadius: 26,
+        minHeight: 52,
+        paddingHorizontal: spacing.l,
         alignItems: 'center',
+        justifyContent: 'center',
         marginTop: spacing.s,
     },
     buttonDisabled: {
         opacity: 0.7,
     },
     buttonText: {
-        ...typography.button,
-        color: '#FFFFFF',
+        fontSize: 16,
         fontWeight: '600',
+        color: colors.onPrimary,
     },
     footer: {
         flexDirection: 'row',

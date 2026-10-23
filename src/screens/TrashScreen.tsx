@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { createStyles } from '../theme/createStyles';
 import { useNotesContext } from '../contexts/NotesContext';
@@ -15,6 +15,7 @@ import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { haptics } from '../utils/haptics';
 import { rtlFlip, textAlignFor } from '../i18n/direction';
 import { UndoSnackbar } from '../components/UndoSnackbar';
+import { appAlert } from '../components/AppAlert';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,7 +61,7 @@ export const TrashScreen = () => {
     };
 
     const handleDeleteForever = (entry: TrashEntry) => {
-        Alert.alert(
+        appAlert(
             t('trash.deleteForeverTitle', 'Delete for good?'),
             t('trash.deleteForeverText', 'The note and its recordings will be erased. This cannot be undone.'),
             [
@@ -79,7 +80,7 @@ export const TrashScreen = () => {
     };
 
     const handleEmpty = () => {
-        Alert.alert(
+        appAlert(
             t('trash.emptyConfirmTitle', 'Empty the trash?'),
             t('trash.emptyConfirmText', 'All notes in the trash and their recordings will be erased. This cannot be undone.'),
             [
@@ -108,9 +109,7 @@ export const TrashScreen = () => {
             <View key={entry.id} style={styles.card}>
                 {voice ? (
                     <View style={styles.voiceRow}>
-                        <View style={styles.voiceIcon}>
-                            <MaterialIcons name="mic" size={18} color={colors.primary} />
-                        </View>
+                        <MaterialIcons name="mic-none" size={18} color={colors.textSecondary} />
                         <Text style={styles.voiceLabel}>
                             {[t('notes.voiceRecording', 'Voice note'), duration].filter(Boolean).join(' · ')}
                         </Text>
@@ -134,10 +133,10 @@ export const TrashScreen = () => {
                         accessibilityRole="button"
                     >
                         {busyId === entry.id ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
+                            <ActivityIndicator size="small" color={colors.textSecondary} />
                         ) : (
                             <>
-                                <MaterialIcons name="restore" size={18} color={colors.primary} />
+                                <MaterialIcons name="restore" size={18} color={colors.text} />
                                 <Text style={styles.restoreText}>{t('trash.restore', 'Restore')}</Text>
                             </>
                         )}
@@ -148,7 +147,7 @@ export const TrashScreen = () => {
                         accessibilityRole="button"
                         accessibilityLabel={t('trash.deleteForever', 'Delete for good')}
                     >
-                        <MaterialIcons name="delete-forever" size={22} color={colors.error} />
+                        <MaterialIcons name="delete-outline" size={22} color={colors.textTertiary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -157,41 +156,39 @@ export const TrashScreen = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            <View style={styles.header}>
+            <View style={styles.topBar}>
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     style={styles.backButton}
+                    activeOpacity={0.6}
+                    hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={t('a11y.back', 'Back')}
                 >
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
-                <View style={styles.headerText}>
-                    <Text style={styles.headerTitle}>{t('trash.title', 'Trash')}</Text>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+                <View style={styles.heading}>
+                    <Text style={styles.headerTitle} accessibilityRole="header">{t('trash.title', 'Trash')}</Text>
                     <Text style={styles.headerSubtitle}>
                         {t('trash.subtitle', 'Deleted notes are kept for {{days}} days, then erased.', { days: TRASH_RETENTION_DAYS })}
                     </Text>
                 </View>
-            </View>
-
-            {entries === null ? (
-                <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />
-            ) : entries.length === 0 ? (
-                <View style={styles.empty}>
-                    <View style={styles.emptyIcon}>
-                        <MaterialIcons name="delete-outline" size={32} color={colors.textTertiary} />
-                    </View>
+                {entries === null ? (
+                    <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.textSecondary} />
+                ) : entries.length === 0 ? (
                     <Text style={styles.emptyText}>{t('trash.empty', 'The trash is empty')}</Text>
-                </View>
-            ) : (
-                <ScrollView contentContainerStyle={styles.list}>
-                    {entries.map(renderEntry)}
-                    <TouchableOpacity style={styles.emptyAllButton} onPress={handleEmpty} accessibilityRole="button">
-                        <MaterialIcons name="delete-sweep" size={20} color={colors.error} />
-                        <Text style={styles.emptyAllText}>{t('trash.emptyAll', 'Empty trash')}</Text>
-                    </TouchableOpacity>
-                </ScrollView>
-            )}
+                ) : (
+                    <>
+                        {entries.map(renderEntry)}
+                        <TouchableOpacity style={styles.emptyAllButton} onPress={handleEmpty} accessibilityRole="button" activeOpacity={0.6}>
+                            <Text style={styles.emptyAllText}>{t('trash.emptyAll', 'Empty trash')}</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
+            </ScrollView>
 
             <UndoSnackbar
                 message={restored ? t('trash.restored', 'Note restored') : null}
@@ -211,54 +208,63 @@ const styles = createStyles(() => ({
         flex: 1,
         backgroundColor: colors.background,
     },
-    header: {
+    topBar: {
         width: '100%',
         maxWidth: 760,
         alignSelf: 'center',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.xs,
+        paddingTop: spacing.s,
+        height: 52,
     },
     backButton: {
-        width: 48,
-        height: 48,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    headerText: {
-        flex: 1,
-    },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: colors.text,
-    },
-    headerSubtitle: {
-        fontSize: 13,
-        color: colors.textSecondary,
-        marginTop: 2,
     },
     list: {
         width: '100%',
         maxWidth: 760,
         alignSelf: 'center',
-        padding: spacing.m,
+        paddingHorizontal: spacing.m,
+        paddingTop: spacing.xs,
         gap: spacing.s,
         paddingBottom: spacing.xxl * 2,
     },
+    heading: {
+        gap: spacing.xs,
+        marginBottom: spacing.m,
+    },
+    headerTitle: {
+        fontSize: 32,
+        lineHeight: 38,
+        fontWeight: '700',
+        letterSpacing: -0.8,
+        color: colors.text,
+    },
+    headerSubtitle: {
+        fontSize: 15,
+        lineHeight: 21,
+        color: colors.textSecondary,
+    },
     card: {
-        padding: spacing.m,
-        borderRadius: 16,
+        paddingHorizontal: spacing.m,
+        paddingTop: 14,
+        paddingBottom: spacing.s,
+        borderRadius: 14,
         backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
         gap: 4,
     },
     title: {
         fontSize: 16,
+        lineHeight: 21,
         fontWeight: '600',
+        letterSpacing: -0.2,
         color: colors.text,
     },
     preview: {
@@ -269,25 +275,18 @@ const styles = createStyles(() => ({
     voiceRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
-    },
-    voiceIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primaryLight,
+        gap: spacing.xs,
     },
     voiceLabel: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '600',
         color: colors.text,
+        fontVariant: ['tabular-nums'],
     },
     meta: {
         fontSize: 12,
         color: colors.textTertiary,
-        marginTop: 4,
+        marginTop: 2,
     },
     actions: {
         flexDirection: 'row',
@@ -299,15 +298,15 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        minHeight: 44,
-        paddingHorizontal: spacing.m,
-        borderRadius: 12,
-        backgroundColor: colors.primaryLight,
+        minHeight: 36,
+        paddingHorizontal: 14,
+        borderRadius: 18,
+        backgroundColor: colors.backgroundSecondary,
     },
     restoreText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: colors.primary,
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text,
     },
     deleteButton: {
         width: 44,
@@ -315,35 +314,16 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    empty: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.m,
-        paddingBottom: spacing.xxl * 2,
-    },
-    emptyIcon: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.backgroundSecondary,
-    },
     emptyText: {
         fontSize: 16,
+        lineHeight: 22,
         color: colors.textSecondary,
     },
     emptyAllButton: {
-        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.s,
         minHeight: 48,
-        marginTop: spacing.m,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.error,
+        marginTop: spacing.s,
     },
     emptyAllText: {
         fontSize: 15,

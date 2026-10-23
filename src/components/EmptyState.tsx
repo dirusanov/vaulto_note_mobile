@@ -10,8 +10,9 @@ import { createStyles } from '../theme/createStyles';
 interface EmptyStateProps {
     message: string;
     /**
-     * 'welcome' introduces the app on an empty list (first launch); 'search' is
-     * a plain "nothing found"; 'plain' just shows the message.
+     * 'welcome' introduces the app on an empty list (first launch; the list puts
+     * its "tap the mic" hint by the dock); 'search' is a plain "nothing found";
+     * 'plain' just shows the message.
      */
     variant?: 'welcome' | 'search' | 'plain';
 }
@@ -29,45 +30,34 @@ export const EmptyState = ({ message, variant = 'plain' }: EmptyStateProps) => {
     }
 
     if (variant === 'welcome') {
-        const points: { icon: keyof typeof MaterialIcons.glyphMap; title: string; text: string }[] = [
+        // What the app does, in three numbered steps.
+        const points: { title: string; text: string }[] = [
             {
-                icon: 'mic',
                 title: t('welcome.voiceTitle', 'Speak, get text'),
                 text: t('welcome.voiceText', 'Recordings turn into text, even without internet.'),
             },
             {
-                icon: 'auto-awesome',
                 title: t('welcome.aiTitle', 'AI tidies it up'),
                 text: t('welcome.aiText', 'Improve the text, find tasks, ask about your notes.'),
             },
             {
-                icon: 'lock',
                 title: t('welcome.privacyTitle', 'Private by default'),
                 text: t('welcome.privacyText', 'Notes are encrypted on the device and end-to-end when synced: only you can read them.'),
             },
         ];
         return (
             <View style={styles.welcome}>
-                <View style={styles.heroIcon}>
-                    <MaterialIcons name="graphic-eq" size={34} color={colors.primary} />
-                </View>
                 <Text style={styles.welcomeTitle}>{t('welcome.title', 'Your notes will live here')}</Text>
                 <View style={styles.points}>
-                    {points.map((point) => (
-                        <View key={point.icon} style={styles.point}>
-                            <View style={styles.pointIcon}>
-                                <MaterialIcons name={point.icon} size={20} color={colors.primary} />
-                            </View>
+                    {points.map((point, index) => (
+                        <View key={index} style={styles.point}>
+                            <Text style={styles.pointNumber}>{index + 1}</Text>
                             <View style={styles.pointText}>
                                 <Text style={styles.pointTitle}>{point.title}</Text>
                                 <Text style={styles.pointBody}>{point.text}</Text>
                             </View>
                         </View>
                     ))}
-                </View>
-                {/* Kept in the layout while hidden, so the screen does not jump. */}
-                <View style={styles.cta}>
-                    <Text style={[styles.ctaText, !message && { opacity: 0 }]}>{message || ' '}</Text>
                 </View>
             </View>
         );
@@ -93,51 +83,43 @@ const styles = createStyles(() => ({
         textAlign: 'center',
     },
     welcome: {
-        alignItems: 'center',
-        paddingHorizontal: spacing.m,
-        paddingTop: spacing.s,
-    },
-    heroIcon: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primaryLight,
-        marginBottom: spacing.m,
+        alignSelf: 'center',
+        width: '100%',
+        maxWidth: 400,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.l,
     },
     welcomeTitle: {
-        fontSize: 22,
+        fontSize: 26,
+        lineHeight: 32,
         fontWeight: '700',
+        letterSpacing: -0.6,
         color: colors.text,
-        textAlign: 'center',
-        marginBottom: spacing.m,
+        marginBottom: spacing.l,
     },
     points: {
-        alignSelf: 'stretch',
-        gap: spacing.s,
+        gap: spacing.l,
     },
     point: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: spacing.m,
-        padding: spacing.m,
-        borderRadius: 16,
-        backgroundColor: colors.surface,
     },
-    pointIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primaryLight,
+    pointNumber: {
+        width: 16,
+        fontSize: 16,
+        lineHeight: 22,
+        fontWeight: '600',
+        color: colors.primary,
+        fontVariant: ['tabular-nums'],
     },
     pointText: {
         flex: 1,
+        gap: 2,
     },
     pointTitle: {
         fontSize: 16,
+        lineHeight: 22,
         fontWeight: '600',
         color: colors.text,
     },
@@ -145,16 +127,5 @@ const styles = createStyles(() => ({
         fontSize: 14,
         lineHeight: 20,
         color: colors.textSecondary,
-        marginTop: 2,
-    },
-    cta: {
-        alignItems: 'center',
-        marginTop: spacing.l,
-    },
-    ctaText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: colors.primary,
-        textAlign: 'center',
     },
 }));

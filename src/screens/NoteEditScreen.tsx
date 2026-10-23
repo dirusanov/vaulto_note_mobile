@@ -6,10 +6,10 @@ import {
     TouchableOpacity,
     Text,
     ActivityIndicator,
-    Alert,
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    StyleSheet,
     Modal,
     TouchableWithoutFeedback,
     Keyboard,
@@ -108,14 +108,13 @@ import { LimitModal } from '../components/LimitModal';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
-import { DRAWING_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
+import { DRAWING_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { DrawingEditor } from '../drawing/DrawingEditor';
 import { DRAWING_MARKER, DrawingDocument, buildDrawingSrc } from '../drawing/drawingEmbeds';
 import { upsertDrawingInHtml } from '../drawing/drawingFormat';
 import { generateUUID } from '../utils/uuid';
 import {
     appendPlainTextSnippetToRichContent,
-    deriveAutoTitleFromPlainText,
     extractEmbeddedAudioPaths,
     hasMeaningfulRichContent,
     isRichHtmlContent,
@@ -158,6 +157,7 @@ import { isDeviceOffline } from '../utils/connectivity';
 import { takeSlowTranscriptionHint } from '../services/localSpeechSpeed';
 import NetInfo from '@react-native-community/netinfo';
 import { scheduleTaskReminder } from '../services/notifications';
+import { appAlert } from '../components/AppAlert';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
 const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
@@ -571,22 +571,21 @@ const HeaderTitle = memo(({
     onChange,
     onFocus,
     inputRef,
-    autoTitle,
 }: {
     title: string;
     onChange: (t: string) => void;
     onFocus: () => void;
     inputRef?: React.RefObject<TextInput | null>;
-    /** What the notes list shows for an untitled note; hinted here too. */
-    autoTitle?: string;
 }) => {
     const { t } = useTranslation();
 
+    // A plain "Title" hint: echoing the first line here in grey read as a
+    // second copy of the text right above it.
     return (
         <TextInput
             ref={inputRef}
             style={styles.titleInput}
-            placeholder={autoTitle || t('edit.titlePlaceholder', 'Title')}
+            placeholder={t('edit.titlePlaceholder', 'Title')}
             placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={onChange}
@@ -603,7 +602,7 @@ const HeaderMeta = memo(({ dateStr, charCount }: { dateStr: string; charCount: n
     return (
         <View style={styles.metaInfo}>
             <Text style={styles.metaText}>
-                {dateStr}  |  {t('edit.charactersCount', '{{count}} characters', { count: charCount })}
+                {dateStr}  ·  {t('edit.charactersCount', '{{count}} characters', { count: charCount })}
             </Text>
         </View>
     );
@@ -961,6 +960,8 @@ export const NoteEditScreen = () => {
         return value === 'local_only' ? 'local_only' : 'sync';
     };
     const routeNoteId = route.params?.noteId;
+    // "New note" from the list: open ready to type, not in reading mode.
+    const opensAsBlankNoteRef = useRef(!routeNoteId && !route.params?.initialRecording);
 
     const [localNoteId, setLocalNoteId] = useState(routeNoteId);
     const localNoteIdRef = useRef(localNoteId);
@@ -1122,7 +1123,7 @@ export const NoteEditScreen = () => {
         if (!isPrivateContent()) {
             return true;
         }
-        Alert.alert(
+        appAlert(
             t("edit.shareBlockedTitle", "Sharing disabled for private notes"),
             t("settings.ui.shareBlockedLocal", "To prevent leaks, share and export are blocked for local-only notes.")
         );
@@ -1218,11 +1219,11 @@ export const NoteEditScreen = () => {
                     UTI: 'net.daringfireball.markdown', // Helping iOS identify it as markdown
                 });
             } else {
-                Alert.alert(t('common.errorTitle', 'Error'), t('alerts.shareUnavailable', 'Sharing is not available on this device.'));
+                appAlert(t('common.errorTitle', 'Error'), t('alerts.shareUnavailable', 'Sharing is not available on this device.'));
             }
         } catch (error) {
             console.error('Error exporting markdown:', error);
-            Alert.alert(t("common.errorTitle"), t("edit.exportMarkdownFailed", "Failed to export markdown file"));
+            appAlert(t("common.errorTitle"), t("edit.exportMarkdownFailed", "Failed to export markdown file"));
         }
     };
 
@@ -1243,14 +1244,14 @@ export const NoteEditScreen = () => {
                         dialogTitle: 'Share Note as Image',
                     });
                 } else {
-                    Alert.alert(t('common.errorTitle', 'Error'), t('alerts.shareUnavailable', 'Sharing is not available on this device.'));
+                    appAlert(t('common.errorTitle', 'Error'), t('alerts.shareUnavailable', 'Sharing is not available on this device.'));
                 }
             } else {
-                Alert.alert(t('common.errorTitle', 'Error'), t('alerts.captureFailed', 'Could not create the image.'));
+                appAlert(t('common.errorTitle', 'Error'), t('alerts.captureFailed', 'Could not create the image.'));
             }
         } catch (error) {
             console.error('Error exporting image:', error);
-            Alert.alert(t("common.errorTitle"), t("edit.exportImageFailed", "Failed to export image"));
+            appAlert(t("common.errorTitle"), t("edit.exportImageFailed", "Failed to export image"));
         }
     };
 
@@ -1459,6 +1460,7 @@ export const NoteEditScreen = () => {
     const [errorShowSettingsAction, setErrorShowSettingsAction] = useState(false);
     const [currentAIProvider, setCurrentAIProvider] = useState<AIProvider>('vaulto_ai');
     const [showTranscriptionAuthModal, setShowTranscriptionAuthModal] = useState(false);
+    const [showAiAuthModal, setShowAiAuthModal] = useState(false);
     const [activeImprovementTask, setActiveImprovementTask] = useState<AIActiveTask | null>(null);
     // Manual AI results wait here for Accept / Try again / Discard. Nothing is
     // persisted and no variant is created until the user accepts.
@@ -1551,7 +1553,7 @@ export const NoteEditScreen = () => {
         if (isProtectedRef.current && !onDeviceProvider) {
             // No "allow once": the promise of a protected note is that its text
             // never reaches a server unencrypted.
-            Alert.alert(
+            appAlert(
                 t('edit.protected.aiBlockedTitle', 'Protected note'),
                 t('edit.protected.aiBlockedDesc', 'AI features send the text to a server, so they are off for protected notes. Remove protection to use them.'),
             );
@@ -1569,7 +1571,7 @@ export const NoteEditScreen = () => {
         }
 
         return await new Promise<boolean>((resolve) => {
-            Alert.alert(
+            appAlert(
                 t("edit.privateProtectionTitle"),
                 t("edit.privateProtectionDesc"),
                 [
@@ -1607,7 +1609,7 @@ export const NoteEditScreen = () => {
                 : baseQuestion;
 
             return await new Promise<boolean>((resolve) => {
-                Alert.alert(
+                appAlert(
                     t('edit.agent.confirmTitle'),
                     question,
                     [
@@ -1636,7 +1638,7 @@ export const NoteEditScreen = () => {
             currentAIProvider === 'local';
 
         if (needsLocalLLMRuntime && !isLocalLLMRuntimeAvailable()) {
-            Alert.alert(
+            appAlert(
                 t('alerts.localLlmUnavailableTitle', 'On-device AI is unavailable'),
                 t('alerts.localLlmUnavailableText', 'This version of the app cannot run AI on the device. Update the app or turn off "Only on this device" in Settings.'),
             );
@@ -1646,7 +1648,7 @@ export const NoteEditScreen = () => {
         if (needsLocalLLMRuntime) {
             const llmStatus = await getLocalLLMModelStatus().catch(() => null);
             if (!llmStatus?.isDownloaded) {
-                Alert.alert(
+                appAlert(
                     t('localAI.modelMissingTitle', 'Download the AI model'),
                     t('localAI.modelMissingDesc', 'On-device AI needs its model ({{model}}, {{size}}). Turn on "AI without internet" in Settings → Voice & AI; after that everything works offline.', {
                         model: llmStatus?.selectedModel.label ?? 'Qwen3.5',
@@ -1662,17 +1664,7 @@ export const NoteEditScreen = () => {
         }
 
         if (isGuest && !isLocalAiProvider) {
-            Alert.alert(
-                t('alerts.aiLockedTitle', 'Sign in to use AI'),
-                t('alerts.aiLockedText', 'Cloud AI features are available after signing in. On-device AI works without an account.'),
-                [
-                    { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-                    {
-                        text: t('ask.signIn', 'Sign in'),
-                        onPress: () => navigation.navigate('SignIn')
-                    }
-                ]
-            );
+            setShowAiAuthModal(true);
             return;
         }
         const consentGranted = await requestPrivateAIConsent();
@@ -1697,7 +1689,7 @@ export const NoteEditScreen = () => {
 
     const confirm = useCallback((title: string, message: string, action: string, destructive = false) =>
         new Promise<boolean>((resolve) => {
-            Alert.alert(title, message, [
+            appAlert(title, message, [
                 { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
                 { text: action, style: destructive ? 'destructive' : 'default', onPress: () => resolve(true) },
             ], { cancelable: true, onDismiss: () => resolve(false) });
@@ -1738,7 +1730,7 @@ export const NoteEditScreen = () => {
         }
         await applyProtection({ isProtected: true, sync: true });
         if (!accountEncrypted) {
-            Alert.alert(
+            appAlert(
                 t('edit.protected.syncWaitsTitle', 'Sync waits for encryption'),
                 isAuthenticated && !isGuest
                     ? t('edit.protected.syncWaitsE2ee', 'Protected notes sync only end-to-end encrypted. Turn on encryption in Settings → Cloud Sync and the note syncs.')
@@ -1770,7 +1762,7 @@ export const NoteEditScreen = () => {
             { text: t('edit.onDeviceOffer.later', 'Not now'), style: 'cancel' },
             { text: t('edit.onDeviceOffer.download', 'Download'), onPress: enable },
         ];
-        Alert.alert(
+        appAlert(
             reason === 'offline'
                 ? t('edit.onDeviceOffer.offlineTitle', 'Work without internet')
                 : t('edit.onDeviceOffer.suggestTitle', 'Transcribe for free on your device'),
@@ -1809,7 +1801,7 @@ export const NoteEditScreen = () => {
     }, [t]);
 
     const promptOnDeviceModelRequired = useCallback(() => {
-        Alert.alert(
+        appAlert(
             t('edit.protected.modelTitle', 'Recording saved without text'),
             isProtectedRef.current
                 ? t('edit.protected.modelDesc', 'Protected notes are transcribed only on the device. Download the speech model once to get text from recordings.')
@@ -3480,7 +3472,7 @@ export const NoteEditScreen = () => {
             return;
         }
 
-        Alert.alert(t('common.errorTitle', 'Error'), t('alerts.insertAudioFailed', 'Could not add the audio player to the note.'));
+        appAlert(t('common.errorTitle', 'Error'), t('alerts.insertAudioFailed', 'Could not add the audio player to the note.'));
     }, [
         buildInsertedTextForVariant,
         closeRecordingsList,
@@ -3870,7 +3862,7 @@ export const NoteEditScreen = () => {
             return { ok: true, message: t('edit.tasks.reminderSet', 'Reminder: {{when}}', { when }) };
         }
         if (result.error === 'permission') {
-            Alert.alert(
+            appAlert(
                 t('edit.tasks.notifyOffTitle', 'Notifications are off'),
                 t('edit.tasks.notifyOffText', 'Allow notifications for Vaulto in the device settings to get reminders.'),
                 [
@@ -4054,7 +4046,7 @@ export const NoteEditScreen = () => {
     }, []);
 
     const handleMakeVariantMain = useCallback((improvementId: string) => {
-        Alert.alert(
+        appAlert(
             t('edit.versions.makeMainConfirmTitle', 'Use this version as the main text?'),
             t('edit.versions.makeMainConfirmBody', 'The current original is kept as a separate version, so nothing is lost.'),
             [
@@ -4106,7 +4098,7 @@ export const NoteEditScreen = () => {
                                 showToast(t('edit.versions.madeMain', 'This version is now the main text'));
                             } catch (error) {
                                 console.error('Failed to promote version', error);
-                                Alert.alert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
+                                appAlert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
                             }
                         })();
                     },
@@ -4127,7 +4119,7 @@ export const NoteEditScreen = () => {
             showToast(t('edit.versions.copied', 'Copied to a new note'));
         } catch (error) {
             console.error('Failed to copy version to a new note', error);
-            Alert.alert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
+            appAlert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
         }
     }, [createNote, existingNote?.title, noteTitle, privacy, resolveVariantContent, showToast, storageScope, t]);
 
@@ -4159,7 +4151,7 @@ export const NoteEditScreen = () => {
             improvementTitleSavedRef.current[target.id] = nextTitle;
         } catch (error) {
             console.error('Failed to rename version', error);
-            Alert.alert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
+            appAlert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
         }
     }, [noteImprovements, renameTarget, t, updateImprovement]);
 
@@ -5621,7 +5613,7 @@ export const NoteEditScreen = () => {
         const selected = selectedRecordingForText;
         const recognizedText = selected?.transcription?.trim() || '';
         if (!selected || !recognizedText) {
-            Alert.alert(t('alerts.noTranscriptTitle', 'No text yet'), t('alerts.noTranscriptText', 'This recording has not been transcribed yet.'));
+            appAlert(t('alerts.noTranscriptTitle', 'No text yet'), t('alerts.noTranscriptText', 'This recording has not been transcribed yet.'));
             return;
         }
 
@@ -5641,7 +5633,7 @@ export const NoteEditScreen = () => {
         const selected = selectedRecordingForText;
         const recognizedText = selected?.transcription?.trim() || '';
         if (!recognizedText) {
-            Alert.alert(t('alerts.noTranscriptTitle', 'No text yet'), t('alerts.noTranscriptText', 'This recording has not been transcribed yet.'));
+            appAlert(t('alerts.noTranscriptTitle', 'No text yet'), t('alerts.noTranscriptText', 'This recording has not been transcribed yet.'));
             return;
         }
         await Clipboard.setStringAsync(recognizedText);
@@ -5679,7 +5671,7 @@ export const NoteEditScreen = () => {
     const startRealtimeDictationSession = useCallback(async () => {
         const hasPermission = await AudioService.requestPermissions();
         if (!hasPermission) {
-            Alert.alert(
+            appAlert(
                 t('common.errorTitle'),
                 t('edit.dictation.permissionDenied', 'Microphone access is required for dictation.'),
             );
@@ -5719,7 +5711,7 @@ export const NoteEditScreen = () => {
                 onEnd: (error) => {
                     void stopRealtimeDictation(true);
                     if (error) {
-                        Alert.alert(
+                        appAlert(
                             t('edit.dictation.errorTitle', 'Dictation Error'),
                             error,
                         );
@@ -5739,7 +5731,7 @@ export const NoteEditScreen = () => {
             if (msg.includes('is not downloaded') || msg.includes('download')) {
                 setShowLocalWhisperModal(true);
             } else {
-                Alert.alert(
+                appAlert(
                     t('edit.dictation.errorTitle', 'Dictation Error'),
                     msg || t('edit.dictation.startFailed', 'Failed to start dictation'),
                 );
@@ -5877,7 +5869,7 @@ export const NoteEditScreen = () => {
                 : resolveVariantContent(variantAtRequestStart);
             const sourceText = richContentToPlainText(sourceRichText).trim();
             if (!sourceText) {
-                Alert.alert(t('edit.improvePreview.title'), t('edit.improvePreview.emptyText'));
+                appAlert(t('edit.improvePreview.title'), t('edit.improvePreview.emptyText'));
                 return;
             }
 
@@ -6049,7 +6041,7 @@ export const NoteEditScreen = () => {
     };
 
     const handleDeletePrompt = (id: string) => {
-        Alert.alert(
+        appAlert(
             t('alerts.deletePromptTitle', 'Delete this prompt?'),
             t('alerts.deletePromptText', 'It will be removed from your list.'),
             [
@@ -6159,13 +6151,6 @@ export const NoteEditScreen = () => {
         });
 
     const plainContent = editMode === 'visual' ? visualPlainText : richContentToPlainText(content);
-    // Same rule NoteCard uses for untitled notes.
-    const autoTitle = useMemo(() => deriveAutoTitleFromPlainText(plainContent), [plainContent]);
-    // With a version open, an untitled note still hints the title the list shows.
-    const originalAutoTitle = useMemo(
-        () => (activeVariantId === 'original' ? '' : deriveAutoTitleFromPlainText(richContentToPlainText(existingNote?.content || ''))),
-        [activeVariantId, existingNote?.content]
-    );
     const charCount = plainContent.replace(/\r?\n/g, '').length;
     const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
@@ -6544,7 +6529,6 @@ export const NoteEditScreen = () => {
                 onChange={activeVariantId === 'original' ? handleTitleChange : handleNoteTitleEditOnVariant}
                 onFocus={() => setIsEditing(true)}
                 inputRef={titleInputRef}
-                autoTitle={activeVariantId === 'original' ? autoTitle : originalAutoTitle}
             />
 
             <HeaderMeta
@@ -6578,11 +6562,9 @@ export const NoteEditScreen = () => {
         </View>
     ), [
         activeVariantId,
-        autoTitle,
         charCount,
         dateStr,
         handleNoteTitleEditOnVariant,
-        originalAutoTitle,
         handleTitleChange,
         handleVariantSelect,
         improvementOptionIcons,
@@ -6601,7 +6583,7 @@ export const NoteEditScreen = () => {
 
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={[styles.iconButton, styles.headerEdgeLeft]} accessibilityRole="button" accessibilityLabel={t("a11y.back", "Back")}>
-                    <MaterialIcons name="arrow-back" size={28} color={colors.text} style={rtlFlip} />
+                    <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
                 <View style={styles.headerRight}>
                     {/* Text Appearance Button */}
@@ -6626,7 +6608,7 @@ export const NoteEditScreen = () => {
                             <MaterialIcons
                                 name="auto-awesome"
                                 size={24}
-                                color={canUseAI ? colors.primary : colors.textMuted}
+                                color={canUseAI ? colors.text : colors.textMuted}
                             />
                         )}
                     </TouchableOpacity>
@@ -6798,7 +6780,7 @@ export const NoteEditScreen = () => {
                                                 onPress={() => setShowPromptBuilder(true)}
                                             >
                                                 <MaterialIcons name="add" size={18} color={colors.primary} />
-                                                <Text style={styles.aiActionText}>{t("edit.create", "Create")}</Text>
+                                                <Text style={styles.aiActionText}>{t("edit.newPrompt", "New prompt")}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -6841,19 +6823,26 @@ export const NoteEditScreen = () => {
                                                 style={styles.customLabelContainer}
                                                 onPress={() => setShowCustomInput(!showCustomInput)}
                                             >
+                                                {/* Collapsed, it reads as an empty field to type into. */}
                                                 <MaterialIcons
-                                                    name={showCustomInput ? "expand-less" : "expand-more"}
-                                                    size={24}
-                                                    color={colors.text}
+                                                    name={showCustomInput ? "expand-less" : "edit"}
+                                                    size={showCustomInput ? 22 : 18}
+                                                    color={colors.textSecondary}
                                                 />
-                                                <Text style={styles.customBoxLabel}>{t("edit.customInstruction", "Custom Instruction")}</Text>
+                                                {showCustomInput ? (
+                                                    <Text style={styles.customBoxLabel}>{t("edit.customInstruction", "Custom Instruction")}</Text>
+                                                ) : (
+                                                    <Text style={styles.customBoxPlaceholder} numberOfLines={1}>
+                                                        {t("edit.customInstructionCollapsed", "Write your own instruction…")}
+                                                    </Text>
+                                                )}
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
                                                 style={styles.customMicHeaderButton}
                                                 onPress={handleVoiceInstructionStart}
                                             >
-                                                <MaterialIcons name="mic" size={24} color={colors.primary} />
+                                                <MaterialIcons name="mic-none" size={22} color={colors.textSecondary} />
                                             </TouchableOpacity>
                                         </View>
 
@@ -6862,7 +6851,7 @@ export const NoteEditScreen = () => {
                                                 <View style={styles.customInputRow}>
                                                     <TextInput
                                                         style={styles.customInstructionInput}
-                                                        placeholder="e.g. 'Make it funnier' or 'Translate to Spanish'"
+                                                        placeholder={t('edit.customInstructionPlaceholder', 'For example: make it shorter, or translate to Spanish')}
                                                         placeholderTextColor={colors.textMuted}
                                                         value={customInstruction}
                                                         onChangeText={setCustomInstruction}
@@ -6879,7 +6868,7 @@ export const NoteEditScreen = () => {
                                                     disabled={!customInstruction.trim() || isAIProcessing}
                                                 >
                                                     <Text style={styles.runCustomButtonText}>{t("edit.applyInstruction", "Apply Instruction")}</Text>
-                                                    <MaterialIcons name="arrow-forward" size={16} color="white" style={rtlFlip} />
+                                                    <MaterialIcons name="arrow-forward" size={18} color={colors.onPrimary} style={rtlFlip} />
                                                 </TouchableOpacity>
                                             </View>
                                         )}
@@ -6921,7 +6910,7 @@ export const NoteEditScreen = () => {
                                                             activeOpacity={0.7}
                                                         >
                                                             <View style={styles.aiOptionIconContainer}>
-                                                                <MaterialIcons name={item.icon as any} size={24} color={colors.primary} />
+                                                                <MaterialIcons name={item.icon as any} size={22} color={colors.textSecondary} />
                                                             </View>
                                                             <View style={styles.aiOptionTextWrapper}>
                                                                 <Text style={styles.aiOptionLabel}>{getLocalizedPresetLabel(item, t)}</Text>
@@ -6938,10 +6927,9 @@ export const NoteEditScreen = () => {
                                                                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                                                     style={{ padding: 8, marginRight: 4 }}
                                                                 >
-                                                                    <MaterialIcons name="delete-outline" size={22} color={colors.error} />
+                                                                    <MaterialIcons name="delete-outline" size={22} color={colors.textTertiary} />
                                                                 </TouchableOpacity>
                                                             )}
-                                                            <MaterialIcons name="drag-handle" size={22} color={colors.textMuted} />
                                                         </TouchableOpacity>
                                                     </ScaleDecorator>
                                                 )}
@@ -7067,31 +7055,13 @@ export const NoteEditScreen = () => {
                             large font, the full menu is taller than the screen. Read on open. */}
                         <View style={[styles.menuContainer, { maxHeight: Dimensions.get('window').height - 80 - Math.max(insets.bottom, spacing.m) }]}>
                         <ScrollView style={styles.menuScroll} bounces={false} showsVerticalScrollIndicator>
-                            <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>{t("edit.editorMode", "EDITOR MODE")}</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => { setEditMode('visual'); setShowMenu(false); setIsEditing(true); }} style={styles.menuItem}>
-                                <MaterialIcons name="view-quilt" size={20} color={editMode === 'visual' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
-                                <Text style={[styles.menuItemText, editMode === 'visual' && { color: colors.primary, fontWeight: 'bold' }]}>{t("edit.visualEditor", "Visual Editor")}</Text>
-                                {editMode === 'visual' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => { void enterRawMode(); }} style={styles.menuItem}>
-                                <MaterialIcons name="code" size={20} color={editMode === 'raw' ? colors.primary : colors.text} style={{ marginRight: 12 }} />
-                                <Text style={[styles.menuItemText, editMode === 'raw' && { color: colors.primary, fontWeight: 'bold' }]}>{t("edit.rawMarkdown", "Raw Markdown")}</Text>
-                                {editMode === 'raw' && <MaterialIcons name="check" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />}
-                            </TouchableOpacity>
-
-                            <View style={styles.menuDivider} />
-
-                            <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>{t("edit.copy", "COPY")}</Text>
-                            </View>
+                            {/* Visual vs Markdown editing lives in Text appearance (the Aa button). */}
                             <TouchableOpacity onPress={handleCopyPlainText} style={styles.menuItem}>
-                                <MaterialIcons name="content-copy" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <MaterialIcons name="content-copy" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                 <Text style={styles.menuItemText}>{t("edit.copyPlainText", "Copy Plain Text")}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleCopyMarkdown} style={styles.menuItem}>
-                                <MaterialIcons name="code" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                <MaterialIcons name="code" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                 <Text style={styles.menuItemText}>{t("edit.copyMarkdown", "Copy Markdown")}</Text>
                             </TouchableOpacity>
 
@@ -7099,7 +7069,7 @@ export const NoteEditScreen = () => {
                                 <>
                                     <View style={styles.menuDivider} />
                                     <TouchableOpacity onPress={handleFindTasks} style={styles.menuItem}>
-                                        <MaterialIcons name="task-alt" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="task-alt" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                         <Text style={styles.menuItemText}>{t("edit.tasks.find", "Find tasks")}</Text>
                                     </TouchableOpacity>
                                 </>
@@ -7107,14 +7077,11 @@ export const NoteEditScreen = () => {
                             {visibleImprovements.length > 0 && (
                                 <>
                                     <View style={styles.menuDivider} />
-                                    <View style={styles.menuSectionHeader}>
-                                        <Text style={styles.menuSectionTitle}>{t("edit.versions.menuSection", "VERSIONS")}</Text>
-                                    </View>
                                     <TouchableOpacity
                                         onPress={() => { setShowMenu(false); openVersionsSheet(); }}
                                         style={styles.menuItem}
                                     >
-                                        <MaterialIcons name="view-list" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="view-list" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                         <Text style={styles.menuItemText}>{t("edit.versions.all", "All versions")}</Text>
                                     </TouchableOpacity>
                                     {activeVariantId !== 'original' && (
@@ -7125,7 +7092,7 @@ export const NoteEditScreen = () => {
                                             }}
                                             style={styles.menuItem}
                                         >
-                                            <MaterialIcons name="compare-arrows" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                            <MaterialIcons name="compare-arrows" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                             <Text style={styles.menuItemText}>{t("edit.versions.compare", "Compare with Original")}</Text>
                                         </TouchableOpacity>
                                     )}
@@ -7136,19 +7103,16 @@ export const NoteEditScreen = () => {
                                 <>
                                     <View style={styles.menuDivider} />
 
-                                    <View style={styles.menuSectionHeader}>
-                                        <Text style={styles.menuSectionTitle}>{t("edit.shareExport", "SHARE & EXPORT")}</Text>
-                                    </View>
                                     <TouchableOpacity onPress={handleShareText} style={styles.menuItem}>
-                                        <MaterialIcons name="share" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="share" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                         <Text style={styles.menuItemText}>{t("edit.shareText", "Share Text")}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={handleExportMarkdownFile} style={styles.menuItem}>
-                                        <MaterialIcons name="file-present" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="file-present" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                         <Text style={styles.menuItemText}>{t("edit.exportMarkdown", "Export Markdown File")}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={handleExportImage} style={styles.menuItem}>
-                                        <MaterialIcons name="image" size={20} color={colors.text} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="image" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                         <Text style={styles.menuItemText}>{t("edit.exportImage", "Export as Image")}</Text>
                                     </TouchableOpacity>
                                 </>
@@ -7156,11 +7120,8 @@ export const NoteEditScreen = () => {
                                 <>
                                     <View style={styles.menuDivider} />
 
-                                    <View style={styles.menuSectionHeader}>
-                                        <Text style={styles.menuSectionTitle}>{t("edit.shareExport", "SHARE & EXPORT")}</Text>
-                                    </View>
                                     <View style={styles.menuItem}>
-                                        <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                         <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>
                                             {isProtected
                                                 ? t('edit.protected.shareDisabled', 'Off for protected notes')
@@ -7172,9 +7133,6 @@ export const NoteEditScreen = () => {
 
                             <View style={styles.menuDivider} />
 
-                            <View style={styles.menuSectionHeader}>
-                                <Text style={styles.menuSectionTitle}>{t("edit.security", "SECURITY")}</Text>
-                            </View>
                             <TouchableOpacity
                                 onPress={() => {
                                     setShowMenu(false);
@@ -7185,8 +7143,8 @@ export const NoteEditScreen = () => {
                                 <MaterialIcons
                                     name={isProtected ? 'remove-moderator' : 'shield'}
                                     size={20}
-                                    color={isProtected ? colors.text : colors.primary}
-                                    style={{ marginRight: 12 }}
+                                    color={colors.textSecondary}
+                                    style={styles.menuItemIcon}
                                 />
                                 <Text style={styles.menuItemText}>
                                     {isProtected ? t('edit.protected.unprotect', 'Remove protection') : t('edit.protected.protectNote', 'Protect note')}
@@ -7203,8 +7161,8 @@ export const NoteEditScreen = () => {
                                     <MaterialIcons
                                         name={effectiveStorageScope === 'sync' ? (accountEncrypted ? 'cloud-done' : 'cloud-queue') : 'cloud-off'}
                                         size={20}
-                                        color={colors.text}
-                                        style={{ marginRight: 12 }}
+                                        color={colors.textSecondary}
+                                        style={styles.menuItemIcon}
                                     />
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.menuItemText}>
@@ -7225,7 +7183,7 @@ export const NoteEditScreen = () => {
                             <View style={styles.menuDivider} />
 
                             <TouchableOpacity onPress={handleDelete} style={styles.menuItem}>
-                                <MaterialIcons name="delete-outline" size={20} color={colors.error} style={{ marginRight: 12 }} />
+                                <MaterialIcons name="delete-outline" size={20} color={colors.error} style={styles.menuItemIcon} />
                                 <Text style={[styles.menuItemText, { color: colors.error }]}>{t("edit.deleteNote", "Delete Note")}</Text>
                             </TouchableOpacity>
                         </ScrollView>
@@ -7323,6 +7281,7 @@ export const NoteEditScreen = () => {
                             placeholder={t('edit.placeholderVisual', 'Start typing...')}
                             onAudioAction={handleAudioActionFromEditor}
                             onDrawingOpen={DRAWING_ENABLED ? setDrawingDocument : undefined}
+                            autoFocus={opensAsBlankNoteRef.current}
                         />
                     )}
                 </View>
@@ -7354,9 +7313,10 @@ export const NoteEditScreen = () => {
                 </View>
             )}
 
-            {/* Floating Mic Button */}
+            {/* Floating Mic Button. While typing, the toolbar's own mic dictates:
+                one microphone on screen at a time. */}
             {
-                !showVoiceRecorder && (
+                !showVoiceRecorder && !(LOCAL_WHISPER_ENABLED && editMode === 'visual' && keyboardVisibleState) && (
                     <View style={[styles.micFloatingContainer, { bottom: floatingMicBottomOffset }]}>
                         <TouchableOpacity
                             style={styles.micButton}
@@ -7515,6 +7475,22 @@ export const NoteEditScreen = () => {
                 }}
             />
 
+            <SignInRequiredModal
+                visible={showAiAuthModal}
+                title={t('alerts.aiLockedTitle', 'Sign in to use AI')}
+                message={t('alerts.aiLockedText', 'Cloud AI features are available after signing in. On-device AI works without an account.')}
+                onClose={() => setShowAiAuthModal(false)}
+                onSignIn={() => {
+                    setShowAiAuthModal(false);
+                    navigation.navigate('SignIn');
+                }}
+                secondaryLabel={LOCAL_MODELS_ENABLED ? t('alerts.aiSetUpOnDevice', 'Set up AI on this device') : undefined}
+                onSecondary={() => {
+                    setShowAiAuthModal(false);
+                    navigation.navigate('Settings', { section: 'voice' });
+                }}
+            />
+
             <LimitModal />
 
             {
@@ -7602,7 +7578,7 @@ export const NoteEditScreen = () => {
                 <TouchableWithoutFeedback onPress={closeRecordingsList}>
                     <GestureHandlerRootView style={styles.modalOverlay}>
                         <TouchableWithoutFeedback>
-                            <View style={styles.aiModalContent}>
+                            <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + spacing.s }]}>
                                 <Text style={styles.aiModalTitle}>{t("edit.voiceRecordings", "Voice Recordings")}</Text>
 
                                 {!!recordingsPreviewUri && (
@@ -7621,19 +7597,19 @@ export const NoteEditScreen = () => {
 
 
                                     {voiceRecordings.length === 0 ? (
-                                        <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: spacing.m }}>
+                                        <Text style={styles.recordingsEmpty}>
                                             {t('alerts.recordingsEmpty', 'No recordings yet.')}
                                         </Text>
                                     ) : (
-                                        voiceRecordings.map((rec) => {
+                                        voiceRecordings.map((rec, index) => {
                                             const isPlaying = playingRecordingId === rec.id;
                                             const isAttachedToNote = embeddedAudioPaths.includes(rec.file_path);
                                             const hasRecognizedText = !!rec.transcription?.trim();
                                             const isInsertActionDisabled = !hasRecognizedText && isAttachedToNote;
                                             const insertActionLabel = hasRecognizedText
                                                 ? t('edit.recordings.addText', 'Add text')
-                                                : (isAttachedToNote ? t('edit.recordings.inNote', 'In note') : t('edit.recordings.add', 'Add'));
-                                            const insertActionIcon = hasRecognizedText ? 'notes' : 'add';
+                                                : (isAttachedToNote ? t('edit.recordings.inNote', 'In note') : t('edit.recordings.addAudio', 'Add audio'));
+                                            const insertActionIcon = hasRecognizedText ? 'notes' : (isAttachedToNote ? 'check' : 'add');
                                             // Decoupled from transcriptionEnabled per user request
                                             const canTranscribeThisRecording = true;
                                             const isAnyTranscribing = !!transcribingRecordingId;
@@ -7642,34 +7618,27 @@ export const NoteEditScreen = () => {
                                             return (
                                                 <TouchableOpacity
                                                     key={rec.id}
-                                                    style={[
-                                                        styles.recordingItem,
-                                                        isPlaying && {
-                                                            backgroundColor: colors.backgroundSecondary,
-                                                            borderColor: colors.border,
-                                                            borderWidth: 1
-                                                        }
-                                                    ]}
+                                                    style={[styles.recordingItem, index > 0 && styles.recordingItemDivided]}
                                                     onPress={() => {
                                                         void handlePreviewRecording(rec);
                                                     }}
+                                                    activeOpacity={0.6}
+                                                    accessibilityRole="button"
+                                                    accessibilityState={{ selected: isPlaying }}
                                                 >
                                                     {/* Actions wrap under the duration when they do not fit beside it. */}
                                                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', rowGap: spacing.s }}>
                                                         {/* Tapping the row plays it: the icon says so. */}
-                                                        <View style={[
-                                                            styles.recordingIconContainer,
-                                                            { backgroundColor: colors.primary + (isPlaying ? '24' : '14') }
-                                                        ]}>
+                                                        <View style={[styles.recordingIconContainer, isPlaying && styles.recordingIconContainerActive]}>
                                                             <MaterialIcons
                                                                 name={isPlaying ? "graphic-eq" : "play-arrow"}
                                                                 size={22}
-                                                                color={colors.primary}
+                                                                color={isPlaying ? colors.onPrimary : colors.text}
                                                             />
                                                         </View>
 
                                                         <View style={{ flex: 1, minWidth: 110, marginRight: spacing.s }}>
-                                                            <Text style={[styles.recordingTitle, isPlaying && { color: colors.primary }]} numberOfLines={1}>
+                                                            <Text style={styles.recordingTitle} numberOfLines={1}>
                                                                 {formatDuration(rec.duration)}
                                                             </Text>
                                                             <Text style={styles.recordingSubtitle} numberOfLines={1}>
@@ -7685,8 +7654,8 @@ export const NoteEditScreen = () => {
                                                                     void handleInsertRecordingIntoNote(rec);
                                                                 }}
                                                             >
-                                                                <MaterialIcons name={insertActionIcon} size={14} color={isInsertActionDisabled ? colors.textMuted : colors.primary} />
-                                                                <Text style={[styles.recordingActionChipText, isInsertActionDisabled && { color: colors.textMuted }]}>
+                                                                <MaterialIcons name={insertActionIcon} size={16} color={colors.textSecondary} />
+                                                                <Text style={styles.recordingActionChipText}>
                                                                     {insertActionLabel}
                                                                 </Text>
                                                             </TouchableOpacity>
@@ -7700,10 +7669,10 @@ export const NoteEditScreen = () => {
                                                                     }}
                                                                 >
                                                                     {isTranscribingThisRecording ? (
-                                                                        <ActivityIndicator size="small" color={colors.primary} />
+                                                                        <ActivityIndicator size="small" color={colors.textSecondary} />
                                                                     ) : (
                                                                         <>
-                                                                            <MaterialIcons name="auto-awesome" size={12} color={colors.primary} />
+                                                                            <MaterialIcons name="subject" size={16} color={colors.textSecondary} />
                                                                             <Text style={styles.recordingActionChipText}>{t('edit.recordings.transcribe', 'Transcribe')}</Text>
                                                                         </>
                                                                     )}
@@ -7712,11 +7681,11 @@ export const NoteEditScreen = () => {
 
                                                             {hasRecognizedText && (
                                                                 <TouchableOpacity
-                                                                    style={[styles.recordingActionChip, { backgroundColor: colors.backgroundSecondary }]}
+                                                                    style={styles.recordingActionChip}
                                                                     onPress={() => openRecordingTextView(rec)}
                                                                 >
-                                                                    <MaterialIcons name="visibility" size={14} color={colors.textSecondary} />
-                                                                    <Text style={[styles.recordingActionChipText, { color: colors.textSecondary }]}>{t('edit.recordings.view', 'View')}</Text>
+                                                                    <MaterialIcons name="visibility" size={16} color={colors.textSecondary} />
+                                                                    <Text style={styles.recordingActionChipText}>{t('edit.recordings.view', 'View')}</Text>
                                                                 </TouchableOpacity>
                                                             )}
 
@@ -7726,7 +7695,7 @@ export const NoteEditScreen = () => {
                                                                 accessibilityRole="button"
                                                                 accessibilityLabel={t('common.delete', 'Delete')}
                                                             >
-                                                                <MaterialIcons name="delete-outline" size={18} color={colors.error} />
+                                                                <MaterialIcons name="delete-outline" size={20} color={colors.textTertiary} />
                                                             </TouchableOpacity>
                                                         </View>
                                                     </View>
@@ -7803,6 +7772,16 @@ export const NoteEditScreen = () => {
                 onFontSizeChange={handleFontSizeChange}
                 autoScalingEnabled={autoScalingEnabled}
                 onAutoScalingChange={handleAutoScalingChange}
+                markdownMode={editMode === 'raw'}
+                onMarkdownModeChange={(enabled) => {
+                    setShowAppearanceModal(false);
+                    if (enabled) {
+                        void enterRawMode();
+                    } else {
+                        setEditMode('visual');
+                        setIsEditing(true);
+                    }
+                }}
             />
 
         </ScreenContainer >
@@ -7866,19 +7845,19 @@ const styles = createStyles(() => ({
     },
     menuContainer: {
         position: 'absolute',
-        top: 80,
+        top: 72,
         right: spacing.m,
         backgroundColor: colors.surfaceElevated,
-        borderRadius: 14,
-        borderWidth: isDarkScheme() ? 1 : 0,
-        borderColor: colors.border,
-        padding: spacing.xs,
+        borderRadius: 16,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.borderHover : colors.border,
+        paddingVertical: spacing.xs,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
-        minWidth: 200,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: isDarkScheme() ? 0.4 : 0.1,
+        shadowRadius: 20,
+        elevation: 6,
+        minWidth: 220,
     },
     menuScroll: {
         flexGrow: 0,
@@ -7886,24 +7865,17 @@ const styles = createStyles(() => ({
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: spacing.s + 4,
+        minHeight: 48,
+        paddingVertical: 10,
         paddingHorizontal: spacing.m,
     },
-    menuSectionHeader: {
-        paddingHorizontal: spacing.m,
-        paddingTop: spacing.s + 4,
-        paddingBottom: spacing.s,
-    },
-    menuSectionTitle: {
-        fontSize: 11,
-        color: colors.textMuted,
-        fontWeight: '600',
-        letterSpacing: 0.5,
+    menuItemIcon: {
+        marginEnd: 14,
     },
     menuDivider: {
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         backgroundColor: colors.border,
-        marginVertical: 4,
+        marginVertical: spacing.xs,
     },
     menuItemHint: {
         fontSize: 12,
@@ -7951,8 +7923,10 @@ const styles = createStyles(() => ({
     },
 
     titleInput: {
-        fontSize: 24,
-        fontWeight: '400',
+        fontSize: 26,
+        lineHeight: 32,
+        fontWeight: '700',
+        letterSpacing: -0.5,
         color: colors.text,
         marginBottom: spacing.xs,
         padding: 0,
@@ -8206,15 +8180,15 @@ const styles = createStyles(() => ({
     micButton: {
         width: FLOATING_MIC_BUTTON_SIZE,
         height: FLOATING_MIC_BUTTON_SIZE,
-        borderRadius: 28,
+        borderRadius: FLOATING_MIC_BUTTON_SIZE / 2,
         backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: isDarkScheme() ? 0.35 : 0.12,
         shadowRadius: 8,
-        elevation: 8,
+        elevation: 4,
     },
     transcribingContainer: {
         flexDirection: 'row',
@@ -8237,27 +8211,37 @@ const styles = createStyles(() => ({
     aiModalContent: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         width: '100%',
         maxWidth: 640,
         alignSelf: 'center',
-        borderTopRightRadius: 24,
-        padding: spacing.l,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.l,
         maxHeight: '82%',
     },
     aiModalTitle: {
-        ...typography.h3,
-        marginBottom: spacing.l,
-        textAlign: 'center',
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
+        color: colors.text,
+        textAlign: 'left',
+        marginBottom: spacing.m,
     },
     aiModalTitleInline: {
         marginBottom: 0,
         flexShrink: 1,
+        textAlign: 'left',
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
     },
     previewSectionLabel: {
-        ...typography.caption,
-        color: colors.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
+        color: colors.textSecondary,
         marginBottom: spacing.xs,
     },
     previewReviewHint: {
@@ -8332,19 +8316,17 @@ const styles = createStyles(() => ({
     aiActionButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s,
-        borderRadius: 12,
-        backgroundColor: colors.background,
-        gap: spacing.xs,
-        borderWidth: 1,
-        borderColor: colors.border,
+        minHeight: 36,
+        paddingStart: 10,
+        paddingEnd: 14,
+        borderRadius: 18,
+        backgroundColor: colors.backgroundSecondary,
+        gap: 4,
     },
     aiActionText: {
-        ...typography.body,
+        fontSize: 14,
         fontWeight: '600',
-        color: colors.primary,
-        fontSize: 15,
+        color: colors.text,
     },
     aiLoader: {
         paddingVertical: spacing.xl,
@@ -8352,47 +8334,48 @@ const styles = createStyles(() => ({
         justifyContent: 'center',
     },
     aiScrollableArea: {
-        maxHeight: 360,
+        // Takes whatever height the sheet has left, so presets are not cut off early.
+        flexShrink: 1,
+        minHeight: 120,
     },
     aiList: {
         flexGrow: 0,
     },
     aiListContent: {
+        paddingTop: spacing.xxs,
         paddingBottom: spacing.s,
-        paddingRight: spacing.s,
+        paddingEnd: spacing.s,
     },
     aiOptionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: spacing.m,
-        borderBottomWidth: 1,
+        minHeight: 56,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: colors.border,
     },
     aiOptionIconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: colors.background,
-        justifyContent: 'center',
+        width: 24,
         alignItems: 'center',
-        marginRight: spacing.m,
+        marginEnd: spacing.m,
     },
     aiOptionLabel: {
         flex: 1,
-        ...typography.body,
-        fontWeight: '500',
+        fontSize: 16,
+        lineHeight: 22,
+        color: colors.text,
     },
     aiOptionTextWrapper: {
         flex: 1,
-        gap: 4,
+        gap: 2,
     },
     aiOptionPrompt: {
-        ...typography.caption,
-        // textMuted was too faint to read on white.
+        fontSize: 13,
+        lineHeight: 18,
         color: colors.textSecondary,
     },
     aiReorderItem: {
-        paddingVertical: spacing.s,
+        paddingVertical: 10,
     },
     aiOptionActive: {
         backgroundColor: colors.background,
@@ -8401,17 +8384,13 @@ const styles = createStyles(() => ({
     aiCloseButton: {
         minHeight: 48,
         justifyContent: 'center',
-        marginTop: spacing.m,
-        paddingTop: spacing.s,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        paddingVertical: spacing.xs,
         alignItems: 'center',
+        marginTop: spacing.s,
     },
     aiCloseButtonText: {
-        ...typography.body,
-        fontWeight: '600',
-        color: colors.primary,
+        fontSize: 16,
+        fontWeight: '500',
+        color: colors.textSecondary,
     },
     promptBuilderWrapper: {
         flex: 1,
@@ -8502,13 +8481,11 @@ const styles = createStyles(() => ({
         fontWeight: '600',
     },
     customInstructionBox: {
-        marginBottom: spacing.l,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 16,
-        padding: spacing.s,
-        backgroundColor: colors.background,
-        marginHorizontal: spacing.s,
+        marginBottom: spacing.m,
+        borderRadius: 14,
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.s,
+        backgroundColor: colors.backgroundSecondary,
     },
     customHeaderRow: {
         flexDirection: 'row',
@@ -8517,37 +8494,39 @@ const styles = createStyles(() => ({
         marginBottom: 0,
     },
     customLabelContainer: {
+        flex: 1,
+        minHeight: 40,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
     },
     customMicHeaderButton: {
-        padding: spacing.s,
-        backgroundColor: colors.surface,
+        width: 40,
+        height: 40,
         borderRadius: 20,
-        // borderWidth: 1,
-        // borderColor: colors.border,
         alignItems: 'center',
         justifyContent: 'center',
     },
     customBoxLabel: {
-        ...typography.body,
+        fontSize: 15,
         fontWeight: '500',
         color: colors.text,
     },
-    customExpandedContent: {
-        marginTop: spacing.m,
+    customBoxPlaceholder: {
+        flexShrink: 1,
+        fontSize: 15,
+        color: colors.textTertiary,
     },
+    customExpandedContent: {
+        marginTop: spacing.xs,
+        paddingBottom: spacing.s,
+    },
+    // The field lives straight in the grey box: no second card inside it.
     customInputRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 12,
-        backgroundColor: colors.surface,
-        paddingHorizontal: spacing.s,
         marginBottom: spacing.s,
-        minHeight: 60,
+        minHeight: 48,
     },
     customInstructionInput: {
         flex: 1,
@@ -8564,21 +8543,20 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.primary,
-        paddingVertical: 12,
-        borderRadius: 12,
-        gap: spacing.s,
+        minHeight: 44,
+        borderRadius: 22,
+        gap: spacing.xs,
     },
     runCustomButtonDisabled: {
-        opacity: 0.5,
-        backgroundColor: colors.textMuted,
+        opacity: 0.4,
     },
     runCustomButtonText: {
-        ...typography.body,
+        fontSize: 15,
         fontWeight: '600',
         color: colors.onPrimary,
     },
     divider: {
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         backgroundColor: colors.border,
         marginHorizontal: -spacing.l,
         marginBottom: 0,
@@ -8656,21 +8634,25 @@ const styles = createStyles(() => ({
         borderColor: colors.border,
     },
     recordingsListTitle: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
         color: colors.textSecondary,
         marginBottom: spacing.s,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
     recordingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingVertical: 12,
-        paddingHorizontal: spacing.m,
-        marginBottom: spacing.s,
-        borderRadius: 16,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
+    },
+    recordingItemDivided: {
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors.border,
+    },
+    recordingsEmpty: {
+        fontSize: 15,
+        color: colors.textSecondary,
+        paddingVertical: spacing.l,
     },
     recordingItemActive: {
         borderColor: colors.primary,
@@ -8683,50 +8665,53 @@ const styles = createStyles(() => ({
         elevation: 2,
     },
     recordingIconContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: colors.backgroundSecondary,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: spacing.s,
+        marginEnd: spacing.m,
     },
     recordingIconContainerActive: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 102, 255, 0.2)',
+        backgroundColor: colors.primary,
     },
     recordingInfo: {
         flex: 1,
         justifyContent: 'center',
     },
     recordingTitle: {
-        fontSize: 14,
-        fontWeight: '700',
+        fontSize: 16,
+        lineHeight: 22,
+        fontWeight: '600',
         color: colors.text,
+        fontVariant: ['tabular-nums'],
     },
     recordingSubtitle: {
-        fontSize: 11,
-        color: colors.textMuted,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
     },
     recordingCompactActions: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        // Kept at the row's end even when wrapped, so every bin lines up.
+        marginStart: 'auto',
     },
     recordingActionChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.primaryLight,
-        minHeight: 40,
+        backgroundColor: colors.backgroundSecondary,
+        minHeight: 36,
         paddingHorizontal: 12,
-        borderRadius: 12,
-        gap: 4,
+        borderRadius: 18,
+        gap: 6,
     },
     recordingActionChipText: {
-        ...typography.captionBold,
-        color: colors.primary,
-        fontSize: 13,
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text,
     },
     recordingDeleteIcon: {
         width: 44,
@@ -8778,10 +8763,9 @@ const styles = createStyles(() => ({
         borderRadius: 8,
     },
     recordingBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
+        fontSize: 12,
+        fontWeight: '500',
         color: colors.textSecondary,
-        textTransform: 'uppercase',
     },
     recordingActionsRow: {
         flexDirection: 'row',
@@ -8833,60 +8817,49 @@ const styles = createStyles(() => ({
     recordingTextBody: {
         maxHeight: 280,
         marginBottom: spacing.m,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 12,
+        borderRadius: 14,
         padding: spacing.m,
-        backgroundColor: colors.background,
+        backgroundColor: colors.backgroundSecondary,
     },
     recordingTextValue: {
-        ...typography.body,
+        fontSize: 16,
+        lineHeight: 24,
         color: colors.text,
-        lineHeight: 22,
     },
     recordingActionButton: {
         backgroundColor: colors.primary,
-        borderRadius: 14,
-        height: 50,
+        borderRadius: 25,
+        minHeight: 50,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: spacing.s,
-        shadowColor: colors.cardShadow,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 4,
     },
     recordingActionText: {
-        ...typography.button,
+        fontSize: 16,
+        fontWeight: '600',
         color: colors.onPrimary,
     },
     recordingSecondaryAction: {
-        borderRadius: 12,
-        height: 46,
+        borderRadius: 25,
+        minHeight: 50,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        marginBottom: spacing.xs,
-        backgroundColor: colors.surface,
+        backgroundColor: colors.backgroundSecondary,
     },
     recordingSecondaryText: {
-        ...typography.captionBold,
+        fontSize: 16,
+        fontWeight: '600',
         color: colors.text,
     },
     recordingCloseAction: {
         alignItems: 'center',
         justifyContent: 'center',
-        height: 46,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
+        minHeight: 48,
         marginTop: spacing.xs,
     },
     recordingCloseText: {
-        ...typography.captionBold,
+        fontSize: 15,
+        fontWeight: '500',
         color: colors.textSecondary,
     },
     recordingActionDisabled: {

@@ -61,7 +61,8 @@
     "deletedCount": "已移到回收站：{{count}}",
     "offlineSync": "离线。更改已保存，稍后会同步。",
     "offline": "离线。笔记和设备上的功能仍可使用。",
-    "unlockWithKey": "输入恢复密钥，在本机上显示它们。"
+    "unlockWithKey": "输入恢复密钥，在本机上显示它们。",
+    "listTitle": "笔记"
   },
   "settings": {
     "title": "设置",
@@ -665,7 +666,8 @@
       "inNote": "已在笔记中",
       "add": "插入",
       "transcribe": "转文字",
-      "view": "查看"
+      "view": "查看",
+      "addAudio": "插入音频"
     },
     "toast": {
       "audioMissing": "此设备上找不到录音文件",
@@ -678,7 +680,9 @@
       "message": "此设备上的转写速度较慢。云端更快。",
       "useCloud": "使用云端",
       "switched": "录音现在在云端转写。没有网络时仍由设备转写。"
-    }
+    },
+    "customInstructionPlaceholder": "例如：写得更简短，或翻译成英文",
+    "customInstructionCollapsed": "写下你自己的指令…"
   },
   "voice": {
     "modelNotDownloaded": "模型尚未下载，请检查设置。",
@@ -708,7 +712,10 @@
     "slowOnDevice": "此录音仍在设备上处理。今后的录音在联网时使用云端处理可能更快。",
     "processingSeconds": "{{seconds}} 秒",
     "transcribingCloud": "正在云端转写…",
-    "privateModelMissing": "已开启仅在本机处理，但语音识别模型不可用。录音已保存在设备上。请下载模型以转写文字。"
+    "privateModelMissing": "已开启仅在本机处理，但语音识别模型不可用。录音已保存在设备上。请下载模型以转写文字。",
+    "toTextHint": "结束后，录音会转成文字",
+    "audioOnlyHint": "仅保存音频，不转文字",
+    "discardConfirmHint": "再次点按垃圾桶即可删除录音"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -728,8 +735,8 @@
     "newPassword": "新密码",
     "confirmPassword": "确认密码",
     "oneLastStep": "最后一步",
-    "proAccess": "PRO 权限",
-    "unlockFullPotential": "解锁全部能力。",
+    "proAccess": "Vaulto Pro",
+    "unlockFullPotential": "更多语音时长，笔记在你的所有设备上同步。",
     "bestValue": "最超值",
     "restorePurchases": "恢复购买",
     "autoRenewable": "自动续订，可随时取消。",
@@ -841,7 +848,10 @@
     "onDeviceFree": "在此设备上免费转写",
     "perMonth": "每月 {{price}}",
     "guestMinutesUsedTitle": "免费分钟已用完",
-    "guestMinutesUsedDesc": "登录可获得更多免费分钟并同步笔记。也可以直接在设备上把语音转成文字——免费且离线。"
+    "guestMinutesUsedDesc": "登录可获得更多免费分钟并同步笔记。也可以直接在设备上把语音转成文字——免费且离线。",
+    "perYear": "每年 {{price}}",
+    "markdownSource": "以 Markdown 编辑",
+    "markdownSourceDesc": "格式显示为普通字符，例如 **粗体**。"
   },
   "a11y": {
     "back": "返回",
@@ -915,7 +925,9 @@
     "signIn": "登录",
     "privacyNoteLocal": "完全在此设备上离线运行——不会发送任何内容。",
     "offlineHint": "设备上的 AI 无需联网即可使用。",
-    "setUpOnDevice": "去设置"
+    "setUpOnDevice": "去设置",
+    "subtitle": "根据你记下的所有内容作答，并附上笔记链接。",
+    "examplesLabel": "试着问问"
   },
   "localAI": {
     "modelMissingTitle": "下载 AI 模型",
@@ -994,7 +1006,8 @@
     "deletePromptText": "它将从列表中移除。",
     "recordingsEmpty": "还没有录音。",
     "promptIcon": "图标",
-    "promptHelper": "在需要插入笔记文字的位置写 {text}。"
+    "promptHelper": "在需要插入笔记文字的位置写 {text}。",
+    "aiSetUpOnDevice": "设置本机 AI"
   },
   "trash": {
     "title": "回收站",

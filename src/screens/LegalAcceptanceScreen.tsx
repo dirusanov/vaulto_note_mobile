@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useMemo, useState } from 'react';
 import {
-    Alert,
     Linking,
     Text,
     TouchableOpacity,
@@ -20,6 +19,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
+import { appAlert } from '../components/AppAlert';
 
 type LegalParams = {
     legalToken?: string;
@@ -52,19 +52,19 @@ export const LegalAcceptanceScreen = () => {
                 await Linking.openURL(url);
                 return;
             }
-            Alert.alert(t("common.errorTitle"), `Cannot open URL: ${url}`);
+            appAlert(t("common.errorTitle"), `Cannot open URL: ${url}`);
         } catch (_) {
-            Alert.alert(t("common.errorTitle"), t("common.failedOpenLink", "Failed to open link."));
+            appAlert(t("common.errorTitle"), t("common.failedOpenLink", "Failed to open link."));
         }
     };
 
     const handleContinue = async () => {
         if (!accepted) {
-            Alert.alert(t("auth.agreementRequired"), t("common.agreeToTerms"));
+            appAlert(t("auth.agreementRequired"), t("common.agreeToTerms"));
             return;
         }
         if (!legalToken) {
-            Alert.alert(t("common.sessionExpired"), t("common.pleaseSignInAgain"));
+            appAlert(t("common.sessionExpired"), t("common.pleaseSignInAgain"));
             navigation.navigate('SignIn');
             return;
         }
@@ -81,7 +81,7 @@ export const LegalAcceptanceScreen = () => {
                 routes: [{ name: 'NotesList' }],
             });
         } catch (error) {
-            Alert.alert(t("common.failedTitle"), getErrorMessage(error, t("common.pleaseSignInAgain")));
+            appAlert(t("common.failedTitle"), getErrorMessage(error, t("common.pleaseSignInAgain")));
             navigation.navigate('SignIn');
         } finally {
             setLoading(false);

@@ -61,7 +61,8 @@
     "deletedCount": "Movidas para a lixeira: {{count}}",
     "offlineSync": "Sem conexão. As alterações são salvas e serão sincronizadas depois.",
     "offline": "Sem conexão. As notas e os recursos no dispositivo continuam funcionando.",
-    "unlockWithKey": "Digite sua chave de recuperação para vê-las neste dispositivo."
+    "unlockWithKey": "Digite sua chave de recuperação para vê-las neste dispositivo.",
+    "listTitle": "Notas"
   },
   "settings": {
     "title": "Configurações",
@@ -665,7 +666,8 @@
       "inNote": "Na nota",
       "add": "Inserir",
       "transcribe": "Transcrever",
-      "view": "Ver"
+      "view": "Ver",
+      "addAudio": "Inserir áudio"
     },
     "toast": {
       "audioMissing": "O arquivo da gravação não está neste dispositivo",
@@ -678,7 +680,9 @@
       "message": "A transcrição neste dispositivo está lenta. A nuvem é mais rápida.",
       "useCloud": "Usar a nuvem",
       "switched": "Agora as gravações vão para a nuvem. Sem internet, o dispositivo continua transcrevendo."
-    }
+    },
+    "customInstructionPlaceholder": "Por exemplo: deixe mais curto ou traduza para o inglês",
+    "customInstructionCollapsed": "Escreva sua própria instrução…"
   },
   "voice": {
     "modelNotDownloaded": "Modelo não baixado. Verifique as configurações.",
@@ -708,7 +712,10 @@
     "slowOnDevice": "Esta gravação ainda está sendo processada no dispositivo. Para as próximas, a nuvem pode ser mais rápida com internet.",
     "processingSeconds": "{{seconds}} s",
     "transcribingCloud": "Transcrevendo na nuvem…",
-    "privateModelMissing": "O processamento só neste dispositivo está ativado, mas o modelo de voz não está disponível. A gravação foi salva no dispositivo. Baixe o modelo para transcrevê-la."
+    "privateModelMissing": "O processamento só neste dispositivo está ativado, mas o modelo de voz não está disponível. A gravação foi salva no dispositivo. Baixe o modelo para transcrevê-la.",
+    "toTextHint": "Ao terminar, a gravação vira texto",
+    "audioOnlyHint": "Salvo só como áudio, sem texto",
+    "discardConfirmHint": "Toque na lixeira de novo para apagar a gravação"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -728,8 +735,8 @@
     "newPassword": "Nova senha",
     "confirmPassword": "Confirmar senha",
     "oneLastStep": "Falta um último passo",
-    "proAccess": "ACESSO PRO",
-    "unlockFullPotential": "Libere todo o potencial.",
+    "proAccess": "Vaulto Pro",
+    "unlockFullPotential": "Mais minutos de voz e suas notas em todos os dispositivos.",
     "bestValue": "MELHOR OFERTA",
     "restorePurchases": "Restaurar compras",
     "autoRenewable": "Renovação automática. Cancele quando quiser.",
@@ -798,13 +805,13 @@
     "unableDownloadWhisper": "Não foi possível baixar o modelo Whisper.",
     "purchaseProRequired": "Crie uma conta para comprar o Pro.",
     "unlimitedCloudSync": "Sincronização em nuvem ilimitada",
-    "minsMonthTranscription": "{{minutes}} min/mês de transcrição com a Vaulto AI",
+    "minsMonthTranscription": "{{minutes}} minutos de voz para texto por mês",
     "customApiKeyServer": "Chave de API e servidor personalizados",
     "signInRestorePurchases": "Entre para restaurar suas compras.",
     "yearlyPlan": "Plano anual",
     "monthlyPlan": "Plano mensal",
-    "savePercentage": "ECONOMIZE {{percentage}}%",
-    "vaultoAiMinsMonth": "{{minutes}} minutos da Vaulto AI / mês",
+    "savePercentage": "Economize {{percentage}}%",
+    "vaultoAiMinsMonth": "{{minutes}} minutos por mês",
     "switchToVaultoAI": "Mudar para Vaulto AI",
     "searchLanguage": "Buscar idioma...",
     "confirmAndDelete": "Sim, excluir tudo",
@@ -841,7 +848,10 @@
     "onDeviceFree": "Transcrever grátis neste dispositivo",
     "perMonth": "{{price}} por mês",
     "guestMinutesUsedTitle": "Minutos grátis esgotados",
-    "guestMinutesUsedDesc": "Entre para ganhar mais minutos grátis e sincronizar suas notas. Ou transforme voz em texto direto no dispositivo — grátis e offline."
+    "guestMinutesUsedDesc": "Entre para ganhar mais minutos grátis e sincronizar suas notas. Ou transforme voz em texto direto no dispositivo — grátis e offline.",
+    "perYear": "{{price}} por ano",
+    "markdownSource": "Editar como Markdown",
+    "markdownSourceDesc": "A formatação aparece como caracteres simples, como **negrito**."
   },
   "a11y": {
     "back": "Voltar",
@@ -915,7 +925,9 @@
     "signIn": "Entrar",
     "privacyNoteLocal": "Funciona inteiramente neste dispositivo, offline — nada é enviado.",
     "offlineHint": "A IA no dispositivo funciona sem internet.",
-    "setUpOnDevice": "Configurar"
+    "setUpOnDevice": "Configurar",
+    "subtitle": "Respostas com base em tudo o que você anotou, com links para as notas.",
+    "examplesLabel": "Experimente perguntar"
   },
   "localAI": {
     "modelMissingTitle": "Baixe o modelo de IA",
@@ -994,7 +1006,8 @@
     "deletePromptText": "Ele será removido da sua lista.",
     "recordingsEmpty": "Ainda não há gravações.",
     "promptIcon": "Ícone",
-    "promptHelper": "Escreva {text} onde o texto da nota deve entrar."
+    "promptHelper": "Escreva {text} onde o texto da nota deve entrar.",
+    "aiSetUpOnDevice": "Configurar a IA no aparelho"
   },
   "trash": {
     "title": "Lixeira",

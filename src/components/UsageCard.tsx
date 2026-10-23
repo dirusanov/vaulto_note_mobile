@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -28,7 +28,6 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
 
     const totalSeconds = user.transcription_total_seconds ?? 1800;
     const usedSeconds = user.transcription_total_used_seconds ?? 0;
-    console.log('[UsageCard] Credits:', totalSeconds, 'Used:', usedSeconds, 'Remaining:', user.transcription_remaining_seconds);
 
     // "Unlimited" logic: If total seconds > 100 hours (360000s)
     const isUnlimited = totalSeconds > 360000;
@@ -67,6 +66,48 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                 <Text style={styles.compactText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                     {label}
                 </Text>
+            </View>
+        );
+    }
+
+    // Inside the settings account group: one line of text and a hairline bar.
+    if (embedded) {
+        const title = isUnlimited
+            ? t("aux.vaultoAIPlan", "Vaulto AI Plan")
+            : isGuest
+                ? t('settings.ai.transcription', 'Transcription')
+                : isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance');
+        const value = isUnlimited
+            ? t("aux.unlimitedAccess", "Unlimited Access")
+            : isGuest ? null : `\u2066${formatTimeMMSS(usedSeconds)} / ${formatTimeMMSS(totalSeconds)}\u2069`;
+        const note = isGuest
+            ? t('aux.createAccountTranscribe', 'Create an account to enable transcription.')
+            : isUnlimited ? null
+                : isExpired
+                    ? (isPro
+                        ? t('aux.usedAllMonthlyMinutes', "You've used all monthly minutes")
+                        : t('aux.usedAllFreeMinutes', "You've used all {{minutes}} free minutes", { minutes: Math.round(totalSeconds / 60) }))
+                    : isLowBalance
+                        ? (isPro
+                            ? t('settings.ui.minutesWarningTextLow', 'Running low on monthly transcription minutes')
+                            : t('aux.runningLowTranscription', 'Running low on transcription time'))
+                        : null;
+        return (
+            <View style={styles.embeddedWrap}>
+                <View style={styles.embeddedHeader}>
+                    <Text style={styles.embeddedTitle}>{title}</Text>
+                    {!!value && <Text style={styles.embeddedValue}>{value}</Text>}
+                </View>
+                {!isUnlimited && !isGuest && (
+                    <View style={styles.embeddedTrack}>
+                        <View style={[styles.embeddedFill, { width: `${progress * 100}%`, backgroundColor: getProgressColor() }]} />
+                    </View>
+                )}
+                {!!note && (
+                    <Text style={[styles.embeddedNote, (isExpired || isLowBalance) && !isGuest && { color: getProgressColor() }]}>
+                        {note}
+                    </Text>
+                )}
             </View>
         );
     }
@@ -199,10 +240,47 @@ const styles = createStyles(() => ({
         minWidth: 0,
     },
     embeddedWrap: {
-        marginTop: spacing.s,
-        paddingTop: spacing.s,
-        borderTopWidth: 1,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 14,
+        borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
+        marginStart: spacing.m,
+        paddingStart: 0,
+        gap: 10,
+    },
+    embeddedHeader: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: spacing.m,
+    },
+    embeddedTitle: {
+        fontSize: 15,
+        lineHeight: 20,
+        color: colors.textSecondary,
+        flexShrink: 1,
+    },
+    embeddedValue: {
+        fontSize: 15,
+        lineHeight: 20,
+        fontWeight: '500',
+        color: colors.text,
+        fontVariant: ['tabular-nums'],
+    },
+    embeddedTrack: {
+        height: 3,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        backgroundColor: colors.backgroundSecondary,
+    },
+    embeddedFill: {
+        height: '100%',
+        borderRadius: 1.5,
+    },
+    embeddedNote: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
     },
     compactIcon: {
         width: 22,
@@ -366,6 +444,5 @@ const styles = createStyles(() => ({
         ...typography.caption,
         fontSize: 12,
         color: colors.textSecondary,
-        textAlign: 'center',
     },
 }));

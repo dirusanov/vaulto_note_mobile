@@ -7,7 +7,6 @@ import {
     TouchableOpacity,
     Modal,
     Animated,
-    Alert,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -23,7 +22,8 @@ import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
-import { rtlFlip } from '../i18n/direction';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { appAlert } from './AppAlert';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -41,6 +41,9 @@ const MIN_VOICE_SAMPLES = 3;
 const MAX_RECORDING_DURATION_SECONDS = Math.floor(MAX_RECORDING_DURATION_MS / 1000);
 const MAX_MEETING_DURATION_SECONDS = Math.floor(MAX_MEETING_DURATION_MS / 1000);
 const MEETING_SEGMENT_SECONDS = Math.floor(MEETING_SEGMENT_MS / 1000);
+// Longer recordings ask for a second tap on the bin before they are thrown away.
+const DISCARD_CONFIRM_AFTER_SECONDS = 5;
+const DISCARD_CONFIRM_WINDOW_MS = 4000;
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     visible,
@@ -51,7 +54,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     isMainScreen = false,
 }) => {
     const { t } = useTranslation();
+    const insets = useSafeAreaInsets();
     const [isRecording, setIsRecording] = useState(false);
+    const [confirmDiscard, setConfirmDiscard] = useState(false);
+    const confirmDiscardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [duration, setDuration] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
@@ -116,6 +122,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsStartPending(false);
             setPermissionSettled(false);
             setDuration(0);
+            setConfirmDiscard(false);
+            if (confirmDiscardTimerRef.current) {
+                clearTimeout(confirmDiscardTimerRef.current);
+            }
             setShowModelMissingWarning(false);
             warningOpacity.setValue(0);
             if (warningTimeoutRef.current) {
@@ -255,7 +265,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         voiceSamples.current = 0;
         void AudioService.cancelRecording().catch(() => undefined);
 
-        Alert.alert(
+        appAlert(
             t("voice.recordingInterrupted", "Recording interrupted"),
             message,
             [
@@ -345,7 +355,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
 
         maxDurationHandledRef.current = true;
-        Alert.alert(
+        appAlert(
             t("voice.recordingLimitReached"),
             t("voice.recordingLimitReachedDesc")
         );
@@ -404,7 +414,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             const granted = await AudioService.requestPermissions();
             setPermissionSettled(true);
             if (!granted) {
-                Alert.alert(t("common.permission", "Permission"), t("voice.micPermissionDenied"));
+                appAlert(t("common.permission", "Permission"), t("voice.micPermissionDenied"));
                 onCancel();
                 return;
             }
@@ -420,7 +430,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setDuration(0);
             recordingStartAtRef.current = Date.now();
         } catch (error) {
-            Alert.alert(t("common.errorTitle"), t("voice.startError", "Could not start recording"));
+            appAlert(t("common.errorTitle"), t("voice.startError", "Could not start recording"));
             console.error(error);
         } finally {
             setIsStartPending(false);
@@ -492,7 +502,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsPaused(false);
             if (!recording) {
                 interruptionHandledRef.current = true;
-                Alert.alert(
+                appAlert(
                     t("voice.recordingUnavailable"),
                     t("voice.recordingUnavailableDesc")
                 );
@@ -504,7 +514,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             const hasVoiceSignal = !hasMetering || voiceSamples.current >= MIN_VOICE_SAMPLES;
             if (!hasVoiceSignal) {
                 await AudioService.deleteAudioFile(recording.uri);
-                Alert.alert(
+                appAlert(
                     t("voice.noAudioCaptured"),
                     t("voice.noAudioCapturedDesc")
                 );
@@ -519,7 +529,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             interruptionHandledRef.current = true;
             setIsRecording(false);
             setIsPaused(false);
-            Alert.alert(t("common.errorTitle"), t("voice.finishError"));
+            appAlert(t("common.errorTitle"), t("voice.finishError"));
             onCancel();
             console.error(error);
         } finally {
@@ -527,10 +537,29 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
     };
 
+    useEffect(() => () => {
+        if (confirmDiscardTimerRef.current) clearTimeout(confirmDiscardTimerRef.current);
+    }, []);
+
+    const handleDiscardPress = () => {
+        if (isStopping) {
+            return;
+        }
+        if (!confirmDiscard && duration >= DISCARD_CONFIRM_AFTER_SECONDS) {
+            haptics.medium();
+            setConfirmDiscard(true);
+            confirmDiscardTimerRef.current = setTimeout(() => setConfirmDiscard(false), DISCARD_CONFIRM_WINDOW_MS);
+            return;
+        }
+        handleCancel();
+    };
+
     const handleCancel = async () => {
         if (isStopping) {
             return;
         }
+        if (confirmDiscardTimerRef.current) clearTimeout(confirmDiscardTimerRef.current);
+        setConfirmDiscard(false);
         while (rollingRef.current) {
             await new Promise((resolve) => setTimeout(resolve, 50));
         }
@@ -560,7 +589,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             transparent
             onRequestClose={handleCancel}
         >
-            <View style={styles.overlay} pointerEvents="box-none">
+            {/* On the notes list the panel takes the dock's place (the list hides the dock). */}
+            <View
+                style={[styles.overlay, isMainScreen && { paddingBottom: Math.max(insets.bottom, spacing.m) + spacing.m }]}
+                pointerEvents="box-none"
+            >
                 <View style={styles.container} pointerEvents="box-none">
                     {/* Toggles Row */}
                     <View style={styles.togglesRow}>
@@ -638,11 +671,20 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         )}
                     </View>
 
-                    {meetingMode && (
-                        <Text style={styles.meetingHint}>
-                            {t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")}
-                        </Text>
-                    )}
+                    {/* What happens on Done, so the chips above explain themselves. */}
+                    <Text
+                        style={[styles.modeHint, confirmDiscard && styles.modeHintWarning]}
+                        numberOfLines={2}
+                        accessibilityLiveRegion="polite"
+                    >
+                        {confirmDiscard
+                            ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording")
+                            : meetingMode
+                                ? t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")
+                                : transcribe || micMode === 'force_text'
+                                    ? t("voice.toTextHint", "When you finish, the recording becomes text")
+                                    : t("voice.audioOnlyHint", "Saved as audio only, without text")}
+                    </Text>
 
                     {/* Inline Warning Banner */}
                     {showModelMissingWarning && (
@@ -658,12 +700,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     <View style={[styles.mainBar, isMainScreen && styles.mainBarLarge]}>
                         <TouchableOpacity
                             style={styles.cancelButtonCompact}
-                            onPress={handleCancel}
+                            onPress={handleDiscardPress}
                             disabled={isStopping}
                             accessibilityRole="button"
-                            accessibilityLabel={t("a11y.deleteRecording", "Delete recording")}
+                            accessibilityLabel={confirmDiscard
+                                ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording")
+                                : t("a11y.deleteRecording", "Delete recording")}
                         >
-                            <MaterialIcons name="delete-outline" size={isMainScreen ? 36 : 26} color={colors.textTertiary} />
+                            <MaterialIcons
+                                name={confirmDiscard ? 'delete-forever' : 'delete-outline'}
+                                size={isMainScreen ? 36 : 26}
+                                color={confirmDiscard ? colors.error : colors.textTertiary}
+                            />
                         </TouchableOpacity>
 
                         <View style={styles.centerSection}>
@@ -710,7 +758,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             accessibilityRole="button"
                             accessibilityLabel={t("a11y.sendRecording", "Finish and send recording")}
                         >
-                            <MaterialIcons name="send" size={isMainScreen ? 30 : 20} color="white" style={rtlFlip} />
+                            <MaterialIcons name="check" size={isMainScreen ? 34 : 22} color="white" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -758,12 +806,23 @@ const styles = createStyles(() => ({
         shadowRadius: 4,
         elevation: 3,
     },
-    meetingHint: {
+    modeHint: {
+        alignSelf: 'center',
+        maxWidth: '100%',
         fontSize: 13,
+        lineHeight: 18,
         color: colors.textSecondary,
         textAlign: 'center',
-        marginTop: -spacing.s,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        overflow: 'hidden',
+        paddingHorizontal: spacing.m,
+        paddingVertical: 6,
+        marginTop: -spacing.xs,
         marginBottom: spacing.s,
+    },
+    modeHintWarning: {
+        color: colors.error,
     },
     badgeToggleOn: {
         backgroundColor: colors.primary,

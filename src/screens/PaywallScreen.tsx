@@ -1,15 +1,17 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
+import { spacing } from '../theme/spacing';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { createStyles } from '../theme/createStyles';
 import { CUSTOM_AI_ENABLED } from '../utils/featureFlags';
 import { haptics } from '../utils/haptics';
+import { appAlert } from '../components/AppAlert';
 
 export const PaywallScreen = () => {
     const { t } = useTranslation();
@@ -48,7 +50,7 @@ export const PaywallScreen = () => {
 
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
-            Alert.alert(t("voice.signInRequired"), t("aux.purchaseProRequired"));
+            appAlert(t("voice.signInRequired"), t("aux.purchaseProRequired"));
             (navigation as any).navigate('SignIn');
             return;
         }
@@ -64,40 +66,42 @@ export const PaywallScreen = () => {
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     style={styles.closeButton}
+                    hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={t("a11y.close", "Close")}
                 >
-                    <MaterialIcons name="close" size={24} color={colors.textSecondary} />
+                    <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
-                <View style={styles.centerContent}>
+                {/* Offer and button sit together, centred in the free height. */}
+                <View style={styles.body}>
+                <View>
                     <View style={styles.heroSection}>
-                        <View style={styles.logoContainer}>
-                            <Image
-                                source={require('../../assets/icon.png')}
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
-                        </View>
-                        <Text style={styles.heroTitle}>{t("aux.proAccess")}</Text>
+                        {/* The mark is a transparent glyph, tinted to the text colour. */}
+                        <Image
+                            source={require('../../assets/icon.png')}
+                            style={styles.logoImage}
+                            resizeMode="contain"
+                            accessibilityIgnoresInvertColors
+                        />
+                        <Text style={styles.heroTitle}>{t("aux.proAccess", "Vaulto Pro")}</Text>
                         <Text style={styles.heroSubtitle}>
                             {t("aux.unlockFullPotential")}
                         </Text>
                     </View>
 
                     <View style={styles.featuresList}>
-                        <FeatureItem text={t("aux.unlimitedCloudSync")} />
                         <FeatureItem text={t("aux.minsMonthTranscription", { minutes: transcriptionMinutes })} />
+                        <FeatureItem text={t("aux.unlimitedCloudSync")} />
                         {CUSTOM_AI_ENABLED && <FeatureItem text={t("aux.customApiKeyServer")} />}
                     </View>
 
                     {isLoading ? (
-                        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+                        <ActivityIndicator size="small" color={colors.textSecondary} style={styles.loader} />
                     ) : packages.length === 0 ? (
                         // Store unreachable or no offerings configured: say so instead of
                         // leaving an empty gap with nothing to tap.
                         <View style={styles.unavailableCard}>
-                            <MaterialIcons name="cloud-off" size={28} color={colors.textSecondary} />
                             <Text style={styles.unavailableTitle}>
                                 {t("aux.paywallUnavailableTitle", "Plans are unavailable right now")}
                             </Text>
@@ -109,12 +113,11 @@ export const PaywallScreen = () => {
                                 onPress={() => { void reloadOfferings(); }}
                                 accessibilityRole="button"
                             >
-                                <MaterialIcons name="refresh" size={18} color={colors.onPrimary} />
                                 <Text style={styles.retryButtonText}>{t("aux.paywallRetry", "Try again")}</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        <View style={styles.packagesContainer}>
+                        <View style={styles.packagesContainer} accessibilityRole="radiogroup">
                             {packages.map((pack) => {
                                 const { backendPlan, product } = pack;
                                 const title = backendPlan?.display_name || (
@@ -124,57 +127,59 @@ export const PaywallScreen = () => {
                                             ? t("aux.monthlyPlan")
                                             : pack.identifier
                                 );
-                                
-                                const price = product.priceString;
+
                                 const isBestValue = isYearly(pack);
+                                const isMonthly = pack.identifier.toLowerCase().includes('monthly');
+                                // Every price says what period it pays for.
+                                const price = isBestValue
+                                    ? t("aux.perYear", { price: product.priceString, defaultValue: '{{price}} / year' })
+                                    : isMonthly
+                                        ? t("aux.perMonth", { price: product.priceString, defaultValue: '{{price}} / month' })
+                                        : product.priceString;
                                 const selected = pack.identifier === selectedId;
                                 const perMonth = isBestValue ? product.pricePerMonthString : null;
-                                const minutesToDisplay = backendPlan?.transcription_minutes || transcriptionMinutes;
-                                const minutesLabel = minutesToDisplay ? `${minutesToDisplay} Vaulto AI minutes / month` : null;
+                                // The feature list already names the minutes; a plan repeats them only if it differs.
+                                const planMinutes = backendPlan?.transcription_minutes;
+                                const minutesToDisplay = planMinutes && planMinutes !== transcriptionMinutes ? planMinutes : 0;
 
                                 return (
                                     <TouchableOpacity
                                         key={pack.identifier}
-                                        style={[styles.planCard, selected && styles.planCardBest]}
+                                        style={[styles.planCard, selected && styles.planCardSelected]}
                                         onPress={() => {
                                             if (!selected) haptics.selection();
                                             setSelectedId(pack.identifier);
                                         }}
-                                        activeOpacity={0.9}
+                                        activeOpacity={0.8}
                                         disabled={isLoading}
                                         accessibilityRole="radio"
                                         accessibilityState={{ selected }}
                                     >
-                                        <View style={styles.planHeader}>
-                                            <View style={styles.planTitleRow}>
-                                                <MaterialIcons
-                                                    name={selected ? 'radio-button-checked' : 'radio-button-unchecked'}
-                                                    size={22}
-                                                    color={selected ? colors.primary : colors.textTertiary}
-                                                />
-                                                <Text style={[styles.planTitle, selected && styles.planTitleBest]}>{title}</Text>
-                                            </View>
-                                            <View style={styles.badgesContainer}>
-                                                {isBestValue && savingsPercentage > 0 && (
-                                                    <View style={[styles.badge, styles.savingsBadge]}>
-                                                        <Text style={styles.badgeText}>{t("aux.savePercentage", { percentage: savingsPercentage })}</Text>
-                                                    </View>
-                                                )}
-                                            </View>
+                                        <View style={[styles.radio, selected && styles.radioOn]}>
+                                            {selected && <View style={styles.radioDot} />}
                                         </View>
-                                        <View style={styles.planPriceRow}>
-                                            <Text style={[styles.planPrice, selected && styles.planPriceBest]}>{price}</Text>
+                                        <View style={styles.planText}>
+                                            <Text style={styles.planTitle}>{title}</Text>
+                                            {/* Its own line, so long translations never wrap inside the title row. */}
+                                            {isBestValue && savingsPercentage > 0 && (
+                                                <Text style={styles.savingsBadge}>
+                                                    {t("aux.savePercentage", { percentage: savingsPercentage })}
+                                                </Text>
+                                            )}
+                                            {!!minutesToDisplay && (
+                                                <Text style={styles.planMeta}>
+                                                    {t("aux.vaultoAiMinsMonth", { minutes: minutesToDisplay })}
+                                                </Text>
+                                            )}
+                                        </View>
+                                        <View style={styles.planPriceColumn}>
+                                            <Text style={styles.planPrice}>{price}</Text>
                                             {perMonth ? (
                                                 <Text style={styles.planPerMonth}>
                                                     {t("aux.perMonth", { price: perMonth, defaultValue: '{{price}} / month' })}
                                                 </Text>
                                             ) : null}
                                         </View>
-                                        {minutesLabel ? (
-                                            <Text style={[styles.planMinutes, selected && styles.planMinutesBest]}>
-                                                {t("aux.vaultoAiMinsMonth", { minutes: minutesToDisplay })}
-                                            </Text>
-                                        ) : null}
                                     </TouchableOpacity>
                                 );
                             })}
@@ -188,15 +193,19 @@ export const PaywallScreen = () => {
                             style={[styles.ctaButton, isLoading && { opacity: 0.6 }]}
                             onPress={() => { haptics.light(); void handlePurchase(selectedPack); }}
                             disabled={isLoading}
+                            activeOpacity={0.85}
                             accessibilityRole="button"
                         >
                             <Text style={styles.ctaText}>{t("auth.continue", "Continue")}</Text>
                         </TouchableOpacity>
                     )}
+                    <Text style={styles.termsText}>
+                        {t("aux.autoRenewable")}
+                    </Text>
                     <TouchableOpacity
                         onPress={() => {
                             if (!canPurchase) {
-                                Alert.alert(t("voice.signInRequired"), t("aux.signInRestorePurchases"));
+                                appAlert(t("voice.signInRequired"), t("aux.signInRestorePurchases"));
                                 (navigation as any).navigate('SignIn');
                                 return;
                             }
@@ -204,13 +213,11 @@ export const PaywallScreen = () => {
                         }}
                         style={styles.restoreButton}
                         disabled={!canPurchase}
+                        hitSlop={8}
                     >
                         <Text style={styles.restoreButtonText}>{t("aux.restorePurchases")}</Text>
                     </TouchableOpacity>
-
-                    <Text style={styles.termsText}>
-                        {t("aux.autoRenewable")}
-                    </Text>
+                </View>
                 </View>
             </View>
         </SafeAreaView>
@@ -219,50 +226,12 @@ export const PaywallScreen = () => {
 
 const FeatureItem = ({ text }: { text: string }) => (
     <View style={styles.featureRow}>
-        <MaterialIcons name="check" size={16} color={colors.primary} style={styles.checkIcon} />
+        <MaterialIcons name="check" size={18} color={colors.primary} />
         <Text style={styles.featureText}>{text}</Text>
     </View>
 );
 
 const styles = createStyles(() => ({
-    unavailableCard: {
-        alignItems: 'center',
-        gap: 8,
-        paddingVertical: 24,
-        paddingHorizontal: 16,
-        marginTop: 24,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-    },
-    unavailableTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.text,
-        textAlign: 'center',
-    },
-    unavailableText: {
-        fontSize: 14,
-        lineHeight: 20,
-        color: colors.textSecondary,
-        textAlign: 'center',
-    },
-    retryButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 8,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 12,
-        backgroundColor: colors.primary,
-    },
-    retryButtonText: {
-        color: colors.onPrimary,
-        fontSize: 15,
-        fontWeight: '600',
-    },
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -272,10 +241,9 @@ const styles = createStyles(() => ({
         maxWidth: 520,
         alignSelf: 'center',
         flex: 1,
-        paddingHorizontal: 24,
-        paddingBottom: 24,
-        paddingTop: 16,
-        justifyContent: 'space-between',
+        paddingHorizontal: spacing.l,
+        paddingBottom: spacing.m,
+        paddingTop: spacing.s,
     },
     closeButton: {
         width: 32,
@@ -283,111 +251,177 @@ const styles = createStyles(() => ({
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 16,
-        backgroundColor: colors.surface,
+        backgroundColor: colors.backgroundSecondary,
         alignSelf: 'flex-start',
     },
-    centerContent: {
+    body: {
         flex: 1,
         justifyContent: 'center',
+        paddingBottom: spacing.l,
     },
     heroSection: {
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    logoContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 20,
-        backgroundColor: '#FFFFFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 20,
-        // Soft shadow for app icon look
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
-        elevation: 8,
+        marginBottom: spacing.l,
     },
     logoImage: {
-        width: 60,
-        height: 60,
-        borderRadius: 12,
+        width: 44,
+        height: 44,
+        tintColor: colors.text,
+        marginBottom: spacing.m,
     },
     heroTitle: {
-        fontSize: 24,
-        fontWeight: '800',
+        fontSize: 32,
+        lineHeight: 38,
+        fontWeight: '700',
+        letterSpacing: -0.8,
         color: colors.text,
-        marginBottom: 8,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
+        marginBottom: spacing.s,
     },
     heroSubtitle: {
-        fontSize: 15,
+        fontSize: 16,
+        lineHeight: 22,
         color: colors.textSecondary,
-        textAlign: 'center',
-        letterSpacing: 0.5,
     },
     featuresList: {
-        marginBottom: 32,
-        gap: 14,
-        paddingHorizontal: 16,
+        marginBottom: spacing.l,
+        gap: 12,
     },
     featureRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 12,
-    },
-    checkIcon: {
-        opacity: 1,
     },
     featureText: {
-        fontSize: 14,
+        flex: 1,
+        fontSize: 15,
+        lineHeight: 20,
         color: colors.text,
-        fontWeight: '500',
     },
     packagesContainer: {
-        gap: 12,
+        gap: 10,
     },
     planCard: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        minHeight: 72,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 14,
         borderRadius: 16,
-        padding: 20,
-    },
-    planCardBest: {
-        borderColor: colors.primary,
         backgroundColor: colors.surface,
+        // Hairline at rest; the chosen plan gets a 2px outline (padding absorbs it).
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
+    },
+    planCardSelected: {
         borderWidth: 2,
+        borderColor: colors.primary,
+        paddingHorizontal: spacing.m - 2,
+        paddingVertical: 12,
     },
-    planHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    radio: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 1.5,
+        borderColor: colors.borderHover,
         alignItems: 'center',
-        marginBottom: 4,
+        justifyContent: 'center',
     },
-    planTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        flexShrink: 1,
+    radioOn: {
+        borderColor: colors.primary,
     },
-    planPriceRow: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginLeft: 30,
+    radioDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: colors.primary,
+    },
+    planText: {
+        flex: 1,
+        gap: 2,
+    },
+    planTitle: {
+        fontSize: 16,
+        lineHeight: 22,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    savingsBadge: {
+        alignSelf: 'flex-start',
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.success,
+        backgroundColor: colors.successLight,
+        overflow: 'hidden',
+        borderRadius: 8,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+    },
+    planMeta: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+    },
+    planPriceColumn: {
+        alignItems: 'flex-end',
+        gap: 2,
+    },
+    planPrice: {
+        fontSize: 17,
+        lineHeight: 22,
+        fontWeight: '600',
+        color: colors.text,
+        fontVariant: ['tabular-nums'],
     },
     planPerMonth: {
-        fontSize: 14,
+        fontSize: 13,
+        lineHeight: 18,
         color: colors.textSecondary,
+    },
+    unavailableCard: {
+        gap: 6,
+        padding: spacing.m,
+        borderRadius: 16,
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
+    },
+    unavailableTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    unavailableText: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: colors.textSecondary,
+    },
+    retryButton: {
+        alignSelf: 'flex-start',
+        justifyContent: 'center',
+        minHeight: 40,
+        marginTop: spacing.s,
+        paddingHorizontal: 18,
+        borderRadius: 20,
+        backgroundColor: colors.primary,
+    },
+    retryButtonText: {
+        color: colors.onPrimary,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    loader: {
+        marginVertical: spacing.xl,
+    },
+    footer: {
+        alignItems: 'center',
+        gap: spacing.s,
+        paddingTop: spacing.l,
     },
     ctaButton: {
         alignSelf: 'stretch',
-        minHeight: 56,
-        borderRadius: 16,
+        minHeight: 54,
+        borderRadius: 27,
         backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
@@ -395,83 +429,22 @@ const styles = createStyles(() => ({
     ctaText: {
         color: colors.onPrimary,
         fontSize: 17,
-        fontWeight: '700',
-    },
-    planTitle: {
-        fontSize: 15,
         fontWeight: '600',
-        color: colors.textSecondary,
     },
-    planTitleBest: {
-        color: colors.primary,
-        fontWeight: '700',
-    },
-    badgesContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    badge: {
-        backgroundColor: colors.primary,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    savingsBadge: {
-        backgroundColor: '#10B981',
-    },
-    badgeText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    planPrice: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: colors.text,
-        marginBottom: 2,
-    },
-    planPriceBest: {
-        color: colors.primary,
-    },
-    planMinutes: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: colors.text,
-        marginBottom: 4,
-        marginLeft: 30,
-    },
-    planMinutesBest: {
-        color: colors.primary,
-    },
-    planSubtext: {
+    termsText: {
         fontSize: 12,
-        color: colors.textSecondary,
-    },
-    planSubtextBest: {
-        color: colors.textSecondary,
-    },
-    loader: {
-        marginVertical: 40,
-    },
-    footer: {
-        alignItems: 'center',
-        gap: 16,
-        paddingTop: 16,
+        lineHeight: 16,
+        color: colors.textTertiary,
+        textAlign: 'center',
     },
     restoreButton: {
-        padding: 8,
+        minHeight: 40,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.m,
     },
     restoreButtonText: {
         color: colors.textSecondary,
         fontSize: 14,
         fontWeight: '500',
-    },
-    termsText: {
-        marginTop: 24,
-        fontSize: 12,
-        color: colors.textTertiary,
-        textAlign: 'center',
-        lineHeight: 18,
     },
 }));

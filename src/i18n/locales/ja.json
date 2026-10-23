@@ -61,7 +61,8 @@
     "deletedCount": "ゴミ箱に移動：{{count}}",
     "offlineSync": "オフラインです。変更は保存され、後で同期されます。",
     "offline": "オフラインです。ノートと端末上の機能はそのまま使えます。",
-    "unlockWithKey": "復元キーを入力すると、この端末に表示されます。"
+    "unlockWithKey": "復元キーを入力すると、この端末に表示されます。",
+    "listTitle": "ノート"
   },
   "settings": {
     "title": "設定",
@@ -665,7 +666,8 @@
       "inNote": "ノートに追加済み",
       "add": "追加",
       "transcribe": "文字起こし",
-      "view": "表示"
+      "view": "表示",
+      "addAudio": "音声を追加"
     },
     "toast": {
       "audioMissing": "この端末に録音ファイルがありません",
@@ -678,7 +680,9 @@
       "message": "このデバイスでの文字起こしは遅いです。クラウドの方が速いです。",
       "useCloud": "クラウドを使う",
       "switched": "録音はクラウドで文字起こしされます。インターネットがないときは引き続きデバイスで処理します。"
-    }
+    },
+    "customInstructionPlaceholder": "例：もっと短くして、英語に翻訳して",
+    "customInstructionCollapsed": "自分で指示を書く…"
   },
   "voice": {
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",
@@ -708,7 +712,10 @@
     "slowOnDevice": "この録音は端末上で処理中です。次回は、接続時にクラウドを使うと速くなる場合があります。",
     "processingSeconds": "{{seconds}} 秒",
     "transcribingCloud": "クラウドで文字起こし中…",
-    "privateModelMissing": "この端末のみでの処理が有効ですが、音声認識モデルが利用できません。録音は端末に保存されています。文字起こしするにはモデルをダウンロードしてください。"
+    "privateModelMissing": "この端末のみでの処理が有効ですが、音声認識モデルが利用できません。録音は端末に保存されています。文字起こしするにはモデルをダウンロードしてください。",
+    "toTextHint": "終了すると、録音がテキストになります",
+    "audioOnlyHint": "音声のみ保存され、テキストにはなりません",
+    "discardConfirmHint": "もう一度ゴミ箱をタップすると録音を削除します"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -728,8 +735,8 @@
     "newPassword": "新しいパスワード",
     "confirmPassword": "パスワードの確認",
     "oneLastStep": "あと 1 ステップ",
-    "proAccess": "PRO アクセス",
-    "unlockFullPotential": "すべての機能を解放しましょう。",
+    "proAccess": "Vaulto Pro",
+    "unlockFullPotential": "文字起こしの時間が増え、すべてのデバイスでノートを使えます。",
     "bestValue": "いちばんお得",
     "restorePurchases": "購入を復元",
     "autoRenewable": "自動更新です。いつでも解約できます。",
@@ -841,7 +848,10 @@
     "onDeviceFree": "この端末で無料で文字起こし",
     "perMonth": "月額 {{price}}",
     "guestMinutesUsedTitle": "無料の分数を使い切りました",
-    "guestMinutesUsedDesc": "サインインすると無料の分数が追加され、メモも同期できます。またはこの端末で直接文字起こし — 無料・オフラインで。"
+    "guestMinutesUsedDesc": "サインインすると無料の分数が追加され、メモも同期できます。またはこの端末で直接文字起こし — 無料・オフラインで。",
+    "perYear": "年額 {{price}}",
+    "markdownSource": "Markdown で編集",
+    "markdownSourceDesc": "書式が **太字** のような記号で表示されます。"
   },
   "a11y": {
     "back": "戻る",
@@ -915,7 +925,9 @@
     "signIn": "サインイン",
     "privacyNoteLocal": "すべてこの端末上でオフライン動作し、何も送信されません。",
     "offlineHint": "この端末の AI はインターネットなしで使えます。",
-    "setUpOnDevice": "設定する"
+    "setUpOnDevice": "設定する",
+    "subtitle": "書き留めたすべての内容から答え、ノートへのリンクも示します。",
+    "examplesLabel": "たとえば"
   },
   "localAI": {
     "modelMissingTitle": "AI モデルをダウンロード",
@@ -994,7 +1006,8 @@
     "deletePromptText": "リストから削除されます。",
     "recordingsEmpty": "まだ録音はありません。",
     "promptIcon": "アイコン",
-    "promptHelper": "ノートの本文を入れたい場所に {text} と書いてください。"
+    "promptHelper": "ノートの本文を入れたい場所に {text} と書いてください。",
+    "aiSetUpOnDevice": "端末上の AI を設定"
   },
   "trash": {
     "title": "ゴミ箱",

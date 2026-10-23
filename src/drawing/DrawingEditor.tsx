@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
-    Alert,
     AppState,
     Keyboard,
     Modal,
@@ -28,6 +27,7 @@ import { DEFAULT_PAPER, PaperStyle } from './paper';
 import { PaperPicker } from './PaperPicker';
 import { pushRecentColor } from './colorMath';
 import { measureText } from './textLayout';
+import { appAlert } from '../components/AppAlert';
 
 type Props = {
     visible: boolean;
@@ -350,7 +350,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             onClose();
             return;
         }
-        Alert.alert(
+        appAlert(
             t('drawing.discardTitle', 'Discard changes?'),
             t('drawing.discardBody', 'Your changes to this drawing will be lost.'),
             [

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Alert, Linking, Modal, Pressable, Platform, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Linking, Modal, Pressable, Platform, Image, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useAuth } from '../hooks/useAuth';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import {
     AIProvider,
     TranscriptionLanguage,
@@ -35,7 +35,7 @@ import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { UsageCard } from '../components/UsageCard';
 import { SignOutChoiceDialog } from '../components/SignOutChoiceDialog';
 import { DeleteAccountModal } from '../components/DeleteAccountModal';
@@ -51,7 +51,6 @@ import { DisableEncryptionModal } from '../components/DisableEncryptionModal';
 import { syncService } from '../services/SyncService';
 import { useSubscription } from '../context/SubscriptionContext';
 import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
-import { ProIcon } from '../components/ProIcon';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
 import { CUSTOM_AI_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED, isLocalAIProvider } from '../utils/featureFlags';
@@ -67,6 +66,7 @@ import { rtlFlip } from '../i18n/direction';
 import { useNotesContext } from '../contexts/NotesContext';
 import { isWeeklyDigestEnabled, setWeeklyDigestEnabled } from '../services/notifications';
 import { exportNotesAsZip, pickNotesToImport } from '../services/notesTransfer';
+import { appAlert } from '../components/AppAlert';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
@@ -83,7 +83,107 @@ const getDaysUntilDate = (isoDate: string | null) => {
     return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 };
 
-interface SubscriptionStatusSectionProps {
+// ─── Building blocks ─────────────────────────────────────────────────────────
+// Settings is a list of plain grouped rows: a quiet label above each group, text
+// rows inside, an optional footnote below. No icons in rows, no nested cards.
+
+interface SectionProps {
+    label?: string;
+    labelAccessory?: React.ReactNode;
+    footer?: React.ReactNode;
+    children: React.ReactNode;
+}
+
+const Section: React.FC<SectionProps> = ({ label, labelAccessory, footer, children }) => (
+    <View style={styles.section}>
+        {!!label && (
+            <View style={styles.sectionLabelRow}>
+                <Text style={styles.sectionLabel}>{label}</Text>
+                {labelAccessory}
+            </View>
+        )}
+        <View style={styles.group}>{children}</View>
+        {typeof footer === 'string' ? <Text style={styles.sectionFooter}>{footer}</Text> : footer}
+    </View>
+);
+
+const Divider = () => <View style={styles.divider} />;
+
+interface RowProps {
+    title: string;
+    detail?: string | null;
+    /** A small amber dot by the title: needs attention, not an error. */
+    attention?: boolean;
+    value?: string | null;
+    tone?: 'default' | 'accent' | 'danger';
+    onPress?: () => void;
+    disabled?: boolean;
+    /** Replaces the chevron: a switch, a spinner. */
+    accessory?: React.ReactNode;
+    /** Opens something outside the app. */
+    external?: boolean;
+    accessibilityLabel?: string;
+}
+
+const Row: React.FC<RowProps> = ({
+    title, detail, attention, value, tone = 'default', onPress, disabled, accessory, external, accessibilityLabel,
+}) => {
+    const showChevron = !!onPress && accessory === undefined && tone !== 'danger';
+    const content = (
+        <>
+            <View style={styles.rowText}>
+                <View style={styles.rowTitleLine}>
+                    <Text
+                        style={[styles.rowTitle, tone === 'accent' && styles.rowTitleAccent, tone === 'danger' && styles.rowTitleDanger]}
+                    >
+                        {title}
+                    </Text>
+                    {attention && <View style={styles.attentionDot} />}
+                </View>
+                {!!detail && <Text style={styles.rowDetail}>{detail}</Text>}
+            </View>
+            {!!value && <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>}
+            {accessory}
+            {showChevron && (
+                <MaterialIcons
+                    name={external ? 'north-east' : 'chevron-right'}
+                    size={external ? 16 : 20}
+                    color={colors.textTertiary}
+                    style={external ? undefined : rtlFlip}
+                />
+            )}
+        </>
+    );
+    if (!onPress) return <View style={styles.row}>{content}</View>;
+    return (
+        <TouchableOpacity
+            style={[styles.row, disabled && styles.rowDisabled]}
+            onPress={onPress}
+            disabled={disabled}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel}
+        >
+            {content}
+        </TouchableOpacity>
+    );
+};
+
+const Toggle: React.FC<{ value: boolean; onChange: (value: boolean) => void; disabled?: boolean; label: string }> = ({
+    value, onChange, disabled, label,
+}) => (
+    <Switch
+        value={value}
+        onValueChange={onChange}
+        disabled={disabled}
+        trackColor={{ false: colors.borderHover, true: colors.primary }}
+        thumbColor={colors.onPrimary}
+        ios_backgroundColor={colors.borderHover}
+        accessibilityLabel={label}
+    />
+);
+
+interface SubscriptionRowsProps {
     isAuthenticated: boolean;
     isGuest: boolean;
     isPro: boolean;
@@ -94,7 +194,7 @@ interface SubscriptionStatusSectionProps {
     onManageSubscription: () => void;
 }
 
-const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
+const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
     isAuthenticated,
     isGuest,
     isPro,
@@ -105,125 +205,43 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
     onManageSubscription,
 }) => {
     const { t } = useTranslation();
-    
+
     if (!isAuthenticated || isGuest) return null;
 
     if (isLoading) {
-        return <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: spacing.s }} />;
+        return (
+            <>
+                <Divider />
+                <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginVertical: spacing.m }} />
+            </>
+        );
     }
 
     if (isPro) {
         return (
-            <View style={styles.proStatusCard}>
-                <View style={styles.proStatusHeader}>
-                    {/* Unified PRO Badge with Crown */}
-                    <View style={{ alignItems: 'center' }}>
-                        <MaterialCommunityIcons
-                            name="crown"
-                            size={32}
-                            color="#FCD34D"
-                            style={{
-                                marginBottom: -12,
-                                transform: [{ rotate: '-15deg' }],
-                                zIndex: 1,
-                                shadowColor: '#FCD34D',
-                                shadowOffset: { width: 0, height: 3 },
-                                shadowOpacity: 0.7,
-                                shadowRadius: 4,
-                            }}
-                        />
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: colors.primary,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 10, // Pill shape
-                            gap: 4,
-                            shadowColor: colors.primary,
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 2,
-                        }}>
-                            <Image
-                                source={require('../../assets/icon.png')}
-                                style={{
-                                    width: 10,
-                                    height: 10,
-                                    tintColor: '#FFFFFF',
-                                    opacity: 1,
-                                }}
-                                resizeMode="contain"
-                            />
-                            <Text style={{
-                                ...typography.caption,
-                                color: '#fff',
-                                fontWeight: '800', // Extra bold
-                                fontSize: 11,
-                                letterSpacing: 0.5,
-                            }}>{t('common.pro')}</Text>
-                        </View>
-                    </View>
-
-                    {/* Spacer to push "ACTIVE" to the right */}
-                    <View style={{ flex: 1 }} />
-
-                    <View style={styles.proStatusPill}>
-                        <Text style={styles.proStatusPillText}>{t('settings.ui.activeCaps')}</Text>
-                    </View>
-                </View>
-                <TouchableOpacity
-                    style={styles.proStatusAction}
-                    onPress={onOpenMinutesSheet}
-                    activeOpacity={0.9}
-                >
-                    <View style={styles.proStatusActionLeft}>
-                        <MaterialIcons name="receipt-long" size={16} color={colors.primary} />
-                        <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>{t('settings.ui.subscriptionDetails')}</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary} style={rtlFlip} />
-                </TouchableOpacity>
+            <>
+                <Divider />
+                <Row title={t('settings.ui.subscriptionDetails', 'Subscription details')} onPress={onOpenMinutesSheet} />
                 {canManageSubscription && (
-                    <TouchableOpacity
-                        style={styles.proStatusAction}
-                        onPress={onManageSubscription}
-                        activeOpacity={0.9}
-                    >
-                        <View style={styles.proStatusActionLeft}>
-                            <MaterialIcons name="manage-accounts" size={16} color={colors.primary} />
-                            <Text style={[styles.proStatusActionText, { color: colors.textSecondary, fontWeight: 'normal', fontSize: 13 }]}>
-                                {t('settings.ui.manageGooglePlay')}
-                            </Text>
-                        </View>
-                        <MaterialIcons name="open-in-new" size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
+                    <>
+                        <Divider />
+                        <Row title={t('settings.ui.manageGooglePlay', 'Manage in Google Play')} onPress={onManageSubscription} external />
+                    </>
                 )}
-            </View>
+            </>
         );
     }
 
     return (
-        <View style={styles.premiumUpgradeCard}>
-            <TouchableOpacity style={styles.premiumUpgradeRow} onPress={onUpgrade} activeOpacity={0.9}>
-                <View style={styles.premiumUpgradeIcon}>
-                    <ProIcon
-                        size={22}
-                        containerSize={40}
-                        backgroundColor={colors.warningLight}
-                        borderColor="#FCD34D"
-                        tintColor={null}
-                    />
-                </View>
-                <View style={styles.premiumUpgradeCopy}>
-                    <Text style={styles.premiumUpgradeTitle}>{t('settings.pro.upgrade')}</Text>
-                    <Text style={styles.premiumUpgradeSubtitle}>
-                        {t('settings.pro.subtitle')}
-                    </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
-            </TouchableOpacity>
-        </View>
+        <>
+            <Divider />
+            <Row
+                title={t('settings.pro.upgrade', 'Upgrade to Pro')}
+                detail={t('settings.pro.subtitle', 'Extended transcription & premium features')}
+                tone="accent"
+                onPress={onUpgrade}
+            />
+        </>
     );
 };
 
@@ -231,6 +249,18 @@ const SubscriptionStatusSection: React.FC<SubscriptionStatusSectionProps> = ({
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
+    const route = useRoute<any>();
+    const scrollRef = useRef<ScrollView>(null);
+    const voiceSectionYRef = useRef<number | null>(null);
+    const requestedSectionRef = useRef<string | undefined>(route.params?.section);
+    // Opened for a specific group (e.g. "set up AI on this device"): scroll to it
+    // once its position is known.
+    const scrollToRequestedSection = useCallback(() => {
+        if (requestedSectionRef.current !== 'voice' || voiceSectionYRef.current === null) return;
+        requestedSectionRef.current = undefined;
+        const y = Math.max(0, voiceSectionYRef.current - spacing.m);
+        setTimeout(() => scrollRef.current?.scrollTo({ y, animated: true }), 250);
+    }, []);
     const { t, i18n } = useTranslation();
     const [showAppLanguageModal, setShowAppLanguageModal] = useState(false);
     const { preference: themePreference, setPreference: setThemePreference } = useTheme();
@@ -246,7 +276,7 @@ export const SettingsScreen = () => {
         const ok = await setWeeklyDigestEnabled(value).catch(() => false);
         if (!ok) {
             setDigestEnabled(false);
-            Alert.alert(t('digest.settingTitle', 'Weekly summary'), t('digest.permissionDenied', 'Allow notifications for Vaulto in the device settings to get the summary.'), [
+            appAlert(t('digest.settingTitle', 'Weekly summary'), t('digest.permissionDenied', 'Allow notifications for Vaulto in the device settings to get the summary.'), [
                 { text: t('common.cancel', 'Cancel'), style: 'cancel' },
                 { text: t('edit.tasks.openSettings', 'Open settings'), onPress: () => { void Linking.openSettings(); } },
             ]);
@@ -258,15 +288,15 @@ export const SettingsScreen = () => {
         try {
             const result = await exportNotesAsZip(getAllNotes());
             if (result.exported === 0) {
-                Alert.alert(t('data.exportTitle', 'Export notes'), t('data.exportNothing', 'There are no notes to export.'));
+                appAlert(t('data.exportTitle', 'Export notes'), t('data.exportNothing', 'There are no notes to export.'));
             } else if (result.skippedProtected > 0) {
-                Alert.alert(
+                appAlert(
                     t('data.exportTitle', 'Export notes'),
                     t('data.exportSkippedProtected', 'Protected notes ({{count}}) were not exported: they never leave the device unencrypted.', { count: result.skippedProtected }),
                 );
             }
         } catch (error) {
-            Alert.alert(t('data.exportTitle', 'Export notes'), getErrorMessage(error, t('data.exportFailed', 'Could not export the notes.')));
+            appAlert(t('data.exportTitle', 'Export notes'), getErrorMessage(error, t('data.exportFailed', 'Could not export the notes.')));
         } finally {
             setTransferBusy(null);
         }
@@ -278,7 +308,7 @@ export const SettingsScreen = () => {
             const found = await pickNotesToImport();
             if (!found) return;
             if (found.length === 0) {
-                Alert.alert(t('data.importTitle', 'Import notes'), t('data.importNothing', 'No notes found in these files. Supported: .md, .txt, .zip and Google Keep (Takeout).'));
+                appAlert(t('data.importTitle', 'Import notes'), t('data.importNothing', 'No notes found in these files. Supported: .md, .txt, .zip and Google Keep (Takeout).'));
                 return;
             }
             let created = 0;
@@ -291,9 +321,9 @@ export const SettingsScreen = () => {
                 }
             }
             haptics.success();
-            Alert.alert(t('data.importTitle', 'Import notes'), t('data.importDone', 'Imported notes: {{count}}', { count: created }));
+            appAlert(t('data.importTitle', 'Import notes'), t('data.importDone', 'Imported notes: {{count}}', { count: created }));
         } catch (error) {
-            Alert.alert(t('data.importTitle', 'Import notes'), getErrorMessage(error, t('data.importFailed', 'Could not import the notes.')));
+            appAlert(t('data.importTitle', 'Import notes'), getErrorMessage(error, t('data.importFailed', 'Could not import the notes.')));
         } finally {
             setTransferBusy(null);
         }
@@ -362,7 +392,7 @@ export const SettingsScreen = () => {
         try {
             await enableE2EEWithRecoveryKey((progress) => setUnlockProgress(progress));
         } catch (error: any) {
-            Alert.alert(t('aux.enableSyncFailed', 'Could not enable encryption'), getErrorMessage(error, t('common.errorOccurred', 'An error occurred')));
+            appAlert(t('aux.enableSyncFailed', 'Could not enable encryption'), getErrorMessage(error, t('common.errorOccurred', 'An error occurred')));
         } finally {
             setShowUnlockingOverlay(false);
             setUnlockProgress(null);
@@ -475,13 +505,13 @@ export const SettingsScreen = () => {
         try {
             const supported = await Linking.canOpenURL(targetUrl);
             if (!supported) {
-                Alert.alert(t("common.unavailable"), t("aux.unableOpenSubscription"));
+                appAlert(t("common.unavailable"), t("aux.unableOpenSubscription"));
                 return;
             }
             await Linking.openURL(targetUrl);
         } catch (error) {
             console.error('Failed to open subscription management URL:', error);
-            Alert.alert(t("common.unavailable"), t("aux.unableOpenSubscription"));
+            appAlert(t("common.unavailable"), t("aux.unableOpenSubscription"));
         }
     }, [subscriptionStatus?.managementURL]);
 
@@ -502,7 +532,7 @@ export const SettingsScreen = () => {
                     void syncService.syncNow('manual');
                 }, 0);
             } catch (error: any) {
-                Alert.alert(t("common.failed"), error?.message || t("aux.unableEnableSync"));
+                appAlert(t("common.failed"), error?.message || t("aux.unableEnableSync"));
             }
             return;
         }
@@ -511,7 +541,7 @@ export const SettingsScreen = () => {
     }, [encryptionStatus, setSyncEnabledPreference, syncToggleDisabled, t]);
 
     const confirmKeepResetArchiveLocal = useCallback(() => {
-        Alert.alert(
+        appAlert(
             t('settings.resetRecovery.keepTitle', 'Keep notes only on this device?'),
             t('settings.resetRecovery.keepDescription', 'The recovered notes will remain local and cloud sync will stay off.'),
             [
@@ -520,7 +550,7 @@ export const SettingsScreen = () => {
                     text: t('settings.resetRecovery.keepLocal', 'Keep local'),
                     onPress: () => {
                         void keepResetArchiveLocal().catch((error: any) => {
-                            Alert.alert(t('common.failed', 'Failed'), error?.message || t('aux.somethingWentWrong', 'Something went wrong'));
+                            appAlert(t('common.failed', 'Failed'), error?.message || t('aux.somethingWentWrong', 'Something went wrong'));
                         });
                     },
                 },
@@ -529,7 +559,7 @@ export const SettingsScreen = () => {
     }, [keepResetArchiveLocal, t]);
 
     const confirmStandardResetRecovery = useCallback(() => {
-        Alert.alert(
+        appAlert(
             t('settings.resetRecovery.standardTitle', 'Sync without E2EE?'),
             t('settings.resetRecovery.standardDescription', 'Your recovered notes will be uploaded using standard sync. Vaulto can technically process their contents.'),
             [
@@ -539,7 +569,7 @@ export const SettingsScreen = () => {
                     style: 'destructive',
                     onPress: () => {
                         void resumeStandardSyncAfterReset().catch((error: any) => {
-                            Alert.alert(t('common.failed', 'Failed'), error?.message || t('aux.somethingWentWrong', 'Something went wrong'));
+                            appAlert(t('common.failed', 'Failed'), error?.message || t('aux.somethingWentWrong', 'Something went wrong'));
                         });
                     },
                 },
@@ -733,7 +763,7 @@ export const SettingsScreen = () => {
         try {
             const plan = await planOfflineModels();
             if (!plan) {
-                Alert.alert(
+                appAlert(
                     t('settings.voice.offlineNoSpaceTitle', 'Not enough space'),
                     t('settings.voice.offlineNoSpace', 'Not enough free space on this device'),
                 );
@@ -742,7 +772,7 @@ export const SettingsScreen = () => {
             if (plan.downloadBytes > 0) {
                 const net = await NetInfo.fetch().catch(() => null);
                 const proceed = await new Promise<boolean>((resolve) => {
-                    Alert.alert(
+                    appAlert(
                         t('settings.voice.offlineConfirmTitle', 'Download models?'),
                         [
                             t('settings.voice.offlineConfirmDesc', 'The best speech and AI models for this device, {{size}}, downloaded once. After that notes work without internet.', {
@@ -772,7 +802,7 @@ export const SettingsScreen = () => {
                 }
             } catch (error: any) {
                 if (!String(error?.message ?? '').toLowerCase().includes('cancel')) {
-                    Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
+                    appAlert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
                 }
             } finally {
                 setOfflineProgress(null);
@@ -818,7 +848,7 @@ export const SettingsScreen = () => {
         try {
             await removeOfflineModels();
         } catch (error: any) {
-            Alert.alert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
+            appAlert(t('alerts.deleteFailed', 'Could not delete'), getErrorMessage(error, t('alerts.whisperDeleteFailed', 'Could not remove the speech model.')));
         }
         await refreshOffline();
     }, [refreshOffline, t]);
@@ -848,7 +878,7 @@ export const SettingsScreen = () => {
             }
         } catch (error: any) {
             if (!String(error?.message ?? '').toLowerCase().includes('cancel')) {
-                Alert.alert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
+                appAlert(t('alerts.downloadFailed', 'Download failed'), getErrorMessage(error, t('aux.unableDownloadWhisper')));
             }
         } finally {
             setOfflineProgress(null);
@@ -893,7 +923,7 @@ export const SettingsScreen = () => {
             setUnsyncedCount(await getSignOutDataAtRiskCount(userId ?? user?.id ?? ''));
             setShowSignOutDialog(true);
         } catch (error) {
-            Alert.alert(t('common.error', 'Error'), getErrorMessage(error));
+            appAlert(t('common.error', 'Error'), getErrorMessage(error));
         }
     };
 
@@ -965,42 +995,46 @@ export const SettingsScreen = () => {
         ?? null
     );
 
+    const currentAppLanguage = appLanguages.find(l => l.key === i18n.language)?.label || 'English';
+    const showAccountActions = isAuthenticated && !isGuest;
+
     return (
         <ScreenContainer>
             <View style={styles.topBar}>
                 <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
-                    activeOpacity={0.8}
+                    activeOpacity={0.6}
+                    hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={t("a11y.back", "Back")}
                 >
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
-                <Text style={styles.title}>{t('settings.ui.settingsHeader', 'Settings')}</Text>
             </View>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <Text style={styles.title} accessibilityRole="header">{t('settings.ui.settingsHeader', 'Settings')}</Text>
 
-                <View style={styles.card}>
+                {/* Account */}
+                <Section>
                     {isAuthenticated && user ? (
                         <>
-                            <View style={styles.userInfoContainer}>
+                            <View style={styles.accountRow}>
                                 <View style={styles.userAvatar}>
                                     <Text style={styles.userAvatarText}>
                                         {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
                                     </Text>
                                 </View>
                                 <View style={styles.userInfoText}>
-                                    {user.full_name && (
-                                        <Text style={styles.userName} numberOfLines={1}>{user.full_name}</Text>
+                                    <View style={styles.userNameRow}>
+                                        <Text style={styles.userName} numberOfLines={1}>
+                                            {user.full_name || user.email || t('settings.account.signIn', 'Signed in')}
+                                        </Text>
+                                        {isPro && <Text style={styles.proMark}>{t('common.pro')}</Text>}
+                                    </View>
+                                    {!!user.full_name && !!user.email && (
+                                        <Text style={styles.userEmail} numberOfLines={1} ellipsizeMode="middle">{user.email}</Text>
                                     )}
-                                    <Text
-                                        style={user.full_name ? styles.userEmail : styles.userEmailPrimary}
-                                        numberOfLines={1}
-                                        ellipsizeMode="middle"
-                                    >
-                                        {user.email || t('settings.account.signIn', 'Signed in')}
-                                    </Text>
                                 </View>
                             </View>
                             {!isPro && (
@@ -1014,28 +1048,19 @@ export const SettingsScreen = () => {
                             )}
                         </>
                     ) : (
-                        <View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.m }}>
-                                <View style={[styles.iconContainer, { backgroundColor: colors.backgroundSecondary }]}>
-                                    <MaterialIcons name="account-circle" size={24} color={colors.textSecondary} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.preferenceTitle}>{t("settings.ui.signInTitle", "Sign in")}</Text>
-                                    <Text style={styles.preferenceDescription}>{t("settings.ui.signInDesc", "Sync notes & access AI features")}</Text>
-                                </View>
-                            </View>
+                        <View style={styles.signInBlock}>
+                            <Text style={styles.signInTitle}>{t("settings.ui.signInTitle", "Sign in")}</Text>
+                            <Text style={styles.rowDetail}>{t("settings.ui.signInDesc", "Sync notes & access AI features")}</Text>
                             <Button
                                 title={t("settings.ui.signInBtn", "Sign In / Create Account")}
                                 onPress={() => navigation.navigate('SignIn')}
-                                style={{ width: '100%' }}
+                                style={styles.signInButton}
                             />
-                            <Text style={styles.trialInfoText}>
-                                {trialInfoText}
-                            </Text>
+                            {!!trialInfoText && <Text style={styles.trialInfoText}>{trialInfoText}</Text>}
                         </View>
                     )}
 
-                    <SubscriptionStatusSection
+                    <SubscriptionRows
                         isAuthenticated={isAuthenticated}
                         isGuest={isGuest}
                         isPro={isPro}
@@ -1045,240 +1070,174 @@ export const SettingsScreen = () => {
                         canManageSubscription={isSubscriptionActive}
                         onManageSubscription={openManageSubscription}
                     />
-                </View>
+                </Section>
 
-                {/* Language / Preferences */}
-                <View style={styles.card}>
-                    <TouchableOpacity
-                        style={styles.preferenceRow}
-                        activeOpacity={0.85}
+                {/* General */}
+                <Section label={t('settings.ui.general', 'General')}>
+                    <Row
+                        title={t('settings.languageSelection', 'App Language')}
+                        value={currentAppLanguage}
                         onPress={() => setShowAppLanguageModal(true)}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons name="language" size={24} color={colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t('settings.languageSelection', 'App Language')}</Text>
-                                <Text style={styles.preferenceDescription}>
-                                    {appLanguages.find(l => l.key === i18n.language)?.label || 'English'}
-                                </Text>
-                            </View>
-                        </View>
-                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
-                    </TouchableOpacity>
-                    <View style={styles.themeDivider} />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s }}>
-                        <MaterialIcons name="contrast" size={24} color={colors.textSecondary} />
-                        <Text style={styles.preferenceTitle}>{t('settings.theme.title', 'Theme')}</Text>
-                    </View>
-                    <View style={styles.themeSegments} accessibilityRole="radiogroup">
-                        {([
-                            { key: 'system', icon: 'brightness-auto', label: t('settings.theme.system', 'System') },
-                            { key: 'light', icon: 'light-mode', label: t('settings.theme.light', 'Light') },
-                            { key: 'dark', icon: 'dark-mode', label: t('settings.theme.dark', 'Dark') },
-                        ] as const).map((option) => {
-                            const selected = themePreference === option.key;
-                            return (
-                                <TouchableOpacity
-                                    key={option.key}
-                                    style={[styles.themeSegment, selected && styles.themeSegmentActive]}
-                                    onPress={() => {
-                                        if (!selected) {
-                                            haptics.selection();
-                                            setThemePreference(option.key);
-                                        }
-                                    }}
-                                    accessibilityRole="radio"
-                                    accessibilityState={{ selected }}
-                                    accessibilityLabel={option.label}
-                                >
-                                    <MaterialIcons
-                                        name={option.icon}
-                                        size={18}
-                                        color={selected ? colors.primary : colors.textSecondary}
-                                    />
-                                    <Text
-                                        style={[styles.themeSegmentText, selected && styles.themeSegmentTextActive]}
-                                        numberOfLines={2}
+                    />
+                    <Divider />
+                    <View style={styles.themeRow}>
+                        <Text style={styles.rowTitle}>{t('settings.theme.title', 'Theme')}</Text>
+                        <View style={styles.themeSegments} accessibilityRole="radiogroup">
+                            {([
+                                { key: 'system', label: t('settings.theme.system', 'System') },
+                                { key: 'light', label: t('settings.theme.light', 'Light') },
+                                { key: 'dark', label: t('settings.theme.dark', 'Dark') },
+                            ] as const).map((option) => {
+                                const selected = themePreference === option.key;
+                                return (
+                                    <TouchableOpacity
+                                        key={option.key}
+                                        style={[styles.themeSegment, selected && styles.themeSegmentActive]}
+                                        onPress={() => {
+                                            if (!selected) {
+                                                haptics.selection();
+                                                setThemePreference(option.key);
+                                            }
+                                        }}
+                                        activeOpacity={0.7}
+                                        accessibilityRole="radio"
+                                        accessibilityState={{ selected }}
+                                        accessibilityLabel={option.label}
                                     >
-                                        {option.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
+                                        <Text
+                                            style={[styles.themeSegmentText, selected && styles.themeSegmentTextActive]}
+                                            numberOfLines={1}
+                                            adjustsFontSizeToFit
+                                            minimumFontScale={0.8}
+                                        >
+                                            {option.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
                     </View>
-                </View>
+                </Section>
 
-                {/* Your data: trash, export, import */}
-                <View style={styles.card}>
-                    <Text style={styles.dataCardTitle}>{t('data.title', 'Notes')}</Text>
-                    <View style={styles.preferenceRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons name="insights" size={24} color={colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t('digest.settingTitle', 'Weekly summary')}</Text>
-                                <Text style={styles.preferenceDescription}>{t('digest.settingDesc', 'Sunday evening: what you noted and what is still open')}</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={digestEnabled}
-                            onValueChange={(value) => { void toggleDigest(value); }}
-                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                            thumbColor={colors.onPrimary}
-                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                            accessibilityLabel={t('digest.settingTitle', 'Weekly summary')}
-                        />
-                    </View>
-                    <View style={styles.themeDivider} />
-                    <TouchableOpacity
-                        style={styles.preferenceRow}
-                        activeOpacity={0.85}
+                {/* Your notes: digest, trash, export, import */}
+                <Section label={t('data.title', 'Notes')}>
+                    <Row
+                        title={t('digest.settingTitle', 'Weekly summary')}
+                        detail={t('digest.settingDesc', 'Sunday evening: what you noted and what is still open')}
+                        onPress={() => { void toggleDigest(!digestEnabled); }}
+                        accessory={(
+                            <Toggle
+                                value={digestEnabled}
+                                onChange={(value) => { void toggleDigest(value); }}
+                                label={t('digest.settingTitle', 'Weekly summary')}
+                            />
+                        )}
+                    />
+                    <Divider />
+                    <Row
+                        title={t('trash.title', 'Trash')}
+                        detail={t('trash.rowDesc', 'Deleted notes, kept for 30 days')}
                         onPress={() => navigation.navigate('Trash')}
-                        accessibilityRole="button"
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons name="delete-outline" size={24} color={colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t('trash.title', 'Trash')}</Text>
-                                <Text style={styles.preferenceDescription}>{t('trash.rowDesc', 'Deleted notes, kept for 30 days')}</Text>
-                            </View>
-                        </View>
-                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
-                    </TouchableOpacity>
-                    <View style={styles.themeDivider} />
-                    <TouchableOpacity
-                        style={styles.preferenceRow}
-                        activeOpacity={0.85}
+                    />
+                    <Divider />
+                    <Row
+                        title={t('data.exportTitle', 'Export notes')}
+                        detail={t('data.exportDesc', 'Markdown files in a ZIP')}
                         onPress={() => { void handleExport(); }}
                         disabled={transferBusy !== null}
-                        accessibilityRole="button"
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons name="ios-share" size={24} color={colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t('data.exportTitle', 'Export notes')}</Text>
-                                <Text style={styles.preferenceDescription}>{t('data.exportDesc', 'Markdown files in a ZIP')}</Text>
-                            </View>
-                        </View>
-                        {transferBusy === 'export'
-                            ? <ActivityIndicator size="small" color={colors.primary} />
-                            : <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />}
-                    </TouchableOpacity>
-                    <View style={styles.themeDivider} />
-                    <TouchableOpacity
-                        style={styles.preferenceRow}
-                        activeOpacity={0.85}
+                        accessory={transferBusy === 'export' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined}
+                    />
+                    <Divider />
+                    <Row
+                        title={t('data.importTitle', 'Import notes')}
+                        detail={t('data.importDesc', '.md, .txt, .zip or Google Keep (Takeout)')}
                         onPress={() => { void handleImport(); }}
                         disabled={transferBusy !== null}
-                        accessibilityRole="button"
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.s, flex: 1 }}>
-                            <MaterialIcons name="file-download" size={24} color={colors.textSecondary} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.preferenceTitle}>{t('data.importTitle', 'Import notes')}</Text>
-                                <Text style={styles.preferenceDescription}>{t('data.importDesc', '.md, .txt, .zip or Google Keep (Takeout)')}</Text>
-                            </View>
-                        </View>
-                        {transferBusy === 'import'
-                            ? <ActivityIndicator size="small" color={colors.primary} />
-                            : <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />}
-                    </TouchableOpacity>
-                </View>
+                        accessory={transferBusy === 'import' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined}
+                    />
+                </Section>
 
                 {/* Cloud Sync */}
                 {/* Guests have nothing to sync yet; the account card above offers sign-in. */}
                 {!isGuestOrAnonymous && (
-                    <View style={styles.card}>
-                        <View style={[styles.cardHeader, { marginBottom: 0 }]}>
-                            <Text style={styles.dataCardTitle}>{t("settings.ui.cloudSync", "Cloud Sync")}</Text>
+                    <Section
+                        label={t("settings.ui.cloudSync", "Cloud Sync")}
+                        labelAccessory={(
                             <TouchableOpacity
                                 onPress={() => setShowSecurityInfoModal(true)}
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                hitSlop={12}
                                 accessibilityRole="button"
                                 accessibilityLabel={t("a11y.helpSync", "About cloud sync")}
                             >
-                                <MaterialIcons name="help-outline" size={18} color={colors.textSecondary} />
+                                <MaterialIcons name="help-outline" size={16} color={colors.textTertiary} />
                             </TouchableOpacity>
-                        </View>
-
+                        )}
+                        footer={hasConfiguredKey && encryptionStatus !== 'locked' && !isGuestOrAnonymous ? (
+                            <TouchableOpacity
+                                style={styles.footerLink}
+                                onPress={() => setShowDisableEncryptionModal(true)}
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.footerLinkText}>{t('settings.sync.turnOffE2ee', 'Turn off end-to-end encryption')}</Text>
+                            </TouchableOpacity>
+                        ) : undefined}
+                    >
                         {resetRecoveryPending && (
-                            <View style={{
-                                borderWidth: 1,
-                                borderColor: colors.warning + '80',
-                                backgroundColor: colors.warning + '12',
-                                borderRadius: 14,
-                                padding: spacing.m,
-                                marginBottom: spacing.m,
-                            }}>
-                                <View style={{ flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' }}>
-                                    <MaterialCommunityIcons name="shield-alert-outline" size={20} color={colors.warning} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.preferenceTitle}>
-                                            {t('settings.resetRecovery.title', 'Encrypted vault was reset')}
-                                        </Text>
-                                        <Text style={[styles.preferenceDescription, { marginTop: 4 }]}>
-                                            {t('settings.resetRecovery.description', 'Notes retained on this device are isolated locally. Sync is paused so they cannot be uploaded without your choice.')}
-                                        </Text>
+                            <>
+                                <View style={styles.noticeBlock}>
+                                    <Text style={styles.noticeTitle}>
+                                        {t('settings.resetRecovery.title', 'Encrypted vault was reset')}
+                                    </Text>
+                                    <Text style={styles.rowDetail}>
+                                        {t('settings.resetRecovery.description', 'Notes retained on this device are isolated locally. Sync is paused so they cannot be uploaded without your choice.')}
+                                    </Text>
+                                    <View style={styles.noticeActions}>
+                                        <TouchableOpacity style={styles.pillButtonPrimary} onPress={() => setShowEnableSyncModal(true)}>
+                                            <Text style={styles.pillButtonPrimaryText}>
+                                                {t('settings.resetRecovery.enableE2EE', 'Restore with E2EE')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.pillButton} onPress={confirmKeepResetArchiveLocal}>
+                                            <Text style={styles.pillButtonText}>
+                                                {t('settings.resetRecovery.keepLocal', 'Keep local')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.pillButton} onPress={confirmStandardResetRecovery}>
+                                            <Text style={[styles.pillButtonText, { color: colors.warning }]}>
+                                                {t('settings.resetRecovery.standardAction', 'Use standard sync')}
+                                            </Text>
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginTop: spacing.m }}>
-                                    <TouchableOpacity
-                                        style={[styles.smallButton, { backgroundColor: colors.primary }]}
-                                        onPress={() => setShowEnableSyncModal(true)}
-                                    >
-                                        <Text style={styles.smallButtonText}>
-                                            {t('settings.resetRecovery.enableE2EE', 'Restore with E2EE')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.smallButtonOutlined}
-                                        onPress={confirmKeepResetArchiveLocal}
-                                    >
-                                        <Text style={styles.smallButtonTextOutlined}>
-                                            {t('settings.resetRecovery.keepLocal', 'Keep local')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.smallButtonOutlined, { borderColor: colors.warning }]}
-                                        onPress={confirmStandardResetRecovery}
-                                    >
-                                        <Text style={[styles.smallButtonTextOutlined, { color: colors.warning }]}>
-                                            {t('settings.resetRecovery.standardAction', 'Use standard sync')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
+                                <Divider />
+                            </>
                         )}
 
                         {/* A guest has no vault: encryption controls left by a previous account do not apply. */}
                         {(!hasConfiguredKey || isGuestOrAnonymous) ? (
                             <>
-                                <View style={[styles.preferenceRow, styles.voiceRow]}>
-                                    <View style={styles.voiceRowText}>
-                                        <MaterialIcons name={syncEnabled ? 'cloud-done' : 'cloud-off'} size={24} color={syncEnabled ? colors.primary : colors.textSecondary} />
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.preferenceTitle}>{t('settings.sync.title', 'Sync')}</Text>
-                                            <Text style={styles.preferenceDescription}>
-                                                {syncEnabled
-                                                    ? t('settings.sync.onPlain', 'On · notes are backed up and on all your devices')
-                                                    : t('settings.sync.off', 'Off · notes stay on this device')}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <Switch
-                                        value={syncEnabled}
-                                        onValueChange={(value) => { void handleToggleSync(value); }}
-                                        disabled={showUnlockingOverlay || resetRecoveryPending}
-                                        trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                        thumbColor={colors.onPrimary}
-                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                        accessibilityLabel={t('settings.sync.title', 'Sync')}
-                                    />
-                                </View>
-                                <View style={styles.separator} />
-                                <TouchableOpacity
-                                    style={[styles.preferenceRow, styles.voiceRow]}
-                                    activeOpacity={0.85}
-                                    accessibilityRole="button"
+                                <Row
+                                    title={t('settings.sync.title', 'Sync')}
+                                    detail={syncEnabled
+                                        ? t('settings.sync.onPlain', 'On · notes are backed up and on all your devices')
+                                        : t('settings.sync.off', 'Off · notes stay on this device')}
+                                    onPress={() => { void handleToggleSync(!syncEnabled); }}
+                                    disabled={showUnlockingOverlay || resetRecoveryPending}
+                                    accessory={(
+                                        <Toggle
+                                            value={syncEnabled}
+                                            onChange={(value) => { void handleToggleSync(value); }}
+                                            disabled={showUnlockingOverlay || resetRecoveryPending}
+                                            label={t('settings.sync.title', 'Sync')}
+                                        />
+                                    )}
+                                />
+                                <Divider />
+                                <Row
+                                    title={t('settings.sync.e2eeTitle', 'End-to-end encryption')}
+                                    detail={autoEncrypting
+                                        ? t('settings.sync.e2eeTurningOn', 'Turning on…')
+                                        : t('settings.sync.e2eeOffDesc', 'Only you can read your notes, not even Vaulto')}
                                     disabled={autoEncrypting}
                                     onPress={() => {
                                         if (isGuestOrAnonymous) {
@@ -1287,28 +1246,15 @@ export const SettingsScreen = () => {
                                         }
                                         void handleEnableEncryption();
                                     }}
-                                >
-                                    <View style={styles.voiceRowText}>
-                                        <MaterialIcons name="lock-outline" size={24} color={colors.textSecondary} />
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.preferenceTitle}>{t('settings.sync.e2eeTitle', 'End-to-end encryption')}</Text>
-                                            <Text style={styles.preferenceDescription}>
-                                                {autoEncrypting
-                                                    ? t('settings.sync.e2eeTurningOn', 'Turning on…')
-                                                    : t('settings.sync.e2eeOffDesc', 'Only you can read your notes, not even Vaulto')}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    {autoEncrypting
-                                        ? <ActivityIndicator size="small" color={colors.primary} />
+                                    accessory={autoEncrypting
+                                        ? <ActivityIndicator size="small" color={colors.textSecondary} />
                                         : <Text style={styles.rowAction}>{t('settings.sync.turnOn', 'Turn on')}</Text>}
-                                </TouchableOpacity>
+                                />
                             </>
                         ) : encryptionStatus === 'locked' ? (
-                            <TouchableOpacity
-                                style={styles.preferenceRow}
-                                activeOpacity={0.85}
-                                accessibilityRole="button"
+                            <Row
+                                title={t("settings.ui.vaultLocked", "Vault is locked")}
+                                detail={hasRemoteKeyBundle ? t("settings.ui.unlockToRestore", "Encrypted notes on server") : null}
                                 onPress={() => {
                                     if (isGuestOrAnonymous) {
                                         setShowSecurityAuthModal(true);
@@ -1316,134 +1262,73 @@ export const SettingsScreen = () => {
                                     }
                                     setShowUnlockSyncModal(true);
                                 }}
-                            >
-                                <View style={[styles.securityRowLeft, { gap: spacing.s }]}>
-                                    <MaterialIcons name="lock-outline" size={24} color={colors.textSecondary} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.preferenceTitle}>
-                                            {t("settings.ui.vaultLocked", "Vault is locked")}
-                                        </Text>
-                                        {hasRemoteKeyBundle && (
-                                            <Text style={styles.preferenceDescription}>
-                                                {t("settings.ui.unlockToRestore", "Encrypted notes on server")}
-                                            </Text>
-                                        )}
-                                    </View>
-                                </View>
-                                <Text style={styles.rowAction}>{t("settings.ui.unlock", "Unlock")}</Text>
-                            </TouchableOpacity>
+                                accessory={<Text style={styles.rowAction}>{t("settings.ui.unlock", "Unlock")}</Text>}
+                            />
                         ) : (
                             <>
-                                <View style={[styles.preferenceRow, styles.voiceRow]}>
-                                    <View style={styles.voiceRowText}>
-                                        <MaterialIcons name={syncEnabled ? 'cloud-done' : 'cloud-off'} size={24} color={syncEnabled ? colors.primary : colors.textSecondary} />
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.preferenceTitle}>{t('settings.sync.title', 'Sync')}</Text>
-                                            <Text style={styles.preferenceDescription}>
-                                                {encryptionStatus === 'loading'
-                                                    ? t('settings.ui.checking', 'Checking…')
-                                                    : syncEnabled
-                                                        ? t('settings.sync.onE2ee', 'On · end-to-end encrypted, only you can read it')
-                                                        : t('settings.sync.off', 'Off · notes stay on this device')}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    {encryptionStatus === 'loading' ? (
-                                        <ActivityIndicator size="small" color={colors.primary} />
-                                    ) : !syncToggleDisabled && (
-                                        <Switch
-                                            value={syncEnabled}
-                                            onValueChange={(value) => { void handleToggleSync(value); }}
-                                            disabled={showUnlockingOverlay}
-                                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                            thumbColor={colors.onPrimary}
-                                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                            accessibilityLabel={t('settings.sync.title', 'Sync')}
-                                        />
-                                    )}
-                                </View>
+                                <Row
+                                    title={t('settings.sync.title', 'Sync')}
+                                    detail={encryptionStatus === 'loading'
+                                        ? t('settings.ui.checking', 'Checking…')
+                                        : syncEnabled
+                                            ? t('settings.sync.onE2ee', 'On · end-to-end encrypted, only you can read it')
+                                            : t('settings.sync.off', 'Off · notes stay on this device')}
+                                    onPress={encryptionStatus === 'loading' || syncToggleDisabled
+                                        ? undefined
+                                        : () => { void handleToggleSync(!syncEnabled); }}
+                                    disabled={showUnlockingOverlay}
+                                    accessory={encryptionStatus === 'loading'
+                                        ? <ActivityIndicator size="small" color={colors.textSecondary} />
+                                        : syncToggleDisabled ? null : (
+                                            <Toggle
+                                                value={syncEnabled}
+                                                onChange={(value) => { void handleToggleSync(value); }}
+                                                disabled={showUnlockingOverlay}
+                                                label={t('settings.sync.title', 'Sync')}
+                                            />
+                                        )}
+                                />
                                 {!!recoveryCode && (
                                     <>
-                                        <View style={styles.separator} />
-                                        <TouchableOpacity
-                                            style={[styles.preferenceRow, styles.voiceRow]}
-                                            activeOpacity={0.85}
-                                            accessibilityRole="button"
+                                        <Divider />
+                                        <Row
+                                            title={t('settings.recovery.keyTitle', 'Recovery key')}
+                                            detail={keyBackup?.cloud
+                                                ? (Platform.OS === 'ios'
+                                                    ? t('settings.sync.keyInIcloud', 'In iCloud Keychain · opens your notes on a new iPhone')
+                                                    : t('settings.sync.keyInGoogle', 'In your Google backup · opens your notes on a new device'))
+                                                : t('settings.sync.keyOnlyHere', 'Only on this device · save a copy so you never lose your notes')}
+                                            attention={!keyBackup?.cloud}
                                             onPress={() => { void openRecoveryKey(); }}
-                                        >
-                                            <View style={styles.voiceRowText}>
-                                                <MaterialCommunityIcons
-                                                    name={keyBackup?.cloud ? 'cloud-check-outline' : 'key-variant'}
-                                                    size={24}
-                                                    color={keyBackup?.cloud ? colors.success : colors.warning}
-                                                />
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={styles.preferenceTitle}>{t('settings.recovery.keyTitle', 'Recovery key')}</Text>
-                                                    <Text style={[styles.preferenceDescription, !keyBackup?.cloud && { color: colors.warning }]}>
-                                                        {keyBackup?.cloud
-                                                            ? (Platform.OS === 'ios'
-                                                                ? t('settings.sync.keyInIcloud', 'In iCloud Keychain · opens your notes on a new iPhone')
-                                                                : t('settings.sync.keyInGoogle', 'In your Google backup · opens your notes on a new device'))
-                                                            : t('settings.sync.keyOnlyHere', 'Only on this device · save a copy so you never lose your notes')}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                            <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
-                                        </TouchableOpacity>
+                                        />
                                     </>
                                 )}
-                                <TouchableOpacity
-                                    style={styles.quietLink}
-                                    onPress={() => setShowDisableEncryptionModal(true)}
-                                    accessibilityRole="button"
-                                >
-                                    <Text style={styles.quietLinkText}>{t('settings.sync.turnOffE2ee', 'Turn off end-to-end encryption')}</Text>
-                                </TouchableOpacity>
                             </>
                         )}
-
-                    </View>
+                    </Section>
                 )}
 
-
-
-
-
                 {/* Voice & AI: works out of the box (cloud), one switch for offline */}
-                <View style={styles.card}>
-                    <Text style={styles.dataCardTitle}>{t("settings.voice.title", "Voice & AI")}</Text>
-                    {!privateMode && (
-                        <Text style={[styles.preferenceDescription, { marginBottom: spacing.s }]}>
-                            {t('settings.voice.routingHint', 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.')}
-                        </Text>
-                    )}
-
+                <View onLayout={(event) => { voiceSectionYRef.current = event.nativeEvent.layout.y; scrollToRequestedSection(); }}>
+                <Section
+                    label={t("settings.voice.title", "Voice & AI")}
+                    footer={privateMode ? undefined : t('settings.voice.routingHint', 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.')}
+                >
                     {LOCAL_WHISPER_ENABLED && (
                         <>
-                            <TouchableOpacity
-                                style={[styles.preferenceRow, styles.voiceRow]}
-                                activeOpacity={0.85}
-                                disabled={!offlineAIMissing || offlineDownloading}
-                                onPress={() => { void handleEnableOffline(); }}
-                                accessibilityRole={offlineAIMissing ? 'button' : undefined}
-                            >
-                                <View style={styles.voiceRowText}>
-                                    <MaterialIcons name="cloud-off" size={24} color={offlineOn ? colors.primary : colors.textSecondary} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.preferenceTitle}>{t("settings.voice.offlineMode", "Work without internet")}</Text>
-                                        <Text style={styles.preferenceDescription}>{offlineDescription}</Text>
-                                    </View>
-                                </View>
-                                <Switch
-                                    value={offlineOn}
-                                    onValueChange={(value) => { void handleToggleOffline(value); }}
-                                    disabled={!offlineOn && !offlineOffKept && !offlinePlan}
-                                    trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                    thumbColor={colors.onPrimary}
-                                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                    accessibilityLabel={t("settings.voice.offlineMode", "Work without internet")}
-                                />
-                            </TouchableOpacity>
+                            <Row
+                                title={t("settings.voice.offlineMode", "Work without internet")}
+                                detail={offlineDescription}
+                                onPress={offlineAIMissing && !offlineDownloading ? () => { void handleEnableOffline(); } : undefined}
+                                accessory={(
+                                    <Toggle
+                                        value={offlineOn}
+                                        onChange={(value) => { void handleToggleOffline(value); }}
+                                        disabled={!offlineOn && !offlineOffKept && !offlinePlan}
+                                        label={t("settings.voice.offlineMode", "Work without internet")}
+                                    />
+                                )}
+                            />
 
                             {offlineDownloading && (
                                 <View style={styles.voiceProgress}>
@@ -1460,62 +1345,44 @@ export const SettingsScreen = () => {
 
                             {(offlineOn || privateMode) && (
                                 <>
-                                    <View style={styles.separator} />
-                                    <View style={[styles.preferenceRow, styles.voiceRow]}>
-                                        <View style={styles.voiceRowText}>
-                                            <MaterialIcons name="phonelink-lock" size={24} color={privateMode ? colors.primary : colors.textSecondary} />
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.preferenceTitle}>{t("settings.voice.private", "Only on this device")}</Text>
-                                                <Text style={styles.preferenceDescription}>
-                                                    {privateVoiceOnly
-                                                        ? t("settings.voice.privateVoiceDesc", "Voice never leaves the device, even online")
-                                                        : t("settings.voice.privateDesc", "Voice and AI never leave the device, even online")}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <Switch
-                                            value={privateMode}
-                                            onValueChange={(value) => { void handleTogglePrivateMode(value); }}
-                                            trackColor={{ false: colors.textTertiary, true: colors.primary }}
-                                            thumbColor={colors.onPrimary}
-                                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                            accessibilityLabel={t("settings.voice.private", "Only on this device")}
-                                        />
-                                    </View>
+                                    <Divider />
+                                    <Row
+                                        title={t("settings.voice.private", "Only on this device")}
+                                        detail={privateVoiceOnly
+                                            ? t("settings.voice.privateVoiceDesc", "Voice never leaves the device, even online")
+                                            : t("settings.voice.privateDesc", "Voice and AI never leave the device, even online")}
+                                        onPress={() => { void handleTogglePrivateMode(!privateMode); }}
+                                        accessory={(
+                                            <Toggle
+                                                value={privateMode}
+                                                onChange={(value) => { void handleTogglePrivateMode(value); }}
+                                                label={t("settings.voice.private", "Only on this device")}
+                                            />
+                                        )}
+                                    />
                                 </>
                             )}
                             {!offlineDownloading && (
                                 <>
-                                    <View style={styles.separator} />
-                                    <TouchableOpacity
-                                        style={[styles.preferenceRow, styles.voiceRow]}
-                                        activeOpacity={0.85}
+                                    <Divider />
+                                    <Row
+                                        title={t("settings.models.row", "Models")}
+                                        detail={modelSummary || null}
                                         onPress={() => setShowModelPicker(true)}
-                                        accessibilityRole="button"
-                                    >
-                                        <View style={styles.voiceRowText}>
-                                            <MaterialIcons name="tune" size={24} color={colors.textSecondary} />
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.preferenceTitle}>{t("settings.models.row", "Models")}</Text>
-                                                {!!modelSummary && <Text style={styles.preferenceDescription}>{modelSummary}</Text>}
-                                            </View>
-                                        </View>
-                                        <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} style={rtlFlip} />
-                                    </TouchableOpacity>
+                                    />
                                 </>
                             )}
-                            <View style={styles.separator} />
+                            <Divider />
                         </>
                     )}
 
-                    <View style={[styles.modelLanguageRow, styles.voiceRow]}>
-                        <MaterialIcons name="translate" size={24} color={colors.textSecondary} />
-                        <Text style={styles.modelLanguageLabel}>{t('localModels.language', 'Speech language')}</Text>
-                        <SearchableLanguageSelector
-                            value={transcriptionLanguage}
-                            onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
-                        />
-                    </View>
+                    <SearchableLanguageSelector
+                        value={transcriptionLanguage}
+                        onChange={(lang) => { void updateTranscriptionLanguage(lang); }}
+                        renderTrigger={(open, label) => (
+                            <Row title={t('localModels.language', 'Speech language')} value={label} onPress={open} />
+                        )}
+                    />
                             {/* Setup for Custom AI (OpenAI & Compatible) */}
                             {CUSTOM_AI_ENABLED && showCustomAIConfig && (
                                 <View style={styles.openAIConfigCard}>
@@ -1614,49 +1481,39 @@ export const SettingsScreen = () => {
                                 </View>
                             )}
 
+                </Section>
                 </View>
 
-                {/* Sign Out & About */}
-                <View style={{ marginTop: spacing.m, marginBottom: spacing.m, gap: spacing.m }}>
-                    {isAuthenticated && !isGuest && (
-                        <>
-                            <TouchableOpacity
-                                style={styles.signOutButton}
-                                onPress={handleSignOut}
-                            >
-                                <MaterialIcons name="logout" size={18} color={colors.error} style={rtlFlip} />
-                                <Text style={styles.signOutText}>{t("settings.account.signOut", "Sign Out")}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.deleteAccountButton}
-                                onPress={() => setShowDeleteAccountModal(true)}
-                                accessibilityRole="button"
-                            >
-                                <Text style={styles.deleteAccountText}>{t("settings.ui.deleteAccount", "Delete Account")}</Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
+                {showAccountActions && (
+                    <Section>
+                        <Row title={t("settings.account.signOut", "Sign Out")} onPress={handleSignOut} accessory={null} />
+                        <Divider />
+                        <Row
+                            title={t("settings.ui.deleteAccount", "Delete Account")}
+                            tone="danger"
+                            onPress={() => setShowDeleteAccountModal(true)}
+                        />
+                    </Section>
+                )}
 
-                    <View style={{ alignItems: 'center', gap: spacing.s, opacity: 0.7 }}>
-                        {/* Wraps: the two links do not fit on one line in every language. */}
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: spacing.l, rowGap: spacing.xs, paddingHorizontal: spacing.m }}>
-                            <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')}>
-                                <Text style={styles.legalLink}>{t("settings.ui.privacy", "Privacy Policy")}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')}>
-                                <Text style={styles.legalLink}>{t('settings.ui.termsOfService', 'Terms of Service')}</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com')}>
-                            <Text style={styles.versionText}>
-                                {t('settings.ui.vaultoVersion', 'Vaulto v{{version}}', { version: appConfig.expo.version })}
-                            </Text>
+                <View style={styles.about}>
+                    <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com')} hitSlop={8}>
+                        <Text style={styles.versionText}>
+                            {t('settings.ui.vaultoVersion', 'Vaulto v{{version}}', { version: appConfig.expo.version })}
+                        </Text>
+                    </TouchableOpacity>
+                    {/* Wraps: the two links do not fit on one line in every language. Spacing
+                        instead of a "·" separator, which could be left hanging at a line end. */}
+                    <View style={styles.legalLinks}>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/privacy')} hitSlop={8}>
+                            <Text style={styles.legalLink}>{t("settings.ui.privacy", "Privacy Policy")}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://vaultonote.com/terms')} hitSlop={8}>
+                            <Text style={styles.legalLink}>{t('settings.ui.termsOfService', 'Terms of Service')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
-
-
-            </ScrollView >
+            </ScrollView>
 
             <Modal
                 visible={showMinutesSheet}
@@ -1857,7 +1714,7 @@ export const SettingsScreen = () => {
                     try {
                         await setSyncEnabledPreference(false);
                     } catch (error: any) {
-                        Alert.alert(t("settings.ui.failed", "Failed"), error?.message || t("settings.ui.unableDisableSync", "Unable to disable sync."));
+                        appAlert(t("settings.ui.failed", "Failed"), error?.message || t("settings.ui.unableDisableSync", "Unable to disable sync."));
                     }
                 }}
             />
@@ -1884,13 +1741,13 @@ export const SettingsScreen = () => {
                 onKeep={() => {
                     setShowSignOutDialog(false);
                     void signOut({ keepLocalNotes: true, wipeLocal: false }).catch((error) => {
-                        Alert.alert(t('common.error', 'Error'), getErrorMessage(error));
+                        appAlert(t('common.error', 'Error'), getErrorMessage(error));
                     });
                 }}
                 onDelete={() => {
                     setShowSignOutDialog(false);
                     void signOut({ keepLocalNotes: false, wipeLocal: true }).catch((error) => {
-                        Alert.alert(t('common.error', 'Error'), getErrorMessage(error));
+                        appAlert(t('common.error', 'Error'), getErrorMessage(error));
                     });
                 }}
                 onCancel={() => setShowSignOutDialog(false)}
@@ -1945,7 +1802,7 @@ export const SettingsScreen = () => {
                                         {lang.label}
                                     </Text>
                                     {i18n.language === lang.key && (
-                                        <MaterialIcons name="check" size={20} color={colors.primary} />
+                                        <MaterialIcons name="check" size={20} color={colors.text} />
                                     )}
                                 </TouchableOpacity>
                             ))}
@@ -1958,21 +1815,329 @@ export const SettingsScreen = () => {
 };
 
 const styles = createStyles(() => ({
-    modelLanguageRow: {
+    topBar: {
+        width: '100%',
+        maxWidth: 680,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.xs,
+        paddingTop: spacing.s,
+        height: 52,
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    title: {
+        fontSize: 32,
+        lineHeight: 38,
+        fontWeight: '700',
+        letterSpacing: -0.8,
+        color: colors.text,
+        paddingHorizontal: spacing.xs,
+        marginBottom: spacing.s,
+    },
+    scrollContent: {
+        width: '100%',
+        maxWidth: 680,
+        alignSelf: 'center',
+        paddingTop: spacing.xs,
+        paddingBottom: spacing.xxl,
+        gap: spacing.l,
+    },
+    section: {
+        gap: spacing.s,
+    },
+    sectionLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: spacing.m,
+    },
+    sectionLabel: {
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
+        color: colors.textSecondary,
+    },
+    group: {
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        overflow: 'hidden',
+        ...(isDarkScheme() ? {} : {
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.border,
+        }),
+    },
+    sectionFooter: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+        paddingHorizontal: spacing.m,
+    },
+    divider: {
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: colors.border,
+        marginStart: spacing.m,
+    },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+        minHeight: 52,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 12,
+    },
+    rowDisabled: {
+        opacity: 0.5,
+    },
+    rowText: {
+        flex: 1,
+        gap: 2,
+    },
+    rowTitle: {
+        fontSize: 16,
+        lineHeight: 22,
+        color: colors.text,
+        flexShrink: 1,
+    },
+    rowTitleAccent: {
+        color: colors.primary,
+        fontWeight: '500',
+    },
+    rowTitleDanger: {
+        color: colors.error,
+    },
+    rowDetail: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+    },
+    rowTitleLine: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
-        minHeight: 44,
     },
-    modelWarning: {
+    attentionDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+        backgroundColor: colors.warning,
+    },
+    rowValue: {
+        fontSize: 15,
+        lineHeight: 20,
+        color: colors.textSecondary,
+        maxWidth: '45%',
+    },
+    rowAction: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: colors.primary,
+    },
+    accountRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        paddingHorizontal: spacing.m,
+        paddingVertical: 14,
+    },
+    userAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: colors.backgroundSecondary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    userAvatarText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    userInfoText: {
+        flex: 1,
+        gap: 2,
+    },
+    userNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    userName: {
+        fontSize: 17,
+        lineHeight: 22,
+        fontWeight: '600',
+        color: colors.text,
+        flexShrink: 1,
+    },
+    proMark: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.6,
+        color: colors.primary,
+    },
+    userEmail: {
         fontSize: 13,
         lineHeight: 18,
+        color: colors.textSecondary,
+    },
+    signInBlock: {
+        padding: spacing.m,
+        gap: 4,
+    },
+    signInTitle: {
+        fontSize: 17,
+        lineHeight: 22,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    signInButton: {
+        width: '100%',
+        marginTop: spacing.m,
+    },
+    trialInfoText: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+        marginTop: spacing.s,
+    },
+    themeRow: {
+        paddingHorizontal: spacing.m,
+        paddingVertical: 12,
+        gap: 10,
+    },
+    themeSegments: {
+        flexDirection: 'row',
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 10,
+        padding: 2,
+    },
+    themeSegment: {
+        flex: 1,
+        height: 32,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: spacing.xs,
+    },
+    themeSegmentActive: {
+        backgroundColor: isDarkScheme() ? colors.surfaceElevated : colors.surface,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.08,
+                shadowRadius: 2,
+            },
+            android: { elevation: 1 },
+        }),
+    },
+    themeSegmentText: {
+        fontSize: 14,
+        color: colors.textSecondary,
+    },
+    themeSegmentTextActive: {
+        color: colors.text,
+        fontWeight: '600',
+    },
+    footerLink: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: spacing.m,
+        paddingVertical: 2,
+    },
+    footerLinkText: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+        textDecorationLine: 'underline',
+    },
+    noticeBlock: {
+        padding: spacing.m,
+        gap: 4,
+    },
+    noticeTitle: {
+        fontSize: 16,
+        lineHeight: 22,
+        fontWeight: '600',
         color: colors.warning,
     },
-    modelLanguageLabel: {
-        flex: 1,
+    noticeActions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.s,
+        marginTop: spacing.m,
+    },
+    pillButton: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    pillButtonText: {
         fontSize: 14,
+        fontWeight: '500',
         color: colors.text,
+    },
+    pillButtonPrimary: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: colors.primary,
+    },
+    pillButtonPrimaryText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.onPrimary,
+    },
+    voiceProgress: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+        paddingHorizontal: spacing.m,
+        paddingBottom: 14,
+    },
+    voiceProgressTrack: {
+        flex: 1,
+        height: 3,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        backgroundColor: colors.backgroundSecondary,
+    },
+    voiceProgressFill: {
+        height: '100%',
+        borderRadius: 1.5,
+        backgroundColor: colors.primary,
+    },
+    voiceProgressCancel: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: colors.primary,
+    },
+    about: {
+        alignItems: 'center',
+        gap: 6,
+        paddingTop: spacing.s,
+    },
+    legalLinks: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        columnGap: spacing.l,
+        rowGap: spacing.xs,
+        paddingHorizontal: spacing.m,
+    },
+    legalLink: {
+        fontSize: 13,
+        color: colors.textTertiary,
+    },
+    versionText: {
+        fontSize: 13,
+        color: colors.textTertiary,
     },
     languageModalOverlay: {
         flex: 1,
@@ -1983,283 +2148,46 @@ const styles = createStyles(() => ({
     },
     languageModalContent: {
         width: '100%',
-        maxWidth: 420,
+        maxWidth: 400,
         backgroundColor: colors.surface,
-        borderRadius: 24,
-        padding: spacing.l,
+        borderRadius: 20,
+        paddingVertical: spacing.s,
         maxHeight: '80%',
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.15,
+                shadowOpacity: 0.12,
                 shadowRadius: 24,
             },
             android: {
-                elevation: 12,
+                elevation: 8,
             },
         }),
     },
     languageModalTitle: {
-        ...typography.h3,
-        marginBottom: spacing.m,
-        textAlign: 'center',
+        fontSize: 17,
+        lineHeight: 22,
+        fontWeight: '600',
         color: colors.text,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.m,
+        paddingBottom: spacing.s,
     },
     languageModalItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: spacing.m,
-        paddingHorizontal: spacing.m,
-        borderRadius: 12,
-        marginBottom: spacing.xs,
+        minHeight: 48,
+        paddingHorizontal: spacing.l,
     },
-    languageModalItemActive: {
-        backgroundColor: colors.primary + '15',
-    },
+    languageModalItemActive: {},
     languageModalItemText: {
-        ...typography.body,
-        color: colors.text,
         fontSize: 16,
+        color: colors.text,
     },
     languageModalItemTextActive: {
-        color: colors.primary,
-        fontWeight: '700',
-    },
-    trialInfoText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginTop: spacing.s,
-        textAlign: 'center',
-    },
-    agentModeWarning: {
-        ...typography.caption,
-        color: colors.error,
-        marginTop: 4,
         fontWeight: '600',
-    },
-    backButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.surface,
-    },
-    title: {
-        ...typography.h1,
-        fontSize: 24,
-        flex: 1,
-    },
-    badge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.xs,
-        borderRadius: 20,
-        backgroundColor: colors.backgroundSecondary,
-    },
-    badgeText: {
-        ...typography.caption,
-        color: colors.primary,
-        fontWeight: '700',
-    },
-    proStatusCard: {
-        marginTop: spacing.s,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-        paddingHorizontal: spacing.m,
-        paddingBottom: spacing.s,
-        paddingTop: spacing.xs,
-        gap: spacing.s,
-    },
-    proStatusHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-    },
-    proStatusCopy: {
-        flex: 1,
-    },
-    proStatusTitle: {
-        ...typography.h3,
-        fontSize: 16,
-        color: colors.text,
-    },
-    proStatusPill: {
-        borderRadius: 999,
-        paddingHorizontal: spacing.s,
-        paddingVertical: 4,
-        backgroundColor: colors.primary + '12',
-        borderWidth: 1,
-        borderColor: colors.primary + '30',
-    },
-    proStatusPillText: {
-        ...typography.captionBold,
-        color: colors.primary,
-        fontSize: 11,
-    },
-    scrollContent: {
-        width: '100%',
-        maxWidth: 680,
-        alignSelf: 'center',
-        paddingVertical: spacing.s,
-        paddingHorizontal: spacing.m,
-        gap: spacing.m,
-        paddingBottom: spacing.xxl,
-    },
-    card: {
-        backgroundColor: colors.surface,
-        borderRadius: 16,
-        padding: spacing.m, // Reduced from spacing.l
-        borderWidth: 1,
-        borderColor: colors.border,
-        // Removed heavy shadow for flatness/compactness
-    },
-    topBar: {
-        width: '100%',
-        maxWidth: 680,
-        alignSelf: 'center',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-        paddingHorizontal: spacing.m,
-        paddingTop: spacing.l, // Status bar
-        paddingBottom: spacing.s,
-    },
-    userAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    userAvatarText: {
-        ...typography.h3,
-        color: colors.onPrimary,
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    userName: {
-        ...typography.h3,
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.text,
-    },
-    preferenceTitleSmall: {
-        ...typography.body,
-        fontSize: 14,
-        color: colors.text,
-    },
-    preferenceValue: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-    compactProviderSelector: {
-        flexDirection: 'row',
-        gap: spacing.s,
-        marginBottom: spacing.s,
-    },
-    compactProviderOption: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 48,
-        paddingVertical: 8,
-        paddingHorizontal: 8,
-        backgroundColor: colors.backgroundSecondary,
-        borderRadius: 12,
-        gap: 4,
-        borderWidth: 1,
-        borderColor: 'transparent',
-    },
-    compactProviderOptionActive: {
-        backgroundColor: colors.primary,
-    },
-    compactProviderOptionLocked: {
-        opacity: 0.6,
-    },
-    compactProviderText: {
-        ...typography.captionBold,
-        color: colors.textSecondary,
-        fontSize: 12,
-        flexShrink: 1,
-    },
-    compactProviderTextActive: {
-        color: colors.onPrimary,
-    },
-    compactConfigBox: {
-        backgroundColor: colors.backgroundSecondary,
-        borderRadius: 12,
-        padding: spacing.s,
-    },
-    inputContainerCompact: {
-        marginBottom: spacing.xs,
-    },
-    labelCompact: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginBottom: 2,
-        fontSize: 11,
-    },
-    compactInput: {
-        backgroundColor: colors.surface,
-        borderRadius: 8,
-        paddingVertical: 4, // Very compact
-        paddingHorizontal: 8,
-        fontSize: 13,
-        borderWidth: 1,
-        borderColor: colors.border,
-        height: 32,
-        color: colors.text,
-    },
-    eyeButtonCompact: {
-        height: 32,
-        width: 32,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    smallButtonOutlined: {
-        marginTop: spacing.s,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignSelf: 'flex-start',
-    },
-    smallButtonTextOutlined: {
-        ...typography.captionBold,
-        color: colors.text,
-    },
-    proStatusAction: {
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.backgroundSecondary,
-        paddingVertical: spacing.s,
-        paddingHorizontal: spacing.s,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    proStatusActionLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-    },
-    proStatusActionText: {
-        ...typography.body,
-        color: colors.text,
-        fontWeight: '700',
     },
     sheetBackdrop: {
         flex: 1,
@@ -2457,631 +2385,11 @@ const styles = createStyles(() => ({
         color: colors.textSecondary,
         marginTop: spacing.s,
     },
-
-    premiumUpgradeCard: {
-        marginTop: spacing.m,
-        borderRadius: 20,
-        padding: spacing.m,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 193, 7, 0.3)', // Subtle gold border
-        shadowColor: colors.accentYellow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
-    },
-    premiumUpgradeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.m,
-    },
-    premiumUpgradeIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: colors.warningLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    premiumUpgradeCopy: {
-        flex: 1,
-    },
-    premiumUpgradeTitle: {
-        ...typography.h3,
-        color: colors.text,
-        fontSize: 17,
-        marginBottom: 2,
-    },
-    premiumUpgradeSubtitle: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        fontSize: 13,
-    },
-    manageAccountRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.m,
-        paddingHorizontal: spacing.s,
-        marginTop: spacing.s,
-        borderTopWidth: 0.5,
-        borderTopColor: colors.border,
-    },
-    manageAccountIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: colors.backgroundSecondary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.m,
-    },
-    manageAccountText: {
-        ...typography.body,
-        fontSize: 16,
-        fontWeight: '500',
-        color: colors.text,
-        flex: 1,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing.s,
-    },
-    sectionToggleButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        paddingHorizontal: spacing.s,
-        paddingVertical: 4,
-        borderRadius: 10,
-        backgroundColor: colors.backgroundSecondary,
-    },
-    sectionToggleText: {
-        ...typography.captionBold,
-        color: colors.textSecondary,
-    },
-    sectionTitle: {
-        ...typography.h2,
-        fontSize: 20,
-    },
-    sectionHint: {
-        ...typography.body,
-        color: colors.textSecondary,
-        marginBottom: spacing.m,
-    },
-    securityRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 6,
-    },
-    securityLabel: {
-        ...typography.body,
-        color: colors.text,
-        fontWeight: '600',
-    },
-    securityValue: {
-        ...typography.body,
-        color: colors.textSecondary,
-    },
-    securityCopy: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginTop: spacing.s,
-    },
-    miniPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        paddingHorizontal: spacing.s,
-        paddingVertical: spacing.xs,
-        borderRadius: 12,
-        backgroundColor: colors.backgroundSecondary,
-    },
-    miniPillText: {
-        ...typography.caption,
-        color: colors.primary,
-    },
-    preferenceRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: spacing.xs,
-    },
-    preferenceTitle: {
-        ...typography.body,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    preferenceDescription: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-    dataCardTitle: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: colors.textSecondary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: spacing.s,
-    },
-    themeDivider: {
-        height: 1,
-        backgroundColor: colors.border,
-        marginVertical: spacing.m,
-    },
-    themeSegments: {
-        flexDirection: 'row',
-        gap: spacing.xs,
-        marginTop: spacing.s,
-        padding: 4,
-        borderRadius: 14,
-        backgroundColor: colors.backgroundSecondary,
-    },
-    themeSegment: {
-        flex: 1,
-        minHeight: 48,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 2,
-        paddingHorizontal: 4,
-    },
-    themeSegmentActive: {
-        backgroundColor: isDarkScheme() ? '#353B43' : colors.surface,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
-        elevation: 1,
-    },
-    themeSegmentText: {
-        fontSize: 13,
-        textAlign: 'center',
-        fontWeight: '500',
-        color: colors.textSecondary,
-    },
-    themeSegmentTextActive: {
-        color: colors.text,
-        fontWeight: '600',
-    },
-    timeoutRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.xs,
-        marginTop: spacing.xs,
-        marginBottom: spacing.s,
-    },
-    timeoutChip: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 999,
-        paddingHorizontal: spacing.s,
-        paddingVertical: 6,
-        backgroundColor: colors.background,
-    },
-    timeoutChipActive: {
-        borderColor: colors.primary,
-        backgroundColor: colors.primaryLight,
-    },
-    timeoutChipText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        fontWeight: '600',
-    },
-    timeoutChipTextActive: {
-        color: colors.primary,
-    },
-    providerSwitcher: {
-        flexDirection: 'column',
-        gap: spacing.s,
-        marginTop: spacing.s,
-    },
-    providerPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: spacing.s,
-        paddingHorizontal: spacing.m,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.background,
-        width: '100%',
-        gap: spacing.s,
-    },
-    providerPillActive: {
-        borderColor: colors.primary,
-        backgroundColor: colors.primaryLight,
-        shadowColor: colors.cardShadow,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 3,
-    },
-    providerPillIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    providerGlyphText: {
-        fontSize: 12,
-        fontWeight: '800',
-        letterSpacing: 0.6,
-    },
-    providerPillTitle: {
-        ...typography.h3,
-        fontSize: 16,
-    },
-    providerPillTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-    },
-    providerPillTitleLocked: {
-        color: colors.textSecondary,
-    },
-    providerPillSubtitle: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
-    providerPillSubtitleLocked: {
-        color: colors.accentPurple,
-        fontWeight: '600',
-    },
-    providerPillLocked: {
-        opacity: 0.65,
-    },
-    lockBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        paddingHorizontal: spacing.xs,
-        paddingVertical: 2,
-        borderRadius: 8,
-        backgroundColor: colors.accentPurple + '15',
-    },
-    lockBadgeText: {
-        ...typography.caption,
-        fontSize: 11,
-        color: colors.accentPurple,
-        fontWeight: '700',
-    },
-    activeProviderCard: {
-        flexDirection: 'row',
-        gap: spacing.m,
-        marginTop: spacing.m,
-        padding: spacing.m,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.background,
-    },
-    activeProviderIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    activeProviderTitle: {
-        ...typography.h3,
-        fontSize: 17,
-    },
-    activeProviderDescription: {
-        ...typography.body,
-        color: colors.textSecondary,
-        marginTop: spacing.xs,
-        lineHeight: 22,
-    },
-    chipRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4, // Reduced gap
-        marginTop: spacing.xs,
-        // Ensure it doesn't wrap but we try to fit
-    },
-    // chipRowContent removed as we are back to View
-    microChip: {
-        paddingHorizontal: 6, // Reduced padding
-        paddingVertical: 2,
-        borderRadius: 8,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        flexShrink: 1, // Allow chips to shrink if needed
-    },
-    microChipText: {
-        ...typography.caption,
-        fontSize: 11, // Slightly smaller font
-        color: colors.textSecondary,
-    },
-    microRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        marginTop: spacing.xs,
-    },
-    microText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-    radio: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
-        borderColor: colors.border,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    radioActive: {
-        borderColor: colors.primary,
-    },
-    radioDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: colors.primary,
-    },
-    label: {
-        ...typography.body,
-        fontWeight: '600',
-        marginBottom: spacing.xs,
-    },
-    agentModeCard: {
-        backgroundColor: colors.surface,
-        borderRadius: 16,
-        padding: spacing.m,
-        marginBottom: spacing.m,
-        borderWidth: 1,
-        borderColor: colors.border,
-        // Add subtle shine/elevation to make it stand out
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    agentModeHeader: {
-        flexDirection: 'column',
-    },
-    agentModeTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.m,
-    },
-    agentModeIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: colors.backgroundSecondary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    agentModeTitle: {
-        ...typography.h3,
-        fontSize: 16,
-        marginBottom: 2,
-    },
-    agentModeDescription: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        lineHeight: 18,
-    },
-    settingsPanel: {
-        marginTop: spacing.l,
-        padding: spacing.m,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.background,
-        gap: spacing.s,
-    },
-    settingsPanelHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    inlineTitle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-    },
-    panelTitle: {
-        ...typography.h3,
-        fontSize: 17,
-    },
-    inputCluster: {
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-        padding: spacing.m,
-        gap: spacing.s,
-    },
-    inputContainer: {
-        marginBottom: spacing.xs,
-    },
-    secretFieldRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-        flex: 1,
-        minWidth: 0, // Prevents flex item from overflowing
-    },
-    flex: {
-        flex: 1,
-    },
-    eyeButton: {
-        width: 40, // Reduced from 44 to give more space to input
-        height: 40,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.backgroundSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
-        flexShrink: 0, // Prevents button from being squeezed outside container
-    },
-    noMarginContainer: {
-        marginBottom: 0,
-    },
-    testActionButton: {
-        marginTop: spacing.s,
-        height: 50,
-        borderRadius: 14,
-        backgroundColor: colors.primary,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-        shadowColor: colors.cardShadow,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 4,
-    },
-    testActionButtonDisabled: {
-        backgroundColor: colors.textMuted,
-    },
-    testActionText: {
-        ...typography.button,
-        color: colors.onPrimary,
-    },
-    labelSpacing: {
-        marginTop: spacing.s,
-    },
-    statusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        marginTop: spacing.xs,
-    },
-    statusText: {
-        ...typography.bodySmall,
-        fontWeight: '600',
-    },
     statusTextSuccess: {
         color: colors.accentGreen,
     },
     statusTextError: {
         color: colors.error,
-    },
-    infoToggleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        paddingVertical: spacing.xs,
-    },
-    infoToggleText: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-        fontWeight: '600',
-    },
-    infoBox: {
-        marginTop: spacing.xs,
-        padding: spacing.m,
-        borderRadius: 12,
-        backgroundColor: colors.backgroundSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
-        gap: spacing.xs,
-    },
-    infoBoxText: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-    },
-    info: {
-        ...typography.body,
-        color: colors.textSecondary,
-        marginBottom: spacing.s,
-    },
-    resetButton: {
-        borderColor: colors.textMuted,
-        marginTop: spacing.s,
-    },
-    signInButton: {
-        marginTop: spacing.s,
-    },
-    createAccountButton: {
-        marginTop: spacing.m,
-    },
-    syncHint: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginBottom: spacing.xs,
-    },
-    footer: {
-        marginTop: spacing.m,
-        marginBottom: spacing.l,
-    },
-    button: {
-        borderColor: colors.error,
-    },
-    // User info styles for Account section
-    userInfoContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.m,
-        paddingVertical: spacing.xs,
-        marginBottom: spacing.s,
-    },
-    userInfoText: {
-        flex: 1,
-        gap: 2,
-    },
-    userEmail: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-    },
-    userEmailPrimary: {
-        ...typography.body,
-        fontSize: 16,
-        fontWeight: '500',
-        color: colors.text,
-    },
-    syncStatusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        marginTop: 4,
-    },
-    syncStatusText: {
-        ...typography.caption,
-        color: colors.accentGreen,
-        fontWeight: '600',
-    },
-    minimalAppInfo: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: spacing.xl,
-        marginBottom: spacing.m,
-        opacity: 0.7,
-    },
-    minimalAppInfoText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        textAlign: 'center',
-    },
-    minimalAppInfoLink: {
-        textDecorationLine: 'underline',
-    },
-    securityRowMinimal: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: spacing.s,
-    },
-    securityRowLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.m,
-        flex: 1,
     },
     iconContainer: {
         width: 36,
@@ -3090,100 +2398,6 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    // Same weight as the AI-section rows so both cards read as one list.
-    securityLabelMinimal: {
-        ...typography.body,
-        fontSize: 15,
-        color: colors.text,
-        fontWeight: '600',
-        flex: 1,
-    },
-    securityValueMinimal: {
-        ...typography.bodySmall,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    smallButton: {
-        backgroundColor: colors.primary,
-        paddingHorizontal: spacing.m,
-        paddingVertical: 6,
-        borderRadius: 12,
-    },
-    smallButtonText: {
-        ...typography.caption,
-        color: colors.onPrimary,
-    },
-    iconButton: {
-        padding: spacing.s,
-    },
-    resetLink: {
-        alignItems: 'center',
-        paddingVertical: spacing.s,
-        marginTop: spacing.xs,
-    },
-    resetLinkText: {
-        ...typography.caption,
-        color: colors.error,
-        fontWeight: '600',
-    },
-    separator: {
-        height: 1,
-        backgroundColor: colors.border,
-        opacity: 0.5,
-    },
-    signOutButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-        minHeight: 52,
-        borderRadius: 16,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    quietLink: {
-        alignSelf: 'center',
-        minHeight: 44,
-        justifyContent: 'center',
-        marginTop: spacing.xs,
-    },
-    quietLinkText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-    rowAction: {
-        ...typography.body,
-        fontWeight: '600',
-        color: colors.primary,
-    },
-    signOutText: {
-        ...typography.button,
-        color: colors.error,
-        fontSize: 15,
-    },
-    deleteAccountButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.xs,
-        minHeight: 44,
-    },
-    deleteAccountText: {
-        ...typography.caption,
-        fontWeight: '500',
-        color: colors.textSecondary,
-    },
-    legalLink: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        textDecorationLine: 'underline',
-    },
-    versionText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-    // OpenAI Configuration Card Styles
     openAIConfigCard: {
         marginTop: spacing.m,
         padding: spacing.m,
@@ -3210,55 +2424,6 @@ const styles = createStyles(() => ({
         fontSize: 12,
         color: colors.textSecondary,
         marginTop: 2,
-    },
-    openAIModeSelectorRow: {
-        flexDirection: 'row',
-        gap: spacing.s,
-    },
-    openAIModeButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-        paddingVertical: spacing.s + 2,
-        paddingHorizontal: spacing.m,
-        borderRadius: 12,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    openAIModeButtonActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    openAIModeIconContainer: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.backgroundSecondary,
-    },
-    openAIModeGlyph: {
-        ...typography.button,
-        fontSize: 11,
-        fontWeight: '800',
-        letterSpacing: 0.3,
-    },
-    openAIModeButtonText: {
-        ...typography.button,
-        fontSize: 14,
-        color: colors.text,
-        fontWeight: '600',
-    },
-    openAIModeButtonTextActive: {
-        color: colors.onPrimary,
     },
     openAIInputGroup: {
         gap: spacing.xs,
@@ -3329,118 +2494,5 @@ const styles = createStyles(() => ({
         fontSize: 14,
         fontWeight: '600',
         color: colors.onPrimary,
-    },
-    localWhisperModelPill: {
-        minHeight: 44,
-        paddingHorizontal: spacing.m,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: colors.background,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minWidth: 70,
-    },
-    localWhisperModelPillActive: {
-        backgroundColor: colors.primary + '10',
-        borderColor: colors.primary,
-    },
-    localWhisperModelText: {
-        ...typography.captionBold,
-        fontSize: 13,
-        color: colors.textSecondary,
-    },
-    localWhisperModelTextActive: {
-        color: colors.primary,
-    },
-    localWhisperDeleteButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.xs,
-        paddingVertical: 10,
-        paddingHorizontal: spacing.m,
-        borderRadius: 12,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.error + '40',
-        minHeight: 44,
-        flex: 1,
-    },
-    localWhisperDeleteText: {
-        ...typography.button,
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.error,
-    },
-    inlineWarningContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: `${colors.warning}15`,
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.xs,
-        borderRadius: 16,
-        gap: spacing.xs,
-        borderWidth: 1,
-        borderColor: `${colors.warning}30`,
-    },
-    voiceRow: {
-        minHeight: 56,
-        paddingVertical: spacing.s,
-    },
-    voiceRowText: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-        flex: 1,
-        paddingRight: spacing.s,
-    },
-    voiceProgress: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.m,
-        paddingLeft: 24 + spacing.s,
-        paddingBottom: spacing.s,
-    },
-    voiceProgressTrack: {
-        flex: 1,
-        height: 4,
-        borderRadius: 2,
-        overflow: 'hidden',
-        backgroundColor: colors.backgroundSecondary,
-    },
-    voiceProgressFill: {
-        height: '100%',
-        borderRadius: 2,
-        backgroundColor: colors.primary,
-    },
-    voiceProgressCancel: {
-        ...typography.caption,
-        fontWeight: '600',
-        color: colors.primary,
-    },
-    voiceQuality: {
-        paddingLeft: 24 + spacing.s,
-        paddingBottom: spacing.m,
-    },
-    voiceQualityLabel: {
-        ...typography.caption,
-        fontWeight: '600',
-        color: colors.textSecondary,
-    },
-    voiceQualitySize: {
-        fontSize: 11,
-        color: colors.textSecondary,
-    },
-    voiceHint: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginTop: spacing.s,
-    },
-    inlineWarningText: {
-        ...typography.captionBold,
-        color: colors.warning,
-        fontSize: 13,
     },
 }));

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors } from '../theme/colors';
@@ -59,7 +59,7 @@ export const SelectionActionPanel = ({
                         accessibilityRole="button"
                         accessibilityLabel={t('a11y.deleteSelected', 'Delete selected notes')}
                     >
-                        <MaterialIcons name="delete" size={24} color={colors.text} />
+                        <MaterialIcons name="delete-outline" size={24} color={colors.text} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -68,15 +68,11 @@ export const SelectionActionPanel = ({
 };
 
 const styles = createStyles(() => ({
+    // Flat bar in the page colour, separated by a hairline.
     container: {
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
+        backgroundColor: colors.background,
+        borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: colors.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
     },
     // The bar spans the window; its controls line up with the 760 notes header.
     content: {
@@ -86,7 +82,7 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: spacing.m,
-        paddingVertical: spacing.m,
+        paddingVertical: spacing.xs,
         minHeight: 60,
     },
     closeButton: {
@@ -99,13 +95,14 @@ const styles = createStyles(() => ({
     },
     countText: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '600',
         color: colors.text,
+        fontVariant: ['tabular-nums'],
     },
     actions: {
         flexDirection: 'row',
-        gap: spacing.s,
+        gap: spacing.xs,
         marginRight: -spacing.s,
     },
     actionButton: {

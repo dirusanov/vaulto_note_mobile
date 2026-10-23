@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
-    Alert,
     Text,
     TextInput,
     TouchableOpacity,
@@ -9,6 +8,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    StyleSheet,
 } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
@@ -17,7 +17,6 @@ import { ScreenContainer } from '../components/ScreenContainer';
 
 import { AuthProviderButton } from '../components/AuthProviderButton';
 import { colors } from '../theme/colors';
-import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
 
 import { useAuth } from '../hooks/useAuth';
@@ -28,6 +27,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
 import { GoogleLogo } from '../components/GoogleLogo';
+import { appAlert } from '../components/AppAlert';
 
 export const SignInScreen = () => {
     const { t } = useTranslation();
@@ -60,7 +60,7 @@ export const SignInScreen = () => {
 
     const handleEmailSignIn = async () => {
         if (!email || !password) {
-            Alert.alert(t("common.errorTitle"), t("common.fillFields"));
+            appAlert(t("common.errorTitle"), t("common.fillFields"));
             return;
         }
 
@@ -70,7 +70,7 @@ export const SignInScreen = () => {
             await handlePostLogin(result, 'email');
         } catch (err) {
             const message = getErrorMessage(err, t("auth.signInFailed"));
-            Alert.alert(t("auth.signInFailed"), message);
+            appAlert(t("auth.signInFailed"), message);
         } finally {
             setLoading(false);
         }
@@ -84,7 +84,7 @@ export const SignInScreen = () => {
             }
         } catch (err) {
             const message = getErrorMessage(err, t("auth.googleSignInFailed"));
-            Alert.alert(t("auth.googleSignInFailed"), message);
+            appAlert(t("auth.googleSignInFailed"), message);
         }
     };
 
@@ -100,7 +100,7 @@ export const SignInScreen = () => {
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
                     >
-                        <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
+                        <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>
 
                     <View style={styles.content}>
@@ -197,22 +197,19 @@ const styles = createStyles(() => ({
         flex: 1,
     },
     backButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.surface,
-        marginTop: spacing.m,
-        marginLeft: spacing.m,
+        marginTop: spacing.s,
+        marginStart: spacing.s,
         alignSelf: 'flex-start',
     },
     content: {
         flex: 1,
         paddingHorizontal: spacing.m,
-        paddingTop: spacing.m,
+        paddingTop: spacing.l,
         paddingBottom: spacing.xxl,
     },
     scrollContent: {
@@ -222,15 +219,18 @@ const styles = createStyles(() => ({
         flexGrow: 1,
     },
     title: {
-        ...typography.h1,
-        textAlign: 'center',
-        marginBottom: spacing.xs,
+        fontSize: 30,
+        lineHeight: 36,
+        fontWeight: '700',
+        letterSpacing: -0.7,
+        color: colors.text,
+        marginBottom: 6,
     },
     subtitle: {
-        ...typography.body,
+        fontSize: 16,
+        lineHeight: 22,
         color: colors.textSecondary,
-        textAlign: 'center',
-        marginBottom: spacing.l,
+        marginBottom: spacing.xl,
     },
     buttonContainer: {
         gap: spacing.s,
@@ -239,17 +239,18 @@ const styles = createStyles(() => ({
         marginBottom: spacing.xs,
     },
     label: {
-        ...typography.caption,
-        color: colors.text,
-        marginBottom: spacing.s,
-        fontWeight: '600',
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
+        color: colors.textSecondary,
+        marginBottom: 6,
     },
     input: {
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: 12,
-        minHeight: 48,
+        borderRadius: 14,
+        minHeight: 52,
         paddingHorizontal: spacing.m,
         paddingVertical: spacing.s,
         color: colors.text,
@@ -279,23 +280,26 @@ const styles = createStyles(() => ({
         marginBottom: spacing.xs,
     },
     forgotPasswordText: {
-        ...typography.caption,
+        fontSize: 14,
+        fontWeight: '500',
         color: colors.primary,
-        fontWeight: '600',
     },
     button: {
         backgroundColor: colors.primary,
-        borderRadius: 12,
-        padding: spacing.m,
+        borderRadius: 26,
+        minHeight: 52,
+        paddingHorizontal: spacing.l,
         alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 0,
     },
     buttonDisabled: {
         opacity: 0.7,
     },
     buttonText: {
-        ...typography.button,
-        color: '#FFFFFF',
+        fontSize: 16,
         fontWeight: '600',
+        color: colors.onPrimary,
     },
     separator: {
         flexDirection: 'row',
@@ -304,12 +308,12 @@ const styles = createStyles(() => ({
     },
     separatorLine: {
         flex: 1,
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         backgroundColor: colors.border,
     },
     separatorText: {
-        ...typography.caption,
-        color: colors.textSecondary,
+        fontSize: 13,
+        color: colors.textTertiary,
         paddingHorizontal: spacing.m,
     },
     signUpButton: {
@@ -319,7 +323,7 @@ const styles = createStyles(() => ({
         alignItems: 'center',
     },
     signUpText: {
-        ...typography.body,
+        fontSize: 15,
         color: colors.textSecondary,
     },
     signUpLink: {

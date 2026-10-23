@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Note } from '../api/notes';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, hasMeaningfulRichContent, richContentToPlainText, richContentToPreviewText } from '../utils/richContent';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
@@ -51,12 +51,12 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     let content = note.content || '';
     const storageScope = note.storage_scope ?? 'sync';
     
-    // Logic for showing the lock icon:
-    // 1. If we are in E2EE mode, all synced notes are protected.
-    // 2. If we are in Local mode, we only show it as a warning if the content itself is still encrypted with a Master Key.
-    const isEncrypted = (mode === 'e2ee' && storageScope === 'sync') || 
-                       (typeof content === 'string' && isMasterCiphertext(content)) ||
-                       (typeof note.title === 'string' && isMasterCiphertext(note.title));
+    // With end-to-end encryption on, every synced note is encrypted: a lock on
+    // each card says nothing new. Settings shows that state once. The lock
+    // stays for content still sealed with a master key (it cannot be read yet).
+    const isEncrypted = mode !== 'e2ee' && (
+        (typeof content === 'string' && isMasterCiphertext(content)) ||
+        (typeof note.title === 'string' && isMasterCiphertext(note.title)));
 
     // Check if there is an active improvement (active child note)
     if (note.improvements && note.improvements.length > 0) {
@@ -89,7 +89,15 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // Untitled notes show their text, as Keep does: a title derived from the
     // first line would only repeat it.
     const titleIsCutFirstLine = !hasStoredTitle && !!fullPreview.trim();
-    const previewString = fullPreview;
+    // Every card reads the same way: a bold first line, then grey text. An
+    // untitled note's first line takes the title's place.
+    const leadBreak = titleIsCutFirstLine ? fullPreview.trim().indexOf('\n') : -1;
+    const leadLine = titleIsCutFirstLine
+        ? (leadBreak === -1 ? fullPreview.trim() : fullPreview.trim().slice(0, leadBreak))
+        : '';
+    const previewString = titleIsCutFirstLine
+        ? (leadBreak === -1 ? '' : fullPreview.trim().slice(leadBreak + 1).replace(/^\s*\n/, ''))
+        : fullPreview;
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -137,7 +145,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
             onPress={onPress}
             onLongPress={onLongPress}
             delayLongPress={350}
-            onPressIn={() => animatePress(0.97)}
+            onPressIn={() => animatePress(0.98)}
             onPressOut={() => animatePress(1)}
             accessibilityRole="button"
             accessibilityState={isSelectionMode ? { selected: isSelected } : undefined}
@@ -171,20 +179,23 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         </View>
                         {voiceDuration ? <Text style={styles.voiceDuration}>{voiceDuration}</Text> : null}
                     </View>
-                ) : titleIsCutFirstLine ? null : (
+                ) : titleIsCutFirstLine ? (
+                    <Text style={[styles.title, textAlignFor(leadLine), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={3}>
+                        {splitTags(leadLine).map((part, index) => (
+                            part.tag
+                                ? <Text key={index} style={styles.tagText}>{part.text}</Text>
+                                : part.text
+                        ))}
+                    </Text>
+                ) : (
                     <Text style={[styles.title, textAlignFor(title), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
                         {title || ' '}
                     </Text>
                 )}
                 {(!isEmpty && previewString && (titleIsCutFirstLine || previewString !== title)) && (
                     <Text
-                        style={[
-                            styles.preview,
-                            titleIsCutFirstLine && styles.previewLead,
-                            textAlignFor(previewString),
-                            titleIsCutFirstLine && isSelectionMode && { paddingEnd: 28 },
-                        ]}
-                        numberOfLines={titleIsCutFirstLine ? 8 : 6}
+                        style={[styles.preview, textAlignFor(previewString)]}
+                        numberOfLines={titleIsCutFirstLine ? 5 : 4}
                     >
                         {splitTags(previewString).map((part, index) => (
                             part.tag
@@ -200,18 +211,18 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 </Text>
                 <View style={styles.iconsRow}>
                     {!!hasAudio && !isVoiceOnly && (
-                        <MaterialIcons name="mic" size={16} color={colors.textTertiary} />
+                        <MaterialIcons name="mic-none" size={15} color={colors.textTertiary} />
                     )}
                     {note.is_protected ? (
-                        <MaterialIcons name="shield" size={14} color={colors.primary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.protected", "Protected note")} />
+                        <MaterialIcons name="shield" size={14} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t("a11y.protected", "Protected note")} />
                     ) : !!isEncrypted && (
-                        <MaterialIcons name="lock" size={14} color={colors.primary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.encrypted", "End-to-end encrypted")} />
+                        <MaterialIcons name="lock-outline" size={14} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t("a11y.encrypted", "End-to-end encrypted")} />
                     )}
                     {storageScope === 'local_only' && (
-                        <MaterialIcons name="smartphone" size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} accessibilityLabel={t("a11y.onThisPhoneOnly", "Only on this device")} />
+                        <MaterialIcons name="smartphone" size={14} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t("a11y.onThisPhoneOnly", "Only on this device")} />
                     )}
                     {!!note.is_pinned && (
-                        <MaterialIcons name="push-pin" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                        <MaterialIcons name="push-pin" size={14} color={colors.textSecondary} style={styles.footerIcon} />
                     )}
                 </View>
             </View>
@@ -221,16 +232,13 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 };
 
 const styles = createStyles(() => ({
+    // Flat paper cards: a hairline edge in light, a lighter surface in dark.
     card: {
         backgroundColor: colors.surface,
-        borderRadius: 16,
-        marginBottom: spacing.m,
-        // Soft shadow
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 3,
+        borderRadius: 14,
+        marginBottom: spacing.s,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
         position: 'relative',
     },
     selectedCard: {
@@ -245,12 +253,12 @@ const styles = createStyles(() => ({
         zIndex: 10,
     },
     checkbox: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: colors.border,
-        backgroundColor: colors.background,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 1.5,
+        borderColor: colors.borderHover,
+        backgroundColor: colors.surface,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -259,15 +267,17 @@ const styles = createStyles(() => ({
         borderColor: colors.primary,
     },
     content: {
-        padding: spacing.m,
+        paddingHorizontal: 14,
+        paddingTop: 14,
         paddingBottom: spacing.s,
     },
     title: {
-        fontSize: 18,
-        fontWeight: '700',
-        marginBottom: spacing.xs,
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
         color: colors.text,
-        lineHeight: 24,
+        lineHeight: 21,
+        letterSpacing: -0.2,
     },
     preview: {
         fontSize: 14,
@@ -277,15 +287,9 @@ const styles = createStyles(() => ({
     tagText: {
         color: colors.primary,
     },
-    // Untitled note shown as its text: a touch larger and in the text colour.
-    previewLead: {
-        fontSize: 15,
-        lineHeight: 21,
-        color: colors.text,
-    },
     footer: {
-        paddingHorizontal: spacing.m,
-        paddingBottom: spacing.m,
+        paddingHorizontal: 14,
+        paddingBottom: 12,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -294,10 +298,12 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    footerIcon: {
+        marginStart: 4,
+    },
     date: {
         fontSize: 12,
         color: colors.textTertiary,
-        fontWeight: '500',
     },
     voiceRow: {
         flexDirection: 'row',
@@ -306,9 +312,9 @@ const styles = createStyles(() => ({
         paddingVertical: 2,
     },
     voiceIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.primaryLight,
@@ -322,13 +328,13 @@ const styles = createStyles(() => ({
         overflow: 'hidden',
     },
     voiceBar: {
-        width: 3,
+        width: 2.5,
         borderRadius: 2,
         backgroundColor: colors.textTertiary,
     },
     voiceDuration: {
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '500',
         color: colors.text,
         fontVariant: ['tabular-nums'],
     },

@@ -7,11 +7,11 @@ import {
     TouchableOpacity,
     TouchableWithoutFeedback,
     Switch,
+    StyleSheet,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
 
 interface TextAppearanceModalProps {
@@ -21,6 +21,9 @@ interface TextAppearanceModalProps {
     onFontSizeChange: (size: number) => void;
     autoScalingEnabled: boolean;
     onAutoScalingChange: (enabled: boolean) => void;
+    /** Editing the note's Markdown source instead of formatted text. */
+    markdownMode?: boolean;
+    onMarkdownModeChange?: (enabled: boolean) => void;
 }
 
 export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
@@ -30,6 +33,8 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
     onFontSizeChange,
     autoScalingEnabled,
     onAutoScalingChange,
+    markdownMode,
+    onMarkdownModeChange,
 }) => {
     const { t } = useTranslation();
 
@@ -61,62 +66,60 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
                         <View style={styles.contentContainer}>
+                            <View style={styles.handle} />
                             <View style={styles.header}>
                                 <Text style={styles.title}>{t("aux.textAppearance", "Text Appearance")}</Text>
                                 <TouchableOpacity
                                     onPress={onClose}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    style={styles.closeButton}
+                                    hitSlop={8}
                                     accessibilityRole="button"
                                     accessibilityLabel={t('a11y.close', 'Close')}
                                 >
-                                    <MaterialIcons name="close" size={24} color={colors.textSecondary} />
+                                    <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Font Size Control */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <MaterialIcons name="format-size" size={24} color={colors.text} />
-                                    <Text style={styles.sectionTitle}>{t("aux.fontSize", "Font Size")}</Text>
-                                </View>
-
-                                <View style={styles.fontSizeControl}>
+                            {/* Font size: a label and a compact stepper on one line */}
+                            <View style={styles.row}>
+                                <Text style={styles.rowTitle}>{t("aux.fontSize", "Font Size")}</Text>
+                                <View style={styles.stepper}>
                                     <TouchableOpacity
-                                        style={[styles.sizeButton, fontSize <= MIN_FONT_SIZE && styles.disabledButton]}
+                                        style={styles.stepButton}
                                         onPress={decreaseFontSize}
                                         disabled={fontSize <= MIN_FONT_SIZE}
                                         accessibilityRole="button"
                                         accessibilityLabel={t('a11y.decreaseFontSize', 'Decrease font size')}
                                         accessibilityState={{ disabled: fontSize <= MIN_FONT_SIZE }}
                                     >
-                                        <MaterialIcons name="remove" size={24} color={fontSize <= MIN_FONT_SIZE ? colors.textMuted : colors.text} />
+                                        <MaterialIcons name="remove" size={20} color={fontSize <= MIN_FONT_SIZE ? colors.textMuted : colors.text} />
                                     </TouchableOpacity>
-
                                     <Text style={styles.fontSizeValue}>{fontSize}</Text>
-
                                     <TouchableOpacity
-                                        style={[styles.sizeButton, fontSize >= MAX_FONT_SIZE && styles.disabledButton]}
+                                        style={styles.stepButton}
                                         onPress={increaseFontSize}
                                         disabled={fontSize >= MAX_FONT_SIZE}
                                         accessibilityRole="button"
                                         accessibilityLabel={t('a11y.increaseFontSize', 'Increase font size')}
                                         accessibilityState={{ disabled: fontSize >= MAX_FONT_SIZE }}
                                     >
-                                        <MaterialIcons name="add" size={24} color={fontSize >= MAX_FONT_SIZE ? colors.textMuted : colors.text} />
+                                        <MaterialIcons name="add" size={20} color={fontSize >= MAX_FONT_SIZE ? colors.textMuted : colors.text} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
 
                             <View style={styles.divider} />
 
-                            {/* Auto Scaling Toggle */}
-                            <View style={styles.sectionRow}>
-                                <View style={styles.sectionInfo}>
-                                    <View style={styles.sectionHeader}>
-                                        <MaterialIcons name="aspect-ratio" size={24} color={colors.text} />
-                                        <Text style={styles.sectionTitle}>{t("aux.autoScaleChecklists", "Auto-scale Checklists")}</Text>
-                                    </View>
-                                    <Text style={styles.sectionDescription}>
+                            <TouchableOpacity
+                                style={styles.row}
+                                activeOpacity={0.6}
+                                onPress={() => onAutoScalingChange(!autoScalingEnabled)}
+                                accessibilityRole="switch"
+                                accessibilityState={{ checked: autoScalingEnabled }}
+                            >
+                                <View style={styles.rowText}>
+                                    <Text style={styles.rowTitle}>{t("aux.autoScaleChecklists", "Auto-scale Checklists")}</Text>
+                                    <Text style={styles.rowDetail}>
                                         {t('aux.autoScaleDesc', 'Automatically increase size of short checklists for better readability.')}
                                     </Text>
                                 </View>
@@ -124,11 +127,39 @@ export const TextAppearanceModal: React.FC<TextAppearanceModalProps> = ({
                                     accessibilityLabel={t('aux.autoScaleChecklists', 'Auto-scale Checklists')}
                                     value={autoScalingEnabled}
                                     onValueChange={onAutoScalingChange}
-                                    trackColor={{ false: colors.textTertiary, true: colors.primary }}
+                                    trackColor={{ false: colors.borderHover, true: colors.primary }}
                                     thumbColor={colors.onPrimary}
+                                    ios_backgroundColor={colors.borderHover}
                                 />
-                            </View>
+                            </TouchableOpacity>
 
+                            {onMarkdownModeChange && (
+                                <>
+                                    <View style={styles.divider} />
+                                    <TouchableOpacity
+                                        style={styles.row}
+                                        activeOpacity={0.6}
+                                        onPress={() => onMarkdownModeChange(!markdownMode)}
+                                        accessibilityRole="switch"
+                                        accessibilityState={{ checked: !!markdownMode }}
+                                    >
+                                        <View style={styles.rowText}>
+                                            <Text style={styles.rowTitle}>{t('aux.markdownSource', 'Edit as Markdown')}</Text>
+                                            <Text style={styles.rowDetail}>
+                                                {t('aux.markdownSourceDesc', 'Formatting appears as plain characters, like **bold**.')}
+                                            </Text>
+                                        </View>
+                                        <Switch
+                                            accessibilityLabel={t('aux.markdownSource', 'Edit as Markdown')}
+                                            value={!!markdownMode}
+                                            onValueChange={onMarkdownModeChange}
+                                            trackColor={{ false: colors.borderHover, true: colors.primary }}
+                                            thumbColor={colors.onPrimary}
+                                            ios_backgroundColor={colors.borderHover}
+                                        />
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
                     </TouchableWithoutFeedback>
                 </View>
@@ -146,85 +177,88 @@ const styles = createStyles(() => ({
     contentContainer: {
         backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         width: '100%',
         maxWidth: 640,
         alignSelf: 'center',
-        borderTopRightRadius: 24,
-        padding: spacing.l,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.s,
         paddingBottom: spacing.xl + 20, // Extra padding for bottom safe area
+    },
+    handle: {
+        alignSelf: 'center',
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: colors.border,
+        marginBottom: spacing.m,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: spacing.l,
+        marginBottom: spacing.s,
     },
     title: {
-        ...typography.h3,
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
+        color: colors.text,
     },
-    section: {
-
-    },
-    sectionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    sectionInfo: {
-        flex: 1,
-        paddingRight: spacing.m,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.xs,
-    },
-    sectionTitle: {
-        ...typography.bodyLarge,
-        fontWeight: '600',
-        marginLeft: spacing.s,
-    },
-    sectionDescription: {
-        ...typography.bodySmall,
-        marginTop: 2,
-    },
-    fontSizeControl: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: spacing.s,
-        backgroundColor: colors.background,
-        borderRadius: 12,
-        padding: spacing.xs,
-    },
-    sizeButton: {
-        width: 44,
-        height: 44,
+    closeButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.surface,
-        borderRadius: 8,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 1,
-        elevation: 2,
+        backgroundColor: colors.backgroundSecondary,
     },
-    disabledButton: {
-        opacity: 0.5,
-        elevation: 0,
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing.m,
+        minHeight: 56,
+        paddingVertical: spacing.s,
+    },
+    rowText: {
+        flex: 1,
+        gap: 2,
+    },
+    rowTitle: {
+        fontSize: 16,
+        lineHeight: 22,
+        color: colors.text,
+        flexShrink: 1,
+    },
+    rowDetail: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+    },
+    stepper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 20,
+    },
+    stepButton: {
+        width: 44,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     fontSizeValue: {
-        ...typography.h2,
-        minWidth: 40,
+        minWidth: 32,
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
         textAlign: 'center',
+        fontVariant: ['tabular-nums'],
     },
     divider: {
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         backgroundColor: colors.border,
-        marginVertical: spacing.l,
     },
 }));

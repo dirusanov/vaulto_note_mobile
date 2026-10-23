@@ -5,7 +5,6 @@ import {
     View,
     TouchableOpacity,
     ScrollView,
-    Alert,
     Share,
     Platform,
     Linking,
@@ -21,6 +20,7 @@ import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { createStyles } from '../theme/createStyles';
+import { appAlert } from './AppAlert';
 
 interface RecoveryCodeModalProps {
     visible: boolean;
@@ -45,7 +45,7 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
     const handleCopy = async () => {
         if (!recoveryCode) return;
         await Clipboard.setStringAsync(recoveryCode);
-        Alert.alert(
+        appAlert(
             t('common.copied', 'Copied'),
             t('settings.recovery.copiedMsg', 'Recovery code copied to clipboard. Save it in a safe place!')
         );
@@ -67,10 +67,10 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri);
             } else {
-                Alert.alert(t('common.error', 'Error'), t('settings.recovery.sharingNotAvailable', 'Sharing is not available on this device.'));
+                appAlert(t('common.error', 'Error'), t('settings.recovery.sharingNotAvailable', 'Sharing is not available on this device.'));
             }
         } catch (err: any) {
-            Alert.alert(t('common.error', 'Error'), err.message || t('settings.recovery.failedToSaveQr', 'Failed to save QR code.'));
+            appAlert(t('common.error', 'Error'), err.message || t('settings.recovery.failedToSaveQr', 'Failed to save QR code.'));
         }
     };
 

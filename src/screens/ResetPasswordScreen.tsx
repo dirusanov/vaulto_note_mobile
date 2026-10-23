@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import {
-    Alert,
     Text,
     TextInput,
     TouchableOpacity,
@@ -21,6 +20,7 @@ import { authApi } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
+import { appAlert } from '../components/AppAlert';
 
 type RouteParams = {
     ResetPassword: {
@@ -40,36 +40,36 @@ export const ResetPasswordScreen = () => {
 
     const handleSubmit = async () => {
         if (!token) {
-            Alert.alert(t("common.errorTitle"), t("auth.resetTokenPlaceholder"));
+            appAlert(t("common.errorTitle"), t("auth.resetTokenPlaceholder"));
             return;
         }
 
         if (!newPassword || !confirmPassword) {
-            Alert.alert(t("common.errorTitle"), t("common.fillFields"));
+            appAlert(t("common.errorTitle"), t("common.fillFields"));
             return;
         }
 
         if (newPassword.length < 8) {
-            Alert.alert(t("common.errorTitle"), t("common.passwordLengthError"));
+            appAlert(t("common.errorTitle"), t("common.passwordLengthError"));
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Alert.alert(t("common.errorTitle"), t("common.passwordsMatchError"));
+            appAlert(t("common.errorTitle"), t("common.passwordsMatchError"));
             return;
         }
 
         setLoading(true);
         try {
             await authApi.confirmPasswordReset(token, newPassword);
-            Alert.alert(
+            appAlert(
                 t("common.successTitle"),
                 t("auth.passwordResetSuccess"),
                 [{ text: t("common.ok"), onPress: () => navigation.navigate('SignIn') }]
             );
         } catch (err) {
             const message = getErrorMessage(err, t("auth.resetPasswordFailed"));
-            Alert.alert(t("common.errorTitle"), message);
+            appAlert(t("common.errorTitle"), message);
         } finally {
             setLoading(false);
         }
@@ -87,7 +87,7 @@ export const ResetPasswordScreen = () => {
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
                     >
-                        <MaterialIcons name="arrow-back" size={22} color={colors.text} style={rtlFlip} />
+                        <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>
 
                     <View style={styles.header}>
@@ -168,41 +168,41 @@ const styles = createStyles(() => ({
         flexGrow: 1,
     },
     backButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.surface,
-        marginTop: spacing.l,
-        marginLeft: spacing.l,
+        marginTop: spacing.s,
+        marginStart: spacing.s,
         alignSelf: 'flex-start',
     },
     header: {
         marginTop: spacing.xl,
-        paddingHorizontal: spacing.l,
+        paddingHorizontal: spacing.m,
         marginBottom: spacing.xl,
     },
     title: {
-        ...typography.h1,
-        marginBottom: spacing.xs,
+        fontSize: 30,
+        lineHeight: 36,
+        fontWeight: '700',
+        letterSpacing: -0.7,
+        color: colors.text,
+        marginBottom: 6,
     },
     subtitle: {
-        ...typography.body,
+        fontSize: 16,
+        lineHeight: 22,
         color: colors.textSecondary,
     },
     form: {
-        paddingHorizontal: spacing.l,
+        paddingHorizontal: spacing.m,
     },
     warningBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: '#2196F3',
-        borderRadius: 12,
+        backgroundColor: colors.warningLight,
+        borderRadius: 14,
         padding: spacing.m,
         marginBottom: spacing.l,
         gap: spacing.s,
@@ -216,33 +216,38 @@ const styles = createStyles(() => ({
         marginBottom: spacing.l,
     },
     label: {
-        ...typography.caption,
-        color: colors.text,
-        marginBottom: spacing.s,
-        fontWeight: '600',
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
+        color: colors.textSecondary,
+        marginBottom: 6,
     },
     input: {
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: 12,
-        padding: spacing.m,
+        borderRadius: 14,
+        minHeight: 52,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
         color: colors.text,
         fontSize: 16,
     },
     button: {
         backgroundColor: colors.primary,
-        borderRadius: 12,
-        padding: spacing.m,
+        borderRadius: 26,
+        minHeight: 52,
+        paddingHorizontal: spacing.l,
         alignItems: 'center',
+        justifyContent: 'center',
         marginTop: spacing.m,
     },
     buttonDisabled: {
         opacity: 0.7,
     },
     buttonText: {
-        ...typography.button,
-        color: '#FFFFFF',
+        fontSize: 16,
         fontWeight: '600',
+        color: colors.onPrimary,
     },
 }));

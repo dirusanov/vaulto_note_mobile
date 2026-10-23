@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
     KeyboardAvoidingView,
     Modal,
     Pressable,
@@ -17,6 +16,7 @@ import { typography } from '../theme/typography';
 import { Button } from './Button';
 import { TextInput } from './TextInput';
 import { createStyles } from '../theme/createStyles';
+import { appAlert } from './AppAlert';
 
 interface DisableEncryptionModalProps {
     visible: boolean;
@@ -59,7 +59,7 @@ export const DisableEncryptionModal = ({ visible, onClose, onDisable }: DisableE
             const { purged, syncSucceeded } = await resetEncryption();
             
             if (!syncSucceeded) {
-                Alert.alert(
+                appAlert(
                     t("settings.ui.encryptionDisabledTitle", "Encryption Disabled"),
                     t("settings.ui.syncPendingMessage", "End-to-end encryption has been disabled on this device. However, your notes could not be synced to the server right now. They will be automatically updated to plain text as soon as you have an internet connection.")
                 );

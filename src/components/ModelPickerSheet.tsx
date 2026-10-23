@@ -300,10 +300,8 @@ const styles = createStyles(() => ({
     },
     section: {
         fontSize: 13,
-        fontWeight: '600',
+        fontWeight: '500',
         color: colors.textSecondary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
         paddingHorizontal: spacing.s,
         marginTop: spacing.m,
         marginBottom: spacing.xs,
@@ -313,11 +311,15 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         gap: spacing.s,
         borderRadius: 12,
-        paddingVertical: spacing.s + 2,
-        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.s - 2,
+        // Same selection mark as the paywall plans: a 2px outline, reserved at
+        // rest so choosing a row does not shift it.
+        borderWidth: 2,
+        borderColor: 'transparent',
     },
     rowSelected: {
-        backgroundColor: colors.primaryLight,
+        borderColor: colors.primary,
     },
     rowDisabled: {
         opacity: 0.45,

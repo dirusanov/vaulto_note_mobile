@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform, StyleSheet, BackHandler } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -8,7 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { SelectionActionPanel } from '../components/SelectionActionPanel';
 import { UndoSnackbar } from '../components/UndoSnackbar';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useNotesContext } from '../contexts/NotesContext';
@@ -27,10 +27,12 @@ import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 import { useNetInfo } from '@react-native-community/netinfo';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const DOCK_PREF_KEY = 'vaulto_dock_preference';
 
 const SEARCH_BAR_HEIGHT = 60;
+const DOCK_HEIGHT = 68;
 
 export const NotesListScreen = () => {
     const { t } = useTranslation();
@@ -43,6 +45,7 @@ export const NotesListScreen = () => {
     // Live window size: tablets rotate (Android 16 ignores the portrait lock
     // on large screens), so nothing may be measured once at import time.
     const { width: windowWidth, height: screenHeight } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const columnCount = windowWidth >= 1100 ? 4 : windowWidth >= 700 ? 3 : 2;
     const netInfo = useNetInfo();
     // `null` means not known yet; only a definite "no" shows the offline note.
@@ -273,6 +276,31 @@ export const NotesListScreen = () => {
         setSelectedNoteIds(new Set());
     };
 
+    // Android Back steps out of selection, then a tag filter, then a search,
+    // before it is allowed to leave the app.
+    useFocusEffect(
+        useCallback(() => {
+            const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+                if (isSelectionMode) {
+                    setIsSelectionMode(false);
+                    setSelectedNoteIds(new Set());
+                    return true;
+                }
+                if (activeTag) {
+                    setActiveTag(null);
+                    return true;
+                }
+                if (searchQuery) {
+                    setSearchQuery('');
+                    searchNotes('');
+                    return true;
+                }
+                return false;
+            });
+            return () => subscription.remove();
+        }, [activeTag, isSelectionMode, searchNotes, searchQuery])
+    );
+
     const handleBatchPin = async () => {
         const ids = Array.from(selectedNoteIds);
         // Check if all selected notes are already pinned
@@ -443,6 +471,8 @@ export const NotesListScreen = () => {
     const tagFilteredNotes = activeTag ? filteredNotes.filter(n => hasTag(notePlainText(n), activeTag)) : filteredNotes;
 
     const canShowEmptyState = !!userId && !loading && filteredNotes.length === 0;
+    // First launch: nothing to search yet, so the bar keeps only the avatar.
+    const isWelcomeEmpty = canShowEmptyState && !searchQuery.trim() && lockedCount === 0 && !syncLocked;
 
     // Split notes into two columns for masonry layout
     // Sort pinned notes first
@@ -510,7 +540,7 @@ export const NotesListScreen = () => {
                     activeOpacity={0.8}
                 >
                     <View style={styles.centerButtonInner}>
-                        <MaterialIcons name="mic" size={40} color={colors.onPrimary} />
+                        <MaterialIcons name="mic" size={28} color={colors.onPrimary} />
                     </View>
                 </TouchableOpacity>
             );
@@ -527,7 +557,7 @@ export const NotesListScreen = () => {
                     activeOpacity={0.8}
                 >
                     <View style={styles.centerButtonInner}>
-                        <MaterialIcons name="edit" size={40} color={colors.onPrimary} />
+                        <MaterialIcons name="edit" size={26} color={colors.onPrimary} />
                     </View>
                 </TouchableOpacity>
             );
@@ -547,7 +577,7 @@ export const NotesListScreen = () => {
                     delayLongPress={500}
                     activeOpacity={0.7}
                 >
-                    <MaterialIcons name="edit" size={24} color={colors.textSecondary} />
+                    <MaterialIcons name="edit" size={24} color={colors.text} />
                 </TouchableOpacity>
             );
         } else {
@@ -562,7 +592,7 @@ export const NotesListScreen = () => {
                     delayLongPress={500}
                     activeOpacity={0.7}
                 >
-                    <MaterialIcons name="mic" size={24} color={colors.textSecondary} />
+                    <MaterialIcons name="mic-none" size={24} color={colors.text} />
                 </TouchableOpacity>
             );
         }
@@ -587,7 +617,7 @@ export const NotesListScreen = () => {
             {/* Offline: say that nothing is lost, sync just waits for the network. */}
             {isOffline && !isSelectionMode && (
                 <View style={styles.offlinePill} accessibilityLiveRegion="polite">
-                    <MaterialIcons name="cloud-off" size={16} color={colors.textSecondary} />
+                    <MaterialIcons name="cloud-off" size={14} color={colors.textTertiary} />
                     <Text style={styles.offlineText} numberOfLines={2}>
                         {signedIn
                             ? t('notes.offlineSync', 'Offline. Changes are saved and will sync later.')
@@ -599,9 +629,6 @@ export const NotesListScreen = () => {
             {!signedIn && lockedCount > 0 && !isSelectionMode && (
                 <View style={styles.lockBanner}>
                     <View style={styles.lockBannerHeader}>
-                        <View style={styles.lockBannerIcon}>
-                            <MaterialIcons name="lock" size={20} color={colors.primary} />
-                        </View>
                         <View style={styles.lockBannerTextWrap}>
                             <Text style={styles.lockBannerTitle}>
                                 {t('notes.keptLockedTitle', 'Account notes kept on this device: {{count}}', { count: lockedCount })}
@@ -617,7 +644,6 @@ export const NotesListScreen = () => {
                             onPress={() => navigation.navigate('SignIn')}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="login" size={16} color={colors.onPrimary} style={rtlFlip} />
                             <Text style={styles.lockActionPrimaryText}>{t('auth.signIn', 'Sign In')}</Text>
                         </TouchableOpacity>
                     </View>
@@ -626,9 +652,6 @@ export const NotesListScreen = () => {
             {shouldShowResetRecoveryBanner && (
                 <View style={styles.lockBanner}>
                     <View style={styles.lockBannerHeader}>
-                        <View style={styles.lockBannerIcon}>
-                            <MaterialIcons name="security" size={20} color={colors.warning} />
-                        </View>
                         <View style={styles.lockBannerTextWrap}>
                             <Text style={styles.lockBannerTitle}>
                                 {t('notes.resetRecoveryTitle', 'Encrypted vault was reset')}
@@ -644,7 +667,6 @@ export const NotesListScreen = () => {
                             onPress={handleSettingsPress}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="settings" size={16} color={colors.onPrimary} />
                             <Text style={styles.lockActionPrimaryText}>
                                 {t('notes.reviewRecovery', 'Review options')}
                             </Text>
@@ -658,13 +680,13 @@ export const NotesListScreen = () => {
                         onPress={dismissLockBanner}
                         style={styles.lockBannerClose}
                         activeOpacity={0.75}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.close', 'Close')}
                     >
                         <MaterialIcons name="close" size={18} color={colors.textTertiary} />
                     </TouchableOpacity>
                     <View style={styles.lockBannerHeader}>
-                        <View style={styles.lockBannerIcon}>
-                            <MaterialIcons name="lock-open" size={20} color={colors.primary} />
-                        </View>
                         <View style={styles.lockBannerTextWrap}>
                             <Text style={styles.lockBannerTitle}>
                                 {t("notes.syncLocked")}
@@ -682,7 +704,6 @@ export const NotesListScreen = () => {
                             onPress={() => setShowUnlockSyncModal(true)}
                             activeOpacity={0.85}
                         >
-                            <MaterialIcons name="vpn-key" size={16} color={colors.onPrimary} />
                             <Text style={styles.lockActionPrimaryText}>{t("settings.ui.unlock")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -699,15 +720,19 @@ export const NotesListScreen = () => {
             )}
             {!isSelectionMode && (
                 <Animated.View style={[styles.searchContainer, { height: searchBarHeight, opacity: searchBarHeight.interpolate({ inputRange: [0, SEARCH_BAR_HEIGHT], outputRange: [0, 1] }) }]}>
-                    <View style={styles.searchBar}>
-                        <MaterialIcons name="search" size={20} color={colors.textTertiary} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder={t("common.search")}
-                            placeholderTextColor={colors.textTertiary}
-                            value={searchQuery}
-                            onChangeText={handleSearch}
-                        />
+                    <View style={[styles.searchBar, isWelcomeEmpty && styles.searchBarBare]}>
+                        {!isWelcomeEmpty && (
+                            <>
+                                <MaterialIcons name="search" size={20} color={colors.textSecondary} />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder={t("common.search")}
+                                    placeholderTextColor={colors.textTertiary}
+                                    value={searchQuery}
+                                    onChangeText={handleSearch}
+                                />
+                            </>
+                        )}
                         {searchQuery.length > 0 && (
                             <TouchableOpacity
                                 onPress={() => handleSearch('')}
@@ -808,12 +833,16 @@ export const NotesListScreen = () => {
                                     ? encryptionBundle?.secret_mode === 'recovery_code'
                                         ? t('notes.unlockWithKey', 'Enter your recovery key to show them on this device.')
                                         : t('notes.unlockToRestore')
-                                // The open recorder covers this spot: no "tap the mic" under it.
-                                : isVoiceRecorderVisible ? ''
-                                : isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")}
+                                : ''}
                         />
                     </View>
                 ) : (
+                    <>
+                    {!isSelectionMode && !searchQuery.trim() && (
+                        <Text style={styles.listTitle} accessibilityRole="header" numberOfLines={1}>
+                            {activeTag ? `#${activeTag}` : t('notes.listTitle', 'Notes')}
+                        </Text>
+                    )}
                     <View style={styles.masonryContainer}>
                         {noteColumns.map((columnNotes, columnIndex) => (
                             <View key={columnIndex} style={styles.column}>
@@ -830,13 +859,38 @@ export const NotesListScreen = () => {
                             </View>
                         ))}
                     </View>
+                    </>
                 )}
-                <View style={{ height: 120 }} pointerEvents="none" />
+                {/* Room for the floating dock, so the last cards can scroll clear of it. */}
+                <View style={{ height: DOCK_HEIGHT + Math.max(insets.bottom, spacing.m) + spacing.l }} pointerEvents="none" />
             </ScrollView>
 
-            {/* Floating Dock - hide in selection mode */}
-            {!isSelectionMode && (
-                <View style={styles.dockContainer} key={dockInstanceKey} pointerEvents="box-none">
+            {/* First launch: the one thing to do, right above the button that does it. */}
+            {isWelcomeEmpty && !isSelectionMode && !isVoiceRecorderVisible && (
+                <View
+                    pointerEvents="box-none"
+                    style={[styles.welcomeHintContainer, { bottom: Math.max(insets.bottom, spacing.m) + spacing.m + DOCK_HEIGHT + spacing.s }]}
+                >
+                    <TouchableOpacity
+                        style={styles.welcomeHint}
+                        onPress={isMicPrimary ? handleMicPress : handleCreateNote}
+                        activeOpacity={0.6}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                    >
+                        {/* The arrow is part of the text, so it stays with the last word when it wraps. */}
+                        <Text style={styles.welcomeHintText}>
+                            {isMicPrimary ? t("notes.tapMicToRecord") : t("notes.tapPencilToWrite")}
+                            {'\u00A0'}
+                            <MaterialIcons name="south" size={16} color={colors.primary} />
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Floating dock: hidden in selection mode and while the recorder takes its place. */}
+            {!isSelectionMode && !isVoiceRecorderVisible && (
+                <View style={[styles.dockContainer, { bottom: Math.max(insets.bottom, spacing.m) + spacing.m }]} key={dockInstanceKey} pointerEvents="box-none">
                     <View style={styles.dock}>
                         <View style={styles.dockButtonRow}>
                             <TouchableOpacity
@@ -846,7 +900,7 @@ export const NotesListScreen = () => {
                                 accessibilityRole="button"
                                 accessibilityLabel={t("ask.title", "Ask your notes")}
                             >
-                                <MaterialIcons name="auto-awesome" size={24} color={colors.primary} />
+                                <MaterialIcons name="auto-awesome" size={22} color={colors.text} />
                             </TouchableOpacity>
 
                             {/* Center Primary Button */}
@@ -924,24 +978,24 @@ export const NotesListScreen = () => {
 
 const styles = createStyles(() => ({
     avatar: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.primary,
+        backgroundColor: colors.backgroundSecondary,
     },
     avatarGuest: {
         backgroundColor: colors.backgroundSecondary,
     },
     avatarText: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: colors.onPrimary,
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.text,
     },
     searchBarButton: {
-        width: 48,
-        height: 48,
+        width: 44,
+        height: 44,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -980,109 +1034,86 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    // Offline is a status, not an alarm: one quiet line above the list.
     offlinePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
+        justifyContent: 'center',
+        gap: 6,
         marginHorizontal: spacing.m,
-        marginBottom: spacing.m,
+        marginBottom: spacing.s,
         paddingHorizontal: spacing.m,
-        paddingVertical: 10,
-        borderRadius: 14,
-        backgroundColor: colors.backgroundSecondary,
     },
     offlineText: {
-        flex: 1,
+        flexShrink: 1,
         fontSize: 13,
+        lineHeight: 18,
         color: colors.textSecondary,
+        textAlign: 'center',
     },
+    // Banners read like a short note from the app: text first, one clear action.
     lockBanner: {
         marginHorizontal: spacing.m,
         marginBottom: spacing.m,
-        padding: spacing.m,
-        borderRadius: 22,
-        borderWidth: 1,
-        borderColor: colors.primary + '18',
+        paddingHorizontal: spacing.m,
+        paddingVertical: 14,
+        borderRadius: 14,
         backgroundColor: colors.surface,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        elevation: 4,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
     },
     lockBannerHeader: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: spacing.m,
-        paddingRight: spacing.xl,
-    },
-    lockBannerIcon: {
-        width: 42,
-        height: 42,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primary + '10',
-        borderWidth: 1,
-        borderColor: colors.primary + '14',
+        paddingEnd: spacing.xl,
     },
     lockBannerTextWrap: {
-        flex: 1,
+        gap: 4,
     },
     lockBannerTitle: {
-        ...typography.noteTitle,
+        fontSize: 15,
+        lineHeight: 20,
+        fontWeight: '600',
         color: colors.text,
     },
     lockBannerText: {
-        ...typography.caption,
-        color: colors.textSecondary,
         fontSize: 13,
         lineHeight: 18,
-        marginTop: spacing.xs,
+        color: colors.textSecondary,
     },
     lockBannerClose: {
         position: 'absolute',
         top: spacing.s,
-        right: spacing.s,
+        end: spacing.s,
         padding: spacing.xs,
         zIndex: 2,
     },
     lockActionPrimary: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.xs,
         backgroundColor: colors.primary,
-        minHeight: 48,
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s + 2,
-        borderRadius: 12,
+        minHeight: 40,
+        paddingHorizontal: 18,
+        borderRadius: 20,
     },
     lockActionPrimaryText: {
-        ...typography.captionBold,
+        fontSize: 14,
+        fontWeight: '600',
         color: colors.onPrimary,
-        fontSize: 13,
     },
     lockActionsRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: spacing.s,
-        marginTop: spacing.m,
+        marginTop: 12,
     },
     lockActionSecondary: {
-        minHeight: 48,
+        minHeight: 40,
         justifyContent: 'center',
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s + 2,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
+        paddingHorizontal: 12,
     },
     lockActionSecondaryText: {
-        ...typography.captionBold,
+        fontSize: 14,
+        fontWeight: '500',
         color: colors.textSecondary,
-        fontSize: 13,
     },
     syncButton: {
         flexDirection: 'row',
@@ -1116,10 +1147,17 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.surface,
-        borderRadius: 12,
+        borderRadius: 24,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
         paddingLeft: spacing.m,
-        paddingRight: spacing.xs,
-        height: 56, // Increased for better usability on mobile
+        paddingRight: spacing.xxs,
+        height: 48,
+    },
+    searchBarBare: {
+        justifyContent: 'flex-end',
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
     },
     searchInput: {
         flex: 1,
@@ -1127,6 +1165,19 @@ const styles = createStyles(() => ({
         marginLeft: spacing.s,
         color: colors.text,
         fontSize: 16,
+    },
+    listTitle: {
+        fontSize: 32,
+        lineHeight: 38,
+        fontWeight: '700',
+        letterSpacing: -0.8,
+        color: colors.text,
+        // Padding, not margin: with width 100% a margin would push it off-centre.
+        paddingHorizontal: spacing.xs,
+        marginBottom: spacing.m,
+        width: '100%',
+        maxWidth: 1200,
+        alignSelf: 'center',
     },
     masonryContainer: {
         flexDirection: 'row',
@@ -1148,8 +1199,8 @@ const styles = createStyles(() => ({
         paddingHorizontal: 12,
         borderRadius: 18,
         backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.surface : colors.border,
     },
     tagChipActive: {
         backgroundColor: colors.primary,
@@ -1161,8 +1212,10 @@ const styles = createStyles(() => ({
         color: colors.text,
     },
     tagChipCount: {
-        fontSize: 12,
-        color: colors.textTertiary,
+        fontSize: 13,
+        fontWeight: '500',
+        color: colors.textSecondary,
+        fontVariant: ['tabular-nums'],
     },
     tagChipTextActive: {
         color: colors.onPrimary,
@@ -1183,9 +1236,27 @@ const styles = createStyles(() => ({
         maxWidth: 760,
         alignSelf: 'center',
     },
+    welcomeHintContainer: {
+        position: 'absolute',
+        left: spacing.m,
+        right: spacing.m,
+        alignItems: 'center',
+    },
+    welcomeHint: {
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
+        borderRadius: 20,
+        backgroundColor: colors.background,
+    },
+    welcomeHintText: {
+        fontSize: 15,
+        lineHeight: 21,
+        fontWeight: '500',
+        color: colors.primary,
+        textAlign: 'center',
+    },
     dockContainer: {
         position: 'absolute',
-        bottom: spacing.xxl + spacing.l, // Moved up significantly
         left: 0,
         right: 0,
         alignItems: 'center',
@@ -1193,25 +1264,24 @@ const styles = createStyles(() => ({
         zIndex: 20,
         elevation: 20,
     },
+    // One floating pill: Ask on the left, the main action in the middle, the
+    // other way to make a note on the right. Everything sits inside the pill.
     dock: {
-        flexDirection: 'column',
+        flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.surface,
-        borderRadius: 32,
-        paddingTop: 8, // Push contents down for vertical centering
-        paddingBottom: 4,
-        paddingHorizontal: spacing.l,
-        // Three actions: the thumb reaches all of them, with room between each.
-        width: 320,
-        maxWidth: '86%',
+        backgroundColor: isDarkScheme() ? colors.surfaceElevated : colors.surface,
+        borderRadius: 34,
+        paddingHorizontal: spacing.s,
+        width: 264,
+        maxWidth: '80%',
+        height: DOCK_HEIGHT,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
-        elevation: 10,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-        height: 70, // Fixed height
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: isDarkScheme() ? 0.4 : 0.1,
+        shadowRadius: 16,
+        elevation: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDarkScheme() ? colors.borderHover : colors.border,
     },
     dockButtonRow: {
         flexDirection: 'row',
@@ -1220,33 +1290,25 @@ const styles = createStyles(() => ({
         width: '100%',
     },
     dockButton: {
-        width: 48,
-        height: 48,
+        width: 52,
+        height: 52,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 24,
+        borderRadius: 26,
     },
     centerButton: {
-        width: 88,
-        height: 88,
-        marginTop: -35, // Lowered blue icon
+        width: 56,
+        height: 56,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: colors.background, // Gap filler
-        borderRadius: 44,
-        padding: 6,
+        borderRadius: 28,
     },
     centerButtonInner: {
         width: '100%',
         height: '100%',
-        borderRadius: 38,
+        borderRadius: 28,
         backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 8,
     },
 }));
