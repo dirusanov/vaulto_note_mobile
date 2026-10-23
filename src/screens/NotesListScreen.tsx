@@ -7,7 +7,7 @@ import { NoteCard } from '../components/NoteCard';
 import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { SelectionActionPanel } from '../components/SelectionActionPanel';
-import { UndoSnackbar } from '../components/UndoSnackbar';
+import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
 import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -339,7 +339,7 @@ export const NotesListScreen = () => {
         haptics.warning();
         pendingDeleteRef.current = ids;
         setPendingDeleteIds(ids);
-        pendingDeleteTimerRef.current = setTimeout(() => commitPendingDeleteRef.current(), 5000);
+        pendingDeleteTimerRef.current = setTimeout(() => commitPendingDeleteRef.current(), UNDO_WINDOW_MS);
         handleExitSelectionMode();
     };
 

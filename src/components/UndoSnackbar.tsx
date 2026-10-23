@@ -6,6 +6,9 @@ import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { createStyles } from '../theme/createStyles';
 
+/** How long an undoable action waits before it is applied for good. */
+export const UNDO_WINDOW_MS = 8000;
+
 interface UndoSnackbarProps {
     message: string | null;
     onUndo: () => void;

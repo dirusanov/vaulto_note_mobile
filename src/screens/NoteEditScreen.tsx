@@ -59,7 +59,7 @@ import {
 } from '../utils/taskExtraction';
 import { markdownToTiptapHtml } from '../utils/tiptapMarkdownAdapter';
 import { CompareVersionsModal } from '../components/CompareVersionsModal';
-import { UndoSnackbar } from '../components/UndoSnackbar';
+import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { enqueuePendingTranscription, getPendingTranscriptions, removePendingTranscription } from '../services/pendingTranscriptions';
@@ -4054,7 +4054,7 @@ export const NoteEditScreen = () => {
             await handleVariantSelect('original');
         }
         setHiddenVariantIds(prev => (prev.includes(improvementId) ? prev : [...prev, improvementId]));
-        const timer = setTimeout(finalizePendingVariantDelete, 5000);
+        const timer = setTimeout(finalizePendingVariantDelete, UNDO_WINDOW_MS);
         pendingVariantDeleteRef.current = { id: improvementId, noteId, timer };
         setUndoMessage(t('edit.versions.deleted', 'Version deleted'));
     }, [finalizePendingVariantDelete, handleVariantSelect, t]);
