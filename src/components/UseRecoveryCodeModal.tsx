@@ -12,7 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useEncryption } from '../context/EncryptionContext';
 import { getSecretValidationError, normalizeSecretInput } from '../crypto/e2ee';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { Button } from './Button';
@@ -147,8 +147,9 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
             if (decoded && decoded.data) {
                 const qrCode = jsQR(new Uint8ClampedArray(decoded.data), decoded.width, decoded.height);
                 if (qrCode && qrCode.data) {
+                    // The words appearing in the field are the confirmation.
                     setCode(qrCode.data);
-                    appAlert(t('common.success', 'Success'), t('settings.recovery.qrScannedMsg', 'QR code successfully read!'));
+                    setError(null);
                 } else {
                     appAlert(t('common.error', 'Error'), t('settings.recovery.noQrFound', 'No QR code found in this image.'));
                 }
@@ -226,12 +227,12 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
 
                                 <View style={styles.qrActions}>
                                     <TouchableOpacity style={styles.qrActionButton} onPress={handleScanQr} disabled={loading}>
-                                        <MaterialCommunityIcons name="camera" size={20} color={colors.primary} />
+                                        <MaterialCommunityIcons name="camera-outline" size={20} color={colors.text} />
                                         <Text style={styles.qrActionButtonText}>{t('settings.recovery.scanQr', 'Scan QR Code')}</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity style={styles.qrActionButton} onPress={handleImportImage} disabled={loading}>
-                                        <MaterialCommunityIcons name="image-search" size={20} color={colors.primary} />
+                                        <MaterialCommunityIcons name="image-outline" size={20} color={colors.text} />
                                         <Text style={styles.qrActionButtonText}>{t('settings.recovery.pickQr', 'Import from Image')}</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -256,21 +257,23 @@ export const UseRecoveryCodeModal: React.FC<UseRecoveryCodeModalProps> = ({
                                     </View>
                                 )}
 
+                                {/* The app's dialog pattern: the main action as a pill, Cancel quiet under it. */}
                                 <View style={styles.actions}>
-                                    <Button
-                                        title={t('common.cancel', 'Cancel')}
-                                        variant="outline"
-                                        onPress={handleClose}
-                                        disabled={loading}
-                                        style={styles.actionButton}
-                                    />
                                     <Button
                                         title={t('common.unlock', 'Unlock')}
                                         onPress={handleUnlock}
                                         loading={loading}
                                         disabled={loading}
-                                        style={styles.actionButton}
                                     />
+                                    <TouchableOpacity
+                                        style={styles.cancelButton}
+                                        onPress={handleClose}
+                                        disabled={loading}
+                                        activeOpacity={0.6}
+                                        accessibilityRole="button"
+                                    >
+                                        <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         </Pressable>
@@ -303,22 +306,27 @@ const styles = createStyles(() => ({
     },
     card: {
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 380,
         backgroundColor: colors.surface,
-        borderRadius: 24,
-        padding: spacing.l,
-        borderWidth: 1,
+        borderRadius: 20,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.l,
+        paddingBottom: spacing.s,
+        borderWidth: isDarkScheme() ? StyleSheet.hairlineWidth : 0,
         borderColor: colors.border,
         alignItems: 'stretch',
     },
     title: {
-        ...typography.h3,
-        textAlign: 'center',
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
+        color: colors.text,
         marginBottom: spacing.s,
     },
     subtitle: {
-        ...typography.bodySmall,
-        textAlign: 'center',
+        fontSize: 15,
+        lineHeight: 21,
         color: colors.textSecondary,
         marginBottom: spacing.l,
     },
@@ -339,13 +347,14 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.xs,
-        paddingVertical: spacing.s,
-        backgroundColor: colors.primary + '10',
-        borderRadius: 12,
+        minHeight: 44,
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 22,
     },
     qrActionButtonText: {
-        ...typography.captionBold,
-        color: colors.primary,
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text,
     },
     error: {
         ...typography.captionBold,
@@ -354,9 +363,18 @@ const styles = createStyles(() => ({
         marginBottom: spacing.s,
     },
     actions: {
-        flexDirection: 'row',
-        gap: spacing.s,
+        gap: spacing.xs,
         marginTop: spacing.m,
+    },
+    cancelButton: {
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: colors.textSecondary,
     },
     progressText: {
         ...typography.captionBold,
@@ -374,9 +392,6 @@ const styles = createStyles(() => ({
     progressFill: {
         height: '100%',
         backgroundColor: colors.primary,
-    },
-    actionButton: {
-        flex: 1,
     },
     scannerOverlay: {
         flex: 1,

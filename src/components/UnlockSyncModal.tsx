@@ -10,11 +10,10 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEncryption } from '../context/EncryptionContext';
 import { getSecretValidationError } from '../crypto/e2ee';
 import { Button } from './Button';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { TextInput } from './TextInput';
@@ -157,9 +156,6 @@ export const UnlockSyncModal = ({
                     >
                         <Pressable style={styles.cardPressable} pointerEvents="auto">
                             <View style={styles.card}>
-                                <View style={styles.headerIcon}>
-                                    <MaterialCommunityIcons name="lock-open-variant-outline" size={26} color={colors.primary} />
-                                </View>
                                 <Text style={styles.title}>
                                     {t("notes.unlockSync", "Unlock encrypted notes")}
                                 </Text>
@@ -189,7 +185,6 @@ export const UnlockSyncModal = ({
                                 </Pressable>
 
                                 <View style={styles.hintBox}>
-                                    <MaterialCommunityIcons name="shield-check-outline" size={16} color={colors.accentGreen} />
                                     <Text style={styles.hint}>
                                         {isLegacyNumericPassphrase
                                             ? t("settings.ui.legacyPassphraseHint", "Legacy mode: enter your 8-digit code.")
@@ -199,21 +194,23 @@ export const UnlockSyncModal = ({
 
                                 {error && <Text style={styles.error}>{error}</Text>}
 
+                                {/* The app's dialog pattern: the main action as a pill, Cancel quiet under it. */}
                                 <View style={styles.actions}>
-                                    <Button
-                                        title={t("common.cancel", "Cancel")}
-                                        variant="outline"
-                                        onPress={handleClose}
-                                        disabled={loading}
-                                        style={styles.actionButton}
-                                    />
                                     <Button
                                         title={t("settings.ui.unlock", "Unlock")}
                                         onPress={handleUnlock}
                                         loading={loading}
                                         disabled={loading || !secret.trim()}
-                                        style={styles.actionButton}
                                     />
+                                    <TouchableOpacity
+                                        style={styles.cancelButton}
+                                        onPress={handleClose}
+                                        disabled={loading}
+                                        activeOpacity={0.6}
+                                        accessibilityRole="button"
+                                    >
+                                        <Text style={styles.cancelText}>{t("common.cancel", "Cancel")}</Text>
+                                    </TouchableOpacity>
                                 </View>
 
                                 <View style={styles.recoveryOptions}>
@@ -222,7 +219,6 @@ export const UnlockSyncModal = ({
                                         style={styles.recoveryButton}
                                         disabled={loading}
                                     >
-                                        <MaterialCommunityIcons name="key-chain" size={16} color={colors.primary} />
                                         <Text style={styles.recoveryButtonText}>{t("settings.recovery.useBtn", "Use Recovery Code")}</Text>
                                     </TouchableOpacity>
 
@@ -231,7 +227,6 @@ export const UnlockSyncModal = ({
                                         style={styles.resetButton}
                                         disabled={loading}
                                     >
-                                        <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
                                         <Text style={styles.resetButtonText}>{t("aux.forgotPassReset", "Forgot passphrase? Reset encryption")}</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -283,39 +278,27 @@ const styles = createStyles(() => ({
     },
     card: {
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 380,
         backgroundColor: colors.surface,
-        borderRadius: 28,
-        padding: spacing.l,
-        borderWidth: 1,
+        borderRadius: 20,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.l,
+        paddingBottom: spacing.s,
+        borderWidth: isDarkScheme() ? StyleSheet.hairlineWidth : 0,
         borderColor: colors.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.12,
-        shadowRadius: 22,
-        elevation: 6,
         alignItems: 'stretch',
     },
-    headerIcon: {
-        width: 58,
-        height: 58,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        alignSelf: 'center',
-        backgroundColor: colors.primary + '10',
-        borderWidth: 1,
-        borderColor: colors.primary + '18',
-        marginBottom: spacing.m,
-    },
     title: {
-        ...typography.h3,
-        textAlign: 'center',
-        marginBottom: spacing.xs,
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
+        color: colors.text,
+        marginBottom: spacing.s,
     },
     subtitle: {
-        ...typography.bodySmall,
-        textAlign: 'center',
+        fontSize: 15,
+        lineHeight: 21,
         color: colors.textSecondary,
         marginBottom: spacing.l,
     },
@@ -334,76 +317,59 @@ const styles = createStyles(() => ({
         color: colors.primary,
     },
     hintBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
-        backgroundColor: colors.accentGreen + '0F',
-        borderRadius: 12,
-        paddingHorizontal: spacing.m,
-        paddingVertical: spacing.s,
         marginBottom: spacing.s,
     },
     hint: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textTertiary,
     },
     error: {
         ...typography.captionBold,
         color: colors.error,
         marginTop: spacing.xs,
         marginBottom: spacing.s,
-        textAlign: 'center',
     },
     actions: {
-        flexDirection: 'row',
-        gap: spacing.s,
+        gap: spacing.xs,
         marginTop: spacing.m,
     },
-    resetButton: {
-        flexDirection: 'row',
+    cancelButton: {
+        minHeight: 44,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.xs,
-        width: '100%',
-        minHeight: 48,
-        paddingVertical: spacing.s,
-        backgroundColor: colors.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.error + '18',
     },
-    resetButtonText: {
-        ...typography.captionBold,
-        color: colors.error,
+    cancelText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: colors.textSecondary,
     },
+    // Other ways in, as plain text links under a hairline.
     recoveryOptions: {
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: spacing.s,
-        marginTop: spacing.m,
-        paddingTop: spacing.m,
-        borderTopWidth: 1,
+        marginTop: spacing.s,
+        borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
+        paddingTop: spacing.xs,
     },
     recoveryButton: {
-        flexDirection: 'row',
+        minHeight: 44,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.xs,
-        width: '100%',
-        minHeight: 48,
-        paddingVertical: spacing.s,
-        backgroundColor: colors.primary + '08',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.primary + '14',
     },
     recoveryButtonText: {
-        ...typography.captionBold,
+        fontSize: 15,
+        fontWeight: '500',
         color: colors.primary,
+        textAlign: 'center',
     },
-    actionButton: {
-        flex: 1,
+    resetButton: {
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    resetButtonText: {
+        fontSize: 14,
+        color: colors.error,
+        textAlign: 'center',
     },
 }));

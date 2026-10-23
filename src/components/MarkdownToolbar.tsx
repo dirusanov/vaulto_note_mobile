@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, I18nManager, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { View, TouchableOpacity, ScrollView, Platform, Modal, Text, TouchableWithoutFeedback, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { EdgeFade } from './EdgeFade';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -255,19 +255,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({ onFormat, acti
                 />
 
             </ScrollView>
-            {hasMoreAtEnd && (
-                <View pointerEvents="none" style={styles.edgeFade}>
-                    <Svg width="100%" height="100%">
-                        <Defs>
-                            <LinearGradient id="toolbarEdgeFade" x1={I18nManager.isRTL ? '1' : '0'} y1="0" x2={I18nManager.isRTL ? '0' : '1'} y2="0">
-                                <Stop offset="0" stopColor={colors.surface} stopOpacity="0" />
-                                <Stop offset="1" stopColor={colors.surface} stopOpacity="1" />
-                            </LinearGradient>
-                        </Defs>
-                        <Rect width="100%" height="100%" fill="url(#toolbarEdgeFade)" />
-                    </Svg>
-                </View>
-            )}
+            {hasMoreAtEnd && <EdgeFade side="end" color={colors.surface} width={40} />}
 
             <Modal
                 transparent
@@ -330,13 +318,6 @@ const styles = createStyles(() => ({
                 elevation: 12,
             },
         }),
-    },
-    edgeFade: {
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        end: 0,
-        width: 40,
     },
     scrollContent: {
         flexGrow: 1,

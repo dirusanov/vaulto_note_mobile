@@ -46,6 +46,7 @@ import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadMod
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
+import { EdgeFade } from '../components/EdgeFade';
 import { VersionsSheet, VersionListItem } from '../components/VersionsSheet';
 import { TasksSheet, TaskSheetItem } from '../components/TasksSheet';
 import {
@@ -612,7 +613,6 @@ const MemoizedImprovementChips = memo(({
     noteImprovements,
     activeVariantId,
     handleVariantSelect,
-    onRequestDelete,
     onOpenAllVersions,
     optionIcons,
     displayLabels,
@@ -620,7 +620,6 @@ const MemoizedImprovementChips = memo(({
     noteImprovements: any[],
     activeVariantId: string,
     handleVariantSelect: (id: string) => void,
-    onRequestDelete: (id: string) => void,
     onOpenAllVersions: () => void,
     /** option id -> Material icon, so a chip shows which action produced it. */
     optionIcons: Record<string, string>,
@@ -636,8 +635,15 @@ const MemoizedImprovementChips = memo(({
     const revealedForRef = useRef<string | null>(null);
 
     const revealChip = useCallback((variantId: string, force = false) => {
-        if (variantId === 'original') return; // pinned outside the scroll row
         if (!force && revealedForRef.current === variantId) return;
+        // Original is pinned outside the scroll row: show the versions from the
+        // start, the way they read next to it, instead of a half-cut chip.
+        if (variantId === 'original') {
+            if (typeof scrollRef.current?.scrollTo !== 'function') return;
+            revealedForRef.current = variantId;
+            scrollRef.current.scrollTo({ x: 0, animated: true });
+            return;
+        }
 
         const layout = chipLayoutsRef.current[variantId];
         const viewportWidth = viewportWidthRef.current;
@@ -658,6 +664,17 @@ const MemoizedImprovementChips = memo(({
     // chip immediately instead of leaving the row looking unresponsive.
     const [pendingVariantId, setPendingVariantId] = useState<string | null>(null);
     const selectedVariantId = pendingVariantId ?? activeVariantId;
+    // Fades on the edges where versions are scrolled out of view, so a chip
+    // cut by the edge reads as "more this way" rather than as a broken label.
+    const [hiddenEdges, setHiddenEdges] = useState({ start: false, end: false });
+    const contentWidthRef = useRef(0);
+    const scrollXRef = useRef(0);
+    const updateHiddenEdges = useCallback(() => {
+        const viewport = viewportWidthRef.current;
+        const start = scrollXRef.current > 4;
+        const end = contentWidthRef.current - viewport - scrollXRef.current > 4;
+        setHiddenEdges((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+    }, []);
 
     useEffect(() => {
         if (pendingVariantId === null) return undefined;
@@ -688,6 +705,9 @@ const MemoizedImprovementChips = memo(({
     const originalActive = selectedVariantId === 'original';
     return (
         <View style={[styles.variantContainer, styles.variantRow]}>
+            {/* One segmented track, like the theme switch in Settings: the open
+                version is the raised white segment. */}
+            <View style={styles.variantTrack}>
             {/* Original stays pinned: it is the reference every version is read against. */}
             <TouchableOpacity
                 style={[styles.variantChip, styles.variantOriginalChip, originalActive && styles.variantChipActive]}
@@ -700,27 +720,37 @@ const MemoizedImprovementChips = memo(({
                 <MaterialIcons
                     name="article"
                     size={14}
-                    color={originalActive ? colors.onPrimary : colors.textSecondary}
+                    color={originalActive ? colors.text : colors.textSecondary}
                     style={styles.variantChipIcon}
                 />
                 <Text style={[styles.variantChipText, originalActive && styles.variantChipTextActive]}>
                     {t("edit.original")}
                 </Text>
             </TouchableOpacity>
+            <View style={styles.variantScroll}>
             <GestureHandlerScrollView
                 ref={scrollRef}
                 horizontal
                 nestedScrollEnabled
                 directionalLockEnabled
                 showsHorizontalScrollIndicator={false}
-                style={styles.variantScroll}
                 contentContainerStyle={styles.variantScrollContent}
                 keyboardShouldPersistTaps="always"
+                scrollEventThrottle={32}
+                onScroll={(event) => {
+                    scrollXRef.current = event.nativeEvent.contentOffset.x;
+                    updateHiddenEdges();
+                }}
+                onContentSizeChange={(width) => {
+                    contentWidthRef.current = width;
+                    updateHiddenEdges();
+                }}
                 onLayout={(event) => {
                     // Chips can be measured before the row is, so retry the reveal
                     // once the viewport width is finally known.
                     viewportWidthRef.current = event.nativeEvent.layout.width;
                     revealChip(selectedVariantId);
+                    updateHiddenEdges();
                 }}
             >
                 {noteImprovements.map((imp: any, index: number) => {
@@ -754,13 +784,13 @@ const MemoizedImprovementChips = memo(({
                                     <MaterialIcons
                                         name="subdirectory-arrow-right"
                                         size={14}
-                                        color={isActive ? colors.onPrimary : colors.textSecondary}
+                                        color={isActive ? colors.text : colors.textSecondary}
                                     />
                                 )}
                                 <MaterialIcons
                                     name={chipIcon as any}
                                     size={14}
-                                    color={isActive ? colors.onPrimary : colors.textSecondary}
+                                    color={isActive ? colors.text : colors.textSecondary}
                                     style={styles.variantChipIcon}
                                 />
                                 <Text
@@ -773,24 +803,17 @@ const MemoizedImprovementChips = memo(({
                                     {chipText}
                                 </Text>
                             </TouchableOpacity>
-                            {/* Close affordance only on the active chip, like editor tabs.
-                                Deleting is undoable, and the full list offers it for any version. */}
-                            {isActive && (
-                                <TouchableOpacity
-                                    style={styles.variantDeleteButton}
-                                    onPress={() => onRequestDelete(imp.id)}
-                                    hitSlop={6}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={t("a11y.removeVersion", "Remove this version")}
-                                >
-                                    <MaterialIcons name="close" size={16} color={colors.textTertiary} />
-                                </TouchableOpacity>
-                            )}
                         </View>
                     );
                 })}
             </GestureHandlerScrollView>
-            {noteImprovements.length >= 2 && (
+            {hiddenEdges.start && <EdgeFade side="start" color={colors.backgroundSecondary} width={24} />}
+            {hiddenEdges.end && <EdgeFade side="end" color={colors.backgroundSecondary} width={24} />}
+            </View>
+            </View>
+            {/* Renaming and deleting live in the full list (with undo), not on the
+                chips, where a stray tap could remove a version. */}
+            {noteImprovements.length >= 1 && (
                 <TouchableOpacity
                     style={styles.variantAllButton}
                     onPress={onOpenAllVersions}
@@ -798,7 +821,7 @@ const MemoizedImprovementChips = memo(({
                     accessibilityRole="button"
                     accessibilityLabel={t("a11y.allVersions", "All versions")}
                 >
-                    <MaterialIcons name="view-list" size={18} color={colors.primary} />
+                    <MaterialIcons name="view-list" size={20} color={colors.textSecondary} />
                     <Text style={styles.variantAllCount}>{noteImprovements.length + 1}</Text>
                 </TouchableOpacity>
             )}
@@ -6540,14 +6563,13 @@ export const NoteEditScreen = () => {
                 noteImprovements={visibleImprovements}
                 activeVariantId={activeVariantId}
                 handleVariantSelect={handleVariantSelect}
-                onRequestDelete={requestDeleteVariant}
                 onOpenAllVersions={openVersionsSheet}
                 optionIcons={improvementOptionIcons}
                 displayLabels={variantDisplayLabels}
             />
             {showSwipeHint && visibleImprovements.length > 0 && (
                 <View style={styles.swipeHint}>
-                    <MaterialIcons name="swipe" size={16} color={colors.primary} />
+                    <MaterialIcons name="swipe" size={16} color={colors.textTertiary} />
                     <Text style={styles.swipeHintText}>{t('edit.versions.swipeHint', 'Swipe the text left or right to switch versions')}</Text>
                     <TouchableOpacity
                         onPress={dismissSwipeHint}
@@ -6703,7 +6725,6 @@ export const NoteEditScreen = () => {
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={styles.previewSectionLabel}>{t('edit.improvePreview.result')}</Text>
                                 <Text style={styles.previewReviewHint}>
                                     {t('edit.improvePreview.reviewHint', 'Check names, amounts and dates. Accept creates a separate version; the original stays safe.')}
                                 </Text>
@@ -6722,37 +6743,46 @@ export const NoteEditScreen = () => {
                                     </View>
                                 )}
 
+                                {/* The app's dialog pattern: the main action as a pill, the
+                                    others as quiet text buttons under it. */}
                                 <View style={styles.previewActions}>
                                     <TouchableOpacity
-                                        style={[styles.previewButton, styles.previewButtonSecondary]}
-                                        onPress={handlePreviewDiscard}
-                                        disabled={isPreviewRegenerating}
-                                    >
-                                        <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-                                        <Text style={styles.previewButtonSecondaryText}>
-                                            {t('edit.improvePreview.discard')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.previewButton, styles.previewButtonSecondary]}
-                                        onPress={handlePreviewRetry}
-                                        disabled={isPreviewRegenerating}
-                                    >
-                                        <MaterialIcons name="refresh" size={18} color={colors.textSecondary} />
-                                        <Text style={styles.previewButtonSecondaryText}>
-                                            {t('edit.improvePreview.retry')}
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.previewButton, styles.previewButtonPrimary]}
+                                        style={[styles.previewButtonPrimary, isPreviewRegenerating && { opacity: 0.5 }]}
                                         onPress={handlePreviewAccept}
                                         disabled={isPreviewRegenerating}
+                                        activeOpacity={0.85}
+                                        accessibilityRole="button"
                                     >
-                                        <MaterialIcons name="check" size={18} color={colors.onPrimary} />
                                         <Text style={styles.previewButtonPrimaryText}>
                                             {t('edit.improvePreview.accept')}
                                         </Text>
                                     </TouchableOpacity>
+                                    <View style={styles.previewSecondaryRow}>
+                                        <TouchableOpacity
+                                            style={styles.previewButtonSecondary}
+                                            onPress={handlePreviewRetry}
+                                            disabled={isPreviewRegenerating}
+                                            activeOpacity={0.6}
+                                            accessibilityRole="button"
+                                        >
+                                            <MaterialIcons name="refresh" size={18} color={colors.textSecondary} />
+                                            <Text style={styles.previewButtonSecondaryText}>
+                                                {t('edit.improvePreview.retry')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.previewButtonSecondary}
+                                            onPress={handlePreviewDiscard}
+                                            disabled={isPreviewRegenerating}
+                                            activeOpacity={0.6}
+                                            accessibilityRole="button"
+                                        >
+                                            <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                                            <Text style={styles.previewButtonSecondaryText}>
+                                                {t('edit.improvePreview.discard')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
                             </View>
                         </TouchableWithoutFeedback>
@@ -7973,11 +8003,7 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         gap: spacing.s,
         marginTop: -spacing.s,
-        marginBottom: spacing.m,
-        paddingVertical: 8,
-        paddingHorizontal: spacing.m,
-        borderRadius: 10,
-        backgroundColor: colors.primaryLight,
+        marginBottom: spacing.s,
     },
     swipeHintClose: {
         width: 40,
@@ -7990,7 +8016,7 @@ const styles = createStyles(() => ({
     swipeHintText: {
         flex: 1,
         fontSize: 13,
-        color: colors.text,
+        color: colors.textSecondary,
     },
     renameOverlay: {
         flex: 1,
@@ -8067,7 +8093,7 @@ const styles = createStyles(() => ({
         borderRadius: 8,
     },
     improveSourceSegmentActive: {
-        backgroundColor: colors.surface,
+        backgroundColor: isDarkScheme() ? colors.borderHover : colors.surface,
         shadowColor: '#000',
         shadowOpacity: 0.08,
         shadowRadius: 3,
@@ -8087,67 +8113,72 @@ const styles = createStyles(() => ({
         marginRight: spacing.xs,
     },
     variantScroll: {
-        flex: 1,
+        flexGrow: 0,
+        flexShrink: 1,
+    },
+    variantTrack: {
+        // Hugs its segments; with many versions it shrinks and the chips scroll.
+        flexShrink: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.backgroundSecondary,
+        borderRadius: 10,
+        padding: 2,
     },
     variantAllButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginLeft: spacing.xs,
+        marginStart: 'auto',
         minHeight: 40,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 20,
-        backgroundColor: colors.primaryLight,
+        paddingHorizontal: spacing.s,
     },
     variantAllCount: {
-        marginLeft: 4,
+        marginStart: 4,
         fontSize: 13,
         fontWeight: '600',
-        color: colors.primary,
+        color: colors.textSecondary,
+        fontVariant: ['tabular-nums'],
     },
     variantScrollContent: {
         alignItems: 'center',
-        paddingVertical: spacing.xs,
     },
     variantChipWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginRight: spacing.xs,
     },
     variantChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 20,
-        minHeight: 40,
-        paddingVertical: 6,
-        paddingHorizontal: spacing.m,
-        backgroundColor: colors.surface,
+        borderRadius: 8,
+        minHeight: 36,
+        paddingHorizontal: spacing.m - 4,
     },
     variantChipActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
+        // In dark the raised segment must be clearly lighter than the track.
+        backgroundColor: isDarkScheme() ? colors.borderHover : colors.surface,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.08,
+                shadowRadius: 2,
+            },
+            android: { elevation: 1 },
+        }),
     },
     variantChipText: {
-        fontSize: 13,
+        fontSize: 14,
         color: colors.textSecondary,
         fontWeight: '500',
         // A long AI title must not stretch one chip across the whole row.
         maxWidth: 150,
     },
     variantChipTextActive: {
-        color: colors.onPrimary,
+        color: colors.text,
+        fontWeight: '600',
     },
     variantChipIcon: {
         marginRight: 6,
-    },
-    variantDeleteButton: {
-        width: 36,
-        height: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginHorizontal: -4,
     },
     contentInput: {
         fontSize: 16,
@@ -8237,13 +8268,6 @@ const styles = createStyles(() => ({
         fontWeight: '700',
         letterSpacing: -0.3,
     },
-    previewSectionLabel: {
-        fontSize: 13,
-        lineHeight: 18,
-        fontWeight: '500',
-        color: colors.textSecondary,
-        marginBottom: spacing.xs,
-    },
     previewReviewHint: {
         ...typography.caption,
         color: colors.textSecondary,
@@ -8271,36 +8295,36 @@ const styles = createStyles(() => ({
         color: colors.primary,
     },
     previewActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.s,
+        gap: spacing.xs,
         marginTop: spacing.l,
     },
-    previewButton: {
+    previewButtonPrimary: {
+        minHeight: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.primary,
+    },
+    previewButtonPrimaryText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.onPrimary,
+    },
+    previewSecondaryRow: {
+        flexDirection: 'row',
+    },
+    previewButtonSecondary: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.xs,
-        paddingVertical: spacing.m,
-        borderRadius: 12,
-    },
-    previewButtonSecondary: {
-        backgroundColor: colors.background,
-        borderWidth: 1,
-        borderColor: colors.border,
+        minHeight: 44,
     },
     previewButtonSecondaryText: {
-        ...typography.caption,
+        fontSize: 15,
+        fontWeight: '500',
         color: colors.textSecondary,
-    },
-    previewButtonPrimary: {
-        backgroundColor: colors.primary,
-    },
-    previewButtonPrimaryText: {
-        ...typography.caption,
-        color: colors.onPrimary,
-        fontWeight: '600',
     },
     aiModalHeader: {
         flexDirection: 'row',

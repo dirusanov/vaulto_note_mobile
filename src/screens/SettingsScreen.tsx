@@ -2026,7 +2026,8 @@ const styles = createStyles(() => ({
         paddingHorizontal: spacing.xs,
     },
     themeSegmentActive: {
-        backgroundColor: isDarkScheme() ? colors.surfaceElevated : colors.surface,
+        // In dark the raised segment must be clearly lighter than the track.
+        backgroundColor: isDarkScheme() ? colors.borderHover : colors.surface,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',

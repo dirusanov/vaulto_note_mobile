@@ -62,7 +62,9 @@
     "offlineSync": "Hors ligne. Les modifications sont enregistrées et seront synchronisées plus tard.",
     "offline": "Hors ligne. Les notes et les fonctions sur l’appareil restent disponibles.",
     "unlockWithKey": "Saisissez votre clé de récupération pour les afficher sur cet appareil.",
-    "listTitle": "Notes"
+    "listTitle": "Notes",
+    "drawing": "Dessin",
+    "lockedListHint": "Vos notes apparaîtront ici une fois déverrouillées."
   },
   "settings": {
     "title": "Paramètres",

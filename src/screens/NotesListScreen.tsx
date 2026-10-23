@@ -830,9 +830,12 @@ export const NotesListScreen = () => {
                             message={searchQuery.trim()
                                 ? t("notes.noSearchResults", "No notes match your search")
                                 : syncLocked
-                                    ? encryptionBundle?.secret_mode === 'recovery_code'
-                                        ? t('notes.unlockWithKey', 'Enter your recovery key to show them on this device.')
-                                        : t('notes.unlockToRestore')
+                                    // The banner above already asks for the key: don't repeat it.
+                                    ? shouldShowLockBanner
+                                        ? t('notes.lockedListHint', 'Your notes will appear here once they are unlocked.')
+                                        : encryptionBundle?.secret_mode === 'recovery_code'
+                                            ? t('notes.unlockWithKey', 'Enter your recovery key to show them on this device.')
+                                            : t('notes.unlockToRestore')
                                 : ''}
                         />
                     </View>

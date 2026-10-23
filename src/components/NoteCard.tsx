@@ -14,6 +14,7 @@ import { createStyles } from '../theme/createStyles';
 import { textAlignFor } from '../i18n/direction';
 import { splitTags } from '../utils/tags';
 import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
+import { DRAWING_MARKER } from '../drawing/drawingFormat';
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
 
@@ -22,6 +23,14 @@ const embeddedAudioDuration = (content: string): number | undefined => {
     const tag = content.match(/<img\b[^>]*>/i)?.[0];
     return tag ? getAudioEmbedAttributesFromHtml(tag)?.duration ?? undefined : undefined;
 };
+
+/** A line compared without list markers, case or a trailing ellipsis. */
+const comparableLine = (value: string): string => value
+    .replace(/^[\s☐☑•\-*]+/, '')
+    .replace(/(\.{3}|…)\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase();
 
 const formatVoiceDuration = (seconds?: number | null): string => {
     if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '';
@@ -86,9 +95,14 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const fullPreview = richContentToPreviewText(content);
     // An untitled note's title is its first line; don't print that line twice.
     const hasStoredTitle = !!activeChildTitle || !!note.title?.trim();
+    // Older voice notes saved the first words as the title ("Call Anna about
+    // the"): shown above the full first line it read as a cut-off duplicate.
+    const firstLine = fullPreview.trim().split('\n')[0] ?? '';
+    const storedTitleRepeatsText = hasStoredTitle && !!comparableLine(title)
+        && comparableLine(firstLine).startsWith(comparableLine(title));
     // Untitled notes show their text, as Keep does: a title derived from the
     // first line would only repeat it.
-    const titleIsCutFirstLine = !hasStoredTitle && !!fullPreview.trim();
+    const titleIsCutFirstLine = (!hasStoredTitle || storedTitleRepeatsText) && !!fullPreview.trim();
     // Every card reads the same way: a bold first line, then grey text. An
     // untitled note's first line takes the title's place.
     const leadBreak = titleIsCutFirstLine ? fullPreview.trim().indexOf('\n') : -1;
@@ -132,6 +146,9 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 
     const isEmpty = !title && !hasMeaningfulRichContent(content);
     const isVoiceOnly = !title && !!hasAudio;
+    // A handwritten note has no text to show: say what it is instead of an empty card.
+    const hasDrawing = content.includes(DRAWING_MARKER);
+    const isDrawingOnly = !isVoiceOnly && hasDrawing && !title && !fullPreview.trim();
     const voiceDuration = isVoiceOnly ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
 
     // The card sinks slightly under the finger, like Keep and Apple Notes.
@@ -179,6 +196,13 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         </View>
                         {voiceDuration ? <Text style={styles.voiceDuration}>{voiceDuration}</Text> : null}
                     </View>
+                ) : isDrawingOnly ? (
+                    <View style={[styles.voiceRow, isSelectionMode && { paddingEnd: 28 }]}>
+                        <View style={styles.voiceIcon}>
+                            <MaterialIcons name="gesture" size={18} color={colors.primary} />
+                        </View>
+                        <Text style={styles.drawingLabel}>{t('notes.drawing', 'Drawing')}</Text>
+                    </View>
                 ) : titleIsCutFirstLine ? (
                     <Text style={[styles.title, textAlignFor(leadLine), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={3}>
                         {splitTags(leadLine).map((part, index) => (
@@ -212,6 +236,9 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 <View style={styles.iconsRow}>
                     {!!hasAudio && !isVoiceOnly && (
                         <MaterialIcons name="mic-none" size={15} color={colors.textTertiary} />
+                    )}
+                    {hasDrawing && !isDrawingOnly && (
+                        <MaterialIcons name="gesture" size={15} color={colors.textTertiary} style={styles.footerIcon} />
                     )}
                     {note.is_protected ? (
                         <MaterialIcons name="shield" size={14} color={colors.textTertiary} style={styles.footerIcon} accessibilityLabel={t("a11y.protected", "Protected note")} />
@@ -331,6 +358,11 @@ const styles = createStyles(() => ({
         width: 2.5,
         borderRadius: 2,
         backgroundColor: colors.textTertiary,
+    },
+    drawingLabel: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: colors.text,
     },
     voiceDuration: {
         fontSize: 14,

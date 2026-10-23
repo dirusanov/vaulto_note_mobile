@@ -57,7 +57,7 @@ export const VersionsSheet = ({
                                     accessibilityRole="button"
                                     accessibilityLabel={t('a11y.close', 'Close')}
                                 >
-                                    <MaterialIcons name="close" size={22} color={colors.textSecondary} />
+                                    <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
                             <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: spacing.s }}>
@@ -74,19 +74,18 @@ export const VersionsSheet = ({
                                                 accessibilityState={{ selected: isActive }}
                                                 accessibilityLabel={[item.label, item.title !== item.label ? item.title : ''].filter(Boolean).join(', ')}
                                             >
-                                                <View style={[styles.iconBadge, isActive && styles.iconBadgeActive]}>
-                                                    <MaterialIcons
-                                                        name={item.icon as any}
-                                                        size={16}
-                                                        color={isActive ? colors.onPrimary : colors.primary}
-                                                    />
-                                                </View>
+                                                <MaterialIcons
+                                                    name={item.icon as any}
+                                                    size={18}
+                                                    color={isActive ? colors.primary : colors.textSecondary}
+                                                    style={styles.rowIcon}
+                                                />
                                                 <View style={styles.rowText}>
                                                     <View style={styles.rowTopLine}>
                                                         <Text style={styles.rowLabel} numberOfLines={1}>{item.label}</Text>
                                                         {item.timeLabel ? <Text style={styles.rowTime}>{item.timeLabel}</Text> : null}
                                                     </View>
-                                                    {item.title && item.title.trim().toLowerCase() !== item.label.trim().toLowerCase() ? <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text> : null}
+                                                    {/* No per-version title line: the note has one title, so it only repeated it. */}
                                                     {item.snippet ? <Text style={styles.rowSnippet} numberOfLines={2}>{item.snippet}</Text> : null}
                                                 </View>
                                             </TouchableOpacity>
@@ -154,58 +153,55 @@ const styles = createStyles(() => ({
     },
     sheet: {
         backgroundColor: colors.surface,
-        borderTopLeftRadius: 20,
+        borderTopLeftRadius: 24,
         width: '100%',
         maxWidth: 640,
         alignSelf: 'center',
-        borderTopRightRadius: 20,
-        paddingTop: spacing.m,
+        borderTopRightRadius: 24,
+        paddingTop: spacing.l,
         maxHeight: '80%',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: spacing.m,
-        marginBottom: spacing.s,
+        paddingHorizontal: spacing.l,
+        marginBottom: spacing.m,
     },
     title: {
-        fontSize: 18,
+        fontSize: 20,
+        lineHeight: 26,
         fontWeight: '700',
+        letterSpacing: -0.3,
         color: colors.text,
     },
     list: {
-        paddingHorizontal: spacing.s,
+        paddingHorizontal: spacing.m,
     },
+    // The open version gets the same 2px outline as a chosen plan or model;
+    // the border is reserved at rest so rows do not shift.
     row: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         alignItems: 'center',
-        borderRadius: 12,
+        borderRadius: 14,
+        borderWidth: 2,
+        borderColor: 'transparent',
         paddingVertical: spacing.s,
-        paddingLeft: spacing.s,
+        paddingHorizontal: spacing.s,
         marginBottom: spacing.xs,
     },
     rowActive: {
-        backgroundColor: colors.primaryLight,
+        borderColor: colors.primary,
     },
     rowMain: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'flex-start',
     },
-    iconBadge: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.primaryLight,
+    rowIcon: {
+        marginTop: 1,
         marginRight: spacing.s,
-        marginTop: 2,
-    },
-    iconBadgeActive: {
-        backgroundColor: colors.primary,
     },
     rowText: {
         flex: 1,
@@ -225,15 +221,10 @@ const styles = createStyles(() => ({
         color: colors.textSecondary,
         marginLeft: spacing.s,
     },
-    rowTitle: {
-        fontSize: 13,
-        color: colors.textSecondary,
-        marginTop: 1,
-    },
     rowSnippet: {
         fontSize: 13,
         lineHeight: 18,
-        color: colors.textTertiary,
+        color: colors.textSecondary,
         marginTop: 2,
     },
     moreButton: {
@@ -243,35 +234,30 @@ const styles = createStyles(() => ({
         justifyContent: 'center',
     },
     closeButton: {
-        width: 48,
-        height: 48,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: -12,
+        backgroundColor: colors.backgroundSecondary,
     },
     actions: {
-        // One equal-width column: translated labels are too long to sit side by side.
+        // One column of plain rows: translated labels are too long to sit side by side.
         width: '100%',
-        gap: spacing.s,
-        paddingLeft: 40,
-        paddingRight: spacing.s,
-        paddingTop: spacing.s,
+        marginTop: spacing.s,
+        borderRadius: 12,
+        backgroundColor: colors.backgroundSecondary,
+        overflow: 'hidden',
     },
     actionButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: spacing.s,
         minHeight: 48,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
+        paddingHorizontal: spacing.m,
     },
     actionText: {
-        fontSize: 13,
-        fontWeight: '500',
+        fontSize: 15,
         color: colors.text,
     },
 }));

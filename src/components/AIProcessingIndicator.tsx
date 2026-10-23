@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, Animated, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -19,34 +19,6 @@ interface AIProcessingIndicatorProps {
     onCancelTask?: (taskId: string) => void;
 }
 
-const AIAnimatedIcon = () => {
-    const rotateAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        Animated.loop(
-            Animated.timing(rotateAnim, {
-                toValue: 1,
-                duration: 2000,
-                easing: Easing.linear,
-                useNativeDriver: true,
-            })
-        ).start();
-    }, [rotateAnim]);
-
-    const spin = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
-
-    return (
-        <View style={styles.iconContainer}>
-            <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                <MaterialIcons name="settings" size={16} color={colors.primary} style={{ position: 'absolute', opacity: 0.3 }} />
-            </Animated.View>
-            <MaterialIcons name="smart-toy" size={20} color={colors.primary} />
-        </View>
-    );
-};
 
 export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
     visible,
@@ -86,7 +58,7 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
             >
                 {filteredTasks.map((task, index) => (
                     <View key={task.id} style={[styles.container, index > 0 && { marginTop: spacing.s }]}>
-                        <AIAnimatedIcon />
+                        <ActivityIndicator size="small" color={colors.primary} style={styles.spinner} />
                         <View style={styles.textContainer}>
                             <Text style={styles.title} numberOfLines={1}>
                                 {t('aux.aiWorking', 'AI Agent working...')}
@@ -128,9 +100,11 @@ const styles = createStyles(() => ({
     listContainer: {
         width: '100%',
     },
+    // Room around the pill so the ScrollView does not clip its shadow into a box.
     listContentContainer: {
         alignItems: 'center',
-        paddingVertical: spacing.s,
+        paddingVertical: spacing.m,
+        paddingHorizontal: spacing.m,
     },
     container: {
         flexDirection: 'row',
@@ -138,28 +112,22 @@ const styles = createStyles(() => ({
         // Opaque: Android draws the elevation shadow through a translucent fill as a grey box.
         backgroundColor: colors.surface,
         paddingVertical: spacing.s,
-        paddingHorizontal: spacing.m,
-        borderRadius: 20,
+        paddingStart: spacing.m,
+        paddingEnd: spacing.s,
+        minHeight: 56,
+        borderRadius: 28,
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
-            height: 4,
+            height: 2,
         },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
-        borderWidth: 1,
-        borderColor: colors.border,
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
         alignSelf: 'center',
     },
-    iconContainer: {
-        marginRight: spacing.m,
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: colors.primary + '15',
+    spinner: {
+        marginEnd: spacing.m,
     },
     textContainer: {
         flexDirection: 'column',
@@ -173,17 +141,15 @@ const styles = createStyles(() => ({
     subtitle: {
         ...typography.caption,
         color: colors.textSecondary,
-        fontStyle: 'italic',
         marginTop: 2,
     },
     taskCancelButton: {
-        marginLeft: spacing.s,
-        padding: spacing.xs,
-        borderRadius: 12,
-        backgroundColor: colors.surface,
+        marginStart: spacing.m,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: colors.backgroundSecondary,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: colors.border,
     },
 }));

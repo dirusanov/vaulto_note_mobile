@@ -62,7 +62,9 @@
     "offlineSync": "Offline. Changes are saved and will sync later.",
     "offline": "Offline. Notes and on-device features still work.",
     "unlockWithKey": "Enter your recovery key to show them on this device.",
-    "listTitle": "Notes"
+    "listTitle": "Notes",
+    "drawing": "Drawing",
+    "lockedListHint": "Your notes will appear here once they are unlocked."
   },
   "settings": {
     "title": "Settings",
