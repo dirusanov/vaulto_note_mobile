@@ -1055,6 +1055,9 @@
   "drawing": {
     "done": "Done",
     "eraser": "Eraser",
+    "erasePartial": "Erase part",
+    "eraseStroke": "Whole stroke",
+    "showTools": "Show tools",
     "colorAndSize": "Color and size",
     "size": "Size",
     "fingerDrawing": "Draw with finger",

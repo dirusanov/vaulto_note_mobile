@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "हो गया",
     "eraser": "इरेज़र",
+    "erasePartial": "हिस्सा मिटाएँ",
+    "eraseStroke": "पूरी रेखा",
+    "showTools": "टूल दिखाएँ",
     "colorAndSize": "रंग और मोटाई",
     "size": "मोटाई",
     "fingerDrawing": "उंगली से ड्रॉ करें",

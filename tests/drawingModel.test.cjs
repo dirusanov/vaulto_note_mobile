@@ -17,7 +17,7 @@ test('every stroke is one undo step and redo restores it', () => {
     assert.equal(s.redo.length, 0, 'a new edit drops the redo branch');
 });
 
-test('one eraser drag that removes several strokes and a label is one undo step', () => {
+test('one eraser drag in whole-stroke mode that removes several strokes and a label is one undo step', () => {
     let s = run([
         { type: 'addStroke', stroke: stroke(10) },
         { type: 'addStroke', stroke: stroke(40) },
@@ -25,9 +25,9 @@ test('one eraser drag that removes several strokes and a label is one undo step'
     ]);
     const boxes = [{ width: 60, height: 25 }];
     s = run([
-        { type: 'eraseAt', x: 30, y: 10, radius: 5, boxes },
-        { type: 'eraseAt', x: 30, y: 40, radius: 5, boxes },
-        { type: 'eraseAt', x: 30, y: 80, radius: 5, boxes },
+        { type: 'eraseAt', x: 30, y: 10, radius: 5, boxes, mode: 'stroke' },
+        { type: 'eraseAt', x: 30, y: 40, radius: 5, boxes, mode: 'stroke' },
+        { type: 'eraseAt', x: 30, y: 80, radius: 5, boxes, mode: 'stroke' },
         { type: 'eraseEnd' },
     ], s);
     assert.equal(s.content.strokes.length, 0);
@@ -72,4 +72,32 @@ test('paper is part of the content and its change can be undone', () => {
     s = drawingReducer(s, { type: 'undo' });
     s = drawingReducer(s, { type: 'undo' });
     assert.deepEqual(s.content.paper, { pattern: 'blank', color: null, layout: 'pages' });
+});
+
+test('the eraser rubs out only the ink under it and splits the stroke there', () => {
+    const long = { tool: 'fountain', color: '#000', size: 2, points: [0, 10, 0.5, 100, 10, 0.5] };
+    const kept = drawingReducer(run([{ type: 'addStroke', stroke: long }]), { type: 'eraseAt', x: 50, y: 10, radius: 5, boxes: [] });
+    const [left, right] = kept.content.strokes;
+    assert.equal(kept.content.strokes.length, 2);
+    // Cut where the circle (grown by half the line width) meets the line, not at a sample.
+    const round = (points) => points.map((value) => Math.round(value * 1000) / 1000);
+    assert.deepEqual(round(left.points), [0, 10, 0.5, 44, 10, 0.5]);
+    assert.deepEqual(round(right.points), [56, 10, 0.5, 100, 10, 0.5]);
+    assert.equal(left.cut, undefined, 'the first piece keeps the pen-down start');
+    assert.equal(right.cut, true, 'the cut end is not tapered like a pen-down');
+});
+
+test('partial erasing leaves untouched strokes as they were and removes covered ones', () => {
+    const near = stroke(10);
+    const far = stroke(200);
+    const s = run([{ type: 'addStroke', stroke: near }, { type: 'addStroke', stroke: far }]);
+    const dot = { tool: 'ballpoint', color: '#000', size: 2, points: [30, 10, 0.5] };
+    const after = run([
+        { type: 'addStroke', stroke: dot },
+        { type: 'eraseAt', x: 30, y: 10, radius: 30, boxes: [] },
+        { type: 'eraseEnd' },
+    ], s);
+    assert.deepEqual(after.content.strokes, [far]);
+    assert.equal(after.content.strokes[0], far, 'same object, so its cached path is reused');
+    assert.equal(drawingReducer(after, { type: 'undo' }).content.strokes.length, 3);
 });

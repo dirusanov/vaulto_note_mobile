@@ -11,6 +11,8 @@ export type InkStroke = {
     size: number;
     /** Flat [x, y, pressure, x, y, pressure, ...] in document coordinates. */
     points: number[];
+    /** The stroke starts where the eraser cut a longer one: no pen-down taper there. */
+    cut?: boolean;
 };
 
 /** A typed label on the canvas; (x, y) is its top-left corner in document coordinates. */
@@ -79,6 +81,7 @@ export const SMART_INVERT_MATRIX = [
  * with alpha taken from the noise, so the paper shows through in a grain.
  */
 export const pencilGrainMatrix = (hex: string): number[] => {
+    'worklet';
     const value = parseInt(hex.replace('#', ''), 16) || 0;
     const r = ((value >> 16) & 255) / 255;
     const g = ((value >> 8) & 255) / 255;
@@ -245,7 +248,7 @@ export function strokeOutline(
 export function strokeOutlineFor(stroke: InkStroke): number[] {
     'worklet';
     const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
-    return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper, spec.nib);
+    return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper && !stroke.cut, spec.nib);
 }
 
 /**
@@ -303,6 +306,9 @@ export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
 
 /** True when the eraser circle at (x, y) touches the stroke. */
 export const strokeHit = (stroke: InkStroke, x: number, y: number, radius: number): boolean => {
+    if (!nearStroke(stroke, x, y, radius)) {
+        return false;
+    }
     const reach = radius + stroke.size / 2;
     const reach2 = reach * reach;
     const pts = stroke.points;
@@ -332,4 +338,120 @@ export const strokeHit = (stroke: InkStroke, x: number, y: number, radius: numbe
         }
     }
     return false;
+};
+
+/** Distance at which the eraser circle touches the ink of the stroke. */
+const eraseReach = (stroke: InkStroke, radius: number): number => radius + stroke.size / 2;
+
+// The eraser runs over every stroke many times a second; a box test skips the
+// strokes it is nowhere near without walking their points.
+const boundsCache = new WeakMap<InkStroke, InkBounds | null>();
+const boundsOf = (stroke: InkStroke): InkBounds | null => {
+    let bounds = boundsCache.get(stroke);
+    if (bounds === undefined) {
+        bounds = strokeBounds([stroke]);
+        boundsCache.set(stroke, bounds);
+    }
+    return bounds;
+};
+
+/** True when the eraser circle at (x, y) may touch the stroke (its box, grown by the circle). */
+const nearStroke = (stroke: InkStroke, x: number, y: number, radius: number): boolean => {
+    const box = boundsOf(stroke);
+    return !!box && x >= box.minX - radius && x <= box.maxX + radius && y >= box.minY - radius && y <= box.maxY + radius;
+};
+
+/**
+ * What is left of the stroke after the eraser circle at (x, y) passed over it:
+ * null when the circle misses it, otherwise the pieces outside the circle
+ * (none when it covered the whole stroke). The line is cut exactly at the edge
+ * of the circle, so a fast stroke with sparse samples is cut where it crosses,
+ * not at the nearest sample.
+ */
+export const eraseStroke = (stroke: InkStroke, x: number, y: number, radius: number): InkStroke[] | null => {
+    const pts = stroke.points;
+    const count = Math.floor(pts.length / 3);
+    if (count === 0 || !nearStroke(stroke, x, y, radius)) {
+        return null;
+    }
+    const reach = eraseReach(stroke, radius);
+    const reach2 = reach * reach;
+    const inside = (i: number) => (pts[i * 3] - x) ** 2 + (pts[i * 3 + 1] - y) ** 2 <= reach2;
+    if (count === 1) {
+        return inside(0) ? [] : null;
+    }
+    const pieces: number[][] = [];
+    const starts: number[] = [];
+    let current: number[] | null = inside(0) ? null : [pts[0], pts[1], pts[2]];
+    let currentStart = 0;
+    let touched = current === null;
+    const at = (i: number, t: number) => [
+        pts[i * 3] + (pts[i * 3 + 3] - pts[i * 3]) * t,
+        pts[i * 3 + 1] + (pts[i * 3 + 4] - pts[i * 3 + 1]) * t,
+        pts[i * 3 + 2] + (pts[i * 3 + 5] - pts[i * 3 + 2]) * t,
+    ];
+    for (let i = 0; i + 1 < count; i++) {
+        const ax = pts[i * 3] - x;
+        const ay = pts[i * 3 + 1] - y;
+        const dx = pts[i * 3 + 3] - pts[i * 3];
+        const dy = pts[i * 3 + 4] - pts[i * 3 + 1];
+        // Where the segment runs inside the circle: |a + t·d| ≤ reach for t in [enter, leave].
+        const a = dx * dx + dy * dy;
+        const b = ax * dx + ay * dy;
+        const c = ax * ax + ay * ay - reach2;
+        const disc = b * b - a * c;
+        let enter = 2;
+        let leave = -1;
+        if (a > 0 && disc > 0) {
+            const root = Math.sqrt(disc);
+            enter = Math.max(0, (-b - root) / a);
+            leave = Math.min(1, (-b + root) / a);
+        } else if (c <= 0) {
+            enter = 0;
+            leave = 1;
+        }
+        if (enter > leave) {
+            if (current) {
+                current.push(pts[i * 3 + 3], pts[i * 3 + 4], pts[i * 3 + 5]);
+            } else {
+                current = [pts[i * 3 + 3], pts[i * 3 + 4], pts[i * 3 + 5]];
+                currentStart = i + 1;
+            }
+            continue;
+        }
+        touched = true;
+        if (current) {
+            if (enter > 0) {
+                current.push(...at(i, enter));
+            }
+            pieces.push(current);
+            starts.push(currentStart);
+            current = null;
+        }
+        if (leave < 1) {
+            current = [...at(i, leave), pts[i * 3 + 3], pts[i * 3 + 4], pts[i * 3 + 5]];
+            currentStart = -1;
+        }
+    }
+    if (!touched) {
+        return null;
+    }
+    if (current) {
+        pieces.push(current);
+        starts.push(currentStart);
+    }
+    const kept: InkStroke[] = [];
+    pieces.forEach((points, index) => {
+        let length = 0;
+        for (let i = 3; i + 2 < points.length; i += 3) {
+            length += Math.hypot(points[i] - points[i - 3], points[i + 1] - points[i - 2]);
+        }
+        // Crumbs at the edge of the circle are erased too.
+        if (length < Math.max(0.5, stroke.size * 0.25)) {
+            return;
+        }
+        const cut = starts[index] === 0 ? stroke.cut : true;
+        kept.push({ tool: stroke.tool, color: stroke.color, size: stroke.size, points, ...(cut ? { cut: true } : {}) });
+    });
+    return kept;
 };

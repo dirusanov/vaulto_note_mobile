@@ -121,6 +121,18 @@ const decodeStroke = (raw: unknown): InkStroke | null => {
     };
 };
 
+const decodeStrokes = (raw: unknown, cuts: unknown): InkStroke[] => {
+    const cut = new Set(Array.isArray(cuts) ? cuts.map(Number) : []);
+    const strokes: InkStroke[] = [];
+    (Array.isArray(raw) ? raw : []).forEach((item, index) => {
+        const stroke = decodeStroke(item);
+        if (stroke) {
+            strokes.push(cut.has(index) ? { ...stroke, cut: true } : stroke);
+        }
+    });
+    return strokes;
+};
+
 export const parseDrawingSrc = (src: string | null | undefined): DrawingDocument | null => {
     const index = (src || '').indexOf(DRAWING_MARKER);
     if (index === -1) {
@@ -150,7 +162,7 @@ export const parseDrawingSrc = (src: string | null | undefined): DrawingDocument
         return {
             id: parsed.id,
             width: Number(parsed.w) || 800,
-            strokes: (Array.isArray(parsed.s) ? parsed.s : []).map(decodeStroke).filter(Boolean) as InkStroke[],
+            strokes: decodeStrokes(parsed.s, parsed.c),
             texts,
             paper,
         };
@@ -267,6 +279,10 @@ export const buildDrawingSrc = (doc: DrawingDocument): string => {
         id: doc.id,
         w: Math.round(doc.width),
         s: doc.strokes.map(encodeStroke),
+        // Strokes the eraser cut (indices into s); older versions ignore it and taper them.
+        ...(doc.strokes.some((stroke) => stroke.cut)
+            ? { c: doc.strokes.flatMap((stroke, index) => (stroke.cut ? [index] : [])) }
+            : {}),
         ...(doc.texts && doc.texts.length
             ? { t: doc.texts.map((item) => [Math.round(item.x * 10), Math.round(item.y * 10), Math.round(item.size * 10), item.color, item.text]) }
             : {}),

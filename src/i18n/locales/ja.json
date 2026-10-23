@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "完了",
     "eraser": "消しゴム",
+    "erasePartial": "部分消し",
+    "eraseStroke": "ストローク全体",
+    "showTools": "ツールを表示",
     "colorAndSize": "色と太さ",
     "size": "太さ",
     "fingerDrawing": "指で描く",

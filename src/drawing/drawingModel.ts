@@ -1,4 +1,4 @@
-import { InkStroke, InkText, strokeHit } from './ink';
+import { InkStroke, InkText, eraseStroke, strokeHit } from './ink';
 import { DEFAULT_PAPER, PaperStyle } from './paper';
 
 // The editable content of a drawing and its undo history, as a pure reducer.
@@ -22,10 +22,13 @@ export type DrawingState = {
 /** Measured size of a label, needed to erase it (text width depends on the font). */
 export type TextBox = { width: number; height: number };
 
+/** The eraser rubs out the ink under it, or takes whole strokes it touches. */
+export type EraseMode = 'partial' | 'stroke';
+
 export type DrawingAction =
     | { type: 'load'; content: DrawingContent }
     | { type: 'addStroke'; stroke: InkStroke }
-    | { type: 'eraseAt'; x: number; y: number; radius: number; boxes: TextBox[] }
+    | { type: 'eraseAt'; x: number; y: number; radius: number; boxes: TextBox[]; mode?: EraseMode }
     | { type: 'eraseEnd' }
     | { type: 'addText'; text: InkText }
     | { type: 'updateText'; index: number; patch: Partial<InkText> }
@@ -68,12 +71,24 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
             return commit(state, { ...state.content, strokes: [...state.content.strokes, action.stroke] });
         case 'eraseAt': {
             const { strokes, texts } = state.content;
-            const keptStrokes = strokes.filter((stroke) => !strokeHit(stroke, action.x, action.y, action.radius));
+            let strokesChanged = false;
+            const keptStrokes = action.mode === 'stroke'
+                ? strokes.filter((stroke) => !strokeHit(stroke, action.x, action.y, action.radius))
+                : strokes.flatMap((stroke) => {
+                    // Untouched strokes stay the same objects: their cached paths are reused.
+                    const pieces = eraseStroke(stroke, action.x, action.y, action.radius);
+                    if (!pieces) {
+                        return [stroke];
+                    }
+                    strokesChanged = true;
+                    return pieces;
+                });
+            strokesChanged = strokesChanged || keptStrokes.length !== strokes.length;
             const keptTexts = texts.filter((item, index) => !textHit(item, action.boxes[index], action.x, action.y, action.radius));
-            if (keptStrokes.length === strokes.length && keptTexts.length === texts.length) {
+            if (!strokesChanged && keptTexts.length === texts.length) {
                 return state;
             }
-            const content = { ...state.content, strokes: keptStrokes, texts: keptTexts };
+            const content = { ...state.content, strokes: strokesChanged ? keptStrokes : strokes, texts: keptTexts.length === texts.length ? texts : keptTexts };
             if (state.eraseStart) {
                 // Same drag: extend the step that is already on the undo stack.
                 return { ...state, content };

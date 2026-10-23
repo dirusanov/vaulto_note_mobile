@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- Eraser that rubs out only the ink under it, cutting strokes where it passes (or, as before, whole strokes); three eraser sizes. A pen's eraser end or side button erases with any tool (Android).
+- Thickness and quick colours right in the drawing toolbar; the toolbar sits above the canvas (in the header on wide screens) and can be hidden.
+
+### Fixed
+- Fast handwriting no longer makes the previous strokes vanish for a moment.
+- A palm resting on the screen while writing with a pen no longer cuts the stroke or zooms (Android).
+- The end of a finger stroke is no longer cut short.
+
+### Changed
+- The dot shown under a hovering pen is fainter.
+
 ## [1.0.99] - 2026-10-23
 
 ### Added

@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "Terminé",
     "eraser": "Gomme",
+    "erasePartial": "Effacer en partie",
+    "eraseStroke": "Trait entier",
+    "showTools": "Afficher les outils",
     "colorAndSize": "Couleur et épaisseur",
     "size": "Épaisseur",
     "fingerDrawing": "Dessiner au doigt",

@@ -1057,6 +1057,9 @@
   "drawing": {
     "done": "Готово",
     "eraser": "Ластик",
+    "erasePartial": "Стирать часть",
+    "eraseStroke": "Весь штрих",
+    "showTools": "Показать инструменты",
     "colorAndSize": "Цвет и толщина",
     "size": "Толщина",
     "fingerDrawing": "Рисовать пальцем",

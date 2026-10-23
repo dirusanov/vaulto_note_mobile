@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "Fertig",
     "eraser": "Radierer",
+    "erasePartial": "Teilweise",
+    "eraseStroke": "Ganzer Strich",
+    "showTools": "Werkzeuge zeigen",
     "colorAndSize": "Farbe und Stärke",
     "size": "Stärke",
     "fingerDrawing": "Mit dem Finger zeichnen",

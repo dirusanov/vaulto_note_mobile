@@ -226,3 +226,18 @@ test('ink already drawn keeps its shape while the stroke goes on', () => {
         }
     }
 });
+
+test('strokes cut by the eraser keep that mark through a save', () => {
+    const doc = {
+        id: 'cut',
+        width: 400,
+        strokes: [
+            { tool: 'fountain', color: '#000', size: 3, points: [0, 0, 0.5, 20, 0, 0.5] },
+            { tool: 'fountain', color: '#000', size: 3, points: [30, 0, 0.5, 60, 0, 0.5], cut: true },
+        ],
+    };
+    const parsed = parseDrawingSrc(buildDrawingSrc(doc));
+    assert.equal(parsed.strokes[0].cut, undefined);
+    assert.equal(parsed.strokes[1].cut, true);
+    assert.ok(!buildDrawingSrc({ ...doc, strokes: [doc.strokes[0]] }).includes('"c"'), 'no field when nothing was cut');
+});

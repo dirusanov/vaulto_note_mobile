@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "تم",
     "eraser": "ممحاة",
+    "erasePartial": "مسح جزء",
+    "eraseStroke": "الخط كاملًا",
+    "showTools": "إظهار الأدوات",
     "colorAndSize": "اللون والسُمك",
     "size": "السُمك",
     "fingerDrawing": "الرسم بالإصبع",

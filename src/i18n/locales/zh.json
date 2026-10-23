@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "完成",
     "eraser": "橡皮擦",
+    "erasePartial": "局部擦除",
+    "eraseStroke": "整笔擦除",
+    "showTools": "显示工具",
     "colorAndSize": "颜色和粗细",
     "size": "粗细",
     "fingerDrawing": "用手指绘图",

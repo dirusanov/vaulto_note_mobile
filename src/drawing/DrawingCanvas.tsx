@@ -29,7 +29,7 @@ import {
     useSharedValue,
     withDecay,
 } from 'react-native-reanimated';
-import { InkInputView } from '../../modules/ink-input';
+import { ERASER_PRESSURE } from '../../modules/ink-input';
 import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, strokeOutline, strokeOutlineFor } from './ink';
 import { TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
@@ -82,6 +82,8 @@ type Props = {
     size: number;
     /** Once a pen has touched the canvas, fingers scroll instead of drawing. */
     stylusOnly: boolean;
+    /** Eraser radius in screen pixels. */
+    eraserRadius: number;
     /** Label being edited in the text field overlay; the canvas does not draw it. */
     editingText: number | null;
     dark: boolean;
@@ -105,9 +107,8 @@ const CANVAS_ZOOM = [0.15, 8];
 const PAGE_MARGIN = 12;
 /** How far a canvas extends; far beyond anything drawn by hand. */
 const CANVAS_EXTENT = 1e6;
-const ERASER_SCREEN_RADIUS = 14;
-/** Screen distance the eraser moves between two erase passes. */
-const ERASE_STEP = 4;
+/** Screen distance the eraser moves between two erase passes: well under its smallest radius. */
+const ERASE_STEP = 3;
 /** Shortest interval over which finger speed (and so ink width) is measured. */
 const SPEED_WINDOW_MS = 8;
 /** Screen distance a text-mode touch must travel before it drags the label. */
@@ -232,31 +233,40 @@ const pathFor = (stroke: InkStroke): SkPath => {
     return path;
 };
 
+/** Paint of a finished stroke; built on either thread (see the pending strokes). */
+const makeInkPaint = (stroke: InkStroke): SkPaint => {
+    'worklet';
+    const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
+    const paint = Skia.Paint();
+    paint.setAntiAlias(true);
+    paint.setColor(Skia.Color(stroke.color));
+    if (spec.grain) {
+        // Same graphite as the live stroke (PencilGrain), opacity folded into the alpha row.
+        const matrix = pencilGrainMatrix(stroke.color);
+        for (let i = 15; i < 20; i++) {
+            matrix[i] *= spec.opacity;
+        }
+        paint.setShader(Skia.Shader.MakeFractalNoise(0.9, 0.9, 2, 3, 0, 0));
+        paint.setColorFilter(Skia.ColorFilter.MakeMatrix(matrix));
+    } else {
+        paint.setAlphaf(spec.opacity);
+    }
+    return paint;
+};
+
 const paintCache = new Map<string, SkPaint>();
-const grainShader = Skia.Shader.MakeFractalNoise(0.9, 0.9, 2, 3, 0, 0);
 const paintFor = (stroke: InkStroke): SkPaint => {
     const key = `${stroke.tool}|${stroke.color}`;
     let paint = paintCache.get(key);
     if (!paint) {
-        const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
-        paint = Skia.Paint();
-        paint.setAntiAlias(true);
-        paint.setColor(Skia.Color(stroke.color));
-        if (spec.grain) {
-            // Same graphite as the live stroke (PencilGrain), opacity folded into the alpha row.
-            const matrix = pencilGrainMatrix(stroke.color);
-            for (let i = 15; i < 20; i++) {
-                matrix[i] *= spec.opacity;
-            }
-            paint.setShader(grainShader);
-            paint.setColorFilter(Skia.ColorFilter.MakeMatrix(matrix));
-        } else {
-            paint.setAlphaf(spec.opacity);
-        }
+        paint = makeInkPaint(stroke);
         paintCache.set(key, paint);
     }
     return paint;
 };
+
+/** A finished stroke the UI thread draws until the committed picture has it. */
+type PendingStroke = { id: number; stroke: InkStroke };
 
 type InkCache = { strokes: InkStroke[]; picture: SkPicture | null; depth: number };
 /** Pictures nested by appending before the chain is flattened again. */
@@ -290,7 +300,7 @@ const Label: React.FC<{ item: InkText }> = ({ item }) => (
 );
 
 export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
-    bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly,
+    bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius,
     editingText, dark, themePaperColor, themeLineColor, deskColor,
     onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
 }, ref) => {
@@ -351,6 +361,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
 
     const live = useSharedValue<number[]>([]);
     const liveId = useSharedValue(0);
+    // A lifted stroke moves from `live` to `pending` in the same UI frame and is
+    // drawn from there until React has rendered it into the ink picture. With
+    // the stroke only in `live`, the next stroke replaced it on screen before
+    // the JS thread caught up, and fast handwriting flickered.
+    const pending = useSharedValue<PendingStroke[]>([]);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
@@ -366,10 +381,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
 
-    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly });
+    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius });
     useEffect(() => {
-        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly };
-    }, [canvasMode, tool, color, size, stylusOnly, toolSV]);
+        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly, eraserRadius };
+    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, toolSV]);
 
     useEffect(() => {
         textBoxesSV.value = texts.flatMap((item, index) => {
@@ -458,16 +473,46 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         }
     );
 
-    const commitLive = useCallback((points: number[], id: number, strokeTool: InkTool, strokeColor: string, strokeSize: number) => {
-        onCommit({ tool: strokeTool, color: strokeColor, size: strokeSize, points });
-        // Drop the live copy only after the committed path has rendered, and only
-        // if no new stroke has started meanwhile (fast handwriting).
-        requestAnimationFrame(() => {
-            if (liveId.value === id) {
-                live.value = [];
+    /** Pending stroke of each stroke committed from here, and those not yet seen rendered. */
+    const pendingIds = useRef(new WeakMap<InkStroke, number>());
+    const awaiting = useRef<{ id: number; checked: boolean }[]>([]);
+    const commitLive = useCallback((stroke: InkStroke, id: number) => {
+        pendingIds.current.set(stroke, id);
+        awaiting.current.push({ id, checked: false });
+        onCommit(stroke);
+    }, [onCommit]);
+    // After each render: strokes now in the ink picture stop being drawn as
+    // pending, one frame later so the picture is on screen first. A stroke that
+    // never shows up (undone at once) is dropped after one more render.
+    useEffect(() => {
+        if (!awaiting.current.length) {
+            return;
+        }
+        const rendered = new Set<number>();
+        for (let i = strokes.length - 1; i >= 0 && rendered.size < awaiting.current.length; i--) {
+            const id = pendingIds.current.get(strokes[i]);
+            if (id !== undefined) {
+                rendered.add(id);
             }
+        }
+        const done: number[] = [];
+        awaiting.current = awaiting.current.filter((entry) => {
+            if (rendered.has(entry.id) || entry.checked) {
+                done.push(entry.id);
+                return false;
+            }
+            entry.checked = true;
+            return true;
         });
-    }, [onCommit, live, liveId]);
+        if (done.length) {
+            requestAnimationFrame(() => {
+                runOnUI((ids: number[]) => {
+                    'worklet';
+                    pending.value = pending.value.filter((entry) => !ids.includes(entry.id));
+                })(done);
+            });
+        }
+    });
 
     const finishTextDrag = useCallback((index: number, dx: number, dy: number) => {
         onTextMove(index, dx, dy);
@@ -546,6 +591,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     runOnJS(callJs)('onStylus');
                 }
                 const cfg = toolSV.value;
+                // The pen's eraser end or side button (see InkInputView) erases with any tool.
+                const penErases = isStylus && !!e.stylusData && e.stylusData.pressure <= ERASER_PRESSURE / 2;
                 // Typing a label is fine with a finger; drawing obeys pen-only mode.
                 if (cfg.stylusOnly && !isStylus && cfg.mode !== 'text') {
                     gestureMode.value = 'scroll';
@@ -555,7 +602,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 multiTouch.value = false;
                 const pt = toDoc(e.x, e.y);
                 const scale = scaleSV.value * zoom.value;
-                if (cfg.mode === 'text') {
+                if (cfg.mode === 'text' && !penErases) {
                     gestureMode.value = 'text';
                     textGesture.value = {
                         index: hitTextAt(pt.x, pt.y, 8 / scale),
@@ -567,11 +614,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     };
                     return;
                 }
-                if (cfg.mode === 'erase') {
+                if (cfg.mode === 'erase' || penErases) {
                     gestureMode.value = 'erase';
                     eraser.value = { x: e.x, y: e.y, visible: true };
                     lastErase.value = { x: e.x, y: e.y };
-                    runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / scale);
+                    runOnJS(callJs)('onErase', pt.x, pt.y, cfg.eraserRadius / scale);
                     return;
                 }
                 gestureMode.value = 'draw';
@@ -616,7 +663,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     // (far less than its radius, so nothing in between is skipped).
                     if (Math.hypot(e.x - at.x, e.y - at.y) >= ERASE_STEP) {
                         lastErase.value = { x: e.x, y: e.y };
-                        runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
+                        runOnJS(callJs)('onErase', pt.x, pt.y, toolSV.value.eraserRadius / (scaleSV.value * zoom.value));
                     }
                     return;
                 }
@@ -652,7 +699,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             })
             // `success` is not used: a touch that never moves (a tap, the dot over an
             // "i") ends without the pan activating, yet it is a real tap or dot.
-            .onFinalize(() => {
+            .onFinalize((e) => {
                 const current = gestureMode.value;
                 gestureMode.value = 'none';
                 if (current === 'text') {
@@ -680,14 +727,24 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (current !== 'draw') {
                     return;
                 }
-                const points = live.value.slice();
                 // A second finger landing (pinch) cancels the stroke it interrupted.
                 if (multiTouch.value) {
                     live.value = [];
                     return;
                 }
+                const points = live.value.slice();
+                // The lift-off point ends the line, even when no move reported it.
+                const end = toDoc(e.x, e.y);
+                const n = points.length;
+                if (n >= 3 && Math.hypot(end.x - points[n - 3], end.y - points[n - 2]) > 0.5) {
+                    points.push(end.x, end.y, points[n - 1]);
+                }
                 const cfg = toolSV.value;
-                runOnJS(callJs)('commitLive', points, liveId.value, cfg.tool, cfg.color, cfg.size);
+                const id = liveId.value;
+                const stroke: InkStroke = { tool: cfg.tool, color: cfg.color, size: cfg.size, points };
+                pending.value = [...pending.value, { id, stroke }];
+                live.value = [];
+                runOnJS(callJs)('commitLive', stroke, id);
             });
 
         const pinch = Gesture.Pinch()
@@ -766,19 +823,32 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         return outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib));
     });
 
+    // Strokes are pending only for a frame or two, so rebuilding this on each
+    // change costs little; with none pending it is an empty picture.
+    const pendingPicture = useDerivedValue(() => {
+        const recorder = Skia.PictureRecorder();
+        const canvas = recorder.beginRecording(Skia.XYWHRect(-CANVAS_EXTENT, -CANVAS_EXTENT, CANVAS_EXTENT * 2, CANVAS_EXTENT * 2));
+        pending.value.forEach(({ stroke }) => {
+            canvas.drawPath(outlineToSkPath(strokeOutlineFor(stroke)), makeInkPaint(stroke));
+        });
+        return recorder.finishRecordingAsPicture();
+    });
+
     const eraserX = useDerivedValue(() => eraser.value.x);
     const eraserY = useDerivedValue(() => eraser.value.y);
     const eraserOpacity = useDerivedValue(() => (eraser.value.visible ? 1 : 0));
+    const eraserR = useDerivedValue(() => toolSV.value.eraserRadius);
     const hoverX = useDerivedValue(() => hover.value.x);
     const hoverY = useDerivedValue(() => hover.value.y);
     const hoverRadius = useDerivedValue(() => {
         const cfg = toolSV.value;
         if (cfg.mode === 'erase') {
-            return ERASER_SCREEN_RADIUS;
+            return cfg.eraserRadius;
         }
-        return Math.max(2, (cfg.mode === 'text' ? 3 : cfg.size / 2) * scaleSV.value * zoom.value);
+        return Math.max(1.5, (cfg.mode === 'text' ? 2 : cfg.size / 2) * scaleSV.value * zoom.value);
     });
-    const hoverOpacity = useDerivedValue(() => (hover.value.visible ? 0.45 : 0));
+    // Just a hint of where the nib will land: faint, the size of the line it draws.
+    const hoverOpacity = useDerivedValue(() => (hover.value.visible ? 0.18 : 0));
 
     const sheetColor = paper.color || themePaperColor;
     const lineColor = paperLineColor(paper.color, themeLineColor);
@@ -830,43 +900,42 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     };
 
     return (
-        <InkInputView style={styles.fill} collapsable={false}>
-            <GestureDetector gesture={gesture}>
-                <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
-                    {view.width > 0 && (
-                        // Opaque puts the canvas on a SurfaceView on Android, which reaches the
-                        // screen a composition step sooner than the default TextureView; it
-                        // then paints the desk itself.
-                        <Canvas key={surfaceKey} style={styles.fill} opaque>
-                            <Fill color={deskColor} />
-                            <Group transform={transform}>
-                                <Picture picture={paperPictures.sheet} />
-                                {paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
-                                <Group layer={inkLayer} clip={pageClip}>
-                                    <Picture picture={inkPicture} />
-                                    <Path path={livePath} color={color} opacity={liveOpacity}>
-                                        {liveGrain && <PencilGrain color={color} />}
-                                    </Path>
-                                    {labels}
-                                    {dragIndex !== null && texts[dragIndex] && (
-                                        <Group transform={dragTransform}>
-                                            <Label item={texts[dragIndex]} />
-                                        </Group>
-                                    )}
-                                </Group>
+        <GestureDetector gesture={gesture}>
+            <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
+                {view.width > 0 && (
+                    // Opaque puts the canvas on a SurfaceView on Android, which reaches the
+                    // screen a composition step sooner than the default TextureView; it
+                    // then paints the desk itself.
+                    <Canvas key={surfaceKey} style={styles.fill} opaque>
+                        <Fill color={deskColor} />
+                        <Group transform={transform}>
+                            <Picture picture={paperPictures.sheet} />
+                            {paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
+                            <Group layer={inkLayer} clip={pageClip}>
+                                <Picture picture={inkPicture} />
+                                <Picture picture={pendingPicture} />
+                                <Path path={livePath} color={color} opacity={liveOpacity}>
+                                    {liveGrain && <PencilGrain color={color} />}
+                                </Path>
+                                {labels}
+                                {dragIndex !== null && texts[dragIndex] && (
+                                    <Group transform={dragTransform}>
+                                        <Label item={texts[dragIndex]} />
+                                    </Group>
+                                )}
                             </Group>
-                            <Circle cx={eraserX} cy={eraserY} r={ERASER_SCREEN_RADIUS} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
-                            <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
-                        </Canvas>
-                    )}
-                    {isPages && pageCount > 1 && (
-                        <View pointerEvents="none" style={styles.pageBadge}>
-                            <Text style={styles.pageBadgeText}>{`${Math.min(currentPage, pageCount - 1) + 1} / ${pageCount}`}</Text>
-                        </View>
-                    )}
-                </View>
-            </GestureDetector>
-        </InkInputView>
+                        </Group>
+                        <Circle cx={eraserX} cy={eraserY} r={eraserR} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
+                        <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
+                    </Canvas>
+                )}
+                {isPages && pageCount > 1 && (
+                    <View pointerEvents="none" style={styles.pageBadge}>
+                        <Text style={styles.pageBadgeText}>{`${Math.min(currentPage, pageCount - 1) + 1} / ${pageCount}`}</Text>
+                    </View>
+                )}
+            </View>
+        </GestureDetector>
     );
 });
 DrawingCanvas.displayName = 'DrawingCanvas';

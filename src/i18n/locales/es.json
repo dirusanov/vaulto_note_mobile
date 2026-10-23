@@ -1053,6 +1053,9 @@
   "drawing": {
     "done": "Listo",
     "eraser": "Borrador",
+    "erasePartial": "Borrar parte",
+    "eraseStroke": "Trazo entero",
+    "showTools": "Mostrar herramientas",
     "colorAndSize": "Color y grosor",
     "size": "Grosor",
     "fingerDrawing": "Dibujar con el dedo",
