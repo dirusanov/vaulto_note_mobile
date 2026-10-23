@@ -106,6 +106,10 @@ const PAGE_MARGIN = 12;
 /** How far a canvas extends; far beyond anything drawn by hand. */
 const CANVAS_EXTENT = 1e6;
 const ERASER_SCREEN_RADIUS = 14;
+/** Screen distance the eraser moves between two erase passes. */
+const ERASE_STEP = 4;
+/** Shortest interval over which finger speed (and so ink width) is measured. */
+const SPEED_WINDOW_MS = 8;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
 
@@ -350,6 +354,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'none'>('none');
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
+    /** Screen point of the last erase pass in the current drag. */
+    const lastErase = useSharedValue({ x: 0, y: 0 });
     const hover = useSharedValue({ x: -100, y: -100, visible: false });
     const textBoxesSV = useSharedValue<number[]>([]);
     const textGesture = useSharedValue({ index: -1, startX: 0, startY: 0, screenX: 0, screenY: 0, moved: false });
@@ -564,6 +570,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (cfg.mode === 'erase') {
                     gestureMode.value = 'erase';
                     eraser.value = { x: e.x, y: e.y, visible: true };
+                    lastErase.value = { x: e.x, y: e.y };
                     runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / scale);
                     return;
                 }
@@ -603,7 +610,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 }
                 if (current === 'erase') {
                     eraser.value = { x: e.x, y: e.y, visible: true };
-                    runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
+                    const at = lastErase.value;
+                    // Every pen sample arrives now; erasing runs on the JS thread over
+                    // all strokes, so it waits until the eraser has moved a little
+                    // (far less than its radius, so nothing in between is skipped).
+                    if (Math.hypot(e.x - at.x, e.y - at.y) >= ERASE_STEP) {
+                        lastErase.value = { x: e.x, y: e.y };
+                        runOnJS(callJs)('onErase', pt.x, pt.y, ERASER_SCREEN_RADIUS / (scaleSV.value * zoom.value));
+                    }
                     return;
                 }
                 let pressure: number;
@@ -611,13 +625,19 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     pressure = e.stylusData.pressure;
                 } else {
                     // A finger has no pressure: faster movement draws thinner, like ink.
+                    // Samples come a few ms apart and the clock counts whole ms, so
+                    // the speed is measured over at least SPEED_WINDOW_MS.
                     const now = Date.now();
                     const prev = lastSample.value;
-                    const dt = Math.max(1, now - prev.t);
-                    const speed = Math.hypot(e.x - prev.x, e.y - prev.y) / dt;
-                    const target = Math.min(0.9, Math.max(0.2, 0.85 - speed * 0.22));
-                    pressure = prev.p + (target - prev.p) * 0.3;
-                    lastSample.value = { x: e.x, y: e.y, t: now, p: pressure };
+                    const dt = now - prev.t;
+                    if (dt >= SPEED_WINDOW_MS) {
+                        const speed = Math.hypot(e.x - prev.x, e.y - prev.y) / dt;
+                        const target = Math.min(0.9, Math.max(0.2, 0.85 - speed * 0.22));
+                        pressure = prev.p + (target - prev.p) * 0.3;
+                        lastSample.value = { x: e.x, y: e.y, t: now, p: pressure };
+                    } else {
+                        pressure = prev.p;
+                    }
                 }
                 live.modify((points) => {
                     'worklet';
