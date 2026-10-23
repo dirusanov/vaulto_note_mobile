@@ -5,6 +5,12 @@
 ## [1.0.102] - 2026-10-23
 
 ### Fixed
+- Edits after accepting an AI version (e.g. ticking a checklist) are saved and undoable again; Undo can no longer wipe a version or many edits at once.
+- A voice command the AI could not carry out is not pasted into the note; it can be inserted or retried. Limit messages say whether cloud minutes or AI is used up.
+- Clearing a new note no longer leaves an endless spinner; a note starting with a recording keeps its player when you type; the first letters after Enter in the title are kept.
+- Undo after deleting notes always restores them; a version delete keeps its full Undo window.
+- The drawing survives the Esc key and a light/dark switch; Lasso right after picking it selects instead of drawing.
+- Highlighted text is readable in dark mode.
 - Drawing with a pen no longer falls seconds behind: the stroke being drawn is redrawn at most once a frame instead of for every one of the hundreds of pen samples a second.
 - Drawing toolbar buttons stay in place when switching tools, so a tap always lands on the tool you aim at.
 - A small letter ("o", "l") no longer turns into a shape when the pen rests for a moment; shapes need a longer hold.
@@ -15,6 +21,10 @@
 - Search results start at the top of the list.
 
 ### Added
+- First run: a sign-in screen that says what an account gives (free minutes, AI, sync; your notes come with you), Google first; honest welcome copy; Ask notes explains up front how to get AI; "Set up AI on this device" preselects the right model.
+- A clearer subscription screen: what Pro adds, renewal and cancellation note, Terms and Privacy.
+- Notes list: Pinned and Others sections, checklists with done items struck through, a hint when free minutes run low.
+- A Checklist preset for AI improvements; versions made from your own instruction are named after it.
 - Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
 
 - The drawing tools, colours, sizes and paper you last used are remembered, also after the app restarts, and a new drawing starts with them.
