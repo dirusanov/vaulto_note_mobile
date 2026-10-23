@@ -226,3 +226,70 @@ test('ink already drawn keeps its shape while the stroke goes on', () => {
         }
     }
 });
+
+test('strokes cut by the eraser keep that mark through a save', () => {
+    const doc = {
+        id: 'cut',
+        width: 400,
+        strokes: [
+            { tool: 'fountain', color: '#000', size: 3, points: [0, 0, 0.5, 20, 0, 0.5] },
+            { tool: 'fountain', color: '#000', size: 3, points: [30, 0, 0.5, 60, 0, 0.5], cut: true },
+        ],
+    };
+    const parsed = parseDrawingSrc(buildDrawingSrc(doc));
+    assert.equal(parsed.strokes[0].cut, undefined);
+    assert.equal(parsed.strokes[1].cut, true);
+    assert.ok(!buildDrawingSrc({ ...doc, strokes: [doc.strokes[0]] }).includes('"c"'), 'no field when nothing was cut');
+});
+
+test('a stroke held at the end becomes the clean shape it resembles', () => {
+    const { recognizeShape } = require('../.test-build/drawing/drawing/ink');
+    // A wobbly hand-drawn circle around (100, 100), radius 50, starting at the right.
+    const circle = [];
+    for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        const r = 50 + Math.sin(i * 1.7) * 2.5;
+        circle.push(100 + Math.cos(a) * r, 100 + Math.sin(a) * r, 0.5);
+    }
+    const round = recognizeShape(circle);
+    assert.ok(round, 'circle recognised');
+    for (let i = 0; i < round.length; i += 3) {
+        assert.ok(Math.abs(Math.hypot(round[i] - 100, round[i + 1] - 100) - 50) < 3, 'on the circle');
+    }
+
+    // A rectangle drawn slightly crooked comes out axis-aligned.
+    const rect = [];
+    const corners = [[10, 10], [210, 13], [208, 110], [12, 108], [11, 12]];
+    for (let c = 0; c < 4; c++) {
+        for (let k = 0; k < 20; k++) {
+            const t = k / 20;
+            rect.push(corners[c][0] + (corners[c + 1][0] - corners[c][0]) * t + Math.sin(k) * 0.8,
+                corners[c][1] + (corners[c + 1][1] - corners[c][1]) * t, 0.5);
+        }
+    }
+    rect.push(11, 12, 0.5);
+    const box = recognizeShape(rect);
+    assert.ok(box, 'rectangle recognised');
+    const xsOf = (pts) => pts.filter((_, i) => i % 3 === 0);
+    const ysOf = (pts) => pts.filter((_, i) => i % 3 === 1);
+    assert.equal(new Set(xsOf(box).map(Math.round)).size > 2, true);
+    assert.ok(xsOf(box).every((x) => x >= 9 && x <= 211));
+    assert.equal(box[0], box[box.length - 3], 'closed');
+    assert.equal(box[1], box[box.length - 2], 'closed');
+
+    // A nearly horizontal line is straightened and levelled.
+    const line = [];
+    for (let i = 0; i <= 40; i++) {
+        line.push(20 + i * 5, 50 + i * 0.12 + Math.sin(i) * 0.6, 0.4 + (i % 3) * 0.1);
+    }
+    const straight = recognizeShape(line);
+    assert.ok(straight, 'line recognised');
+    assert.ok(ysOf(straight).every((y) => y === straight[1]), 'levelled');
+
+    // Handwriting is left alone.
+    const scribble = [];
+    for (let i = 0; i <= 80; i++) {
+        scribble.push(i * 3, 40 + Math.sin(i * 0.9) * 15 + Math.cos(i * 0.37) * 10, 0.5);
+    }
+    assert.equal(recognizeShape(scribble), null);
+});

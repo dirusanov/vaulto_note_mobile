@@ -11,6 +11,11 @@ export type InkStroke = {
     size: number;
     /** Flat [x, y, pressure, x, y, pressure, ...] in document coordinates. */
     points: number[];
+    /**
+     * No pen-down taper at the start: the stroke begins where the eraser cut a
+     * longer one, or it is a shape drawn clean.
+     */
+    cut?: boolean;
 };
 
 /** A typed label on the canvas; (x, y) is its top-left corner in document coordinates. */
@@ -79,6 +84,7 @@ export const SMART_INVERT_MATRIX = [
  * with alpha taken from the noise, so the paper shows through in a grain.
  */
 export const pencilGrainMatrix = (hex: string): number[] => {
+    'worklet';
     const value = parseInt(hex.replace('#', ''), 16) || 0;
     const r = ((value >> 16) & 255) / 255;
     const g = ((value >> 8) & 255) / 255;
@@ -245,7 +251,7 @@ export function strokeOutline(
 export function strokeOutlineFor(stroke: InkStroke): number[] {
     'worklet';
     const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
-    return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper, spec.nib);
+    return strokeOutline(stroke.points, stroke.size, spec.thinning, spec.streamline, spec.taper && !stroke.cut, spec.nib);
 }
 
 /**
@@ -284,12 +290,16 @@ export const outlineToSvgPath = (outline: number[], scale: number = 2): string =
 
 export type InkBounds = { minX: number; minY: number; maxX: number; maxY: number };
 
-export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    strokes.forEach((stroke) => {
+const boundsCache = new WeakMap<InkStroke, InkBounds | null>();
+
+/** Box of one stroke's samples grown by its width; cached, strokes are never mutated. */
+const boundsOf = (stroke: InkStroke): InkBounds | null => {
+    let bounds = boundsCache.get(stroke);
+    if (bounds === undefined) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
         const pts = stroke.points;
         for (let i = 0; i + 1 < pts.length; i += 3) {
             minX = Math.min(minX, pts[i] - stroke.size);
@@ -297,12 +307,34 @@ export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
             minY = Math.min(minY, pts[i + 1] - stroke.size);
             maxY = Math.max(maxY, pts[i + 1] + stroke.size);
         }
+        bounds = Number.isFinite(minY) ? { minX, minY, maxX, maxY } : null;
+        boundsCache.set(stroke, bounds);
+    }
+    return bounds;
+};
+
+export const strokeBounds = (strokes: InkStroke[]): InkBounds | null => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    strokes.forEach((stroke) => {
+        const box = boundsOf(stroke);
+        if (box) {
+            minX = Math.min(minX, box.minX);
+            maxX = Math.max(maxX, box.maxX);
+            minY = Math.min(minY, box.minY);
+            maxY = Math.max(maxY, box.maxY);
+        }
     });
     return Number.isFinite(minY) ? { minX, minY, maxX, maxY } : null;
 };
 
 /** True when the eraser circle at (x, y) touches the stroke. */
 export const strokeHit = (stroke: InkStroke, x: number, y: number, radius: number): boolean => {
+    if (!nearStroke(stroke, x, y, radius)) {
+        return false;
+    }
     const reach = radius + stroke.size / 2;
     const reach2 = reach * reach;
     const pts = stroke.points;
@@ -333,3 +365,336 @@ export const strokeHit = (stroke: InkStroke, x: number, y: number, radius: numbe
     }
     return false;
 };
+
+/** Distance at which the eraser circle touches the ink of the stroke. */
+const eraseReach = (stroke: InkStroke, radius: number): number => radius + stroke.size / 2;
+
+// The eraser runs over every stroke many times a second; a box test skips the
+// strokes it is nowhere near without walking their points.
+/** True when the eraser circle at (x, y) may touch the stroke (its box, grown by the circle). */
+const nearStroke = (stroke: InkStroke, x: number, y: number, radius: number): boolean => {
+    const box = boundsOf(stroke);
+    return !!box && x >= box.minX - radius && x <= box.maxX + radius && y >= box.minY - radius && y <= box.maxY + radius;
+};
+
+/**
+ * What is left of the stroke after the eraser circle at (x, y) passed over it:
+ * null when the circle misses it, otherwise the pieces outside the circle
+ * (none when it covered the whole stroke). The line is cut exactly at the edge
+ * of the circle, so a fast stroke with sparse samples is cut where it crosses,
+ * not at the nearest sample.
+ */
+export const eraseStroke = (stroke: InkStroke, x: number, y: number, radius: number): InkStroke[] | null => {
+    const pts = stroke.points;
+    const count = Math.floor(pts.length / 3);
+    if (count === 0 || !nearStroke(stroke, x, y, radius)) {
+        return null;
+    }
+    const reach = eraseReach(stroke, radius);
+    const reach2 = reach * reach;
+    const inside = (i: number) => (pts[i * 3] - x) ** 2 + (pts[i * 3 + 1] - y) ** 2 <= reach2;
+    if (count === 1) {
+        return inside(0) ? [] : null;
+    }
+    const pieces: number[][] = [];
+    const starts: number[] = [];
+    let current: number[] | null = inside(0) ? null : [pts[0], pts[1], pts[2]];
+    let currentStart = 0;
+    let touched = current === null;
+    const at = (i: number, t: number) => [
+        pts[i * 3] + (pts[i * 3 + 3] - pts[i * 3]) * t,
+        pts[i * 3 + 1] + (pts[i * 3 + 4] - pts[i * 3 + 1]) * t,
+        pts[i * 3 + 2] + (pts[i * 3 + 5] - pts[i * 3 + 2]) * t,
+    ];
+    for (let i = 0; i + 1 < count; i++) {
+        const ax = pts[i * 3] - x;
+        const ay = pts[i * 3 + 1] - y;
+        const dx = pts[i * 3 + 3] - pts[i * 3];
+        const dy = pts[i * 3 + 4] - pts[i * 3 + 1];
+        // Where the segment runs inside the circle: |a + t·d| ≤ reach for t in [enter, leave].
+        const a = dx * dx + dy * dy;
+        const b = ax * dx + ay * dy;
+        const c = ax * ax + ay * ay - reach2;
+        const disc = b * b - a * c;
+        let enter = 2;
+        let leave = -1;
+        if (a > 0 && disc > 0) {
+            const root = Math.sqrt(disc);
+            enter = Math.max(0, (-b - root) / a);
+            leave = Math.min(1, (-b + root) / a);
+        } else if (c <= 0) {
+            enter = 0;
+            leave = 1;
+        }
+        if (enter > leave) {
+            if (current) {
+                current.push(pts[i * 3 + 3], pts[i * 3 + 4], pts[i * 3 + 5]);
+            } else {
+                current = [pts[i * 3 + 3], pts[i * 3 + 4], pts[i * 3 + 5]];
+                currentStart = i + 1;
+            }
+            continue;
+        }
+        touched = true;
+        if (current) {
+            if (enter > 0) {
+                current.push(...at(i, enter));
+            }
+            pieces.push(current);
+            starts.push(currentStart);
+            current = null;
+        }
+        if (leave < 1) {
+            current = [...at(i, leave), pts[i * 3 + 3], pts[i * 3 + 4], pts[i * 3 + 5]];
+            currentStart = -1;
+        }
+    }
+    if (!touched) {
+        return null;
+    }
+    if (current) {
+        pieces.push(current);
+        starts.push(currentStart);
+    }
+    const kept: InkStroke[] = [];
+    pieces.forEach((points, index) => {
+        let length = 0;
+        for (let i = 3; i + 2 < points.length; i += 3) {
+            length += Math.hypot(points[i] - points[i - 3], points[i + 1] - points[i - 2]);
+        }
+        // Crumbs at the edge of the circle are erased too.
+        if (length < Math.max(0.5, stroke.size * 0.25)) {
+            return;
+        }
+        const cut = starts[index] === 0 ? stroke.cut : true;
+        kept.push({ tool: stroke.tool, color: stroke.color, size: stroke.size, points, ...(cut ? { cut: true } : {}) });
+    });
+    return kept;
+};
+
+// ---------------------------------------------------------------------------
+// Shapes: a stroke drawn by hand and held still at the end is replaced by the
+// clean shape it resembles (line, ellipse, circle, rectangle, triangle,
+// polygon, polyline), as notebook apps do. Everything is in document units.
+
+/** Ramer–Douglas–Peucker: indices of the corners of a polyline within `epsilon`, in order. */
+const simplify = (xs: number[], ys: number[], epsilon: number): number[] => {
+    'worklet';
+    const last = xs.length - 1;
+    const keep: boolean[] = xs.map(() => false);
+    keep[0] = true;
+    keep[last] = true;
+    // A stack of spans instead of recursion (worklets should not call themselves).
+    const spans: number[] = [0, last];
+    while (spans.length) {
+        const to = spans.pop() as number;
+        const from = spans.pop() as number;
+        let worst = -1;
+        let worstDistance = epsilon;
+        const dx = xs[to] - xs[from];
+        const dy = ys[to] - ys[from];
+        const length = Math.hypot(dx, dy) || 1;
+        for (let i = from + 1; i < to; i++) {
+            const distance = Math.abs(dy * (xs[i] - xs[from]) - dx * (ys[i] - ys[from])) / length;
+            if (distance > worstDistance) {
+                worst = i;
+                worstDistance = distance;
+            }
+        }
+        if (worst >= 0) {
+            keep[worst] = true;
+            spans.push(from, worst, worst, to);
+        }
+    }
+    const out: number[] = [];
+    keep.forEach((kept, index) => {
+        if (kept) {
+            out.push(index);
+        }
+    });
+    return out;
+};
+
+const segmentDistance = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
+    'worklet';
+    const abx = bx - ax;
+    const aby = by - ay;
+    const len2 = abx * abx + aby * aby;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * abx + (py - ay) * aby) / len2)) : 0;
+    return Math.hypot(ax + abx * t - px, ay + aby * t - py);
+};
+
+/** Mean distance of the samples to the nearest edge of a polyline [x, y, ...]. */
+const polylineError = (xs: number[], ys: number[], corners: number[]): number => {
+    'worklet';
+    let total = 0;
+    for (let i = 0; i < xs.length; i++) {
+        let best = Infinity;
+        for (let c = 0; c + 3 < corners.length; c += 2) {
+            best = Math.min(best, segmentDistance(xs[i], ys[i], corners[c], corners[c + 1], corners[c + 2], corners[c + 3]));
+        }
+        total += best;
+    }
+    return total / xs.length;
+};
+
+/** Angles within this of horizontal, vertical or a diagonal are snapped to it. */
+const SNAP_ANGLE = (4 * Math.PI) / 180;
+
+const snapDirection = (dx: number, dy: number): [number, number] => {
+    'worklet';
+    const length = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const step = Math.PI / 4;
+    const nearest = Math.round(angle / step) * step;
+    if (Math.abs(angle - nearest) < SNAP_ANGLE) {
+        return [Math.cos(nearest) * length, Math.sin(nearest) * length];
+    }
+    return [dx, dy];
+};
+
+/** Samples along a polyline [x, y, ...] every `spacing` units, with one pressure throughout. */
+const resample = (corners: number[], spacing: number, pressure: number): number[] => {
+    'worklet';
+    const out: number[] = [corners[0], corners[1], pressure];
+    for (let c = 0; c + 3 < corners.length; c += 2) {
+        const ax = corners[c];
+        const ay = corners[c + 1];
+        const bx = corners[c + 2];
+        const by = corners[c + 3];
+        const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / spacing));
+        for (let k = 1; k <= steps; k++) {
+            out.push(ax + ((bx - ax) * k) / steps, ay + ((by - ay) * k) / steps, pressure);
+        }
+    }
+    return out;
+};
+
+/**
+ * The clean shape a hand-drawn stroke resembles, as new stroke samples, or
+ * null when it looks like none (handwriting, scribbles). Closed shapes end
+ * where they start; the pressure is the stroke's average, so the line keeps
+ * the weight it was drawn with.
+ */
+export function recognizeShape(points: number[]): number[] | null {
+    'worklet';
+    const count = Math.floor(points.length / 3);
+    if (count < 3) {
+        return null;
+    }
+    const xs: number[] = [];
+    const ys: number[] = [];
+    let pressure = 0;
+    let length = 0;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < count; i++) {
+        const x = points[i * 3];
+        const y = points[i * 3 + 1];
+        if (i > 0) {
+            length += Math.hypot(x - xs[i - 1], y - ys[i - 1]);
+        }
+        xs.push(x);
+        ys.push(y);
+        pressure += points[i * 3 + 2];
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+    }
+    pressure /= count;
+    const size = Math.hypot(maxX - minX, maxY - minY);
+    if (size < 12) {
+        return null;
+    }
+    const spacing = 2;
+    const n = count - 1;
+    const chord = Math.hypot(xs[n] - xs[0], ys[n] - ys[0]);
+
+    // A line: everything close to the chord from the first sample to the last.
+    if (chord > size * 0.9) {
+        let worst = 0;
+        for (let i = 0; i < count; i++) {
+            worst = Math.max(worst, segmentDistance(xs[i], ys[i], xs[0], ys[0], xs[n], ys[n]));
+        }
+        if (worst < Math.max(3, chord * 0.06)) {
+            const [dx, dy] = snapDirection(xs[n] - xs[0], ys[n] - ys[0]);
+            return resample([xs[0], ys[0], xs[0] + dx, ys[0] + dy], spacing, pressure);
+        }
+    }
+
+    const closed = chord < size * 0.25 && length > size * 1.5;
+    const epsilon = size * 0.06;
+    const indices = simplify(xs, ys, epsilon);
+    const corners: number[] = [];
+    indices.forEach((i) => corners.push(xs[i], ys[i]));
+
+    if (closed) {
+        // Ellipse through the box of the stroke; a circle when nearly round.
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        let rx = (maxX - minX) / 2;
+        let ry = (maxY - minY) / 2;
+        let ellipseError = 0;
+        for (let i = 0; i < count; i++) {
+            ellipseError += Math.abs(Math.hypot((xs[i] - cx) / (rx || 1), (ys[i] - cy) / (ry || 1)) - 1);
+        }
+        ellipseError /= count;
+
+        // Polygon: the corners found above, the last one merged with the first.
+        corners.splice(-2, 2);
+        const sides = corners.length / 2;
+        if (sides >= 3 && sides <= 5) {
+            const ring = [...corners, corners[0], corners[1]];
+            const polygonError = polylineError(xs, ys, ring) / size;
+            if (polygonError < 0.035 && polygonError * 2.5 < ellipseError) {
+                if (sides === 4) {
+                    // Nearly square corners and edges near the axes: a true rectangle.
+                    let square = true;
+                    for (let c = 0; c < 4; c++) {
+                        const [ax, ay] = [ring[c * 2], ring[c * 2 + 1]];
+                        const [bx, by] = [ring[c * 2 + 2], ring[c * 2 + 3]];
+                        const angle = Math.abs(Math.atan2(by - ay, bx - ax)) % (Math.PI / 2);
+                        if (Math.min(angle, Math.PI / 2 - angle) > (12 * Math.PI) / 180) {
+                            square = false;
+                        }
+                    }
+                    if (square) {
+                        return resample([minX, minY, maxX, minY, maxX, maxY, minX, maxY, minX, minY], spacing, pressure);
+                    }
+                }
+                return resample(ring, spacing, pressure);
+            }
+        }
+        if (ellipseError < 0.1) {
+            if (Math.abs(rx - ry) < Math.max(rx, ry) * 0.15) {
+                rx = (rx + ry) / 2;
+                ry = rx;
+            }
+            // Starts where the hand started, going round the same way.
+            const start = Math.atan2((ys[0] - cy) / (ry || 1), (xs[0] - cx) / (rx || 1));
+            let turn = 0;
+            for (let i = 1; i < count; i++) {
+                turn += (xs[i - 1] - cx) * (ys[i] - cy) - (ys[i - 1] - cy) * (xs[i] - cx);
+            }
+            const direction = turn >= 0 ? 1 : -1;
+            const steps = Math.max(24, Math.ceil((Math.PI * (rx + ry)) / spacing));
+            const out: number[] = [];
+            for (let k = 0; k <= steps; k++) {
+                const angle = start + direction * ((k / steps) * Math.PI * 2);
+                out.push(cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry, pressure);
+            }
+            return out;
+        }
+        return null;
+    }
+
+    // An open polyline of a few straight parts (a corner, a zigzag, an arrow's shaft and head).
+    const parts = corners.length / 2 - 1;
+    if (parts >= 2 && parts <= 4 && polylineError(xs, ys, corners) / size < 0.025) {
+        return resample(corners, spacing, pressure);
+    }
+    return null;
+}

@@ -1068,6 +1068,15 @@
   "drawing": {
     "done": "تم",
     "eraser": "ممحاة",
+    "erasePartial": "مسح جزء",
+    "eraseStroke": "الخط كاملًا",
+    "showTools": "إظهار الأدوات",
+    "shapes": "الأشكال",
+    "shapesOn": "ارسم شكلًا وأبقِ القلم ثابتًا ليستقيم",
+    "shapesOff": "تبقى الأشكال كما رُسمت",
+    "duplicate": "تكرار",
+    "delete": "حذف",
+    "deselect": "إلغاء التحديد",
     "colorAndSize": "اللون والسُمك",
     "size": "السُمك",
     "fingerDrawing": "الرسم بالإصبع",
@@ -1083,7 +1092,8 @@
       "pencil": "قلم رصاص",
       "brush": "فرشاة",
       "marker": "قلم تمييز",
-      "text": "نص"
+      "text": "نص",
+      "lasso": "الوهق"
     },
     "color": {
       "palette": "لوحة الألوان",

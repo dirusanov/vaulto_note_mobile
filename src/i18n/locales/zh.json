@@ -1068,6 +1068,15 @@
   "drawing": {
     "done": "完成",
     "eraser": "橡皮擦",
+    "erasePartial": "局部擦除",
+    "eraseStroke": "整笔擦除",
+    "showTools": "显示工具",
+    "shapes": "形状",
+    "shapesOn": "画出形状后按住笔不动即可变规整",
+    "shapesOff": "形状保持手绘原样",
+    "duplicate": "复制",
+    "delete": "删除",
+    "deselect": "取消选择",
     "colorAndSize": "颜色和粗细",
     "size": "粗细",
     "fingerDrawing": "用手指绘图",
@@ -1083,7 +1092,8 @@
       "pencil": "铅笔",
       "brush": "画笔",
       "marker": "荧光笔",
-      "text": "文本"
+      "text": "文本",
+      "lasso": "套索"
     },
     "color": {
       "palette": "调色板",

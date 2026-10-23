@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { InkInputView } from '../../modules/ink-input';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, isDarkScheme } from '../theme/colors';
@@ -21,7 +22,7 @@ import { createStyles } from '../theme/createStyles';
 import { CanvasMode, DrawingCanvas, DrawingCanvasHandle, TextTap } from './DrawingCanvas';
 import { ColorPanel } from './ColorPanel';
 import { DrawingDocument } from './drawingFormat';
-import { DrawingAction, drawingReducer, emptyContent, initialDrawingState } from './drawingModel';
+import { DrawingAction, EMPTY_SELECTION, EraseMode, Selection, drawingReducer, emptyContent, initialDrawingState, selectInLasso } from './drawingModel';
 import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool } from './ink';
 import { DEFAULT_PAPER, PaperStyle } from './paper';
 import { PaperPicker } from './PaperPicker';
@@ -42,7 +43,7 @@ type Props = {
     onClose: () => void;
 };
 
-type ActiveTool = InkTool | 'eraser' | 'text';
+type ActiveTool = InkTool | 'eraser' | 'text' | 'lasso';
 type SettingsKey = InkTool | 'text';
 type ToolSettings = Record<SettingsKey, { color: string; sizeIndex: number }>;
 
@@ -58,6 +59,10 @@ type TextEdit = {
 };
 
 const TEXT_SIZES = [14, 18, 24, 32, 44];
+/** Eraser radius on screen: the same however far the drawing is zoomed. */
+const ERASER_SIZES = [7, 14, 26];
+const QUICK_COLORS = ['#1D1D1F', '#1E88E5', '#E53935', '#43A047', '#FDD835'];
+type EraserSettings = { sizeIndex: number; mode: EraseMode };
 /** Palette colours are always on screen, so only other colours go to "Recent". */
 const INK_COLOR_SET = new Set(INK_COLORS);
 
@@ -83,11 +88,16 @@ let rememberedSettings: ToolSettings | null = null;
 let rememberedTool: ActiveTool = 'fountain';
 let rememberedPaper: PaperStyle = DEFAULT_PAPER;
 let rememberedRecent: string[] = [];
+let rememberedEraser: EraserSettings = { sizeIndex: 1, mode: 'partial' };
+let rememberedToolsHidden = false;
+let rememberedSnapShapes = true;
 
 export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAutosave, onClose }) => {
     const { t } = useTranslation();
     const { width, height } = useWindowDimensions();
     const isTablet = Math.min(width, height) >= 600;
+    /** Wide enough for the tools to sit in the header row itself. */
+    const inlineTools = width >= 1150;
     const dark = isDarkScheme();
 
     const [state, dispatch] = useReducer(drawingReducer, undefined, () => initialDrawingState());
@@ -97,6 +107,15 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     const [settings, setSettings] = useState<ToolSettings>(() => rememberedSettings || initialSettings());
     const [activeTool, setActiveTool] = useState<ActiveTool>(rememberedTool);
     const [recent, setRecent] = useState<string[]>(rememberedRecent);
+    const [eraser, setEraser] = useState<EraserSettings>(rememberedEraser);
+    const [toolsHidden, setToolsHidden] = useState(rememberedToolsHidden);
+    const [snapShapes, setSnapShapes] = useState(rememberedSnapShapes);
+    /** A short tip over the canvas, e.g. how shapes are drawn. */
+    const [tip, setTip] = useState<string | null>(null);
+    const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+    const selectionRef = useRef(selection);
+    selectionRef.current = selection;
+    const hasSelection = selection.strokes.length > 0 || selection.texts.length > 0;
     const [popover, setPopover] = useState<'tool' | 'paper' | null>(null);
     const [stylusSeen, setStylusSeen] = useState(false);
     const [stylusOnly, setStylusOnly] = useState(false);
@@ -132,6 +151,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         });
         setPopover(null);
         setTextEdit(null);
+        setSelection(EMPTY_SELECTION);
         setDocWidth(document?.width || 0);
     }, [visible, document]);
 
@@ -139,7 +159,18 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         rememberedSettings = settings;
         rememberedTool = activeTool;
         rememberedRecent = recent;
-    }, [settings, activeTool, recent]);
+        rememberedEraser = eraser;
+        rememberedToolsHidden = toolsHidden;
+        rememberedSnapShapes = snapShapes;
+    }, [settings, activeTool, recent, eraser, toolsHidden, snapShapes]);
+
+    useEffect(() => {
+        if (!tip) {
+            return;
+        }
+        const timer = setTimeout(() => setTip(null), 3000);
+        return () => clearTimeout(timer);
+    }, [tip]);
 
     const textBoxes = useMemo(() => texts.map(measureText), [texts]);
 
@@ -165,12 +196,12 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [keyboardTop, editingLines, settings.text.sizeIndex, textEdit?.index, textEdit?.x, textEdit?.y]);
 
-    const settingsKey: SettingsKey = activeTool === 'text' ? 'text' : activeTool === 'eraser' ? 'fountain' : activeTool;
+    const settingsKey: SettingsKey = activeTool === 'text' ? 'text' : activeTool === 'eraser' || activeTool === 'lasso' ? 'fountain' : activeTool;
     const current = settings[settingsKey];
-    const inkTool: InkTool = activeTool === 'text' || activeTool === 'eraser' ? 'fountain' : activeTool;
+    const inkTool: InkTool = activeTool === 'text' || activeTool === 'eraser' || activeTool === 'lasso' ? 'fountain' : activeTool;
     const sizes = activeTool === 'text' ? TEXT_SIZES : INK_TOOLS[inkTool].sizes;
     const size = sizes[current.sizeIndex] ?? sizes[1];
-    const mode: CanvasMode = activeTool === 'eraser' ? 'erase' : activeTool === 'text' ? 'text' : 'ink';
+    const mode: CanvasMode = activeTool === 'eraser' ? 'erase' : activeTool === 'text' ? 'text' : activeTool === 'lasso' ? 'select' : 'ink';
 
     /** The action that stores the label being typed, if any. */
     const textEditAction = useCallback((edit: TextEdit | null): DrawingAction | null => {
@@ -204,13 +235,45 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         closePopover();
     }, [closePopover]);
 
-    const handleErase = useCallback((x: number, y: number, radius: number) => {
-        dispatch({ type: 'eraseAt', x, y, radius, boxes: textBoxes });
-    }, [textBoxes]);
+    const handleErase = useCallback((x: number, y: number, radius: number, path?: number[]) => {
+        setSelection(EMPTY_SELECTION);
+        dispatch({ type: 'eraseAt', x, y, path, radius, boxes: textBoxes, mode: eraser.mode });
+    }, [textBoxes, eraser.mode]);
 
     const handleEraseEnd = useCallback(() => dispatch({ type: 'eraseEnd' }), []);
-    const handleUndo = useCallback(() => dispatch({ type: 'undo' }), []);
-    const handleRedo = useCallback(() => dispatch({ type: 'redo' }), []);
+    // Indices in a selection stop meaning the same items once history moves.
+    const handleUndo = useCallback(() => {
+        setSelection(EMPTY_SELECTION);
+        dispatch({ type: 'undo' });
+    }, []);
+    const handleRedo = useCallback(() => {
+        setSelection(EMPTY_SELECTION);
+        dispatch({ type: 'redo' });
+    }, []);
+
+    const handleLasso = useCallback((polygon: number[]) => {
+        setSelection(selectInLasso(stateRef.current.content, textBoxes, polygon));
+    }, [textBoxes]);
+    const handleSelectionMove = useCallback((dx: number, dy: number) => {
+        dispatch({ type: 'moveSelection', selection: selectionRef.current, dx, dy });
+    }, []);
+    const duplicateSelection = () => {
+        const { strokes: allStrokes, texts: allTexts } = stateRef.current.content;
+        const copied = {
+            strokes: selection.strokes.filter((index) => allStrokes[index]).length,
+            texts: selection.texts.filter((index) => allTexts[index]).length,
+        };
+        dispatch({ type: 'duplicateSelection', selection, dx: 24, dy: 24 });
+        // The copies are the last items: they become the selection, ready to be moved.
+        setSelection({
+            strokes: Array.from({ length: copied.strokes }, (_, i) => allStrokes.length + i),
+            texts: Array.from({ length: copied.texts }, (_, i) => allTexts.length + i),
+        });
+    };
+    const deleteSelection = () => {
+        dispatch({ type: 'deleteSelection', selection });
+        setSelection(EMPTY_SELECTION);
+    };
 
     const handleTextTap = useCallback((tap: TextTap) => {
         if (textEdit) {
@@ -275,7 +338,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         if (textEdit) {
             commitTextEdit();
         }
-        if (next === activeTool && next !== 'eraser') {
+        if (next === activeTool && next !== 'eraser' && next !== 'lasso') {
             if (popover === 'tool') {
                 closePopover();
             } else {
@@ -284,6 +347,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             return;
         }
         closePopover();
+        setSelection(EMPTY_SELECTION);
         setActiveTool(next);
     };
 
@@ -362,8 +426,12 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
 
     const editingTextSize = TEXT_SIZES[settings.text.sizeIndex] ?? 18;
 
-    const toolPalette = (
-        <View style={[styles.palette, isTablet ? styles.paletteFloating : styles.paletteDocked]}>
+    // Swatches always at hand in the bar, each in a fixed place (a colour picked
+    // from the full palette takes the last one); the palette opens from the button after them.
+    const quickColors = QUICK_COLORS.includes(current.color) ? QUICK_COLORS : [...QUICK_COLORS.slice(0, -1), current.color];
+
+    const toolButtons = (
+        <>
             {INK_TOOL_ORDER.map((inkToolOption) => {
                 const active = activeTool === inkToolOption;
                 return (
@@ -375,7 +443,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                         accessibilityState={{ selected: active }}
                         accessibilityLabel={t(`drawing.tool.${inkToolOption}`, inkToolOption)}
                     >
-                        <MaterialCommunityIcons name={TOOL_ICONS[inkToolOption]} size={24} color={active ? colors.primary : colors.textSecondary} />
+                        <MaterialCommunityIcons name={TOOL_ICONS[inkToolOption]} size={22} color={active ? colors.primary : colors.textSecondary} />
                         <View style={[styles.toolInk, { backgroundColor: settings[inkToolOption].color }]} />
                     </TouchableOpacity>
                 );
@@ -387,7 +455,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                 accessibilityState={{ selected: activeTool === 'text' }}
                 accessibilityLabel={t('drawing.tool.text', 'Text')}
             >
-                <MaterialCommunityIcons name="format-text" size={24} color={activeTool === 'text' ? colors.primary : colors.textSecondary} />
+                <MaterialCommunityIcons name="format-text" size={22} color={activeTool === 'text' ? colors.primary : colors.textSecondary} />
                 <View style={[styles.toolInk, { backgroundColor: settings.text.color }]} />
             </TouchableOpacity>
             <TouchableOpacity
@@ -397,65 +465,177 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                 accessibilityState={{ selected: activeTool === 'eraser' }}
                 accessibilityLabel={t('drawing.eraser', 'Eraser')}
             >
-                <MaterialCommunityIcons name="eraser" size={24} color={activeTool === 'eraser' ? colors.primary : colors.textSecondary} />
+                <MaterialCommunityIcons name="eraser" size={22} color={activeTool === 'eraser' ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
-            <View style={styles.paletteDivider} />
+            <TouchableOpacity
+                onPress={() => selectTool('lasso')}
+                style={[styles.toolButton, activeTool === 'lasso' && styles.toolButtonActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeTool === 'lasso' }}
+                accessibilityLabel={t('drawing.tool.lasso', 'Lasso')}
+            >
+                <MaterialCommunityIcons name="lasso" size={22} color={activeTool === 'lasso' ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
             <TouchableOpacity
                 onPress={() => {
-                    if (activeTool === 'eraser') {
-                        setActiveTool('fountain');
-                    }
-                    setPopover((open) => (open === 'tool' ? null : 'tool'));
+                    const next = !snapShapes;
+                    setSnapShapes(next);
+                    setTip(next ? t('drawing.shapesOn', 'Draw a shape and hold the pen still to straighten it') : t('drawing.shapesOff', 'Shapes stay as drawn'));
                 }}
-                style={styles.toolButton}
-                accessibilityRole="button"
-                accessibilityLabel={t('drawing.colorAndSize', 'Color and size')}
+                style={[styles.toolButton, snapShapes && styles.toolButtonActive]}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: snapShapes }}
+                accessibilityLabel={t('drawing.shapes', 'Shapes')}
             >
-                <View style={[styles.colorDot, { backgroundColor: current.color }]} />
+                <MaterialCommunityIcons name="shape-outline" size={22} color={snapShapes ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
-        </View>
+        </>
     );
 
-    const sizeRow = (
-        <View style={styles.sizeRow}>
-            {sizes.map((value, index) => {
-                const active = index === current.sizeIndex;
-                const dot = 5 + (23 * index) / (sizes.length - 1);
-                return (
-                    <TouchableOpacity
-                        key={value}
-                        onPress={() => setSizeIndex(index)}
-                        style={[styles.sizeButton, active && styles.sizeButtonActive]}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        accessibilityLabel={`${t('drawing.size', 'Size')} ${index + 1}`}
-                    >
-                        {activeTool === 'text' ? (
-                            <Text style={{ fontSize: 11 + index * 4, color: current.color, fontWeight: '600' }}>A</Text>
-                        ) : (
-                            <View
-                                style={{
-                                    width: dot,
-                                    height: dot,
-                                    borderRadius: 15,
-                                    backgroundColor: current.color,
-                                    opacity: INK_TOOLS[inkTool].opacity < 1 ? 0.6 : 1,
-                                }}
-                            />
-                        )}
-                    </TouchableOpacity>
-                );
-            })}
+    // Thickness of the active tool, right in the bar: one tap, no menu.
+    const sizeButtons = activeTool === 'eraser'
+        ? ERASER_SIZES.map((value, index) => {
+            const active = index === eraser.sizeIndex;
+            return (
+                <TouchableOpacity
+                    key={value}
+                    onPress={() => setEraser((prev) => ({ ...prev, sizeIndex: index }))}
+                    style={[styles.sizeButton, active && styles.toolButtonActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${t('drawing.size', 'Size')} ${index + 1}`}
+                >
+                    <View style={{ width: 6 + index * 7, height: 6 + index * 7, borderRadius: 12, borderWidth: 1.5, borderColor: active ? colors.primary : colors.textSecondary }} />
+                </TouchableOpacity>
+            );
+        })
+        : sizes.map((value, index) => {
+            const active = index === current.sizeIndex;
+            const dot = 4 + (14 * index) / (sizes.length - 1);
+            return (
+                <TouchableOpacity
+                    key={value}
+                    onPress={() => setSizeIndex(index)}
+                    style={[styles.sizeButton, active && styles.toolButtonActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${t('drawing.size', 'Size')} ${index + 1}`}
+                >
+                    {activeTool === 'text' ? (
+                        <Text style={{ fontSize: 10 + index * 3, color: active ? colors.primary : colors.textSecondary, fontWeight: '700' }}>A</Text>
+                    ) : (
+                        <View
+                            style={{
+                                width: dot,
+                                height: dot,
+                                borderRadius: 10,
+                                backgroundColor: current.color,
+                                opacity: INK_TOOLS[inkTool].opacity < 1 ? 0.6 : 1,
+                            }}
+                        />
+                    )}
+                </TouchableOpacity>
+            );
+        });
+
+    // The eraser has no colour; its two ways of erasing take the swatches' place.
+    const colorButtons = activeTool === 'eraser'
+        ? (['partial', 'stroke'] as EraseMode[]).map((value) => {
+            const active = eraser.mode === value;
+            return (
+                <TouchableOpacity
+                    key={value}
+                    onPress={() => setEraser((prev) => ({ ...prev, mode: value }))}
+                    style={[styles.modeButton, active && styles.toolButtonActive]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                >
+                    <MaterialCommunityIcons name={value === 'partial' ? 'eraser' : 'gesture'} size={18} color={active ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.modeText, { color: active ? colors.primary : colors.textSecondary }]} numberOfLines={1}>
+                        {value === 'partial' ? t('drawing.erasePartial', 'Erase part') : t('drawing.eraseStroke', 'Whole stroke')}
+                    </Text>
+                </TouchableOpacity>
+            );
+        })
+        : (
+            <>
+                {quickColors.map((value) => {
+                    const active = value === current.color;
+                    return (
+                        <TouchableOpacity
+                            key={value}
+                            onPress={() => setColor(value, 'swatch')}
+                            style={styles.swatchButton}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            accessibilityLabel={value}
+                        >
+                            <View style={[styles.swatch, { backgroundColor: value }, active && { borderColor: colors.primary, borderWidth: 2.5 }]} />
+                        </TouchableOpacity>
+                    );
+                })}
+                <TouchableOpacity
+                    onPress={() => setPopover((open) => (open === 'tool' ? null : 'tool'))}
+                    style={[styles.swatchButton, popover === 'tool' && styles.toolButtonActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: popover === 'tool' }}
+                    accessibilityLabel={t('drawing.color.palette', 'Palette')}
+                >
+                    <MaterialCommunityIcons name="palette-outline" size={22} color={popover === 'tool' ? colors.primary : colors.textSecondary} />
+                </TouchableOpacity>
+            </>
+        );
+
+    // With the lasso the swatches recolour what is selected.
+    const recolorButtons = QUICK_COLORS.map((value) => (
+        <TouchableOpacity
+            key={value}
+            onPress={() => dispatch({ type: 'recolorSelection', selection, color: value })}
+            disabled={!hasSelection}
+            style={[styles.swatchButton, !hasSelection && styles.disabled]}
+            accessibilityRole="button"
+            accessibilityLabel={value}
+        >
+            <View style={[styles.swatch, { backgroundColor: value }]} />
+        </TouchableOpacity>
+    ));
+
+    const toolBarContent = activeTool === 'lasso'
+        ? (
+            <>
+                {toolButtons}
+                <View style={styles.paletteDivider} />
+                {recolorButtons}
+            </>
+        )
+        : (
+            <>
+                {toolButtons}
+                <View style={styles.paletteDivider} />
+                {sizeButtons}
+                <View style={styles.paletteDivider} />
+                {colorButtons}
+            </>
+        );
+
+    const selectionBar = hasSelection && (
+        <View style={styles.selectionBar}>
+            <TouchableOpacity onPress={duplicateSelection} style={styles.selectionButton} accessibilityRole="button" accessibilityLabel={t('drawing.duplicate', 'Duplicate')}>
+                <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
+                <Text style={[styles.selectionText, { color: colors.text }]}>{t('drawing.duplicate', 'Duplicate')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={deleteSelection} style={styles.selectionButton} accessibilityRole="button" accessibilityLabel={t('drawing.delete', 'Delete')}>
+                <MaterialCommunityIcons name="delete-outline" size={20} color={colors.error} />
+                <Text style={[styles.selectionText, { color: colors.error }]}>{t('drawing.delete', 'Delete')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setSelection(EMPTY_SELECTION)} style={styles.selectionButton} accessibilityRole="button" accessibilityLabel={t('drawing.deselect', 'Deselect')}>
+                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
         </View>
     );
 
     const popoverContent = popover === 'tool' && activeTool !== 'eraser'
-        ? (
-            <>
-                {sizeRow}
-                <ColorPanel color={current.color} recent={recent} onChange={setColor} />
-            </>
-        )
+        ? <ColorPanel color={current.color} recent={recent} onChange={setColor} />
         : popover === 'paper'
             ? <PaperPicker paper={paper} onChange={setPaper} />
             : null;
@@ -464,7 +644,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         <View
             style={[
                 styles.popover,
-                isTablet ? (popover === 'paper' ? styles.popoverTabletRight : styles.popoverTablet) : styles.popoverPhone,
+                isTablet
+                    ? [styles.popoverTablet, popover === 'paper' ? { right: 12 } : { left: Math.max(12, (width - 372) / 2) }]
+                    : styles.popoverPhone,
                 !isTablet && { maxHeight: height * 0.6 },
             ]}
         >
@@ -476,110 +658,145 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} supportedOrientations={['portrait', 'landscape']}>
-            <GestureHandlerRootView style={styles.root}>
-                <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
-                    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                        <TouchableOpacity onPress={handleClose} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.close', 'Close')}>
-                            <MaterialIcons name="close" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleUndo} disabled={!state.undo.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.undo', 'Undo')}>
-                            <MaterialIcons name="undo" size={24} color={state.undo.length ? colors.text : colors.textMuted} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleRedo} disabled={!state.redo.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.redo', 'Redo')}>
-                            <MaterialIcons name="redo" size={24} color={state.redo.length ? colors.text : colors.textMuted} />
-                        </TouchableOpacity>
-                        <View style={styles.headerSpacer} />
-                        {stylusSeen && (
-                            <TouchableOpacity
-                                onPress={() => setStylusOnly((value) => !value)}
-                                style={[styles.headerButton, !stylusOnly && styles.toolButtonActive]}
-                                accessibilityRole="switch"
-                                accessibilityState={{ checked: !stylusOnly }}
-                                accessibilityLabel={t('drawing.fingerDrawing', 'Draw with finger')}
-                            >
-                                <MaterialCommunityIcons name={stylusOnly ? 'hand-back-right-off' : 'hand-back-right'} size={22} color={stylusOnly ? colors.textSecondary : colors.primary} />
+            {/* Palm rejection and every pen sample: above the gesture root, so gestures see the filtered touches. */}
+            <InkInputView style={styles.root} collapsable={false}>
+                <GestureHandlerRootView style={styles.root}>
+                    <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
+                        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                            <TouchableOpacity onPress={handleClose} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.close', 'Close')}>
+                                <MaterialIcons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                            onPress={() => (popover === 'paper' ? closePopover() : setPopover('paper'))}
-                            style={[styles.headerButton, popover === 'paper' && styles.toolButtonActive]}
-                            accessibilityRole="button"
-                            accessibilityState={{ expanded: popover === 'paper' }}
-                            accessibilityLabel={t('drawing.paper.title', 'Paper')}
-                        >
-                            <MaterialCommunityIcons name="notebook-outline" size={22} color={popover === 'paper' ? colors.primary : colors.textSecondary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleDone} style={[styles.doneButton, { backgroundColor: colors.primary }]} accessibilityRole="button" accessibilityLabel={t('a11y.done', 'Done')}>
-                            <Text style={[styles.doneText, { color: colors.onPrimary }]}>{t('drawing.done', 'Done')}</Text>
-                        </TouchableOpacity>
-                    </View>
+                            <TouchableOpacity onPress={handleUndo} disabled={!state.undo.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.undo', 'Undo')}>
+                                <MaterialIcons name="undo" size={24} color={state.undo.length ? colors.text : colors.textMuted} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleRedo} disabled={!state.redo.length} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.redo', 'Redo')}>
+                                <MaterialIcons name="redo" size={24} color={state.redo.length ? colors.text : colors.textMuted} />
+                            </TouchableOpacity>
+                            {inlineTools ? (
+                                <View style={styles.headerTools}>{toolBarContent}</View>
+                            ) : (
+                                <View style={styles.headerSpacer} />
+                            )}
+                            {!inlineTools && (
+                                <TouchableOpacity
+                                    onPress={() => setToolsHidden((value) => !value)}
+                                    style={[styles.headerButton, toolsHidden && styles.toolButtonActive]}
+                                    accessibilityRole="switch"
+                                    accessibilityState={{ checked: !toolsHidden }}
+                                    accessibilityLabel={t('drawing.showTools', 'Show tools')}
+                                >
+                                    <MaterialCommunityIcons
+                                        name={toolsHidden ? 'chevron-down' : 'chevron-up'}
+                                        size={24}
+                                        color={toolsHidden ? colors.primary : colors.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                            )}
+                            {stylusSeen && (
+                                <TouchableOpacity
+                                    onPress={() => setStylusOnly((value) => !value)}
+                                    style={[styles.headerButton, !stylusOnly && styles.toolButtonActive]}
+                                    accessibilityRole="switch"
+                                    accessibilityState={{ checked: !stylusOnly }}
+                                    accessibilityLabel={t('drawing.fingerDrawing', 'Draw with finger')}
+                                >
+                                    <MaterialCommunityIcons name={stylusOnly ? 'hand-back-right-off' : 'hand-back-right'} size={22} color={stylusOnly ? colors.textSecondary : colors.primary} />
+                                </TouchableOpacity>
+                            )}
+                            {/* Its place is kept, so the tools do not shift when the first pen touch adds it. */}
+                            {!stylusSeen && inlineTools && <View style={styles.headerButton} />}
+                            <TouchableOpacity
+                                onPress={() => (popover === 'paper' ? closePopover() : setPopover('paper'))}
+                                style={[styles.headerButton, popover === 'paper' && styles.toolButtonActive]}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: popover === 'paper' }}
+                                accessibilityLabel={t('drawing.paper.title', 'Paper')}
+                            >
+                                <MaterialCommunityIcons name="notebook-outline" size={22} color={popover === 'paper' ? colors.primary : colors.textSecondary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleDone} style={[styles.doneButton, { backgroundColor: colors.primary }]} accessibilityRole="button" accessibilityLabel={t('a11y.done', 'Done')}>
+                                <Text style={[styles.doneText, { color: colors.onPrimary }]}>{t('drawing.done', 'Done')}</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                    <View ref={canvasAreaRef} style={styles.root} collapsable={false}>
-                        <DrawingCanvas
-                            ref={canvasRef}
-                            bottomInset={textEdit && keyboardTop !== null ? height - keyboardTop : 0}
-                            strokes={strokes}
-                            texts={texts}
-                            textBoxes={textBoxes}
-                            paper={paper}
-                            docWidth={docWidth}
-                            onMeasure={handleMeasure}
-                            mode={mode}
-                            tool={inkTool}
-                            color={current.color}
-                            size={size}
-                            stylusOnly={stylusOnly}
-                            editingText={textEdit?.index ?? null}
-                            dark={dark}
-                            themePaperColor={colors.background}
-                            themeLineColor={colors.border}
-                            deskColor={colors.backgroundSecondary}
-                            onCommit={handleCommit}
-                            onErase={handleErase}
-                            onEraseEnd={handleEraseEnd}
-                            onTextTap={handleTextTap}
-                            onTextMove={handleTextMove}
-                            onStylus={handleStylus}
-                            onUndo={handleUndo}
-                            onRedo={handleRedo}
-                        />
-                        {textEdit && (
-                            <TextInput
-                                autoFocus
-                                multiline
-                                value={textEdit.value}
-                                onChangeText={(value) => setTextEdit((edit) => (edit ? { ...edit, value } : edit))}
-                                onBlur={commitTextEdit}
-                                placeholder={t('drawing.textPlaceholder', 'Type here')}
-                                placeholderTextColor={colors.textMuted}
-                                style={[
-                                    styles.textField,
-                                    {
-                                        left: Math.max(4, textEdit.screenX - 6),
-                                        top: Math.max(4, textEdit.screenY - 4),
-                                        maxWidth: width - Math.max(4, textEdit.screenX - 6) - 12,
-                                        fontSize: editingTextSize * textEdit.scale,
-                                        lineHeight: editingTextSize * textEdit.scale * INK_TEXT_LINE_HEIGHT,
-                                        color: paper.color || !dark ? settings.text.color : colors.text,
-                                    },
-                                ]}
-                            />
-                        )}
-                        {isTablet && (
-                            <View pointerEvents="box-none" style={styles.floatingLayer}>
-                                {toolPalette}
-                                {popover === 'tool' && popoverView}
+                        {!inlineTools && !toolsHidden && (
+                            // Docked above the canvas, never over it.
+                            <View style={[styles.toolRow, { borderBottomColor: colors.border }]}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolRowContent} keyboardShouldPersistTaps="handled">
+                                    {toolBarContent}
+                                </ScrollView>
                             </View>
                         )}
-                        {isTablet && popover === 'paper' && popoverView}
-                        {!isTablet && popover && (
-                            <Pressable style={StyleSheet.absoluteFill} onPress={closePopover} accessibilityLabel={t('a11y.close', 'Close')} />
-                        )}
-                        {!isTablet && popoverView}
-                    </View>
-                    {!isTablet && toolPalette}
-                </SafeAreaView>
-            </GestureHandlerRootView>
+                        <View ref={canvasAreaRef} style={styles.root} collapsable={false}>
+                            <DrawingCanvas
+                                ref={canvasRef}
+                                bottomInset={textEdit && keyboardTop !== null ? height - keyboardTop : 0}
+                                strokes={strokes}
+                                texts={texts}
+                                textBoxes={textBoxes}
+                                paper={paper}
+                                docWidth={docWidth}
+                                onMeasure={handleMeasure}
+                                mode={mode}
+                                tool={inkTool}
+                                color={current.color}
+                                size={size}
+                                stylusOnly={stylusOnly}
+                                eraserRadius={ERASER_SIZES[eraser.sizeIndex] ?? ERASER_SIZES[1]}
+                            snapShapes={snapShapes}
+                                editingText={textEdit?.index ?? null}
+                                dark={dark}
+                                themePaperColor={colors.background}
+                                themeLineColor={colors.border}
+                                deskColor={colors.backgroundSecondary}
+                                onCommit={handleCommit}
+                                onErase={handleErase}
+                                onEraseEnd={handleEraseEnd}
+                                onTextTap={handleTextTap}
+                                onTextMove={handleTextMove}
+                                onStylus={handleStylus}
+                                onUndo={handleUndo}
+                                onRedo={handleRedo}
+                                selection={selection}
+                                onLasso={handleLasso}
+                                onSelectionMove={handleSelectionMove}
+                            />
+                            {textEdit && (
+                                <TextInput
+                                    autoFocus
+                                    multiline
+                                    value={textEdit.value}
+                                    onChangeText={(value) => setTextEdit((edit) => (edit ? { ...edit, value } : edit))}
+                                    onBlur={commitTextEdit}
+                                    placeholder={t('drawing.textPlaceholder', 'Type here')}
+                                    placeholderTextColor={colors.textMuted}
+                                    style={[
+                                        styles.textField,
+                                        {
+                                            left: Math.max(4, textEdit.screenX - 6),
+                                            top: Math.max(4, textEdit.screenY - 4),
+                                            maxWidth: width - Math.max(4, textEdit.screenX - 6) - 12,
+                                            fontSize: editingTextSize * textEdit.scale,
+                                            lineHeight: editingTextSize * textEdit.scale * INK_TEXT_LINE_HEIGHT,
+                                            color: paper.color || !dark ? settings.text.color : colors.text,
+                                        },
+                                    ]}
+                                />
+                            )}
+                            {selectionBar}
+                            {tip && (
+                                <View pointerEvents="none" style={styles.tip}>
+                                    <Text style={styles.tipText}>{tip}</Text>
+                                </View>
+                            )}
+                            {!isTablet && popover && (
+                                <Pressable style={StyleSheet.absoluteFill} onPress={closePopover} accessibilityLabel={t('a11y.close', 'Close')} />
+                            )}
+                            {popoverView}
+                        </View>
+                    </SafeAreaView>
+                </GestureHandlerRootView>
+            </InkInputView>
         </Modal>
     );
 };
@@ -598,36 +815,15 @@ const styles = createStyles(() => ({
     headerSpacer: { flex: 1 },
     doneButton: { paddingHorizontal: 18, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
     doneText: { fontSize: 15, fontWeight: '600' },
-    floatingLayer: { position: 'absolute', top: 12, left: 0, right: 0, alignItems: 'center' },
-    palette: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.surface,
-        paddingHorizontal: 6,
-        gap: 2,
-    },
-    paletteFloating: {
-        borderRadius: 28,
-        paddingVertical: 4,
-        shadowColor: '#000',
-        shadowOpacity: 0.16,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 6,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: colors.border,
-    },
-    paletteDocked: {
-        justifyContent: 'space-around',
-        paddingVertical: 6,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: colors.border,
-    },
-    paletteDivider: { width: StyleSheet.hairlineWidth, height: 28, backgroundColor: colors.border, marginHorizontal: 4 },
-    toolButton: { width: 46, height: 48, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+    headerTools: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+    toolRow: { height: 50, borderBottomWidth: StyleSheet.hairlineWidth, backgroundColor: colors.surface },
+    toolRowContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, gap: 2 },
+    paletteDivider: { width: StyleSheet.hairlineWidth, height: 26, backgroundColor: colors.border, marginHorizontal: 6 },
+    toolButton: { width: 40, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     toolButtonActive: { backgroundColor: colors.backgroundSecondary },
-    toolInk: { position: 'absolute', bottom: 7, width: 14, height: 3, borderRadius: 2 },
-    colorDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.border },
+    toolInk: { position: 'absolute', bottom: 5, width: 14, height: 3, borderRadius: 2 },
+    swatchButton: { width: 36, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    swatch: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
     popover: {
         backgroundColor: colors.surface,
         borderRadius: 20,
@@ -641,12 +837,43 @@ const styles = createStyles(() => ({
         overflow: 'hidden',
     },
     popoverScroll: { padding: 14, gap: 14 },
-    popoverTablet: { marginTop: 10, width: 372, maxHeight: 560 },
-    popoverTabletRight: { position: 'absolute', top: 8, right: 12, width: 372, maxHeight: 600 },
-    popoverPhone: { position: 'absolute', left: 12, right: 12, bottom: 8 },
-    sizeRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    sizeButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-    sizeButtonActive: { backgroundColor: colors.backgroundSecondary },
+    popoverTablet: { position: 'absolute', top: 8, width: 372, maxHeight: 600 },
+    popoverPhone: { position: 'absolute', left: 12, right: 12, top: 8 },
+    selectionBar: {
+        position: 'absolute',
+        top: 12,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 6,
+        borderRadius: 22,
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+        shadowColor: '#000',
+        shadowOpacity: 0.14,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 5,
+    },
+    selectionButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, paddingHorizontal: 12, borderRadius: 22 },
+    selectionText: { fontSize: 14, fontWeight: '600' },
+    disabled: { opacity: 0.35 },
+    tip: {
+        position: 'absolute',
+        bottom: 24,
+        alignSelf: 'center',
+        maxWidth: '90%',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 16,
+        backgroundColor: 'rgba(0,0,0,0.72)',
+    },
+    tipText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500', textAlign: 'center' },
+    modeButton: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 44, borderRadius: 12, paddingHorizontal: 10 },
+    modeText: { fontSize: 14, fontWeight: '600' },
+    sizeButton: { width: 36, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     textField: {
         position: 'absolute',
         minWidth: 180,
