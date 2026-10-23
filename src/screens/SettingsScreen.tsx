@@ -449,6 +449,8 @@ export const SettingsScreen = () => {
     const [onDeviceTranscription, setOnDeviceTranscriptionState] = useState(false);
     const [offlineStatus, setOfflineStatus] = useState<OfflineStatus | null>(null);
     const [offlinePlan, setOfflinePlan] = useState<OfflinePlan | null>(null);
+    // Until the first read, a missing plan does not mean "no free space".
+    const [offlineChecked, setOfflineChecked] = useState(false);
     // Non-null while offline mode downloads: bytes across both models.
     const [offlineProgress, setOfflineProgress] = useState<{ loaded: number; total: number } | null>(null);
     // Off keeps the downloaded models on the phone; they are just not used.
@@ -503,6 +505,9 @@ export const SettingsScreen = () => {
                 : offlineStatus.aiReady
                     ? t('settings.voice.offlineReadyAll', 'Ready · speech and AI work without internet')
                     : t('settings.voice.offlineReadySpeech', 'Ready · speech works without internet'))
+            // Not read yet: "no free space" (a missing plan) only once it is known.
+            : !offlineChecked
+                ? t('common.loading', 'Loading...')
             : offlinePlan
                 ? t(offlinePlan.llmKey ? 'settings.voice.offlineHintAll' : 'settings.voice.offlineHintSpeech', offlinePlan.llmKey ? 'Speech and AI without internet · {{size}}' : 'Speech without internet · {{size}}', {
                     size: formatModelSize(offlinePlan.downloadBytes, t),
@@ -609,6 +614,8 @@ export const SettingsScreen = () => {
             setModelSummary([...choices.speech, ...choices.ai].filter((c) => c.current).map((c) => c.name).join(' · '));
         } catch (error) {
             console.warn('Failed to read offline mode state', error);
+        } finally {
+            setOfflineChecked(true);
         }
     }, []);
 

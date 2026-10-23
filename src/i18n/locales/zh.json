@@ -552,6 +552,7 @@
     },
     "titlePlaceholder": "标题",
     "charactersCount": "{{count}} 个字符",
+    "charactersCount_other": "{{count}} 个字符",
     "placeholderVisual": "开始输入…",
     "placeholderMarkdown": "开始输入 Markdown…",
     "promptNamePlaceholder": "提示词名称",

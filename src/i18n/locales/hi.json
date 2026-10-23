@@ -552,6 +552,8 @@
     },
     "titlePlaceholder": "शीर्षक",
     "charactersCount": "{{count}} अक्षर",
+    "charactersCount_one": "{{count}} अक्षर",
+    "charactersCount_other": "{{count}} अक्षर",
     "placeholderVisual": "लिखना शुरू करें...",
     "placeholderMarkdown": "मार्कडाउन लिखना शुरू करें...",
     "promptNamePlaceholder": "प्रॉम्प्ट नाम",

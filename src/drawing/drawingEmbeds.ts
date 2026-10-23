@@ -93,7 +93,13 @@ export const getDrawingBridge = (onOpen?: (doc: DrawingDocument) => void) => new
  * the tiptap instance (tiptap keeps it on the ProseMirror DOM node), so the change
  * is a real document transaction and reaches the note through the usual update.
  */
-export const buildDrawingCommandJs = (command: { id: string; src: string | null; pos?: number }): string => `
+export const buildDrawingCommandJs = (command: {
+    id: string;
+    src: string | null;
+    pos?: number;
+    /** A new drawing goes at the caret (the editor was blurred to open the canvas). */
+    atCaret?: boolean;
+}): string => `
 (() => {
   try {
     const editor = document.querySelector('.ProseMirror')?.editor;
@@ -137,21 +143,47 @@ export const buildDrawingCommandJs = (command: { id: string; src: string | null;
     });
     // Back from the canvas, the note shows the top of the drawing. Without this
     // the caret after a tall drawing scrolled the note to its blank bottom, and
-    // the drawing looked lost.
-    const reveal = () => {
-      requestAnimationFrame(() => {
-        let pos = null;
-        editor.state.doc.descendants((node, at) => {
-          if (pos === null && idAt(node) === command.id) pos = at;
-          return pos === null;
-        });
-        if (pos === null) return;
-        const dom = editor.view.nodeDOM(pos);
-        const image = dom && (dom.tagName === 'IMG' ? dom : dom.querySelector && dom.querySelector('img'));
-        if (!image) return;
-        const show = () => image.scrollIntoView({ block: 'start' });
-        if (image.complete) show(); else image.addEventListener('load', show, { once: true });
+    // the drawing looked lost. Later scrolling (the selection after the insert,
+    // the WebView resizing as the keyboard goes) overrode a single scroll, so it
+    // is repeated over the next frames, until the user touches the note.
+    const findImage = () => {
+      let pos = null;
+      editor.state.doc.descendants((node, at) => {
+        if (pos === null && idAt(node) === command.id) pos = at;
+        return pos === null;
       });
+      if (pos === null) return null;
+      const dom = editor.view.nodeDOM(pos);
+      return dom && (dom.tagName === 'IMG' ? dom : dom.querySelector && dom.querySelector('img'));
+    };
+    const reveal = () => {
+      let cancelled = false;
+      const cancel = () => { cancelled = true; };
+      window.addEventListener('touchstart', cancel, { capture: true, once: true });
+      const show = () => {
+        if (cancelled) return;
+        const image = findImage();
+        if (image) image.scrollIntoView({ block: 'start' });
+      };
+      const showRepeatedly = () => {
+        show();
+        requestAnimationFrame(() => {
+          show();
+          requestAnimationFrame(show);
+        });
+        [120, 300, 600, 1000].forEach((delay) => setTimeout(show, delay));
+        setTimeout(() => window.removeEventListener('touchstart', cancel, { capture: true }), 1100);
+      };
+      requestAnimationFrame(() => {
+        const image = findImage();
+        if (!image) return;
+        if (image.complete) showRepeatedly();
+        else image.addEventListener('load', showRepeatedly, { once: true });
+      });
+    };
+    // A drawing command never brings up the keyboard.
+    const keepKeyboardDown = () => {
+      if (editor.view.hasFocus()) editor.view.dom.blur();
     };
     if (found) {
       const tr = editor.state.tr;
@@ -161,16 +193,18 @@ export const buildDrawingCommandJs = (command: { id: string; src: string | null;
         tr.delete(found.pos, found.pos + found.node.nodeSize);
       }
       editor.view.dispatch(tr);
+      keepKeyboardDown();
       if (command.src) reveal();
       return;
     }
     if (!command.src) return;
     const { selection, doc } = editor.state;
-    const at = editor.isFocused ? selection.to : doc.content.size;
+    const at = command.atCaret || editor.isFocused ? selection.to : doc.content.size;
     editor.chain().insertContentAt(at, [
       { type: 'image', attrs: { src: command.src } },
       { type: 'paragraph' },
     ]).run();
+    keepKeyboardDown();
     reveal();
   } catch (error) {
     console.warn('Drawing command failed', error);

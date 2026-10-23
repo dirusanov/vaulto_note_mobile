@@ -552,6 +552,8 @@
     },
     "titlePlaceholder": "Titel",
     "charactersCount": "{{count}} Zeichen",
+    "charactersCount_one": "{{count}} Zeichen",
+    "charactersCount_other": "{{count}} Zeichen",
     "placeholderVisual": "Schreib los ...",
     "placeholderMarkdown": "Markdown eingeben ...",
     "promptNamePlaceholder": "Prompt-Name",

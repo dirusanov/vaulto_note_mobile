@@ -552,6 +552,7 @@
     },
     "titlePlaceholder": "タイトル",
     "charactersCount": "{{count}} 文字",
+    "charactersCount_other": "{{count}} 文字",
     "placeholderVisual": "入力を始めましょう…",
     "placeholderMarkdown": "Markdown を入力…",
     "promptNamePlaceholder": "プロンプト名",

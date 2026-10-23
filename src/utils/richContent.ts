@@ -11,8 +11,6 @@ import {
 } from './audioEmbeds';
 
 const HTML_TAG_REGEX = /<\/?[a-z][\s\S]*>/i;
-const TASK_ITEM_HTML_REGEX = /<li\b[^>]*data-type=(["'])taskItem\1/i;
-const EMPTY_CHECKLIST_MARKDOWN_REGEX = /(?:^|\n)\s*-\s\[(?: |x|X)\]\s*(?=\n|$)/;
 const TRAILING_IMG_TAG_REGEX = /<img\b[^>]*>\s*$/i;
 /** An <li> with no further <li> inside it - i.e. the innermost item. */
 const LEAF_LIST_ITEM_REGEX = /<li\b([^>]*)>((?:(?!<li\b)[\s\S])*?)<\/li>/i;
@@ -398,10 +396,26 @@ export const richContentToPreviewText = (content: string, maxLines: number = 8, 
  * first sentence is used whole; a longer one is cut to its first words with
  * an ellipsis, so the title never reads as a finished phrase ("Ship v2 is").
  */
+const LEADING_LIST_MARKER_REGEX = /^(?:[-*+•]\s+|[☐☑]\s*|[-*+]?\s*\[[ xX]?\]\s+|\d+[.)]\s+)/;
+
+/**
+ * A line without its list marker: checkbox glyphs (☐ ☑), "- [ ]", bullets and
+ * "1." numbers belong to the list, not to a title made from the line.
+ */
+export const stripLeadingListMarker = (line: string): string => {
+    let result = (line || '').trim();
+    for (let guard = 0; guard < 4; guard += 1) {
+        const next = result.replace(LEADING_LIST_MARKER_REGEX, '').trim();
+        if (next === result) break;
+        result = next;
+    }
+    return result;
+};
+
 export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number = 6): string => {
     const firstLine = (plainText || '')
         .split('\n')
-        .map((line) => line.trim())
+        .map((line) => stripLeadingListMarker(line))
         .find(Boolean) || '';
     const sentence = firstLine.split(/(?<=[.!?。！？])\s|[:;]\s/)[0].replace(/[.!?。！？:;,]+$/, '');
     const words = sentence
@@ -566,10 +580,8 @@ export const hasMeaningfulRichContent = (content: string): boolean => {
         return true;
     }
 
-    if (TASK_ITEM_HTML_REGEX.test(sanitizedContent) || EMPTY_CHECKLIST_MARKDOWN_REGEX.test(sanitizedContent)) {
-        return true;
-    }
-
+    // An empty checklist item ("Checklist" tapped, nothing typed) is not
+    // content: it left blank ghost notes in the list.
     return /<img\b/i.test(sanitizedContent) || hasAudioEmbeds(sanitizedContent);
 };
 

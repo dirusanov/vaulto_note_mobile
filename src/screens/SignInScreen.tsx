@@ -115,6 +115,8 @@ export const SignInScreen = () => {
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.back', 'Back')}
                     >
                         <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>

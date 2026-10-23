@@ -491,6 +491,8 @@ export const stripStoredTitleMarkdown = (value: string): string => {
     if (!trimmed) return '';
     const cleaned = trimmed
         .replace(/^#{1,6}\s+/, '')
+        // Checkbox glyphs from a checklist's preview line ("☐ Milk") or a model title.
+        .replace(/^[☐☑]\s*/, '')
         .replace(/^[-*+]\s*\[(?:[ xX])?\]\s+/, '')
         .replace(/^[-*+]\s+/, '')
         .replace(/^\d+[.)]\s+/, '')
@@ -521,6 +523,8 @@ export const sanitizeDisplayLabel = (text: string): string => {
         .replace(/\u00a0/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
+        // A title taken from a checklist line keeps no checkbox glyph.
+        .replace(/^[☐☑]\s*/, '')
         .replace(WRAPPING_QUOTES_REGEX, '')
         .trim()
         .replace(/[\s:;,.\-–—]+$/, '')

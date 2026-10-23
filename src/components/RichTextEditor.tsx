@@ -85,11 +85,16 @@ interface RichTextEditorProps {
 export interface RichTextEditorHandle {
     handleFormat: (type: MarkdownFormatType) => void;
     focusBlockAt: (lineIndex: number, ratio?: number) => void;
+    /**
+     * Types text at the caret (a line break splits the line as Enter does):
+     * characters typed elsewhere while the editor was taking focus.
+     */
+    insertTextAtCaret: (text: string) => void;
     setContent: (content: string) => void;
     insertAudioEmbed: (payload: InsertAudioEmbedPayload) => void;
     setAudioEmbedState: (payload: AudioEmbedRuntimeState) => void;
     /** Inserts a new drawing, replaces the one with this id, or removes it (src null). */
-    applyDrawing: (command: { id: string; src: string | null; pos?: number }) => void;
+    applyDrawing: (command: { id: string; src: string | null; pos?: number; atCaret?: boolean }) => void;
     flushPendingChanges: () => Promise<string>;
     /** Current document as Markdown, serialized from the editor's own JSON. */
     getMarkdown: () => Promise<string>;
@@ -384,7 +389,6 @@ const getEditorCss = (
   .ProseMirror mark {
     padding: 0.04em 0.12em;
     border-radius: 0.22em;
-    color: ${colors.text};
   }
 
   .ProseMirror a {
@@ -415,9 +419,11 @@ const getEditorCss = (
     text-align: start;
   }
 
-  /* Highlight fills stay pastel in both themes, so their text stays dark. */
+  /* Highlight fills stay pastel in both themes, so their text stays dark.
+     Tiptap writes an inline "color: inherit" on every highlight, which beat
+     this rule and left the dark theme's white text on a pastel fill. */
   .ProseMirror mark {
-    color: #1A1A1A;
+    color: #1A1A1A !important;
     border-radius: 3px;
   }
 
@@ -749,6 +755,91 @@ true;
 `;
 
 
+/**
+ * JS for the editor WebView that puts a text caret at the start or end of the
+ * note (and/or types text there). A note that starts with an audio player or a
+ * drawing has no text position before it: tiptap's focus('start') selected that
+ * block as a node, and the first key typed replaced the recording. The caret
+ * goes to the first text position after leading audio/drawing blocks instead,
+ * with an empty line added after them when there is none.
+ */
+export const buildTextCaretJs = (command: { place: 'start' | 'end' | 'keep'; text?: string }): string => `
+(() => {
+  try {
+    const editor = document.querySelector('.ProseMirror')?.editor;
+    if (!editor) return;
+    const view = editor.view;
+    const command = ${JSON.stringify(command)};
+    const Sel = view.state.selection.constructor;
+    const hasText = (node) => {
+      let found = false;
+      node.descendants((child) => {
+        if (found) return false;
+        if (child.isText) found = true;
+        return !found;
+      });
+      return found;
+    };
+    // Audio players and drawings (images), or a line holding only them.
+    const isNonTextBlock = (node) => (
+      (!node.isTextblock && node.isAtom)
+      || (node.isTextblock && node.childCount > 0 && !hasText(node))
+    );
+    const placeCaret = (tr, place) => {
+      const doc = tr.doc;
+      if (place === 'end') {
+        const last = doc.lastChild;
+        if (!last || isNonTextBlock(last)) {
+          tr.insert(doc.content.size, view.state.schema.nodes.paragraph.create());
+        }
+        const sel = Sel.findFrom(tr.doc.resolve(tr.doc.content.size), -1, true);
+        if (sel) tr.setSelection(sel);
+        return;
+      }
+      let offset = 0;
+      let index = 0;
+      while (index < doc.childCount && isNonTextBlock(doc.child(index))) {
+        offset += doc.child(index).nodeSize;
+        index += 1;
+      }
+      let sel = index < doc.childCount ? Sel.findFrom(doc.resolve(offset), 1, true) : null;
+      if (!sel) {
+        tr.insert(offset, view.state.schema.nodes.paragraph.create());
+        sel = Sel.findFrom(tr.doc.resolve(offset + 1), 1, true);
+      }
+      if (sel) tr.setSelection(sel);
+    };
+    const tr = view.state.tr;
+    if (command.place !== 'keep') {
+      placeCaret(tr, command.place);
+    } else if (tr.selection.node) {
+      // Never type over a selected audio player or drawing.
+      const after = Sel.findFrom(tr.doc.resolve(tr.selection.to), 1, true);
+      if (after) {
+        tr.setSelection(after);
+      } else {
+        tr.insert(tr.doc.content.size, view.state.schema.nodes.paragraph.create());
+        const sel = Sel.findFrom(tr.doc.resolve(tr.doc.content.size), -1, true);
+        if (sel) tr.setSelection(sel);
+      }
+    }
+    view.dispatch(tr.scrollIntoView());
+    const lines = typeof command.text === 'string' ? command.text.split(/\\r\\n|\\r|\\n/) : [];
+    lines.forEach((line, index) => {
+      if (index > 0) {
+        if (typeof editor.commands.enter === 'function') editor.commands.enter();
+        else editor.commands.splitBlock();
+      }
+      if (line) view.dispatch(view.state.tr.insertText(line).scrollIntoView());
+    });
+    if (!view.hasFocus()) view.focus();
+  } catch (error) {
+    console.warn('Placing the caret failed', error);
+  }
+})();
+true;
+`;
+
 const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorProps>((props, ref) => {
 
     const {
@@ -882,6 +973,9 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     const latestHtmlRef = useRef(initialEditorHtmlRef.current);
     const lastReparseTriggerRef = useRef(reparseTrigger);
     const pendingProgrammaticHtmlRef = useRef<string | null>(null);
+    // What the editor showed before the pending programmatic load: a late
+    // report of it is stale, not an edit.
+    const htmlBeforeProgrammaticRef = useRef<string | null>(null);
     const pendingFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFocusedRef = useRef(false);
     const editorApi = editor as typeof editor & {
@@ -932,11 +1026,35 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             pendingFlushTimeoutRef.current = null;
         }
 
+        if (pendingProgrammaticHtmlRef.current === null) {
+            htmlBeforeProgrammaticRef.current = lastHtmlRef.current;
+        }
         pendingProgrammaticHtmlRef.current = nextHtml;
         latestHtmlRef.current = nextHtml;
         lastHtmlRef.current = nextHtml;
         lastExternalContentRef.current = content;
         editor.setContent(nextHtml);
+
+        // When Tiptap's rendering equals what the editor already reported, no
+        // new content report arrives to clear the pending load; every later
+        // edit was then dropped as "still loading" (not saved, not undoable).
+        // Confirm the rendering directly instead.
+        setTimeout(() => {
+            if (pendingProgrammaticHtmlRef.current !== nextHtml) {
+                return;
+            }
+            void editor.getHTML().then((html) => {
+                const renderedHtml = normalizeEditorHtml(html);
+                if (
+                    pendingProgrammaticHtmlRef.current === nextHtml
+                    && isEditorRenderingOf(nextHtml, renderedHtml)
+                ) {
+                    pendingProgrammaticHtmlRef.current = null;
+                    lastHtmlRef.current = renderedHtml;
+                    latestHtmlRef.current = renderedHtml;
+                }
+            }).catch(() => undefined);
+        }, 250);
     };
 
     const flushPendingContent = async (): Promise<string> => {
@@ -949,11 +1067,18 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
         }
 
         if (pendingProgrammaticHtmlRef.current !== null) {
-            if (isEditorRenderingOf(pendingProgrammaticHtmlRef.current, nextHtml)) {
-                pendingProgrammaticHtmlRef.current = null;
+            if (
+                isEditorRenderingOf(pendingProgrammaticHtmlRef.current, nextHtml)
+                || nextHtml === htmlBeforeProgrammaticRef.current
+            ) {
+                if (nextHtml !== htmlBeforeProgrammaticRef.current) {
+                    pendingProgrammaticHtmlRef.current = null;
+                }
+                lastHtmlRef.current = nextHtml;
+                return nextHtml;
             }
-            lastHtmlRef.current = nextHtml;
-            return nextHtml;
+            // Neither the old text nor the loaded one: an edit made after the load.
+            pendingProgrammaticHtmlRef.current = null;
         }
 
         if (nextHtml !== lastHtmlRef.current) {
@@ -1000,6 +1125,11 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     // does) a hidden input takes focus first and the editor then inherits the
     // open keyboard. The delay lets the screen transition finish.
     const [autoFocusPending, setAutoFocusPending] = useState(autoFocus);
+    const keyboardPrimerRef = useRef<TextInput | null>(null);
+    // The keyboard is up (on the primer) before the editor page has loaded,
+    // which can take seconds: what is typed meanwhile went into the hidden
+    // primer and was lost. It is kept and typed into the note on focus.
+    const primerTextRef = useRef('');
     useEffect(() => {
         if (!autoFocusPending || !editorState.isReady) {
             return;
@@ -1007,11 +1137,20 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
 
         const timer = setTimeout(() => {
             setAutoFocusPending(false);
-            editor.focus('end');
+            // The title (or another field) was tapped meanwhile: leave it there.
+            const focusedInput = TextInput.State.currentlyFocusedInput();
+            if (Platform.OS === 'android' && focusedInput && !keyboardPrimerRef.current?.isFocused()) {
+                primerTextRef.current = '';
+                return;
+            }
+            const typed = primerTextRef.current;
+            primerTextRef.current = '';
+            editor.focus(false);
+            editorApi.injectJS?.(buildTextCaretJs({ place: 'end', text: typed || undefined }));
         }, 350);
 
         return () => clearTimeout(timer);
-    }, [autoFocusPending, editor, editorState.isReady]);
+    }, [autoFocusPending, editor, editorApi, editorState.isReady]);
 
 
     useEffect(() => {
@@ -1051,8 +1190,15 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             if (isEditorRenderingOf(pendingProgrammaticHtmlRef.current, normalizedEditorHtml)) {
                 pendingProgrammaticHtmlRef.current = null;
                 lastHtmlRef.current = normalizedEditorHtml;
+                return;
             }
-            return;
+            // A late report of the text shown before the load.
+            if (normalizedEditorHtml === htmlBeforeProgrammaticRef.current) {
+                return;
+            }
+            // Anything else is an edit made after the load: report it, or it is
+            // neither saved nor undoable.
+            pendingProgrammaticHtmlRef.current = null;
         }
 
         if (normalizedEditorHtml === lastHtmlRef.current) {
@@ -1251,12 +1397,20 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     useImperativeHandle(ref, () => ({
         handleFormat: applyFormat,
         focusBlockAt: (_lineIndex: number, ratio: number = 1) => {
-            if (ratio <= 0) {
-                editor.focus('start');
+            // The caret is placed by the script, never on an audio/drawing block.
+            editorApi.injectJS?.(buildTextCaretJs({ place: ratio <= 0 ? 'start' : 'end' }));
+            // Native focus right away: tentap's focus() asks for it only 100 ms
+            // later, and keys typed meanwhile (after Enter in the title) went
+            // to the field that still had it. focus(false) moves no caret; it
+            // keeps tentap's focus state and its delayed request as a backstop.
+            editor.webviewRef.current?.requestFocus();
+            editor.focus(false);
+        },
+        insertTextAtCaret: (text: string) => {
+            if (!text) {
                 return;
             }
-
-            editor.focus('end');
+            editorApi.injectJS?.(buildTextCaretJs({ place: 'keep', text }));
         },
         setContent: (content: string) => {
             applyProgrammaticContent(content);
@@ -1306,7 +1460,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
                 true;
             `);
         },
-        applyDrawing: (command: { id: string; src: string | null; pos?: number }) => {
+        applyDrawing: (command: { id: string; src: string | null; pos?: number; atCaret?: boolean }) => {
             editorApi.injectJS?.(buildDrawingCommandJs(command));
         },
         flushPendingChanges: () => flushPendingContent(),
@@ -1319,7 +1473,15 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
     return (
         <View style={styles.editorShell}>
             {autoFocusPending && Platform.OS === 'android' && (
-                <TextInput autoFocus style={styles.keyboardPrimer} importantForAccessibility="no" />
+                <TextInput
+                    ref={keyboardPrimerRef}
+                    autoFocus
+                    style={styles.keyboardPrimer}
+                    importantForAccessibility="no"
+                    onChangeText={(text) => {
+                        primerTextRef.current = text;
+                    }}
+                />
             )}
             <RichText
                 editor={editor}

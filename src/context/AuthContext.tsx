@@ -332,7 +332,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 setIsGuest(!profile.is_verified && profile.provider === 'anonymous');
                 return profile;
             } catch (err) {
-                console.error('[AuthContext] Failed to refresh profile', err);
+                // An expired guest token answers 401 and is renewed right after:
+                // expected, so not an error (a red LogBox in dev builds).
+                const status = (err as { response?: { status?: number }; status?: number } | null)?.response?.status
+                    ?? (err as { status?: number } | null)?.status;
+                if (status === 401) {
+                    console.log('[AuthContext] Profile refresh needs a new session (401)');
+                } else {
+                    console.warn('[AuthContext] Failed to refresh profile', err);
+                }
                 return null;
             } finally {
                 refreshInFlight.current = null;

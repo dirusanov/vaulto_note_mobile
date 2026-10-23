@@ -133,6 +133,17 @@ import {
     stripAudioEmbedsFromRichContent,
     titleMatchesContextScript,
 } from '../utils/richContent';
+import {
+    splitTitleHandoffText,
+    TITLE_HANDOFF_DUPLICATE_SUBMIT_MS,
+    TITLE_HANDOFF_WINDOW_MS,
+} from '../utils/titleHandoff';
+import {
+    isHistoryEchoExpected,
+    pushHistoryStep,
+    recordHistoryChange,
+    type VariantHistory,
+} from '../utils/editHistory';
 import { getLocalizedPresetDescription, getLocalizedPresetLabel } from '../i18n/presetLabels';
 import { getVersionSwipeHintSeen, setVersionSwipeHintSeen } from '../utils/storage';
 import {
@@ -878,16 +889,7 @@ const buildAgentImprovementLabel = (
     return '';
 };
 
-// History stack implementation - separate history for each variant
-interface HistoryState {
-    content: string;
-    title: string;
-}
-
-interface VariantHistory {
-    history: HistoryState[];
-    index: number;
-}
+// History stack implementation - separate history for each variant (src/utils/editHistory.ts)
 
 interface PendingVoiceInsertion {
     recordingId: string;
@@ -1370,6 +1372,13 @@ export const NoteEditScreen = () => {
     // The history lives in a ref; this re-renders the Undo/Redo buttons when a
     // debounced step lands without any other state change (e.g. a ticked box).
     const [, setHistoryRevision] = useState(0);
+    // When the app last loaded content into a version's editor (initial load,
+    // version switch or accept, voice/AI insert). Only the first change after
+    // that may be the editor's echo of it; every other change is a step.
+    const historyEchoExpectedAtRef = useRef<Record<string, number>>({});
+    const expectHistoryEcho = useCallback((variantId: string) => {
+        historyEchoExpectedAtRef.current[variantId] = Date.now();
+    }, []);
 
     // Initialize history for original variant
     if (!variantHistories.current['original']) {
@@ -1377,6 +1386,7 @@ export const NoteEditScreen = () => {
             history: [{ title: existingNote?.title || '', content: stripAudioEmbedsFromRichContent(existingNote?.content || '') }],
             index: 0
         };
+        historyEchoExpectedAtRef.current['original'] = Date.now();
     }
 
     // Audio state
@@ -2605,6 +2615,7 @@ export const NoteEditScreen = () => {
                     }],
                     index: 0
                 };
+                expectHistoryEcho('original');
             }
         }
         // An opened note's original had text from the start, whatever its history
@@ -2658,6 +2669,7 @@ export const NoteEditScreen = () => {
                         history: [{ title: titleDrafts[imp.id] ?? titleValue, content: drafts[imp.id] }],
                         index: 0,
                     };
+                    expectHistoryEcho(imp.id);
                     if (hasMeaningfulRichContent(drafts[imp.id])) loadedWithTextRef.current.add(imp.id);
                 }
 
@@ -2823,39 +2835,26 @@ export const NoteEditScreen = () => {
 
         historyTimeoutRef.current = setTimeout(() => {
             const variantId = targetVariantId;
-            const currentHistory = variantHistories.current[variantId] || {
-                history: [],
-                index: -1
-            };
-            const hadUndo = currentHistory.index > 0;
-            const hadRedo = currentHistory.index < currentHistory.history.length - 1;
+            const currentHistory = variantHistories.current[variantId];
+            const hadUndo = !!currentHistory && currentHistory.index > 0;
+            const hadRedo = !!currentHistory && currentHistory.index < currentHistory.history.length - 1;
 
             // The editor reporting back the Markdown it was just given (a new or
-            // reopened version) is the same text, not an edit: it replaces the
-            // step instead of adding one Undo would "undo" without a visible change.
-            const currentEntry = currentHistory.history[currentHistory.index];
-            // Identical text is not an echo: that is a title edit, a step of its own.
-            if (currentEntry && currentEntry.content !== newContent && isEditorEchoOf(currentEntry.content, newContent)) {
-                const nextHistory = [...currentHistory.history];
-                nextHistory[currentHistory.index] = { title: newTitle, content: newContent };
-                variantHistories.current[variantId] = { history: nextHistory, index: currentHistory.index };
+            // reopened version) is the same text, not an edit. That is expected
+            // once, right after the app loaded it; later changes are all steps.
+            const echoExpected = isHistoryEchoExpected(historyEchoExpectedAtRef.current[variantId], Date.now());
+            delete historyEchoExpectedAtRef.current[variantId];
+
+            const result = recordHistoryChange(
+                currentHistory,
+                { title: newTitle, content: newContent },
+                { echoExpected, isEcho: isEditorEchoOf }
+            );
+            if (result.kind === 'unchanged') {
                 return;
             }
-
-            const newHistory = currentHistory.history.slice(0, currentHistory.index + 1);
-            newHistory.push({ title: newTitle, content: newContent });
-            // Limit history size to 50 items
-            if (newHistory.length > 50) {
-                newHistory.shift();
-            } else {
-                currentHistory.index++;
-            }
-
-            variantHistories.current[variantId] = {
-                history: newHistory,
-                index: currentHistory.index
-            };
-            if (!hadUndo || hadRedo) {
+            variantHistories.current[variantId] = result.history;
+            if (result.kind === 'step' && (!hadUndo || hadRedo)) {
                 setHistoryRevision(prev => prev + 1);
             }
         }, 500); // 500ms debounce
@@ -2868,25 +2867,12 @@ export const NoteEditScreen = () => {
         }
 
         const variantId = variantIdOverride ?? activeVariantIdRef.current;
-        const currentHistory = variantHistories.current[variantId] || {
-            history: [],
-            index: -1
-        };
-
-        const newHistory = currentHistory.history.slice(0, currentHistory.index + 1);
-        newHistory.push({ title: newTitle, content: newContent });
-
-        if (newHistory.length > 50) {
-            newHistory.shift();
-        } else {
-            currentHistory.index++;
-        }
-
-        variantHistories.current[variantId] = {
-            history: newHistory,
-            index: currentHistory.index
-        };
-
+        variantHistories.current[variantId] = pushHistoryStep(
+            variantHistories.current[variantId],
+            { title: newTitle, content: newContent }
+        );
+        // The app put this text into the editor; its rendering comes back next.
+        expectHistoryEcho(variantId);
     };
 
     const replaceCurrentHistoryState = useCallback((
@@ -2895,6 +2881,7 @@ export const NoteEditScreen = () => {
         contentValue: string
     ) => {
         const currentHistory = variantHistories.current[variantId];
+        expectHistoryEcho(variantId);
         if (!currentHistory || currentHistory.history.length === 0 || currentHistory.index < 0) {
             variantHistories.current[variantId] = {
                 history: [{ title: titleValue, content: contentValue }],
@@ -2910,7 +2897,7 @@ export const NoteEditScreen = () => {
             history: nextHistory,
             index: safeIndex,
         };
-    }, []);
+    }, [expectHistoryEcho]);
 
     const scrubAudioFromVariantHistory = useCallback((variantId: string, audioPath: string) => {
         const currentHistory = variantHistories.current[variantId];
@@ -3130,7 +3117,7 @@ export const NoteEditScreen = () => {
 
     // Debounced save
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const saveNoteRef = useRef<(() => Promise<void>) | null>(null);
+    const saveNoteRef = useRef<((options?: { skipEditorFlush?: boolean }) => Promise<void>) | null>(null);
 
 
 
@@ -3410,13 +3397,36 @@ export const NoteEditScreen = () => {
     }, [clearInlineEditorAudio, handleInlineEditorPlaybackStatus, pushInlineEditorAudioState, resolveAudioUri]);
 
     const [drawingDocument, setDrawingDocument] = useState<DrawingDocument | null>(null);
+    // Whether the new drawing goes at the caret: the editor is blurred before
+    // the canvas opens, so it no longer counts as focused when the drawing lands.
+    const drawingAtCaretRef = useRef(false);
     const handleNewDrawing = useCallback(async () => {
-        setDrawingDocument({ id: await generateUUID(), width: 0, strokes: [] });
+        drawingAtCaretRef.current = visualEditorFocusedRef.current;
+        // With the keyboard up the canvas opened black behind it for seconds.
+        const keyboardWasUp = Keyboard.isVisible();
+        editorRef.current?.blur();
+        titleInputRef.current?.blur();
+        Keyboard.dismiss();
+        const id = await generateUUID();
+        if (keyboardWasUp) {
+            await new Promise<void>((resolve) => {
+                const timer = setTimeout(done, 400);
+                const subscription = Keyboard.addListener('keyboardDidHide', done);
+                function done() {
+                    clearTimeout(timer);
+                    subscription.remove();
+                    resolve();
+                }
+            });
+        }
+        if (!isMounted.current) return;
+        setDrawingDocument({ id, width: 0, strokes: [] });
     }, []);
     const applyDrawingToNote = useCallback((doc: DrawingDocument) => {
         editorRef.current?.applyDrawing({
             id: doc.id,
             pos: doc.pos,
+            atCaret: drawingAtCaretRef.current,
             // Nothing drawn or typed left: remove the drawing from the note.
             src: doc.strokes.length || doc.texts?.length ? buildDrawingSrc(doc) : null,
         });
@@ -3765,15 +3775,40 @@ export const NoteEditScreen = () => {
 
         if (isContentEmpty && !hasAudio && !hasImprovements) {
             if (noteId) {
+                // Same lock as creation: an edit typed while the delete is in
+                // flight must not update the note being deleted; it is saved
+                // (as a new note) right after.
+                isCreatingNote.current = true;
+                pendingSaveAfterCreate.current = false;
+                let deleted = false;
                 try {
                     await deleteNote(noteId);
+                    deleted = true;
+                    localNoteIdRef.current = undefined;
+                    if (createdDraftNoteIdRef.current === noteId) {
+                        createdDraftNoteIdRef.current = null;
+                    }
                     if (isMounted.current) {
                         setLocalNoteId(undefined);
+                        // The route still named the deleted note, and a route
+                        // note that is not the shown one keeps the editor behind
+                        // a spinner for good. The screen goes on as a new note.
+                        updateRouteParamsIfCurrent({ noteId: undefined });
                     }
                     lastSavedTitle.current = '';
                     lastSavedContent.current = '';
                 } catch (error) {
                     console.error('Failed to delete empty note:', error);
+                } finally {
+                    isCreatingNote.current = false;
+                }
+                const typedMeanwhile = currentTitleRef.current.trim()
+                    || hasMeaningfulRichContent(stripAudioEmbedsFromRichContent(currentContentRef.current));
+                if (deleted && isMounted.current && (pendingSaveAfterCreate.current || typedMeanwhile)) {
+                    pendingSaveAfterCreate.current = false;
+                    saveNoteRef.current?.({ skipEditorFlush: true }).catch((error) => {
+                        console.error('Failed to save the note typed while the empty one was deleted:', error);
+                    });
                 }
             }
             return;
@@ -3865,7 +3900,7 @@ export const NoteEditScreen = () => {
                 setIsSaving(false);
             }
         }
-    }, [bindCreatedDraftToRoute, createNote, deleteNote, flushVisualEditorContent, handleCreatedNoteAutoScale, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote]);
+    }, [bindCreatedDraftToRoute, createNote, deleteNote, flushVisualEditorContent, handleCreatedNoteAutoScale, noteImprovements.length, privacy, saveImprovementDraft, storageScope, syncTrackedProcessingToNote, updateNote, updateRouteParamsIfCurrent]);
 
     // App going to the background with the drawing canvas open: Android may end
     // the app, so the drawing goes into the note and is saved right away. The
@@ -4163,6 +4198,7 @@ export const NoteEditScreen = () => {
             history: [{ title: variantTitle, content: visibleContent }],
             index: 0
         };
+        expectHistoryEcho(variantId);
         if (hasMeaningfulRichContent(visibleContent)) loadedWithTextRef.current.add(variantId);
         else loadedWithTextRef.current.delete(variantId);
 
@@ -4398,7 +4434,8 @@ export const NoteEditScreen = () => {
             if (!iso) return undefined;
             const date = new Date(iso);
             if (Number.isNaN(date.getTime())) return undefined;
-            return date.toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            // 24-hour, as the editor's own date line.
+            return date.toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
         };
         return [
             {
@@ -5026,6 +5063,7 @@ export const NoteEditScreen = () => {
                                         history: [{ title: improvementTitle, content: newText }],
                                         index: 0,
                                     };
+                                    expectHistoryEcho(improvement.id);
                                     loadedWithTextRef.current.add(improvement.id);
 
                                     // Optionally keep user on Original even when instruction produced an improvement.
@@ -6283,7 +6321,7 @@ export const NoteEditScreen = () => {
             // note's own title, or "Meeting · <date>".
             const meetingTitle = option.id === 'meeting'
                 ? ((title || existingNote?.title || '').trim() || t('meeting.title', 'Meeting · {{date}}', {
-                    date: new Date().toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+                    date: new Date().toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }),
                 }))
                 : '';
             // A custom instruction names its version after itself ("Translate to
@@ -6316,6 +6354,7 @@ export const NoteEditScreen = () => {
                 history: [{ title: improvementTitle, content: finalText }],
                 index: 0
             };
+            expectHistoryEcho(improvement.id);
             loadedWithTextRef.current.add(improvement.id);
 
             setActiveVariantId(improvement.id);
@@ -6916,20 +6955,89 @@ export const NoteEditScreen = () => {
     };
 
     // Enter in the title continues in the text, at its start (Keep does the same).
+    // The keyboard keeps typing into the title for a moment after the editor
+    // WebView took focus: what is typed into the title meanwhile belongs to the
+    // text and is moved there (it used to be lost). The title input keeps showing
+    // those characters until the handoff ends: resetting it at once restarted the
+    // keyboard's input mid-typing and lost the next key.
+    const titleHandoffRef = useRef<{ title: string; moved: string; startedAt: number } | null>(null);
+    const [titleHandoffShown, setTitleHandoffShown] = useState<string | null>(null);
+    const titleHandoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const endTitleHandoff = useCallback(() => {
+        titleHandoffRef.current = null;
+        if (titleHandoffTimerRef.current) {
+            clearTimeout(titleHandoffTimerRef.current);
+            titleHandoffTimerRef.current = null;
+        }
+        setTitleHandoffShown(null);
+    }, []);
+    const activeTitleHandoff = () => {
+        const handoff = titleHandoffRef.current;
+        if (handoff && Date.now() - handoff.startedAt > TITLE_HANDOFF_WINDOW_MS) {
+            endTitleHandoff();
+            return null;
+        }
+        return handoff;
+    };
+    useEffect(() => () => {
+        if (titleHandoffTimerRef.current) clearTimeout(titleHandoffTimerRef.current);
+    }, []);
     const focusBodyFromTitle = useCallback(() => {
         if (rawEditorRef.current) {
             rawEditorRef.current.focus();
             return;
         }
+        const handoff = activeTitleHandoff();
+        if (handoff) {
+            // A further Enter before the editor took over: a new line in the text
+            // (unless it is the same key press reported twice).
+            if (Date.now() - handoff.startedAt > TITLE_HANDOFF_DUPLICATE_SUBMIT_MS) {
+                editorRef.current?.insertTextAtCaret('\n');
+            }
+            return;
+        }
+        titleHandoffRef.current = {
+            title: activeVariantIdRef.current === 'original' ? currentTitleRef.current : noteTitleRef.current,
+            moved: '',
+            startedAt: Date.now(),
+        };
+        if (titleHandoffTimerRef.current) clearTimeout(titleHandoffTimerRef.current);
+        titleHandoffTimerRef.current = setTimeout(endTitleHandoff, TITLE_HANDOFF_WINDOW_MS);
         editorRef.current?.focusBlockAt(0, 0);
-    }, []);
+    }, [endTitleHandoff]);
+    const handleHeaderTitleChange = useCallback((text: string) => {
+        const handoff = activeTitleHandoff();
+        const split = handoff ? splitTitleHandoffText(handoff.title, handoff.moved, text) : null;
+        if (handoff && split) {
+            if (split.moved) {
+                handoff.moved = text.slice(handoff.title.length);
+                setTitleHandoffShown(text);
+                editorRef.current?.insertTextAtCaret(split.moved);
+            }
+            return;
+        }
+        if (handoff) {
+            endTitleHandoff();
+        }
+        if (activeVariantIdRef.current === 'original') {
+            handleTitleChange(text);
+        } else {
+            handleNoteTitleEditOnVariant(text);
+        }
+    }, [endTitleHandoff, handleNoteTitleEditOnVariant, handleTitleChange]);
+    // The title blurs as soon as the editor takes focus, while the keyboard may
+    // still type into it, so only tapping the title again ends the handoff.
+    const handleHeaderTitleFocus = useCallback(() => {
+        setIsEditing(true);
+        if (titleHandoffRef.current) endTitleHandoff();
+    }, [endTitleHandoff]);
 
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
-                title={activeVariantId === 'original' ? title : noteTitle}
-                onChange={activeVariantId === 'original' ? handleTitleChange : handleNoteTitleEditOnVariant}
-                onFocus={() => setIsEditing(true)}
+                title={titleHandoffShown ?? (activeVariantId === 'original' ? title : noteTitle)}
+                onChange={handleHeaderTitleChange}
+                onFocus={handleHeaderTitleFocus}
                 onSubmit={focusBodyFromTitle}
                 inputRef={titleInputRef}
             />
@@ -6966,8 +7074,9 @@ export const NoteEditScreen = () => {
         activeVariantId,
         charCount,
         dateStr,
-        handleNoteTitleEditOnVariant,
-        handleTitleChange,
+        handleHeaderTitleFocus,
+        handleHeaderTitleChange,
+        titleHandoffShown,
         handleVariantSelect,
         improvementOptionIcons,
         noteTitle,

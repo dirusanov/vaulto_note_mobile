@@ -552,6 +552,10 @@
     },
     "titlePlaceholder": "Заголовок",
     "charactersCount": "символов: {{count}}",
+    "charactersCount_one": "{{count}} символ",
+    "charactersCount_few": "{{count}} символа",
+    "charactersCount_many": "{{count}} символов",
+    "charactersCount_other": "{{count}} символа",
     "placeholderVisual": "Начните писать...",
     "placeholderMarkdown": "Начните писать markdown...",
     "promptNamePlaceholder": "Название промпта",
@@ -588,7 +592,7 @@
         "description": "Итоги, решения и задачи"
       },
       "checklist": {
-        "label": "Чеклист",
+        "label": "Чек-лист",
         "description": "Превратить заметку в список задач"
       }
     },
@@ -612,7 +616,7 @@
       "deleted": "Версия удалена",
       "undo": "Отменить",
       "kind": {
-        "checklist": "Чеклист",
+        "checklist": "Чек-лист",
         "list": "Список",
         "formatted": "Форматирование",
         "agent": "ИИ-агент",
