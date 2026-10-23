@@ -1,3 +1,9 @@
+# 1.0.100 — 2026-10-23
+
+- iOS: remove unused background audio capability for App Review 2.5.4.
+- Explicitly disable background playback/recording in the Expo audio plugin so regeneration cannot reintroduce the capability. Foreground recording and playback remain available.
+- This iOS correction is based on submitted 1.0.95; it does not incorporate later unrelated Android/drawing work.
+
 # 1.0.95
 
 - Ask permission before iOS cloud AI uploads, identify the service, and allow revocation in Settings.

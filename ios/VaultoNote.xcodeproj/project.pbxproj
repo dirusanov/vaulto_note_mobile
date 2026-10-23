@@ -421,7 +421,7 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = VaultoNote/VaultoNote.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 100;
 				DEVELOPMENT_TEAM = PC7H2H9BH5;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -435,7 +435,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.4;
-				MARKETING_VERSION = 1.0.95;
+				MARKETING_VERSION = 1.0.100;
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(inherited)",
 					"-std=gnu++20",
@@ -465,7 +465,7 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = VaultoNote/VaultoNote.entitlements;
-				CURRENT_PROJECT_VERSION = 95;
+				CURRENT_PROJECT_VERSION = 100;
 				DEVELOPMENT_TEAM = PC7H2H9BH5;
 				INFOPLIST_FILE = VaultoNote/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
@@ -474,7 +474,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.4;
-				MARKETING_VERSION = 1.0.95;
+				MARKETING_VERSION = 1.0.100;
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(inherited)",
 					"-std=gnu++20",
