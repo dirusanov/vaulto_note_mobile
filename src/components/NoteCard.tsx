@@ -152,7 +152,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const isDrawingOnly = !isVoiceOnly && hasDrawing && !title && !fullPreview.trim();
     // A thumbnail shows what is drawn; the stored preview picture is reused.
     const drawingSvg = useMemo(() => (hasDrawing ? firstDrawingSvg(content) : null), [hasDrawing, content]);
-    const voiceDuration = isVoiceOnly ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
+    const voiceDuration = hasAudio ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
 
     // The card sinks slightly under the finger, like Keep and Apple Notes.
     const pressScale = useRef(new Animated.Value(1)).current;
@@ -200,7 +200,9 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         {voiceDuration ? <Text style={styles.voiceDuration}>{voiceDuration}</Text> : null}
                     </View>
                 ) : isDrawingOnly && drawingSvg ? (
-                    <View style={isSelectionMode ? { paddingEnd: 28 } : undefined}>
+                    // Full width in selection mode too: the checkbox sits over its corner
+                    // instead of narrowing (and re-cropping) the picture.
+                    <View accessible accessibilityLabel={t('notes.drawing', 'Drawing')}>
                         <DrawingThumbnail svg={drawingSvg} />
                     </View>
                 ) : isDrawingOnly ? (
@@ -243,7 +245,15 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 </Text>
                 <View style={styles.iconsRow}>
                     {!!hasAudio && !isVoiceOnly && (
-                        <MaterialIcons name="mic-none" size={15} color={colors.textTertiary} />
+                        // A note with text and a recording says so, with its length.
+                        <View
+                            style={styles.audioChip}
+                            accessible
+                            accessibilityLabel={[t('notes.voiceRecording'), voiceDuration].filter(Boolean).join(', ')}
+                        >
+                            <MaterialIcons name="mic-none" size={14} color={colors.textSecondary} />
+                            {voiceDuration ? <Text style={styles.audioChipText}>{voiceDuration}</Text> : null}
+                        </View>
                     )}
                     {hasDrawing && !drawingSvg && !isDrawingOnly && (
                         <MaterialIcons name="gesture" size={15} color={colors.textTertiary} style={styles.footerIcon} />
@@ -358,6 +368,7 @@ const styles = createStyles(() => ({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: 2,
         height: 22,
         overflow: 'hidden',
@@ -366,6 +377,21 @@ const styles = createStyles(() => ({
         width: 2.5,
         borderRadius: 2,
         backgroundColor: colors.textTertiary,
+    },
+    audioChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        paddingHorizontal: 7,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    audioChipText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: colors.textSecondary,
+        fontVariant: ['tabular-nums'],
     },
     drawingLabel: {
         fontSize: 15,

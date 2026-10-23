@@ -20,6 +20,8 @@ import {
     SkPicture,
     Paragraph,
     Rect,
+    StrokeCap,
+    StrokeJoin,
     TileMode,
 } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, PointerType } from 'react-native-gesture-handler';
@@ -35,7 +37,7 @@ import {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
-import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, strokeOutline, strokeOutlineFor } from './ink';
+import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, shapeIsClosed, shapeWidth, strokeOutline, strokeOutlineFor } from './ink';
 import { Selection, TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
 import {
@@ -250,10 +252,33 @@ const PencilGrain: React.FC<{ color: string }> = ({ color }) => (
 );
 
 const pathCache = new WeakMap<InkStroke, SkPath>();
+/** A straightened shape: its line stroked at an even width with round joins, as a fill path. */
+const shapeSkPath = (points: number[], width: number): SkPath => {
+    'worklet';
+    if (points.length < 6) {
+        return Skia.Path.Make();
+    }
+    const line = Skia.PathBuilder.Make();
+    line.moveTo(points[0], points[1]);
+    for (let i = 3; i + 1 < points.length; i += 3) {
+        line.lineTo(points[i], points[i + 1]);
+    }
+    if (shapeIsClosed(points)) {
+        line.close();
+    }
+    return Skia.Path.Stroke(line.build(), { width, join: StrokeJoin.Round, cap: StrokeCap.Round }) || Skia.Path.Make();
+};
+
+/** Fill path of a finished stroke: pen ink, or a shape's even line. */
+const inkSkPath = (stroke: InkStroke): SkPath => {
+    'worklet';
+    return stroke.shape ? shapeSkPath(stroke.points, shapeWidth(stroke)) : outlineToSkPath(strokeOutlineFor(stroke));
+};
+
 const pathFor = (stroke: InkStroke): SkPath => {
     let path = pathCache.get(stroke);
     if (!path) {
-        path = outlineToSkPath(strokeOutlineFor(stroke));
+        path = inkSkPath(stroke);
         pathCache.set(stroke, path);
     }
     return path;
@@ -920,9 +945,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 const cfg = toolSV.value;
                 const id = liveId.value;
                 const stroke: InkStroke = snapped.value
-                    ? { tool: cfg.tool, color: cfg.color, size: cfg.size, points, cut: true }
+                    ? { tool: cfg.tool, color: cfg.color, size: cfg.size, points, cut: true, shape: true }
                     : { tool: cfg.tool, color: cfg.color, size: cfg.size, points };
                 pending.value = [...pending.value, { id, stroke }];
+                snapped.value = false;
                 live.value = [];
                 runOnJS(callJs)('commitLive', stroke, id);
             });
@@ -1001,7 +1027,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         const cfg = toolSV.value;
         const spec = INK_TOOLS[cfg.tool];
         const started = performance.now();
-        const path = outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper && !snapped.value, spec.nib));
+        const path = snapped.value
+            ? shapeSkPath(live.value, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points: live.value }))
+            : outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib));
         liveCost.value = performance.now() - started;
         return path;
     });
@@ -1012,7 +1040,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         const recorder = Skia.PictureRecorder();
         const canvas = recorder.beginRecording(Skia.XYWHRect(-CANVAS_EXTENT, -CANVAS_EXTENT, CANVAS_EXTENT * 2, CANVAS_EXTENT * 2));
         pending.value.forEach(({ stroke }) => {
-            canvas.drawPath(outlineToSkPath(strokeOutlineFor(stroke)), makeInkPaint(stroke));
+            canvas.drawPath(inkSkPath(stroke), makeInkPaint(stroke));
         });
         return recorder.finishRecordingAsPicture();
     });

@@ -12,11 +12,17 @@
 - The drawing in the note is as smooth as on the canvas (curves instead of straight segments).
 - After editing a tall drawing the note shows its top instead of the blank bottom.
 - The eraser takes a typed label only when it passes over it, not when its edge brushes the label.
+- Search results start at the top of the list.
 
 ### Added
 - Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
 
+- The drawing tools, colours, sizes and paper you last used are remembered, also after the app restarts, and a new drawing starts with them.
+- A calmer formatting toolbar above the keyboard with an Aa panel (text styles, B/I/U/S, highlight, lists, numbered list, indent, quote) and a hide-keyboard button; picking a highlight colour no longer closes the keyboard.
+- A note with text and a recording shows the recording's length on its card.
+
 ### Changed
+- Straightened shapes are clean geometry: an even line with neat round corners, no pen wobble; a hand-drawn rectangle comes out level even when a side wobbles.
 - The highlighter darkens what is under it, as on paper: ink under it stays readable.
 - The lasso actions sit at the bottom, away from the selection; the page counter appears once a second page has ink.
 

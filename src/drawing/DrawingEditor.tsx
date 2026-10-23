@@ -24,7 +24,8 @@ import { ColorPanel } from './ColorPanel';
 import { DrawingDocument } from './drawingFormat';
 import { DrawingAction, EMPTY_SELECTION, EraseMode, Selection, drawingReducer, emptyContent, initialDrawingState, selectInLasso } from './drawingModel';
 import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool, invertedInkColor } from './ink';
-import { DEFAULT_PAPER, PaperStyle } from './paper';
+import { DEFAULT_PAPER, PAPER_LAYOUTS, PAPER_PATTERNS, PaperStyle } from './paper';
+import { StoredDrawingPrefs, loadDrawingPrefs, saveDrawingPrefs } from './drawingPrefs';
 import { PaperPicker } from './PaperPicker';
 import { pushRecentColor } from './colorMath';
 import { measureText } from './textLayout';
@@ -92,6 +93,68 @@ let rememberedEraser: EraserSettings = { sizeIndex: 1, mode: 'partial' };
 let rememberedToolsHidden = false;
 let rememberedSnapShapes = true;
 
+const ACTIVE_TOOLS: ActiveTool[] = [...INK_TOOL_ORDER, 'eraser', 'text', 'lasso'];
+const isColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/.test(value);
+const isIndex = (value: unknown, count: number): value is number => Number.isInteger(value) && (value as number) >= 0 && (value as number) < count;
+
+/** Takes what was stored on the device, field by field, ignoring anything malformed. */
+const applyStoredPrefs = (saved: StoredDrawingPrefs) => {
+    const settings = initialSettings();
+    const storedSettings = (saved.settings && typeof saved.settings === 'object' ? saved.settings : {}) as Record<string, any>;
+    (Object.keys(settings) as SettingsKey[]).forEach((key) => {
+        const item = storedSettings[key];
+        if (item && isColor(item.color)) {
+            settings[key].color = item.color.toUpperCase();
+        }
+        if (item && isIndex(item.sizeIndex, 5)) {
+            settings[key].sizeIndex = item.sizeIndex;
+        }
+    });
+    rememberedSettings = settings;
+    if (ACTIVE_TOOLS.includes(saved.tool as ActiveTool)) {
+        rememberedTool = saved.tool as ActiveTool;
+    }
+    const paper = saved.paper as Record<string, unknown> | undefined;
+    if (paper && PAPER_PATTERNS.includes(paper.pattern as any) && PAPER_LAYOUTS.includes(paper.layout as any)
+        && (paper.color === null || isColor(paper.color))) {
+        rememberedPaper = { pattern: paper.pattern as any, layout: paper.layout as any, color: paper.color as string | null };
+    }
+    if (Array.isArray(saved.recent)) {
+        rememberedRecent = saved.recent.filter(isColor).slice(0, 12);
+    }
+    const eraser = saved.eraser as Record<string, unknown> | undefined;
+    if (eraser && isIndex(eraser.sizeIndex, ERASER_SIZES.length) && (eraser.mode === 'partial' || eraser.mode === 'stroke')) {
+        rememberedEraser = { sizeIndex: eraser.sizeIndex as number, mode: eraser.mode };
+    }
+    if (typeof saved.toolsHidden === 'boolean') {
+        rememberedToolsHidden = saved.toolsHidden;
+    }
+    if (typeof saved.snapShapes === 'boolean') {
+        rememberedSnapShapes = saved.snapShapes;
+    }
+};
+
+const persistPrefs = () => saveDrawingPrefs({
+    settings: rememberedSettings,
+    tool: rememberedTool,
+    paper: rememberedPaper,
+    recent: rememberedRecent,
+    eraser: rememberedEraser,
+    toolsHidden: rememberedToolsHidden,
+    snapShapes: rememberedSnapShapes,
+});
+
+// Read once when the app loads this screen; an editor that opens before it
+// finishes waits for it (see the load effect), so stored choices never lose
+// to the defaults.
+let prefsLoaded = false;
+const prefsReady = loadDrawingPrefs().then((saved) => {
+    if (saved) {
+        applyStoredPrefs(saved);
+    }
+    prefsLoaded = true;
+});
+
 export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAutosave, onClose }) => {
     const { t } = useTranslation();
     const { width, height } = useWindowDimensions();
@@ -141,28 +204,49 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         if (!visible) {
             return;
         }
-        dispatch({
-            type: 'load',
-            content: document
-                // A parsed drawing always carries its paper; a new one (no paper
-                // yet) starts on the paper used last.
-                ? { strokes: document.strokes, texts: document.texts || [], paper: document.paper ?? rememberedPaper }
-                : emptyContent(rememberedPaper),
+        let cancelled = false;
+        void prefsReady.then(() => {
+            if (cancelled) {
+                return;
+            }
+            // The tools come back as they were last used, even after a restart.
+            setSettings(rememberedSettings || initialSettings());
+            setActiveTool(rememberedTool);
+            setRecent(rememberedRecent);
+            setEraser(rememberedEraser);
+            setToolsHidden(rememberedToolsHidden);
+            setSnapShapes(rememberedSnapShapes);
+            dispatch({
+                type: 'load',
+                content: document
+                    // A parsed drawing always carries its paper; a new one (no paper
+                    // yet) starts on the paper used last.
+                    ? { strokes: document.strokes, texts: document.texts || [], paper: document.paper ?? rememberedPaper }
+                    : emptyContent(rememberedPaper),
+            });
         });
         setPopover(null);
         setTextEdit(null);
         setSelection(EMPTY_SELECTION);
         setDocWidth(document?.width || 0);
+        return () => {
+            cancelled = true;
+        };
     }, [visible, document]);
 
     useEffect(() => {
+        // Before the stored choices are read, the state still holds defaults.
+        if (!prefsLoaded || !visible) {
+            return;
+        }
         rememberedSettings = settings;
         rememberedTool = activeTool;
         rememberedRecent = recent;
         rememberedEraser = eraser;
         rememberedToolsHidden = toolsHidden;
         rememberedSnapShapes = snapShapes;
-    }, [settings, activeTool, recent, eraser, toolsHidden, snapShapes]);
+        persistPrefs();
+    }, [settings, activeTool, recent, eraser, toolsHidden, snapShapes, visible]);
 
     useEffect(() => {
         if (!tip) {
@@ -366,6 +450,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
 
     const setPaper = (next: PaperStyle) => {
         rememberedPaper = next;
+        persistPrefs();
         dispatch({ type: 'setPaper', paper: next });
     };
 

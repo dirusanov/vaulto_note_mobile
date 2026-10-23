@@ -277,6 +277,22 @@ test('a stroke held at the end becomes the clean shape it resembles', () => {
     assert.equal(box[0], box[box.length - 3], 'closed');
     assert.equal(box[1], box[box.length - 2], 'closed');
 
+    // A rectangle whose bottom side wobbles in the middle still comes out as a box.
+    const wobbly = [];
+    const pts = [[300, 400], [700, 402], [703, 650], [550, 652], [400, 648], [302, 650], [301, 402]];
+    for (let c = 0; c + 1 < pts.length; c++) {
+        for (let k = 0; k < 12; k++) {
+            const t = k / 12;
+            wobbly.push(pts[c][0] + (pts[c + 1][0] - pts[c][0]) * t, pts[c][1] + (pts[c + 1][1] - pts[c][1]) * t, 0.5);
+        }
+    }
+    wobbly.push(301, 402, 0.5);
+    const box2 = recognizeShape(wobbly);
+    assert.ok(box2, 'wobbly rectangle recognised');
+    const ys2 = new Set(ysOf(box2).map(Math.round));
+    assert.ok([...ys2].every((y) => Math.abs(y - 398) < 6 || Math.abs(y - 652) < 6 || (y > 398 && y < 652)));
+    assert.equal(Math.round(Math.min(...ysOf(box2))), Math.round(Math.min(...ysOf(wobbly))), 'top edge level');
+
     // A nearly horizontal line is straightened and levelled.
     const line = [];
     for (let i = 0; i <= 40; i++) {
@@ -310,4 +326,16 @@ test('the notes list can show the first drawing of a note as a thumbnail', () =>
     assert.ok(svg.endsWith('</svg>'));
     assert.ok(svg.includes('<path'));
     assert.equal(firstDrawingSvg('<p>no drawing</p>'), null);
+});
+
+test('a straightened shape keeps its mark and is drawn as an even line with round joins', () => {
+    const square = [10, 10, 0.5, 110, 10, 0.5, 110, 110, 0.5, 10, 110, 0.5, 10, 10, 0.5];
+    const doc = { id: 'shape', width: 400, strokes: [{ tool: 'fountain', color: '#000', size: 3, points: square, cut: true, shape: true }] };
+    const src = buildDrawingSrc(doc);
+    const parsed = parseDrawingSrc(src);
+    assert.equal(parsed.strokes[0].shape, true);
+    assert.equal(parsed.strokes[0].cut, true, 'older versions at least skip the pen-down taper');
+    const svg = decodeURIComponent(src.slice(src.indexOf(',') + 1, src.indexOf(DRAWING_MARKER)));
+    assert.match(svg, /fill='none' stroke='#000' stroke-width='[\d.]+' stroke-linejoin='round'/);
+    assert.match(svg, /z' fill='none'/, 'a closed figure is closed, not capped twice');
 });

@@ -16,6 +16,11 @@ export type InkStroke = {
      * longer one, or it is a shape drawn clean.
      */
     cut?: boolean;
+    /**
+     * A shape straightened from a held stroke: drawn as a plain line of even
+     * width with round joins, not as pen ink (no smoothing, nib or pressure).
+     */
+    shape?: boolean;
 };
 
 /** A typed label on the canvas; (x, y) is its top-left corner in document coordinates. */
@@ -260,6 +265,21 @@ export function strokeOutline(
     return outline;
 }
 
+/** Line width of a shape: the tool's width at the pressure the shape was drawn with. */
+export function shapeWidth(stroke: InkStroke): number {
+    'worklet';
+    const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
+    const pressure = stroke.points.length >= 3 ? stroke.points[2] : 0.5;
+    return Math.max(stroke.size * 0.16, stroke.size * (1 + spec.thinning * (pressure - 0.5) * 1.6));
+}
+
+/** True when a shape's line comes back to where it started (a closed figure). */
+export function shapeIsClosed(points: number[]): boolean {
+    'worklet';
+    const n = points.length;
+    return n >= 9 && Math.hypot(points[0] - points[n - 3], points[1] - points[n - 2]) < 0.5;
+}
+
 export function strokeOutlineFor(stroke: InkStroke): number[] {
     'worklet';
     const spec = INK_TOOLS[stroke.tool] || INK_TOOLS.fountain;
@@ -488,7 +508,14 @@ export const eraseStroke = (stroke: InkStroke, x: number, y: number, radius: num
             return;
         }
         const cut = starts[index] === 0 ? stroke.cut : true;
-        kept.push({ tool: stroke.tool, color: stroke.color, size: stroke.size, points, ...(cut ? { cut: true } : {}) });
+        kept.push({
+            tool: stroke.tool,
+            color: stroke.color,
+            size: stroke.size,
+            points,
+            ...(cut ? { cut: true } : {}),
+            ...(stroke.shape ? { shape: true } : {}),
+        });
     });
     return kept;
 };
@@ -670,6 +697,25 @@ export function recognizeShape(points: number[]): number[] | null {
 
         // Polygon: the corners found above, the last one merged with the first.
         corners.splice(-2, 2);
+        // A wobble along a side is not a corner: drop vertices where the line
+        // barely turns, so a hand-drawn rectangle has four corners, not five.
+        for (let changed = true; changed && corners.length > 6;) {
+            changed = false;
+            const count2 = corners.length / 2;
+            for (let c = 0; c < count2; c++) {
+                const p = ((c - 1 + count2) % count2) * 2;
+                const q = ((c + 1) % count2) * 2;
+                const a1 = Math.atan2(corners[c * 2 + 1] - corners[p + 1], corners[c * 2] - corners[p]);
+                const a2 = Math.atan2(corners[q + 1] - corners[c * 2 + 1], corners[q] - corners[c * 2]);
+                let turn = Math.abs(a2 - a1);
+                turn = Math.min(turn, Math.PI * 2 - turn);
+                if (turn < (25 * Math.PI) / 180) {
+                    corners.splice(c * 2, 2);
+                    changed = true;
+                    break;
+                }
+            }
+        }
         const sides = corners.length / 2;
         if (sides >= 3 && sides <= 5) {
             const ring = [...corners, corners[0], corners[1]];

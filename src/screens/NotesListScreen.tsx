@@ -69,6 +69,12 @@ export const NotesListScreen = () => {
     const [activeTag, setActiveTag] = useState<string | null>(null);
     const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    // Results start at the top (with the "Ask AI" row), not where the list was scrolled to.
+    const listScrollRef = useRef<ScrollView>(null);
+    const hasSearch = searchQuery.trim().length > 0;
+    useEffect(() => {
+        listScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, [hasSearch]);
     const [showUnlockSyncModal, setShowUnlockSyncModal] = useState(false);
     const [showResetSyncModal, setShowResetSyncModal] = useState(false);
     const [showUnlockingOverlay, setShowUnlockingOverlay] = useState(false);
@@ -795,6 +801,7 @@ export const NotesListScreen = () => {
             </View>
 
             <ScrollView
+                ref={listScrollRef}
                 style={{ flex: 1 }}
                 contentContainerStyle={[
                     styles.scrollContent,

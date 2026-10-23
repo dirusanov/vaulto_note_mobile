@@ -1,4 +1,4 @@
-import { INK_TEXT_LINE_HEIGHT, INK_TOOLS, INK_TOOL_ORDER, InkBounds, InkStroke, InkText, InkTool, outlineToSvgPath, strokeBounds, strokeOutlineFor } from './ink';
+import { INK_TEXT_LINE_HEIGHT, INK_TOOLS, INK_TOOL_ORDER, InkBounds, InkStroke, InkText, InkTool, outlineToSvgPath, shapeIsClosed, shapeWidth, strokeBounds, strokeOutlineFor } from './ink';
 import {
     DEFAULT_PAPER,
     LEGACY_PAPER,
@@ -121,13 +121,18 @@ const decodeStroke = (raw: unknown): InkStroke | null => {
     };
 };
 
-const decodeStrokes = (raw: unknown, cuts: unknown): InkStroke[] => {
+const decodeStrokes = (raw: unknown, cuts: unknown, shapes: unknown): InkStroke[] => {
     const cut = new Set(Array.isArray(cuts) ? cuts.map(Number) : []);
+    const shape = new Set(Array.isArray(shapes) ? shapes.map(Number) : []);
     const strokes: InkStroke[] = [];
     (Array.isArray(raw) ? raw : []).forEach((item, index) => {
         const stroke = decodeStroke(item);
         if (stroke) {
-            strokes.push(cut.has(index) ? { ...stroke, cut: true } : stroke);
+            strokes.push({
+                ...stroke,
+                ...(cut.has(index) ? { cut: true } : {}),
+                ...(shape.has(index) ? { shape: true } : {}),
+            });
         }
     });
     return strokes;
@@ -162,7 +167,7 @@ export const parseDrawingSrc = (src: string | null | undefined): DrawingDocument
         return {
             id: parsed.id,
             width: Number(parsed.w) || 800,
-            strokes: decodeStrokes(parsed.s, parsed.c),
+            strokes: decodeStrokes(parsed.s, parsed.c, parsed.g),
             texts,
             paper,
         };
@@ -196,6 +201,33 @@ const sheetSvg = (paper: PaperStyle, id: string, x: number, y: number, width: nu
         }
     }
     return out;
+};
+
+/** A straightened shape as an SVG line of even width with round joins. */
+const shapeSvg = (stroke: InkStroke): string => {
+    const S = SVG_SCALE;
+    const pts = stroke.points;
+    let px = Math.round(pts[0] * S);
+    let py = Math.round(pts[1] * S);
+    let d = `M${px} ${py}l`;
+    let segments = 0;
+    for (let i = 3; i + 1 < pts.length; i += 3) {
+        const x = Math.round(pts[i] * S);
+        const y = Math.round(pts[i + 1] * S);
+        if (x === px && y === py) {
+            continue;
+        }
+        d += `${segments && x - px >= 0 ? ' ' : ''}${x - px}${y - py >= 0 ? ' ' : ''}${y - py}`;
+        px = x;
+        py = y;
+        segments += 1;
+    }
+    if (!segments) {
+        return '';
+    }
+    const spec = INK_TOOLS[stroke.tool];
+    const opacity = spec?.opacity ?? 1;
+    return `<path d='${d}${shapeIsClosed(pts) ? 'z' : ''}' fill='none' stroke='${stroke.color}' stroke-width='${Math.round(shapeWidth(stroke) * S * 10) / 10}' stroke-linejoin='round' stroke-linecap='round'${opacity < 1 ? ` stroke-opacity='${opacity}'` : ''}${stroke.tool === 'marker' ? " style='mix-blend-mode:multiply'" : ''}/>`;
 };
 
 export const buildDrawingSvg = (doc: DrawingDocument): string => {
@@ -254,6 +286,9 @@ export const buildDrawingSvg = (doc: DrawingDocument): string => {
         return `<text x='${Math.round(item.x * S)}' y='${Math.round(baseline * S)}' font-size='${Math.round(item.size * S)}' font-family='Roboto,Helvetica,Arial,sans-serif' fill='${item.color}'>${escapeXml(lineText)}</text>`;
     }).join('')).join('');
     const paths = doc.strokes.map((stroke) => {
+        if (stroke.shape) {
+            return shapeSvg(stroke);
+        }
         const d = outlineToSvgPath(strokeOutlineFor(stroke), SVG_SCALE);
         if (!d) {
             return '';
@@ -282,6 +317,10 @@ export const buildDrawingSrc = (doc: DrawingDocument): string => {
         // Strokes the eraser cut (indices into s); older versions ignore it and taper them.
         ...(doc.strokes.some((stroke) => stroke.cut)
             ? { c: doc.strokes.flatMap((stroke, index) => (stroke.cut ? [index] : [])) }
+            : {}),
+        // Straightened shapes (indices into s); older versions draw them as ink.
+        ...(doc.strokes.some((stroke) => stroke.shape)
+            ? { g: doc.strokes.flatMap((stroke, index) => (stroke.shape ? [index] : [])) }
             : {}),
         ...(doc.texts && doc.texts.length
             ? { t: doc.texts.map((item) => [Math.round(item.x * 10), Math.round(item.y * 10), Math.round(item.size * 10), item.color, item.text]) }
