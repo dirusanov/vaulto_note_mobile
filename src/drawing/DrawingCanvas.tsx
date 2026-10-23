@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import {
     BlendMode,
@@ -35,6 +35,7 @@ import {
     useSharedValue,
     withDecay,
 } from 'react-native-reanimated';
+import { runOnUISync } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
 import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, shapeIsClosed, shapeWidth, strokeOutline, strokeOutlineFor } from './ink';
@@ -71,6 +72,11 @@ export type TextTap = {
 export type DrawingCanvasHandle = {
     /** Scrolls the page by `dy` screen pixels (negative = content up); returns the distance applied. */
     panBy: (dy: number) => number;
+    /**
+     * Takes a newly picked tool at once, from the button's handler, so a touch
+     * that follows quickly uses it even while the editor is still re-rendering.
+     */
+    applyTool: (next: { mode: CanvasMode; tool: InkTool; color: string; size: number }) => void;
 };
 
 type Props = {
@@ -453,9 +459,13 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const [currentPage, setCurrentPage] = useState(0);
 
     const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
-    useEffect(() => {
+    // Before paint, not after: a touch that lands right after picking a tool
+    // must already see it (a lasso started quickly was drawn as ink).
+    useLayoutEffect(() => {
         toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes };
     }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, toolSV]);
+    /** The pen a stroke started with: it keeps it to the end, whatever is picked meanwhile. */
+    const strokeCfg = useSharedValue({ tool, color, size });
 
     useEffect(() => {
         textBoxesSV.value = texts.flatMap((item, index) => {
@@ -523,6 +533,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             const next = Math.min(limits.maxY, Math.max(limits.minY, before + dy));
             ty.value = next;
             return next - before;
+        },
+        applyTool: (next) => {
+            // On the UI thread before returning: a plain write is sent only after
+            // the JS task ends, i.e. after the re-render the same tap starts.
+            runOnUISync((picked: typeof next) => {
+                'worklet';
+                toolSV.value = { ...toolSV.value, ...picked };
+            }, next);
         },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }), []);
@@ -748,6 +766,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return;
                 }
                 gestureMode.value = 'draw';
+                strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size };
                 const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
                 lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
                 liveId.value += 1;
@@ -942,7 +961,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return;
                 }
                 const points = live.value.slice();
-                const cfg = toolSV.value;
+                const cfg = strokeCfg.value;
                 const id = liveId.value;
                 const stroke: InkStroke = snapped.value
                     ? { tool: cfg.tool, color: cfg.color, size: cfg.size, points, cut: true, shape: true }
@@ -1024,7 +1043,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     ]);
 
     const livePath = useDerivedValue(() => {
-        const cfg = toolSV.value;
+        const cfg = strokeCfg.value;
         const spec = INK_TOOLS[cfg.tool];
         const started = performance.now();
         const path = snapped.value
@@ -1157,7 +1176,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         return builder.build();
     });
 
-    const liveOpacity = INK_TOOLS[tool]?.opacity ?? 1;
+    // The live stroke shows in the pen it started with, as it will be committed.
+    const liveColor = useDerivedValue(() => strokeCfg.value.color);
+    const liveOpacity = useDerivedValue(() => INK_TOOLS[strokeCfg.value.tool]?.opacity ?? 1);
     const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
     const inkLayer = invertInk ? (
         <Paint>
@@ -1185,7 +1206,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                             <Group layer={inkLayer} clip={pageClip}>
                                 <Picture picture={inkPicture} />
                                 <Picture picture={pendingPicture} />
-                                <Path path={livePath} color={color} opacity={liveOpacity} blendMode={tool === 'marker' ? 'multiply' : 'srcOver'}>
+                                <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={tool === 'marker' ? 'multiply' : 'srcOver'}>
                                     {liveGrain && <PencilGrain color={color} />}
                                 </Path>
                                 {labels}

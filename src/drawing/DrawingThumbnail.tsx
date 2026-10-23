@@ -18,6 +18,19 @@ const aspectOf = (svg: string): number => {
 };
 
 /**
+ * Colour of a sheet that has its own (class='vp'): the fill of its first sheet
+ * rect, so the frame around a narrower picture and the frame shown before the
+ * picture renders are the paper itself, never a white bar or flash.
+ */
+const paperColorOf = (svg: string): string | null => {
+    if (!svg.includes("class='vp'")) {
+        return null;
+    }
+    const match = /<rect [^>]*fill='(#[0-9A-Fa-f]{6})'/.exec(svg);
+    return match ? match[1] : null;
+};
+
+/**
  * A drawing as a small picture in the notes list, so a handwritten note shows
  * what is on it. On the theme paper in dark mode its colours are inverted, as
  * the note and the canvas show it; a sheet with its own colour keeps it. The
@@ -26,6 +39,7 @@ const aspectOf = (svg: string): number => {
  */
 export const DrawingThumbnail = React.memo(({ svg }: { svg: string }) => {
     const invert = isDarkScheme() && !svg.includes("class='vp'");
+    const paperColor = useMemo(() => paperColorOf(svg), [svg]);
     const xml = useMemo(() => {
         const plain = svg.replace(/<filter\b.*?<\/filter>/g, '').replace(/ filter='url\(#g\)'/g, '');
         return invert
@@ -38,7 +52,7 @@ export const DrawingThumbnail = React.memo(({ svg }: { svg: string }) => {
     const height = Math.round(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, natural)));
     const onLayout = (event: LayoutChangeEvent) => setWidth(Math.round(event.nativeEvent.layout.width));
     return (
-        <View style={[styles.sheet, invert && styles.sheetDark, { height }]} onLayout={onLayout}>
+        <View style={[styles.sheet, invert && styles.sheetDark, !!paperColor && { backgroundColor: paperColor }, { height }]} onLayout={onLayout}>
             {width > 0 && (
                 <SvgXml
                     xml={xml}

@@ -3,6 +3,7 @@ import {
     AppState,
     Keyboard,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -17,14 +18,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { InkInputView } from '../../modules/ink-input';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { colors, isDarkScheme } from '../theme/colors';
+import { colors, getColorScheme, isDarkScheme } from '../theme/colors';
 import { createStyles } from '../theme/createStyles';
 import { CanvasMode, DrawingCanvas, DrawingCanvasHandle, TextTap } from './DrawingCanvas';
 import { ColorPanel } from './ColorPanel';
 import { DrawingDocument } from './drawingFormat';
-import { DrawingAction, EMPTY_SELECTION, EraseMode, Selection, drawingReducer, emptyContent, initialDrawingState, selectInLasso } from './drawingModel';
+import { DrawingAction, DrawingState, EMPTY_SELECTION, EraseMode, Selection, drawingReducer, emptyContent, initialDrawingState, selectInLasso } from './drawingModel';
 import { INK_COLORS, INK_DEFAULT_COLOR, INK_TEXT_LINE_HEIGHT, INK_TOOL_ORDER, INK_TOOLS, InkStroke, InkTool, invertedInkColor } from './ink';
-import { DEFAULT_PAPER, PAPER_LAYOUTS, PAPER_PATTERNS, PaperStyle } from './paper';
+import { DEFAULT_PAPER, PAPER_LAYOUTS, PAPER_PATTERNS, PaperStyle, isDarkPaper } from './paper';
 import { StoredDrawingPrefs, loadDrawingPrefs, saveDrawingPrefs } from './drawingPrefs';
 import { PaperPicker } from './PaperPicker';
 import { pushRecentColor } from './colorMath';
@@ -63,6 +64,8 @@ const TEXT_SIZES = [14, 18, 24, 32, 44];
 /** Eraser radius on screen: the same however far the drawing is zoomed. */
 const ERASER_SIZES = [7, 14, 26];
 const QUICK_COLORS = ['#1D1D1F', '#1E88E5', '#E53935', '#43A047', '#FDD835'];
+/** On a dark sheet black barely shows: white takes its place in the quick row. */
+const QUICK_COLORS_DARK_PAPER = ['#FFFFFF', ...QUICK_COLORS.slice(1)];
 type EraserSettings = { sizeIndex: number; mode: EraseMode };
 /** Palette colours are always on screen, so only other colours go to "Recent". */
 const INK_COLOR_SET = new Set(INK_COLORS);
@@ -93,9 +96,38 @@ let rememberedEraser: EraserSettings = { sizeIndex: 1, mode: 'partial' };
 let rememberedToolsHidden = false;
 let rememberedSnapShapes = true;
 
+/**
+ * A drawing open while the colour scheme changes: the ThemeProvider remounts the
+ * whole app then, and with it this editor and the note screen that opened it.
+ * The session is parked here on unmount and the editor that mounts next takes it
+ * back and reopens itself, so a theme switch never loses a drawing.
+ */
+type ParkedDrawing = { document: DrawingDocument; state: DrawingState; docWidth: number; at: number };
+let parkedDrawing: ParkedDrawing | null = null;
+/** The remount happens at once; an older parked drawing belongs to something else. */
+const PARKED_TTL_MS = 10_000;
+const peekParkedDrawing = (): ParkedDrawing | null =>
+    parkedDrawing && Date.now() - parkedDrawing.at < PARKED_TTL_MS ? parkedDrawing : null;
+/** How long the app's own window must keep focus before the canvas counts as gone (see B2 effect). */
+const LOST_WINDOW_MS = 400;
+
 const ACTIVE_TOOLS: ActiveTool[] = [...INK_TOOL_ORDER, 'eraser', 'text', 'lasso'];
 const isColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/.test(value);
 const isIndex = (value: unknown, count: number): value is number => Number.isInteger(value) && (value as number) >= 0 && (value as number) < count;
+
+const luminance = (hex: string): number => {
+    const value = parseInt(hex.replace('#', ''), 16) || 0;
+    const [r, g, b] = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => {
+        const c = channel / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** WCAG contrast ratio of two #RRGGBB colours (1..21). */
+const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+};
 
 /** Takes what was stored on the device, field by field, ignoring anything malformed. */
 const applyStoredPrefs = (saved: StoredDrawingPrefs) => {
@@ -163,6 +195,12 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     const inlineTools = width >= 1150;
     const dark = isDarkScheme();
 
+    // A drawing parked by a theme remount (see parkedDrawing) reopens here with
+    // its history; the parent knows nothing of it, so `open` covers both cases.
+    const [restored, setRestored] = useState<ParkedDrawing | null>(null);
+    const open = visible || !!restored;
+    const activeDocument = visible ? document : restored?.document ?? null;
+
     const [state, dispatch] = useReducer(drawingReducer, undefined, () => initialDrawingState());
     const stateRef = useRef(state);
     stateRef.current = state;
@@ -191,6 +229,21 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     /** Screen y of the keyboard's top edge while it is open. */
     const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
 
+    // Taken in an effect, not while rendering: the new tree renders before the
+    // old one unmounts, and only the old one's cleanup parks the drawing. The
+    // content comes back in the same render that opens the canvas, so the
+    // editor is never open with an empty sheet (another remount right then
+    // would park that).
+    useEffect(() => {
+        const parked = peekParkedDrawing();
+        parkedDrawing = null;
+        if (parked) {
+            dispatch({ type: 'restore', state: parked.state });
+            setDocWidth(parked.docWidth);
+            setRestored(parked);
+        }
+    }, []);
+
     useEffect(() => {
         const show = Keyboard.addListener('keyboardDidShow', (event) => setKeyboardTop(event.endCoordinates.screenY));
         const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardTop(null));
@@ -201,10 +254,12 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     }, []);
 
     useEffect(() => {
-        if (!visible) {
+        if (!open) {
             return;
         }
         let cancelled = false;
+        // A restored session already holds its content (see above).
+        const restoring = !visible;
         void prefsReady.then(() => {
             if (cancelled) {
                 return;
@@ -216,6 +271,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             setEraser(rememberedEraser);
             setToolsHidden(rememberedToolsHidden);
             setSnapShapes(rememberedSnapShapes);
+            if (restoring) {
+                return;
+            }
             dispatch({
                 type: 'load',
                 content: document
@@ -228,15 +286,17 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         setPopover(null);
         setTextEdit(null);
         setSelection(EMPTY_SELECTION);
-        setDocWidth(document?.width || 0);
+        if (!restoring) {
+            setDocWidth(document?.width || 0);
+        }
         return () => {
             cancelled = true;
         };
-    }, [visible, document]);
+    }, [visible, document, open]);
 
     useEffect(() => {
         // Before the stored choices are read, the state still holds defaults.
-        if (!prefsLoaded || !visible) {
+        if (!prefsLoaded || !open) {
             return;
         }
         rememberedSettings = settings;
@@ -246,7 +306,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         rememberedToolsHidden = toolsHidden;
         rememberedSnapShapes = snapShapes;
         persistPrefs();
-    }, [settings, activeTool, recent, eraser, toolsHidden, snapShapes, visible]);
+    }, [settings, activeTool, recent, eraser, toolsHidden, snapShapes, open]);
 
     useEffect(() => {
         if (!tip) {
@@ -433,6 +493,16 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         closePopover();
         setSelection(EMPTY_SELECTION);
         setActiveTool(next);
+        // Mirrors the derived values below, for the canvas to use before the re-render lands.
+        const nextInk: InkTool = next === 'text' || next === 'eraser' || next === 'lasso' ? 'fountain' : next;
+        const nextKey: SettingsKey = next === 'text' ? 'text' : nextInk;
+        const nextSizes = next === 'text' ? TEXT_SIZES : INK_TOOLS[nextInk].sizes;
+        canvasRef.current?.applyTool({
+            mode: next === 'eraser' ? 'erase' : next === 'text' ? 'text' : next === 'lasso' ? 'select' : 'ink',
+            tool: nextInk,
+            color: settings[nextKey].color,
+            size: nextSizes[settings[nextKey].sizeIndex] ?? nextSizes[1],
+        });
     };
 
     const setColor = (color: string, source: 'swatch' | 'custom') => {
@@ -459,18 +529,39 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         // content can be computed right here instead of waiting for a render.
         const action = textEditAction(textEdit);
         const content = action ? drawingReducer(state, action).content : state.content;
-        return { id: document?.id || '', width: docWidth || width, pos: document?.pos, ...content };
+        return { id: activeDocument?.id || '', width: docWidth || width, pos: activeDocument?.pos, ...content };
     };
     const latestDocument = useRef(currentDocument);
     latestDocument.current = currentDocument;
+
+    // Parks the open session when a colour-scheme change unmounts the editor (the
+    // scheme is already switched by then); any other unmount parks nothing.
+    const renderedScheme = getColorScheme();
+    const parkSession = useRef<() => void>(() => undefined);
+    parkSession.current = () => {
+        if (!open || getColorScheme() === renderedScheme) {
+            return;
+        }
+        const action = textEditAction(textEdit);
+        parkedDrawing = {
+            document: currentDocument(),
+            state: action ? drawingReducer(state, action) : state,
+            docWidth,
+            at: Date.now(),
+        };
+    };
+    // The latest session is wanted at unmount, hence the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => () => parkSession.current(), []);
+
     const savedUndoDepth = useRef(0);
     useEffect(() => {
-        if (visible) {
+        if (open) {
             savedUndoDepth.current = 0;
         }
-    }, [visible, document]);
+    }, [open, activeDocument]);
     useEffect(() => {
-        if (!visible) {
+        if (!open) {
             return;
         }
         const subscription = AppState.addEventListener('change', (next) => {
@@ -487,16 +578,24 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             }
         });
         return () => subscription.remove();
-    }, [visible, onAutosave]);
+    }, [open, onAutosave]);
 
     const handleDone = () => {
-        onSave(currentDocument());
+        const doc = currentDocument();
+        setRestored(null);
+        onSave(doc);
     };
 
+    const closeEditor = () => {
+        setRestored(null);
+        onClose();
+    };
+
+    const hasChanges = () => state.undo.length > 0 || !!textEdit?.value.trim();
+
     const handleClose = () => {
-        const changed = state.undo.length > 0 || !!textEdit?.value.trim();
-        if (!changed) {
-            onClose();
+        if (!hasChanges()) {
+            closeEditor();
             return;
         }
         appAlert(
@@ -504,19 +603,87 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             t('drawing.discardBody', 'Your changes to this drawing will be lost.'),
             [
                 { text: t('drawing.keepEditing', 'Keep editing'), style: 'cancel' },
-                { text: t('drawing.discard', 'Discard'), style: 'destructive', onPress: onClose },
+                { text: t('drawing.discard', 'Discard'), style: 'destructive', onPress: closeEditor },
             ]
         );
     };
+
+    // A hardware Escape key makes Android cancel the Modal's window itself,
+    // without the onRequestClose that Back sends: the canvas would vanish while
+    // React still thinks it is open. The only trace is the app's own window
+    // getting focus back and keeping it (a window shown on top takes it away
+    // again within moments). Then the canvas is shown again in a fresh window
+    // and closing goes the usual way, through "Discard changes?" when needed.
+    // Focus changes before our window is up (opening, a theme remount) say nothing.
+    const [modalKey, setModalKey] = useState(0);
+    const windowShown = useRef(false);
+    const askOnShow = useRef(false);
+    const windowLost = useRef<() => void>(() => undefined);
+    windowLost.current = () => {
+        if (!windowShown.current) {
+            return;
+        }
+        windowShown.current = false;
+        if (!hasChanges()) {
+            closeEditor();
+            return;
+        }
+        // Asked once the new window is up, so the dialog opens above it.
+        askOnShow.current = true;
+        setModalKey((key) => key + 1);
+    };
+    const closeRef = useRef(handleClose);
+    closeRef.current = handleClose;
+    const handleShow = useCallback(() => {
+        windowShown.current = true;
+        if (askOnShow.current) {
+            askOnShow.current = false;
+            closeRef.current();
+        }
+    }, []);
+    useEffect(() => {
+        if (!open || Platform.OS !== 'android') {
+            windowShown.current = false;
+            return;
+        }
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const cancel = () => {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+        };
+        const focus = AppState.addEventListener('focus', () => {
+            cancel();
+            if (!windowShown.current) {
+                return;
+            }
+            timer = setTimeout(() => {
+                timer = null;
+                windowLost.current();
+            }, LOST_WINDOW_MS);
+        });
+        const blur = AppState.addEventListener('blur', cancel);
+        return () => {
+            cancel();
+            focus.remove();
+            blur.remove();
+        };
+    }, [open]);
 
     const editingTextSize = TEXT_SIZES[settings.text.sizeIndex] ?? 18;
     // The canvas shows ink inverted in dark mode on the theme paper: the toolbar
     // shows each colour the same way, so black reads as the white it draws.
     const shown = useCallback((value: string) => (dark && !paper.color ? invertedInkColor(value) : value), [dark, paper.color]);
+    // A colour as dark (or as light) as the bar behind it would vanish there, as
+    // black does on a coloured sheet in dark mode: such a swatch gets a clear ring.
+    const barColor = inlineTools ? colors.background : colors.surface;
+    const outlineOf = (value: string) => (contrast(shown(value), barColor) < 1.6 ? colors.textSecondary : colors.border);
+    const quickBase = isDarkPaper(paper.color) ? QUICK_COLORS_DARK_PAPER : QUICK_COLORS;
 
     // Swatches always at hand in the bar, each in a fixed place (a colour picked
     // from the full palette takes the last one); the palette opens from the button after them.
-    const quickColors = QUICK_COLORS.includes(current.color) ? QUICK_COLORS : [...QUICK_COLORS.slice(0, -1), current.color];
+    const quickColors = quickBase.includes(current.color) ? quickBase : [...quickBase.slice(0, -1), current.color];
 
     const toolButtons = (
         <>
@@ -532,7 +699,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                         accessibilityLabel={t(`drawing.tool.${inkToolOption}`, inkToolOption)}
                     >
                         <MaterialCommunityIcons name={TOOL_ICONS[inkToolOption]} size={22} color={active ? colors.primary : colors.textSecondary} />
-                        <View style={[styles.toolInk, { backgroundColor: shown(settings[inkToolOption].color) }]} />
+                        <View style={[styles.toolInk, { backgroundColor: shown(settings[inkToolOption].color), borderColor: outlineOf(settings[inkToolOption].color) }]} />
                     </TouchableOpacity>
                 );
             })}
@@ -544,7 +711,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                 accessibilityLabel={t('drawing.tool.text', 'Text')}
             >
                 <MaterialCommunityIcons name="format-text" size={22} color={activeTool === 'text' ? colors.primary : colors.textSecondary} />
-                <View style={[styles.toolInk, { backgroundColor: shown(settings.text.color) }]} />
+                <View style={[styles.toolInk, { backgroundColor: shown(settings.text.color), borderColor: outlineOf(settings.text.color) }]} />
             </TouchableOpacity>
             <TouchableOpacity
                 onPress={() => selectTool('eraser')}
@@ -618,8 +785,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                 height: dot,
                                 borderRadius: 10,
                                 backgroundColor: shown(current.color),
-                                borderWidth: StyleSheet.hairlineWidth,
-                                borderColor: colors.border,
+                                borderWidth: 1,
+                                borderColor: outlineOf(current.color),
                                 opacity: INK_TOOLS[inkTool].opacity < 1 ? 0.6 : 1,
                             }}
                         />
@@ -660,7 +827,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                             accessibilityState={{ selected: active }}
                             accessibilityLabel={value}
                         >
-                            <View style={[styles.swatch, { backgroundColor: shown(value) }, active && { borderColor: colors.primary, borderWidth: 2.5 }]} />
+                            <View style={[styles.swatch, { backgroundColor: shown(value), borderColor: outlineOf(value) }, active && { borderColor: colors.primary, borderWidth: 2.5 }]} />
                         </TouchableOpacity>
                     );
                 })}
@@ -677,7 +844,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         );
 
     // With the lasso the swatches recolour what is selected.
-    const recolorButtons = QUICK_COLORS.map((value) => (
+    const recolorButtons = quickBase.map((value) => (
         <TouchableOpacity
             key={value}
             onPress={() => dispatch({ type: 'recolorSelection', selection, color: value })}
@@ -686,7 +853,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             accessibilityRole="button"
             accessibilityLabel={value}
         >
-            <View style={[styles.swatch, { backgroundColor: shown(value) }]} />
+            <View style={[styles.swatch, { backgroundColor: shown(value), borderColor: outlineOf(value) }]} />
         </TouchableOpacity>
     ));
 
@@ -747,7 +914,15 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     );
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} supportedOrientations={['portrait', 'landscape']}>
+        <Modal
+            key={modalKey}
+            visible={open}
+            animationType="slide"
+            presentationStyle="fullScreen"
+            onRequestClose={handleClose}
+            onShow={handleShow}
+            supportedOrientations={['portrait', 'landscape']}
+        >
             {/* Palm rejection and every pen sample: above the gesture root, so gestures see the filtered touches. */}
             <InkInputView style={styles.root} collapsable={false}>
                 <GestureHandlerRootView style={styles.root}>
@@ -912,9 +1087,9 @@ const styles = createStyles(() => ({
     paletteDivider: { width: StyleSheet.hairlineWidth, height: 26, backgroundColor: colors.border, marginHorizontal: 6 },
     toolButton: { width: 40, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     toolButtonActive: { backgroundColor: colors.backgroundSecondary },
-    toolInk: { position: 'absolute', bottom: 5, width: 14, height: 3, borderRadius: 2 },
+    toolInk: { position: 'absolute', bottom: 5, width: 14, height: 3, borderRadius: 2, borderWidth: StyleSheet.hairlineWidth },
     swatchButton: { width: 36, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    swatch: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+    swatch: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border },
     popover: {
         backgroundColor: colors.surface,
         borderRadius: 20,

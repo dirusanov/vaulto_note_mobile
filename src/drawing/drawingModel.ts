@@ -76,6 +76,8 @@ export const selectInLasso = (content: DrawingContent, boxes: TextBox[], polygon
 
 export type DrawingAction =
     | { type: 'load'; content: DrawingContent }
+    /** Brings back a whole editing session, history included (after the app's tree is remounted). */
+    | { type: 'restore'; state: DrawingState }
     | { type: 'addStroke'; stroke: InkStroke }
         /** `path`: further eraser centres [x, y, ...] of the same pass, so a fast move leaves no gaps. */
     | { type: 'eraseAt'; x: number; y: number; path?: number[]; radius: number; boxes: TextBox[]; mode?: EraseMode }
@@ -132,6 +134,8 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
     switch (action.type) {
         case 'load':
             return initialDrawingState(action.content);
+        case 'restore':
+            return { ...action.state, eraseStart: null };
         case 'addStroke':
             return commit(state, { ...state.content, strokes: [...state.content.strokes, action.stroke] });
         case 'eraseAt': {

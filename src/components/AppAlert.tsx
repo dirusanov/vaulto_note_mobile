@@ -45,7 +45,12 @@ export const appAlert = (
         Alert.alert(title, message, buttons, options);
         return;
     }
-    queue = [...queue, { id: nextId++, title, message, buttons: buttons?.length ? buttons : [], options }];
+    // The same question asked again replaces the one still queued. A hardware
+    // Escape key cancels an alert's window natively, without onRequestClose, so
+    // that alert would stay first in the queue, unseen, and hide every later one;
+    // asked anew it gets a new id, and the host a new window (keyed by id).
+    const fresh = { id: nextId++, title, message, buttons: buttons?.length ? buttons : [], options };
+    queue = [...queue.filter((item) => item.title !== title || item.message !== message), fresh];
     listener(queue);
 };
 
@@ -97,7 +102,7 @@ export const AppAlertHost = () => {
     };
 
     return (
-        <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={handleRequestClose}>
+        <Modal key={current.id} visible transparent animationType="fade" statusBarTranslucent onRequestClose={handleRequestClose}>
             <TouchableWithoutFeedback onPress={handleRequestClose}>
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>

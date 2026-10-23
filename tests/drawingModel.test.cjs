@@ -145,3 +145,13 @@ test('the lasso picks what it encloses; moving, copying, recolouring and deletin
     s = drawingReducer(s, { type: 'undo' });
     assert.equal(s.content.strokes.length, 3);
 });
+
+test('restore brings back the content and its undo history', () => {
+    const before = run([{ type: 'addStroke', stroke: stroke(10) }, { type: 'addStroke', stroke: stroke(20) }, { type: 'undo' }]);
+    let s = drawingReducer(initialDrawingState(), { type: 'restore', state: before });
+    assert.equal(s.content.strokes.length, 1);
+    assert.equal(s.undo.length, 1);
+    assert.equal(s.redo.length, 1);
+    s = drawingReducer(s, { type: 'redo' });
+    assert.equal(s.content.strokes.length, 2);
+});
