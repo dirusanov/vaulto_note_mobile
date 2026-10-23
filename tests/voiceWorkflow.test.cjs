@@ -79,6 +79,7 @@ function transcription(options = {}) {
     '../utils/authEvents': {}, '../api/tokenRefresh': {}, '../utils/deviceIdentity': {},
     '../utils/connectivity': { isDeviceOffline: async () => state.offline },
     '../utils/limitEvents': { onLimitReached: { emit: () => { calls.limit++; } } },
+    '../utils/aiLimitState': { clearAiLimit: () => {}, isLlmLimitReason: () => false, markAiLimitReached: () => {} },
     './localSpeechSpeed': { recordLocalTranscription: async (elapsedMs, audioMs) => { calls.timings.push({ elapsedMs, audioMs }); } },
     './LocalWhisperService': {
       getLocalWhisperModelStatus: async () => {

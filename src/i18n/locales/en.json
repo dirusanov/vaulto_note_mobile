@@ -64,7 +64,14 @@
     "unlockWithKey": "Enter your recovery key to show them on this device.",
     "listTitle": "Notes",
     "drawing": "Drawing",
-    "lockedListHint": "Your notes will appear here once they are unlocked."
+    "sectionPinned": "Pinned",
+    "sectionOthers": "Others",
+    "checkedMore": "+{{count}} checked",
+    "freeMinutesLeft": "{{minutes}} min left",
+    "freeMinutesUsed": "Free minutes used up",
+    "lockedListHint": "Your notes will appear here once they are unlocked.",
+    "lockedNotBackedUp": "Until then, new notes are not backed up.",
+    "lockedSyncNotice": "Not synced: unlock encryption to back up new notes."
   },
   "settings": {
     "title": "Settings",
@@ -374,7 +381,10 @@
       "speechOnlyHint": "Skip the AI download. Cloud AI is a separate choice when online.",
       "fastQualityHint": "The small AI model can miss details or get facts wrong. Check text improvements; consider the cloud for complex notes.",
       "loadFailed": "Could not check the models. Please try again.",
-      "remove": "Remove from this device · {{size}}"
+      "remove": "Remove from this device · {{size}}",
+      "aiReadyTitle": "AI on this device is ready",
+      "aiReadyGuest": "Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.",
+      "turnOn": "Turn on"
     }
   },
   "languages": {
@@ -436,7 +446,13 @@
     "iAcceptThe": "I accept the",
     "andThe": "and",
     "locallyStoredUnaffected": "Your locally stored notes remain unaffected and fully accessible.",
-    "signUpPerk": "30 minutes of transcription free"
+    "signUpPerk": "30 minutes of transcription free",
+    "newUserTitle": "Keep your notes and get {{minutes}} free minutes",
+    "newUserSubtitle": "A free account. The minutes come with a new one.",
+    "benefitAI": "AI tidies up text, finds tasks and answers questions about your notes",
+    "benefitSync": "Sync across your devices with end-to-end encryption",
+    "benefitKeepNotes": "Notes you made without an account come with you",
+    "orWithEmail": "or with email"
   },
   "edit": {
     "visualEditor": "Visual editor",
@@ -499,7 +515,11 @@
       "addedToOriginal": "Added to original",
       "addedToImproved": "Added to improved",
       "savedRecording": "Saved recording",
-      "cancelled": "Change cancelled"
+      "cancelled": "Change cancelled",
+      "commandLimit": "AI limit reached, so this request was not carried out: “{{text}}”",
+      "commandFailed": "Could not carry out this request: “{{text}}”",
+      "limitNotice": "AI limit reached for this month: recordings are added as plain text, without AI cleanup.",
+      "insertAsText": "Insert as text"
     },
     "improvePreview": {
       "title": "AI suggestion",
@@ -565,6 +585,10 @@
       "meeting": {
         "label": "Meeting notes",
         "description": "Summary, decisions and action items"
+      },
+      "checklist": {
+        "label": "Checklist",
+        "description": "Turn the note into a task list"
       }
     },
     "versions": {
@@ -859,9 +883,16 @@
     "guestMinutesUsedDesc": "Sign in to get more free minutes and sync your notes. Or turn speech into text right on this device — free and offline.",
     "perYear": "{{price}} / year",
     "markdownSource": "Edit as Markdown",
-    "markdownSourceDesc": "Formatting appears as plain characters, like **bold**."
+    "markdownSourceDesc": "Formatting appears as plain characters, like **bold**.",
+    "guestBusyTitle": "Cloud transcription is busy",
+    "guestBusyDesc": "Free cloud transcription without an account is busy right now. Sign in for your own free minutes, or turn speech into text on this device — free and offline.",
+    "aiLimitDescDate": "You have used this month's AI allowance. It resets on {{date}}.",
+    "aiLimitDescNoDate": "You have used this month's AI allowance. It resets at the start of your next period.",
+    "aiLimitGuestDesc": "Sign in to get your own monthly AI allowance."
   },
   "a11y": {
+    "checked": "checked",
+    "pinned": "Pinned",
     "back": "Back",
     "close": "Close",
     "textAppearance": "Text appearance",
@@ -941,7 +972,12 @@
     "offlineHint": "AI on this device works without internet.",
     "setUpOnDevice": "Set up",
     "subtitle": "Answers from everything you have written down, with links to the notes.",
-    "examplesLabel": "Try asking"
+    "examplesLabel": "Try asking",
+    "gateText": "Ask your notes works with a free account, or with AI that runs on this device — offline and private.",
+    "lockedPlaceholder": "Sign in or set up AI to ask",
+    "limitGeneric": "A usage limit was reached, so this question was not answered. Try again later.",
+    "aiLimitDate": "This month's AI allowance is used up, so this question was not answered. It resets on {{date}}.",
+    "aiLimit": "This month's AI allowance is used up, so this question was not answered. It resets at the start of your next period."
   },
   "localAI": {
     "modelMissingTitle": "Download the AI model",
@@ -991,7 +1027,9 @@
     "aiTitle": "AI tidies it up",
     "aiText": "Improve the text, find tasks, ask about your notes.",
     "privacyTitle": "Private by default",
-    "privacyText": "Notes are encrypted on the device and end-to-end when synced: only you can read them."
+    "privacyText": "Notes are encrypted on the device and end-to-end when synced: only you can read them.",
+    "voiceTextOffline": "Recordings turn into text — offline too, after a one-time download.",
+    "aiTextGuest": "Improve the text, find tasks, ask about your notes — with a free account or AI on this device."
   },
   "errors": {
     "offline": "No internet connection. Check your network and try again.",
@@ -1076,7 +1114,24 @@
     "summaryFailed": "Could not write the meeting notes. You can run \"Meeting notes\" from the AI menu later.",
     "title": "Meeting · {{date}}"
   },
-  "paywall": {},
+  "paywall": {
+    "headline": "Record without watching the clock",
+    "subtitle": "Vaulto Pro: fresh minutes every month and AI without limits.",
+    "benefitAI": "AI without monthly limits: tidy up text, find tasks, ask your notes",
+    "includedLabel": "Plus everything in your free account",
+    "benefitSync": "Sync and end-to-end encryption on all your devices",
+    "benefitHandwriting": "Handwriting and drawings in notes",
+    "cancelGooglePlay": "Renews automatically. Cancel anytime in Google Play.",
+    "cancelAppStore": "Renews automatically. Cancel anytime in your App Store settings.",
+    "terms": "Terms of Use",
+    "privacy": "Privacy Policy",
+    "introOffer": "Introductory price {{intro}}, then {{price}}",
+    "startTrial": "Start free trial",
+    "trialDays_one": "{{count}} day free, then {{price}}",
+    "trialDays_other": "{{count}} days free, then {{price}}",
+    "trialMonths_one": "{{count}} month free, then {{price}}",
+    "trialMonths_other": "{{count}} months free, then {{price}}"
+  },
   "drawing": {
     "done": "Done",
     "eraser": "Eraser",

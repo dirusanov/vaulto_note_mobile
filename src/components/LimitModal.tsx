@@ -6,7 +6,6 @@ import {
     Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -14,7 +13,8 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
-import { onLimitReached } from '../utils/limitEvents';
+import { onLimitReached, setLimitSheetOpen } from '../utils/limitEvents';
+import { LLM_LIMIT_REASON, markAiLimitReached } from '../utils/aiLimitState';
 import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
@@ -25,9 +25,11 @@ export const LimitModal: React.FC = () => {
     const { t } = useTranslation();
 
     const navigation = useNavigation();
-    const { isAuthenticated, isGuest } = useAuth();
+    const { isAuthenticated, isGuest, user } = useAuth();
     const isGuestUser = !isAuthenticated || isGuest;
     const [visible, setVisible] = useState(false);
+    // The server's reason, when the emitter passes one (`meta.reason` of the 403).
+    const [limitReason, setLimitReason] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState<CurrentPeriodUsage | null>(null);
     const [onDeviceActive, setOnDeviceActive] = useState(true);
@@ -38,22 +40,32 @@ export const LimitModal: React.FC = () => {
     isFocusedRef.current = isFocused;
 
     useEffect(() => {
-        const unsubscribe = onLimitReached.subscribe(() => {
+        const unsubscribe = onLimitReached.subscribe((reason?: string) => {
             if (!isFocusedRef.current) return;
+            setLimitReason(typeof reason === 'string' ? reason : null);
             setVisible(true);
-            fetchUsage();
+            fetchUsage(typeof reason === 'string' ? reason : null);
             void isOnDeviceTranscriptionActive().then(setOnDeviceActive).catch(() => setOnDeviceActive(true));
         });
         return unsubscribe;
     }, []);
 
-    const fetchUsage = async () => {
+    // Others (the note screen's queued prompts) wait while this sheet is up.
+    useEffect(() => {
+        setLimitSheetOpen(visible);
+        return () => setLimitSheetOpen(false);
+    }, [visible]);
+
+    const fetchUsage = async (reason: string | null) => {
         setLoading(true);
         try {
             const data = await subscriptionApi.getCurrentPeriodUsage();
             setUsage(data);
+            // The server may refuse with tokens left (less than the request needs):
+            // the refusal decides, the usage only tells when it resets.
+            if (reason === LLM_LIMIT_REASON) markAiLimitReached(data?.period_end_at);
         } catch (error) {
-            console.error('[LimitModal] Failed to fetch usage:', error);
+            console.warn('[LimitModal] Failed to fetch usage:', error);
         } finally {
             setLoading(false);
         }
@@ -74,24 +86,41 @@ export const LimitModal: React.FC = () => {
     let iconName: keyof typeof MaterialIcons.glyphMap = 'warning-amber';
     let isTrial = false;
     let isTranscriptionLimit = false;
+    let showUpgrade = false;
 
-    if (usage) {
-        const isFree = (usage.plan || '').trim().toLowerCase() !== 'pro';
+    // The plan before usage arrives comes from the profile, so the sheet reads
+    // right from the first frame instead of showing a spinner.
+    const planName = (usage?.plan ?? user?.plan ?? '').trim().toLowerCase();
+    const isFreePlan = usage ? planName !== 'pro' : !(user?.is_pro || planName === 'pro');
+    // The server's code says which allowance ran out. Without one (older
+    // servers), the usage figures tell, AI first as before.
+    const llmEmpty = !!usage && usage.limits.llm_remaining_tokens <= 0;
+    const isAiLimit = limitReason ? limitReason === LLM_LIMIT_REASON : llmEmpty;
+
+    if (isAiLimit) {
+        const resetAt = usage?.period_end_at ?? user?.current_usage_period_end_at ?? null;
+        title = t('aux.aiLimitTitle', 'AI Limit Reached');
+        message = isGuestUser
+            ? t('aux.aiLimitGuestDesc', 'Sign in to get your own monthly AI allowance.')
+            : resetAt
+                ? t('aux.aiLimitDescDate', 'You have used this month\'s AI allowance. It resets on {{date}}.', {
+                    date: new Date(resetAt).toLocaleDateString(),
+                })
+                : t('aux.aiLimitDescNoDate', 'You have used this month\'s AI allowance. It resets at the start of your next period.');
+        iconName = 'auto-awesome';
+        // Signed-in free users can upgrade; guests sign in for an allowance of their own.
+        showUpgrade = isGuestUser || isFreePlan;
+    } else if (usage) {
         const transEmptyPro = usage.limits.transcription_subscription_remaining_seconds <= 0;
         const transEmptyTrial = usage.limits.transcription_trial_remaining_seconds <= 0;
-        const llmEmpty = usage.limits.llm_remaining_tokens <= 0;
 
-        if (llmEmpty) {
-            title = t('aux.aiLimitTitle', 'AI Limit Reached');
-            message = t('aux.aiLimitDesc', 'You have exceeded your Vaulto AI tokens limit for this period. Please try again later.');
-            iconName = 'auto-awesome';
-        } else if (isFree && transEmptyTrial) {
+        if (isFreePlan && transEmptyTrial) {
             title = t('aux.trialExhaustedTitle', 'Trial Exhausted');
             message = t('aux.trialExhaustedDesc', 'You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!');
             iconName = 'stars';
             isTrial = true;
             isTranscriptionLimit = true;
-        } else if (!isFree && transEmptyPro) {
+        } else if (!isFreePlan && transEmptyPro) {
             title = t('aux.transcriptionLimitTitle', 'Transcription Limit Reached');
             message = usage.subscription_next_refill_at
                 ? t('aux.transcriptionLimitDescDate', 'You have used all your PRO transcription minutes for this period. Your limit will reset on {{date}}.', {
@@ -103,13 +132,28 @@ export const LimitModal: React.FC = () => {
         }
     }
 
-    if (isGuestUser) {
-        title = t('aux.guestMinutesUsedTitle', 'Free minutes used up');
-        message = t('aux.guestMinutesUsedDesc', 'Sign in to get more free minutes and sync your notes. Or turn speech into text right on this device — free and offline.');
-        iconName = 'stars';
+    // A guest can be refused while still holding free minutes: all guests share a
+    // daily cloud budget (gateway code "guest_budget_exhausted"). The reason comes
+    // from the 403 body; without one, a balance left over means that budget.
+    const guestSecondsLeft = usage
+        ? usage.limits.transcription_trial_remaining_seconds + usage.limits.transcription_subscription_remaining_seconds
+        : user?.transcription_remaining_seconds;
+    const guestCloudBusy = isGuestUser && (limitReason
+        ? limitReason === 'guest_budget_exhausted'
+        : typeof guestSecondsLeft === 'number' && guestSecondsLeft > 0);
+
+    if (isGuestUser && !isAiLimit) {
+        title = guestCloudBusy
+            ? t('aux.guestBusyTitle', 'Cloud transcription is busy')
+            : t('aux.guestMinutesUsedTitle', 'Free minutes used up');
+        message = guestCloudBusy
+            ? t('aux.guestBusyDesc', 'Free cloud transcription without an account is busy right now. Sign in for your own free minutes, or turn speech into text on this device — free and offline.')
+            : t('aux.guestMinutesUsedDesc', 'Sign in to get more free minutes and sync your notes. Or turn speech into text right on this device — free and offline.');
+        iconName = guestCloudBusy ? 'cloud-queue' : 'stars';
         isTrial = true;
         isTranscriptionLimit = true;
     }
+    showUpgrade = showUpgrade || isTrial;
 
     // Out of transcription minutes is not a dead end: the phone can transcribe for free.
     const offerOnDevice = LOCAL_WHISPER_ENABLED && isTranscriptionLimit && !onDeviceActive && !loading;
@@ -151,20 +195,16 @@ export const LimitModal: React.FC = () => {
 
                             <Text style={styles.title}>{title}</Text>
 
-                            {loading ? (
-                                <View style={styles.loaderContainer}>
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                </View>
-                            ) : (
-                                <Text style={styles.message}>{message}</Text>
-                            )}
+                            {/* Shown at once and refined when usage arrives: a spinner-only
+                                body made the buttons jump under the finger. */}
+                            <Text style={styles.message}>{message}</Text>
 
                             <View style={styles.actionsRow}>
                                 <TouchableOpacity onPress={handleClose} activeOpacity={0.8} style={styles.cancelButton}>
-                                    <Text style={styles.cancelText}>{isTrial ? t('aux.maybeLater', 'Maybe Later') : t('common.close', 'Close')}</Text>
+                                    <Text style={styles.cancelText}>{showUpgrade ? t('aux.maybeLater', 'Maybe Later') : t('common.close', 'Close')}</Text>
                                 </TouchableOpacity>
 
-                                {isTrial && (
+                                {showUpgrade && (
                                     <TouchableOpacity onPress={handleUpgrade} activeOpacity={0.85} style={styles.primaryButton}>
                                         <Text style={styles.primaryText}>{isGuestUser ? t('auth.signIn', 'Sign In') : t("aux.upgrade", "Upgrade")}</Text>
                                     </TouchableOpacity>
@@ -243,11 +283,6 @@ const styles = createStyles(() => ({
         textAlign: 'center',
         marginBottom: spacing.xs,
         color: colors.text,
-    },
-    loaderContainer: {
-        marginVertical: spacing.l,
-        height: 22,
-        justifyContent: 'center',
     },
     message: {
         ...typography.body,

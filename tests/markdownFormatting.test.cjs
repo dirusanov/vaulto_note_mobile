@@ -267,6 +267,17 @@ check('cjk long line truncated', deriveAutoTitleFromPlainText('明天上午十�
 check('empty', deriveAutoTitleFromPlainText(''), '');
 check('hashtags left out of the title', deriveAutoTitleFromPlainText('Подготовить отчёт к пятнице #работа'), 'Подготовить отчёт к пятнице');
 
+// --- AI output and voice inserts -------------------------------------------
+const { stripTrailingLineSpaces, appendPlainTextSnippetToRichContent } = require('../.test-build/md/utils/richContent');
+check('model hard-break spaces are dropped', normalizeModelMarkdownForEditor('First line  \n- [ ] item  \nEnd'), 'First line\n- [ ] item\nEnd');
+check('code keeps its spaces', normalizeModelMarkdownForEditor('```\na  \n```'), '```\na  \n```');
+check('trailing line spaces stripped', stripTrailingLineSpaces('- [ ] a  \n- [ ] b \t'), '- [ ] a\n- [ ] b');
+check('html left alone by trailing-space strip', stripTrailingLineSpaces('<p>a  </p>'), '<p>a  </p>');
+check('voice text after an empty first line has no blank line', appendPlainTextSnippetToRichContent('<p></p>', 'Hello'), '<p>Hello</p>');
+check('voice text after trailing empty paragraphs', appendPlainTextSnippetToRichContent('<p>Title</p><p><br></p><p></p>', 'Hello'), '<p>Title</p><p>Hello</p>');
+check('plain base starting with a newline', appendPlainTextSnippetToRichContent('\n', 'Hello'), 'Hello');
+check('text before the insert is kept', appendPlainTextSnippetToRichContent('<p>One</p>', 'Two'), '<p>One</p><p>Two</p>');
+
 if (failures > 0) {
     console.error(`\n${failures} test(s) failed`);
     process.exit(1);

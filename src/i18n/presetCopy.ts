@@ -32,6 +32,12 @@ export const PRESET_COPY: Record<string, PresetCopy> = {
         descriptionKey: 'edit.presets.structure.description',
         description: 'Add headings and lists for readability',
     },
+    checklist: {
+        labelKey: 'edit.presets.checklist.label',
+        label: 'Checklist',
+        descriptionKey: 'edit.presets.checklist.description',
+        description: 'Turn the note into a task list',
+    },
     meeting: {
         labelKey: 'edit.presets.meeting.label',
         label: 'Meeting Notes',

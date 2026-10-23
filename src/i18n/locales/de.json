@@ -64,7 +64,14 @@
     "unlockWithKey": "Gib deinen Wiederherstellungsschlüssel ein, um sie auf diesem Gerät zu sehen.",
     "listTitle": "Notizen",
     "drawing": "Zeichnung",
-    "lockedListHint": "Deine Notizen erscheinen hier, sobald du sie entsperrst."
+    "sectionPinned": "Angeheftet",
+    "sectionOthers": "Andere",
+    "checkedMore": "+{{count}} erledigt",
+    "freeMinutesLeft": "Noch {{minutes}} Min.",
+    "freeMinutesUsed": "Freiminuten aufgebraucht",
+    "lockedListHint": "Deine Notizen erscheinen hier, sobald du sie entsperrst.",
+    "lockedNotBackedUp": "Bis dahin werden neue Notizen nicht gesichert.",
+    "lockedSyncNotice": "Nicht synchronisiert: Entsperre die Verschlüsselung, um neue Notizen zu sichern."
   },
   "settings": {
     "title": "Einstellungen",
@@ -374,7 +381,10 @@
       "speechOnlyHint": "Kein KI-Download. Cloud-KI ist online separat wählbar.",
       "fastQualityHint": "Das kleine KI-Modell kann Details übersehen oder Fakten verwechseln. Prüfe Textverbesserungen; für komplexe Notizen empfiehlt sich die Cloud.",
       "loadFailed": "Die Modelle konnten nicht geprüft werden. Bitte versuche es erneut.",
-      "remove": "Von diesem Gerät entfernen · {{size}}"
+      "remove": "Von diesem Gerät entfernen · {{size}}",
+      "aiReadyTitle": "KI auf dem Gerät ist bereit",
+      "aiReadyGuest": "Ohne Konto läuft KI auf diesem Gerät. Schalte „{{option}}“ ein, um sie zu nutzen: Sprache und KI bleiben dann auf dem Gerät.",
+      "turnOn": "Einschalten"
     }
   },
   "languages": {
@@ -436,7 +446,13 @@
     "iAcceptThe": "Ich akzeptiere die",
     "andThe": "und",
     "locallyStoredUnaffected": "Deine lokal gespeicherten Notizen bleiben unverändert und vollständig zugänglich.",
-    "signUpPerk": "30 Minuten Transkription gratis"
+    "signUpPerk": "30 Minuten Transkription gratis",
+    "newUserTitle": "Behalte deine Notizen und erhalte {{minutes}} Freiminuten",
+    "newUserSubtitle": "Ein kostenloses Konto. Die Minuten gibt es für neue Konten.",
+    "benefitAI": "KI bringt Texte in Form, findet Aufgaben und beantwortet Fragen zu deinen Notizen",
+    "benefitSync": "Synchronisierung zwischen deinen Geräten mit Ende-zu-Ende-Verschlüsselung",
+    "benefitKeepNotes": "Notizen, die du ohne Konto erstellt hast, kommen mit",
+    "orWithEmail": "oder mit E-Mail"
   },
   "edit": {
     "visualEditor": "Visueller Editor",
@@ -499,7 +515,11 @@
       "addedToOriginal": "Zum Original hinzugefügt",
       "addedToImproved": "Zur Verbesserung hinzugefügt",
       "savedRecording": "Aufnahme gespeichert",
-      "cancelled": "Änderung abgebrochen"
+      "cancelled": "Änderung abgebrochen",
+      "commandLimit": "KI-Limit erreicht, deshalb wurde diese Anweisung nicht ausgeführt: „{{text}}“",
+      "commandFailed": "Diese Anweisung konnte nicht ausgeführt werden: „{{text}}“",
+      "limitNotice": "KI-Limit für diesen Monat erreicht: Aufnahmen werden als reiner Text eingefügt, ohne KI-Bearbeitung.",
+      "insertAsText": "Als Text einfügen"
     },
     "improvePreview": {
       "title": "KI-Vorschlag",
@@ -565,6 +585,10 @@
       "meeting": {
         "label": "Meeting-Protokoll",
         "description": "Zusammenfassung, Beschlüsse und Aufgaben"
+      },
+      "checklist": {
+        "label": "Checkliste",
+        "description": "Die Notiz in eine Aufgabenliste verwandeln"
       }
     },
     "versions": {
@@ -857,9 +881,16 @@
     "guestMinutesUsedDesc": "Melde dich an für weitere Freiminuten und Synchronisierung. Oder wandle Sprache direkt auf dem Gerät in Text um – kostenlos und offline.",
     "perYear": "{{price}} pro Jahr",
     "markdownSource": "Als Markdown bearbeiten",
-    "markdownSourceDesc": "Formatierung erscheint als einfache Zeichen, etwa **fett**."
+    "markdownSourceDesc": "Formatierung erscheint als einfache Zeichen, etwa **fett**.",
+    "guestBusyTitle": "Cloud-Transkription ist ausgelastet",
+    "guestBusyDesc": "Die kostenlose Cloud-Transkription ohne Konto ist gerade ausgelastet. Melde dich an, um eigene Freiminuten zu erhalten, oder wandle Sprache direkt auf diesem Gerät in Text um – kostenlos und offline.",
+    "aiLimitDescDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird am {{date}} zurückgesetzt.",
+    "aiLimitDescNoDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird zu Beginn des nächsten Zeitraums zurückgesetzt.",
+    "aiLimitGuestDesc": "Melde dich an, um ein eigenes monatliches KI-Kontingent zu erhalten."
   },
   "a11y": {
+    "checked": "erledigt",
+    "pinned": "Angeheftet",
     "back": "Zurück",
     "close": "Schließen",
     "textAppearance": "Textdarstellung",
@@ -939,7 +970,12 @@
     "offlineHint": "KI auf dem Gerät funktioniert ohne Internet.",
     "setUpOnDevice": "Einrichten",
     "subtitle": "Antworten aus allem, was du notiert hast, mit Links zu den Notizen.",
-    "examplesLabel": "Frag zum Beispiel"
+    "examplesLabel": "Frag zum Beispiel",
+    "gateText": "„Frag deine Notizen“ funktioniert mit einem kostenlosen Konto oder mit KI direkt auf diesem Gerät – offline und privat.",
+    "lockedPlaceholder": "Melde dich an oder richte KI ein, um zu fragen",
+    "limitGeneric": "Ein Nutzungslimit wurde erreicht, deshalb gibt es keine Antwort. Versuche es später erneut.",
+    "aiLimitDate": "Das KI-Kontingent für diesen Monat ist aufgebraucht, deshalb gibt es keine Antwort. Es wird am {{date}} zurückgesetzt.",
+    "aiLimit": "Das KI-Kontingent für diesen Monat ist aufgebraucht, deshalb gibt es keine Antwort. Es wird zu Beginn des nächsten Zeitraums zurückgesetzt."
   },
   "localAI": {
     "modelMissingTitle": "KI-Modell herunterladen",
@@ -989,7 +1025,9 @@
     "aiTitle": "Die KI räumt auf",
     "aiText": "Verbessert Text, findet Aufgaben, beantwortet Fragen zu deinen Notizen.",
     "privacyTitle": "Standardmäßig privat",
-    "privacyText": "Notizen sind auf dem Gerät verschlüsselt und beim Synchronisieren Ende-zu-Ende: nur du kannst sie lesen."
+    "privacyText": "Notizen sind auf dem Gerät verschlüsselt und beim Synchronisieren Ende-zu-Ende: nur du kannst sie lesen.",
+    "voiceTextOffline": "Aufnahmen werden zu Text – nach einem einmaligen Download auch offline.",
+    "aiTextGuest": "Text verbessern, Aufgaben finden, Fragen zu Notizen stellen – mit kostenlosem Konto oder KI auf dem Gerät."
   },
   "errors": {
     "offline": "Keine Internetverbindung. Prüfe dein Netzwerk und versuche es erneut.",
@@ -1074,7 +1112,24 @@
     "summaryFailed": "Das Protokoll konnte nicht erstellt werden. Du kannst später „Meeting-Protokoll“ im KI-Menü starten.",
     "title": "Meeting · {{date}}"
   },
-  "paywall": {},
+  "paywall": {
+    "headline": "Aufnehmen, ohne auf die Uhr zu schauen",
+    "subtitle": "Vaulto Pro: jeden Monat neue Minuten und KI ohne Limits.",
+    "benefitAI": "KI ohne monatliche Limits: Texte verbessern, Aufgaben finden, Notizen befragen",
+    "includedLabel": "Dazu alles aus deinem kostenlosen Konto",
+    "benefitSync": "Synchronisierung und Ende-zu-Ende-Verschlüsselung auf all deinen Geräten",
+    "benefitHandwriting": "Handschrift und Zeichnungen in Notizen",
+    "cancelGooglePlay": "Verlängert sich automatisch. Jederzeit in Google Play kündbar.",
+    "cancelAppStore": "Verlängert sich automatisch. Jederzeit in den App-Store-Einstellungen kündbar.",
+    "terms": "Nutzungsbedingungen",
+    "privacy": "Datenschutzerklärung",
+    "introOffer": "Einführungspreis {{intro}}, danach {{price}}",
+    "startTrial": "Gratis testen",
+    "trialDays_one": "{{count}} Tag gratis, danach {{price}}",
+    "trialDays_other": "{{count}} Tage gratis, danach {{price}}",
+    "trialMonths_one": "{{count}} Monat gratis, danach {{price}}",
+    "trialMonths_other": "{{count}} Monate gratis, danach {{price}}"
+  },
   "drawing": {
     "done": "Fertig",
     "eraser": "Radierer",

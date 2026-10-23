@@ -64,7 +64,14 @@
     "unlockWithKey": "復元キーを入力すると、この端末に表示されます。",
     "listTitle": "ノート",
     "drawing": "手書き",
-    "lockedListHint": "ロックを解除すると、ここにノートが表示されます。"
+    "sectionPinned": "固定済み",
+    "sectionOthers": "その他",
+    "checkedMore": "+{{count}} 件完了",
+    "freeMinutesLeft": "残り {{minutes}} 分",
+    "freeMinutesUsed": "無料の分数を使い切りました",
+    "lockedListHint": "ロックを解除すると、ここにノートが表示されます。",
+    "lockedNotBackedUp": "それまでは、新しいメモはバックアップされません。",
+    "lockedSyncNotice": "未同期:新しいメモをバックアップするには暗号化のロックを解除してください。"
   },
   "settings": {
     "title": "設定",
@@ -374,7 +381,10 @@
       "speechOnlyHint": "AIはダウンロードしません。接続時のクラウドAIは別途選択できます。",
       "fastQualityHint": "小型AIモデルは詳細を見落としたり、事実を誤ったりすることがあります。文章の改善結果を確認し、複雑なメモにはクラウドの利用を検討してください。",
       "loadFailed": "モデルを確認できませんでした。もう一度お試しください。",
-      "remove": "このデバイスから削除 · {{size}}"
+      "remove": "このデバイスから削除 · {{size}}",
+      "aiReadyTitle": "端末上の AI の準備ができました",
+      "aiReadyGuest": "アカウントなしでは、AI はこの端末で動作します。使うには「{{option}}」をオンにしてください。音声と AI は端末の外に出ません。",
+      "turnOn": "オンにする"
     }
   },
   "languages": {
@@ -436,7 +446,13 @@
     "iAcceptThe": "同意します：",
     "andThe": "と",
     "locallyStoredUnaffected": "端末に保存されたノートはそのまま残り、問題なく利用できます。",
-    "signUpPerk": "文字起こし 30 分無料"
+    "signUpPerk": "文字起こし 30 分無料",
+    "newUserTitle": "メモを守って、{{minutes}}分の無料時間を手に入れよう",
+    "newUserSubtitle": "アカウントは無料です。無料時間は新規アカウントに付与されます。",
+    "benefitAI": "AI が文章を整え、タスクを見つけ、メモについての質問に答えます",
+    "benefitSync": "エンドツーエンド暗号化で端末間を同期",
+    "benefitKeepNotes": "アカウントなしで作ったメモもそのまま引き継がれます",
+    "orWithEmail": "またはメールで"
   },
   "edit": {
     "visualEditor": "ビジュアルエディタ",
@@ -499,7 +515,11 @@
       "addedToOriginal": "オリジナルに追加しました",
       "addedToImproved": "改善版に追加しました",
       "savedRecording": "録音を保存しました",
-      "cancelled": "変更をキャンセルしました"
+      "cancelled": "変更をキャンセルしました",
+      "commandLimit": "AI の上限に達したため、この指示は実行されませんでした:「{{text}}」",
+      "commandFailed": "この指示を実行できませんでした:「{{text}}」",
+      "limitNotice": "今月の AI の上限に達しました。録音は AI による整形なしで、そのままテキストとして追加されます。",
+      "insertAsText": "テキストとして挿入"
     },
     "improvePreview": {
       "title": "AI の提案",
@@ -565,6 +585,10 @@
       "meeting": {
         "label": "議事録",
         "description": "要約・決定事項・タスク"
+      },
+      "checklist": {
+        "label": "チェックリスト",
+        "description": "メモをタスクリストに変換"
       }
     },
     "versions": {
@@ -857,9 +881,16 @@
     "guestMinutesUsedDesc": "サインインすると無料の分数が追加され、メモも同期できます。またはこの端末で直接文字起こし — 無料・オフラインで。",
     "perYear": "年額 {{price}}",
     "markdownSource": "Markdown で編集",
-    "markdownSourceDesc": "書式が **太字** のような記号で表示されます。"
+    "markdownSourceDesc": "書式が **太字** のような記号で表示されます。",
+    "guestBusyTitle": "クラウド文字起こしが混み合っています",
+    "guestBusyDesc": "アカウントなしの無料クラウド文字起こしは現在混み合っています。サインインして自分の無料時間を受け取るか、この端末上で文字起こししてください（無料・オフライン）。",
+    "aiLimitDescDate": "今月の AI 利用枠を使い切りました。{{date}} にリセットされます。",
+    "aiLimitDescNoDate": "今月の AI 利用枠を使い切りました。次の期間の開始時にリセットされます。",
+    "aiLimitGuestDesc": "サインインすると、毎月の AI 利用枠を自分用に使えます。"
   },
   "a11y": {
+    "checked": "完了",
+    "pinned": "固定済み",
     "back": "戻る",
     "close": "閉じる",
     "textAppearance": "テキストの表示",
@@ -939,7 +970,12 @@
     "offlineHint": "この端末の AI はインターネットなしで使えます。",
     "setUpOnDevice": "設定する",
     "subtitle": "書き留めたすべての内容から答え、ノートへのリンクも示します。",
-    "examplesLabel": "たとえば"
+    "examplesLabel": "たとえば",
+    "gateText": "メモへの質問は、無料アカウントか、この端末で動く AI で使えます（オフライン・プライベート）。",
+    "lockedPlaceholder": "質問するにはサインインか AI の設定が必要です",
+    "limitGeneric": "利用上限に達したため、この質問には回答できませんでした。しばらくしてからお試しください。",
+    "aiLimitDate": "今月の AI 利用枠を使い切ったため、この質問には回答できませんでした。{{date}} にリセットされます。",
+    "aiLimit": "今月の AI 利用枠を使い切ったため、この質問には回答できませんでした。次の期間の開始時にリセットされます。"
   },
   "localAI": {
     "modelMissingTitle": "AI モデルをダウンロード",
@@ -989,7 +1025,9 @@
     "aiTitle": "AI が整えます",
     "aiText": "文章の改善、タスクの抽出、ノートへの質問に対応。",
     "privacyTitle": "初期設定でプライベート",
-    "privacyText": "メモは端末上で暗号化され、同期時もエンドツーエンドで暗号化。読めるのはあなただけです。"
+    "privacyText": "メモは端末上で暗号化され、同期時もエンドツーエンドで暗号化。読めるのはあなただけです。",
+    "voiceTextOffline": "録音がテキストに。一度ダウンロードすればオフラインでも。",
+    "aiTextGuest": "文章の改善、タスクの抽出、メモへの質問。無料アカウントか端末上の AI で。"
   },
   "errors": {
     "offline": "インターネットに接続されていません。ネットワークを確認して、もう一度お試しください。",
@@ -1074,7 +1112,22 @@
     "summaryFailed": "議事録を作成できませんでした。後で AI メニューの「議事録」から実行できます。",
     "title": "会議 · {{date}}"
   },
-  "paywall": {},
+  "paywall": {
+    "headline": "時間を気にせず録音しよう",
+    "subtitle": "Vaulto Pro：毎月新しい時間と、制限なしの AI。",
+    "benefitAI": "月の上限なしの AI：文章の整理、タスク抽出、メモへの質問",
+    "includedLabel": "さらに無料アカウントの機能もすべて",
+    "benefitSync": "すべての端末で同期とエンドツーエンド暗号化",
+    "benefitHandwriting": "メモに手書きと描画",
+    "cancelGooglePlay": "自動更新されます。Google Play でいつでも解約できます。",
+    "cancelAppStore": "自動更新されます。App Store の設定からいつでも解約できます。",
+    "terms": "利用規約",
+    "privacy": "プライバシーポリシー",
+    "introOffer": "初回価格 {{intro}}、その後 {{price}}",
+    "startTrial": "無料トライアルを開始",
+    "trialDays_other": "{{count}}日間無料、その後 {{price}}",
+    "trialMonths_other": "{{count}}か月無料、その後 {{price}}"
+  },
   "drawing": {
     "done": "完了",
     "eraser": "消しゴム",

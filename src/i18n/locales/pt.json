@@ -64,7 +64,14 @@
     "unlockWithKey": "Digite sua chave de recuperação para vê-las neste dispositivo.",
     "listTitle": "Notas",
     "drawing": "Desenho",
-    "lockedListHint": "Suas notas aparecerão aqui depois de desbloqueadas."
+    "sectionPinned": "Fixadas",
+    "sectionOthers": "Outras",
+    "checkedMore": "+{{count}} marcados",
+    "freeMinutesLeft": "Restam {{minutes}} min",
+    "freeMinutesUsed": "Minutos grátis esgotados",
+    "lockedListHint": "Suas notas aparecerão aqui depois de desbloqueadas.",
+    "lockedNotBackedUp": "Até lá, as notas novas não têm backup.",
+    "lockedSyncNotice": "Não sincronizado: desbloqueie a criptografia para fazer backup das notas novas."
   },
   "settings": {
     "title": "Configurações",
@@ -374,7 +381,10 @@
       "speechOnlyHint": "Sem baixar IA. A IA na nuvem pode ser escolhida separadamente com internet.",
       "fastQualityHint": "O modelo pequeno de IA pode omitir detalhes ou errar fatos. Revise as melhorias de texto; considere a nuvem para notas complexas.",
       "loadFailed": "Não foi possível verificar os modelos. Tente novamente.",
-      "remove": "Remover deste dispositivo · {{size}}"
+      "remove": "Remover deste dispositivo · {{size}}",
+      "aiReadyTitle": "A IA no dispositivo está pronta",
+      "aiReadyGuest": "Sem conta, a IA funciona neste dispositivo. Ative “{{option}}” para a usar: a voz e a IA ficam então no dispositivo.",
+      "turnOn": "Ativar"
     }
   },
   "languages": {
@@ -436,7 +446,13 @@
     "iAcceptThe": "Eu aceito os",
     "andThe": "e",
     "locallyStoredUnaffected": "Suas notas salvas localmente continuam intactas e totalmente acessíveis.",
-    "signUpPerk": "30 minutos de transcrição grátis"
+    "signUpPerk": "30 minutos de transcrição grátis",
+    "newUserTitle": "Guarde as suas notas e ganhe {{minutes}} minutos grátis",
+    "newUserSubtitle": "Uma conta gratuita. Os minutos vêm com uma conta nova.",
+    "benefitAI": "A IA arruma o texto, encontra tarefas e responde a perguntas sobre as suas notas",
+    "benefitSync": "Sincronização entre os seus dispositivos com encriptação ponta a ponta",
+    "benefitKeepNotes": "As notas que criou sem conta vêm consigo",
+    "orWithEmail": "ou com e-mail"
   },
   "edit": {
     "visualEditor": "Editor Visual",
@@ -499,7 +515,11 @@
       "addedToOriginal": "Adicionado ao original",
       "addedToImproved": "Adicionado à melhoria",
       "savedRecording": "Gravação salva",
-      "cancelled": "Alteração cancelada"
+      "cancelled": "Alteração cancelada",
+      "commandLimit": "Limite de IA atingido, então este pedido não foi executado: “{{text}}”",
+      "commandFailed": "Não foi possível executar este pedido: “{{text}}”",
+      "limitNotice": "Limite de IA deste mês atingido: as gravações são adicionadas como texto simples, sem ajuste da IA.",
+      "insertAsText": "Inserir como texto"
     },
     "improvePreview": {
       "title": "Sugestão da IA",
@@ -565,6 +585,10 @@
       "meeting": {
         "label": "Ata da reunião",
         "description": "Resumo, decisões e tarefas"
+      },
+      "checklist": {
+        "label": "Checklist",
+        "description": "Transformar a nota em uma lista de tarefas"
       }
     },
     "versions": {
@@ -857,9 +881,16 @@
     "guestMinutesUsedDesc": "Entre para ganhar mais minutos grátis e sincronizar suas notas. Ou transforme voz em texto direto no dispositivo — grátis e offline.",
     "perYear": "{{price}} por ano",
     "markdownSource": "Editar como Markdown",
-    "markdownSourceDesc": "A formatação aparece como caracteres simples, como **negrito**."
+    "markdownSourceDesc": "A formatação aparece como caracteres simples, como **negrito**.",
+    "guestBusyTitle": "A transcrição na nuvem está sobrecarregada",
+    "guestBusyDesc": "A transcrição gratuita na nuvem sem conta está sobrecarregada neste momento. Inicie sessão para ter os seus próprios minutos grátis ou transforme a voz em texto neste dispositivo — grátis e offline.",
+    "aiLimitDescDate": "Você usou sua cota de IA deste mês. Ela será renovada em {{date}}.",
+    "aiLimitDescNoDate": "Você usou sua cota de IA deste mês. Ela será renovada no início do próximo período.",
+    "aiLimitGuestDesc": "Entre na sua conta para ter sua própria cota mensal de IA."
   },
   "a11y": {
+    "checked": "marcado",
+    "pinned": "Fixada",
     "back": "Voltar",
     "close": "Fechar",
     "textAppearance": "Aparência do texto",
@@ -939,7 +970,12 @@
     "offlineHint": "A IA no dispositivo funciona sem internet.",
     "setUpOnDevice": "Configurar",
     "subtitle": "Respostas com base em tudo o que você anotou, com links para as notas.",
-    "examplesLabel": "Experimente perguntar"
+    "examplesLabel": "Experimente perguntar",
+    "gateText": "Perguntar às notas funciona com uma conta gratuita ou com IA neste dispositivo — offline e privada.",
+    "lockedPlaceholder": "Inicie sessão ou configure a IA para perguntar",
+    "limitGeneric": "Um limite de uso foi atingido, então esta pergunta ficou sem resposta. Tente mais tarde.",
+    "aiLimitDate": "A cota de IA deste mês acabou, então esta pergunta ficou sem resposta. Ela será renovada em {{date}}.",
+    "aiLimit": "A cota de IA deste mês acabou, então esta pergunta ficou sem resposta. Ela será renovada no início do próximo período."
   },
   "localAI": {
     "modelMissingTitle": "Baixe o modelo de IA",
@@ -989,7 +1025,9 @@
     "aiTitle": "A IA organiza",
     "aiText": "Melhora o texto, encontra tarefas e responde sobre suas notas.",
     "privacyTitle": "Privado por padrão",
-    "privacyText": "As notas são criptografadas no dispositivo e de ponta a ponta ao sincronizar: só você pode lê-las."
+    "privacyText": "As notas são criptografadas no dispositivo e de ponta a ponta ao sincronizar: só você pode lê-las.",
+    "voiceTextOffline": "As gravações viram texto — também offline, após uma transferência única.",
+    "aiTextGuest": "Melhore o texto, encontre tarefas, pergunte sobre as notas — com uma conta gratuita ou IA no dispositivo."
   },
   "errors": {
     "offline": "Sem conexão com a internet. Verifique sua rede e tente novamente.",
@@ -1074,7 +1112,26 @@
     "summaryFailed": "Não foi possível escrever a ata. Você pode usar “Ata da reunião” no menu de IA depois.",
     "title": "Reunião · {{date}}"
   },
-  "paywall": {},
+  "paywall": {
+    "headline": "Grave sem olhar para o relógio",
+    "subtitle": "Vaulto Pro: minutos novos todos os meses e IA sem limites.",
+    "benefitAI": "IA sem limites mensais: arrumar texto, encontrar tarefas, perguntar às notas",
+    "includedLabel": "E tudo o que a conta gratuita inclui",
+    "benefitSync": "Sincronização e encriptação ponta a ponta em todos os seus dispositivos",
+    "benefitHandwriting": "Escrita à mão e desenhos nas notas",
+    "cancelGooglePlay": "Renova automaticamente. Cancele quando quiser no Google Play.",
+    "cancelAppStore": "Renova automaticamente. Cancele quando quiser nas definições da App Store.",
+    "terms": "Termos de utilização",
+    "privacy": "Política de privacidade",
+    "introOffer": "Preço introdutório {{intro}}, depois {{price}}",
+    "startTrial": "Iniciar avaliação gratuita",
+    "trialDays_one": "{{count}} dia grátis, depois {{price}}",
+    "trialDays_many": "{{count}} dias grátis, depois {{price}}",
+    "trialDays_other": "{{count}} dias grátis, depois {{price}}",
+    "trialMonths_one": "{{count}} mês grátis, depois {{price}}",
+    "trialMonths_many": "{{count}} meses grátis, depois {{price}}",
+    "trialMonths_other": "{{count}} meses grátis, depois {{price}}"
+  },
   "drawing": {
     "done": "Concluído",
     "eraser": "Borracha",

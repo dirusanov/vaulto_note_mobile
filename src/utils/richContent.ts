@@ -474,6 +474,10 @@ const STRUCTURAL_MARKDOWN_LINE_REGEX = /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>)/;
  * Blank lines next to headings, list items and quotes are dropped; a single
  * blank line between two plain paragraphs is kept as their separator.
  */
+/** Trailing spaces of every line (Markdown hard breaks) in model output; HTML is left alone. */
+export const stripTrailingLineSpaces = (text: string): string =>
+    !text || isRichHtmlContent(text) ? (text || '') : text.replace(/[ \t]+$/gm, '');
+
 export const normalizeModelMarkdownForEditor = (markdown: string): string => {
     if (!markdown || isRichHtmlContent(markdown)) {
         return markdown || '';
@@ -488,8 +492,14 @@ export const normalizeModelMarkdownForEditor = (markdown: string): string => {
             insideFence = !insideFence;
         }
 
-        if (insideFence || line.trim() !== '') {
+        if (insideFence) {
             result.push(line);
+            return;
+        }
+        if (line.trim() !== '') {
+            // Models end lines with Markdown's two-space break; each line already
+            // becomes its own paragraph, so the spaces would only linger as text.
+            result.push(line.replace(/[ \t]+$/, ''));
             return;
         }
 
@@ -527,6 +537,8 @@ export const hasMeaningfulRichContent = (content: string): boolean => {
     return /<img\b/i.test(sanitizedContent) || hasAudioEmbeds(sanitizedContent);
 };
 
+const TRAILING_EMPTY_PARAGRAPHS_REGEX = /(?:<p(?:\s[^>]*)?>(?:\s|&nbsp;|<br\s*[^>]*>)*<\/p>\s*)+$/i;
+
 export const appendPlainTextSnippetToRichContent = (base: string, snippet: string): string => {
     const normalizedSnippet = (snippet || '').trim();
     if (!normalizedSnippet) {
@@ -548,7 +560,10 @@ export const appendPlainTextSnippetToRichContent = (base: string, snippet: strin
         return `${normalizedBase}\n${normalizedSnippet}`;
     }
 
-    const trimmedBase = base.trim();
+    // Empty paragraphs at the end (an empty first line, Enter pressed before
+    // recording) would leave a blank line above the inserted text, as plain
+    // text bases drop their trailing whitespace above.
+    const trimmedBase = base.trim().replace(TRAILING_EMPTY_PARAGRAPHS_REGEX, '');
     const snippetHtml = isRichHtmlContent(normalizedSnippet)
         ? normalizedSnippet.trim()
         : markdownToTiptapHtml(normalizedSnippet);

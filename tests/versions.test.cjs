@@ -13,6 +13,7 @@ const {
     storedStepLabelOf,
     sanitizeStepLabel,
     markUserVariantName,
+    customInstructionVersionName,
     userVariantName,
     plainVariantTitle,
     chipTextForLabel,
@@ -135,3 +136,21 @@ test('different lineages remain distinct after compact tabs hide the source step
     assert.deepEqual(Object.values(labels).map(chipTextForLabel), ['Кратко', 'Кратко 2', 'Кратко 3']);
     assert.equal(labels.b, 'Кратко → Кратко 2');
 });
+
+test('custom instruction versions are named from the instruction, briefly', () => {
+    assert.equal(customInstructionVersionName('translate to Spanish {text}'), 'Translate to Spanish');
+    assert.equal(customInstructionVersionName('Make it shorter and more friendly for the team please'), 'Make it shorter and more…');
+    // Quoted or listed material after a colon may be note text: it is cut off.
+    assert.equal(customInstructionVersionName('Replace: "meeting with John at 5"'), 'Replace');
+    assert.equal(customInstructionVersionName('Переведи «встреча с Андреем»'), 'Переведи');
+    assert.equal(customInstructionVersionName('   '), '');
+    assert.equal(customInstructionVersionName('{text}'), '');
+    assert.ok(customInstructionVersionName('a'.repeat(80)).length <= 33);
+});
+
+test('the Checklist preset stores a step label the server keeps', () => {
+    assert.equal(englishStepName({ id: 'checklist' }), 'Checklist');
+    assert.equal(isStepLabel('Checklist'), true);
+    assert.equal(isStepLabel('Summarize → Checklist'), true);
+});
+

@@ -4,6 +4,7 @@ import { API_URL } from '../utils/env';
 import { getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel, storage } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL, modelSupportsTemperature } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
+import { clearAiLimit, isLlmLimitReason, markAiLimitReached, UsageLimitError } from '../utils/aiLimitState';
 import { generateWithLocalLLM } from './LocalLLMService';
 import { getEffectiveAIProvider } from './effectiveProvider';
 
@@ -72,6 +73,19 @@ export const DEFAULT_IMPROVEMENT_OPTIONS: AIImprovementOption[] = [
         label: 'Structure',
         icon: 'format-list-bulleted',
         prompt: 'Organize the following text, adding headings and bullet lists where appropriate, for better readability: {text}'
+    },
+    {
+        // "Checklist" is also the step name of the agent's checklists, so the
+        // synced label is one the server already knows (improvement_labels.py).
+        id: 'checklist',
+        label: 'Checklist',
+        icon: 'checklist',
+        prompt: [
+            'Turn the following note into a task checklist in Markdown: one "- [ ] " line per task, short and actionable, in the language of the note.',
+            'Keep every task, name, amount, place and date from the note exactly; do not invent tasks or details. Tasks the note already marks as done become "- [x] ".',
+            'Use a short heading above a group only when the note has clearly separate topics. Return only the checklist.',
+            'Text: {text}',
+        ].join(' '),
     },
     {
         id: 'meeting',
@@ -288,6 +302,18 @@ export async function improveText(text: string, option: AIImprovementOption): Pr
     }
 }
 
+/**
+ * A 403 from the AI endpoint: remembers a used-up AI allowance for the session
+ * (see aiLimitState) and, unless the caller explains it itself, opens the limit sheet.
+ */
+async function refuseForLimit(response: Response, announce: boolean): Promise<UsageLimitError> {
+    const { onLimitReached, limitReasonOf } = await import('../utils/limitEvents');
+    const reason = await limitReasonOf(response);
+    if (isLlmLimitReason(reason, true)) markAiLimitReached();
+    if (announce) onLimitReached.emit(reason);
+    return new UsageLimitError(reason);
+}
+
 async function improveViaBackend(text: string, option: AIImprovementOption): Promise<string> {
     const token = await storage.getToken();
     const baseUrl = BACKEND_IMPROVE_URL;
@@ -322,9 +348,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
     });
 
     if (response.status === 403) {
-        const { onLimitReached } = await import('../utils/limitEvents');
-        onLimitReached.emit();
-        throw new Error('Usage limit reached');
+        throw await refuseForLimit(response, true);
     }
 
     if (!response.ok) {
@@ -337,6 +361,7 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         throw new Error('LLM returned empty response');
     }
 
+    clearAiLimit();
     return data.text as string;
 }
 
@@ -356,7 +381,14 @@ const ASK_NOTES_INSTRUCTION = [
 async function runInstruction(
     instruction: string,
     text: string,
-    { json = false, jsonSchema, maxTokens, onDeviceOnly = false }: { json?: boolean; jsonSchema?: object; maxTokens?: number; onDeviceOnly?: boolean } = {},
+    { json = false, jsonSchema, maxTokens, onDeviceOnly = false, announceLimit = true }: {
+        json?: boolean;
+        jsonSchema?: object;
+        maxTokens?: number;
+        onDeviceOnly?: boolean;
+        /** False when the caller shows the limit itself (Ask your notes answers inline). */
+        announceLimit?: boolean;
+    } = {},
 ): Promise<string> {
     // onDeviceOnly: the caller already decided this text may not leave the phone.
     const provider = onDeviceOnly ? 'local' : await getEffectiveAIProvider();
@@ -382,15 +414,14 @@ async function runInstruction(
             body: JSON.stringify({ text, prompt: instruction, json_mode: json }),
         });
         if (response.status === 403) {
-            const { onLimitReached } = await import('../utils/limitEvents');
-            onLimitReached.emit();
-            throw new Error('Usage limit reached');
+            throw await refuseForLimit(response, announceLimit);
         }
         if (!response.ok) {
             throw new Error(`LLM API error: ${response.status} - ${await response.text()}`);
         }
         const data = await response.json();
         if (!data.text) throw new Error('LLM returned empty response');
+        clearAiLimit();
         return (data.text as string).trim();
     }
 
@@ -427,8 +458,10 @@ export async function answerFromNotes(
     sourcesText: string,
     options: { onDeviceOnly?: boolean } = {},
 ): Promise<string> {
+    // The screen answers a refusal in the chat itself, without the limit sheet on top.
     return runInstruction(`${ASK_NOTES_INSTRUCTION}\n\nQuestion: ${question.trim()}`, `Notes:\n${sourcesText}`, {
         onDeviceOnly: options.onDeviceOnly,
+        announceLimit: false,
     });
 }
 

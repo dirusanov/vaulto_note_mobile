@@ -64,7 +64,14 @@
     "unlockWithKey": "Saisissez votre clé de récupération pour les afficher sur cet appareil.",
     "listTitle": "Notes",
     "drawing": "Dessin",
-    "lockedListHint": "Vos notes apparaîtront ici une fois déverrouillées."
+    "sectionPinned": "Épinglées",
+    "sectionOthers": "Autres",
+    "checkedMore": "+{{count}} cochés",
+    "freeMinutesLeft": "Encore {{minutes}} min",
+    "freeMinutesUsed": "Minutes gratuites épuisées",
+    "lockedListHint": "Vos notes apparaîtront ici une fois déverrouillées.",
+    "lockedNotBackedUp": "D’ici là, les nouvelles notes ne sont pas sauvegardées.",
+    "lockedSyncNotice": "Non synchronisé : déverrouillez le chiffrement pour sauvegarder les nouvelles notes."
   },
   "settings": {
     "title": "Paramètres",
@@ -374,7 +381,10 @@
       "speechOnlyHint": "Sans télécharger d’IA. L’IA cloud peut être choisie séparément avec internet.",
       "fastQualityHint": "Le petit modèle d’IA peut omettre des détails ou se tromper sur les faits. Vérifiez les améliorations ; privilégiez le cloud pour les notes complexes.",
       "loadFailed": "Impossible de vérifier les modèles. Réessayez.",
-      "remove": "Supprimer de cet appareil · {{size}}"
+      "remove": "Supprimer de cet appareil · {{size}}",
+      "aiReadyTitle": "L’IA sur l’appareil est prête",
+      "aiReadyGuest": "Sans compte, l’IA fonctionne sur cet appareil. Activez « {{option}} » pour l’utiliser : la voix et l’IA restent alors sur l’appareil.",
+      "turnOn": "Activer"
     }
   },
   "languages": {
@@ -436,7 +446,13 @@
     "iAcceptThe": "J'accepte les",
     "andThe": "et",
     "locallyStoredUnaffected": "Vos notes stockées localement restent intactes et totalement accessibles.",
-    "signUpPerk": "30 minutes de transcription offertes"
+    "signUpPerk": "30 minutes de transcription offertes",
+    "newUserTitle": "Gardez vos notes et obtenez {{minutes}} minutes gratuites",
+    "newUserSubtitle": "Un compte gratuit. Les minutes sont offertes aux nouveaux comptes.",
+    "benefitAI": "L’IA met en forme le texte, trouve les tâches et répond à vos questions sur vos notes",
+    "benefitSync": "Synchronisation entre vos appareils avec chiffrement de bout en bout",
+    "benefitKeepNotes": "Les notes créées sans compte vous suivent",
+    "orWithEmail": "ou par e-mail"
   },
   "edit": {
     "visualEditor": "Éditeur visuel",
@@ -499,7 +515,11 @@
       "addedToOriginal": "Ajouté à l'original",
       "addedToImproved": "Ajouté à l'amélioration",
       "savedRecording": "Enregistrement sauvegardé",
-      "cancelled": "Modification annulée"
+      "cancelled": "Modification annulée",
+      "commandLimit": "Limite IA atteinte, cette demande n’a donc pas été exécutée : « {{text}} »",
+      "commandFailed": "Impossible d’exécuter cette demande : « {{text}} »",
+      "limitNotice": "Limite IA du mois atteinte : les enregistrements sont ajoutés en texte brut, sans retouche par l’IA.",
+      "insertAsText": "Insérer comme texte"
     },
     "improvePreview": {
       "title": "Suggestion de l'IA",
@@ -565,6 +585,10 @@
       "meeting": {
         "label": "Compte rendu",
         "description": "Résumé, décisions et tâches"
+      },
+      "checklist": {
+        "label": "Liste de tâches",
+        "description": "Transformer la note en liste de tâches"
       }
     },
     "versions": {
@@ -857,9 +881,16 @@
     "guestMinutesUsedDesc": "Connectez-vous pour obtenir plus de minutes gratuites et synchroniser vos notes. Ou transcrivez directement sur cet appareil, gratuitement et hors ligne.",
     "perYear": "{{price}} par an",
     "markdownSource": "Modifier en Markdown",
-    "markdownSourceDesc": "La mise en forme apparaît en caractères simples, comme **gras**."
+    "markdownSourceDesc": "La mise en forme apparaît en caractères simples, comme **gras**.",
+    "guestBusyTitle": "La transcription dans le cloud est saturée",
+    "guestBusyDesc": "La transcription gratuite dans le cloud sans compte est saturée pour le moment. Connectez-vous pour avoir vos propres minutes gratuites, ou transcrivez directement sur cet appareil — gratuitement et hors ligne.",
+    "aiLimitDescDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé le {{date}}.",
+    "aiLimitDescNoDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé au début de la prochaine période.",
+    "aiLimitGuestDesc": "Connectez-vous pour obtenir votre propre quota mensuel d’IA."
   },
   "a11y": {
+    "checked": "coché",
+    "pinned": "Épinglée",
     "back": "Retour",
     "close": "Fermer",
     "textAppearance": "Apparence du texte",
@@ -939,7 +970,12 @@
     "offlineHint": "L’IA sur l’appareil fonctionne sans internet.",
     "setUpOnDevice": "Configurer",
     "subtitle": "Des réponses tirées de tout ce que vous avez noté, avec des liens vers les notes.",
-    "examplesLabel": "Essayez de demander"
+    "examplesLabel": "Essayez de demander",
+    "gateText": "« Interroger vos notes » fonctionne avec un compte gratuit ou avec une IA sur cet appareil — hors ligne et en toute confidentialité.",
+    "lockedPlaceholder": "Connectez-vous ou configurez l’IA pour poser une question",
+    "limitGeneric": "Une limite d’utilisation a été atteinte, cette question est donc restée sans réponse. Réessayez plus tard.",
+    "aiLimitDate": "Le quota d’IA de ce mois est épuisé, cette question est donc restée sans réponse. Il sera renouvelé le {{date}}.",
+    "aiLimit": "Le quota d’IA de ce mois est épuisé, cette question est donc restée sans réponse. Il sera renouvelé au début de la prochaine période."
   },
   "localAI": {
     "modelMissingTitle": "Téléchargez le modèle d’IA",
@@ -989,7 +1025,9 @@
     "aiTitle": "L’IA met de l’ordre",
     "aiText": "Améliore le texte, trouve les tâches, répond sur vos notes.",
     "privacyTitle": "Privé par défaut",
-    "privacyText": "Les notes sont chiffrées sur l’appareil et de bout en bout à la synchronisation : vous seul pouvez les lire."
+    "privacyText": "Les notes sont chiffrées sur l’appareil et de bout en bout à la synchronisation : vous seul pouvez les lire.",
+    "voiceTextOffline": "Les enregistrements deviennent du texte — hors ligne aussi, après un téléchargement unique.",
+    "aiTextGuest": "Améliorez le texte, trouvez les tâches, interrogez vos notes — avec un compte gratuit ou l’IA sur l’appareil."
   },
   "errors": {
     "offline": "Pas de connexion internet. Vérifiez votre réseau et réessayez.",
@@ -1074,7 +1112,26 @@
     "summaryFailed": "Impossible de rédiger le compte rendu. Vous pourrez lancer « Compte rendu » depuis le menu IA.",
     "title": "Réunion · {{date}}"
   },
-  "paywall": {},
+  "paywall": {
+    "headline": "Enregistrez sans regarder l’horloge",
+    "subtitle": "Vaulto Pro : de nouvelles minutes chaque mois et l’IA sans limites.",
+    "benefitAI": "IA sans limite mensuelle : mise en forme, tâches, questions à vos notes",
+    "includedLabel": "Et tout ce qu’offre votre compte gratuit",
+    "benefitSync": "Synchronisation et chiffrement de bout en bout sur tous vos appareils",
+    "benefitHandwriting": "Écriture manuscrite et dessins dans les notes",
+    "cancelGooglePlay": "Renouvellement automatique. Annulable à tout moment dans Google Play.",
+    "cancelAppStore": "Renouvellement automatique. Annulable à tout moment dans les réglages de l’App Store.",
+    "terms": "Conditions d’utilisation",
+    "privacy": "Politique de confidentialité",
+    "introOffer": "Prix de lancement {{intro}}, puis {{price}}",
+    "startTrial": "Commencer l’essai gratuit",
+    "trialDays_one": "{{count}} jour gratuit, puis {{price}}",
+    "trialDays_many": "{{count}} jours gratuits, puis {{price}}",
+    "trialDays_other": "{{count}} jours gratuits, puis {{price}}",
+    "trialMonths_one": "{{count}} mois gratuit, puis {{price}}",
+    "trialMonths_many": "{{count}} mois gratuits, puis {{price}}",
+    "trialMonths_other": "{{count}} mois gratuits, puis {{price}}"
+  },
   "drawing": {
     "done": "Terminé",
     "eraser": "Gomme",

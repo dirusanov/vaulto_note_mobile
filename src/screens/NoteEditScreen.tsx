@@ -106,6 +106,10 @@ import { TextAppearanceModal } from '../components/TextAppearanceModal';
 import { AIProcessingIndicator, AIActiveTask } from '../components/AIProcessingIndicator';
 import { TranscriptionIndicator } from '../components/TranscriptionIndicator';
 import { LimitModal } from '../components/LimitModal';
+import { InlineNotice, InlineNoticeAction } from '../components/InlineNotice';
+import { isAiLimitKnown, noteAccountPlan, takeAiLimitNotice } from '../utils/aiLimitState';
+import { isLimitSheetOpen } from '../utils/limitEvents';
+import { looksLikeVoiceCommand } from '../utils/voiceCommand';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
@@ -121,6 +125,7 @@ import {
     isRichHtmlContent,
     removeAudioFromRichContent,
     normalizeModelMarkdownForEditor,
+    stripTrailingLineSpaces,
     richContentToAgentMarkdown,
     richContentToMarkdown,
     richContentToPlainText,
@@ -134,6 +139,7 @@ import {
     buildLineageLabel,
     buildVariantDisplayLabels,
     chipTextForLabel,
+    customInstructionVersionName,
     englishStepName,
     isDerivedLabel,
     markUserVariantName,
@@ -571,14 +577,32 @@ const HeaderTitle = memo(({
     title,
     onChange,
     onFocus,
+    onSubmit,
     inputRef,
 }: {
     title: string;
     onChange: (t: string) => void;
     onFocus: () => void;
+    /** Enter in the title: the caret moves on to the text, as in Keep. */
+    onSubmit: () => void;
     inputRef?: React.RefObject<TextInput | null>;
 }) => {
     const { t } = useTranslation();
+
+    // A title is one line that wraps: Enter moves on to the text instead of
+    // breaking it. A pasted line break becomes a space for the same reason.
+    const handleChange = useCallback((text: string) => {
+        if (!/[\r\n]/.test(text)) {
+            onChange(text);
+            return;
+        }
+        // One break typed into the unchanged title is the Enter key.
+        if (text.replace(/[\r\n]/g, '') === title) {
+            onSubmit();
+            return;
+        }
+        onChange(text.replace(/\s*[\r\n]+\s*/g, ' '));
+    }, [onChange, onSubmit, title]);
 
     // A plain "Title" hint: echoing the first line here in grey read as a
     // second copy of the text right above it.
@@ -589,8 +613,11 @@ const HeaderTitle = memo(({
             placeholder={t('edit.titlePlaceholder', 'Title')}
             placeholderTextColor={colors.textMuted}
             value={title}
-            onChangeText={onChange}
+            onChangeText={handleChange}
             onFocus={onFocus}
+            onSubmitEditing={onSubmit}
+            submitBehavior="submit"
+            returnKeyType="next"
             maxLength={100}
             multiline
         />
@@ -964,7 +991,14 @@ export const NoteEditScreen = () => {
         setActiveVariant,
         updateNoteProtection,
     } = useNotesContext();
-    const { isAuthenticated, isGuest, userId, refreshProfile } = useAuth();
+    const { isAuthenticated, isGuest, userId, refreshProfile, user } = useAuth();
+    // Read from timers that outlive the render they were set in.
+    const userRef = useRef(user);
+    userRef.current = user;
+    // A new plan (upgrade, renewal) may bring AI tokens back.
+    useEffect(() => {
+        noteAccountPlan(user?.plan);
+    }, [user?.plan]);
     const [isRealtimeDictating, setIsRealtimeDictating] = useState(false);
     const [showLocalWhisperModal, setShowLocalWhisperModal] = useState(false);
     const realtimeDictationStopRef = useRef<(() => Promise<void>) | null>(null);
@@ -983,6 +1017,9 @@ export const NoteEditScreen = () => {
         return value === 'local_only' ? 'local_only' : 'sync';
     };
     const routeNoteId = route.params?.noteId;
+    // Versions that showed text when their undo history began: undo never
+    // empties them (a blank first step there is a loading artefact).
+    const loadedWithTextRef = useRef<Set<string>>(new Set());
     // "New note" from the list: open ready to type, not in reading mode.
     const opensAsBlankNoteRef = useRef(!routeNoteId && !route.params?.initialRecording);
 
@@ -1136,6 +1173,47 @@ export const NoteEditScreen = () => {
             }),
         ]).start();
     };
+
+    // A voice request the agent could not carry out (kept out of the note, with
+    // Retry), or the once-per-session note that the AI allowance is used up.
+    const [agentNotice, setAgentNotice] = useState<{
+        kind: 'command' | 'limit';
+        message: string;
+        text?: string;
+        variantId?: string;
+    } | null>(null);
+    const agentNoticeRef = useRef(agentNotice);
+    agentNoticeRef.current = agentNotice;
+    const agentNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Set once applyPlainTextToVariant exists (defined further down).
+    const insertPendingCommandRef = useRef<((text: string, variantId?: string) => void) | null>(null);
+    const showAgentNotice = useCallback((notice: NonNullable<typeof agentNotice>) => {
+        if (agentNoticeTimerRef.current) clearTimeout(agentNoticeTimerRef.current);
+        agentNoticeTimerRef.current = null;
+        // A newer notice must not drop an earlier request nobody acted on: it goes in as text.
+        const pending = agentNoticeRef.current;
+        if (pending?.kind === 'command' && pending.text && pending !== notice) {
+            insertPendingCommandRef.current?.(pending.text, pending.variantId);
+        }
+        setAgentNotice(notice);
+        // It never blocks the note. The limit note goes away on its own; a request
+        // that was not carried out stays until the person inserts it, retries or
+        // closes it, so nothing they said disappears by itself.
+        if (notice.kind === 'limit') {
+            agentNoticeTimerRef.current = setTimeout(() => {
+                agentNoticeTimerRef.current = null;
+                setAgentNotice(null);
+            }, 15000);
+        }
+    }, []);
+    const dismissAgentNotice = useCallback(() => {
+        if (agentNoticeTimerRef.current) clearTimeout(agentNoticeTimerRef.current);
+        agentNoticeTimerRef.current = null;
+        setAgentNotice(null);
+    }, []);
+    useEffect(() => () => {
+        if (agentNoticeTimerRef.current) clearTimeout(agentNoticeTimerRef.current);
+    }, []);
 
     const isPrivateContent = (): boolean => {
         const effectiveScope = normalizeScope(existingNote?.storage_scope ?? storageScope);
@@ -2017,6 +2095,9 @@ export const NoteEditScreen = () => {
         stageOriginalCreationAutoScale(activeVariantIdRef.current, nextContent);
         setContent(nextContent);
         currentContentRef.current = nextContent;
+        // In the same render as the text: the character count briefly showed the
+        // previous version's until the editor reported back.
+        setVisualPlainText(richContentToPlainText(nextContent));
         if (options?.syncEditor !== false && editMode === 'visual') {
             editorRef.current?.setContent(nextContent);
         }
@@ -2488,6 +2569,11 @@ export const NoteEditScreen = () => {
                     index: 0
                 };
             }
+        }
+        // An opened note's original had text from the start, whatever its history
+        // recorded before the text arrived (see handleUndo).
+        if (routeNoteId && hasMeaningfulRichContent(stripAudioEmbedsFromRichContent(existingNote.content || ''))) {
+            loadedWithTextRef.current.add('original');
         }
 
         // Sync drafts for improvements
@@ -2989,6 +3075,22 @@ export const NoteEditScreen = () => {
 
         const prevIndex = variantHistory.index - 1;
         const prevState = variantHistory.history[prevIndex];
+
+        // A version that opened with text is never undone to nothing: a blank
+        // first step there was recorded before its text loaded. Drop that step
+        // instead of showing (and autosaving) an empty note.
+        if (
+            prevIndex === 0 &&
+            loadedWithTextRef.current.has(activeVariantId) &&
+            !hasMeaningfulRichContent(prevState.content)
+        ) {
+            variantHistories.current[activeVariantId] = {
+                history: variantHistory.history.slice(1),
+                index: variantHistory.index - 1,
+            };
+            setReparseTrigger(prev => prev + 1);
+            return;
+        }
 
         syncVisibleTitle(prevState.title);
         syncVisibleContent(prevState.content);
@@ -3978,22 +4080,26 @@ export const NoteEditScreen = () => {
             console.error('Failed to save before switching variant:', error);
         }
 
-        // Initialize history for new variant if needed
-        if (!variantHistories.current[variantId]) {
-            const content = variantId === 'original'
-                ? stripAudioEmbedsFromRichContent(existingNote?.content || '')
-                : stripAudioEmbedsFromRichContent(
-                    improvementDraftsRef.current[variantId] || noteImprovements.find(i => i.id === variantId)?.content || ''
-                );
-            const variantTitle = variantId === 'original'
-                ? existingNote?.title || ''
-                : resolveImprovementVariantTitle(variantId);
+        // What the version shows once selected.
+        const draft = variantId === 'original' ? undefined : improvementDraftsRef.current[variantId];
+        const visibleContent = variantId === 'original'
+            ? stripAudioEmbedsFromRichContent(existingNote?.content || '')
+            : stripAudioEmbedsFromRichContent(
+                draft !== undefined ? draft : (noteImprovements.find(i => i.id === variantId)?.content || '')
+            );
+        const variantTitle = variantId === 'original'
+            ? existingNote?.title || ''
+            : resolveImprovementVariantTitle(variantId);
 
-            variantHistories.current[variantId] = {
-                history: [{ title: variantTitle, content }],
-                index: 0
-            };
-        }
+        // Undo starts over at what the version shows now. Steps recorded for it
+        // earlier (or while the screen loaded, before its text arrived) used to
+        // let Undo right after switching empty the version, and that got saved.
+        variantHistories.current[variantId] = {
+            history: [{ title: variantTitle, content: visibleContent }],
+            index: 0
+        };
+        if (hasMeaningfulRichContent(visibleContent)) loadedWithTextRef.current.add(variantId);
+        else loadedWithTextRef.current.delete(variantId);
 
         setActiveVariantId(variantId);
         activeVariantIdRef.current = variantId;
@@ -4004,17 +4110,10 @@ export const NoteEditScreen = () => {
             flushNoteTitleSave();
             // Only reached from a version (same-id selects return early above).
             syncVisibleTitle(noteTitleRef.current);
-            syncVisibleContent(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
         } else {
-            syncVisibleTitle(resolveImprovementVariantTitle(variantId));
-            const draft = improvementDraftsRef.current[variantId];
-            if (draft !== undefined) {
-                syncVisibleContent(stripAudioEmbedsFromRichContent(draft));
-            } else {
-                const imp = noteImprovements.find(i => i.id === variantId);
-                syncVisibleContent(stripAudioEmbedsFromRichContent(imp?.content || ''));
-            }
+            syncVisibleTitle(variantTitle);
         }
+        syncVisibleContent(visibleContent);
         setReparseTrigger(prev => prev + 1);
     }, [activeVariantId, existingNote?.content, existingNote?.title, flushNoteTitleSave, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
 
@@ -4442,6 +4541,23 @@ export const NoteEditScreen = () => {
 
 
     // Process transcribed text queue strictly sequentially
+    /**
+     * A voice request ("add an item: buy coffee") the agent could not carry out.
+     * Its words are not note content, so they stay out of the note; the notice
+     * offers to try again, or to insert them after all if they were dictation.
+     */
+    const showFailedCommandNotice = (text: string, variantId: string, hitLimit: boolean) => {
+        const quoted = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
+        showAgentNotice({
+            kind: 'command',
+            message: hitLimit
+                ? t('edit.agent.commandLimit', 'AI limit reached, so this request was not carried out: “{{text}}”', { text: quoted })
+                : t('edit.agent.commandFailed', 'Could not carry out this request: “{{text}}”', { text: quoted }),
+            text,
+            variantId,
+        });
+    };
+
     const processAgentQueue = async () => {
         if (isProcessingQueue.current) return;
         isProcessingQueue.current = true;
@@ -4554,6 +4670,20 @@ export const NoteEditScreen = () => {
                     return true;
                 };
 
+                // The agent failed. Dictation still goes in as text, but a request
+                // that was not carried out must not land in the note as if dictated.
+                const keepFailedCommandOutOfNote = (hitLimit: boolean): boolean => {
+                    if (dictationFinalized || shouldSkipDictationApply || !looksLikeVoiceCommand(normalizedTaskText)) {
+                        return false;
+                    }
+                    allRecordingIds.forEach(id => pendingVoiceInsertionsRef.current.delete(id));
+                    if (task.recordingId) pendingVoiceInsertionsRef.current.delete(task.recordingId);
+                    dictationFinalized = true;
+                    shouldFallbackToDictationOnError = false;
+                    showFailedCommandNotice(normalizedTaskText, taskVariantId, hitLimit);
+                    return true;
+                };
+
                 try {
                     setTrackedIsAIProcessing(true);
 
@@ -4610,7 +4740,7 @@ export const NoteEditScreen = () => {
                             ? pendingContext.dictationContent
                             : commandBaseContent;
                         const processedText = typeof agentResult.processedText === 'string'
-                            ? agentResult.processedText.trim()
+                            ? stripTrailingLineSpaces(agentResult.processedText).trim()
                             : '';
                         // The original note is never written by the agent: instructions
                         // targeting it produce a separate improvement variant instead.
@@ -4938,23 +5068,35 @@ export const NoteEditScreen = () => {
                             }
                         }
                     } else {
-                        // LOGIC FAIL (e.g. backend error)
-                        console.error('[NoteEditScreen] Agent processing returned fail:', agentResult.error);
-                        await finalizeAsDictation(normalizedTaskText);
-                        showPrettyQuotaNotification(
-                            agentResult.error,
-                            getErrorMessage(agentResult.error, 'Agent processing failed')
-                        );
+                        // LOGIC FAIL (e.g. backend error). A used-up allowance is expected:
+                        // the limit sheet explains it, so it is not logged as an error.
+                        const hitLimit = !!agentResult.limitReason
+                            || (agentResult.error || '').toLowerCase().includes('usage limit');
+                        if (hitLimit) {
+                            console.log('[NoteEditScreen] Agent skipped: usage limit');
+                        } else {
+                            console.warn('[NoteEditScreen] Agent processing returned fail:', agentResult.error);
+                        }
+                        if (!keepFailedCommandOutOfNote(hitLimit)) {
+                            await finalizeAsDictation(normalizedTaskText);
+                            showPrettyQuotaNotification(
+                                agentResult.error,
+                                getErrorMessage(agentResult.error, 'Agent processing failed')
+                            );
+                        }
                     }
                 } catch (error) {
-                    console.error('[NoteEditScreen] Agent flow exception:', error);
-                    if (shouldFallbackToDictationOnError) {
-                        await finalizeAsDictation(normalizedTaskText);
+                    console.warn('[NoteEditScreen] Agent flow exception:', getErrorMessage(error, 'unknown'));
+                    const hitLimit = getErrorMessage(error, '').toLowerCase().includes('usage limit');
+                    if (!(shouldFallbackToDictationOnError && keepFailedCommandOutOfNote(hitLimit))) {
+                        if (shouldFallbackToDictationOnError) {
+                            await finalizeAsDictation(normalizedTaskText);
+                        }
+                        showPrettyQuotaNotification(
+                            error,
+                            getErrorMessage(error, 'An error occurred during agent processing')
+                        );
                     }
-                    showPrettyQuotaNotification(
-                        error,
-                        getErrorMessage(error, 'An error occurred during agent processing')
-                    );
                 } finally {
                     activeAgentTasksRef.current = [];
                     // ALWAYS move to next task - handled by batch shift earlier
@@ -5096,17 +5238,40 @@ export const NoteEditScreen = () => {
             preserveOriginalOnInstruction?: boolean;
             dictationAlreadyApplied?: boolean;
             agentRoute?: VoiceAgentRoute;
+            /** An explicit Retry asks the server even when the AI allowance looked used up. */
+            ignoreKnownLimit?: boolean;
         }
     ) => {
         const agentRoute = options?.agentRoute !== undefined ? options.agentRoute : await resolveAgentRoute();
         // The phone model only looks at short phrases: long dictation is never a request.
-        const shouldUseAgentMode = agentRoute === 'cloud'
+        let shouldUseAgentMode = agentRoute === 'cloud'
             || (agentRoute === 'device' && isDeviceAgentCandidate(transcribedText));
         const targetVariantId = options?.targetVariantId ?? activeVariantIdRef.current;
         const normalizedText = transcribedText.trim();
 
         if (!normalizedText) {
             return;
+        }
+
+        // The AI allowance is known to be used up this session: asking again would
+        // only fail and pop the limit sheet after every recording. Dictation goes in
+        // as plain text (one quiet notice per session); a request is not pasted in.
+        if (agentRoute === 'cloud' && !options?.ignoreKnownLimit && isAiLimitKnown()) {
+            if (options?.dictationAlreadyApplied) {
+                return;
+            }
+            if (looksLikeVoiceCommand(normalizedText)) {
+                if (options?.recordingId) pendingVoiceInsertionsRef.current.delete(options.recordingId);
+                showFailedCommandNotice(normalizedText, targetVariantId, true);
+                return;
+            }
+            shouldUseAgentMode = false;
+            if (takeAiLimitNotice()) {
+                showAgentNotice({
+                    kind: 'limit',
+                    message: t('edit.agent.limitNotice', 'AI limit reached for this month: recordings are added as plain text, without AI cleanup.'),
+                });
+            }
         }
 
         if (!shouldUseAgentMode) {
@@ -5204,6 +5369,44 @@ export const NoteEditScreen = () => {
             setTrackedIsAIProcessing(false);
             setActiveImprovementTask(null);
         }
+    };
+
+    /**
+     * The "transcribe free on your device" suggestion matters only once cloud
+     * minutes run low, and never on top of other work: it waits until the agent,
+     * transcription and any sheet or dialog are done.
+     */
+    const onDeviceSuggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const errorModalVisibleRef = useRef(errorModalVisible);
+    errorModalVisibleRef.current = errorModalVisible;
+    useEffect(() => () => {
+        if (onDeviceSuggestTimerRef.current) clearTimeout(onDeviceSuggestTimerRef.current);
+    }, []);
+    const scheduleOnDeviceSuggestion = (attempt: number = 0) => {
+        if (onDeviceSuggestTimerRef.current) clearTimeout(onDeviceSuggestTimerRef.current);
+        onDeviceSuggestTimerRef.current = setTimeout(() => {
+            onDeviceSuggestTimerRef.current = null;
+            const busy = recordingFlowsInFlightRef.current > 0
+                || isTranscribingRef.current
+                || isProcessingQueue.current
+                || activeAgentTasksRef.current.length > 0
+                || agentQueue.current.length > 0
+                || isLimitSheetOpen()
+                || errorModalVisibleRef.current
+                || !!agentNoticeRef.current;
+            if (busy) {
+                // About a minute of waiting at most; otherwise it is for another day.
+                if (attempt < 40) scheduleOnDeviceSuggestion(attempt + 1);
+                return;
+            }
+            const profile = userRef.current as { transcription_remaining_seconds?: number; transcription_total_seconds?: number } | null | undefined;
+            const remaining = profile?.transcription_remaining_seconds;
+            if (typeof remaining !== 'number') return;
+            const total = profile?.transcription_total_seconds || 0;
+            // Low: ten minutes or a fifth of the allowance, whichever is more.
+            if (remaining > Math.max(10 * 60, total * 0.2)) return;
+            void offerOnDeviceTranscription('suggest');
+        }, 1500);
     };
 
     const handleRecordingFinish = async (
@@ -5394,9 +5597,7 @@ export const NoteEditScreen = () => {
                 if (onDeviceTranscription) void suggestCloudIfSlow();
                 if (!onDeviceTranscription && !protectedNote) {
                     void incrementRecordingsCount().then((count) => {
-                        if (count >= 3) {
-                            setTimeout(() => { void offerOnDeviceTranscription('suggest'); }, 1500);
-                        }
+                        if (count >= 3) scheduleOnDeviceSuggestion();
                     });
                 }
             }
@@ -5981,8 +6182,16 @@ export const NoteEditScreen = () => {
                     date: new Date().toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
                 }))
                 : '';
-            // Other versions carry the note's title (the editor shows the note's anyway).
-            const improvementTitle = (meetingTitle || title || existingNote?.title || '').trim();
+            // A custom instruction names its version after itself ("Translate to
+            // Spanish"): the title is encrypted like the content, the label stays
+            // the step name. Other versions carry the note's title (the editor
+            // shows the note's anyway).
+            const customName = option.id === 'custom_instruction'
+                ? customInstructionVersionName(option.prompt)
+                : '';
+            const improvementTitle = customName
+                ? markUserVariantName(customName)
+                : (meetingTitle || title || existingNote?.title || '').trim();
             const sourceStepLabel = variantAtRequestStart === 'original'
                 ? ''
                 : storedStepLabelOf(noteImprovements.find((imp) => imp.id === variantAtRequestStart), aiOptionsById);
@@ -6180,6 +6389,41 @@ export const NoteEditScreen = () => {
     const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only' && !isProtected;
+    insertPendingCommandRef.current = (text, variantId) => {
+        void applyPlainTextToVariant(variantId || activeVariantIdRef.current, text);
+    };
+    const agentNoticeActions: InlineNoticeAction[] = [];
+    if (agentNotice?.kind === 'command' && agentNotice.text) {
+        const { text: noticeText, variantId: noticeVariantId } = agentNotice;
+        agentNoticeActions.push(
+            {
+                label: t('edit.agent.insertAsText', 'Insert as text'),
+                onPress: () => {
+                    dismissAgentNotice();
+                    void applyPlainTextToVariant(noticeVariantId || activeVariantIdRef.current, noticeText);
+                },
+            },
+            {
+                label: t('voice.retry', 'Retry'),
+                onPress: () => {
+                    dismissAgentNotice();
+                    void executeAgentFlow(noticeText, {
+                        targetVariantId: noticeVariantId,
+                        micMode: 'agent',
+                        ignoreKnownLimit: true,
+                    });
+                },
+            },
+        );
+    } else if (agentNotice?.kind === 'limit' && isAuthenticated && !isGuest && !user?.is_pro && (user?.plan || '').toLowerCase() !== 'pro') {
+        agentNoticeActions.push({
+            label: t('aux.upgrade', 'Upgrade'),
+            onPress: () => {
+                dismissAgentNotice();
+                (navigation as any).navigate('Paywall');
+            },
+        });
+    }
     const micHintText = t('edit.micHintHold', 'Hold: no agent');
     const floatingMicBottomOffset = editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible)
         ? (keyboardVisibleState ? keyboardHeight : insets.bottom) + toolbarHeight + FLOATING_MIC_KEYBOARD_GAP
@@ -6547,12 +6791,22 @@ export const NoteEditScreen = () => {
         }
     };
 
+    // Enter in the title continues in the text, at its start (Keep does the same).
+    const focusBodyFromTitle = useCallback(() => {
+        if (rawEditorRef.current) {
+            rawEditorRef.current.focus();
+            return;
+        }
+        editorRef.current?.focusBlockAt(0, 0);
+    }, []);
+
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
                 title={activeVariantId === 'original' ? title : noteTitle}
                 onChange={activeVariantId === 'original' ? handleTitleChange : handleNoteTitleEditOnVariant}
                 onFocus={() => setIsEditing(true)}
+                onSubmit={focusBodyFromTitle}
                 inputRef={titleInputRef}
             />
 
@@ -6596,6 +6850,7 @@ export const NoteEditScreen = () => {
         openVersionsSheet,
         requestDeleteVariant,
         dismissSwipeHint,
+        focusBodyFromTitle,
         showSwipeHint,
         title,
         variantDisplayLabels,
@@ -7452,6 +7707,13 @@ export const NoteEditScreen = () => {
                     message={slowDeviceHint ? t('edit.slowDevice.message', 'Transcription on this device is slow. The cloud is faster.') : null}
                     onUndo={() => { void switchToCloudTranscription(); }}
                     actionLabel={t('edit.slowDevice.useCloud', 'Use cloud')}
+                />
+            )}
+            {!undoMessage && !slowDeviceHint && (
+                <InlineNotice
+                    message={agentNotice?.message ?? null}
+                    actions={agentNoticeActions}
+                    onDismiss={dismissAgentNotice}
                 />
             )}
 

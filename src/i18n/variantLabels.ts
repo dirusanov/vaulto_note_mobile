@@ -109,6 +109,38 @@ export const userVariantName = (title: string | null | undefined): string | null
     return name || null;
 };
 
+/** Longest name taken from a custom instruction, in characters. */
+const CUSTOM_NAME_MAX_CHARS = 32;
+const CUSTOM_NAME_MAX_WORDS = 5;
+
+/**
+ * A short name for a version made by a custom instruction ("Translate to
+ * Spanish"), taken from the instruction itself. It goes into the version's
+ * title, which is end-to-end encrypted like the content, never into the synced
+ * plaintext `label` (that stays "Custom Instruction"). Only the instruction's
+ * opening words are used: anything after a colon or a quote is likely pasted
+ * text. Returns '' when nothing usable is left.
+ */
+export const customInstructionVersionName = (instruction: string | null | undefined): string => {
+    const firstLine = (instruction || '')
+        .replace(/\{text\}/gi, ' ')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean) || '';
+    // Cut before quoted or listed material: it may be text from the note.
+    const head = firstLine.split(/[:;«»"“”„<>(\[{]/)[0].replace(/[.,!?…\s]+$/u, '').trim();
+    const words = head.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '';
+    let name = words.slice(0, CUSTOM_NAME_MAX_WORDS).join(' ');
+    let shortened = words.length > CUSTOM_NAME_MAX_WORDS;
+    if (name.length > CUSTOM_NAME_MAX_CHARS) {
+        name = name.slice(0, CUSTOM_NAME_MAX_CHARS).replace(/\s+\S*$/u, '') || name.slice(0, CUSTOM_NAME_MAX_CHARS);
+        shortened = true;
+    }
+    name = name.charAt(0).toLocaleUpperCase() + name.slice(1);
+    return shortened ? `${name}…` : name;
+};
+
 /** Visible title without the user-name marker. */
 export const plainVariantTitle = (title: string | null | undefined): string =>
     (title || '').split(USER_NAMED_MARKER).join('').trim();

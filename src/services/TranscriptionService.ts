@@ -25,6 +25,7 @@ import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
 import { isDeviceOffline } from '../utils/connectivity';
 import { recordLocalTranscription } from './localSpeechSpeed';
+import { clearAiLimit, isLlmLimitReason, markAiLimitReached } from '../utils/aiLimitState';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 2000; // 2 seconds
@@ -81,6 +82,8 @@ export interface VoiceNoteResult {
     suggestedTitle?: string | null;
     success: boolean;
     error?: string;
+    /** The server's code when it refused for a usage limit (e.g. `llm_tokens_exhausted`). */
+    limitReason?: string;
 }
 
 const parseContentAction = (value: unknown): AgentContentAction => {
@@ -390,7 +393,8 @@ async function fetchBackendAgentWithAuth(
 }
 
 const isRetryableAgentStatus = (status?: number): boolean => {
-    return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+    // 409: the same idempotency key is still being processed; retrying it is safe.
+    return status === 408 || status === 409 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 };
 
 const isRetryableAgentError = (error: unknown): boolean => {
@@ -697,8 +701,8 @@ async function transcribeViaBackend(
 
         if (response.status === 403) {
             if (options.announceLimit !== false) {
-                const { onLimitReached } = await import('../utils/limitEvents');
-                onLimitReached.emit();
+                const { onLimitReached, limitReasonOf } = await import('../utils/limitEvents');
+                onLimitReached.emit(await limitReasonOf(response));
             }
             return {
                 text: '',
@@ -823,14 +827,19 @@ export async function processVoiceNote(
             );
 
             if (response.status === 403) {
-                const { onLimitReached } = await import('../utils/limitEvents');
-                onLimitReached.emit();
+                const { onLimitReached, limitReasonOf } = await import('../utils/limitEvents');
+                const limitReason = await limitReasonOf(response);
+                // The agent spends AI tokens only: remember it so the next
+                // dictations skip it quietly instead of asking again.
+                if (isLlmLimitReason(limitReason, true)) markAiLimitReached();
+                onLimitReached.emit(limitReason);
                 return {
                     originalText: transcriptText,
                     processedText: null,
                     hasInstruction: false,
                     success: false,
-                    error: 'Usage limit reached'
+                    error: 'Usage limit reached',
+                    limitReason,
                 };
             }
 
@@ -863,6 +872,7 @@ export async function processVoiceNote(
             }
 
             const result = await response.json();
+            clearAiLimit();
             // Backend returns: { mode, raw_note, improved_markdown, has_instruction,
             //   content_action, needs_confirmation, confirmation_kind, confirmation_message,
             //   title_action, title_value, suggested_title }
