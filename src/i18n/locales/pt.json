@@ -591,7 +591,7 @@
         "description": "Resumo, decisões e tarefas"
       },
       "checklist": {
-        "label": "Checklist",
+        "label": "Lista de tarefas",
         "description": "Transformar a nota em uma lista de tarefas"
       }
     },
@@ -615,7 +615,7 @@
       "deleted": "Versão excluída",
       "undo": "Desfazer",
       "kind": {
-        "checklist": "Checklist",
+        "checklist": "Lista de tarefas",
         "list": "Lista",
         "formatted": "Formatado",
         "agent": "Agente de IA",
@@ -635,7 +635,7 @@
       "none": "Nenhuma tarefa encontrada nesta nota.",
       "inNote": "Já está na nota",
       "addToCalendar": "Adicionar ao calendário",
-      "addToNote": "Adicionar à nota como checklist ({{count}})",
+      "addToNote": "Adicionar à nota como lista de tarefas ({{count}})",
       "calendarHint": "O botão do calendário abre seu app de calendário, onde você pode definir um lembrete.",
       "failed": "Não foi possível procurar tarefas. Verifique sua conexão e tente novamente.",
       "added": "Tarefas adicionadas à nota: {{count}}",
