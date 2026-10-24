@@ -25,6 +25,7 @@
 - A clearer subscription screen: what Pro adds, renewal and cancellation note, Terms and Privacy.
 - Notes list: Pinned and Others sections, checklists with done items struck through, a hint when free minutes run low.
 - A Checklist preset for AI improvements; versions made from your own instruction are named after it.
+- Try Pro free for 7 days, once per account and without a card: offered on the subscription screen, when free minutes or AI run out, and in the low-minutes hint. Settings and the subscription screen show "Pro trial · N days left"; it ends by itself, and buying a plan replaces it.
 - Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
 
 - The drawing tools, colours, sizes and paper you last used are remembered, also after the app restarts, and a new drawing starts with them.

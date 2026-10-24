@@ -15,7 +15,10 @@ import { appAlert } from '../components/AppAlert';
 
 export const PaywallScreen = () => {
     const { t } = useTranslation();
-    const { packages, purchasePackage, restorePurchases, reloadOfferings, isLoading, isPro } = useSubscription();
+    const {
+        packages, purchasePackage, restorePurchases, reloadOfferings, isLoading, isPro,
+        proTrial, startProTrial, isStartingProTrial,
+    } = useSubscription();
     const navigation = useNavigation();
     const { isAuthenticated, isGuest } = useAuth();
     const canPurchase = isAuthenticated && !isGuest;
@@ -78,6 +81,21 @@ export const PaywallScreen = () => {
         return null;
     };
 
+    // The no-card trial: offered to an account that never had it; a guest sees it
+    // too and signs in first (the trial belongs to the account, not the phone).
+    const showTrialOffer = proTrial.available || (!canPurchase && !isPro);
+    const trialDuration = t('paywall.trialDuration', { count: proTrial.days, defaultValue: '{{count}} days' });
+    const handleStartTrial = async () => {
+        if (!canPurchase) {
+            appAlert(t("voice.signInRequired"), t('paywall.trialSignIn', 'Sign in to try Pro free for {{duration}}.', { duration: trialDuration }));
+            (navigation as any).navigate('SignIn');
+            return;
+        }
+        if (await startProTrial()) {
+            navigation.goBack();
+        }
+    };
+
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
             appAlert(t("voice.signInRequired"), t("aux.purchaseProRequired"));
@@ -85,7 +103,8 @@ export const PaywallScreen = () => {
             return;
         }
         const purchased = await purchasePackage(pack);
-        if (purchased || isPro) {
+        // On the trial the account is already Pro: only a real purchase closes the paywall.
+        if (purchased || (isPro && !proTrial.active)) {
             navigation.goBack();
         }
     };
@@ -135,6 +154,45 @@ export const PaywallScreen = () => {
                         <FeatureItem quiet text={t("paywall.benefitSync", "Sync and end-to-end encryption on all your devices")} />
                         {DRAWING_ENABLED && <FeatureItem quiet text={t("paywall.benefitHandwriting", "Handwriting and drawings in notes")} />}
                     </View>
+
+                    {proTrial.active && (
+                        <View style={styles.trialNotice} accessibilityRole="text">
+                            <MaterialIcons name="schedule" size={18} color={colors.primary} />
+                            <View style={styles.trialNoticeTextWrap}>
+                                <Text style={styles.trialNoticeTitle}>
+                                    {t('paywall.trialDaysLeft', { count: proTrial.daysLeft, defaultValue: 'Pro trial · {{count}} days left' })}
+                                </Text>
+                                <Text style={styles.trialNoticeText}>
+                                    {proTrial.endsAt
+                                        ? t('paywall.trialKeepPro', 'Choose a plan to keep Pro after {{date}}. Nothing is charged until you do.', { date: proTrial.endsAt.toLocaleDateString() })
+                                        : t('paywall.trialKeepProNoDate', 'Choose a plan to keep Pro after the trial. Nothing is charged until you do.')}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {showTrialOffer && (
+                        <TouchableOpacity
+                            style={[styles.trialButton, isStartingProTrial && { opacity: 0.6 }]}
+                            onPress={() => { haptics.light(); void handleStartTrial(); }}
+                            disabled={isStartingProTrial}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                        >
+                            {isStartingProTrial ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                                <>
+                                    <Text style={styles.trialButtonText}>
+                                        {t('paywall.trialCta', 'Try Pro free for {{duration}}', { duration: trialDuration })}
+                                    </Text>
+                                    <Text style={styles.trialButtonHint}>
+                                        {t('paywall.trialHint', '{{minutes}} cloud minutes. No card; it ends by itself, nothing is charged.', { minutes: proTrial.minutes })}
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    )}
 
                     {isLoading ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} style={styles.loader} />
@@ -366,6 +424,56 @@ const styles = createStyles(() => ({
         lineHeight: 18,
         color: colors.textTertiary,
         marginTop: spacing.xs,
+    },
+    trialNotice: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing.s,
+        padding: spacing.m,
+        marginBottom: spacing.m,
+        borderRadius: 16,
+        backgroundColor: colors.primaryLight,
+    },
+    trialNoticeTextWrap: {
+        flex: 1,
+        gap: 2,
+    },
+    trialNoticeTitle: {
+        fontSize: 15,
+        lineHeight: 20,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    trialNoticeText: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+    },
+    trialButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 64,
+        paddingVertical: 12,
+        paddingHorizontal: spacing.m,
+        marginBottom: spacing.m,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        borderColor: colors.primary,
+        backgroundColor: colors.primaryLight,
+        gap: 2,
+    },
+    trialButtonText: {
+        fontSize: 16,
+        lineHeight: 22,
+        fontWeight: '600',
+        color: colors.primary,
+        textAlign: 'center',
+    },
+    trialButtonHint: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+        textAlign: 'center',
     },
     planOffer: {
         fontSize: 13,

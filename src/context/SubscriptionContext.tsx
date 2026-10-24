@@ -6,6 +6,8 @@ import { ErrorModal } from '../components/ErrorModal';
 import { SuccessModal } from '../components/SuccessModal';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
+import i18n from 'i18next';
+import { getProTrialState, ProTrialState } from '../utils/proTrial';
 
 // TODO: Replace with your actual RevenueCat API keys in .env
 // RevenueCat Test Store key: lets dev builds (emulators without Play billing)
@@ -44,6 +46,11 @@ interface SubscriptionContextType {
     /** Re-fetches store offerings, e.g. from the paywall after a failed load. */
     reloadOfferings: () => Promise<void>;
     isLoading: boolean;
+    /** The server-granted Pro trial (no card): offer, running state and days left. */
+    proTrial: ProTrialState;
+    /** Starts the one-time trial; true once Pro is on. Shows its own success/error sheet. */
+    startProTrial: () => Promise<boolean>;
+    isStartingProTrial: boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -93,6 +100,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<{ title?: string; message: string; iconName?: string; iconColor?: string } | null>(null);
+
+    const [isStartingProTrial, setIsStartingProTrial] = useState(false);
+    const startingProTrialRef = useRef(false);
 
     const { userId, user, refreshProfile, isAuthenticated, isGuest } = useAuth();
     const isConfigured = useRef(false);
@@ -167,7 +177,10 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const refreshBackendStatusWithRetry = async (
         maxAttempts = 5,
-        delayMs = 1200
+        delayMs = 1200,
+        // After a store purchase or restore: the server-granted trial is already Pro,
+        // so only the paid plan replacing it confirms the purchase.
+        requirePaid = false
     ) => {
         for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
             if (attempt > 0) {
@@ -184,7 +197,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 checkSubscriptionStatus(customerInfoRef.current, plansRef.current);
             }
 
-            if (backendProRef.current) {
+            if (backendProRef.current && !(requirePaid && (refreshedProfile as any).is_pro_trial === true)) {
                 return true;
             }
         }
@@ -360,9 +373,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             const revenueCatStatus = buildSubscriptionStatus(customerInfo, plansRef.current);
             checkSubscriptionStatus(customerInfo);
 
-            const backendConfirmed = await refreshBackendStatusWithRetry(5, 1200);
+            const backendConfirmed = await refreshBackendStatusWithRetry(5, 1200, true);
             if (!backendConfirmed) {
-                void refreshBackendStatusWithRetry(8, 2000);
+                void refreshBackendStatusWithRetry(8, 2000, true);
             }
 
             const planLabel = revenueCatStatus.billingPeriod === 'yearly'
@@ -391,6 +404,43 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
     };
 
+    const isSignedInAccount = isAuthenticated && !isGuest && !!userId;
+    const proTrial = getProTrialState(user as any, { signedIn: isSignedInAccount, isPro });
+
+    const startProTrial = async () => {
+        if (startingProTrialRef.current) return false;
+        if (!isSignedInAccount) {
+            setError(i18n.t('paywall.trialSignIn', 'Sign in to try Pro free for {{duration}}.', { duration: i18n.t('paywall.trialDuration', { count: proTrial.days, defaultValue: '{{count}} days' }) }));
+            return false;
+        }
+        startingProTrialRef.current = true;
+        setIsStartingProTrial(true);
+        try {
+            const started = await subscriptionApi.startProTrial();
+            await refreshBackendStatusWithRetry(3, 800);
+            setSuccess({
+                title: i18n.t('paywall.trialStartedTitle', 'Pro is on'),
+                message: i18n.t('paywall.trialStartedText', 'Pro is free until {{date}}. Nothing is charged: when it ends, the app goes back to the free plan and your notes stay.', {
+                    date: new Date(started.expires_at).toLocaleDateString(),
+                }),
+                iconName: 'workspace-premium',
+                iconColor: colors.primary,
+            });
+            return true;
+        } catch (e: any) {
+            // 409: already used (e.g. on another phone) or no longer offered; the
+            // refreshed profile hides the offer.
+            void refreshProfile();
+            setError(e?.response?.status === 409
+                ? i18n.t('paywall.trialUsed', 'The free Pro trial is no longer available on this account.')
+                : i18n.t('paywall.trialFailed', 'Could not start the trial. Check your connection and try again.'));
+            return false;
+        } finally {
+            startingProTrialRef.current = false;
+            setIsStartingProTrial(false);
+        }
+    };
+
     const restorePurchases = async () => {
         try {
             if (!isAuthenticated || isGuest || !userId) {
@@ -402,9 +452,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             const revenueCatStatus = buildSubscriptionStatus(customerInfo, plansRef.current);
             checkSubscriptionStatus(customerInfo);
 
-            const backendConfirmed = await refreshBackendStatusWithRetry(5, 1200);
+            const backendConfirmed = await refreshBackendStatusWithRetry(5, 1200, true);
             if (!backendConfirmed) {
-                void refreshBackendStatusWithRetry(8, 2000);
+                void refreshBackendStatusWithRetry(8, 2000, true);
             }
             const hasActiveSubscription = revenueCatStatus.isActive || backendConfirmed;
 
@@ -435,6 +485,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 restorePurchases,
                 reloadOfferings,
                 isLoading,
+                proTrial,
+                startProTrial,
+                isStartingProTrial,
             }}
         >
             {children}

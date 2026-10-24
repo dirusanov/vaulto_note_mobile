@@ -71,7 +71,8 @@
     "freeMinutesUsed": "免费分钟数已用完",
     "lockedListHint": "解锁后，你的笔记会显示在这里。",
     "lockedNotBackedUp": "在此之前，新笔记不会备份。",
-    "lockedSyncNotice": "未同步：解锁加密即可备份新笔记。"
+    "lockedSyncNotice": "未同步：解锁加密即可备份新笔记。",
+    "tryProFree": "免费试用 Pro"
   },
   "settings": {
     "title": "设置",
@@ -1130,7 +1131,29 @@
     "introOffer": "首期价格 {{intro}}，之后 {{price}}",
     "startTrial": "开始免费试用",
     "trialDays_other": "免费 {{count}} 天，之后 {{price}}",
-    "trialMonths_other": "免费 {{count}} 个月，之后 {{price}}"
+    "trialMonths_other": "免费 {{count}} 个月，之后 {{price}}",
+    "trialDuration_other": "{{count}} 天",
+    "trialDaysLeft_other": "Pro 试用 · 剩余 {{count}} 天",
+    "trialCta": "免费试用 Pro {{duration}}",
+    "trialHint": "{{minutes}} 分钟云端转写。无需银行卡，到期自动结束，不收取任何费用。",
+    "trialSignIn": "登录即可免费试用 Pro {{duration}}。",
+    "trialStartedTitle": "Pro 已开启",
+    "trialStartedText": "{{date}} 前可免费使用 Pro。不收取任何费用：到期后应用会回到免费方案，笔记都会保留。",
+    "trialUsed": "此账户已无法使用 Pro 免费试用。",
+    "trialFailed": "无法开始试用。请检查网络后重试。",
+    "trialKeepPro": "如需在 {{date}} 后继续使用 Pro，请选择一个方案。在此之前不会收费。",
+    "trialKeepProNoDate": "如需在试用结束后继续使用 Pro，请选择一个方案。在此之前不会收费。",
+    "trialMinutesLabel": "试用云端分钟",
+    "trialMinutesUsed": "试用的云端分钟已用完",
+    "trialMinutesLow": "试用分钟即将用完",
+    "trialMinutesUsedTitle": "试用分钟已用完",
+    "trialMinutesUsedDesc": "选择一个方案即可继续云端转写。试用结束前 Pro 仍然有效。",
+    "keepProRow": "试用结束后继续使用 Pro",
+    "keepProRowDetail": "在 Google Play 中选择方案",
+    "trialRowDetail": "免费试用 {{duration}}，无需银行卡",
+    "limitTrialOffer": "免费试用 Pro {{duration}}：{{minutes}} 分钟云端转写，AI 不限量。无需银行卡，不收取任何费用。",
+    "limitTrialOfferAI": "Pro 的 AI 不限量：免费试用 {{duration}}，无需银行卡。",
+    "tryFree": "免费试用"
   },
   "drawing": {
     "done": "完成",

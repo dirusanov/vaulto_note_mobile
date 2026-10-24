@@ -192,6 +192,10 @@ interface SubscriptionRowsProps {
     onOpenMinutesSheet: () => void;
     canManageSubscription: boolean;
     onManageSubscription: () => void;
+    /** Pro comes from the no-card trial: no store subscription to manage yet. */
+    onProTrial: boolean;
+    /** Days of the trial the account can still start, or null if it cannot. */
+    trialOfferDays: number | null;
 }
 
 const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
@@ -203,6 +207,8 @@ const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
     onOpenMinutesSheet,
     canManageSubscription,
     onManageSubscription,
+    onProTrial,
+    trialOfferDays,
 }) => {
     const { t } = useTranslation();
 
@@ -213,6 +219,20 @@ const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
             <>
                 <Divider />
                 <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginVertical: spacing.m }} />
+            </>
+        );
+    }
+
+    if (isPro && onProTrial) {
+        return (
+            <>
+                <Divider />
+                <Row
+                    title={t('paywall.keepProRow', 'Keep Pro after the trial')}
+                    detail={t('paywall.keepProRowDetail', 'Choose a plan in Google Play')}
+                    tone="accent"
+                    onPress={onUpgrade}
+                />
             </>
         );
     }
@@ -237,7 +257,9 @@ const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
             <Divider />
             <Row
                 title={t('settings.pro.upgrade', 'Upgrade to Pro')}
-                detail={t('settings.pro.subtitle', 'Extended transcription & premium features')}
+                detail={trialOfferDays
+                    ? t('paywall.trialRowDetail', 'Try it free for {{duration}}, no card', { duration: t('paywall.trialDuration', { count: trialOfferDays, defaultValue: '{{count}} days' }) })
+                    : t('settings.pro.subtitle', 'Extended transcription & premium features')}
                 tone="accent"
                 onPress={onUpgrade}
             />
@@ -366,6 +388,7 @@ export const SettingsScreen = () => {
         isPro,
         subscriptionStatus,
         isLoading: subscriptionLoading,
+        proTrial,
     } = useSubscription();
     const {
         status: encryptionStatus,
@@ -473,7 +496,7 @@ export const SettingsScreen = () => {
     const hasConfiguredKey = encryptionMode === 'e2ee';
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
-    const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive;
+    const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive && !proTrial.active;
 
     // Voice & AI card: the cloud works with no setup; one "Offline mode" switch
     // downloads the best speech and AI models this phone can run; "Only on this
@@ -1095,12 +1118,13 @@ export const SettingsScreen = () => {
                                     )}
                                 </View>
                             </View>
-                            {!isPro && (
+                            {(!isPro || proTrial.active) && (
                                 <UsageCard
                                     user={user}
                                     aiProvider={aiProvider}
                                     isGuest={isGuest}
                                     isPro={isPro}
+                                    trialDaysLeft={proTrial.active ? proTrial.daysLeft : null}
                                     embedded
                                 />
                             )}
@@ -1127,6 +1151,8 @@ export const SettingsScreen = () => {
                         onOpenMinutesSheet={openMinutesSheet}
                         canManageSubscription={isSubscriptionActive}
                         onManageSubscription={openManageSubscription}
+                        onProTrial={proTrial.active}
+                        trialOfferDays={proTrial.available ? proTrial.days : null}
                     />
                 </Section>
 

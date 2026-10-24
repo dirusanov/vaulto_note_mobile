@@ -71,7 +71,8 @@
     "freeMinutesUsed": "Free minutes used up",
     "lockedListHint": "Your notes will appear here once they are unlocked.",
     "lockedNotBackedUp": "Until then, new notes are not backed up.",
-    "lockedSyncNotice": "Not synced: unlock encryption to back up new notes."
+    "lockedSyncNotice": "Not synced: unlock encryption to back up new notes.",
+    "tryProFree": "Try Pro free"
   },
   "settings": {
     "title": "Settings",
@@ -1135,7 +1136,31 @@
     "trialDays_one": "{{count}} day free, then {{price}}",
     "trialDays_other": "{{count}} days free, then {{price}}",
     "trialMonths_one": "{{count}} month free, then {{price}}",
-    "trialMonths_other": "{{count}} months free, then {{price}}"
+    "trialMonths_other": "{{count}} months free, then {{price}}",
+    "trialDuration_one": "{{count}} day",
+    "trialDuration_other": "{{count}} days",
+    "trialDaysLeft_one": "Pro trial · {{count}} day left",
+    "trialDaysLeft_other": "Pro trial · {{count}} days left",
+    "trialCta": "Try Pro free for {{duration}}",
+    "trialHint": "{{minutes}} cloud minutes. No card; it ends by itself, nothing is charged.",
+    "trialSignIn": "Sign in to try Pro free for {{duration}}.",
+    "trialStartedTitle": "Pro is on",
+    "trialStartedText": "Pro is free until {{date}}. Nothing is charged: when it ends, the app goes back to the free plan and your notes stay.",
+    "trialUsed": "The free Pro trial is no longer available on this account.",
+    "trialFailed": "Could not start the trial. Check your connection and try again.",
+    "trialKeepPro": "Choose a plan to keep Pro after {{date}}. Nothing is charged until you do.",
+    "trialKeepProNoDate": "Choose a plan to keep Pro after the trial. Nothing is charged until you do.",
+    "trialMinutesLabel": "Trial cloud minutes",
+    "trialMinutesUsed": "You've used the trial's cloud minutes",
+    "trialMinutesLow": "Running low on trial minutes",
+    "trialMinutesUsedTitle": "Trial minutes used up",
+    "trialMinutesUsedDesc": "Choose a plan to keep transcribing in the cloud. Pro stays on until the trial ends.",
+    "keepProRow": "Keep Pro after the trial",
+    "keepProRowDetail": "Choose a plan in Google Play",
+    "trialRowDetail": "Try it free for {{duration}}, no card",
+    "limitTrialOffer": "Try Pro free for {{duration}}: {{minutes}} cloud minutes and AI without limits. No card, nothing is charged.",
+    "limitTrialOfferAI": "Pro has no AI limit: try it free for {{duration}}, no card.",
+    "tryFree": "Try free"
   },
   "drawing": {
     "done": "Done",

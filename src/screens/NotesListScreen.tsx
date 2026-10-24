@@ -57,7 +57,7 @@ export const NotesListScreen = () => {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const isFocused = useIsFocused();
     const { userId, isAuthenticated, isGuest, user, refreshProfile } = useAuth();
-    const { isPro } = useSubscription();
+    const { isPro, proTrial } = useSubscription();
     // Account avatar in the search bar (as in Keep/Gmail): the initial of the name
     // or e-mail when signed in, a person icon for guests.
     const signedIn = isAuthenticated && !isGuest;
@@ -599,6 +599,11 @@ export const NotesListScreen = () => {
             ? t('notes.freeMinutesLeft', '{{minutes}} min left', { minutes: Math.max(1, Math.round(remainingSeconds / 60)) })
             : t('notes.freeMinutesUsed', 'Free minutes used up'))
         : null;
+    // The same quiet line is the natural moment to mention the no-card Pro trial.
+    const minutesHintOffersTrial = !!minutesHint && signedIn && proTrial.available;
+    const minutesHintText = minutesHint && minutesHintOffersTrial
+        ? `${minutesHint} · ${t('notes.tryProFree', 'Try Pro free')}`
+        : minutesHint;
 
     // Check if all selected notes are pinned
     const selectedNotes = sortedNotes.filter(n => selectedNoteIds.has(n.id));
@@ -1006,7 +1011,8 @@ export const NotesListScreen = () => {
                 </View>
             )}
 
-            {/* Few free minutes left: one quiet line above the record button; tap for Settings. */}
+            {/* Few free minutes left: one quiet line above the record button; tap for Settings
+                (or the paywall, when it also offers the no-card trial). */}
             {!!minutesHint && !isWelcomeEmpty && !isSelectionMode && !isVoiceRecorderVisible && (
                 <View
                     pointerEvents="box-none"
@@ -1014,14 +1020,18 @@ export const NotesListScreen = () => {
                 >
                     <TouchableOpacity
                         style={styles.minutesHint}
-                        onPress={handleSettingsPress}
+                        onPress={minutesHintOffersTrial ? () => navigation.navigate('Paywall') : handleSettingsPress}
                         activeOpacity={0.7}
                         hitSlop={8}
                         accessibilityRole="button"
-                        accessibilityLabel={minutesHint}
+                        accessibilityLabel={minutesHintText ?? undefined}
                     >
-                        <MaterialIcons name="graphic-eq" size={14} color={colors.textSecondary} />
-                        <Text style={styles.minutesHintText} numberOfLines={1}>{minutesHint}</Text>
+                        <MaterialIcons
+                            name={minutesHintOffersTrial ? 'workspace-premium' : 'graphic-eq'}
+                            size={14}
+                            color={minutesHintOffersTrial ? colors.primary : colors.textSecondary}
+                        />
+                        <Text style={styles.minutesHintText} numberOfLines={1}>{minutesHintText}</Text>
                     </TouchableOpacity>
                 </View>
             )}

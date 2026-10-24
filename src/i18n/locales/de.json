@@ -71,7 +71,8 @@
     "freeMinutesUsed": "Freiminuten aufgebraucht",
     "lockedListHint": "Deine Notizen erscheinen hier, sobald du sie entsperrst.",
     "lockedNotBackedUp": "Bis dahin werden neue Notizen nicht gesichert.",
-    "lockedSyncNotice": "Nicht synchronisiert: Entsperre die Verschlüsselung, um neue Notizen zu sichern."
+    "lockedSyncNotice": "Nicht synchronisiert: Entsperre die Verschlüsselung, um neue Notizen zu sichern.",
+    "tryProFree": "Pro gratis testen"
   },
   "settings": {
     "title": "Einstellungen",
@@ -1133,7 +1134,31 @@
     "trialDays_one": "{{count}} Tag gratis, danach {{price}}",
     "trialDays_other": "{{count}} Tage gratis, danach {{price}}",
     "trialMonths_one": "{{count}} Monat gratis, danach {{price}}",
-    "trialMonths_other": "{{count}} Monate gratis, danach {{price}}"
+    "trialMonths_other": "{{count}} Monate gratis, danach {{price}}",
+    "trialDuration_one": "{{count}} Tag",
+    "trialDuration_other": "{{count}} Tage",
+    "trialDaysLeft_one": "Pro-Test · noch {{count}} Tag",
+    "trialDaysLeft_other": "Pro-Test · noch {{count}} Tage",
+    "trialCta": "Pro {{duration}} gratis testen",
+    "trialHint": "{{minutes}} Cloud-Minuten. Ohne Karte; endet von selbst, es wird nichts berechnet.",
+    "trialSignIn": "Melde dich an, um Pro {{duration}} gratis zu testen.",
+    "trialStartedTitle": "Pro ist aktiv",
+    "trialStartedText": "Pro ist bis {{date}} gratis. Es wird nichts berechnet: Danach wechselt die App zurück zum kostenlosen Plan, deine Notizen bleiben.",
+    "trialUsed": "Der kostenlose Pro-Test ist für dieses Konto nicht mehr verfügbar.",
+    "trialFailed": "Der Test konnte nicht gestartet werden. Prüfe deine Verbindung und versuche es erneut.",
+    "trialKeepPro": "Wähle einen Plan, um Pro nach dem {{date}} zu behalten. Bis dahin wird nichts berechnet.",
+    "trialKeepProNoDate": "Wähle einen Plan, um Pro nach dem Test zu behalten. Bis dahin wird nichts berechnet.",
+    "trialMinutesLabel": "Cloud-Minuten im Test",
+    "trialMinutesUsed": "Die Cloud-Minuten des Tests sind aufgebraucht",
+    "trialMinutesLow": "Die Testminuten gehen zur Neige",
+    "trialMinutesUsedTitle": "Testminuten aufgebraucht",
+    "trialMinutesUsedDesc": "Wähle einen Plan, um weiter in der Cloud zu transkribieren. Pro bleibt bis zum Testende aktiv.",
+    "keepProRow": "Pro nach dem Test behalten",
+    "keepProRowDetail": "Plan in Google Play wählen",
+    "trialRowDetail": "{{duration}} gratis testen, ohne Karte",
+    "limitTrialOffer": "Teste Pro {{duration}} gratis: {{minutes}} Cloud-Minuten und KI ohne Limit. Ohne Karte, es wird nichts berechnet.",
+    "limitTrialOfferAI": "Pro hat kein KI-Limit: {{duration}} gratis testen, ohne Karte.",
+    "tryFree": "Gratis testen"
   },
   "drawing": {
     "done": "Fertig",

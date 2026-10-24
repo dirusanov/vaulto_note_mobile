@@ -71,7 +71,8 @@
     "freeMinutesUsed": "無料の分数を使い切りました",
     "lockedListHint": "ロックを解除すると、ここにノートが表示されます。",
     "lockedNotBackedUp": "それまでは、新しいメモはバックアップされません。",
-    "lockedSyncNotice": "未同期:新しいメモをバックアップするには暗号化のロックを解除してください。"
+    "lockedSyncNotice": "未同期:新しいメモをバックアップするには暗号化のロックを解除してください。",
+    "tryProFree": "Pro を無料で試す"
   },
   "settings": {
     "title": "設定",
@@ -1130,7 +1131,29 @@
     "introOffer": "初回価格 {{intro}}、その後 {{price}}",
     "startTrial": "無料トライアルを開始",
     "trialDays_other": "{{count}}日間無料、その後 {{price}}",
-    "trialMonths_other": "{{count}}か月無料、その後 {{price}}"
+    "trialMonths_other": "{{count}}か月無料、その後 {{price}}",
+    "trialDuration_other": "{{count}}日間",
+    "trialDaysLeft_other": "Pro トライアル · 残り{{count}}日",
+    "trialCta": "Pro を{{duration}}無料で試す",
+    "trialHint": "クラウド {{minutes}} 分。カード不要、自動で終了し、料金はかかりません。",
+    "trialSignIn": "Pro を{{duration}}無料で試すにはサインインしてください。",
+    "trialStartedTitle": "Pro がオンになりました",
+    "trialStartedText": "{{date}} まで Pro を無料で使えます。料金はかかりません。終了後は無料プランに戻り、メモはそのまま残ります。",
+    "trialUsed": "このアカウントでは Pro の無料トライアルはご利用いただけません。",
+    "trialFailed": "トライアルを開始できませんでした。接続を確認してもう一度お試しください。",
+    "trialKeepPro": "{{date}} 以降も Pro を使うにはプランを選んでください。それまで料金はかかりません。",
+    "trialKeepProNoDate": "トライアル終了後も Pro を使うにはプランを選んでください。それまで料金はかかりません。",
+    "trialMinutesLabel": "トライアルのクラウド時間",
+    "trialMinutesUsed": "トライアルのクラウド時間を使い切りました",
+    "trialMinutesLow": "トライアルの残り時間がわずかです",
+    "trialMinutesUsedTitle": "トライアルの時間を使い切りました",
+    "trialMinutesUsedDesc": "クラウドでの文字起こしを続けるにはプランを選んでください。Pro はトライアル終了まで有効です。",
+    "keepProRow": "トライアル後も Pro を使う",
+    "keepProRowDetail": "Google Play でプランを選ぶ",
+    "trialRowDetail": "{{duration}}無料、カード不要",
+    "limitTrialOffer": "Pro を{{duration}}無料でお試し：クラウド {{minutes}} 分、AI は無制限。カード不要、料金はかかりません。",
+    "limitTrialOfferAI": "Pro なら AI に上限はありません。{{duration}}無料、カード不要でお試しください。",
+    "tryFree": "無料で試す"
   },
   "drawing": {
     "done": "完了",

@@ -37,7 +37,20 @@ export interface CurrentPeriodUsage {
     };
 }
 
+export interface ProTrialStart {
+    status: string;
+    plan: string;
+    subscription_plan_code: string;
+    expires_at: string;
+    transcription_minutes: number;
+}
+
 export const subscriptionApi = {
+    /** One-time Pro trial: no card, no store purchase; it ends by itself. */
+    startProTrial: async (): Promise<ProTrialStart> => {
+        const response = await client.post<ProTrialStart>('/billing/pro-trial/start');
+        return response.data;
+    },
     getPlans: async (): Promise<SubscriptionPlan[]> => {
         const response = await client.get<SubscriptionPlan[]>('/billing/plans');
         return response.data;
