@@ -1162,7 +1162,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         if (snapped.value) {
             path = shapeSkPath(points, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points }));
         } else if (points.length < 3) {
-            liveInk.value.ink = null;
+            // (Also runs once on the JS thread at mount, where the holder must not be touched.)
+            if (liveInk.value.ink) {
+                liveInk.value.ink = null;
+            }
             path = Skia.Path.Make();
         } else {
             // Mutated in place on the UI thread: nothing reacts to it, and it
