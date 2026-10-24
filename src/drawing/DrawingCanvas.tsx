@@ -17,6 +17,7 @@ import {
     Skia,
     SkPaint,
     SkPath,
+    SkPathBuilder,
     SkPicture,
     Paragraph,
     Rect,
@@ -38,7 +39,25 @@ import {
 import { runOnUISync } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
-import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, shapeIsClosed, shapeWidth, strokeOutline, strokeOutlineFor } from './ink';
+import {
+    INK_TOOLS,
+    InkStroke,
+    InkText,
+    InkTool,
+    InkTrace,
+    SMART_INVERT_MATRIX,
+    createTrace,
+    liveTailStart,
+    nextFrozenPiece,
+    pencilGrainMatrix,
+    recognizeShape,
+    shapeIsClosed,
+    shapeWidth,
+    strokeOutlineFor,
+    traceAppend,
+    traceOutline,
+    traceTail,
+} from './ink';
 import { Selection, TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
 import {
@@ -148,13 +167,13 @@ const SHAPE_STILL_PX = 6;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
 
-const outlineToSkPath = (outline: number[]): SkPath => {
+/** Adds an outline polygon as one closed contour of quadratic segments through the midpoints of its points. */
+const addOutline = (path: SkPathBuilder, outline: number[]): void => {
     'worklet';
     const n = outline.length / 2;
     if (n < 3) {
-        return Skia.Path.Make();
+        return;
     }
-    const path = Skia.PathBuilder.Make();
     const mx = (i: number) => (outline[(i % n) * 2] + outline[((i + 1) % n) * 2]) / 2;
     const my = (i: number) => (outline[(i % n) * 2 + 1] + outline[((i + 1) % n) * 2 + 1]) / 2;
     path.moveTo(mx(0), my(0));
@@ -162,8 +181,24 @@ const outlineToSkPath = (outline: number[]): SkPath => {
         path.quadTo(outline[(i % n) * 2], outline[(i % n) * 2 + 1], mx(i), my(i));
     }
     path.close();
+};
+
+const outlineToSkPath = (outline: number[]): SkPath => {
+    'worklet';
+    if (outline.length < 6) {
+        return Skia.Path.Make();
+    }
+    const path = Skia.PathBuilder.Make();
+    addOutline(path, outline);
     return path.build();
 };
+
+/**
+ * The stroke being drawn, built up as it grows (see InkTrace): the finished
+ * part of the line is frozen into `frozen` piece by piece, and each frame only
+ * rebuilds the last few dozen points on top of it, however long the stroke.
+ */
+type LiveInk = { id: number; trace: InkTrace; frozen: SkPath | null; frozenTo: number };
 
 const pictureBounds = Skia.XYWHRect(-CANVAS_EXTENT, -CANVAS_EXTENT, CANVAS_EXTENT * 2, CANVAS_EXTENT * 2);
 
@@ -423,6 +458,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInsetRef.current = bottomInset;
 
     const live = useSharedValue<number[]>([]);
+    const liveInk = useSharedValue<{ ink: LiveInk | null }>({ ink: null });
     const liveId = useSharedValue(0);
     // A lifted stroke moves from `live` to `pending` in the same UI frame and is
     // drawn from there until React has rendered it into the ink picture. With
@@ -1044,11 +1080,44 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
 
     const livePath = useDerivedValue(() => {
         const cfg = strokeCfg.value;
-        const spec = INK_TOOLS[cfg.tool];
+        const points = live.value;
         const started = performance.now();
-        const path = snapped.value
-            ? shapeSkPath(live.value, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points: live.value }))
-            : outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib));
+        let path: SkPath;
+        if (snapped.value) {
+            path = shapeSkPath(points, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points }));
+        } else if (points.length < 3) {
+            liveInk.value.ink = null;
+            path = Skia.Path.Make();
+        } else {
+            // Mutated in place on the UI thread: nothing reacts to it, and it
+            // carries over from frame to frame.
+            const holder = liveInk.value;
+            let ink = holder.ink;
+            if (!ink || ink.id !== liveId.value || points.length < ink.trace.consumed * 3) {
+                const spec = INK_TOOLS[cfg.tool] || INK_TOOLS.fountain;
+                ink = { id: liveId.value, trace: createTrace(cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib), frozen: null, frozenTo: -1 };
+                holder.ink = ink;
+            }
+            const trace = ink.trace;
+            traceAppend(trace, points);
+            let piece = nextFrozenPiece(ink.frozenTo, trace.done);
+            if (piece) {
+                const builder = ink.frozen ? Skia.PathBuilder.MakeFromPath(ink.frozen) : Skia.PathBuilder.Make();
+                while (piece) {
+                    addOutline(builder, traceOutline(trace, null, piece[0], piece[1], piece[0] === 0, false));
+                    ink.frozenTo = piece[1];
+                    piece = nextFrozenPiece(ink.frozenTo, trace.done);
+                }
+                ink.frozen = builder.build();
+            }
+            const tail = traceTail(trace, points);
+            const from = liveTailStart(ink.frozenTo);
+            // One path, frozen pieces and tail as separate contours: filled as a
+            // union, so a translucent marker does not darken where they overlap.
+            const builder = ink.frozen ? Skia.PathBuilder.MakeFromPath(ink.frozen) : Skia.PathBuilder.Make();
+            addOutline(builder, traceOutline(trace, tail, from, tail.n - 1, from === 0, true));
+            path = builder.build();
+        }
         liveCost.value = performance.now() - started;
         return path;
     });
