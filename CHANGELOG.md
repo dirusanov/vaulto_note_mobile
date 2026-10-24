@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.0.103] - 2026-10-24
+
+### Fixed
+- Android: handwriting no longer lags behind the pen or freezes the app. The line under the pen is drawn natively, in a low-latency layer, with pen motion prediction, however much is already on the page; the stroke looks the same before and after the pen lifts.
+
 ## [1.0.102] - 2026-10-23
 
 ### Fixed
