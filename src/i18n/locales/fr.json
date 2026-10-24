@@ -520,7 +520,9 @@
       "commandFailed": "Impossible d’exécuter cette demande : « {{text}} »",
       "limitNotice": "Limite IA du mois atteinte : les enregistrements sont ajoutés en texte brut, sans retouche par l’IA.",
       "insertAsText": "Insérer comme texte",
-      "guestRequestHint": "Connectez-vous et l'IA transformera ce genre de demande en liste de tâches"
+      "guestRequestHint": "Connectez-vous et l'IA transformera ce genre de demande en liste de tâches",
+      "guestRequestHintTitle": "Connectez-vous et l'IA renommera la note sur ce genre de demande",
+      "guestRequestHintEdit": "Connectez-vous et l'IA appliquera ce genre de demande à votre note"
     },
     "improvePreview": {
       "title": "Suggestion de l'IA",

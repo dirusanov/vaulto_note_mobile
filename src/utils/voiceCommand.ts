@@ -65,3 +65,33 @@ export const shouldHintAiForRequest = (options: {
     && !options.agentAvailable
     && !options.alreadyHinted
     && looksLikeVoiceCommand(options.transcript);
+
+export type VoiceRequestKind = 'checklist' | 'title' | 'edit';
+
+/** Words that make a request about the note's title (stems, lowercase). */
+const TITLE_STEMS = [
+    'title', 'rename', 'name', 'heading',
+    'заголов', 'назов', 'назв', 'назови', 'переименуй', 'озаглавь',
+    'titel', 'überschrift', 'benenne', 'título', 'titulo', 'renombra', 'titre', 'renomme', 'nome', 'renomeia',
+];
+
+/** Words that make a request about a list or its items (stems, lowercase). */
+const CHECKLIST_STEMS = [
+    'checklist', 'list', 'todo', 'to-do', 'item', 'task', 'tick', 'check', 'cross', 'mark',
+    'чек-лист', 'чеклист', 'список', 'пункт', 'задач', 'отметь', 'вычеркни', 'зачеркни', 'галочк',
+    'liste', 'punkt', 'aufgabe', 'lista', 'tarea', 'elemento', 'tâche', 'élément', 'coche', 'tarefa', 'marque',
+];
+
+const hasStem = (all: string[], stems: string[]): boolean =>
+    all.some((word) => stems.some((stem) => word.startsWith(stem)));
+
+/**
+ * What a request is about, so the sign-in hint can name what the AI would do
+ * with it: a title, a checklist, or another change to the note.
+ */
+export const voiceRequestKind = (transcript: string): VoiceRequestKind => {
+    const all = (transcript || '').toLowerCase().match(/[\p{L}\p{N}'-]+/gu) ?? [];
+    if (hasStem(all, TITLE_STEMS)) return 'title';
+    if (hasStem(all, CHECKLIST_STEMS)) return 'checklist';
+    return 'edit';
+};

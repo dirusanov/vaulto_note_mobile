@@ -109,7 +109,7 @@ import { LimitModal } from '../components/LimitModal';
 import { InlineNotice, InlineNoticeAction } from '../components/InlineNotice';
 import { isAiLimitKnown, noteAccountPlan, takeAiLimitNotice } from '../utils/aiLimitState';
 import { isLimitSheetOpen } from '../utils/limitEvents';
-import { looksLikeVoiceCommand, shouldHintAiForRequest } from '../utils/voiceCommand';
+import { looksLikeVoiceCommand, shouldHintAiForRequest, voiceRequestKind } from '../utils/voiceCommand';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
@@ -5866,9 +5866,15 @@ export const NoteEditScreen = () => {
                         })
                     ) {
                         guestRequestHintShown = true;
+                        // Name what the AI would have done with this request.
+                        const requestKind = voiceRequestKind(transcribedText);
                         showAgentNotice({
                             kind: 'aiHint',
-                            message: t('edit.agent.guestRequestHint', 'Sign in and the AI will turn requests like this into a checklist'),
+                            message: requestKind === 'checklist'
+                                ? t('edit.agent.guestRequestHint', 'Sign in and the AI will turn requests like this into a checklist')
+                                : requestKind === 'title'
+                                    ? t('edit.agent.guestRequestHintTitle', 'Sign in and the AI will rename notes when you ask like this')
+                                    : t('edit.agent.guestRequestHintEdit', 'Sign in and the AI will carry out requests like this in your note'),
                         });
                     }
                     const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
