@@ -2097,7 +2097,9 @@ export const NoteEditScreen = () => {
         }
 
         const nextScale = resolveChecklistScaleForContent(nextContent, true);
-        setDraftOriginalChecklistScaleFactor(nextScale);
+        // The first scale a new checklist gets sticks: re-deriving it from the
+        // item count made the font jump while typing (1.25x up to 8 items, then 1.15x).
+        setDraftOriginalChecklistScaleFactor((current) => current ?? nextScale);
 
         const currentNoteId = localNoteIdRef.current;
         if (
@@ -2107,11 +2109,11 @@ export const NoteEditScreen = () => {
             typeof checklistScaleLocksRef.current[currentNoteId] !== 'number'
         ) {
             void (async () => {
-                await persistChecklistScaleLock(currentNoteId, nextScale);
+                await persistChecklistScaleLock(currentNoteId, draftOriginalChecklistScaleFactor ?? nextScale);
                 setPendingCreationAutoScaleNoteId(null);
             })();
         }
-    }, [autoScalingEnabled, pendingCreationAutoScaleNoteId, persistChecklistScaleLock]);
+    }, [autoScalingEnabled, draftOriginalChecklistScaleFactor, pendingCreationAutoScaleNoteId, persistChecklistScaleLock]);
 
     const handleCreatedNoteAutoScale = useCallback(async (newNoteId: string, contentForLock?: string) => {
         if (!newNoteId || pendingCreationAutoScaleNoteId !== NEW_NOTE_AUTO_SCALE_DRAFT_ID) {
@@ -2584,7 +2586,12 @@ export const NoteEditScreen = () => {
     ), [activeVariantId, autoScalingEnabled, localNoteId, pendingCreationAutoScaleNoteId]);
 
     const activeVariantChecklistScaleFactor = useMemo(() => {
-        const lockedScale = checklistScaleLocks[activeVariantId];
+        // The original's scale is locked under the note's id (see
+        // persistChecklistScaleLock): looked up as 'original' it was never found,
+        // so the creation preview's larger checklist shrank back to 1x a moment
+        // after the note was first saved, while typing its first item.
+        const lockKey = activeVariantId === 'original' ? localNoteId : activeVariantId;
+        const lockedScale = lockKey ? checklistScaleLocks[lockKey] : undefined;
         if (typeof lockedScale === 'number') {
             return lockedScale;
         }
@@ -2594,7 +2601,7 @@ export const NoteEditScreen = () => {
         }
 
         return null;
-    }, [activeVariantId, checklistScaleLocks, draftOriginalChecklistScaleFactor, shouldUseCreationAutoScalePreview]);
+    }, [activeVariantId, checklistScaleLocks, draftOriginalChecklistScaleFactor, localNoteId, shouldUseCreationAutoScalePreview]);
 
     useEffect(() => {
         if (!existingNote) {
