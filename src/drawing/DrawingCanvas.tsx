@@ -33,10 +33,11 @@ import {
     useAnimatedReaction,
     useDerivedValue,
     useFrameCallback,
+    SharedValue,
     useSharedValue,
     withDecay,
 } from 'react-native-reanimated';
-import { runOnUISync } from 'react-native-worklets';
+import { Synchronizable, createSynchronizable } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
 import {
@@ -75,6 +76,16 @@ import {
 import { LABEL_LAYOUT_WIDTH, paragraphFor } from './textLayout';
 
 export type CanvasMode = 'ink' | 'erase' | 'text' | 'select';
+
+type ToolConfig = {
+    mode: CanvasMode;
+    tool: InkTool;
+    color: string;
+    size: number;
+    stylusOnly: boolean;
+    eraserRadius: number;
+    snapShapes: boolean;
+};
 
 /** Where a tap in text mode landed, in document and screen coordinates. */
 export type TextTap = {
@@ -285,10 +296,10 @@ const buildPaper = (
 
 // Graphite texture: fractal noise mapped to the ink colour's alpha. The noise is
 // in document space, so the grain stays put while you scroll or zoom.
-const PencilGrain: React.FC<{ color: string }> = ({ color }) => (
+const PencilGrain: React.FC<{ matrix: SharedValue<number[]> }> = ({ matrix }) => (
     <>
         <FractalNoise freqX={0.9} freqY={0.9} octaves={2} seed={3} />
-        <ColorMatrix matrix={pencilGrainMatrix(color)} />
+        <ColorMatrix matrix={matrix} />
     </>
 );
 
@@ -494,14 +505,31 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
 
-    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
-    // Before paint, not after: a touch that lands right after picking a tool
-    // must already see it (a lasso started quickly was drawn as ink).
+    // The tool for the next touch. A touch that lands right after a tool is
+    // picked must already see it (a lasso started quickly was drawn as ink),
+    // but a shared value written from JS reaches the UI thread only after the
+    // JS task ends, i.e. after the re-render the same tap starts, and a
+    // synchronous call to the UI thread would block JS behind a busy frame.
+    // A synchronizable is written from JS at once, under a short lock, and
+    // read by the gesture when a touch begins.
+    const toolSyncRef = useRef<Synchronizable<ToolConfig> | null>(null);
+    const toolNow = useRef<ToolConfig>({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
+    if (!toolSyncRef.current) {
+        toolSyncRef.current = createSynchronizable<ToolConfig>(toolNow.current);
+    }
+    const toolSync = toolSyncRef.current;
+    /** The same, for what is drawn (eraser ring, hover dot); may trail by a frame. */
+    const toolSV = useSharedValue<ToolConfig>(toolNow.current);
+    const setTool = useCallback((next: ToolConfig) => {
+        toolNow.current = next;
+        toolSync.setBlocking(next);
+        toolSV.value = next;
+    }, [toolSync, toolSV]);
     useLayoutEffect(() => {
-        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes };
-    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, toolSV]);
-    /** The pen a stroke started with: it keeps it to the end, whatever is picked meanwhile. */
-    const strokeCfg = useSharedValue({ tool, color, size });
+        setTool({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
+    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, setTool]);
+    /** The tool a touch started with: it keeps it to the end, whatever is picked meanwhile. */
+    const strokeCfg = useSharedValue({ tool, color, size, eraserRadius, snapShapes });
 
     useEffect(() => {
         textBoxesSV.value = texts.flatMap((item, index) => {
@@ -570,14 +598,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             ty.value = next;
             return next - before;
         },
-        applyTool: (next) => {
-            // On the UI thread before returning: a plain write is sent only after
-            // the JS task ends, i.e. after the re-render the same tap starts.
-            runOnUISync((picked: typeof next) => {
-                'worklet';
-                toolSV.value = { ...toolSV.value, ...picked };
-            }, next);
-        },
+        applyTool: (next) => setTool({ ...toolNow.current, ...next }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }), []);
 
@@ -674,7 +695,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             liveShown.value = { t: Date.now(), length: live.value.length };
             live.modify(undefined, true);
         }
-        if (snapped.value || !toolSV.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
+        if (snapped.value || !strokeCfg.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
             return;
         }
         const shape = recognizeShape(live.value);
@@ -758,7 +779,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     stylusSeen.value = true;
                     runOnJS(callJs)('onStylus');
                 }
-                const cfg = toolSV.value;
+                const cfg = toolSync.getBlocking();
+                strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size, eraserRadius: cfg.eraserRadius, snapShapes: cfg.snapShapes };
                 // The pen's eraser end or side button (see InkInputView) erases with any tool.
                 const penErases = isStylus && !!e.stylusData && e.stylusData.pressure <= ERASER_PRESSURE / 2;
                 // Typing a label is fine with a finger; drawing obeys pen-only mode.
@@ -802,7 +824,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return;
                 }
                 gestureMode.value = 'draw';
-                strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size };
                 const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
                 lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
                 liveId.value += 1;
@@ -868,7 +889,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     // filled in, so the ink between them is erased too.
                     const distance = Math.hypot(e.x - at.x, e.y - at.y);
                     if (distance >= ERASE_STEP && Date.now() - at.t >= ERASE_INTERVAL_MS) {
-                        const radius = toolSV.value.eraserRadius;
+                        const radius = strokeCfg.value.eraserRadius;
                         const steps = Math.ceil(distance / Math.max(ERASE_STEP, radius / 2));
                         const path: number[] = [];
                         for (let i = 1; i < steps; i++) {
@@ -1248,6 +1269,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // The live stroke shows in the pen it started with, as it will be committed.
     const liveColor = useDerivedValue(() => strokeCfg.value.color);
     const liveOpacity = useDerivedValue(() => INK_TOOLS[strokeCfg.value.tool]?.opacity ?? 1);
+    const liveBlend = useDerivedValue(() => (strokeCfg.value.tool === 'marker' ? 'multiply' : 'srcOver'));
+    const liveGrainMatrix = useDerivedValue(() => pencilGrainMatrix(strokeCfg.value.color));
     const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
     const inkLayer = invertInk ? (
         <Paint>
@@ -1275,8 +1298,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                             <Group layer={inkLayer} clip={pageClip}>
                                 <Picture picture={inkPicture} />
                                 <Picture picture={pendingPicture} />
-                                <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={tool === 'marker' ? 'multiply' : 'srcOver'}>
-                                    {liveGrain && <PencilGrain color={color} />}
+                                <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={liveBlend}>
+                                    {liveGrain && <PencilGrain matrix={liveGrainMatrix} />}
                                 </Path>
                                 {labels}
                                 {dragIndex !== null && texts[dragIndex] && (
