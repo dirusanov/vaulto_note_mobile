@@ -25,7 +25,8 @@
     "test:editor": "tsc --ignoreConfig src/utils/editHistory.ts src/utils/titleHandoff.ts src/utils/markdownUtils.tsx src/utils/tiptapMarkdownAdapter.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/editor --skipLibCheck --esModuleInterop && node --test tests/editorHistory.test.cjs",
     "test:content-date": "tsc --ignoreConfig src/utils/contentDate.ts --target ES2020 --module commonjs --outDir .test-build/contentDate --skipLibCheck --esModuleInterop && node --test tests/contentDate.test.cjs",
     "test:voice-workflow": "node --test tests/voiceWorkflow.test.cjs tests/aiFlows.test.cjs",
-    "test:guest-integrity": "tsc --ignoreConfig src/utils/guestIntegrity.ts --target ES2020 --module commonjs --outDir .test-build/guestIntegrity --skipLibCheck --esModuleInterop && node --test tests/guestIntegrity.test.cjs"
+    "test:guest-integrity": "tsc --ignoreConfig src/utils/guestIntegrity.ts --target ES2020 --module commonjs --outDir .test-build/guestIntegrity --skipLibCheck --esModuleInterop && node --test tests/guestIntegrity.test.cjs",
+    "test:ink-native": "tsc --ignoreConfig src/drawing/ink.ts --target ES2020 --module commonjs --outDir .test-build/drawing/drawing --skipLibCheck --esModuleInterop && node tests/inkNativeFixtures.cjs && cd android && ./gradlew :ink-input:testDebugUnitTest -q"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",

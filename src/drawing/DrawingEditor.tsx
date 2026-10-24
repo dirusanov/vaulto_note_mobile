@@ -1019,6 +1019,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                 eraserRadius={ERASER_SIZES[eraser.sizeIndex] ?? ERASER_SIZES[1]}
                             snapShapes={snapShapes}
                                 editingText={textEdit?.index ?? null}
+                                inkBlocked={popover !== null || textEdit !== null}
                                 dark={dark}
                                 themePaperColor={colors.background}
                                 themeLineColor={colors.border}

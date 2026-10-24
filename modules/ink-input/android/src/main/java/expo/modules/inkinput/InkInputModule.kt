@@ -7,6 +7,24 @@ class InkInputModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("InkInput")
 
+    /** True when the device can draw ink natively (InkLiveView): Android 10 and later. */
+    Constant("nativeInk") { InkLiveView.supported() }
+
     View(InkInputView::class) {}
+
+    View(InkLiveView::class) {
+      Name("InkLive")
+      Events("onInkBegin", "onInkStroke")
+
+      AsyncFunction("setConfig") { view: InkLiveView, config: Map<String, Any?> ->
+        view.setConfig(config)
+      }
+      AsyncFunction("setTransform") { view: InkLiveView, tx: Double, ty: Double, scale: Double ->
+        view.setTransform(tx, ty, scale)
+      }
+      AsyncFunction("release") { view: InkLiveView, ids: List<Int> ->
+        view.release(ids)
+      }
+    }
   }
 }

@@ -2,6 +2,7 @@ package expo.modules.inkinput
 
 import android.content.Context
 import android.os.Build
+import android.view.InputDevice
 import android.view.MotionEvent
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.views.ExpoView
@@ -21,9 +22,13 @@ import expo.modules.kotlin.views.ExpoView
  *   fingers still down when the pen lifts are ignored until they lift too.
  * - Pen eraser. The eraser end of a pen, or the pen with its side button held,
  *   is passed on as a pen with pressure [ERASER_PRESSURE]; the canvas erases.
+ * - Native ink. A touch that draws ink (the pen, or a finger when fingers
+ *   draw) on the drawing canvas goes to [InkLiveView] alone, which draws it
+ *   with the lowest latency the device allows; the views below never see it.
+ *   A second finger turns a finger stroke into a scroll or pinch for them.
  */
 class InkInputView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
-  private enum class Stream { NONE, FINGERS, PEN, IGNORE }
+  private enum class Stream { NONE, FINGERS, PEN, IGNORE, INK_PEN, INK_FINGER }
 
   private var stream = Stream.NONE
   private var penId = -1
@@ -43,6 +48,9 @@ class InkInputView(context: Context, appContext: AppContext) : ExpoView(context,
         }
         if (isPen(event, 0)) {
           startPen(event, 0)
+          return true
+        }
+        if (startInk(event, 0, false)) {
           return true
         }
         stream = Stream.FINGERS
@@ -70,6 +78,64 @@ class InkInputView(context: Context, appContext: AppContext) : ExpoView(context,
           return true
         }
         return super.dispatchTouchEvent(event)
+      }
+      Stream.INK_PEN -> {
+        val ink = inkView()
+        val index = event.findPointerIndex(penId)
+        if (ink == null || index < 0) {
+          ink?.cancelStroke()
+          stream = Stream.IGNORE
+          return true
+        }
+        when (action) {
+          MotionEvent.ACTION_MOVE -> ink.move(event, index)
+          MotionEvent.ACTION_POINTER_UP -> if (event.actionIndex == index) {
+            liftInk(ink, event, index)
+            stream = Stream.IGNORE
+          }
+          MotionEvent.ACTION_UP -> {
+            liftInk(ink, event, index)
+            stream = Stream.NONE
+          }
+          MotionEvent.ACTION_CANCEL -> {
+            ink.cancelStroke()
+            stream = Stream.NONE
+          }
+          // Another pointer landing while the pen writes: a palm, ignored.
+        }
+        return true
+      }
+      Stream.INK_FINGER -> {
+        val ink = inkView()
+        if (ink == null) {
+          stream = Stream.IGNORE
+          return true
+        }
+        when (action) {
+          MotionEvent.ACTION_MOVE -> ink.move(event, 0)
+          MotionEvent.ACTION_UP -> {
+            liftInk(ink, event, 0)
+            stream = Stream.NONE
+          }
+          MotionEvent.ACTION_CANCEL -> {
+            ink.cancelStroke()
+            stream = Stream.NONE
+          }
+          MotionEvent.ACTION_POINTER_DOWN -> {
+            ink.cancelStroke()
+            if (isPen(event, event.actionIndex)) {
+              // The hand touched first: the pen begins anew.
+              startPen(event, event.actionIndex)
+              return true
+            }
+            // A second finger: no stroke, but a scroll, zoom or two-finger tap
+            // for the canvas, which has not seen the first finger yet.
+            stream = Stream.FINGERS
+            send(event, 0, MotionEvent.ACTION_DOWN, -1, event.downTime)
+            return super.dispatchTouchEvent(event)
+          }
+        }
+        return true
       }
       Stream.PEN -> {
         val index = event.findPointerIndex(penId)
@@ -135,12 +201,66 @@ class InkInputView(context: Context, appContext: AppContext) : ExpoView(context,
   }
 
   private fun startPen(event: MotionEvent, index: Int) {
-    stream = Stream.PEN
     penId = event.getPointerId(index)
     penDownTime = event.eventTime
     penErasing = event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER ||
       event.buttonState and (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_SECONDARY) != 0
+    // An erasing pen goes the usual way: the canvas erases.
+    if (!penErasing && startInk(event, index, true)) {
+      return
+    }
+    stream = Stream.PEN
     send(event, index, MotionEvent.ACTION_DOWN)
+  }
+
+  private fun inkView(): InkLiveView? = InkLiveView.current?.get()
+
+  /** Hands the touch to the native ink layer when it lands there and should draw. */
+  private fun startInk(event: MotionEvent, index: Int, pen: Boolean): Boolean {
+    val ink = inkView() ?: return false
+    if (!ink.wants(this, event.getX(index), event.getY(index), pen)) {
+      return false
+    }
+    stream = if (pen) Stream.INK_PEN else Stream.INK_FINGER
+    penId = event.getPointerId(index)
+    ink.begin(this, event, index, pen)
+    return true
+  }
+
+  /** Android 13+ cancels a pointer it decided was not meant to touch (see [liftAction]). */
+  private fun liftInk(ink: InkLiveView, event: MotionEvent, index: Int) {
+    if (liftAction(event) == MotionEvent.ACTION_CANCEL) {
+      ink.cancelStroke()
+    } else {
+      ink.end(event, index)
+    }
+  }
+
+  /**
+   * A hovering pen shows its dot from the ink layer, and is kept from the views
+   * below, which would redraw the whole canvas for each hover sample.
+   */
+  override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+    val ink = inkView()
+    if (ink != null && event.isFromSource(InputDevice.SOURCE_STYLUS) && isPen(event, 0)) {
+      when (event.actionMasked) {
+        MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
+          if (ink.hoverEnabled() && ink.wants(this, event.x, event.y, true)) {
+            ink.hover(this, event.x, event.y)
+            return true
+          }
+          ink.hoverEnd()
+        }
+        MotionEvent.ACTION_HOVER_EXIT -> {
+          val shown = ink.hoverEnabled()
+          ink.hoverEnd()
+          if (shown) {
+            return true
+          }
+        }
+      }
+    }
+    return super.dispatchGenericMotionEvent(event)
   }
 
   /** Passes on one pointer alone, as sample [history] (or the current one when -1). */

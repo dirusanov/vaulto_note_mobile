@@ -1,5 +1,5 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AppState, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { AppState, LayoutChangeEvent, NativeSyntheticEvent, StyleSheet, Text, View } from 'react-native';
 import {
     BlendMode,
     Canvas,
@@ -39,7 +39,7 @@ import {
 } from 'react-native-reanimated';
 import { Synchronizable, createSynchronizable, runOnUISync } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
-import { ERASER_PRESSURE } from '../../modules/ink-input';
+import { ERASER_PRESSURE, InkLiveHandle, InkLiveView, InkStrokeEvent, NATIVE_INK } from '../../modules/ink-input';
 import {
     INK_TOOLS,
     InkStroke,
@@ -131,6 +131,8 @@ type Props = {
     snapShapes: boolean;
     /** Label being edited in the text field overlay; the canvas does not draw it. */
     editingText: number | null;
+    /** Something is open over the canvas (a popover): touches go the usual way, not to the native ink layer. */
+    inkBlocked?: boolean;
     dark: boolean;
     themePaperColor: string;
     themeLineColor: string;
@@ -177,6 +179,8 @@ const SHAPE_HOLD_MS = 700;
 const SHAPE_STILL_PX = 6;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
+/** Ids of strokes drawn by the native ink layer start here, apart from the canvas's own. */
+const NATIVE_ID_BASE = 1 << 24;
 
 /** Adds an outline polygon as one closed contour of quadratic segments through the midpoints of its points. */
 const addOutline = (path: SkPathBuilder, outline: number[]): void => {
@@ -409,7 +413,7 @@ const Label: React.FC<{ item: InkText }> = ({ item }) => (
 
 export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes,
-    editingText, dark, themePaperColor, themeLineColor, deskColor,
+    editingText, inkBlocked = false, dark, themePaperColor, themeLineColor, deskColor,
     onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
     selection, onLasso, onSelectionMove,
 }, ref) => {
@@ -520,11 +524,44 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const toolSync = toolSyncRef.current;
     /** The same, for what is drawn (eraser ring, hover dot); may trail by a frame. */
     const toolSV = useSharedValue<ToolConfig>(toolNow.current);
+
+    // On Android the stroke under the pen is drawn by a native layer over the
+    // canvas (InkLiveView): touches meant for ink go there directly and never
+    // reach the gesture handler or this canvas until the pen lifts. It is told
+    // the tool, the paper and the view's pan and zoom.
+    const nativeInk = useRef<InkLiveHandle>(null);
+    const nativeExtras = useRef<{ blocked: boolean; invert: boolean; pages: number[] | null }>({ blocked: false, invert: false, pages: null });
+    const pushNativeConfig = useCallback(() => {
+        if (!NATIVE_INK) {
+            return;
+        }
+        const cfg = toolNow.current;
+        const extras = nativeExtras.current;
+        const spec = INK_TOOLS[cfg.tool] || INK_TOOLS.fountain;
+        nativeInk.current?.setConfig({
+            enabled: cfg.mode === 'ink' && !extras.blocked,
+            fingers: !cfg.stylusOnly,
+            tool: cfg.tool,
+            color: cfg.color,
+            size: cfg.size,
+            thinning: spec.thinning,
+            streamline: spec.streamline,
+            taper: spec.taper,
+            nib: spec.nib,
+            opacity: spec.opacity,
+            grain: spec.grain,
+            snapShapes: cfg.snapShapes,
+            invert: extras.invert,
+            hoverColor: extras.invert ? '#FFFFFF' : cfg.color,
+            pages: extras.pages,
+        }).catch(() => undefined);
+    }, []);
     const setTool = useCallback((next: ToolConfig) => {
         toolNow.current = next;
         toolSync.setBlocking(next);
         toolSV.value = next;
-    }, [toolSync, toolSV]);
+        pushNativeConfig();
+    }, [toolSync, toolSV, pushNativeConfig]);
     useLayoutEffect(() => {
         setTool({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
     }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, setTool]);
@@ -707,11 +744,16 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             entry.checked = true;
             return true;
         });
-        if (done.length) {
+        const native = done.filter((id) => id >= NATIVE_ID_BASE);
+        const own = done.filter((id) => id < NATIVE_ID_BASE);
+        if (native.length) {
+            nativeInk.current?.release(native.map((id) => id - NATIVE_ID_BASE)).catch(() => undefined);
+        }
+        if (own.length) {
             runOnUI((ids: number[]) => {
                 'worklet';
                 pending.value = pending.value.filter((entry) => !ids.includes(entry.id));
-            })(done);
+            })(own);
         }
     });
 
@@ -738,6 +780,51 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             dragOffset.value = { dx: 0, dy: 0 };
         });
     }, [onTextMove, dragOffset]);
+
+    // The native layer drew a stroke: the canvas takes it over, and tells the
+    // layer to stop showing it once it is rendered here (see above).
+    const handleInkBegin = useCallback((event: NativeSyntheticEvent<{ stylus: boolean }>) => {
+        if (event.nativeEvent.stylus && !stylusSeen.value) {
+            stylusSeen.value = true;
+            jsHandlersRef.current.onStylus();
+        }
+        // A touch stops a gliding page.
+        runOnUI(() => {
+            'worklet';
+            cancelAnimation(tx);
+            cancelAnimation(ty);
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const handleInkStroke = useCallback((event: NativeSyntheticEvent<InkStrokeEvent>) => {
+        const { id, tool: inkTool, color: inkColor, size: inkSize, shape, points } = event.nativeEvent;
+        const stroke: InkStroke = shape
+            ? { tool: inkTool as InkTool, color: inkColor, size: inkSize, points, cut: true, shape: true }
+            : { tool: inkTool as InkTool, color: inkColor, size: inkSize, points };
+        jsHandlersRef.current.commitLive(stroke, NATIVE_ID_BASE + id);
+    }, []);
+    // The view's pan and zoom, for the native layer to map the pen into the drawing.
+    const lastTransform = useRef<[number, number, number]>([0, PAGE_MARGIN, baseScale]);
+    const sendTransform = useCallback((x: number, y: number, s: number) => {
+        lastTransform.current = [x, y, s];
+        nativeInk.current?.setTransform(x, y, s).catch(() => undefined);
+    }, []);
+    useAnimatedReaction(
+        () => (NATIVE_INK ? [tx.value, ty.value, scaleSV.value * zoom.value] : null),
+        (next, previous) => {
+            if (next && (!previous || next[0] !== previous[0] || next[1] !== previous[1] || next[2] !== previous[2])) {
+                runOnJS(sendTransform)(next[0], next[1], next[2]);
+            }
+        }
+    );
+    const attachNativeInk = useCallback((handle: InkLiveHandle | null) => {
+        nativeInk.current = handle;
+        if (handle) {
+            pushNativeConfig();
+            const [x, y, s] = lastTransform.current;
+            handle.setTransform(x, y, s).catch(() => undefined);
+        }
+    }, [pushNativeConfig]);
 
     // Runs each frame while a stroke is drawn: shows samples that arrived after
     // the last redraw (the pen slowed or stopped), and watches for the pen
@@ -1241,6 +1328,16 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // The theme's own paper flips with dark mode, and so does the ink on it; a
     // sheet with its own colour keeps true colours, as it will in the note.
     const invertInk = dark && !paper.color;
+    const nativePages = isPages ? `${docWidth}|${pitch}|${pageCount}` : '';
+    useLayoutEffect(() => {
+        nativeExtras.current = {
+            blocked: inkBlocked,
+            invert: invertInk,
+            pages: isPages ? [docWidth, pitch, pageHeight(docWidth), pageCount] : null,
+        };
+        pushNativeConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inkBlocked, invertInk, nativePages, pushNativeConfig]);
 
     const paperPictures = useMemo(
         () => buildPaper(paper, sheets, sheetColor, lineColor, 1 / baseScale),
@@ -1396,6 +1493,15 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                         <Circle cx={eraserX} cy={eraserY} r={eraserR} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
                         <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
                     </Canvas>
+                )}
+                {NATIVE_INK && view.width > 0 && (
+                    <InkLiveView
+                        ref={attachNativeInk}
+                        style={StyleSheet.absoluteFill}
+                        pointerEvents="none"
+                        onInkBegin={handleInkBegin}
+                        onInkStroke={handleInkStroke}
+                    />
                 )}
                 {/* One blank page always follows the last one written on: count once there are two with ink. */}
                 {isPages && pageCount > 2 && (
