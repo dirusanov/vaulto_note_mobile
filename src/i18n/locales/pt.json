@@ -521,7 +521,9 @@
       "commandFailed": "Não foi possível executar este pedido: “{{text}}”",
       "limitNotice": "Limite de IA deste mês atingido: as gravações são adicionadas como texto simples, sem ajuste da IA.",
       "insertAsText": "Inserir como texto",
-      "guestRequestHint": "Entre na sua conta e a IA vai transformar pedidos como este em uma lista de tarefas"
+      "guestRequestHint": "Entre na sua conta e a IA vai transformar pedidos como este em uma lista de tarefas",
+      "guestRequestHintTitle": "Entre na sua conta e a IA vai renomear a nota com pedidos como este",
+      "guestRequestHintEdit": "Entre na sua conta e a IA vai fazer pedidos como este na sua nota"
     },
     "improvePreview": {
       "title": "Sugestão da IA",
@@ -592,7 +594,7 @@
         "description": "Resumo, decisões e tarefas"
       },
       "checklist": {
-        "label": "Checklist",
+        "label": "Lista de tarefas",
         "description": "Transformar a nota em uma lista de tarefas"
       }
     },
@@ -616,7 +618,7 @@
       "deleted": "Versão excluída",
       "undo": "Desfazer",
       "kind": {
-        "checklist": "Checklist",
+        "checklist": "Lista de tarefas",
         "list": "Lista",
         "formatted": "Formatado",
         "agent": "Agente de IA",
@@ -636,7 +638,7 @@
       "none": "Nenhuma tarefa encontrada nesta nota.",
       "inNote": "Já está na nota",
       "addToCalendar": "Adicionar ao calendário",
-      "addToNote": "Adicionar à nota como checklist ({{count}})",
+      "addToNote": "Adicionar à nota como lista de tarefas ({{count}})",
       "calendarHint": "O botão do calendário abre seu app de calendário, onde você pode definir um lembrete.",
       "failed": "Não foi possível procurar tarefas. Verifique sua conexão e tente novamente.",
       "added": "Tarefas adicionadas à nota: {{count}}",
@@ -890,6 +892,8 @@
     "markdownSourceDesc": "A formatação aparece como caracteres simples, como **negrito**.",
     "guestBusyTitle": "A transcrição na nuvem está sobrecarregada",
     "guestBusyDesc": "A transcrição gratuita na nuvem sem conta está sobrecarregada neste momento. Inicie sessão para ter os seus próprios minutos grátis ou transforme a voz em texto neste dispositivo — grátis e offline.",
+    "guestUnverifiedTitle": "Entre para continuar transcrevendo",
+    "guestUnverifiedDesc": "A transcrição gratuita na nuvem sem conta não está disponível neste dispositivo. Entre (é grátis) ou transforme fala em texto direto neste dispositivo, offline.",
     "aiLimitDescDate": "Você usou sua cota de IA deste mês. Ela será renovada em {{date}}.",
     "aiLimitDescNoDate": "Você usou sua cota de IA deste mês. Ela será renovada no início do próximo período.",
     "aiLimitGuestDesc": "Entre na sua conta para ter sua própria cota mensal de IA."

@@ -24,7 +24,7 @@ import { answerFromNotes, isOnDeviceAI } from '../services/AIService';
 import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, richContentToAgentMarkdown, richContentToPlainText } from '../utils/richContent';
-import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
+import { buildNoteSources, formatSourcesForModel, NoteSource, renderAnswerCitations, SearchableNote } from '../utils/noteSearch';
 import { getPrivateAIAllowed } from '../utils/storage';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
@@ -35,6 +35,7 @@ import { rtlFlip } from '../i18n/direction';
 import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
 import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
+import { contentDateOf } from '../utils/contentDate';
 import { LLM_LIMIT_REASON, usageLimitReasonOf } from '../utils/aiLimitState';
 
 type Message =
@@ -112,7 +113,8 @@ export const AskNotesScreen = () => {
                 || deriveAutoTitleFromPlainText(richContentToPlainText(content));
             // Protected notes never reach a cloud AI; legacy local-only ones only with consent.
             const cloudAllowed = !note.is_protected && (privateAllowed || note.storage_scope !== 'local_only');
-            return { id: note.id, title, text, updatedAt: note.updated_at, cloudAllowed };
+            // "Recent" means the text changed recently, not that it was pinned.
+            return { id: note.id, title, text, updatedAt: contentDateOf(note), cloudAllowed };
         })
         .filter((note) => note.text.trim().length > 0), [getAllNotes, notes, privateAllowed]);
     const searchable = useMemo(() => allSearchable.filter((note) => note.cloudAllowed), [allSearchable]);
@@ -154,12 +156,14 @@ export const AskNotesScreen = () => {
             // Sources picked for on-device AI may include protected notes: keep the
             // answer on the phone even if the network returns meanwhile.
             const answer = await answerFromNotes(question, formatSourcesForModel(sources), { onDeviceOnly: onDevice });
-            // Only list the notes the answer actually cites; fall back to all used.
-            const cited = sources.filter((source) => answer.includes(`[${source.index}]`));
+            // "[1]" markers become superscripts matching the chips. Only list the
+            // notes the answer actually cites; fall back to all used.
+            const rendered = renderAnswerCitations(answer, sources.length);
+            const cited = sources.filter((source) => rendered.cited.includes(source.index));
             setMessages((prev) => [...prev, {
                 id: `a-${stamp}`,
                 role: 'assistant',
-                text: answer || t('ask.emptyAnswer', 'No answer came back. Try rephrasing the question.'),
+                text: rendered.text || t('ask.emptyAnswer', 'No answer came back. Try rephrasing the question.'),
                 sources: cited.length > 0 ? cited : sources,
             }]);
         } catch (error) {

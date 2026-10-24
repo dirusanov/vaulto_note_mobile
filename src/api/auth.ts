@@ -3,6 +3,7 @@ import client from './client';
 import { AUTH_AUDIENCE } from '../utils/env';
 import axios from 'axios';
 import { API_URL } from '../utils/env';
+import { integrityChallengeOf } from '../utils/guestIntegrity';
 
 export interface AuthTokens {
     access_token: string;
@@ -64,6 +65,8 @@ export interface GuestProfile {
     transcription_total_used_seconds: number;
     transcription_remaining_seconds: number;
     has_llm_access: boolean;
+    /** Play Integrity verdict when this call created the guest (verified | unverified | error). */
+    integrity?: string | null;
 }
 
 export interface GoogleAuthInit {
@@ -147,11 +150,25 @@ export const authApi = {
 
     anonymousAuth: async (deviceKey: string, platform: string): Promise<GuestProfile> => {
         // Anonymous sessions are owned by gateway domain service.
-        const response = await client.post('/auth/anonymous', {
+        const { canAttestGuest, attestGuest } = await import('../services/guestAttestation');
+        const body = {
             device_key: deviceKey,
             platform: platform,
-        });
-        return response.data;
+            integrity_capable: canAttestGuest,
+        };
+        try {
+            const response = await client.post('/auth/anonymous', body);
+            return response.data;
+        } catch (error) {
+            // A device the server has not seen yet may first have to be confirmed
+            // with Google Play (428 + challenge). Whatever Play answers, the second
+            // call goes through: the server decides what the guest gets.
+            const challenge = integrityChallengeOf(error);
+            if (!challenge) throw error;
+            const attestation = await attestGuest(challenge, deviceKey);
+            const response = await client.post('/auth/anonymous', { ...body, ...attestation });
+            return response.data;
+        }
     },
 
     requestPasswordReset: async (email: string): Promise<void> => {

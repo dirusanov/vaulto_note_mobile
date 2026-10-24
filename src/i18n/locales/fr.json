@@ -521,7 +521,9 @@
       "commandFailed": "Impossible d’exécuter cette demande : « {{text}} »",
       "limitNotice": "Limite IA du mois atteinte : les enregistrements sont ajoutés en texte brut, sans retouche par l’IA.",
       "insertAsText": "Insérer comme texte",
-      "guestRequestHint": "Connectez-vous et l'IA transformera ce genre de demande en liste de tâches"
+      "guestRequestHint": "Connectez-vous et l'IA transformera ce genre de demande en liste de tâches",
+      "guestRequestHintTitle": "Connectez-vous et l'IA renommera la note sur ce genre de demande",
+      "guestRequestHintEdit": "Connectez-vous et l'IA appliquera ce genre de demande à votre note"
     },
     "improvePreview": {
       "title": "Suggestion de l'IA",
@@ -890,6 +892,8 @@
     "markdownSourceDesc": "La mise en forme apparaît en caractères simples, comme **gras**.",
     "guestBusyTitle": "La transcription dans le cloud est saturée",
     "guestBusyDesc": "La transcription gratuite dans le cloud sans compte est saturée pour le moment. Connectez-vous pour avoir vos propres minutes gratuites, ou transcrivez directement sur cet appareil — gratuitement et hors ligne.",
+    "guestUnverifiedTitle": "Connectez-vous pour continuer à transcrire",
+    "guestUnverifiedDesc": "La transcription gratuite dans le cloud sans compte n’est pas disponible sur cet appareil. Connectez-vous (c’est gratuit) ou transcrivez directement sur cet appareil, hors ligne.",
     "aiLimitDescDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé le {{date}}.",
     "aiLimitDescNoDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé au début de la prochaine période.",
     "aiLimitGuestDesc": "Connectez-vous pour obtenir votre propre quota mensuel d’IA."

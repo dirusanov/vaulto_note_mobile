@@ -20,7 +20,7 @@ function load(file) {
 }
 
 const limit = load('src/utils/aiLimitState.ts');
-const { looksLikeVoiceCommand, shouldHintAiForRequest } = load('src/utils/voiceCommand.ts');
+const { looksLikeVoiceCommand, shouldHintAiForRequest, voiceRequestKind } = load('src/utils/voiceCommand.ts');
 
 test('only the AI code (or a codeless 403 from an AI endpoint) means the AI allowance', () => {
   assert.equal(limit.isLlmLimitReason('llm_tokens_exhausted'), true);
@@ -91,4 +91,15 @@ test('a guest dictating a request gets the AI hint once', () => {
   assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Купить молоко, хлеб и кофе' }), false, 'plain dictation');
   assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Make a checklist', signedIn: true }), false);
   assert.equal(shouldHintAiForRequest({ ...guest, transcript: 'Make a checklist', agentAvailable: true }), false, 'the on-device agent handles it');
+});
+
+test('the sign-in hint names what the request was about', () => {
+  assert.equal(voiceRequestKind('Make a checklist: milk, bread, eggs'), 'checklist');
+  assert.equal(voiceRequestKind('Добавь пункт: купить кофе'), 'checklist');
+  assert.equal(voiceRequestKind('Mark milk as done'), 'checklist');
+  assert.equal(voiceRequestKind('Rename this note to Groceries'), 'title');
+  assert.equal(voiceRequestKind('Назови заметку Покупки'), 'title');
+  assert.equal(voiceRequestKind('Translate this into English'), 'edit');
+  assert.equal(voiceRequestKind('Сократи текст'), 'edit');
+  assert.equal(voiceRequestKind(''), 'edit');
 });

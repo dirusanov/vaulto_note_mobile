@@ -521,7 +521,9 @@
       "commandFailed": "Diese Anweisung konnte nicht ausgeführt werden: „{{text}}“",
       "limitNotice": "KI-Limit für diesen Monat erreicht: Aufnahmen werden als reiner Text eingefügt, ohne KI-Bearbeitung.",
       "insertAsText": "Als Text einfügen",
-      "guestRequestHint": "Melde dich an, und die KI macht aus solchen Bitten eine Checkliste"
+      "guestRequestHint": "Melde dich an, und die KI macht aus solchen Bitten eine Checkliste",
+      "guestRequestHintTitle": "Melde dich an, und die KI ändert auf solche Bitten den Titel",
+      "guestRequestHintEdit": "Melde dich an, und die KI setzt solche Bitten in deiner Notiz um"
     },
     "improvePreview": {
       "title": "KI-Vorschlag",
@@ -889,6 +891,8 @@
     "markdownSourceDesc": "Formatierung erscheint als einfache Zeichen, etwa **fett**.",
     "guestBusyTitle": "Cloud-Transkription ist ausgelastet",
     "guestBusyDesc": "Die kostenlose Cloud-Transkription ohne Konto ist gerade ausgelastet. Melde dich an, um eigene Freiminuten zu erhalten, oder wandle Sprache direkt auf diesem Gerät in Text um – kostenlos und offline.",
+    "guestUnverifiedTitle": "Anmelden, um weiter zu transkribieren",
+    "guestUnverifiedDesc": "Kostenlose Cloud-Transkription ohne Konto ist auf diesem Gerät nicht verfügbar. Melde dich an – das ist kostenlos – oder wandle Sprache direkt auf diesem Gerät offline in Text um.",
     "aiLimitDescDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird am {{date}} zurückgesetzt.",
     "aiLimitDescNoDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird zu Beginn des nächsten Zeitraums zurückgesetzt.",
     "aiLimitGuestDesc": "Melde dich an, um ein eigenes monatliches KI-Kontingent zu erhalten."

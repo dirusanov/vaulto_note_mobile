@@ -19,6 +19,16 @@
 - After editing a tall drawing the note shows its top instead of the blank bottom.
 - The eraser takes a typed label only when it passes over it, not when its edge brushes the label.
 - Search results start at the top of the list.
+- Pinning a note or switching between its Original and AI versions no longer moves it to the top or shows a new "edited" date; only changes to its text, title, drawing, checklist or audio do (also on your other devices once the server is updated).
+- Tablet landscape: the Aa formatting panel folds into one row above the keyboard, so several lines of the note stay visible.
+- Formatting buttons are greyed out while typing in the title (titles are plain text).
+- Guest voice notes get a title from the first sentence of what was dictated, made on the device.
+- The sign-in hint after a voice request says what the AI would do (checklist, title or other change) instead of always "checklist".
+- Portuguese and Chinese use one name for Checklist in the AI preset, versions and the toolbar.
+- Ask your notes shows citations as small numbers matching the source chips; stray "[1]" markers are gone.
+- An untitled checklist card lists its items with their boxes instead of a bold first line with a "☐".
+- A new checklist keeps one font size while you type its first items.
+- The editor header no longer slides in under the status bar when a note opens.
 
 ### Added
 - First run: a sign-in screen that says what an account gives (free minutes, AI, sync; your notes come with you), Google first; honest welcome copy; Ask notes explains up front how to get AI; "Set up AI on this device" preselects the right model.
@@ -27,6 +37,7 @@
 - A Checklist preset for AI improvements; versions made from your own instruction are named after it.
 - Try Pro free for 7 days, once per account and without a card: offered on the subscription screen, when free minutes or AI run out, and in the low-minutes hint. Settings and the subscription screen show "Pro trial · N days left"; it ends by itself, and buying a plan replaces it.
 - Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
+- Free guest minutes are protected with Google Play Integrity: a new guest session is confirmed with Google Play, so reinstalling the app no longer resets the free minutes. Where the app cannot be confirmed, the app asks you to sign in to keep transcribing; without Play services the app still starts and works.
 
 - The drawing tools, colours, sizes and paper you last used are remembered, also after the app restarts, and a new drawing starts with them.
 - A calmer formatting toolbar above the keyboard with an Aa panel (text styles, B/I/U/S, highlight, lists, numbered list, indent, quote) and a hide-keyboard button; picking a highlight colour no longer closes the keyboard.

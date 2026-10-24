@@ -521,7 +521,9 @@
       "commandFailed": "この指示を実行できませんでした:「{{text}}」",
       "limitNotice": "今月の AI の上限に達しました。録音は AI による整形なしで、そのままテキストとして追加されます。",
       "insertAsText": "テキストとして挿入",
-      "guestRequestHint": "サインインすると、このような依頼を AI がチェックリストに変えます"
+      "guestRequestHint": "サインインすると、このような依頼を AI がチェックリストに変えます",
+      "guestRequestHintTitle": "サインインすると、このような依頼で AI がタイトルを変更します",
+      "guestRequestHintEdit": "サインインすると、このような依頼を AI がノートで実行します"
     },
     "improvePreview": {
       "title": "AI の提案",
@@ -888,6 +890,8 @@
     "markdownSourceDesc": "書式が **太字** のような記号で表示されます。",
     "guestBusyTitle": "クラウド文字起こしが混み合っています",
     "guestBusyDesc": "アカウントなしの無料クラウド文字起こしは現在混み合っています。サインインして自分の無料時間を受け取るか、この端末上で文字起こししてください（無料・オフライン）。",
+    "guestUnverifiedTitle": "文字起こしを続けるにはサインイン",
+    "guestUnverifiedDesc": "このデバイスでは、アカウントなしの無料クラウド文字起こしは利用できません。サインイン（無料）するか、このデバイス上でオフラインで音声をテキストに変換してください。",
     "aiLimitDescDate": "今月の AI 利用枠を使い切りました。{{date}} にリセットされます。",
     "aiLimitDescNoDate": "今月の AI 利用枠を使い切りました。次の期間の開始時にリセットされます。",
     "aiLimitGuestDesc": "サインインすると、毎月の AI 利用枠を自分用に使えます。"

@@ -36,6 +36,12 @@ export interface Note {
     encrypted_content: string;
     created_at?: string;
     updated_at?: string;
+    /**
+     * When the title, text, transcript or audio last changed. updated_at also
+     * moves for pins and version switches; the list sorts by this (see
+     * utils/contentDate). Missing on rows from before it existed.
+     */
+    content_updated_at?: string | null;
     audio_file_path?: string;
     audio_duration?: number;
     encrypted_transcription?: string;
@@ -104,6 +110,8 @@ export interface SyncChangeRequest {
     transcription_ciphertext?: string | null;
     audio_duration?: number | null;
     has_audio?: boolean;
+    // When the content last changed (servers that predate it ignore the field).
+    content_updated_at?: string | null;
 }
 
 export interface SyncImprovementChangeRequest {
@@ -143,6 +151,8 @@ export interface ServerNote {
     version: number;
     conflict_of?: string | null;
     updated_at: string;
+    // Sent by servers that know it; see Note.content_updated_at.
+    content_updated_at?: string | null;
     last_variant_id?: string | null;
     is_active?: boolean;
     is_pinned?: boolean;

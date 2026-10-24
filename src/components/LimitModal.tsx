@@ -168,7 +168,17 @@ export const LimitModal: React.FC = () => {
         ? limitReason === 'guest_budget_exhausted'
         : typeof guestSecondsLeft === 'number' && guestSecondsLeft > 0);
 
-    if (isGuestUser && !isAiLimit) {
+    // The server could not confirm this install with Google Play (gateway code
+    // "guest_unverified"), so free guest minutes are not available here.
+    const guestUnverified = isGuestUser && limitReason === 'guest_unverified';
+
+    if (guestUnverified) {
+        title = t('aux.guestUnverifiedTitle', 'Sign in to keep transcribing');
+        message = t('aux.guestUnverifiedDesc', 'Free cloud transcription without an account is not available on this device. Sign in — it is free — or turn speech into text right on this device, offline.');
+        iconName = 'login';
+        isTrial = true;
+        isTranscriptionLimit = true;
+    } else if (isGuestUser && !isAiLimit) {
         title = guestCloudBusy
             ? t('aux.guestBusyTitle', 'Cloud transcription is busy')
             : t('aux.guestMinutesUsedTitle', 'Free minutes used up');

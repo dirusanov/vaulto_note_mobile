@@ -521,7 +521,9 @@
       "commandFailed": "无法执行此指令：“{{text}}”",
       "limitNotice": "本月已达到 AI 使用上限：录音将以纯文本添加，不经 AI 整理。",
       "insertAsText": "作为文本插入",
-      "guestRequestHint": "登录后，AI 会把这样的请求变成清单"
+      "guestRequestHint": "登录后，AI 会把这样的请求变成清单",
+      "guestRequestHintTitle": "登录后，AI 会按这样的请求修改标题",
+      "guestRequestHintEdit": "登录后，AI 会在笔记中执行这样的请求"
     },
     "improvePreview": {
       "title": "AI 建议",
@@ -888,6 +890,8 @@
     "markdownSourceDesc": "格式显示为普通字符，例如 **粗体**。",
     "guestBusyTitle": "云端转写当前繁忙",
     "guestBusyDesc": "无需账户的免费云端转写当前繁忙。登录即可获得属于你的免费时长，或直接在本设备上转写——免费且离线可用。",
+    "guestUnverifiedTitle": "登录以继续转写",
+    "guestUnverifiedDesc": "此设备无法使用无需账户的免费云端转写。请登录（免费），或直接在此设备上离线将语音转为文字。",
     "aiLimitDescDate": "本月的 AI 额度已用完，将于 {{date}} 重置。",
     "aiLimitDescNoDate": "本月的 AI 额度已用完，将在下一个周期开始时重置。",
     "aiLimitGuestDesc": "登录即可获得属于你自己的每月 AI 额度。"
@@ -927,7 +931,7 @@
     "play": "播放",
     "pause": "暂停",
     "playbackPosition": "播放进度",
-    "checklist": "待办清单",
+    "checklist": "清单",
     "bulletList": "项目符号列表",
     "bold": "粗体",
     "italic": "斜体",

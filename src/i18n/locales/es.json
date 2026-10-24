@@ -521,7 +521,9 @@
       "commandFailed": "No se pudo ejecutar esta orden: «{{text}}»",
       "limitNotice": "Límite de IA de este mes alcanzado: las grabaciones se añaden como texto simple, sin retoque de IA.",
       "insertAsText": "Insertar como texto",
-      "guestRequestHint": "Inicia sesión y la IA convertirá peticiones como esta en una lista de tareas"
+      "guestRequestHint": "Inicia sesión y la IA convertirá peticiones como esta en una lista de tareas",
+      "guestRequestHintTitle": "Inicia sesión y la IA cambiará el título con peticiones como esta",
+      "guestRequestHintEdit": "Inicia sesión y la IA hará en tu nota lo que pidas así"
     },
     "improvePreview": {
       "title": "Sugerencia de IA",
@@ -890,6 +892,8 @@
     "markdownSourceDesc": "El formato aparece como caracteres simples, por ejemplo **negrita**.",
     "guestBusyTitle": "La transcripción en la nube está saturada",
     "guestBusyDesc": "La transcripción gratuita en la nube sin cuenta está saturada ahora mismo. Inicia sesión para tener tus propios minutos gratis o convierte la voz en texto en este dispositivo, gratis y sin conexión.",
+    "guestUnverifiedTitle": "Inicia sesión para seguir transcribiendo",
+    "guestUnverifiedDesc": "La transcripción gratuita en la nube sin cuenta no está disponible en este dispositivo. Inicia sesión (es gratis) o convierte la voz en texto directamente en este dispositivo, sin conexión.",
     "aiLimitDescDate": "Has usado tu cupo de IA de este mes. Se renueva el {{date}}.",
     "aiLimitDescNoDate": "Has usado tu cupo de IA de este mes. Se renueva al inicio del próximo periodo.",
     "aiLimitGuestDesc": "Inicia sesión para tener tu propio cupo mensual de IA."

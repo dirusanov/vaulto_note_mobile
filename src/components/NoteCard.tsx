@@ -13,9 +13,11 @@ import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
 import { createStyles } from '../theme/createStyles';
 import { textAlignFor } from '../i18n/direction';
 import { splitTags } from '../utils/tags';
+import { contentDateOf } from '../utils/contentDate';
 import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
 import { DRAWING_MARKER, firstDrawingSvg } from '../drawing/drawingFormat';
 import { DrawingThumbnail } from '../drawing/DrawingThumbnail';
+import { CHECKED_LINE, layoutCardPreview, uncheckedFirst } from '../utils/cardPreview';
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
 
@@ -23,42 +25,6 @@ const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 
 const embeddedAudioDuration = (content: string): number | undefined => {
     const tag = content.match(/<img\b[^>]*>/i)?.[0];
     return tag ? getAudioEmbedAttributesFromHtml(tag)?.duration ?? undefined : undefined;
-};
-
-/** A line compared without list markers, case or a trailing ellipsis. */
-const comparableLine = (value: string): string => value
-    .replace(/^[\s☐☑•\-*]+/, '')
-    .replace(/(\.{3}|…)\s*$/, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLocaleLowerCase();
-
-/** "  ☑ Milk" -> indent, box, text: a ticked item reads as done. */
-const CHECKED_LINE = /^(\s*)(☑ )(.*)$/;
-const TASK_LINE = /^\s*[☐☑] /;
-
-/**
- * Unticked items first within each checklist, the ticked ones after them,
- * as Keep and Apple Notes list them. Other lines keep their place.
- */
-const uncheckedFirst = (preview: string): string => {
-    const lines = preview.split('\n');
-    const out: string[] = [];
-    let run: string[] = [];
-    const flush = () => {
-        out.push(...run.filter(line => !CHECKED_LINE.test(line)), ...run.filter(line => CHECKED_LINE.test(line)));
-        run = [];
-    };
-    lines.forEach(line => {
-        if (TASK_LINE.test(line)) {
-            run.push(line);
-        } else {
-            flush();
-            out.push(line);
-        }
-    });
-    flush();
-    return out.join('\n');
 };
 
 const formatVoiceDuration = (seconds?: number | null): string => {
@@ -129,23 +95,12 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
         : basePreview;
     // An untitled note's title is its first line; don't print that line twice.
     const hasStoredTitle = !!activeChildTitle || !!note.title?.trim();
-    // Older voice notes saved the first words as the title ("Call Anna about
-    // the"): shown above the full first line it read as a cut-off duplicate.
-    const firstLine = fullPreview.trim().split('\n')[0] ?? '';
-    const storedTitleRepeatsText = hasStoredTitle && !!comparableLine(title)
-        && comparableLine(firstLine).startsWith(comparableLine(title));
-    // Untitled notes show their text, as Keep does: a title derived from the
-    // first line would only repeat it.
-    const titleIsCutFirstLine = (!hasStoredTitle || storedTitleRepeatsText) && !!fullPreview.trim();
     // Every card reads the same way: a bold first line, then grey text. An
-    // untitled note's first line takes the title's place.
-    const leadBreak = titleIsCutFirstLine ? fullPreview.trim().indexOf('\n') : -1;
-    const leadLine = titleIsCutFirstLine
-        ? (leadBreak === -1 ? fullPreview.trim() : fullPreview.trim().slice(0, leadBreak))
-        : '';
-    const previewString = titleIsCutFirstLine
-        ? (leadBreak === -1 ? '' : fullPreview.trim().slice(leadBreak + 1).replace(/^\s*\n/, ''))
-        : fullPreview;
+    // untitled note's first line takes the title's place; an untitled
+    // checklist shows only its items.
+    const { mode: previewMode, leadLine, previewString } = layoutCardPreview(fullPreview, title, hasStoredTitle);
+    const titleIsCutFirstLine = previewMode === 'lead';
+    const isChecklistOnly = previewMode === 'list';
 
     // Format date nicely
     const formatDate = (dateString: string) => {
@@ -179,7 +134,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     };
 
     // Ticked items past the card's lines fold into "+N checked", like Keep.
-    const previewLineBudget = titleIsCutFirstLine ? 5 : 4;
+    const previewLineBudget = titleIsCutFirstLine || isChecklistOnly ? 5 : 4;
     const previewLines = previewString ? previewString.split('\n') : [];
     const hiddenLines = previewLines.slice(previewLineBudget - 1);
     const foldedChecked = previewLines.length > previewLineBudget
@@ -214,7 +169,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const drawingSvg = useMemo(() => (hasDrawing ? firstDrawingSvg(content) : null), [hasDrawing, content]);
     const voiceDuration = hasAudio ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
 
-    const dateLabel = formatDate(note.updated_at || note.created_at || '');
+    // When the text last changed, not when it was last pinned or switched.
+    const dateLabel = formatDate(contentDateOf(note));
     const voiceLabel = [t('notes.voiceRecording'), voiceDuration].filter(Boolean).join(', ');
     // Read aloud without the box glyphs; a ticked item says so.
     const spokenLine = (line: string) => {
@@ -224,8 +180,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // One spoken summary for the whole card: what it is first ("Voice
     // recording, 0:18", "Drawing" or its text), then its date and badges.
     const cardLabel = [
-        isVoiceOnly ? voiceLabel : isDrawingOnly ? t('notes.drawing', 'Drawing') : spokenLine(titleIsCutFirstLine ? leadLine : title),
-        !isEmpty && previewString && (titleIsCutFirstLine || previewString !== title)
+        isVoiceOnly ? voiceLabel : isDrawingOnly ? t('notes.drawing', 'Drawing') : isChecklistOnly ? '' : spokenLine(titleIsCutFirstLine ? leadLine : title),
+        !isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)
             ? shownPreviewLines.map(spokenLine).filter(Boolean).join(', ').slice(0, 200)
             : '',
         foldedChecked ? t('notes.checkedMore', '+{{count}} checked', { count: foldedChecked }) : '',
@@ -300,15 +256,15 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     <Text style={[styles.title, textAlignFor(leadLine), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={3}>
                         {renderLine(leadLine, 'lead')}
                     </Text>
-                ) : (
+                ) : isChecklistOnly ? null : (
                     <Text style={[styles.title, textAlignFor(title), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
                         {title || ' '}
                     </Text>
                 )}
-                {(!isEmpty && previewString && (titleIsCutFirstLine || previewString !== title)) && (
+                {(!isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)) && (
                     <>
                         <Text
-                            style={[styles.preview, textAlignFor(previewString)]}
+                            style={[styles.preview, isChecklistOnly && styles.checklistPreview, textAlignFor(previewString), isChecklistOnly && isSelectionMode && { paddingEnd: 28 }]}
                             numberOfLines={foldedChecked ? previewLineBudget - 1 : previewLineBudget}
                         >
                             {shownPreviewLines.map((line, index) => (
@@ -422,6 +378,12 @@ const styles = createStyles(() => ({
         fontSize: 14,
         lineHeight: 20,
         color: colors.textSecondary,
+    },
+    // Without a title the items are the note: body colour, a touch larger.
+    checklistPreview: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: colors.text,
     },
     tagText: {
         color: colors.primary,

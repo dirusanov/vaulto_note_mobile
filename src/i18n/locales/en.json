@@ -521,7 +521,9 @@
       "commandFailed": "Could not carry out this request: “{{text}}”",
       "limitNotice": "AI limit reached for this month: recordings are added as plain text, without AI cleanup.",
       "insertAsText": "Insert as text",
-      "guestRequestHint": "Sign in and the AI will turn requests like this into a checklist"
+      "guestRequestHint": "Sign in and the AI will turn requests like this into a checklist",
+      "guestRequestHintTitle": "Sign in and the AI will rename notes when you ask like this",
+      "guestRequestHintEdit": "Sign in and the AI will carry out requests like this in your note"
     },
     "improvePreview": {
       "title": "AI suggestion",
@@ -891,6 +893,8 @@
     "markdownSourceDesc": "Formatting appears as plain characters, like **bold**.",
     "guestBusyTitle": "Cloud transcription is busy",
     "guestBusyDesc": "Free cloud transcription without an account is busy right now. Sign in for your own free minutes, or turn speech into text on this device — free and offline.",
+    "guestUnverifiedTitle": "Sign in to keep transcribing",
+    "guestUnverifiedDesc": "Free cloud transcription without an account is not available on this device. Sign in — it is free — or turn speech into text right on this device, offline.",
     "aiLimitDescDate": "You have used this month's AI allowance. It resets on {{date}}.",
     "aiLimitDescNoDate": "You have used this month's AI allowance. It resets at the start of your next period.",
     "aiLimitGuestDesc": "Sign in to get your own monthly AI allowance."

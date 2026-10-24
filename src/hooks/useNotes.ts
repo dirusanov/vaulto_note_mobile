@@ -31,6 +31,7 @@ import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richC
 import { listSearchTerms, matchesListQuery } from '../utils/noteSearch';
 import { plainVariantTitle } from '../i18n/variantLabels';
 import { sanitizeStepLabel } from '../i18n/variantLabels';
+import { nextContentUpdatedAt } from '../utils/contentDate';
 
 export interface NoteAudio {
     filePath: string;
@@ -79,6 +80,7 @@ export const useNotes = () => {
             return [
                 note.id,
                 note.updated_at ?? '',
+                note.content_updated_at ?? '',
                 note.is_pinned ? '1' : '0',
                 note.has_audio ? '1' : '0',
                 note.storage_scope ?? '',
@@ -212,6 +214,7 @@ export const useNotes = () => {
                 encrypted_content: encryptedContent,
                 created_at: now,
                 updated_at: now,
+                content_updated_at: now,
                 audio_file_path: audio?.filePath,
                 audio_duration: audio?.duration,
                 encrypted_transcription: encryptedTranscription,
@@ -628,6 +631,16 @@ export const useNotes = () => {
             const encryptedTitle = await encrypt(titleToUse);
             const encryptedContent = await encrypt(contentToUse);
             const updatedAt = new Date().toISOString();
+            // Only a real change of what the note says moves its content date
+            // (and with it the list position); a save that just re-sends the
+            // same text, privacy or scope does not.
+            const contentUpdatedAt = nextContentUpdatedAt(existing, {
+                title: titleToUse,
+                content: contentToUse,
+                transcription,
+                has_audio: hasAudio,
+                audio_file_path: audioPath,
+            }, updatedAt);
             const updatedLocal: Note = {
                 ...existing,
                 title: titleToUse,
@@ -640,6 +653,7 @@ export const useNotes = () => {
                 audio_duration: audioDuration,
                 has_audio: hasAudio,
                 updated_at: updatedAt,
+                content_updated_at: contentUpdatedAt,
                 synced: 0,
                 dirty: dirtyFlag,
                 deleted: false,
@@ -835,10 +849,13 @@ export const useNotes = () => {
             const refreshedParent = await getNoteById(userId, noteId);
             const parentBase = refreshedParent || note;
 
+            const parentNow = new Date().toISOString();
             const parentUpdate: Note = {
                 ...parentBase,
                 encrypted_content: parentBase.encrypted_content || '', // Fallback to avoid constraint viol
-                updated_at: new Date().toISOString(),
+                updated_at: parentNow,
+                // A new version is new text in the note.
+                content_updated_at: parentNow,
                 synced: 0,
                 dirty: shouldSyncNote(parentBase) || !!parentBase.pending_server_delete,
             };
@@ -930,9 +947,17 @@ export const useNotes = () => {
             const refreshedParent = await getNoteById(userId, noteId);
             const parentBase = refreshedParent || note;
 
+            // Editing a version's text or title is a content edit; renaming its
+            // step label or deleting it is not.
+            const versionTextChanged = !updated.deleted && (
+                (updated.content ?? '') !== (improvement.content ?? '')
+                || (updated.title ?? '') !== (improvement.title ?? '')
+            );
+            const parentNow = new Date().toISOString();
             const parentUpdate: Note = {
                 ...parentBase,
-                updated_at: new Date().toISOString(),
+                updated_at: parentNow,
+                ...(versionTextChanged ? { content_updated_at: parentNow } : {}),
                 synced: 0,
                 dirty: shouldSyncNote(parentBase) || !!parentBase.pending_server_delete,
             };
