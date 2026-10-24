@@ -46,6 +46,14 @@ export interface UserProfile {
     llm_remaining_tokens?: number;
     current_usage_period_start_at?: string | null;
     current_usage_period_end_at?: string | null;
+    subscription_plan_code?: string | null;
+    subscription_expires_at?: string | null;
+    /** Pro granted by the server for a few days, without a store purchase. */
+    is_pro_trial?: boolean;
+    /** The account may still start that trial (once; never for guests or past subscribers). */
+    pro_trial_available?: boolean;
+    pro_trial_days?: number;
+    pro_trial_minutes?: number;
 }
 
 export interface GuestProfile {

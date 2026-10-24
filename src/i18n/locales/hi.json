@@ -71,7 +71,8 @@
     "freeMinutesUsed": "मुफ़्त मिनट खत्म हो गए",
     "lockedListHint": "अनलॉक करने के बाद आपके नोट्स यहाँ दिखेंगे।",
     "lockedNotBackedUp": "तब तक नए नोट्स का बैकअप नहीं होता।",
-    "lockedSyncNotice": "सिंक नहीं हुआ: नए नोट्स का बैकअप लेने के लिए एन्क्रिप्शन अनलॉक करें।"
+    "lockedSyncNotice": "सिंक नहीं हुआ: नए नोट्स का बैकअप लेने के लिए एन्क्रिप्शन अनलॉक करें।",
+    "tryProFree": "Pro मुफ़्त आज़माएँ"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -1137,7 +1138,31 @@
     "trialDays_one": "{{count}} दिन मुफ़्त, फिर {{price}}",
     "trialDays_other": "{{count}} दिन मुफ़्त, फिर {{price}}",
     "trialMonths_one": "{{count}} महीना मुफ़्त, फिर {{price}}",
-    "trialMonths_other": "{{count}} महीने मुफ़्त, फिर {{price}}"
+    "trialMonths_other": "{{count}} महीने मुफ़्त, फिर {{price}}",
+    "trialDuration_one": "{{count}} दिन",
+    "trialDuration_other": "{{count}} दिन",
+    "trialDaysLeft_one": "Pro ट्रायल · {{count}} दिन बाकी",
+    "trialDaysLeft_other": "Pro ट्रायल · {{count}} दिन बाकी",
+    "trialCta": "Pro को {{duration}} मुफ़्त आज़माएँ",
+    "trialHint": "{{minutes}} क्लाउड मिनट। कार्ड नहीं चाहिए; यह अपने आप ख़त्म होगा, कोई शुल्क नहीं।",
+    "trialSignIn": "Pro को {{duration}} मुफ़्त आज़माने के लिए साइन इन करें।",
+    "trialStartedTitle": "Pro चालू है",
+    "trialStartedText": "Pro {{date}} तक मुफ़्त है। कोई शुल्क नहीं: ख़त्म होने पर ऐप मुफ़्त प्लान पर लौट आएगा और आपके नोट्स बने रहेंगे।",
+    "trialUsed": "इस खाते पर मुफ़्त Pro ट्रायल अब उपलब्ध नहीं है।",
+    "trialFailed": "ट्रायल शुरू नहीं हो सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    "trialKeepPro": "{{date}} के बाद भी Pro रखने के लिए कोई प्लान चुनें। तब तक कोई शुल्क नहीं।",
+    "trialKeepProNoDate": "ट्रायल के बाद भी Pro रखने के लिए कोई प्लान चुनें। तब तक कोई शुल्क नहीं।",
+    "trialMinutesLabel": "ट्रायल के क्लाउड मिनट",
+    "trialMinutesUsed": "ट्रायल के क्लाउड मिनट इस्तेमाल हो गए",
+    "trialMinutesLow": "ट्रायल के मिनट कम बचे हैं",
+    "trialMinutesUsedTitle": "ट्रायल के मिनट ख़त्म",
+    "trialMinutesUsedDesc": "क्लाउड में ट्रांसक्राइब करते रहने के लिए कोई प्लान चुनें। ट्रायल ख़त्म होने तक Pro चालू रहेगा।",
+    "keepProRow": "ट्रायल के बाद भी Pro रखें",
+    "keepProRowDetail": "Google Play में प्लान चुनें",
+    "trialRowDetail": "{{duration}} मुफ़्त आज़माएँ, कार्ड नहीं चाहिए",
+    "limitTrialOffer": "Pro को {{duration}} मुफ़्त आज़माएँ: {{minutes}} क्लाउड मिनट और बिना सीमा का AI। कार्ड नहीं चाहिए, कोई शुल्क नहीं।",
+    "limitTrialOfferAI": "Pro में AI की कोई सीमा नहीं: {{duration}} मुफ़्त आज़माएँ, कार्ड नहीं चाहिए।",
+    "tryFree": "मुफ़्त आज़माएँ"
   },
   "drawing": {
     "done": "हो गया",

@@ -20,6 +20,7 @@ import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService'
 import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
 import { createStyles } from '../theme/createStyles';
 import { useAuth } from '../hooks/useAuth';
+import { useSubscription } from '../context/SubscriptionContext';
 
 export const LimitModal: React.FC = () => {
     const { t } = useTranslation();
@@ -27,6 +28,7 @@ export const LimitModal: React.FC = () => {
     const navigation = useNavigation();
     const { isAuthenticated, isGuest, user } = useAuth();
     const isGuestUser = !isAuthenticated || isGuest;
+    const { proTrial, startProTrial } = useSubscription();
     const [visible, setVisible] = useState(false);
     // The server's reason, when the emitter passes one (`meta.reason` of the 403).
     const [limitReason, setLimitReason] = useState<string | null>(null);
@@ -75,8 +77,17 @@ export const LimitModal: React.FC = () => {
         setVisible(false);
     };
 
+    // Out of free minutes or AI with the no-card trial unused: this is the moment to
+    // offer it, and one tap turns Pro on (no store sheet).
+    const offerTrial = !isGuestUser && proTrial.available;
+    const trialDuration = t('paywall.trialDuration', { count: proTrial.days, defaultValue: '{{count}} days' });
+
     const handleUpgrade = () => {
         setVisible(false);
+        if (offerTrial) {
+            void startProTrial();
+            return;
+        }
         // A guest signs in first: the account brings its own free minutes.
         (navigation as any).navigate(isGuestUser ? 'SignIn' : 'Paywall');
     };
@@ -108,6 +119,9 @@ export const LimitModal: React.FC = () => {
                 })
                 : t('aux.aiLimitDescNoDate', 'You have used this month\'s AI allowance. It resets at the start of your next period.');
         iconName = 'auto-awesome';
+        if (offerTrial) {
+            message = `${message} ${t('paywall.limitTrialOfferAI', 'Pro has no AI limit: try it free for {{duration}}, no card.', { duration: trialDuration })}`;
+        }
         // Signed-in free users can upgrade; guests sign in for an allowance of their own.
         showUpgrade = isGuestUser || isFreePlan;
     } else if (usage) {
@@ -116,8 +130,20 @@ export const LimitModal: React.FC = () => {
 
         if (isFreePlan && transEmptyTrial) {
             title = t('aux.trialExhaustedTitle', 'Trial Exhausted');
-            message = t('aux.trialExhaustedDesc', 'You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!');
+            message = offerTrial
+                ? t('paywall.limitTrialOffer', 'Try Pro free for {{duration}}: {{minutes}} cloud minutes and AI without limits. No card, nothing is charged.', {
+                    duration: trialDuration,
+                    minutes: proTrial.minutes,
+                })
+                : t('aux.trialExhaustedDesc', 'You have used all your trial transcription minutes. Upgrade to PRO to get more minutes and unlock all features!');
             iconName = 'stars';
+            isTrial = true;
+            isTranscriptionLimit = true;
+        } else if (!isFreePlan && transEmptyPro && proTrial.active) {
+            // The trial does not refill: the way on is a plan (or the phone, below).
+            title = t('paywall.trialMinutesUsedTitle', 'Trial minutes used up');
+            message = t('paywall.trialMinutesUsedDesc', 'Choose a plan to keep transcribing in the cloud. Pro stays on until the trial ends.');
+            iconName = 'mic-off';
             isTrial = true;
             isTranscriptionLimit = true;
         } else if (!isFreePlan && transEmptyPro) {
@@ -216,7 +242,13 @@ export const LimitModal: React.FC = () => {
 
                                 {showUpgrade && (
                                     <TouchableOpacity onPress={handleUpgrade} activeOpacity={0.85} style={styles.primaryButton}>
-                                        <Text style={styles.primaryText}>{isGuestUser ? t('auth.signIn', 'Sign In') : t("aux.upgrade", "Upgrade")}</Text>
+                                        <Text style={styles.primaryText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                                            {isGuestUser
+                                                ? t('auth.signIn', 'Sign In')
+                                                : offerTrial
+                                                    ? t('paywall.tryFree', 'Try free')
+                                                    : t("aux.upgrade", "Upgrade")}
+                                        </Text>
                                     </TouchableOpacity>
                                 )}
                             </View>

@@ -38,6 +38,7 @@
 - A clearer subscription screen: what Pro adds, renewal and cancellation note, Terms and Privacy.
 - Notes list: Pinned and Others sections, checklists with done items struck through, a hint when free minutes run low.
 - A Checklist preset for AI improvements; versions made from your own instruction are named after it.
+- Try Pro free for 7 days, once per account and without a card: offered on the subscription screen, when free minutes or AI run out, and in the low-minutes hint. Settings and the subscription screen show "Pro trial · N days left"; it ends by itself, and buying a plan replaces it.
 - Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
 - Free guest minutes are protected with Google Play Integrity: a new guest session is confirmed with Google Play, so reinstalling the app no longer resets the free minutes. Where the app cannot be confirmed, the app asks you to sign in to keep transcribing; without Play services the app still starts and works.
 

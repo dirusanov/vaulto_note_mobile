@@ -17,9 +17,11 @@ interface UsageCardProps {
     isPro?: boolean;
     compact?: boolean;
     embedded?: boolean;
+    /** Days left of the server-granted Pro trial; set only while it runs. */
+    trialDaysLeft?: number | null;
 }
 
-export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false }) => {
+export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest, isPro = false, compact = false, embedded = false, trialDaysLeft = null }) => {
     const { t } = useTranslation();
 
     // Only show for Vaulto AI provider
@@ -44,6 +46,18 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
     const guestNote = isExpired
         ? t('settings.ui.guestMinutesUsed', 'Free minutes are used up. Sign in to get more, or turn on "Work without internet" below.')
         : t('settings.ui.guestMinutesLeft', 'Free speech-to-text left: {{minutes}} min. Sign in to get more and sync your notes.', { minutes: guestMinutesLeft });
+
+    // Pro from the no-card trial: its own title, and no "monthly" wording (it does not refill).
+    const onProTrial = isPro && typeof trialDaysLeft === 'number';
+    const trialTitle = onProTrial
+        ? t('paywall.trialDaysLeft', { count: trialDaysLeft, defaultValue: 'Pro trial · {{count}} days left' })
+        : null;
+    const proExpiredNote = onProTrial
+        ? t('paywall.trialMinutesUsed', "You've used the trial's cloud minutes")
+        : t('aux.usedAllMonthlyMinutes', "You've used all monthly minutes");
+    const proLowNote = onProTrial
+        ? t('paywall.trialMinutesLow', 'Running low on trial minutes')
+        : t('settings.ui.minutesWarningTextLow', 'Running low on monthly transcription minutes');
 
     // Formatting helpers
     const formatTimeMMSS = (seconds: number) => {
@@ -82,7 +96,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             ? t("aux.vaultoAIPlan", "Vaulto AI Plan")
             : isGuest
                 ? t('settings.ai.transcription', 'Transcription')
-                : isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance');
+                : trialTitle ?? (isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance'));
         const value = isUnlimited
             ? t("aux.unlimitedAccess", "Unlimited Access")
             : isGuest ? `\u2066${formatTimeMMSS(remainingSeconds)}\u2069` : `\u2066${formatTimeMMSS(usedSeconds)} / ${formatTimeMMSS(totalSeconds)}\u2069`;
@@ -91,11 +105,11 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
             : isUnlimited ? null
                 : isExpired
                     ? (isPro
-                        ? t('aux.usedAllMonthlyMinutes', "You've used all monthly minutes")
+                        ? proExpiredNote
                         : t('aux.usedAllFreeMinutes', "You've used all {{minutes}} free minutes", { minutes: Math.round(totalSeconds / 60) }))
                     : isLowBalance
                         ? (isPro
-                            ? t('settings.ui.minutesWarningTextLow', 'Running low on monthly transcription minutes')
+                            ? proLowNote
                             : t('aux.runningLowTranscription', 'Running low on transcription time'))
                         : null;
         return (
@@ -182,8 +196,8 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                         />
                     </View>
                     <View>
-                        <Text style={styles.title}>{isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance')}</Text>
-                        <Text style={styles.subtitle}>{isPro ? t('settings.ui.monthlyProMinutes', 'Monthly Pro minutes') : t('aux.oneTimeTrialMinutes', 'One-time trial minutes')}</Text>
+                        <Text style={styles.title}>{trialTitle ?? (isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance'))}</Text>
+                        <Text style={styles.subtitle}>{onProTrial ? t('paywall.trialMinutesLabel', 'Trial cloud minutes') : isPro ? t('settings.ui.monthlyProMinutes', 'Monthly Pro minutes') : t('aux.oneTimeTrialMinutes', 'One-time trial minutes')}</Text>
                     </View>
                 </View>
             </View>
@@ -208,7 +222,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                         <MaterialIcons name="info-outline" size={18} color={colors.error} />
                         <Text style={styles.warningText}>
                             {isPro
-                                ? t('aux.usedAllMonthlyMinutes', "You've used all monthly minutes")
+                                ? proExpiredNote
                                 : t('aux.usedAllFreeMinutes', "You've used all {{minutes}} free minutes", { minutes: Math.round(totalSeconds / 60) })}
                         </Text>
                     </View>
@@ -220,7 +234,7 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
                     <MaterialIcons name="warning-amber" size={18} color={colors.warning} />
                     <Text style={[styles.warningText, { color: colors.warning }]}>
                         {isPro
-                            ? t('settings.ui.minutesWarningTextLow', 'Running low on monthly transcription minutes')
+                            ? proLowNote
                             : t('aux.runningLowTranscription', 'Running low on transcription time')}
                     </Text>
                 </View>
