@@ -37,7 +37,7 @@ import {
     useSharedValue,
     withDecay,
 } from 'react-native-reanimated';
-import { Synchronizable, createSynchronizable } from 'react-native-worklets';
+import { Synchronizable, createSynchronizable, runOnUISync } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
 import {
@@ -622,11 +622,66 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     /** Pending stroke of each stroke committed from here, and those not yet seen rendered. */
     const pendingIds = useRef(new WeakMap<InkStroke, number>());
     const awaiting = useRef<{ id: number; checked: boolean }[]>([]);
+    /** Ids of the strokes handed to onCommit (only the most recent matter). */
+    const committedIds = useRef(new Set<number>());
+    const unmounted = useRef(false);
     const commitLive = useCallback((stroke: InkStroke, id: number) => {
+        // Anything still on its way when the canvas went was handed over then (see below).
+        if (unmounted.current || committedIds.current.has(id)) {
+            return;
+        }
+        committedIds.current.add(id);
+        if (committedIds.current.size > 64) {
+            committedIds.current.delete(committedIds.current.values().next().value as number);
+        }
         pendingIds.current.set(stroke, id);
         awaiting.current.push({ id, checked: false });
         onCommit(stroke);
     }, [onCommit]);
+    const onCommitRef = useRef(onCommit);
+    onCommitRef.current = onCommit;
+    // The canvas can go while a stroke is being drawn or just lifted: a theme
+    // switch remounts the whole app, the editor included. The stroke under the
+    // pen and the lifted strokes whose commit has not reached JS yet are handed
+    // to onCommit right here, before anything else of this canvas is gone, so
+    // the editor holds them when it parks the drawing. Read synchronously from
+    // the UI thread, once: the stroke lives only there.
+    useLayoutEffect(() => {
+        unmounted.current = false;
+        return () => {
+            unmounted.current = true;
+            let unfinished: { id: number; stroke: InkStroke }[] = [];
+            try {
+                unfinished = runOnUISync(() => {
+                    'worklet';
+                    const out = pending.value.map((entry) => ({ id: entry.id, stroke: entry.stroke }));
+                    const points = live.value;
+                    if (gestureMode.value === 'draw' && points.length >= 3 && !multiTouch.value) {
+                        const cfg = strokeCfg.value;
+                        out.push({
+                            id: liveId.value,
+                            stroke: snapped.value
+                                ? { tool: cfg.tool, color: cfg.color, size: cfg.size, points: points.slice(), cut: true, shape: true }
+                                : { tool: cfg.tool, color: cfg.color, size: cfg.size, points: points.slice() },
+                        });
+                    }
+                    // The gesture may still end on the UI thread: it finds nothing to commit.
+                    gestureMode.value = 'none';
+                    live.value = [];
+                    return out;
+                });
+            } catch {
+                // The UI runtime is already gone: nothing can be read from it.
+            }
+            unfinished.forEach(({ id, stroke }) => {
+                if (!committedIds.current.has(id)) {
+                    committedIds.current.add(id);
+                    onCommitRef.current(stroke);
+                }
+            });
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     // After each render: strokes now in the ink picture stop being drawn as
     // pending. Skia sent the new picture to the UI thread in the layout effect
     // of this commit, so this removal lands after it: never a frame without
