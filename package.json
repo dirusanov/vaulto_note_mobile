@@ -7,7 +7,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:encryption-lifecycle && npm run test:utils && npm run test:versions && npm run test:voice-workflow && npm run test:search && npm run test:tasks && npm run test:tags && npm run test:transfer && npm run test:drawing && npm run test:pending-delete && npm run test:editor",
+    "test": "npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:encryption-lifecycle && npm run test:utils && npm run test:versions && npm run test:voice-workflow && npm run test:search && npm run test:tasks && npm run test:tags && npm run test:transfer && npm run test:drawing && npm run test:pending-delete && npm run test:editor && npm run test:guest-integrity",
     "typecheck": "tsc --noEmit",
     "test:encryption-state": "tsc --ignoreConfig src/services/encryptionState.ts --target ES2020 --module commonjs --outDir .test-build --skipLibCheck --esModuleInterop && node tests/encryptionState.test.cjs",
     "test:formatting": "tsc --ignoreConfig src/utils/markdownUtils.tsx src/utils/tiptapMarkdownAdapter.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/md --skipLibCheck --esModuleInterop && node tests/markdownFormatting.test.cjs",
@@ -22,10 +22,12 @@
     "test:drawing": "tsc --ignoreConfig src/drawing/drawingFormat.ts src/drawing/drawingModel.ts src/drawing/colorMath.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/drawing --skipLibCheck --esModuleInterop && node --test tests/drawingFormat.test.cjs tests/drawingModel.test.cjs tests/colorMath.test.cjs",
     "test:pending-delete": "tsc --ignoreConfig src/utils/pendingDelete.ts --target ES2020 --module commonjs --outDir .test-build/pendingDelete --skipLibCheck --esModuleInterop && node --test tests/pendingDelete.test.cjs",
     "test:editor": "tsc --ignoreConfig src/utils/editHistory.ts src/utils/titleHandoff.ts src/utils/markdownUtils.tsx src/utils/tiptapMarkdownAdapter.ts src/utils/richContent.ts --target ES2020 --module commonjs --jsx react --outDir .test-build/editor --skipLibCheck --esModuleInterop && node --test tests/editorHistory.test.cjs",
-    "test:voice-workflow": "node --test tests/voiceWorkflow.test.cjs tests/aiFlows.test.cjs"
+    "test:voice-workflow": "node --test tests/voiceWorkflow.test.cjs tests/aiFlows.test.cjs",
+    "test:guest-integrity": "tsc --ignoreConfig src/utils/guestIntegrity.ts --target ES2020 --module commonjs --outDir .test-build/guestIntegrity --skipLibCheck --esModuleInterop && node --test tests/guestIntegrity.test.cjs"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",
+    "@expo/app-integrity": "~57.0.2",
     "@expo/metro-runtime": "~57.0.15",
     "@expo/vector-icons": "^15.0.2",
     "@noble/ciphers": "^0.6.0",
@@ -41,6 +43,7 @@
     "axios": "^1.18.1",
     "bip39": "^3.1.0",
     "expo": "~57.0.21",
+    "expo-application": "~57.0.3",
     "expo-audio": "~57.0.5",
     "expo-calendar": "~57.0.5",
     "expo-camera": "~57.0.4",

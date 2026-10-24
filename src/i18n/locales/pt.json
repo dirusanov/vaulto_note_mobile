@@ -889,6 +889,8 @@
     "markdownSourceDesc": "A formatação aparece como caracteres simples, como **negrito**.",
     "guestBusyTitle": "A transcrição na nuvem está sobrecarregada",
     "guestBusyDesc": "A transcrição gratuita na nuvem sem conta está sobrecarregada neste momento. Inicie sessão para ter os seus próprios minutos grátis ou transforme a voz em texto neste dispositivo — grátis e offline.",
+    "guestUnverifiedTitle": "Entre para continuar transcrevendo",
+    "guestUnverifiedDesc": "A transcrição gratuita na nuvem sem conta não está disponível neste dispositivo. Entre (é grátis) ou transforme fala em texto direto neste dispositivo, offline.",
     "aiLimitDescDate": "Você usou sua cota de IA deste mês. Ela será renovada em {{date}}.",
     "aiLimitDescNoDate": "Você usou sua cota de IA deste mês. Ela será renovada no início do próximo período.",
     "aiLimitGuestDesc": "Entre na sua conta para ter sua própria cota mensal de IA."

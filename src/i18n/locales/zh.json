@@ -887,6 +887,8 @@
     "markdownSourceDesc": "格式显示为普通字符，例如 **粗体**。",
     "guestBusyTitle": "云端转写当前繁忙",
     "guestBusyDesc": "无需账户的免费云端转写当前繁忙。登录即可获得属于你的免费时长，或直接在本设备上转写——免费且离线可用。",
+    "guestUnverifiedTitle": "登录以继续转写",
+    "guestUnverifiedDesc": "此设备无法使用无需账户的免费云端转写。请登录（免费），或直接在此设备上离线将语音转为文字。",
     "aiLimitDescDate": "本月的 AI 额度已用完，将于 {{date}} 重置。",
     "aiLimitDescNoDate": "本月的 AI 额度已用完，将在下一个周期开始时重置。",
     "aiLimitGuestDesc": "登录即可获得属于你自己的每月 AI 额度。"

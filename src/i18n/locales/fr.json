@@ -889,6 +889,8 @@
     "markdownSourceDesc": "La mise en forme apparaît en caractères simples, comme **gras**.",
     "guestBusyTitle": "La transcription dans le cloud est saturée",
     "guestBusyDesc": "La transcription gratuite dans le cloud sans compte est saturée pour le moment. Connectez-vous pour avoir vos propres minutes gratuites, ou transcrivez directement sur cet appareil — gratuitement et hors ligne.",
+    "guestUnverifiedTitle": "Connectez-vous pour continuer à transcrire",
+    "guestUnverifiedDesc": "La transcription gratuite dans le cloud sans compte n’est pas disponible sur cet appareil. Connectez-vous (c’est gratuit) ou transcrivez directement sur cet appareil, hors ligne.",
     "aiLimitDescDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé le {{date}}.",
     "aiLimitDescNoDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé au début de la prochaine période.",
     "aiLimitGuestDesc": "Connectez-vous pour obtenir votre propre quota mensuel d’IA."
