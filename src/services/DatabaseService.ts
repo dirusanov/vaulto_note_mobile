@@ -6,6 +6,7 @@ import { hasMasterKey } from '../crypto/e2ee';
 
 import { AudioService } from './AudioService';
 import { sanitizeStepLabel } from '../i18n/variantLabels';
+import { compareByContentDateDesc } from '../utils/contentDate';
 import { clearPendingTranscriptions, movePendingTranscriptions } from './pendingTranscriptions';
 
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
@@ -140,7 +141,8 @@ const createTables = async (database: SQLite.SQLiteDatabase) => {
             privacy TEXT DEFAULT 'normal',
             pending_server_delete INTEGER DEFAULT 0,
             version INTEGER DEFAULT 0,
-            is_protected INTEGER DEFAULT 0
+            is_protected INTEGER DEFAULT 0,
+            content_updated_at TEXT
         );
     `);
 
@@ -238,6 +240,15 @@ const openDb = async (): Promise<SQLite.SQLiteDatabase> => {
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN audio_synced INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN audio_remote INTEGER DEFAULT 0;'); } catch (e) {}
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN audio_sha256 TEXT;'); } catch (e) {}
+
+    // CONTENT DATE MIGRATION: when the text last changed, separate from
+    // updated_at (which pins and version switches also move). Existing notes
+    // start from updated_at; the backfill runs only right after the column is
+    // added, because the ALTER fails on every later start.
+    try {
+        await database.runAsync('ALTER TABLE notes ADD COLUMN content_updated_at TEXT;');
+        await database.runAsync('UPDATE notes SET content_updated_at = updated_at WHERE content_updated_at IS NULL;');
+    } catch (e) {}
 
     return database;
 };
@@ -565,6 +576,11 @@ export const saveNoteLocal = async (
         delete (safeNote as any).title;
         delete (safeNote as any).content;
         delete (safeNote as any).transcription;
+        // Same rule as the SQLite path: no value keeps the stored content date.
+        if (!safeNote.content_updated_at) {
+            delete (safeNote as any).content_updated_at;
+            if (index < 0) safeNote.content_updated_at = safeNote.updated_at;
+        }
 
         if (index >= 0) {
             notes[index] = { ...notes[index], ...safeNote };
@@ -593,14 +609,15 @@ export const saveNoteLocal = async (
             ? await encryptForPrivacy(note.transcription)
             : note.encrypted_transcription;
 
+        const updatedAt = note.updated_at || new Date().toISOString();
         await withDbRetry('save note', (database) => (
             database.runAsync(
                 `INSERT INTO notes (
                     id, user_id, encrypted_title, encrypted_content, created_at, updated_at,
                     audio_file_path, audio_duration, encrypted_transcription, has_audio, is_pinned, synced, dirty, deleted, is_active,
                     storage_scope, reset_archived, privacy, pending_server_delete, version, audio_synced, audio_remote, audio_sha256,
-                    is_protected
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    is_protected, content_updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     user_id=excluded.user_id,
                     encrypted_title=excluded.encrypted_title,
@@ -625,17 +642,21 @@ export const saveNoteLocal = async (
                     -- what the caller passed (UI paths just spread the old note).
                     audio_synced=CASE WHEN excluded.audio_file_path IS notes.audio_file_path THEN excluded.audio_synced ELSE 0 END,
                     audio_sha256=CASE WHEN excluded.audio_file_path IS notes.audio_file_path THEN excluded.audio_sha256 ELSE NULL END,
-                    audio_remote=excluded.audio_remote
+                    audio_remote=excluded.audio_remote,
+                    -- A caller that does not know the content date keeps the stored one.
+                    content_updated_at=COALESCE(?, notes.content_updated_at, excluded.content_updated_at)
                 `,
                 [
                     note.id, userId, encryptedTitle || '', encryptedContent,
-                    note.created_at || new Date().toISOString(), note.updated_at || new Date().toISOString(),
+                    note.created_at || new Date().toISOString(), updatedAt,
                     note.audio_file_path || null, note.audio_duration || 0,
                     encryptedTranscription || null, note.has_audio ? 1 : 0, note.is_pinned ? 1 : 0,
                     note.synced ?? 1, isDirty, isDeleted, isActive, storageScope, note.reset_archived ? 1 : 0, privacy, pendingServerDelete,
                     note.version ?? 0,
                     note.audio_synced ?? 0, note.audio_remote ?? 0, note.audio_sha256 ?? null,
-                    note.is_protected ? 1 : 0
+                    note.is_protected ? 1 : 0,
+                    note.content_updated_at || updatedAt,
+                    note.content_updated_at || null,
                 ]
             )
         ));
@@ -808,7 +829,7 @@ export const getNotesLocal = async (userId: string): Promise<Note[]> => {
         const childrenMap = new Map<string, Note[]>();
         children.forEach(c => { const list = childrenMap.get(c.parent_id!) ?? []; list.push(c); childrenMap.set(c.parent_id!, list); });
         return parents.map(p => ({ ...p, improvements: childrenMap.get(p.id) || [] }))
-            .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+            .sort(compareByContentDateDesc);
     }
 
     try {
@@ -952,8 +973,7 @@ const processNotes = async (
             } as any;
         }
     }));
-    const sorted = (notes.filter(n => n !== null) as Note[])
-        .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+    const sorted = (notes.filter(n => n !== null) as Note[]).sort(compareByContentDateDesc);
     return { notes: sorted, hasStuckE2EE };
 };
 

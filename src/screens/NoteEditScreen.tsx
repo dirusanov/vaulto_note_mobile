@@ -174,6 +174,7 @@ import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { getAIProvider, storage } from '../utils/storage';
 import { getOfflineStatus } from '../services/offlineMode';
 import { isDeviceOffline } from '../utils/connectivity';
+import { contentDateOf } from '../utils/contentDate';
 import { takeSlowTranscriptionHint } from '../services/localSpeechSpeed';
 import NetInfo from '@react-native-community/netinfo';
 import { scheduleTaskReminder } from '../services/notifications';
@@ -6514,8 +6515,9 @@ export const NoteEditScreen = () => {
     };
 
     // Format date for display
-    const dateStr = existingNote?.updated_at
-        ? new Date(existingNote.updated_at).toLocaleString(i18n.language, {
+    const contentDate = existingNote ? contentDateOf(existingNote) : '';
+    const dateStr = contentDate
+        ? new Date(contentDate).toLocaleString(i18n.language, {
             month: 'long',
             day: 'numeric',
             hour: '2-digit',

@@ -13,6 +13,7 @@ import { plainVariantTitle, userVariantName } from '../i18n/variantLabels';
 import { createStyles } from '../theme/createStyles';
 import { textAlignFor } from '../i18n/direction';
 import { splitTags } from '../utils/tags';
+import { contentDateOf } from '../utils/contentDate';
 import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
 import { DRAWING_MARKER, firstDrawingSvg } from '../drawing/drawingFormat';
 import { DrawingThumbnail } from '../drawing/DrawingThumbnail';
@@ -214,7 +215,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const drawingSvg = useMemo(() => (hasDrawing ? firstDrawingSvg(content) : null), [hasDrawing, content]);
     const voiceDuration = hasAudio ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
 
-    const dateLabel = formatDate(note.updated_at || note.created_at || '');
+    // When the text last changed, not when it was last pinned or switched.
+    const dateLabel = formatDate(contentDateOf(note));
     const voiceLabel = [t('notes.voiceRecording'), voiceDuration].filter(Boolean).join(', ');
     // Read aloud without the box glyphs; a ticked item says so.
     const spokenLine = (line: string) => {

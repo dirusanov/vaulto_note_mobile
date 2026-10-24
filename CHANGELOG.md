@@ -19,6 +19,7 @@
 - After editing a tall drawing the note shows its top instead of the blank bottom.
 - The eraser takes a typed label only when it passes over it, not when its edge brushes the label.
 - Search results start at the top of the list.
+- Pinning a note or switching between its Original and AI versions no longer moves it to the top or shows a new "edited" date; only changes to its text, title, drawing, checklist or audio do (also on your other devices once the server is updated).
 
 ### Added
 - First run: a sign-in screen that says what an account gives (free minutes, AI, sync; your notes come with you), Google first; honest welcome copy; Ask notes explains up front how to get AI; "Set up AI on this device" preselects the right model.
