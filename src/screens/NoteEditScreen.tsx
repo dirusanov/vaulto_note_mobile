@@ -4925,7 +4925,7 @@ export const NoteEditScreen = () => {
                         // A guest's on-device agent may answer without a title: the
                         // dictated words name the note instead (no cloud LLM).
                         const suggestedTitle = modelTitle || (
-                            task.agentRoute === 'device' && !(isAuthenticated && !isGuest)
+                            task.agentRoute === 'device' && !(isAuthenticated && !isGuest) && !looksLikeVoiceCommand(originalText)
                                 ? sanitizeDisplayLabel(deriveTitleFromTranscript(originalText))
                                 : ''
                         );
