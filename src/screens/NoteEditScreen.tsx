@@ -593,12 +593,14 @@ const HeaderTitle = memo(({
     title,
     onChange,
     onFocus,
+    onBlur,
     onSubmit,
     inputRef,
 }: {
     title: string;
     onChange: (t: string) => void;
     onFocus: () => void;
+    onBlur: () => void;
     /** Enter in the title: the caret moves on to the text, as in Keep. */
     onSubmit: () => void;
     inputRef?: React.RefObject<TextInput | null>;
@@ -631,6 +633,7 @@ const HeaderTitle = memo(({
             value={title}
             onChangeText={handleChange}
             onFocus={onFocus}
+            onBlur={onBlur}
             onSubmitEditing={onSubmit}
             submitBehavior="submit"
             returnKeyType="next"
@@ -1990,6 +1993,7 @@ export const NoteEditScreen = () => {
     const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
     // Measured, since the toolbar grows while its Aa panel is open.
     const [toolbarHeight, setToolbarHeight] = useState(FLOATING_MIC_TOOLBAR_HEIGHT);
+    const [titleFocused, setTitleFocused] = useState(false);
     const editorRef = useRef<RichTextEditorHandle>(null);
     const titleInputRef = useRef<TextInput>(null);
     const rawEditorRef = useRef<TextInput>(null);
@@ -7082,8 +7086,13 @@ export const NoteEditScreen = () => {
     // still type into it, so only tapping the title again ends the handoff.
     const handleHeaderTitleFocus = useCallback(() => {
         setIsEditing(true);
+        setTitleFocused(true);
         if (titleHandoffRef.current) endTitleHandoff();
     }, [endTitleHandoff]);
+    // Formatting does not apply to the plain-text title: the toolbar greys out.
+    const handleHeaderTitleBlur = useCallback(() => {
+        setTitleFocused(false);
+    }, []);
 
     const editorHeader = useMemo(() => (
         <View>
@@ -7091,6 +7100,7 @@ export const NoteEditScreen = () => {
                 title={titleHandoffShown ?? (activeVariantId === 'original' ? title : noteTitle)}
                 onChange={handleHeaderTitleChange}
                 onFocus={handleHeaderTitleFocus}
+                onBlur={handleHeaderTitleBlur}
                 onSubmit={focusBodyFromTitle}
                 inputRef={titleInputRef}
             />
@@ -7128,6 +7138,7 @@ export const NoteEditScreen = () => {
         charCount,
         dateStr,
         handleHeaderTitleFocus,
+        handleHeaderTitleBlur,
         handleHeaderTitleChange,
         titleHandoffShown,
         handleVariantSelect,
@@ -7876,6 +7887,8 @@ export const NoteEditScreen = () => {
                             showDictate={LOCAL_WHISPER_ENABLED}
                             activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
                             onHeightChange={setToolbarHeight}
+                            formattingDisabled={titleFocused}
+                            keyboardHeight={keyboardVisibleState ? keyboardHeight : 0}
                         />
                     </View>
                 </View>

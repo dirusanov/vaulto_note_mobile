@@ -186,3 +186,14 @@ test('untitled text leads with its first line; a real title stays', () => {
     assert.equal(layoutCardPreview('Call Anna about the plan', 'Call Anna about the', true).mode, 'lead');
     assert.equal(uncheckedFirst('☑ Milk\n☐ Eggs\nText\n☑ A\n☐ B'), '☐ Eggs\n☑ Milk\nText\n☐ B\n☑ A');
 });
+
+// --- formatting toolbar -------------------------------------------------------
+
+test('the Aa panel collapses to one row only when little room is left above the keyboard', () => {
+    const { shouldUseCompactPanel } = require('../.test-build/utils/toolbarLayout.js');
+    assert.equal(shouldUseCompactPanel(800, 380), true, 'tablet landscape with keyboard');
+    assert.equal(shouldUseCompactPanel(411, 250), true, 'phone landscape');
+    assert.equal(shouldUseCompactPanel(915, 330), false, 'phone portrait');
+    assert.equal(shouldUseCompactPanel(1280, 420), false, 'tablet portrait');
+    assert.equal(shouldUseCompactPanel(800, 0), false, 'no keyboard (hardware keyboard)');
+});
