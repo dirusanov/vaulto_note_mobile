@@ -19,6 +19,15 @@
 - After editing a tall drawing the note shows its top instead of the blank bottom.
 - The eraser takes a typed label only when it passes over it, not when its edge brushes the label.
 - Search results start at the top of the list.
+- Tablet landscape: the Aa formatting panel folds into one row above the keyboard, so several lines of the note stay visible.
+- Formatting buttons are greyed out while typing in the title (titles are plain text).
+- Guest voice notes get a title from the first sentence of what was dictated, made on the device.
+- The sign-in hint after a voice request says what the AI would do (checklist, title or other change) instead of always "checklist".
+- Portuguese and Chinese use one name for Checklist in the AI preset, versions and the toolbar.
+- Ask your notes shows citations as small numbers matching the source chips; stray "[1]" markers are gone.
+- An untitled checklist card lists its items with their boxes instead of a bold first line with a "☐".
+- A new checklist keeps one font size while you type its first items.
+- The editor header no longer slides in under the status bar when a note opens.
 
 ### Added
 - First run: a sign-in screen that says what an account gives (free minutes, AI, sync; your notes come with you), Google first; honest welcome copy; Ask notes explains up front how to get AI; "Set up AI on this device" preselects the right model.
