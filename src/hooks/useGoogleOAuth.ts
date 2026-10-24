@@ -3,28 +3,57 @@ import { useCallback, useEffect, useState } from 'react';
 import { authApi, LoginResult } from '../api/auth';
 import { getErrorMessage } from '../utils/errorMessage';
 
+let googleConfigured = false;
+
+/**
+ * Configures the native Google SDK once. Returns false when it cannot be set up.
+ *
+ * GoogleSignin.configure() throws synchronously when offlineAccess is requested
+ * without a web client id (EXPO_PUBLIC_GOOGLE_CLIENT_ID is optional, see
+ * .env.example, and absent in a checkout without .env). Thrown from an effect,
+ * that error unmounted SignIn/SignUp in the middle of the stack push and Fabric
+ * crashed with "addViewAt: ... View already has a parent". Store builds get the
+ * id from eas.json; without it only the Google button is unavailable.
+ */
+const configureGoogleSignIn = (): boolean => {
+    if (googleConfigured) return true;
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!webClientId) {
+        if (__DEV__) console.warn('[GoogleOAuth] EXPO_PUBLIC_GOOGLE_CLIENT_ID is not set; Google sign-in is off.');
+        return false;
+    }
+    try {
+        GoogleSignin.configure({
+            // Must be the OAuth client the auth server exchanges the code with
+            // (GOOGLE_CLIENT_ID there); a code issued for any other client of the
+            // project is refused by Google with "unauthorized_client".
+            webClientId,
+            offlineAccess: true,      // Required to get a Refresh Token (serverAuthCode)
+            scopes: ['profile', 'email'],
+        });
+        googleConfigured = true;
+    } catch (error) {
+        console.warn('[GoogleOAuth] configure failed:', error);
+    }
+    return googleConfigured;
+};
+
 export const useGoogleOAuth = () => {
     const [loading, setLoading] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
 
     // Initial Configuration
     useEffect(() => {
-        const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-
-        GoogleSignin.configure({
-            // Must be the OAuth client the auth server exchanges the code with
-            // (GOOGLE_CLIENT_ID there); a code issued for any other client of the
-            // project is refused by Google with "unauthorized_client".
-            webClientId: webClientId,
-            offlineAccess: true,      // Required to get a Refresh Token (serverAuthCode)
-            scopes: ['profile', 'email'],
-        });
+        configureGoogleSignIn();
     }, []);
 
     const signInWithGoogle = useCallback(async (): Promise<LoginResult | null> => {
         setLoading(true);
         setLastError(null);
         try {
+            if (!configureGoogleSignIn()) {
+                throw new Error('Google sign-in is not set up in this build.');
+            }
             await GoogleSignin.hasPlayServices();
 
             // Force sign out to ensure the account picker always shows
