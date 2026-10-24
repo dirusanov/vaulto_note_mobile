@@ -168,3 +168,21 @@ test('whisper silence hallucinations are dropped, real speech kept', () => {
     assert.equal(stripWhisperHallucinations('[Music]'), '');
     assert.equal(stripWhisperHallucinations('Позвонить стоматологу завтра в десять'), 'Позвонить стоматологу завтра в десять');
 });
+
+// --- note card preview --------------------------------------------------------
+
+test('an untitled checklist card lists its items without a boxed bold lead', () => {
+    const { layoutCardPreview } = require('../.test-build/utils/cardPreview.js');
+    const preview = '☐ Eggs\n☐ Tea\n☑ Milk';
+    assert.deepEqual(layoutCardPreview(preview, 'Eggs', false), { mode: 'list', leadLine: '', previewString: preview });
+    // A stored title that only repeats the first item is not shown either.
+    assert.equal(layoutCardPreview(preview, 'Eggs', true).mode, 'list');
+});
+
+test('untitled text leads with its first line; a real title stays', () => {
+    const { layoutCardPreview, uncheckedFirst } = require('../.test-build/utils/cardPreview.js');
+    assert.deepEqual(layoutCardPreview('Shop\n☐ Eggs\n☐ Tea', 'Shop', false), { mode: 'lead', leadLine: 'Shop', previewString: '☐ Eggs\n☐ Tea' });
+    assert.deepEqual(layoutCardPreview('Milk\n☐ Eggs', 'Shop', true), { mode: 'title', leadLine: '', previewString: 'Milk\n☐ Eggs' });
+    assert.equal(layoutCardPreview('Call Anna about the plan', 'Call Anna about the', true).mode, 'lead');
+    assert.equal(uncheckedFirst('☑ Milk\n☐ Eggs\nText\n☑ A\n☐ B'), '☐ Eggs\n☑ Milk\nText\n☐ B\n☑ A');
+});
