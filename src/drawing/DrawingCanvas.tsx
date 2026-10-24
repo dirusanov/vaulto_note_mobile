@@ -499,7 +499,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const textBoxesSV = useSharedValue<number[]>([]);
     const textGesture = useSharedValue({ index: -1, startX: 0, startY: 0, screenX: 0, screenY: 0, moved: false });
     const dragOffset = useSharedValue({ dx: 0, dy: 0 });
-    /** A second finger joined (pinch/scroll): the one-finger action it interrupted is void. */
+    /** A second finger joined (pinch/scroll) or the touch was cancelled: the one-finger action it interrupted is void. */
     const multiTouch = useSharedValue(false);
     const stylusSeen = useSharedValue(false);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -1001,6 +1001,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 if (gestureMode.value === 'scroll') {
                     fling(e.velocityX, e.velocityY);
                 }
+                // An active stroke that ends without success was cancelled, not
+                // lifted: a second finger landed, or a palm that touched first
+                // gave way to the pen (InkInputView cancels it), or Android
+                // rejected it as a palm. Its ink is void. (A tap that never
+                // moved never activates and does not come here: dots stay.)
+                if (gestureMode.value === 'draw' && !success) {
+                    multiTouch.value = true;
+                }
                 // The lift-off point ends the line, even when no move reported it.
                 // Only on a real lift: a stroke cut short by a second finger ends
                 // where it was, not at that finger.
@@ -1067,7 +1075,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     watching.value = false;
                     runOnJS(callJs)('watchStroke', false);
                 }
-                // A second finger landing (pinch) cancels the stroke it interrupted.
+                // A second finger landing (pinch) or a cancel voids the stroke it interrupted.
                 if (multiTouch.value) {
                     live.value = [];
                     return;

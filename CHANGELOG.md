@@ -19,6 +19,9 @@
 - After editing a tall drawing the note shows its top instead of the blank bottom.
 - The eraser takes a typed label only when it passes over it, not when its edge brushes the label.
 - Search results start at the top of the list.
+- Very long strokes no longer slow the pen down: only the newest part of the stroke being drawn is rebuilt each frame.
+- Strokes drawn while the app switches between light and dark mode are kept.
+- A palm that touched before the pen, or a stroke cancelled by a second finger, leaves no ink behind; picking a tool never stalls the app while a stroke is being drawn.
 
 ### Added
 - First run: a sign-in screen that says what an account gives (free minutes, AI, sync; your notes come with you), Google first; honest welcome copy; Ask notes explains up front how to get AI; "Set up AI on this device" preselects the right model.
