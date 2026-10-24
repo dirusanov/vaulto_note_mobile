@@ -24,7 +24,7 @@ import { answerFromNotes, isOnDeviceAI } from '../services/AIService';
 import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deriveAutoTitleFromPlainText, richContentToAgentMarkdown, richContentToPlainText } from '../utils/richContent';
-import { buildNoteSources, formatSourcesForModel, NoteSource, SearchableNote } from '../utils/noteSearch';
+import { buildNoteSources, formatSourcesForModel, NoteSource, renderAnswerCitations, SearchableNote } from '../utils/noteSearch';
 import { getPrivateAIAllowed } from '../utils/storage';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
@@ -154,12 +154,14 @@ export const AskNotesScreen = () => {
             // Sources picked for on-device AI may include protected notes: keep the
             // answer on the phone even if the network returns meanwhile.
             const answer = await answerFromNotes(question, formatSourcesForModel(sources), { onDeviceOnly: onDevice });
-            // Only list the notes the answer actually cites; fall back to all used.
-            const cited = sources.filter((source) => answer.includes(`[${source.index}]`));
+            // "[1]" markers become superscripts matching the chips. Only list the
+            // notes the answer actually cites; fall back to all used.
+            const rendered = renderAnswerCitations(answer, sources.length);
+            const cited = sources.filter((source) => rendered.cited.includes(source.index));
             setMessages((prev) => [...prev, {
                 id: `a-${stamp}`,
                 role: 'assistant',
-                text: answer || t('ask.emptyAnswer', 'No answer came back. Try rephrasing the question.'),
+                text: rendered.text || t('ask.emptyAnswer', 'No answer came back. Try rephrasing the question.'),
                 sources: cited.length > 0 ? cited : sources,
             }]);
         } catch (error) {

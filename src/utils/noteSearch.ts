@@ -132,6 +132,69 @@ export const buildNoteSources = (
 export const formatSourcesForModel = (sources: NoteSource[]): string =>
     sources.map((source) => `[${source.index}] ${source.title || 'Untitled'}\n${source.excerpt}`).join('\n\n---\n\n');
 
+const SUPERSCRIPT_DIGITS = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+const toSuperscript = (value: number): string =>
+    String(value).split('').map((digit) => SUPERSCRIPT_DIGITS[Number(digit)] ?? digit).join('');
+
+// "[1]", "[1, 2]", "[1-3]", "[^1]", "[Note 2]", "【1】" - but not a Markdown link "[1](…)".
+const CITATION_REGEX = /[ \t]*[\[【［]\s*(?:\^|(?:note|source|excerpt|заметка|источник)\s*)?(\d{1,3}(?:\s*[,;–-]\s*\d{1,3})*)\s*[\]】］](?!\()/gi;
+// What a line left with only citation numbers may still hold: a "Sources:" label.
+const CITATION_LABEL_ONLY = /^[ \t]*(?:[-*>][ \t]+)?(?:\*{0,2}(?:sources?|notes?|refs?|references?|источники?|заметки|fuentes?|quellen?|fontes?)\*{0,2}[ \t]*:?)?[ \t]*$/i;
+const SUPERSCRIPT_RUN = /[⁰¹²³⁴⁵⁶⁷⁸⁹,.;\s]+/g;
+
+const citedNumbers = (group: string): number[] => {
+    const numbers: number[] = [];
+    for (const part of group.split(/\s*[,;]\s*/)) {
+        const range = part.match(/^(\d+)\s*[–-]\s*(\d+)$/);
+        if (range) {
+            const from = Number(range[1]);
+            const to = Number(range[2]);
+            for (let n = from; n <= to && n - from < 20; n += 1) numbers.push(n);
+        } else if (/^\d+$/.test(part)) {
+            numbers.push(Number(part));
+        }
+    }
+    return numbers;
+};
+
+/**
+ * The model cites excerpts as "[1]"; printed as is (and on-device models also
+ * write "[Note 1]", "【1】" or numbers that match no excerpt) they read as stray
+ * brackets. Valid citations become superscript numbers matching the source
+ * chips under the answer, the rest are dropped. `cited` lists the excerpts the
+ * answer refers to, in order of first use.
+ */
+export const renderAnswerCitations = (answer: string, sourceCount: number): { text: string; cited: number[] } => {
+    const cited: number[] = [];
+    const lines: string[] = [];
+    for (const line of (answer || '').split('\n')) {
+        let hadCitation = false;
+        // "[1][2]" must not read as "¹²" (twelve).
+        let lastEnd = -1;
+        let lastRendered = '';
+        const rendered = line.replace(CITATION_REGEX, (match: string, group: string, offset: number) => {
+            hadCitation = true;
+            const valid = Array.from(new Set(citedNumbers(group).filter((n) => n >= 1 && n <= sourceCount)));
+            valid.forEach((n) => { if (!cited.includes(n)) cited.push(n); });
+            const out = valid.map(toSuperscript).join(',');
+            if (lastEnd !== offset) lastRendered = '';
+            const joined = out && lastRendered ? `,${out}` : out;
+            if (out) lastRendered = out;
+            lastEnd = offset + match.length;
+            return joined;
+        });
+        // "Sources: [1], [2]" on its own line repeats the chips below the answer.
+        if (hadCitation && CITATION_LABEL_ONLY.test(rendered.replace(SUPERSCRIPT_RUN, ' '))) continue;
+        lines.push(rendered);
+    }
+    const text = lines.join('\n')
+        // "milk¹ ." -> "milk¹."
+        .replace(/([⁰¹²³⁴⁵⁶⁷⁸⁹])[ \t]+([.,;:!?)])/g, '$1$2')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    return { text, cited };
+};
+
 const normalizeForMatch = (text: string): string => (text || '').toLowerCase().replace(/ё/g, 'е');
 
 /**
