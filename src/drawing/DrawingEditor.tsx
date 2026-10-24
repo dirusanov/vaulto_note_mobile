@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AppState,
     Keyboard,
@@ -201,9 +201,17 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
     const open = visible || !!restored;
     const activeDocument = visible ? document : restored?.document ?? null;
 
-    const [state, dispatch] = useReducer(drawingReducer, undefined, () => initialDrawingState());
+    // The reducer runs here, not in React: stateRef always holds every action
+    // dispatched so far, even one React has not rendered yet or never will.
+    // A theme switch unmounts the editor right after the canvas hands over the
+    // stroke under the pen (see DrawingCanvas), and the parked drawing must
+    // include it; useReducer would drop an action sent while unmounting.
+    const [state, setRenderedState] = useState<DrawingState>(initialDrawingState);
     const stateRef = useRef(state);
-    stateRef.current = state;
+    const dispatch = useCallback((action: DrawingAction) => {
+        stateRef.current = drawingReducer(stateRef.current, action);
+        setRenderedState(stateRef.current);
+    }, []);
     const { strokes, texts, paper } = state.content;
     const [settings, setSettings] = useState<ToolSettings>(() => rememberedSettings || initialSettings());
     const [activeTool, setActiveTool] = useState<ActiveTool>(rememberedTool);
@@ -528,7 +536,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         // Include the label still being typed: the reducer is pure, so the final
         // content can be computed right here instead of waiting for a render.
         const action = textEditAction(textEdit);
-        const content = action ? drawingReducer(state, action).content : state.content;
+        const latest = stateRef.current;
+        const content = action ? drawingReducer(latest, action).content : latest.content;
         return { id: activeDocument?.id || '', width: docWidth || width, pos: activeDocument?.pos, ...content };
     };
     const latestDocument = useRef(currentDocument);
@@ -545,7 +554,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         const action = textEditAction(textEdit);
         parkedDrawing = {
             document: currentDocument(),
-            state: action ? drawingReducer(state, action) : state,
+            state: action ? drawingReducer(stateRef.current, action) : stateRef.current,
             docWidth,
             at: Date.now(),
         };

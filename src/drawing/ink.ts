@@ -117,6 +117,343 @@ export const pencilGrainMatrix = (hex: string): number[] => {
 const CAP_STEPS = 8;
 
 /**
+ * A stroke's outline being built sample by sample: the smoothed centre line
+ * (positions, radii, distance travelled) and the edges of every point that can
+ * no longer change. Everything in strokeOutline only looks backwards, so a
+ * point's edges are final once the next smoothed point exists; a live stroke
+ * of thousands of samples then costs only its newest samples per frame.
+ *
+ * Plain data and functions, so it lives on the UI thread inside a worklet.
+ */
+export type InkTrace = {
+    size: number;
+    thinning: number;
+    streamline: number;
+    taper: boolean;
+    nib: number;
+    minRadius: number;
+    taperLength: number;
+    nibReach: number;
+    /** Input samples read so far. */
+    consumed: number;
+    sx: number;
+    sy: number;
+    sp: number;
+    travelled: number;
+    /** Smoothed centre line; the pen's own last point is not in it (see traceTail). */
+    xs: number[];
+    ys: number[];
+    rs: number[];
+    dist: number[];
+    /** Edges of points 0 .. done - 1: left and right as flat [x, y, ...], direction, radius after the nib. */
+    left: number[];
+    right: number[];
+    dirX: number[];
+    dirY: number[];
+    radius: number[];
+    done: number;
+    /** Where the nib direction is measured from, for point `done` (see traceEdge). */
+    back: number;
+};
+
+export function createTrace(size: number, thinning: number, streamline: number, taper: boolean, nib: number = 0): InkTrace {
+    'worklet';
+    return {
+        size,
+        thinning,
+        streamline,
+        taper,
+        nib,
+        minRadius: size * 0.08,
+        taperLength: size * 2.5,
+        // Direction for the nib is taken over this much of the line behind a point,
+        // so hand tremor does not flicker the width.
+        nibReach: Math.max(1.5, size * 0.6),
+        consumed: 0,
+        sx: 0,
+        sy: 0,
+        sp: 0,
+        travelled: 0,
+        xs: [],
+        ys: [],
+        rs: [],
+        dist: [],
+        left: [],
+        right: [],
+        dirX: [],
+        dirY: [],
+        radius: [],
+        done: 0,
+        back: 0,
+    };
+}
+
+/** Edges of point i of the centre line (xs, ys, rs, dist) with `n` points; `back` is the nib cursor. */
+function traceEdge(
+    t: InkTrace,
+    xs: number[],
+    ys: number[],
+    rs: number[],
+    dist: number[],
+    n: number,
+    i: number,
+    back: number,
+    out: number[]
+): number {
+    'worklet';
+    const a = Math.max(0, i - 1);
+    const b = Math.min(n - 1, i + 1);
+    let dx = xs[b] - xs[a];
+    let dy = ys[b] - ys[a];
+    const length = Math.hypot(dx, dy) || 1;
+    dx /= length;
+    dy /= length;
+    let r = rs[i];
+    if (t.nib > 0) {
+        // Width follows the angle between the stroke and a 45° nib edge:
+        // thick downstrokes, hairline diagonals, like a real fountain pen.
+        while (back < i && dist[i] - dist[back + 1] >= t.nibReach) {
+            back += 1;
+        }
+        const j = back < i ? back : 0;
+        const k = back < i ? i : Math.min(n - 1, 1);
+        const ndx = xs[k] - xs[j];
+        const ndy = ys[k] - ys[j];
+        const nl = Math.hypot(ndx, ndy) || 1;
+        const across = Math.abs((ndx / nl) * 0.7071 + (ndy / nl) * 0.7071);
+        r = Math.max(t.minRadius, r * (1 - t.nib + t.nib * 1.25 * across));
+    }
+    out[0] = xs[i] - dy * r;
+    out[1] = ys[i] + dx * r;
+    out[2] = xs[i] + dy * r;
+    out[3] = ys[i] - dx * r;
+    out[4] = dx;
+    out[5] = dy;
+    out[6] = r;
+    return back;
+}
+
+/**
+ * Reads the samples of `points` not read yet (a flat [x, y, pressure, ...]
+ * that only grows) and fixes the edges of the points that are final now.
+ */
+export function traceAppend(t: InkTrace, points: number[]): void {
+    'worklet';
+    const count = Math.floor(points.length / 3);
+    const { xs, ys, rs, dist } = t;
+    for (let i = t.consumed; i < count; i++) {
+        if (i === 0) {
+            t.sx = points[0];
+            t.sy = points[1];
+            t.sp = points[2];
+        } else {
+            t.sx += (points[i * 3] - t.sx) * (1 - t.streamline);
+            t.sy += (points[i * 3 + 1] - t.sy) * (1 - t.streamline);
+            t.sp += (points[i * 3 + 2] - t.sp) * 0.35;
+            const last = xs.length - 1;
+            const dx = t.sx - xs[last];
+            const dy = t.sy - ys[last];
+            const step2 = dx * dx + dy * dy;
+            // Dense samples add nothing but outline points.
+            if (step2 < 0.6) {
+                continue;
+            }
+            t.travelled += Math.sqrt(step2);
+        }
+        let r = Math.max(t.minRadius, (t.size / 2) * (1 + t.thinning * (t.sp - 0.5) * 1.6));
+        if (t.taper && t.travelled < t.taperLength) {
+            // Ease-out so the tip narrows quickly and then holds.
+            const k = t.travelled / t.taperLength;
+            r = Math.max(t.minRadius, r * (0.3 + 0.7 * (1 - (1 - k) * (1 - k))));
+        }
+        xs.push(t.sx);
+        ys.push(t.sy);
+        rs.push(r);
+        dist.push(t.travelled);
+    }
+    t.consumed = Math.max(t.consumed, count);
+    // A point's edges need the point after it; the nib only looks back.
+    const edge = [0, 0, 0, 0, 0, 0, 0];
+    while (t.done + 1 < xs.length) {
+        t.back = traceEdge(t, xs, ys, rs, dist, xs.length, t.done, t.back, edge);
+        t.left.push(edge[0], edge[1]);
+        t.right.push(edge[2], edge[3]);
+        t.dirX.push(edge[4]);
+        t.dirY.push(edge[5]);
+        t.radius.push(edge[6]);
+        t.done += 1;
+    }
+}
+
+/**
+ * Edges of the points that may still change: the newest smoothed point and,
+ * when the smoothing lags behind, the pen's own last sample (the ink ends
+ * exactly under the nib). `n` is the length of the whole line with them.
+ */
+export type InkTraceTail = {
+    n: number;
+    xs: number[];
+    ys: number[];
+    left: number[];
+    right: number[];
+    dirX: number[];
+    dirY: number[];
+    radius: number[];
+    /** The line is a single point: drawn as a dot of this radius. */
+    dot: number;
+};
+
+export function traceTail(t: InkTrace, points: number[]): InkTraceTail {
+    'worklet';
+    const count = Math.floor(points.length / 3);
+    const { xs, ys, rs, dist } = t;
+    const smoothed = xs.length;
+    const tail: InkTraceTail = { n: smoothed, xs: [], ys: [], left: [], right: [], dirX: [], dirY: [], radius: [], dot: 0 };
+    if (smoothed === 0) {
+        return tail;
+    }
+    if (count > 1) {
+        // The smoothed line lags the pen by a fraction of a sample: end exactly
+        // under it, so the ink stays attached to the nib.
+        const lx = points[(count - 1) * 3];
+        const ly = points[(count - 1) * 3 + 1];
+        const last = smoothed - 1;
+        const gap = Math.hypot(lx - xs[last], ly - ys[last]);
+        if (gap > 0.05) {
+            // Borrowed for a moment: the nib looks back along the whole line.
+            xs.push(lx);
+            ys.push(ly);
+            rs.push(rs[last]);
+            dist.push(dist[last] + gap);
+        }
+    }
+    const n = xs.length;
+    tail.n = n;
+    if (n === 1) {
+        tail.xs.push(xs[0]);
+        tail.ys.push(ys[0]);
+        tail.dot = rs[0];
+    } else {
+        const edge = [0, 0, 0, 0, 0, 0, 0];
+        let back = t.back;
+        for (let i = t.done; i < n; i++) {
+            back = traceEdge(t, xs, ys, rs, dist, n, i, back, edge);
+            tail.xs.push(xs[i]);
+            tail.ys.push(ys[i]);
+            tail.left.push(edge[0], edge[1]);
+            tail.right.push(edge[2], edge[3]);
+            tail.dirX.push(edge[4]);
+            tail.dirY.push(edge[5]);
+            tail.radius.push(edge[6]);
+        }
+    }
+    if (n > smoothed) {
+        xs.pop();
+        ys.pop();
+        rs.pop();
+        dist.pop();
+    }
+    return tail;
+}
+
+/**
+ * Outline polygon [x, y, ...] of points `from` .. `to` of the line: the left
+ * edge forward, the right edge back. `capEnd` / `capStart` round off that end;
+ * without, the piece ends straight across, to be joined to its neighbour (see
+ * nextFrozenPiece). Points from `t.done` on come from `tail`.
+ */
+export function traceOutline(t: InkTrace, tail: InkTraceTail | null, from: number, to: number, capStart: boolean, capEnd: boolean): number[] {
+    'worklet';
+    const outline: number[] = [];
+    if (tail && tail.n === 1) {
+        const r = tail.dot;
+        for (let i = 0; i < CAP_STEPS * 2; i++) {
+            const angle = (i / (CAP_STEPS * 2)) * Math.PI * 2;
+            outline.push(tail.xs[0] + Math.cos(angle) * r, tail.ys[0] + Math.sin(angle) * r);
+        }
+        return outline;
+    }
+    const done = t.done;
+    const fixed = Math.min(to + 1, done);
+    for (let i = from; i < fixed; i++) {
+        outline.push(t.left[i * 2], t.left[i * 2 + 1]);
+    }
+    if (tail) {
+        for (let i = Math.max(from, done); i <= to; i++) {
+            outline.push(tail.left[(i - done) * 2], tail.left[(i - done) * 2 + 1]);
+        }
+    }
+    // Round end cap: from the left edge, around the tip, to the right edge.
+    if (capEnd) {
+        const e = to - done;
+        const cx = e >= 0 && tail ? tail.xs[e] : t.xs[to];
+        const cy = e >= 0 && tail ? tail.ys[e] : t.ys[to];
+        const r = e >= 0 && tail ? tail.radius[e] : t.radius[to];
+        const dx = e >= 0 && tail ? tail.dirX[e] : t.dirX[to];
+        const dy = e >= 0 && tail ? tail.dirY[e] : t.dirY[to];
+        for (let s = 1; s < CAP_STEPS; s++) {
+            const theta = (s / CAP_STEPS) * Math.PI;
+            const nx = -dy;
+            const ny = dx;
+            outline.push(
+                cx + r * (nx * Math.cos(theta) + dx * Math.sin(theta)),
+                cy + r * (ny * Math.cos(theta) + dy * Math.sin(theta))
+            );
+        }
+    }
+    if (tail) {
+        for (let i = to; i >= Math.max(from, done); i--) {
+            outline.push(tail.right[(i - done) * 2], tail.right[(i - done) * 2 + 1]);
+        }
+    }
+    for (let i = fixed - 1; i >= from; i--) {
+        outline.push(t.right[i * 2], t.right[i * 2 + 1]);
+    }
+    if (capStart) {
+        const e = from - done;
+        const cx = e >= 0 && tail ? tail.xs[e] : t.xs[from];
+        const cy = e >= 0 && tail ? tail.ys[e] : t.ys[from];
+        const r = e >= 0 && tail ? tail.radius[e] : t.radius[from];
+        const dx = e >= 0 && tail ? tail.dirX[e] : t.dirX[from];
+        const dy = e >= 0 && tail ? tail.dirY[e] : t.dirY[from];
+        for (let s = 1; s < CAP_STEPS; s++) {
+            const theta = (s / CAP_STEPS) * Math.PI;
+            const nx = -dy;
+            const ny = dx;
+            outline.push(
+                cx - r * (nx * Math.cos(theta) + dx * Math.sin(theta)),
+                cy - r * (ny * Math.cos(theta) + dy * Math.sin(theta))
+            );
+        }
+    }
+    return outline;
+}
+
+/** Points per frozen piece of a live stroke, and how far each piece reaches back into the one before. */
+export const LIVE_PIECE = 32;
+export const LIVE_OVERLAP = 3;
+
+/**
+ * The next piece of a live stroke to freeze, [from, to], once all its points
+ * are final; null while they are not. `frozenTo` is the last point frozen so
+ * far (-1 for none). Pieces overlap by LIVE_OVERLAP points and end straight
+ * across; filled together (non-zero winding) they cover exactly the outline
+ * of the whole stroke, so only the unfrozen tail is rebuilt on each frame.
+ */
+export function nextFrozenPiece(frozenTo: number, done: number): [number, number] | null {
+    'worklet';
+    const from = frozenTo < 0 ? 0 : frozenTo - LIVE_OVERLAP;
+    const to = Math.max(0, frozenTo) + LIVE_PIECE;
+    return to < done ? [from, to] : null;
+}
+
+/** First point of the unfrozen tail of a live stroke (see nextFrozenPiece). */
+export function liveTailStart(frozenTo: number): number {
+    'worklet';
+    return frozenTo < 0 ? 0 : frozenTo - LIVE_OVERLAP;
+}
+
+/**
  * Filled outline of a pressure-sensitive stroke as a flat [x, y, ...] polygon.
  *
  * Every step only looks backwards (smoothing, pressure, the taper at the start,
@@ -133,136 +470,13 @@ export function strokeOutline(
     nib: number = 0
 ): number[] {
     'worklet';
-    const count = Math.floor(points.length / 3);
-    if (count === 0) {
+    if (Math.floor(points.length / 3) === 0) {
         return [];
     }
-
-    const xs: number[] = [];
-    const ys: number[] = [];
-    const rs: number[] = [];
-    const dist: number[] = [];
-    const minRadius = size * 0.08;
-    const taperLength = size * 2.5;
-    // Direction for the nib is taken over this much of the line behind a point,
-    // so hand tremor does not flicker the width.
-    const nibReach = Math.max(1.5, size * 0.6);
-    let sx = points[0];
-    let sy = points[1];
-    let sp = points[2];
-    let travelled = 0;
-    for (let i = 0; i < count; i++) {
-        if (i > 0) {
-            sx += (points[i * 3] - sx) * (1 - streamline);
-            sy += (points[i * 3 + 1] - sy) * (1 - streamline);
-            sp += (points[i * 3 + 2] - sp) * 0.35;
-            const last = xs.length - 1;
-            const dx = sx - xs[last];
-            const dy = sy - ys[last];
-            const step2 = dx * dx + dy * dy;
-            // Dense samples add nothing but outline points.
-            if (step2 < 0.6) {
-                continue;
-            }
-            travelled += Math.sqrt(step2);
-        }
-        let r = Math.max(minRadius, (size / 2) * (1 + thinning * (sp - 0.5) * 1.6));
-        if (taper && travelled < taperLength) {
-            // Ease-out so the tip narrows quickly and then holds.
-            const t = travelled / taperLength;
-            r = Math.max(minRadius, r * (0.3 + 0.7 * (1 - (1 - t) * (1 - t))));
-        }
-        xs.push(sx);
-        ys.push(sy);
-        rs.push(r);
-        dist.push(travelled);
-    }
-    if (count > 1) {
-        // The smoothed line lags the pen by a fraction of a sample: end exactly
-        // under it, so the ink stays attached to the nib.
-        const lx = points[(count - 1) * 3];
-        const ly = points[(count - 1) * 3 + 1];
-        const last = xs.length - 1;
-        const gap = Math.hypot(lx - xs[last], ly - ys[last]);
-        if (gap > 0.05) {
-            xs.push(lx);
-            ys.push(ly);
-            rs.push(rs[last]);
-            dist.push(dist[last] + gap);
-        }
-    }
-
-    const n = xs.length;
-    const outline: number[] = [];
-    if (n === 1) {
-        const r = rs[0];
-        for (let i = 0; i < CAP_STEPS * 2; i++) {
-            const angle = (i / (CAP_STEPS * 2)) * Math.PI * 2;
-            outline.push(xs[0] + Math.cos(angle) * r, ys[0] + Math.sin(angle) * r);
-        }
-        return outline;
-    }
-
-    const left: number[] = [];
-    const right: number[] = [];
-    const dirX: number[] = [];
-    const dirY: number[] = [];
-    let back = 0;
-    for (let i = 0; i < n; i++) {
-        const a = Math.max(0, i - 1);
-        const b = Math.min(n - 1, i + 1);
-        let dx = xs[b] - xs[a];
-        let dy = ys[b] - ys[a];
-        const length = Math.hypot(dx, dy) || 1;
-        dx /= length;
-        dy /= length;
-        if (nib > 0) {
-            // Width follows the angle between the stroke and a 45° nib edge:
-            // thick downstrokes, hairline diagonals, like a real fountain pen.
-            while (back < i && dist[i] - dist[back + 1] >= nibReach) {
-                back += 1;
-            }
-            const j = back < i ? back : 0;
-            const k = back < i ? i : Math.min(n - 1, 1);
-            const ndx = xs[k] - xs[j];
-            const ndy = ys[k] - ys[j];
-            const nl = Math.hypot(ndx, ndy) || 1;
-            const across = Math.abs((ndx / nl) * 0.7071 + (ndy / nl) * 0.7071);
-            rs[i] = Math.max(minRadius, rs[i] * (1 - nib + nib * 1.25 * across));
-        }
-        dirX.push(dx);
-        dirY.push(dy);
-        left.push(xs[i] - dy * rs[i], ys[i] + dx * rs[i]);
-        right.push(xs[i] + dy * rs[i], ys[i] - dx * rs[i]);
-    }
-
-    for (let i = 0; i < left.length; i++) {
-        outline.push(left[i]);
-    }
-    // Round end cap: from the left edge, around the tip, to the right edge.
-    const end = n - 1;
-    for (let s = 1; s < CAP_STEPS; s++) {
-        const theta = (s / CAP_STEPS) * Math.PI;
-        const nx = -dirY[end];
-        const ny = dirX[end];
-        outline.push(
-            xs[end] + rs[end] * (nx * Math.cos(theta) + dirX[end] * Math.sin(theta)),
-            ys[end] + rs[end] * (ny * Math.cos(theta) + dirY[end] * Math.sin(theta))
-        );
-    }
-    for (let i = n - 1; i >= 0; i--) {
-        outline.push(right[i * 2], right[i * 2 + 1]);
-    }
-    for (let s = 1; s < CAP_STEPS; s++) {
-        const theta = (s / CAP_STEPS) * Math.PI;
-        const nx = -dirY[0];
-        const ny = dirX[0];
-        outline.push(
-            xs[0] - rs[0] * (nx * Math.cos(theta) + dirX[0] * Math.sin(theta)),
-            ys[0] - rs[0] * (ny * Math.cos(theta) + dirY[0] * Math.sin(theta))
-        );
-    }
-    return outline;
+    const trace = createTrace(size, thinning, streamline, taper, nib);
+    traceAppend(trace, points);
+    const tail = traceTail(trace, points);
+    return traceOutline(trace, tail, 0, tail.n - 1, true, true);
 }
 
 /** Line width of a shape: the tool's width at the pressure the shape was drawn with. */

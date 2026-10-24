@@ -29,6 +29,9 @@
 - An untitled checklist card lists its items with their boxes instead of a bold first line with a "☐".
 - A new checklist keeps one font size while you type its first items.
 - The editor header no longer slides in under the status bar when a note opens.
+- Very long strokes no longer slow the pen down: only the newest part of the stroke being drawn is rebuilt each frame.
+- Strokes drawn while the app switches between light and dark mode are kept.
+- A palm that touched before the pen, or a stroke cancelled by a second finger, leaves no ink behind; picking a tool never stalls the app while a stroke is being drawn.
 
 ### Added
 - First run: a sign-in screen that says what an account gives (free minutes, AI, sync; your notes come with you), Google first; honest welcome copy; Ask notes explains up front how to get AI; "Set up AI on this device" preselects the right model.

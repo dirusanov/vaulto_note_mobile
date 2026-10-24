@@ -1,6 +1,7 @@
 package expo.modules.inkinput
 
 import android.content.Context
+import android.os.Build
 import android.view.MotionEvent
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.views.ExpoView
@@ -90,11 +91,11 @@ class InkInputView(context: Context, appContext: AppContext) : ExpoView(context,
             send(event, index, MotionEvent.ACTION_MOVE)
           }
           MotionEvent.ACTION_POINTER_UP -> if (event.actionIndex == index) {
-            send(event, index, MotionEvent.ACTION_UP)
+            send(event, index, liftAction(event))
             stream = Stream.IGNORE
           }
           MotionEvent.ACTION_UP -> {
-            send(event, index, MotionEvent.ACTION_UP)
+            send(event, index, liftAction(event))
             stream = Stream.NONE
           }
           MotionEvent.ACTION_CANCEL -> {
@@ -115,6 +116,18 @@ class InkInputView(context: Context, appContext: AppContext) : ExpoView(context,
       }
     }
   }
+
+  /**
+   * How the pen's lift is passed on: Android 13+ marks a pointer it decided was
+   * not meant to touch (e.g. an accidental contact) with FLAG_CANCELED on its
+   * up event; that stroke is cancelled, not finished.
+   */
+  private fun liftAction(event: MotionEvent): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && event.flags and MotionEvent.FLAG_CANCELED != 0) {
+      MotionEvent.ACTION_CANCEL
+    } else {
+      MotionEvent.ACTION_UP
+    }
 
   private fun isPen(event: MotionEvent, index: Int): Boolean {
     val tool = event.getToolType(index)

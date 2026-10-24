@@ -17,6 +17,7 @@ import {
     Skia,
     SkPaint,
     SkPath,
+    SkPathBuilder,
     SkPicture,
     Paragraph,
     Rect,
@@ -32,13 +33,32 @@ import {
     useAnimatedReaction,
     useDerivedValue,
     useFrameCallback,
+    SharedValue,
     useSharedValue,
     withDecay,
 } from 'react-native-reanimated';
-import { runOnUISync } from 'react-native-worklets';
+import { Synchronizable, createSynchronizable, runOnUISync } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 import { ERASER_PRESSURE } from '../../modules/ink-input';
-import { INK_TOOLS, InkStroke, InkText, InkTool, SMART_INVERT_MATRIX, pencilGrainMatrix, recognizeShape, shapeIsClosed, shapeWidth, strokeOutline, strokeOutlineFor } from './ink';
+import {
+    INK_TOOLS,
+    InkStroke,
+    InkText,
+    InkTool,
+    InkTrace,
+    SMART_INVERT_MATRIX,
+    createTrace,
+    liveTailStart,
+    nextFrozenPiece,
+    pencilGrainMatrix,
+    recognizeShape,
+    shapeIsClosed,
+    shapeWidth,
+    strokeOutlineFor,
+    traceAppend,
+    traceOutline,
+    traceTail,
+} from './ink';
 import { Selection, TextBox } from './drawingModel';
 import { drawingBounds } from './drawingFormat';
 import {
@@ -56,6 +76,16 @@ import {
 import { LABEL_LAYOUT_WIDTH, paragraphFor } from './textLayout';
 
 export type CanvasMode = 'ink' | 'erase' | 'text' | 'select';
+
+type ToolConfig = {
+    mode: CanvasMode;
+    tool: InkTool;
+    color: string;
+    size: number;
+    stylusOnly: boolean;
+    eraserRadius: number;
+    snapShapes: boolean;
+};
 
 /** Where a tap in text mode landed, in document and screen coordinates. */
 export type TextTap = {
@@ -148,13 +178,13 @@ const SHAPE_STILL_PX = 6;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
 
-const outlineToSkPath = (outline: number[]): SkPath => {
+/** Adds an outline polygon as one closed contour of quadratic segments through the midpoints of its points. */
+const addOutline = (path: SkPathBuilder, outline: number[]): void => {
     'worklet';
     const n = outline.length / 2;
     if (n < 3) {
-        return Skia.Path.Make();
+        return;
     }
-    const path = Skia.PathBuilder.Make();
     const mx = (i: number) => (outline[(i % n) * 2] + outline[((i + 1) % n) * 2]) / 2;
     const my = (i: number) => (outline[(i % n) * 2 + 1] + outline[((i + 1) % n) * 2 + 1]) / 2;
     path.moveTo(mx(0), my(0));
@@ -162,8 +192,24 @@ const outlineToSkPath = (outline: number[]): SkPath => {
         path.quadTo(outline[(i % n) * 2], outline[(i % n) * 2 + 1], mx(i), my(i));
     }
     path.close();
+};
+
+const outlineToSkPath = (outline: number[]): SkPath => {
+    'worklet';
+    if (outline.length < 6) {
+        return Skia.Path.Make();
+    }
+    const path = Skia.PathBuilder.Make();
+    addOutline(path, outline);
     return path.build();
 };
+
+/**
+ * The stroke being drawn, built up as it grows (see InkTrace): the finished
+ * part of the line is frozen into `frozen` piece by piece, and each frame only
+ * rebuilds the last few dozen points on top of it, however long the stroke.
+ */
+type LiveInk = { id: number; trace: InkTrace; frozen: SkPath | null; frozenTo: number };
 
 const pictureBounds = Skia.XYWHRect(-CANVAS_EXTENT, -CANVAS_EXTENT, CANVAS_EXTENT * 2, CANVAS_EXTENT * 2);
 
@@ -250,10 +296,10 @@ const buildPaper = (
 
 // Graphite texture: fractal noise mapped to the ink colour's alpha. The noise is
 // in document space, so the grain stays put while you scroll or zoom.
-const PencilGrain: React.FC<{ color: string }> = ({ color }) => (
+const PencilGrain: React.FC<{ matrix: SharedValue<number[]> }> = ({ matrix }) => (
     <>
         <FractalNoise freqX={0.9} freqY={0.9} octaves={2} seed={3} />
-        <ColorMatrix matrix={pencilGrainMatrix(color)} />
+        <ColorMatrix matrix={matrix} />
     </>
 );
 
@@ -423,6 +469,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInsetRef.current = bottomInset;
 
     const live = useSharedValue<number[]>([]);
+    const liveInk = useSharedValue<{ ink: LiveInk | null }>({ ink: null });
     const liveId = useSharedValue(0);
     // A lifted stroke moves from `live` to `pending` in the same UI frame and is
     // drawn from there until React has rendered it into the ink picture. With
@@ -452,20 +499,37 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const textBoxesSV = useSharedValue<number[]>([]);
     const textGesture = useSharedValue({ index: -1, startX: 0, startY: 0, screenX: 0, screenY: 0, moved: false });
     const dragOffset = useSharedValue({ dx: 0, dy: 0 });
-    /** A second finger joined (pinch/scroll): the one-finger action it interrupted is void. */
+    /** A second finger joined (pinch/scroll) or the touch was cancelled: the one-finger action it interrupted is void. */
     const multiTouch = useSharedValue(false);
     const stylusSeen = useSharedValue(false);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
 
-    const toolSV = useSharedValue({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
-    // Before paint, not after: a touch that lands right after picking a tool
-    // must already see it (a lasso started quickly was drawn as ink).
+    // The tool for the next touch. A touch that lands right after a tool is
+    // picked must already see it (a lasso started quickly was drawn as ink),
+    // but a shared value written from JS reaches the UI thread only after the
+    // JS task ends, i.e. after the re-render the same tap starts, and a
+    // synchronous call to the UI thread would block JS behind a busy frame.
+    // A synchronizable is written from JS at once, under a short lock, and
+    // read by the gesture when a touch begins.
+    const toolSyncRef = useRef<Synchronizable<ToolConfig> | null>(null);
+    const toolNow = useRef<ToolConfig>({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
+    if (!toolSyncRef.current) {
+        toolSyncRef.current = createSynchronizable<ToolConfig>(toolNow.current);
+    }
+    const toolSync = toolSyncRef.current;
+    /** The same, for what is drawn (eraser ring, hover dot); may trail by a frame. */
+    const toolSV = useSharedValue<ToolConfig>(toolNow.current);
+    const setTool = useCallback((next: ToolConfig) => {
+        toolNow.current = next;
+        toolSync.setBlocking(next);
+        toolSV.value = next;
+    }, [toolSync, toolSV]);
     useLayoutEffect(() => {
-        toolSV.value = { mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes };
-    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, toolSV]);
-    /** The pen a stroke started with: it keeps it to the end, whatever is picked meanwhile. */
-    const strokeCfg = useSharedValue({ tool, color, size });
+        setTool({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
+    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, setTool]);
+    /** The tool a touch started with: it keeps it to the end, whatever is picked meanwhile. */
+    const strokeCfg = useSharedValue({ tool, color, size, eraserRadius, snapShapes });
 
     useEffect(() => {
         textBoxesSV.value = texts.flatMap((item, index) => {
@@ -534,14 +598,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             ty.value = next;
             return next - before;
         },
-        applyTool: (next) => {
-            // On the UI thread before returning: a plain write is sent only after
-            // the JS task ends, i.e. after the re-render the same tap starts.
-            runOnUISync((picked: typeof next) => {
-                'worklet';
-                toolSV.value = { ...toolSV.value, ...picked };
-            }, next);
-        },
+        applyTool: (next) => setTool({ ...toolNow.current, ...next }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }), []);
 
@@ -565,11 +622,66 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     /** Pending stroke of each stroke committed from here, and those not yet seen rendered. */
     const pendingIds = useRef(new WeakMap<InkStroke, number>());
     const awaiting = useRef<{ id: number; checked: boolean }[]>([]);
+    /** Ids of the strokes handed to onCommit (only the most recent matter). */
+    const committedIds = useRef(new Set<number>());
+    const unmounted = useRef(false);
     const commitLive = useCallback((stroke: InkStroke, id: number) => {
+        // Anything still on its way when the canvas went was handed over then (see below).
+        if (unmounted.current || committedIds.current.has(id)) {
+            return;
+        }
+        committedIds.current.add(id);
+        if (committedIds.current.size > 64) {
+            committedIds.current.delete(committedIds.current.values().next().value as number);
+        }
         pendingIds.current.set(stroke, id);
         awaiting.current.push({ id, checked: false });
         onCommit(stroke);
     }, [onCommit]);
+    const onCommitRef = useRef(onCommit);
+    onCommitRef.current = onCommit;
+    // The canvas can go while a stroke is being drawn or just lifted: a theme
+    // switch remounts the whole app, the editor included. The stroke under the
+    // pen and the lifted strokes whose commit has not reached JS yet are handed
+    // to onCommit right here, before anything else of this canvas is gone, so
+    // the editor holds them when it parks the drawing. Read synchronously from
+    // the UI thread, once: the stroke lives only there.
+    useLayoutEffect(() => {
+        unmounted.current = false;
+        return () => {
+            unmounted.current = true;
+            let unfinished: { id: number; stroke: InkStroke }[] = [];
+            try {
+                unfinished = runOnUISync(() => {
+                    'worklet';
+                    const out = pending.value.map((entry) => ({ id: entry.id, stroke: entry.stroke }));
+                    const points = live.value;
+                    if (gestureMode.value === 'draw' && points.length >= 3 && !multiTouch.value) {
+                        const cfg = strokeCfg.value;
+                        out.push({
+                            id: liveId.value,
+                            stroke: snapped.value
+                                ? { tool: cfg.tool, color: cfg.color, size: cfg.size, points: points.slice(), cut: true, shape: true }
+                                : { tool: cfg.tool, color: cfg.color, size: cfg.size, points: points.slice() },
+                        });
+                    }
+                    // The gesture may still end on the UI thread: it finds nothing to commit.
+                    gestureMode.value = 'none';
+                    live.value = [];
+                    return out;
+                });
+            } catch {
+                // The UI runtime is already gone: nothing can be read from it.
+            }
+            unfinished.forEach(({ id, stroke }) => {
+                if (!committedIds.current.has(id)) {
+                    committedIds.current.add(id);
+                    onCommitRef.current(stroke);
+                }
+            });
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     // After each render: strokes now in the ink picture stop being drawn as
     // pending. Skia sent the new picture to the UI thread in the layout effect
     // of this commit, so this removal lands after it: never a frame without
@@ -638,7 +750,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             liveShown.value = { t: Date.now(), length: live.value.length };
             live.modify(undefined, true);
         }
-        if (snapped.value || !toolSV.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
+        if (snapped.value || !strokeCfg.value.snapShapes || Date.now() - still.value.t < SHAPE_HOLD_MS) {
             return;
         }
         const shape = recognizeShape(live.value);
@@ -722,7 +834,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     stylusSeen.value = true;
                     runOnJS(callJs)('onStylus');
                 }
-                const cfg = toolSV.value;
+                const cfg = toolSync.getBlocking();
+                strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size, eraserRadius: cfg.eraserRadius, snapShapes: cfg.snapShapes };
                 // The pen's eraser end or side button (see InkInputView) erases with any tool.
                 const penErases = isStylus && !!e.stylusData && e.stylusData.pressure <= ERASER_PRESSURE / 2;
                 // Typing a label is fine with a finger; drawing obeys pen-only mode.
@@ -766,7 +879,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return;
                 }
                 gestureMode.value = 'draw';
-                strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size };
                 const pressure = isStylus && e.stylusData && e.stylusData.pressure >= 0 ? e.stylusData.pressure : 0.55;
                 lastSample.value = { x: e.x, y: e.y, t: Date.now(), p: pressure };
                 liveId.value += 1;
@@ -832,7 +944,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     // filled in, so the ink between them is erased too.
                     const distance = Math.hypot(e.x - at.x, e.y - at.y);
                     if (distance >= ERASE_STEP && Date.now() - at.t >= ERASE_INTERVAL_MS) {
-                        const radius = toolSV.value.eraserRadius;
+                        const radius = strokeCfg.value.eraserRadius;
                         const steps = Math.ceil(distance / Math.max(ERASE_STEP, radius / 2));
                         const path: number[] = [];
                         for (let i = 1; i < steps; i++) {
@@ -888,6 +1000,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             .onEnd((e, success) => {
                 if (gestureMode.value === 'scroll') {
                     fling(e.velocityX, e.velocityY);
+                }
+                // An active stroke that ends without success was cancelled, not
+                // lifted: a second finger landed, or a palm that touched first
+                // gave way to the pen (InkInputView cancels it), or Android
+                // rejected it as a palm. Its ink is void. (A tap that never
+                // moved never activates and does not come here: dots stay.)
+                if (gestureMode.value === 'draw' && !success) {
+                    multiTouch.value = true;
                 }
                 // The lift-off point ends the line, even when no move reported it.
                 // Only on a real lift: a stroke cut short by a second finger ends
@@ -955,7 +1075,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     watching.value = false;
                     runOnJS(callJs)('watchStroke', false);
                 }
-                // A second finger landing (pinch) cancels the stroke it interrupted.
+                // A second finger landing (pinch) or a cancel voids the stroke it interrupted.
                 if (multiTouch.value) {
                     live.value = [];
                     return;
@@ -1044,11 +1164,47 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
 
     const livePath = useDerivedValue(() => {
         const cfg = strokeCfg.value;
-        const spec = INK_TOOLS[cfg.tool];
+        const points = live.value;
         const started = performance.now();
-        const path = snapped.value
-            ? shapeSkPath(live.value, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points: live.value }))
-            : outlineToSkPath(strokeOutline(live.value, cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib));
+        let path: SkPath;
+        if (snapped.value) {
+            path = shapeSkPath(points, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points }));
+        } else if (points.length < 3) {
+            // (Also runs once on the JS thread at mount, where the holder must not be touched.)
+            if (liveInk.value.ink) {
+                liveInk.value.ink = null;
+            }
+            path = Skia.Path.Make();
+        } else {
+            // Mutated in place on the UI thread: nothing reacts to it, and it
+            // carries over from frame to frame.
+            const holder = liveInk.value;
+            let ink = holder.ink;
+            if (!ink || ink.id !== liveId.value || points.length < ink.trace.consumed * 3) {
+                const spec = INK_TOOLS[cfg.tool] || INK_TOOLS.fountain;
+                ink = { id: liveId.value, trace: createTrace(cfg.size, spec.thinning, spec.streamline, spec.taper, spec.nib), frozen: null, frozenTo: -1 };
+                holder.ink = ink;
+            }
+            const trace = ink.trace;
+            traceAppend(trace, points);
+            let piece = nextFrozenPiece(ink.frozenTo, trace.done);
+            if (piece) {
+                const builder = ink.frozen ? Skia.PathBuilder.MakeFromPath(ink.frozen) : Skia.PathBuilder.Make();
+                while (piece) {
+                    addOutline(builder, traceOutline(trace, null, piece[0], piece[1], piece[0] === 0, false));
+                    ink.frozenTo = piece[1];
+                    piece = nextFrozenPiece(ink.frozenTo, trace.done);
+                }
+                ink.frozen = builder.build();
+            }
+            const tail = traceTail(trace, points);
+            const from = liveTailStart(ink.frozenTo);
+            // One path, frozen pieces and tail as separate contours: filled as a
+            // union, so a translucent marker does not darken where they overlap.
+            const builder = ink.frozen ? Skia.PathBuilder.MakeFromPath(ink.frozen) : Skia.PathBuilder.Make();
+            addOutline(builder, traceOutline(trace, tail, from, tail.n - 1, from === 0, true));
+            path = builder.build();
+        }
         liveCost.value = performance.now() - started;
         return path;
     });
@@ -1179,6 +1335,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // The live stroke shows in the pen it started with, as it will be committed.
     const liveColor = useDerivedValue(() => strokeCfg.value.color);
     const liveOpacity = useDerivedValue(() => INK_TOOLS[strokeCfg.value.tool]?.opacity ?? 1);
+    const liveBlend = useDerivedValue(() => (strokeCfg.value.tool === 'marker' ? 'multiply' : 'srcOver'));
+    const liveGrainMatrix = useDerivedValue(() => pencilGrainMatrix(strokeCfg.value.color));
     const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
     const inkLayer = invertInk ? (
         <Paint>
@@ -1206,8 +1364,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                             <Group layer={inkLayer} clip={pageClip}>
                                 <Picture picture={inkPicture} />
                                 <Picture picture={pendingPicture} />
-                                <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={tool === 'marker' ? 'multiply' : 'srcOver'}>
-                                    {liveGrain && <PencilGrain color={color} />}
+                                <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={liveBlend}>
+                                    {liveGrain && <PencilGrain matrix={liveGrainMatrix} />}
                                 </Path>
                                 {labels}
                                 {dragIndex !== null && texts[dragIndex] && (
