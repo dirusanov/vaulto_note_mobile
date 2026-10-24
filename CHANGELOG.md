@@ -27,6 +27,7 @@
 - Notes list: Pinned and Others sections, checklists with done items struck through, a hint when free minutes run low.
 - A Checklist preset for AI improvements; versions made from your own instruction are named after it.
 - Notes with a drawing show a small picture of it in the notes list (inverted on the theme paper in dark mode).
+- Free guest minutes are protected with Google Play Integrity: a new guest session is confirmed with Google Play, so reinstalling the app no longer resets the free minutes. Where the app cannot be confirmed, the app asks you to sign in to keep transcribing; without Play services the app still starts and works.
 
 - The drawing tools, colours, sizes and paper you last used are remembered, also after the app restarts, and a new drawing starts with them.
 - A calmer formatting toolbar above the keyboard with an Aa panel (text styles, B/I/U/S, highlight, lists, numbered list, indent, quote) and a hide-keyboard button; picking a highlight colour no longer closes the keyboard.
