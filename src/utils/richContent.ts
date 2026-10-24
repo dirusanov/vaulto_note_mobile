@@ -431,6 +431,41 @@ export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number
     return `${words.slice(0, Math.min(4, maxWords)).join(' ').replace(/[,;:]+$/, '')}…`;
 };
 
+/**
+ * A title for a guest's voice note, made on the device (guests have no cloud
+ * LLM). Unlike deriveAutoTitleFromPlainText it prefers a natural break - the
+ * first sentence, else its first clause - over words cut mid-phrase, and only
+ * falls back to an ellipsis when the opening runs on.
+ */
+export const deriveTitleFromTranscript = (text: string, maxWords: number = 8): string => {
+    const firstLine = (text || '')
+        .split('\n')
+        .map((line) => stripLeadingListMarker(line))
+        .find(Boolean) || '';
+    const tokens = (value: string) => value
+        .split(/\s+/)
+        .filter((token) => token && !/^[-*_•☐☑]+$/.test(token) && !/^#[\p{L}\p{N}]/u.test(token));
+    const clean = (value: string) => value.replace(/[\s.!?。！？:;,，、…—–-]+$/, '').trim();
+    const capitalize = (value: string) => value.charAt(0).toLocaleUpperCase() + value.slice(1);
+
+    const sentence = clean(firstLine.split(/(?<=[.!?。！？])\s*/)[0] || '');
+    const words = tokens(sentence);
+    if (words.length === 0) return '';
+    // Scripts without spaces (Chinese, Japanese) arrive as one long token.
+    if (words.length === 1 && words[0].length > 30) {
+        const clause = clean(words[0].split(/[，、：；,;:]/)[0] || '');
+        return clause.length <= 30 ? clause : `${clause.slice(0, 20)}…`;
+    }
+    if (words.length <= maxWords && sentence.length <= 60) {
+        return capitalize(words.join(' '));
+    }
+    const clause = tokens(clean(sentence.split(/[,;:，；：]\s|\s[—–-]\s/)[0] || ''));
+    if (clause.length >= 2 && clause.length <= maxWords) {
+        return capitalize(clause.join(' '));
+    }
+    return `${capitalize(words.slice(0, Math.min(6, maxWords)).join(' ').replace(/[,;:]+$/, ''))}…`;
+};
+
 const SCRIPT_RANGES: Array<[string, RegExp]> = [
     ['latin', /[A-Za-z\u00c0-\u024f]/],
     ['cyrillic', /[\u0400-\u04ff]/],

@@ -120,6 +120,7 @@ import { upsertDrawingInHtml } from '../drawing/drawingFormat';
 import { generateUUID } from '../utils/uuid';
 import {
     appendPlainTextSnippetToRichContent,
+    deriveTitleFromTranscript,
     extractEmbeddedAudioPaths,
     hasMeaningfulRichContent,
     isEditorEchoOf,
@@ -4915,12 +4916,19 @@ export const NoteEditScreen = () => {
                         }
 
                         const agentTitle = sanitizeDisplayLabel(agentResult.suggestedTitle || '');
-                        // Without a model title the note stays untitled and the list shows
-                        // its text: the first words cut mid-sentence made odd titles.
-                        const suggestedTitle = titleMatchesContextScript(
+                        // Without a model title an account's note stays untitled and the list
+                        // shows its text: the first words cut mid-sentence made odd titles.
+                        const modelTitle = titleMatchesContextScript(
                             agentTitle,
                             `${contextContent || ''}\n${normalizedTaskText || ''}`
                         ) ? agentTitle : '';
+                        // A guest's on-device agent may answer without a title: the
+                        // dictated words name the note instead (no cloud LLM).
+                        const suggestedTitle = modelTitle || (
+                            task.agentRoute === 'device' && !(isAuthenticated && !isGuest)
+                                ? sanitizeDisplayLabel(deriveTitleFromTranscript(originalText))
+                                : ''
+                        );
                         const hasStableTitle =
                             !!currentTitleRef.current.trim() ||
                             !!lastSavedTitle.current.trim() ||
@@ -5518,6 +5526,34 @@ export const NoteEditScreen = () => {
         }, 1500);
     };
 
+    /**
+     * Guests get no AI title (LLM endpoints need an account): an untitled note
+     * takes one from the first sentence of what was dictated, made on the device.
+     */
+    const applyLocalTitleIfUntitled = async (text: string) => {
+        const noteId = localNoteIdRef.current;
+        if (
+            !noteId ||
+            titleLockRef.current ||
+            currentTitleRef.current.trim() ||
+            lastSavedTitle.current.trim() ||
+            (existingNote?.title || '').trim()
+        ) {
+            return;
+        }
+        const localTitle = sanitizeDisplayLabel(deriveTitleFromTranscript(text));
+        if (!localTitle) return;
+        try {
+            await updateNote(noteId, { title: localTitle });
+            setTitle(localTitle);
+            currentTitleRef.current = localTitle;
+            lastSavedTitle.current = localTitle;
+            titleLockRef.current = true;
+        } catch (titleError) {
+            console.error('[NoteEditScreen] Failed to apply local title', titleError);
+        }
+    };
+
     const handleRecordingFinish = async (
         recording: AudioRecording,
         transcribe: boolean = true,
@@ -5850,6 +5886,10 @@ export const NoteEditScreen = () => {
                     }
                     // Transcribed: the note shows only the text. The audio stays
                     // in the note's recordings (toolbar) to replay or re-transcribe.
+                    // A request ("rename it…") left as text would make an odd title.
+                    if (targetVariantId === 'original' && !(isAuthenticated && !isGuest) && !looksLikeVoiceCommand(transcribedText)) {
+                        await applyLocalTitleIfUntitled(transcribedText);
+                    }
                     if (recording.meeting) {
                         void runMeetingSummaryRef.current(transcribedText);
                     }
