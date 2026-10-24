@@ -520,7 +520,9 @@
       "commandFailed": "この指示を実行できませんでした:「{{text}}」",
       "limitNotice": "今月の AI の上限に達しました。録音は AI による整形なしで、そのままテキストとして追加されます。",
       "insertAsText": "テキストとして挿入",
-      "guestRequestHint": "サインインすると、このような依頼を AI がチェックリストに変えます"
+      "guestRequestHint": "サインインすると、このような依頼を AI がチェックリストに変えます",
+      "guestRequestHintTitle": "サインインすると、このような依頼で AI がタイトルを変更します",
+      "guestRequestHintEdit": "サインインすると、このような依頼を AI がノートで実行します"
     },
     "improvePreview": {
       "title": "AI の提案",

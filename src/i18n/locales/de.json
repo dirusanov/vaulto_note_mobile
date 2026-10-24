@@ -520,7 +520,9 @@
       "commandFailed": "Diese Anweisung konnte nicht ausgeführt werden: „{{text}}“",
       "limitNotice": "KI-Limit für diesen Monat erreicht: Aufnahmen werden als reiner Text eingefügt, ohne KI-Bearbeitung.",
       "insertAsText": "Als Text einfügen",
-      "guestRequestHint": "Melde dich an, und die KI macht aus solchen Bitten eine Checkliste"
+      "guestRequestHint": "Melde dich an, und die KI macht aus solchen Bitten eine Checkliste",
+      "guestRequestHintTitle": "Melde dich an, und die KI ändert auf solche Bitten den Titel",
+      "guestRequestHintEdit": "Melde dich an, und die KI setzt solche Bitten in deiner Notiz um"
     },
     "improvePreview": {
       "title": "KI-Vorschlag",

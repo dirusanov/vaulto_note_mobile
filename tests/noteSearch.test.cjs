@@ -61,3 +61,22 @@ test('list search matches every word, in any order and inflection, not markup', 
     assert.ok(matchesListQuery(text, listSearchTerms('   ')));
     assert.deepEqual(listSearchTerms('Meetings meetings'), ['meetin']);
 });
+
+test('answer citations become superscripts that match the source chips', () => {
+    const { renderAnswerCitations } = require('../.test-build/search/noteSearch');
+    assert.deepEqual(renderAnswerCitations('Buy milk and bread [1].', 2), { text: 'Buy milk and bread¹.', cited: [1] });
+    assert.deepEqual(renderAnswerCitations('Hotel [2], flight [1, 2]', 2), { text: 'Hotel², flight¹,²', cited: [2, 1] });
+    assert.equal(renderAnswerCitations('Launch moved [1][2].', 2).text, 'Launch moved¹,².');
+    assert.equal(renderAnswerCitations('Thursday [1-3]', 3).text, 'Thursday¹,²,³');
+    // On-device models: other bracket styles and numbers that match no excerpt.
+    assert.deepEqual(renderAnswerCitations('Четверг【1】 и пятница [Note 2] [7]', 2), { text: 'Четверг¹ и пятница²', cited: [1, 2] });
+    assert.deepEqual(renderAnswerCitations('Nothing about that [1]', 0), { text: 'Nothing about that', cited: [] });
+});
+
+test('citation-only lines are dropped, links and checkboxes are kept', () => {
+    const { renderAnswerCitations } = require('../.test-build/search/noteSearch');
+    assert.equal(renderAnswerCitations('- milk [1]\n- eggs\n\nSources: [1], [2]', 2).text, '- milk¹\n- eggs');
+    assert.equal(renderAnswerCitations('Coffee.\n[1]', 1).text, 'Coffee.');
+    assert.equal(renderAnswerCitations('See [1](https://example.com) and - [ ] task', 1).text, 'See [1](https://example.com) and - [ ] task');
+    assert.equal(renderAnswerCitations('Notes:\n- milk', 1).text, 'Notes:\n- milk');
+});

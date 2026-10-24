@@ -520,7 +520,9 @@
       "commandFailed": "无法执行此指令：“{{text}}”",
       "limitNotice": "本月已达到 AI 使用上限：录音将以纯文本添加，不经 AI 整理。",
       "insertAsText": "作为文本插入",
-      "guestRequestHint": "登录后，AI 会把这样的请求变成清单"
+      "guestRequestHint": "登录后，AI 会把这样的请求变成清单",
+      "guestRequestHintTitle": "登录后，AI 会按这样的请求修改标题",
+      "guestRequestHintEdit": "登录后，AI 会在笔记中执行这样的请求"
     },
     "improvePreview": {
       "title": "AI 建议",
@@ -928,7 +930,7 @@
     "play": "播放",
     "pause": "暂停",
     "playbackPosition": "播放进度",
-    "checklist": "待办清单",
+    "checklist": "清单",
     "bulletList": "项目符号列表",
     "bold": "粗体",
     "italic": "斜体",

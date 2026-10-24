@@ -147,3 +147,21 @@ test('titles derived from a checklist carry no checkbox or list marker', () => {
     assert.equal(stripLeadingListMarker('2026 plan'), '2026 plan');
     assert.equal(stripStoredTitleMarkdown('☐ Milk bread xyz'), 'Milk bread xyz');
 });
+
+test('a guest voice note is titled from its first sentence or clause, on the device', () => {
+    const { deriveTitleFromTranscript } = require('../.test-build/editor/utils/richContent');
+    assert.equal(deriveTitleFromTranscript('Call Anna about the launch. She wants Thursday.'), 'Call Anna about the launch');
+    assert.equal(deriveTitleFromTranscript('купить молоко и хлеб'), 'Купить молоко и хлеб');
+    assert.equal(
+        deriveTitleFromTranscript('Ideas for the weekend trip, we could go hiking near the lake and then have dinner in town'),
+        'Ideas for the weekend trip',
+    );
+    assert.equal(
+        deriveTitleFromTranscript('So yesterday I was thinking that maybe we should finally move the whole team offsite somewhere'),
+        'So yesterday I was thinking that…',
+    );
+    assert.equal(deriveTitleFromTranscript('明天下午三点和产品团队开会讨论新版本的发布计划以及市场推广的安排，还要准备演示'), '明天下午三点和产品团队开会讨论新版本的发…');
+    assert.equal(deriveTitleFromTranscript('明天开会，讨论发布'), '明天开会，讨论发布');
+    assert.equal(deriveTitleFromTranscript('#work Ship the beta?'), 'Ship the beta');
+    assert.equal(deriveTitleFromTranscript('   '), '');
+});

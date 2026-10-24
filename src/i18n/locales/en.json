@@ -520,7 +520,9 @@
       "commandFailed": "Could not carry out this request: “{{text}}”",
       "limitNotice": "AI limit reached for this month: recordings are added as plain text, without AI cleanup.",
       "insertAsText": "Insert as text",
-      "guestRequestHint": "Sign in and the AI will turn requests like this into a checklist"
+      "guestRequestHint": "Sign in and the AI will turn requests like this into a checklist",
+      "guestRequestHintTitle": "Sign in and the AI will rename notes when you ask like this",
+      "guestRequestHintEdit": "Sign in and the AI will carry out requests like this in your note"
     },
     "improvePreview": {
       "title": "AI suggestion",

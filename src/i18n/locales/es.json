@@ -520,7 +520,9 @@
       "commandFailed": "No se pudo ejecutar esta orden: «{{text}}»",
       "limitNotice": "Límite de IA de este mes alcanzado: las grabaciones se añaden como texto simple, sin retoque de IA.",
       "insertAsText": "Insertar como texto",
-      "guestRequestHint": "Inicia sesión y la IA convertirá peticiones como esta en una lista de tareas"
+      "guestRequestHint": "Inicia sesión y la IA convertirá peticiones como esta en una lista de tareas",
+      "guestRequestHintTitle": "Inicia sesión y la IA cambiará el título con peticiones como esta",
+      "guestRequestHintEdit": "Inicia sesión y la IA hará en tu nota lo que pidas así"
     },
     "improvePreview": {
       "title": "Sugerencia de IA",

@@ -154,3 +154,15 @@ test('the Checklist preset stores a step label the server keeps', () => {
     assert.equal(isStepLabel('Summarize → Checklist'), true);
 });
 
+
+test('the checklist preset, its version label and the toolbar button share one name in every locale', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const dir = path.join(__dirname, '../src/i18n/locales');
+    for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.json'))) {
+        const locale = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+        const preset = locale.edit.presets.checklist.label;
+        assert.equal(locale.edit.versions.kind.checklist, preset, `${file}: version kind`);
+        assert.equal(locale.a11y.checklist, preset, `${file}: toolbar button`);
+    }
+});

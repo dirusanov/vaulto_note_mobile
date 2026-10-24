@@ -109,7 +109,7 @@ import { LimitModal } from '../components/LimitModal';
 import { InlineNotice, InlineNoticeAction } from '../components/InlineNotice';
 import { isAiLimitKnown, noteAccountPlan, takeAiLimitNotice } from '../utils/aiLimitState';
 import { isLimitSheetOpen } from '../utils/limitEvents';
-import { looksLikeVoiceCommand, shouldHintAiForRequest } from '../utils/voiceCommand';
+import { looksLikeVoiceCommand, shouldHintAiForRequest, voiceRequestKind } from '../utils/voiceCommand';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
@@ -120,6 +120,7 @@ import { upsertDrawingInHtml } from '../drawing/drawingFormat';
 import { generateUUID } from '../utils/uuid';
 import {
     appendPlainTextSnippetToRichContent,
+    deriveTitleFromTranscript,
     extractEmbeddedAudioPaths,
     hasMeaningfulRichContent,
     isEditorEchoOf,
@@ -593,12 +594,14 @@ const HeaderTitle = memo(({
     title,
     onChange,
     onFocus,
+    onBlur,
     onSubmit,
     inputRef,
 }: {
     title: string;
     onChange: (t: string) => void;
     onFocus: () => void;
+    onBlur: () => void;
     /** Enter in the title: the caret moves on to the text, as in Keep. */
     onSubmit: () => void;
     inputRef?: React.RefObject<TextInput | null>;
@@ -631,6 +634,7 @@ const HeaderTitle = memo(({
             value={title}
             onChangeText={handleChange}
             onFocus={onFocus}
+            onBlur={onBlur}
             onSubmitEditing={onSubmit}
             submitBehavior="submit"
             returnKeyType="next"
@@ -1990,6 +1994,7 @@ export const NoteEditScreen = () => {
     const [isColorPickerVisible, setIsColorPickerVisible] = useState(false);
     // Measured, since the toolbar grows while its Aa panel is open.
     const [toolbarHeight, setToolbarHeight] = useState(FLOATING_MIC_TOOLBAR_HEIGHT);
+    const [titleFocused, setTitleFocused] = useState(false);
     const editorRef = useRef<RichTextEditorHandle>(null);
     const titleInputRef = useRef<TextInput>(null);
     const rawEditorRef = useRef<TextInput>(null);
@@ -2097,7 +2102,9 @@ export const NoteEditScreen = () => {
         }
 
         const nextScale = resolveChecklistScaleForContent(nextContent, true);
-        setDraftOriginalChecklistScaleFactor(nextScale);
+        // The first scale a new checklist gets sticks: re-deriving it from the
+        // item count made the font jump while typing (1.25x up to 8 items, then 1.15x).
+        setDraftOriginalChecklistScaleFactor((current) => current ?? nextScale);
 
         const currentNoteId = localNoteIdRef.current;
         if (
@@ -2107,11 +2114,11 @@ export const NoteEditScreen = () => {
             typeof checklistScaleLocksRef.current[currentNoteId] !== 'number'
         ) {
             void (async () => {
-                await persistChecklistScaleLock(currentNoteId, nextScale);
+                await persistChecklistScaleLock(currentNoteId, draftOriginalChecklistScaleFactor ?? nextScale);
                 setPendingCreationAutoScaleNoteId(null);
             })();
         }
-    }, [autoScalingEnabled, pendingCreationAutoScaleNoteId, persistChecklistScaleLock]);
+    }, [autoScalingEnabled, draftOriginalChecklistScaleFactor, pendingCreationAutoScaleNoteId, persistChecklistScaleLock]);
 
     const handleCreatedNoteAutoScale = useCallback(async (newNoteId: string, contentForLock?: string) => {
         if (!newNoteId || pendingCreationAutoScaleNoteId !== NEW_NOTE_AUTO_SCALE_DRAFT_ID) {
@@ -2584,7 +2591,12 @@ export const NoteEditScreen = () => {
     ), [activeVariantId, autoScalingEnabled, localNoteId, pendingCreationAutoScaleNoteId]);
 
     const activeVariantChecklistScaleFactor = useMemo(() => {
-        const lockedScale = checklistScaleLocks[activeVariantId];
+        // The original's scale is locked under the note's id (see
+        // persistChecklistScaleLock): looked up as 'original' it was never found,
+        // so the creation preview's larger checklist shrank back to 1x a moment
+        // after the note was first saved, while typing its first item.
+        const lockKey = activeVariantId === 'original' ? localNoteId : activeVariantId;
+        const lockedScale = lockKey ? checklistScaleLocks[lockKey] : undefined;
         if (typeof lockedScale === 'number') {
             return lockedScale;
         }
@@ -2594,7 +2606,7 @@ export const NoteEditScreen = () => {
         }
 
         return null;
-    }, [activeVariantId, checklistScaleLocks, draftOriginalChecklistScaleFactor, shouldUseCreationAutoScalePreview]);
+    }, [activeVariantId, checklistScaleLocks, draftOriginalChecklistScaleFactor, localNoteId, shouldUseCreationAutoScalePreview]);
 
     useEffect(() => {
         if (!existingNote) {
@@ -4916,12 +4928,19 @@ export const NoteEditScreen = () => {
                         }
 
                         const agentTitle = sanitizeDisplayLabel(agentResult.suggestedTitle || '');
-                        // Without a model title the note stays untitled and the list shows
-                        // its text: the first words cut mid-sentence made odd titles.
-                        const suggestedTitle = titleMatchesContextScript(
+                        // Without a model title an account's note stays untitled and the list
+                        // shows its text: the first words cut mid-sentence made odd titles.
+                        const modelTitle = titleMatchesContextScript(
                             agentTitle,
                             `${contextContent || ''}\n${normalizedTaskText || ''}`
                         ) ? agentTitle : '';
+                        // A guest's on-device agent may answer without a title: the
+                        // dictated words name the note instead (no cloud LLM).
+                        const suggestedTitle = modelTitle || (
+                            task.agentRoute === 'device' && !(isAuthenticated && !isGuest) && !looksLikeVoiceCommand(originalText)
+                                ? sanitizeDisplayLabel(deriveTitleFromTranscript(originalText))
+                                : ''
+                        );
                         const hasStableTitle =
                             !!currentTitleRef.current.trim() ||
                             !!lastSavedTitle.current.trim() ||
@@ -5519,6 +5538,34 @@ export const NoteEditScreen = () => {
         }, 1500);
     };
 
+    /**
+     * Guests get no AI title (LLM endpoints need an account): an untitled note
+     * takes one from the first sentence of what was dictated, made on the device.
+     */
+    const applyLocalTitleIfUntitled = async (text: string) => {
+        const noteId = localNoteIdRef.current;
+        if (
+            !noteId ||
+            titleLockRef.current ||
+            currentTitleRef.current.trim() ||
+            lastSavedTitle.current.trim() ||
+            (existingNote?.title || '').trim()
+        ) {
+            return;
+        }
+        const localTitle = sanitizeDisplayLabel(deriveTitleFromTranscript(text));
+        if (!localTitle) return;
+        try {
+            await updateNote(noteId, { title: localTitle });
+            setTitle(localTitle);
+            currentTitleRef.current = localTitle;
+            lastSavedTitle.current = localTitle;
+            titleLockRef.current = true;
+        } catch (titleError) {
+            console.error('[NoteEditScreen] Failed to apply local title', titleError);
+        }
+    };
+
     const handleRecordingFinish = async (
         recording: AudioRecording,
         transcribe: boolean = true,
@@ -5851,6 +5898,10 @@ export const NoteEditScreen = () => {
                     }
                     // Transcribed: the note shows only the text. The audio stays
                     // in the note's recordings (toolbar) to replay or re-transcribe.
+                    // A request ("rename it…") left as text would make an odd title.
+                    if (targetVariantId === 'original' && !(isAuthenticated && !isGuest) && !looksLikeVoiceCommand(transcribedText)) {
+                        await applyLocalTitleIfUntitled(transcribedText);
+                    }
                     if (recording.meeting) {
                         void runMeetingSummaryRef.current(transcribedText);
                     }
@@ -5867,9 +5918,15 @@ export const NoteEditScreen = () => {
                         })
                     ) {
                         guestRequestHintShown = true;
+                        // Name what the AI would have done with this request.
+                        const requestKind = voiceRequestKind(transcribedText);
                         showAgentNotice({
                             kind: 'aiHint',
-                            message: t('edit.agent.guestRequestHint', 'Sign in and the AI will turn requests like this into a checklist'),
+                            message: requestKind === 'checklist'
+                                ? t('edit.agent.guestRequestHint', 'Sign in and the AI will turn requests like this into a checklist')
+                                : requestKind === 'title'
+                                    ? t('edit.agent.guestRequestHintTitle', 'Sign in and the AI will rename notes when you ask like this')
+                                    : t('edit.agent.guestRequestHintEdit', 'Sign in and the AI will carry out requests like this in your note'),
                         });
                     }
                     const status = targetVariantId === 'original' ? 'Added to Original' : 'Added to Improved';
@@ -7031,8 +7088,13 @@ export const NoteEditScreen = () => {
     // still type into it, so only tapping the title again ends the handoff.
     const handleHeaderTitleFocus = useCallback(() => {
         setIsEditing(true);
+        setTitleFocused(true);
         if (titleHandoffRef.current) endTitleHandoff();
     }, [endTitleHandoff]);
+    // Formatting does not apply to the plain-text title: the toolbar greys out.
+    const handleHeaderTitleBlur = useCallback(() => {
+        setTitleFocused(false);
+    }, []);
 
     const editorHeader = useMemo(() => (
         <View>
@@ -7040,6 +7102,7 @@ export const NoteEditScreen = () => {
                 title={titleHandoffShown ?? (activeVariantId === 'original' ? title : noteTitle)}
                 onChange={handleHeaderTitleChange}
                 onFocus={handleHeaderTitleFocus}
+                onBlur={handleHeaderTitleBlur}
                 onSubmit={focusBodyFromTitle}
                 inputRef={titleInputRef}
             />
@@ -7077,6 +7140,7 @@ export const NoteEditScreen = () => {
         charCount,
         dateStr,
         handleHeaderTitleFocus,
+        handleHeaderTitleBlur,
         handleHeaderTitleChange,
         titleHandoffShown,
         handleVariantSelect,
@@ -7825,6 +7889,8 @@ export const NoteEditScreen = () => {
                             showDictate={LOCAL_WHISPER_ENABLED}
                             activeFormats={isRealtimeDictating ? [...activeFormats, 'dictate'] : activeFormats}
                             onHeightChange={setToolbarHeight}
+                            formattingDisabled={titleFocused}
+                            keyboardHeight={keyboardVisibleState ? keyboardHeight : 0}
                         />
                     </View>
                 </View>
