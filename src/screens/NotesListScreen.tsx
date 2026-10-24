@@ -26,6 +26,7 @@ import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richC
 import { countTags, hasTag } from '../utils/tags';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
+import { compareByContentDateDesc } from '../utils/contentDate';
 import { rtlFlip } from '../i18n/direction';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -531,10 +532,9 @@ export const NotesListScreen = () => {
         // Pinned notes come first
         if (a.is_pinned && !b.is_pinned) return -1;
         if (!a.is_pinned && b.is_pinned) return 1;
-        // Otherwise sort by updated_at
-        const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-        const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-        return dateB - dateA;
+        // Otherwise by when the text last changed (a pin or version switch
+        // does not move a note).
+        return compareByContentDateDesc(a, b);
     });
 
 

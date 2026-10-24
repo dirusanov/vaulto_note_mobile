@@ -35,6 +35,7 @@ import { rtlFlip } from '../i18n/direction';
 import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { isLocalLLMRuntimeAvailable } from '../services/LocalLLMService';
 import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
+import { contentDateOf } from '../utils/contentDate';
 import { LLM_LIMIT_REASON, usageLimitReasonOf } from '../utils/aiLimitState';
 
 type Message =
@@ -112,7 +113,8 @@ export const AskNotesScreen = () => {
                 || deriveAutoTitleFromPlainText(richContentToPlainText(content));
             // Protected notes never reach a cloud AI; legacy local-only ones only with consent.
             const cloudAllowed = !note.is_protected && (privateAllowed || note.storage_scope !== 'local_only');
-            return { id: note.id, title, text, updatedAt: note.updated_at, cloudAllowed };
+            // "Recent" means the text changed recently, not that it was pinned.
+            return { id: note.id, title, text, updatedAt: contentDateOf(note), cloudAllowed };
         })
         .filter((note) => note.text.trim().length > 0), [getAllNotes, notes, privateAllowed]);
     const searchable = useMemo(() => allSearchable.filter((note) => note.cloudAllowed), [allSearchable]);

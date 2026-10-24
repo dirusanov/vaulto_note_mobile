@@ -24,6 +24,7 @@ import {
     setNoteAudioSyncState,
 } from './DatabaseService';
 import { AudioService } from './AudioService';
+import { incomingContentUpdatedAt } from '../utils/contentDate';
 import { audioApi } from '../api/audio';
 
 import {
@@ -648,6 +649,9 @@ class SyncService {
                     transcription_ciphertext: transcriptionToSync,
                     audio_duration: note.audio_duration ?? null,
                     has_audio: !shouldDelete && !!note.has_audio,
+                    // Decided here, not by the server: with end-to-end encryption
+                    // it cannot compare the text.
+                    content_updated_at: note.content_updated_at || null,
                 });
                 processedNotes += 1;
                 if (processedNotes % YIELD_EVERY === 0) {
@@ -1475,6 +1479,9 @@ class SyncService {
                         encrypted_transcription: serverNote.transcription_ciphertext || existing?.encrypted_transcription,
                         content_nonce: serverNote.content_nonce ?? null,
                         updated_at: serverNote.updated_at,
+                        content_updated_at: serverNote.content_updated_at
+                            || existing?.content_updated_at
+                            || serverNote.updated_at,
                         version: serverNote.version,
                         server_updated_at: serverNote.updated_at,
                         synced: 1,
@@ -1508,6 +1515,8 @@ class SyncService {
                 }
             }
             const keepLocalAudio = !!existing?.audio_file_path && !serverRemovedAudio;
+            const mergedHasAudio = keepLocalAudio || !!serverNote.has_audio;
+            const mergedAudioPath = keepLocalAudio ? existing?.audio_file_path : '';
 
             const merged: Note = {
                 ...(existing ?? {}),
@@ -1517,12 +1526,26 @@ class SyncService {
                 encrypted_title: encryptedTitle,
                 encrypted_content: await encrypt(content),
                 updated_at: serverNote.updated_at,
+                // A pin or version switch from another device keeps the date the
+                // list shows; servers that predate the field leave it to us.
+                content_updated_at: incomingContentUpdatedAt({
+                    serverContentUpdatedAt: serverNote.content_updated_at,
+                    serverUpdatedAt: serverNote.updated_at,
+                    existing,
+                    incoming: {
+                        title,
+                        content,
+                        transcription,
+                        has_audio: mergedHasAudio,
+                        audio_file_path: mergedAudioPath,
+                    },
+                }),
                 created_at: existing?.created_at ?? serverNote.updated_at,
                 transcription,
                 encrypted_transcription: transcription !== undefined ? undefined : existing?.encrypted_transcription,
-                audio_file_path: keepLocalAudio ? existing?.audio_file_path : '',
+                audio_file_path: mergedAudioPath,
                 audio_duration: serverNote.audio_duration ?? (keepLocalAudio ? existing?.audio_duration : undefined),
-                has_audio: keepLocalAudio || !!serverNote.has_audio,
+                has_audio: mergedHasAudio,
                 audio_remote: serverNote.audio_available ? 1 : 0,
                 audio_synced: serverRemovedAudio ? 0 : existing?.audio_synced ?? 0,
                 audio_sha256: serverRemovedAudio ? null : serverNote.audio_sha256 ?? existing?.audio_sha256 ?? null,
