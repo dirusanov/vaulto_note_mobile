@@ -15,11 +15,11 @@ class InkInputModule : Module() {
      * at once from the JS thread (the canvas is going away; see InkLiveView).
      */
     Function("takeUnfinishedStrokes") {
-      val view = InkLiveView.current?.get() ?: return@Function emptyList<Map<String, Any?>>()
+      val view = InkLiveView.current?.get() ?: return@Function emptyList<Map<String, Any>>()
       if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
         return@Function view.unfinishedStrokes()
       }
-      val result = java.util.concurrent.atomic.AtomicReference<List<Map<String, Any?>>>(emptyList())
+      val result = java.util.concurrent.atomic.AtomicReference<List<Map<String, Any>>>(emptyList())
       val done = java.util.concurrent.CountDownLatch(1)
       android.os.Handler(android.os.Looper.getMainLooper()).post {
         try {

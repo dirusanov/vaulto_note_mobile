@@ -684,7 +684,7 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   }
 
   /** What JS gets for a stroke: its look, its samples, and the pan and zoom it was mapped with. */
-  private fun strokePayload(stroke: Live, points: DoubleArray): Map<String, Any?> = mapOf(
+  private fun strokePayload(stroke: Live, points: DoubleArray): Map<String, Any> = mapOf(
     "id" to stroke.id,
     "tool" to stroke.config.tool,
     "color" to stroke.config.color,
@@ -695,15 +695,15 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   )
 
   /** Lifted strokes JS has not taken over yet (it lets go of them with [release]). */
-  private val unacked = java.util.concurrent.ConcurrentHashMap<Int, Map<String, Any?>>()
+  private val unacked = java.util.concurrent.ConcurrentHashMap<Int, Map<String, Any>>()
 
   /**
    * The strokes the canvas does not have yet: lifted ones whose event may still
    * be on its way, and the one under the pen. The canvas takes them when it
    * goes away (a theme switch remounts it), as it does with its own.
    */
-  fun unfinishedStrokes(): List<Map<String, Any?>> {
-    val out = ArrayList<Map<String, Any?>>(unacked.values.sortedBy { it["id"] as Int })
+  fun unfinishedStrokes(): List<Map<String, Any>> {
+    val out = ArrayList<Map<String, Any>>(unacked.values.sortedBy { it["id"] as Int })
     live?.let { stroke ->
       if (stroke.points.size >= 3) {
         out.add(strokePayload(stroke, stroke.points.toArray()))
