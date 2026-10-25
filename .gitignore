@@ -94,6 +94,7 @@ credentials.json
 # Marketing and analytics, user feedback, ideas, QA and release reports.
 /marketing/
 /docs/IDEAS.md
+/docs/TODO.md
 /docs/USER_FEEDBACK.md
 /docs/qa/
 /docs/qa-*.md
