@@ -135,7 +135,7 @@ import {
     stripAudioEmbedsFromRichContent,
     titleMatchesContextScript,
 } from '../utils/richContent';
-import { countTags, extractTags, keepTagLineLast, withTagLine } from '../utils/tags';
+import { appendAboveTagLine, countTags, extractTags, withTagLine } from '../utils/tags';
 import {
     splitTitleHandoffText,
     TITLE_HANDOFF_DUPLICATE_SUBMIT_MS,
@@ -222,9 +222,10 @@ const countNormalizedOccurrences = (haystack: string, needle: string): number =>
     return count;
 };
 
-const appendSnippetToContent = (base: string, snippet: string): string => {
-    return appendPlainTextSnippetToRichContent(base, snippet);
-};
+// Text dictated or added by the agent after the AI wrote the note's tags goes
+// above that tag line, so the tags stay last.
+const appendSnippetToContent = (base: string, snippet: string): string =>
+    appendAboveTagLine(base, (body) => appendPlainTextSnippetToRichContent(body, snippet));
 
 const insertBlockAtSelection = (
     base: string,
@@ -1069,6 +1070,8 @@ export const NoteEditScreen = () => {
     // "New note" from the list: open ready to type, not in reading mode.
     const opensAsBlankNoteRef = useRef(!routeNoteId && !route.params?.initialRecording);
     const initialTagRef = useRef<string | null>(!routeNoteId ? route.params?.initialTag ?? null : null);
+    /** Tags the AI suggested while the user was typing, written when the note is left. */
+    const pendingAutoTagsRef = useRef<string[]>([]);
 
     const [localNoteId, setLocalNoteId] = useState(routeNoteId);
     const localNoteIdRef = useRef(localNoteId);
@@ -1117,17 +1120,22 @@ export const NoteEditScreen = () => {
 
     const existingNote = notes.find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
-    // The user's tags, most used first: the voice agent reuses them rather than
-    // inventing near-duplicates. Read by the agent queue, hence the ref.
-    const userTagsRef = useRef<string[]>([]);
-    userTagsRef.current = useMemo(
-        () => countTags(notes.filter((n) => !n.deleted).map((n) => [
-            n.title || '',
-            richContentToPlainText(n.content || ''),
-            ...(n.improvements || []).map((imp) => richContentToPlainText(imp.content || '')),
-        ].join('\n'))).map(({ tag }) => tag),
-        [notes]
-    );
+    // The user's tags, most used first, sent with a cloud voice request so the
+    // agent reuses them rather than inventing near-duplicates. Only from notes
+    // that may reach the cloud at all: a protected, hidden or device-only note
+    // says nothing, not even its tags. Read when a request is made, not on
+    // every save.
+    const notesRef = useRef(notes);
+    notesRef.current = notes;
+    const shareableUserTags = useCallback((): string[] => countTags(
+        notesRef.current
+            .filter((n) => !n.deleted && !n.is_protected && n.privacy !== 'hidden' && n.storage_scope !== 'local_only')
+            .map((n) => [
+                n.title || '',
+                richContentToPlainText(n.content || ''),
+                ...(n.improvements || []).map((imp) => richContentToPlainText(imp.content || '')),
+            ].join('\n'))
+    ).map(({ tag }) => tag), []);
     const [storageScope, setStorageScope] = useState<StorageScope>(
         route.params?.initialStorageScope ?? existingNote?.storage_scope ?? 'sync'
     );
@@ -3023,10 +3031,7 @@ export const NoteEditScreen = () => {
             updateHistory?: boolean;
         }
     ): Promise<boolean> => {
-        // Text dictated or added by the agent goes above the tag line, which stays last.
-        const sanitizedText = variantId === 'original'
-            ? keepTagLineLast(stripAudioEmbedsFromRichContent(newText))
-            : stripAudioEmbedsFromRichContent(newText);
+        const sanitizedText = stripAudioEmbedsFromRichContent(newText);
         const persist = options?.persist ?? true;
         const updateHistoryState = options?.updateHistory ?? true;
         const currentVariantContent = resolveVariantContent(variantId);
@@ -4556,10 +4561,15 @@ export const NoteEditScreen = () => {
 
                 // Started from the list filtered by a tag: the note leaves with that tag
                 // (added now, not while typing, so the cursor never jumps).
-                const initialTag = initialTagRef.current;
-                if (initialTag && activeVariantIdRef.current === 'original' && hasMeaningfulRichContent(currentContentRef.current)) {
+                // So do tags the AI suggested while the user was typing.
+                const tagsOnLeave = [
+                    ...(initialTagRef.current ? [initialTagRef.current] : []),
+                    ...(extractTags(richContentToPlainText(currentContentRef.current)).length === 0 ? pendingAutoTagsRef.current : []),
+                ];
+                if (tagsOnLeave.length && activeVariantIdRef.current === 'original' && hasMeaningfulRichContent(currentContentRef.current)) {
                     initialTagRef.current = null;
-                    currentContentRef.current = withTagLine(currentContentRef.current, [initialTag]);
+                    pendingAutoTagsRef.current = [];
+                    currentContentRef.current = withTagLine(currentContentRef.current, tagsOnLeave);
                 }
 
                 const latestTitle = currentTitleRef.current;
@@ -4700,7 +4710,10 @@ export const NoteEditScreen = () => {
         haptics.warning();
         skipAutoSaveRef.current = true;
         navigateBackToList();
-        notesPendingDelete.schedule([noteId], batchDeleteNotes);
+        // An empty note is gone already (saving it deletes it): nothing to undo.
+        if (localNoteIdRef.current) {
+            notesPendingDelete.schedule([noteId], batchDeleteNotes);
+        }
     };
 
     const openVoiceRecorderForMode = useCallback((mode: MicInputMode) => {
@@ -4885,7 +4898,7 @@ export const NoteEditScreen = () => {
                             contextContent,
                             normalizedTaskText,
                             requestHistoryRef.current,
-                            { onDevice: task.agentRoute === 'device', existingTags: userTagsRef.current }
+                            { onDevice: task.agentRoute === 'device', existingTags: task.agentRoute === 'device' ? [] : shareableUserTags() }
                         ),
                         new Promise<never>((_, reject) => {
                             setTimeout(() => reject(new Error('Agent task timeout')), AGENT_TASK_TIMEOUT_MS);
@@ -5279,20 +5292,32 @@ export const NoteEditScreen = () => {
                             task.sessionId === agentSessionIdRef.current &&
                             task.noteId === localNoteIdRef.current
                         ) {
+                            const typing = activeVariantIdRef.current === 'original' && visualEditorFocusedRef.current;
+                            if (!typing && activeVariantIdRef.current === 'original') {
+                                // The editor's latest text first: the write below must not
+                                // replace keystrokes it has not reported yet.
+                                await flushVisualEditorContent();
+                            }
                             const originalContent = resolveVariantContent('original');
+                            const latestImprovements = notesRef.current.find((n) => n.id === localNoteIdRef.current)?.improvements ?? noteImprovements;
                             const noteText = [
                                 currentTitleRef.current,
                                 richContentToPlainText(originalContent),
-                                ...noteImprovements.map((imp) => richContentToPlainText(improvementDraftsRef.current[imp.id] ?? imp.content ?? '')),
+                                ...latestImprovements.map((imp) => richContentToPlainText(improvementDraftsRef.current[imp.id] ?? imp.content ?? '')),
                             ].join('\n');
                             if (extractTags(noteText).length === 0) {
-                                try {
-                                    await setVariantContentWithOptions('original', withTagLine(originalContent, suggestedTags), {
-                                        persist: true,
-                                        updateHistory: true,
-                                    });
-                                } catch (tagError) {
-                                    console.warn('[NoteEditScreen] Could not add suggested tags', tagError);
+                                if (typing) {
+                                    // Written when the note is left, not under the caret.
+                                    pendingAutoTagsRef.current = suggestedTags;
+                                } else {
+                                    try {
+                                        await setVariantContentWithOptions('original', withTagLine(originalContent, suggestedTags), {
+                                            persist: true,
+                                            updateHistory: true,
+                                        });
+                                    } catch (tagError) {
+                                        console.warn('[NoteEditScreen] Could not add suggested tags', tagError);
+                                    }
                                 }
                             }
                         }
@@ -7040,6 +7065,13 @@ export const NoteEditScreen = () => {
         setTimeout(async () => {
             if (!isMounted.current || !scope.userId || !scope.noteId
                 || pendingRetryScopeRef.current.noteId !== scope.noteId) return;
+            // Another recording or AI step still runs (a retry would just return):
+            // wait for it without using up an attempt.
+            if (pendingRetryRunningRef.current || recordingFlowsInFlightRef.current > 0 || isTranscribingRef.current) {
+                networkRetryCountRef.current = attempt;
+                scheduleNetworkRetryRef.current();
+                return;
+            }
             await retryPendingTranscriptionsRef.current?.();
             const left = await getPendingTranscriptions(scope.userId, scope.noteId).catch(() => []);
             if (left.length > 0 && isMounted.current) scheduleNetworkRetryRef.current();

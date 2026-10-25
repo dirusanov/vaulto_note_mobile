@@ -662,20 +662,16 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     liveInk = null
     // Over all the live stroke covered: the prediction ahead of the nib goes.
     show(RectF(stroke.allBounds).apply { union(bounds) })
-    onInkStroke(mapOf(
-      "id" to stroke.id,
-      "tool" to stroke.config.tool,
-      "color" to stroke.config.color,
-      "size" to stroke.config.size,
-      "shape" to stroke.snapped,
-      "points" to points.toList(),
-    ))
+    val payload = strokePayload(stroke, points)
+    unacked[stroke.id] = payload
+    onInkStroke(payload)
     // Should the canvas never report it drawn (it went away), it goes anyway.
     postDelayed({ release(listOf(stroke.id)) }, HELD_TIMEOUT_MS)
   }
 
   /** The canvas draws these strokes now: they stop being drawn here, a frame later to be safe. */
   fun release(ids: List<Int>) {
+    ids.forEach { unacked.remove(it) }
     Choreographer.getInstance().postFrameCallback {
       val gone = held.filter { it.id in ids }
       if (gone.isNotEmpty()) {
@@ -685,6 +681,35 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
         show(dirty)
       }
     }
+  }
+
+  /** What JS gets for a stroke: its look, its samples, and the pan and zoom it was mapped with. */
+  private fun strokePayload(stroke: Live, points: DoubleArray): Map<String, Any?> = mapOf(
+    "id" to stroke.id,
+    "tool" to stroke.config.tool,
+    "color" to stroke.config.color,
+    "size" to stroke.config.size,
+    "shape" to stroke.snapped,
+    "points" to points.toList(),
+    "transform" to stroke.transform.toList(),
+  )
+
+  /** Lifted strokes JS has not taken over yet (it lets go of them with [release]). */
+  private val unacked = java.util.concurrent.ConcurrentHashMap<Int, Map<String, Any?>>()
+
+  /**
+   * The strokes the canvas does not have yet: lifted ones whose event may still
+   * be on its way, and the one under the pen. The canvas takes them when it
+   * goes away (a theme switch remounts it), as it does with its own.
+   */
+  fun unfinishedStrokes(): List<Map<String, Any?>> {
+    val out = ArrayList<Map<String, Any?>>(unacked.values.sortedBy { it["id"] as Int })
+    live?.let { stroke ->
+      if (stroke.points.size >= 3) {
+        out.add(strokePayload(stroke, stroke.points.toArray()))
+      }
+    }
+    return out
   }
 
   // ----------------------------------------------------------------- hover

@@ -56,8 +56,9 @@ export const splitTags = (text: string): Array<{ text: string; tag: boolean }> =
 };
 
 // ---------------------------------------------------------------------------
-// The tag line: a paragraph (or plain-text line) of nothing but #hashtags at the
-// end of a note, where tags the AI suggests are written and where they stay.
+// The tag line: a last paragraph (or plain-text line) of nothing but #hashtags,
+// where tags the AI suggests are written. Only that last line is ever touched:
+// tags a user keeps anywhere else stay exactly where they are.
 
 /** A block of nothing but hashtags, e.g. "#work #trip-2026". */
 const TAG_LINE_REGEX = /^\s*(#[\p{L}\p{N}_][\p{L}\p{N}_-]{0,39}\s*)+$/u;
@@ -67,82 +68,100 @@ const decodeEntities = (text: string): string =>
 
 const isRich = (content: string): boolean => /^\s*</.test(content || '');
 
-type Block = { start: number; end: number; text: string };
-
-/** Top-level paragraphs of rich content (not those inside list items) with their plain text. */
-const paragraphs = (html: string): Block[] => {
-    const blocks: Block[] = [];
-    const regex = /<p\b[^>]*>([\s\S]*?)<\/p>/g;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(html))) {
-        const before = html.slice(0, match.index);
-        const openItems = (before.match(/<li\b/g) || []).length - (before.match(/<\/li>/g) || []).length;
-        if (openItems > 0) continue;
-        blocks.push({ start: match.index, end: match.index + match[0].length, text: decodeEntities(match[1].replace(/<[^>]*>/g, '')) });
-    }
-    return blocks;
-};
-
-const lines = (text: string): Block[] => {
-    const blocks: Block[] = [];
-    let start = 0;
-    text.split('\n').forEach((line) => {
-        blocks.push({ start, end: start + line.length, text: line });
-        start += line.length + 1;
-    });
-    return blocks;
-};
-
 const isTagLine = (text: string): boolean => TAG_LINE_REGEX.test(text) && extractTags(text).length > 0;
 
+/** Paragraphs and line breaks that show nothing. */
+const EMPTY_TAIL_REGEX = /^(\s|<p\b[^>]*>(\s|&nbsp;|<br\s*\/?>)*<\/p>)*$/;
+
+/** Elements a paragraph can sit inside: one there is not the note's own last line. */
+const CONTAINER_REGEX = /<(\/?)(li|ul|ol|blockquote|td|th|table|details|summary)\b[^>]*>/g;
+
+type TagLine = {
+    /** Where the line starts and ends in the content (its trailing empty lines follow). */
+    start: number;
+    end: number;
+    /** Rich content: the paragraph's inner HTML, kept with its marks. */
+    inner: string;
+};
+
+/** The note's last line when it is a tag line, or null. */
+const trailingTagLine = (content: string): TagLine | null => {
+    if (isRich(content)) {
+        // The last top-level paragraph, found in one pass over the containers.
+        let depth = 0;
+        let last: TagLine | null = null;
+        const tokens = /<(\/?)(li|ul|ol|blockquote|td|th|table|details|summary)\b[^>]*>|<p\b[^>]*>([\s\S]*?)<\/p>/g;
+        let match: RegExpExecArray | null;
+        while ((match = tokens.exec(content))) {
+            if (match[2]) {
+                depth = Math.max(0, depth + (match[1] ? -1 : 1));
+            } else if (depth === 0 && decodeEntities(match[3].replace(/<[^>]*>/g, '')).trim()) {
+                last = { start: match.index, end: match.index + match[0].length, inner: match[3] };
+            }
+        }
+        if (!last || !EMPTY_TAIL_REGEX.test(content.slice(last.end))) return null;
+        // Nothing else may follow it outside a paragraph (a list, a quote).
+        CONTAINER_REGEX.lastIndex = 0;
+        if (CONTAINER_REGEX.test(content.slice(last.end))) return null;
+        return isTagLine(decodeEntities(last.inner.replace(/<[^>]*>/g, ''))) ? last : null;
+    }
+    const trimmed = content.replace(/\s+$/g, '');
+    const start = trimmed.lastIndexOf('\n') + 1;
+    const line = trimmed.slice(start);
+    return isTagLine(line) ? { start, end: trimmed.length, inner: line } : null;
+};
+
 /**
- * The note with its tag line at the end, holding the tags already in tag lines
- * plus `tags` not yet anywhere in the note. Tag lines elsewhere (text dictated
- * after them) are merged into the last one. Unchanged when there is nothing to do.
+ * The note with `tags` it does not have yet added to its tag line, or as a new
+ * tag line at its end. Unchanged when every tag is already in the note.
  */
 export const withTagLine = (content: string, tags: string[] = []): string => {
     const source = content || '';
     const rich = isRich(source);
-    const blocks = rich ? paragraphs(source) : lines(source);
-    const tagBlocks = blocks.filter((block) => isTagLine(block.text));
     const present = new Set(extractTags(rich ? decodeEntities(source.replace(/<[^>]*>/g, ' ')) : source));
-    const merged: string[] = [];
-    tagBlocks.forEach((block) => extractTags(block.text).forEach((tag) => {
-        if (!merged.includes(tag)) merged.push(tag);
-    }));
     const added: string[] = [];
     tags.forEach((raw) => {
         const tag = normalize((raw || '').trim().replace(/^#+/, ''));
         // Only what extractTags would read back as a tag.
-        if (extractTags(`#${tag}`)[0] === tag && !present.has(tag) && !merged.includes(tag) && !added.includes(tag)) {
+        if (extractTags(`#${tag}`)[0] === tag && !present.has(tag) && !added.includes(tag)) {
             added.push(tag);
         }
     });
-    merged.push(...added);
-    if (!merged.length) {
+    if (!added.length) {
         return source;
     }
-    // Already one tag line, last of all text, and nothing new: leave it as it is.
-    const nonEmpty = blocks.filter((block) => block.text.trim());
-    const last = nonEmpty[nonEmpty.length - 1];
-    if (!added.length && tagBlocks.length === 1 && last === tagBlocks[0]) {
-        return source;
+    const words = added.map((tag) => `#${tag}`).join(' ');
+    const line = trailingTagLine(source);
+    if (line) {
+        if (rich) {
+            const open = source.slice(line.start, line.end).match(/^<p\b[^>]*>/)?.[0] ?? '<p>';
+            return `${source.slice(0, line.start)}${open}${line.inner.replace(/\s+$/g, '')} ${words}</p>${source.slice(line.end)}`;
+        }
+        return `${source.slice(0, line.end)} ${words}${source.slice(line.end)}`;
     }
-    let rest = source;
-    for (let i = tagBlocks.length - 1; i >= 0; i--) {
-        const block = tagBlocks[i];
-        // A plain-text line takes its line break with it.
-        const end = !rich && rest[block.end] === '\n' ? block.end + 1 : block.end;
-        rest = rest.slice(0, block.start) + rest.slice(end);
-    }
-    const line = merged.map((tag) => `#${tag}`).join(' ');
     if (rich) {
-        const trimmed = rest.trim().replace(/(<p\b[^>]*>(\s|&nbsp;|<br\s*\/?>)*<\/p>\s*)+$/g, '');
-        return `${trimmed}<p>${line}</p>`;
+        const trimmed = source.trim().replace(/(<p\b[^>]*>(\s|&nbsp;|<br\s*\/?>)*<\/p>\s*)+$/g, '');
+        return `${trimmed}<p>${words}</p>`;
     }
-    const trimmed = rest.replace(/\s+$/g, '');
-    return trimmed ? `${trimmed}\n\n${line}` : line;
+    const trimmed = source.replace(/\s+$/g, '');
+    return trimmed ? `${trimmed}\n\n${words}` : words;
 };
 
-/** Text dictated after the tag line goes above it: the tags stay last. */
-export const keepTagLineLast = (content: string): string => withTagLine(content, []);
+/**
+ * Appends with `append` above the note's tag line, if it ends with one, so text
+ * dictated after the tags were written does not land below them.
+ */
+export const appendAboveTagLine = (content: string, append: (body: string) => string): string => {
+    const source = content || '';
+    const line = trailingTagLine(source);
+    if (!line) {
+        return append(source);
+    }
+    const body = source.slice(0, line.start);
+    const tagBlock = source.slice(line.start, line.end);
+    if (!isRich(source)) {
+        const appended = append(body.replace(/\s+$/g, '')).replace(/\s+$/g, '');
+        return appended ? `${appended}\n\n${tagBlock}` : tagBlock;
+    }
+    return `${append(body)}${tagBlock}`;
+};

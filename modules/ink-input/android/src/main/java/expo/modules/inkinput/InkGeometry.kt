@@ -16,7 +16,7 @@ import kotlin.math.sqrt
 // A line-for-line port of the stroke model in src/drawing/ink.ts. The live
 // stroke drawn here and the stroke the canvas draws once it is committed must
 // be the same shape, so any change there must be made here too
-// (tests/inkNative.test.cjs compares the two).
+// (`npm run test:ink-native` compares the two: tests/inkNativeFixtures.cjs + InkGeometryTest.kt).
 
 /** A growable list of doubles without boxing. */
 class DoubleList(capacity: Int = 64) {

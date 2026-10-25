@@ -43,6 +43,8 @@ export type InkLiveConfig = {
 
 export type InkStrokeEvent = {
     id: number;
+    /** The pan and zoom the samples were mapped with: [tx, ty, scale]. */
+    transform?: number[];
     tool: string;
     color: string;
     size: number;
@@ -71,3 +73,16 @@ export type InkLiveProps = ViewProps & {
  */
 export const InkLiveView = (NATIVE_INK ? requireNativeView('InkInput', 'InkLive') : View) as unknown as
     React.ComponentType<InkLiveProps & React.RefAttributes<InkLiveHandle>>;
+
+/**
+ * Strokes the native layer drew that the canvas has not taken over yet (lifted
+ * ones on their way, the one under the pen), read synchronously. Empty off Android.
+ */
+export const takeUnfinishedInk = (): InkStrokeEvent[] => {
+    if (!NATIVE_INK) return [];
+    try {
+        return (requireNativeModule('InkInput') as { takeUnfinishedStrokes: () => InkStrokeEvent[] }).takeUnfinishedStrokes() ?? [];
+    } catch {
+        return [];
+    }
+};

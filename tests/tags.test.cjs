@@ -32,31 +32,42 @@ test('splitTags keeps the text intact and marks tags', () => {
     assert.deepStrictEqual(parts.filter((p) => p.tag).map((p) => p.text), ['#home']);
 });
 
-const { withTagLine, keepTagLineLast } = require('../.test-build/tags/tags.js');
+const { withTagLine, appendAboveTagLine } = require('../.test-build/tags/tags.js');
+const appendLine = (text) => (body) => `${body}<p>${text}</p>`;
 
 test('suggested tags are written as a tag line at the end of a rich note', () => {
     assert.strictEqual(withTagLine('<p>Call the bank</p><p></p>', ['Work', 'money']), '<p>Call the bank</p><p>#work #money</p>');
 });
 
-test('tags already in the note are not added twice', () => {
+test('tags already in the note are not added twice; new ones join the last tag line with its marks', () => {
     assert.strictEqual(withTagLine('<p>Plan for #work</p>', ['work', 'trip']), '<p>Plan for #work</p><p>#trip</p>');
     assert.strictEqual(withTagLine('<p>Plan</p><p>#work</p>', ['work']), '<p>Plan</p><p>#work</p>');
+    assert.strictEqual(withTagLine('<p>Plan</p><p><strong>#work</strong></p>', ['trip']), '<p>Plan</p><p><strong>#work</strong> #trip</p>');
 });
 
-test('text dictated after the tag line goes above it', () => {
-    assert.strictEqual(keepTagLineLast('<p>First</p><p>#work #trip</p><p>Second</p>'), '<p>First</p><p>Second</p><p>#work #trip</p>');
-    assert.strictEqual(keepTagLineLast('<p>First</p><p>#work</p>'), '<p>First</p><p>#work</p>');
+test('tags kept elsewhere stay where they are', () => {
+    // A tag line at the top is the user's: new tags go to a new line at the end.
+    assert.strictEqual(withTagLine('<p>#work</p><p>Plan</p>', ['trip']), '<p>#work</p><p>Plan</p><p>#trip</p>');
+    assert.strictEqual(appendAboveTagLine('<p>#work</p><p>Plan</p>', appendLine('More')), '<p>#work</p><p>Plan</p><p>More</p>');
 });
 
-test('a list item made of hashtags is not a tag line', () => {
-    const html = '<ul><li><p>#later</p></li></ul><p>Note</p>';
-    assert.strictEqual(keepTagLineLast(html), html);
-    assert.strictEqual(withTagLine(html, ['home']), '<ul><li><p>#later</p></li></ul><p>Note</p><p>#home</p>');
+test('text appended after the tags were written goes above the tag line', () => {
+    assert.strictEqual(appendAboveTagLine('<p>First</p><p>#work #trip</p>', appendLine('Second')), '<p>First</p><p>Second</p><p>#work #trip</p>');
+    assert.strictEqual(appendAboveTagLine('<p>First</p>', appendLine('Second')), '<p>First</p><p>Second</p>');
+});
+
+test('a paragraph inside a list, quote or table is never the tag line', () => {
+    const list = '<ul><li><p>#later</p></li></ul>';
+    assert.strictEqual(appendAboveTagLine(list, appendLine('Note')), `${list}<p>Note</p>`);
+    assert.strictEqual(withTagLine(list, ['home']), `${list}<p>#home</p>`);
+    const quote = '<p>Hi</p><blockquote><p>#quoted</p></blockquote>';
+    assert.strictEqual(appendAboveTagLine(quote, appendLine('Note')), `${quote}<p>Note</p>`);
 });
 
 test('plain-text notes get a tag line after a blank line', () => {
     assert.strictEqual(withTagLine('Buy milk\n', ['дом']), 'Buy milk\n\n#дом');
-    assert.strictEqual(keepTagLineLast('Buy milk\n\n#дом\nand eggs'), 'Buy milk\n\nand eggs\n\n#дом');
+    assert.strictEqual(withTagLine('Buy milk\n\n#дом', ['еда']), 'Buy milk\n\n#дом #еда');
+    assert.strictEqual(appendAboveTagLine('Buy milk\n\n#дом', (body) => `${body}\nand eggs`), 'Buy milk\nand eggs\n\n#дом');
     assert.strictEqual(withTagLine('', ['дом']), '#дом');
 });
 

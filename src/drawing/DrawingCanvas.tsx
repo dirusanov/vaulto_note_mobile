@@ -43,7 +43,7 @@ import {
 } from 'react-native-reanimated';
 import { Synchronizable, createSynchronizable, runOnUISync } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
-import { ERASER_PRESSURE, InkLiveHandle, InkLiveView, InkStrokeEvent, NATIVE_INK } from '../../modules/ink-input';
+import { ERASER_PRESSURE, InkLiveHandle, InkLiveView, InkStrokeEvent, NATIVE_INK, takeUnfinishedInk } from '../../modules/ink-input';
 import {
     INK_TOOLS,
     InkStroke,
@@ -206,6 +206,8 @@ type SceneSource = {
     clip: SkPath | null;
     invert: boolean;
     desk: string;
+    /** Changes when the canvas surface was rebuilt (back from the background): the offscreen one is made anew too. */
+    generation: number;
 };
 /** The offscreen scene on the UI thread, mutated in place there. */
 type SceneCache = {
@@ -218,6 +220,7 @@ type SceneCache = {
     s: number;
     fade: number;
     version: number;
+    generation: number;
 };
 
 /** Box (document units) around the strokes in one list and not the other: what an edit changed on the page. */
@@ -532,7 +535,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const sceneSource = useSharedValue<SceneSource | null>(null);
     /** The scene version the cached image last drew: what frames on screen now show. */
     const sceneShown = useSharedValue(0);
-    const sceneCache = useSharedValue<SceneCache>({ surface: null, image: null, width: 0, height: 0, tx: 0, ty: 0, s: 0, fade: 0, version: -1 });
+    const sceneCache = useSharedValue<SceneCache>({ surface: null, image: null, width: 0, height: 0, tx: 0, ty: 0, s: 0, fade: 0, version: -1, generation: -1 });
     /** Where and since when the pen has rested; whether the stroke became a shape. */
     const still = useSharedValue({ x: 0, y: 0, t: 0 });
     const snapped = useSharedValue(false);
@@ -763,6 +766,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             } catch {
                 // The UI runtime is already gone: nothing can be read from it.
             }
+            // Strokes the native layer drew (Android) that have not reached here yet.
+            takeUnfinishedInk().forEach((event) => {
+                unfinished.push({ id: NATIVE_ID_BASE + event.id, stroke: nativeStroke(event) });
+            });
             unfinished.forEach(({ id, stroke }) => {
                 if (!committedIds.current.has(id)) {
                     committedIds.current.add(id);
@@ -837,6 +844,28 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         });
     }, [onTextMove, dragOffset]);
 
+    // A stroke from the native layer, in this drawing's coordinates. The layer
+    // maps the pen with the pan and zoom it last heard of, which trails the
+    // page while it still glides or right after a pan: the samples are mapped
+    // back to the screen with that transform and into the drawing with the one
+    // the page has now, so the stroke stays where it was written on the page.
+    const nativeStroke = (e: InkStrokeEvent): InkStroke => {
+        let points = e.points;
+        const used = e.transform;
+        const [x1, y1, s1] = lastTransform.current;
+        if (used && used.length === 3 && s1 > 0 && (used[0] !== x1 || used[1] !== y1 || used[2] !== s1)) {
+            const [x0, y0, s0] = used;
+            points = points.slice();
+            for (let i = 0; i + 1 < points.length; i += 3) {
+                points[i] = (points[i] * s0 + x0 - x1) / s1;
+                points[i + 1] = (points[i + 1] * s0 + y0 - y1) / s1;
+            }
+        }
+        return e.shape
+            ? { tool: e.tool as InkTool, color: e.color, size: e.size, points, cut: true, shape: true }
+            : { tool: e.tool as InkTool, color: e.color, size: e.size, points };
+    };
+
     // The native layer drew a stroke: the canvas takes it over, and tells the
     // layer to stop showing it once it is rendered here (see above).
     const handleInkBegin = useCallback((event: NativeSyntheticEvent<{ stylus: boolean }>) => {
@@ -853,11 +882,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const handleInkStroke = useCallback((event: NativeSyntheticEvent<InkStrokeEvent>) => {
-        const { id, tool: inkTool, color: inkColor, size: inkSize, shape, points } = event.nativeEvent;
-        const stroke: InkStroke = shape
-            ? { tool: inkTool as InkTool, color: inkColor, size: inkSize, points, cut: true, shape: true }
-            : { tool: inkTool as InkTool, color: inkColor, size: inkSize, points };
-        jsHandlersRef.current.commitLive(stroke, NATIVE_ID_BASE + id);
+        jsHandlersRef.current.commitLive(nativeStroke(event.nativeEvent), NATIVE_ID_BASE + event.nativeEvent.id);
     }, []);
     /** Native strokes the canvas has rendered, waiting for a frame to show them. */
     const nativeWaiting = useRef<{ ids: number[]; version: number }[]>([]);
@@ -1491,6 +1516,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             clip: pageClip ?? null,
             invert: invertInk,
             desk: deskColor,
+            generation: surfaceKey,
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [inkPicture, paperPictures, pageClip, invertInk, deskColor, surfaceKey]);
@@ -1516,7 +1542,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         const y = ty.value;
         const fade = patternOpacity.value;
         const cache = sceneCache.value;
-        let full = !cache.surface || cache.width !== width || cache.height !== height
+        let full = !cache.surface || cache.width !== width || cache.height !== height || cache.generation !== scene.generation
             || cache.tx !== x || cache.ty !== y || cache.s !== s || cache.fade !== fade;
         let box: number[] | null = null;
         if (!full) {
@@ -1540,10 +1566,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 return cache.image;
             }
         }
-        if (!cache.surface || cache.width !== width || cache.height !== height) {
+        if (!cache.surface || cache.width !== width || cache.height !== height || cache.generation !== scene.generation) {
+            // A GPU context lost in the background would leave the old surface unusable.
             cache.surface = Skia.Surface.MakeOffscreen(width, height);
             cache.width = width;
             cache.height = height;
+            cache.generation = scene.generation;
             if (!cache.surface) {
                 return null;
             }

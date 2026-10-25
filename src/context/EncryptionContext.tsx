@@ -664,6 +664,11 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         // not the device-local default cryptoMode (which is 'local' on a fresh
         // device and would otherwise leak plaintext into an e2ee account).
         let serverEncMode: 'off' | 'e2ee' | null = null;
+        // The state request failed on the way (no answer within the launch timeout):
+        // the network goes nowhere, so the bundle request gets the same short wait.
+        // Once the server has answered, the bundle gets the client's usual time: a
+        // slow answer must not read as "no valid bundle" and lock a device that holds its key.
+        let serverUnreachable = false;
         if (!pendingMigrationState || destructiveResetMarker) {
             try {
                 const serverState = await e2eeApi.fetchState(storedTransitionToken, LAUNCH_REQUEST_TIMEOUT_MS);
@@ -972,6 +977,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             } catch (error) {
                 // Older server without /e2ee/state, or offline — fall through to
                 // the legacy bundle-based detection below.
+                serverUnreachable = true;
                 console.warn('[Encryption] Could not fetch server encryption state:', error);
             }
         }
@@ -1002,7 +1008,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             }
 
             try {
-                const serverBundle = await e2eeApi.fetchKeyBundle(LAUNCH_REQUEST_TIMEOUT_MS);
+                const serverBundle = await e2eeApi.fetchKeyBundle(serverUnreachable ? LAUNCH_REQUEST_TIMEOUT_MS : undefined);
                 if (serverBundle && isKeyBundle(serverBundle)) {
                     validServerBundleSeen = true;
                     let hasEncryptedRemoteNotes = false;
