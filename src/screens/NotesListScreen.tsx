@@ -948,11 +948,6 @@ export const NotesListScreen = () => {
                     </View>
                 ) : (
                     <>
-                    {!searchQuery.trim() && (
-                        <Text style={styles.listTitle} accessibilityRole="header" numberOfLines={1}>
-                            {activeTag ? `#${activeTag}` : t('notes.listTitle', 'Notes')}
-                        </Text>
-                    )}
                     {noteSections.map((section, sectionIndex) => (
                         <React.Fragment key={section.key}>
                             {section.title && (
@@ -1338,19 +1333,6 @@ const styles = createStyles(() => ({
         color: colors.text,
         fontSize: 16,
     },
-    listTitle: {
-        fontSize: 32,
-        lineHeight: 38,
-        fontWeight: '700',
-        letterSpacing: -0.8,
-        color: colors.text,
-        // Padding, not margin: with width 100% a margin would push it off-centre.
-        paddingHorizontal: spacing.xs,
-        marginBottom: spacing.m,
-        width: '100%',
-        maxWidth: 1200,
-        alignSelf: 'center',
-    },
     // Keep-style group labels above the pinned notes and the rest.
     sectionTitle: {
         fontSize: 12,
@@ -1359,7 +1341,7 @@ const styles = createStyles(() => ({
         letterSpacing: 0.6,
         textTransform: 'uppercase',
         color: colors.textSecondary,
-        // Lined up with the "Notes" title and the card edges.
+        // Lined up with the card edges. Padding, not margin: with width 100% a margin would push it off-centre.
         paddingHorizontal: spacing.xs,
         marginBottom: spacing.s,
         width: '100%',

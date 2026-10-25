@@ -62,7 +62,6 @@
     "offlineSync": "オフラインです。変更は保存され、後で同期されます。",
     "offline": "オフラインです。ノートと端末上の機能はそのまま使えます。",
     "unlockWithKey": "復元キーを入力すると、この端末に表示されます。",
-    "listTitle": "ノート",
     "drawing": "手書き",
     "sectionPinned": "固定済み",
     "sectionOthers": "その他",
