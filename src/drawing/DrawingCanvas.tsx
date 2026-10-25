@@ -1,24 +1,28 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AppState, LayoutChangeEvent, NativeSyntheticEvent, StyleSheet, Text, View } from 'react-native';
+import { AppState, LayoutChangeEvent, NativeSyntheticEvent, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
 import {
     BlendMode,
     Canvas,
     Circle,
+    ClipOp,
     ColorMatrix,
     DashPathEffect,
     Fill,
     FilterMode,
     FractalNoise,
     Group,
+    Image,
     Paint,
     PaintStyle,
     Path,
     Picture,
     Skia,
+    SkImage,
     SkPaint,
     SkPath,
     SkPathBuilder,
     SkPicture,
+    SkSurface,
     Paragraph,
     Rect,
     StrokeCap,
@@ -54,6 +58,7 @@ import {
     recognizeShape,
     shapeIsClosed,
     shapeWidth,
+    strokeBounds,
     strokeOutlineFor,
     traceAppend,
     traceOutline,
@@ -179,6 +184,46 @@ const SHAPE_HOLD_MS = 700;
 const SHAPE_STILL_PX = 6;
 /** Screen distance a text-mode touch must travel before it drags the label. */
 const DRAG_SLOP = 6;
+/**
+ * Desk, paper and finished ink are drawn into an offscreen image (see
+ * sceneImage). Android only for now: it is where it was measured.
+ */
+const SCENE_CACHE = Platform.OS === 'android';
+/** Changes to the scene remembered for the UI thread; one it missed redraws everything. */
+const SCENE_CHANGES_KEPT = 16;
+
+/** What the scene cache draws, and its recent changes as [version, minX, minY, maxX, maxY] ([version] for none). */
+type SceneSource = {
+    version: number;
+    changes: number[][];
+    sheet: SkPicture;
+    pattern: SkPicture | null;
+    ink: SkPicture;
+    clip: SkPath | null;
+    invert: boolean;
+    desk: string;
+};
+/** The offscreen scene on the UI thread, mutated in place there. */
+type SceneCache = {
+    surface: SkSurface | null;
+    image: SkImage | null;
+    width: number;
+    height: number;
+    tx: number;
+    ty: number;
+    s: number;
+    fade: number;
+    version: number;
+};
+
+/** Box (document units) around the strokes in one list and not the other: what an edit changed on the page. */
+const changedBounds = (before: InkStroke[], after: InkStroke[]) => {
+    const kept = new Set(after);
+    const old = new Set(before);
+    const changed = [...before.filter((stroke) => !kept.has(stroke)), ...after.filter((stroke) => !old.has(stroke))];
+    return changed.length ? strokeBounds(changed) : null;
+};
+
 /** Ids of strokes drawn by the native ink layer start here, apart from the canvas's own. */
 const NATIVE_ID_BASE = 1 << 24;
 
@@ -480,6 +525,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // the stroke only in `live`, the next stroke replaced it on screen before
     // the JS thread caught up, and fast handwriting flickered.
     const pending = useSharedValue<PendingStroke[]>([]);
+    const sceneSource = useSharedValue<SceneSource | null>(null);
+    /** The scene version the cached image last drew: what frames on screen now show. */
+    const sceneShown = useSharedValue(0);
+    const sceneCache = useSharedValue<SceneCache>({ surface: null, image: null, width: 0, height: 0, tx: 0, ty: 0, s: 0, fade: 0, version: -1 });
     /** Where and since when the pen has rested; whether the stroke became a shape. */
     const still = useSharedValue({ x: 0, y: 0, t: 0 });
     const snapped = useSharedValue(false);
@@ -747,7 +796,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         const native = done.filter((id) => id >= NATIVE_ID_BASE);
         const own = done.filter((id) => id < NATIVE_ID_BASE);
         if (native.length) {
-            nativeInk.current?.release(native.map((id) => id - NATIVE_ID_BASE)).catch(() => undefined);
+            // Shown natively until the frame that draws them here is on screen
+            // (see sceneShown): let go at once, a fast hand's last strokes blinked out.
+            nativeWaiting.current.push({ ids: native.map((id) => id - NATIVE_ID_BASE), version: sceneVersion.current });
+            releaseNative(SCENE_CACHE ? sceneShownJs.current : Number.MAX_SAFE_INTEGER);
         }
         if (own.length) {
             runOnUI((ids: number[]) => {
@@ -803,6 +855,27 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             : { tool: inkTool as InkTool, color: inkColor, size: inkSize, points };
         jsHandlersRef.current.commitLive(stroke, NATIVE_ID_BASE + id);
     }, []);
+    /** Native strokes the canvas has rendered, waiting for a frame to show them. */
+    const nativeWaiting = useRef<{ ids: number[]; version: number }[]>([]);
+    const sceneShownJs = useRef(0);
+    const releaseNative = useCallback((shown: number) => {
+        sceneShownJs.current = shown;
+        const ready = nativeWaiting.current.filter((entry) => entry.version <= shown);
+        if (!ready.length) {
+            return;
+        }
+        nativeWaiting.current = nativeWaiting.current.filter((entry) => entry.version > shown);
+        nativeInk.current?.release(ready.flatMap((entry) => entry.ids)).catch(() => undefined);
+    }, []);
+    useAnimatedReaction(
+        () => sceneShown.value,
+        (shown, previous) => {
+            if (shown !== previous) {
+                runOnJS(releaseNative)(shown);
+            }
+        }
+    );
+
     // The view's pan and zoom, for the native layer to map the pen into the drawing.
     const lastTransform = useRef<[number, number, number]>([0, PAGE_MARGIN, baseScale]);
     const sendTransform = useCallback((x: number, y: number, s: number) => {
@@ -1377,6 +1450,142 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         }
         return buildInkPicture({ strokes: [], picture: null, depth: 0 }, strokes.filter((_stroke, index) => selectedStrokes.has(index))).picture;
     }, [strokes, selectedStrokes]);
+
+    // The scene (desk, paper, finished ink) as it was last drawn into the cache,
+    // and what changed since: the UI thread redraws only the changed part.
+    const sceneVersion = useRef(0);
+    const sceneChanges = useRef<number[][]>([]);
+    const sceneStrokes = useRef<InkStroke[]>([]);
+    const sceneLook = useRef<unknown[]>([]);
+    useLayoutEffect(() => {
+        if (!SCENE_CACHE) {
+            return;
+        }
+        sceneVersion.current += 1;
+        const version = sceneVersion.current;
+        const look = [paperPictures, pageClip, invertInk, deskColor, surfaceKey];
+        if (look.some((item, index) => item !== sceneLook.current[index])) {
+            // A new look: the whole scene is drawn again.
+            sceneChanges.current = [];
+        } else {
+            const box = changedBounds(sceneStrokes.current, baseStrokes);
+            // Nothing in the scene changed (e.g. only the selection outline did): an empty change.
+            sceneChanges.current = [...sceneChanges.current, box ? [version, box.minX, box.minY, box.maxX, box.maxY] : [version]].slice(-SCENE_CHANGES_KEPT);
+        }
+        sceneLook.current = look;
+        sceneStrokes.current = baseStrokes;
+        sceneSource.value = {
+            version,
+            changes: sceneChanges.current,
+            sheet: paperPictures.sheet,
+            pattern: paperPictures.pattern,
+            ink: inkPicture,
+            clip: pageClip ?? null,
+            invert: invertInk,
+            desk: deskColor,
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inkPicture, paperPictures, pageClip, invertInk, deskColor, surfaceKey]);
+
+    // Desk, paper and finished ink drawn once into an offscreen image, which is
+    // all a frame then draws of them. Without it every frame replayed every
+    // stroke: the eraser ring moving, each erase pass and each new stroke cost
+    // as much as the whole page, and a full page fell far behind the pen.
+    const pixelRatio = PixelRatio.get();
+    const sceneImage = useDerivedValue(() => {
+        const scene = sceneSource.value;
+        // (Also runs once on the JS thread at mount, where there is no surface to draw in.)
+        if (!SCENE_CACHE || !scene || !(globalThis as { _WORKLET?: boolean })._WORKLET) {
+            return null;
+        }
+        const width = Math.ceil(viewW.value * pixelRatio);
+        const height = Math.ceil(viewH.value * pixelRatio);
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+        const s = scaleSV.value * zoom.value;
+        const x = tx.value;
+        const y = ty.value;
+        const fade = patternOpacity.value;
+        const cache = sceneCache.value;
+        let full = !cache.surface || cache.width !== width || cache.height !== height
+            || cache.tx !== x || cache.ty !== y || cache.s !== s || cache.fade !== fade;
+        let box: number[] | null = null;
+        if (!full) {
+            if (cache.version === scene.version) {
+                return cache.image;
+            }
+            // Every change since the last draw must be known, or all is drawn again.
+            for (let v = cache.version + 1; v <= scene.version && !full; v++) {
+                const change = scene.changes.find((entry) => entry[0] === v);
+                if (!change) {
+                    full = true;
+                } else if (change.length === 5) {
+                    box = box
+                        ? [Math.min(box[0], change[1]), Math.min(box[1], change[2]), Math.max(box[2], change[3]), Math.max(box[3], change[4])]
+                        : [change[1], change[2], change[3], change[4]];
+                }
+            }
+            if (!full && !box) {
+                cache.version = scene.version;
+                sceneShown.value = scene.version;
+                return cache.image;
+            }
+        }
+        if (!cache.surface || cache.width !== width || cache.height !== height) {
+            cache.surface = Skia.Surface.MakeOffscreen(width, height);
+            cache.width = width;
+            cache.height = height;
+            if (!cache.surface) {
+                return null;
+            }
+        }
+        const canvas = cache.surface.getCanvas();
+        canvas.save();
+        if (!full && box) {
+            // The changed part on screen, out to whole pixels and the edge of antialiasing.
+            const k = s * pixelRatio;
+            const left = Math.floor((box[0] * s + x) * pixelRatio) - 2;
+            const top = Math.floor((box[1] * s + y) * pixelRatio) - 2;
+            canvas.clipRect(Skia.XYWHRect(left, top, Math.ceil((box[2] - box[0]) * k) + 5, Math.ceil((box[3] - box[1]) * k) + 5), ClipOp.Intersect, false);
+        }
+        canvas.clear(Skia.Color(scene.desk));
+        canvas.scale(pixelRatio, pixelRatio);
+        canvas.translate(x, y);
+        canvas.scale(s, s);
+        canvas.drawPicture(scene.sheet);
+        if (scene.pattern && fade > 0) {
+            const paint = Skia.Paint();
+            paint.setAlphaf(fade);
+            canvas.saveLayer(paint);
+            canvas.drawPicture(scene.pattern);
+            canvas.restore();
+        }
+        canvas.save();
+        if (scene.clip) {
+            canvas.clipPath(scene.clip, ClipOp.Intersect, true);
+        }
+        if (scene.invert) {
+            const paint = Skia.Paint();
+            paint.setColorFilter(Skia.ColorFilter.MakeMatrix(SMART_INVERT_MATRIX));
+            canvas.saveLayer(paint);
+            canvas.drawPicture(scene.ink);
+            canvas.restore();
+        } else {
+            canvas.drawPicture(scene.ink);
+        }
+        canvas.restore();
+        canvas.restore();
+        cache.surface.flush();
+        cache.image = cache.surface.makeImageSnapshot();
+        cache.version = scene.version;
+        sceneShown.value = scene.version;
+        cache.tx = x;
+        cache.ty = y;
+        cache.s = s;
+        cache.fade = fade;
+        return cache.image;
+    });
     useEffect(() => {
         const picked = strokes.filter((_stroke, index) => selectedStrokes.has(index));
         const box = picked.length || selectedTexts.size
@@ -1454,12 +1663,16 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     // screen a composition step sooner than the default TextureView; it
                     // then paints the desk itself.
                     <Canvas key={surfaceKey} style={styles.fill} opaque>
-                        <Fill color={deskColor} />
+                        {SCENE_CACHE ? (
+                            <Image image={sceneImage} x={0} y={0} width={view.width} height={view.height} fit="fill" />
+                        ) : (
+                            <Fill color={deskColor} />
+                        )}
                         <Group transform={transform}>
-                            <Picture picture={paperPictures.sheet} />
-                            {paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
+                            {!SCENE_CACHE && <Picture picture={paperPictures.sheet} />}
+                            {!SCENE_CACHE && paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
                             <Group layer={inkLayer} clip={pageClip}>
-                                <Picture picture={inkPicture} />
+                                {!SCENE_CACHE && <Picture picture={inkPicture} />}
                                 <Picture picture={pendingPicture} />
                                 <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={liveBlend}>
                                     {liveGrain && <PencilGrain matrix={liveGrainMatrix} />}
