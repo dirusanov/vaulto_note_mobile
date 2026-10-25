@@ -140,8 +140,9 @@ type Props = {
     editingText: number | null;
     /** Something is open over the canvas (a popover): touches go the usual way, not to the native ink layer. */
     inkBlocked?: boolean;
-    /** A backdrop closes that popover on a tap: the tap must not also draw a dot. */
+    /** A popover is open over the canvas: a touch on the canvas only closes it (onBlockedTouch), it draws nothing. */
     touchesBlocked?: boolean;
+    onBlockedTouch?: () => void;
     dark: boolean;
     themePaperColor: string;
     themeLineColor: string;
@@ -465,7 +466,7 @@ const Label: React.FC<{ item: InkText }> = ({ item }) => (
 
 export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes,
-    editingText, inkBlocked = false, touchesBlocked = false, dark, themePaperColor, themeLineColor, deskColor,
+    editingText, inkBlocked = false, touchesBlocked = false, onBlockedTouch, dark, themePaperColor, themeLineColor, deskColor,
     onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
     selection, onLasso, onSelectionMove,
 }, ref) => {
@@ -960,7 +961,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // through one stable function that reads the latest handlers.
     const jsHandlers = {
         onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex, watchStroke,
-        onLasso, finishMove,
+        onLasso, finishMove, onBlockedTouch: () => onBlockedTouch?.(),
     };
     const jsHandlersRef = useRef(jsHandlers);
     jsHandlersRef.current = jsHandlers;
@@ -1026,6 +1027,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 const cfg = toolSync.getBlocking();
                 if (cfg.blocked) {
                     gestureMode.value = 'none';
+                    runOnJS(callJs)('onBlockedTouch');
                     return;
                 }
                 strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size, eraserRadius: cfg.eraserRadius, snapShapes: cfg.snapShapes };
@@ -1034,6 +1036,13 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 // Typing a label is fine with a finger; drawing obeys pen-only mode.
                 if (cfg.stylusOnly && !isStylus && cfg.mode !== 'text') {
                     gestureMode.value = 'scroll';
+                    return;
+                }
+                // On Android the native layer draws a finger's ink. A finger that
+                // reaches this gesture in ink mode is the first of two that the
+                // layer handed over for a scroll or zoom: it must not leave a dot.
+                if (NATIVE_INK && cfg.mode === 'ink' && !isStylus && !penErases) {
+                    gestureMode.value = 'none';
                     return;
                 }
                 hover.value = { x: -100, y: -100, visible: false };

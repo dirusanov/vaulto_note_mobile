@@ -541,7 +541,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     t("voice.quietDesc", "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again. Keep this recording anyway?"),
                     [
                         { text: t("common.delete"), style: "destructive", onPress: () => { void discard(); } },
-                        { text: t("voice.keepRecording", "Keep"), onPress: () => onFinish(recording, transcribe) },
+                        // Kept as audio only: transcribing silence would only spend
+                        // cloud minutes; it can still be transcribed from Voice recordings.
+                        { text: t("voice.keepRecording", "Keep"), onPress: () => onFinish(recording, false) },
                     ],
                     // One of the two: dismissed, the recorder would sit there with nothing to do.
                     { cancelable: false }

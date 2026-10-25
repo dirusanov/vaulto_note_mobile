@@ -1037,7 +1037,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                             snapShapes={snapShapes}
                                 editingText={textEdit?.index ?? null}
                                 inkBlocked={popover !== null || textEdit !== null}
-                                touchesBlocked={!isTablet && popover !== null}
+                                touchesBlocked={popover !== null}
+                                onBlockedTouch={closePopover}
                                 dark={dark}
                                 themePaperColor={colors.background}
                                 themeLineColor={colors.border}

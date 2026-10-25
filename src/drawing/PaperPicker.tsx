@@ -119,7 +119,8 @@ export const PaperPicker: React.FC<Props> = ({ paper, onChange }) => {
                             <View style={[styles.tile, active && styles.tileActive]}>
                                 <PatternPreview pattern={pattern} sheet={sheet} line={line} />
                             </View>
-                            <Text style={[styles.patternLabel, active && styles.patternLabelActive]} numberOfLines={1}>
+                            {/* Two lines: "Мелкая клетка" and the like did not fit one under a tile. */}
+                            <Text style={[styles.patternLabel, active && styles.patternLabelActive]} numberOfLines={2}>
                                 {t(`drawing.paper.${pattern}`, PATTERN_LABELS[pattern])}
                             </Text>
                         </TouchableOpacity>
@@ -172,7 +173,7 @@ const styles = createStyles(() => ({
     patternItem: { alignItems: 'center', width: TILE_W + 8 },
     tile: { borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: colors.border },
     tileActive: { borderColor: colors.primary },
-    patternLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 4 },
+    patternLabel: { fontSize: 11, lineHeight: 13, minHeight: 26, textAlign: 'center', color: colors.textSecondary, marginTop: 4 },
     patternLabelActive: { color: colors.primary, fontWeight: '600' },
     colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     colorRing: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },

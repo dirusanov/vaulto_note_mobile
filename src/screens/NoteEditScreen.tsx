@@ -4559,18 +4559,7 @@ export const NoteEditScreen = () => {
                     return;
                 }
 
-                // Started from the list filtered by a tag: the note leaves with that tag
-                // (added now, not while typing, so the cursor never jumps).
-                // So do tags the AI suggested while the user was typing.
-                const tagsOnLeave = [
-                    ...(initialTagRef.current ? [initialTagRef.current] : []),
-                    ...(extractTags(richContentToPlainText(currentContentRef.current)).length === 0 ? pendingAutoTagsRef.current : []),
-                ];
-                if (tagsOnLeave.length && activeVariantIdRef.current === 'original' && hasMeaningfulRichContent(currentContentRef.current)) {
-                    initialTagRef.current = null;
-                    pendingAutoTagsRef.current = [];
-                    currentContentRef.current = withTagLine(currentContentRef.current, tagsOnLeave);
-                }
+                const tagged = applyTagsOnLeaveRef.current();
 
                 const latestTitle = currentTitleRef.current;
                 const latestContent = currentContentRef.current;
@@ -4591,7 +4580,7 @@ export const NoteEditScreen = () => {
                 }
 
                 try {
-                    await saveNote();
+                    await saveNote({ skipEditorFlush: tagged });
                 } catch (error) {
                     console.error('Error during navigation auto-save:', error);
                     finishNavigation();
@@ -4655,6 +4644,29 @@ export const NoteEditScreen = () => {
         };
     }, [clearAgentSessionState, editMode, saveNote]);
 
+    // Started from the list filtered by a tag, a note leaves with that tag; so
+    // do tags the AI suggested while the user was typing. Added when the note
+    // is left (by Back or any other way), not while typing, so the caret never jumps.
+    // True when it changed the text: the save after it must not read the editor
+    // again (which still shows the text without them).
+    const applyTagsOnLeave = (): boolean => {
+        const tagsOnLeave = [
+            ...(initialTagRef.current ? [initialTagRef.current] : []),
+            ...(extractTags(richContentToPlainText(currentContentRef.current)).length === 0 ? pendingAutoTagsRef.current : []),
+        ];
+        if (tagsOnLeave.length && activeVariantIdRef.current === 'original' && hasMeaningfulRichContent(currentContentRef.current)) {
+            initialTagRef.current = null;
+            pendingAutoTagsRef.current = [];
+            const tagged = withTagLine(currentContentRef.current, tagsOnLeave);
+            const changed = tagged !== currentContentRef.current;
+            currentContentRef.current = tagged;
+            return changed;
+        }
+        return false;
+    };
+    const applyTagsOnLeaveRef = useRef(applyTagsOnLeave);
+    applyTagsOnLeaveRef.current = applyTagsOnLeave;
+
     const handleBack = async () => {
         await settleInlineEditorAudioForExit();
 
@@ -4683,8 +4695,9 @@ export const NoteEditScreen = () => {
                 console.error('[AutoClean] Error deleting empty note:', error);
             });
         } else {
+            const tagged = applyTagsOnLeave();
             try {
-                await saveNote();
+                await saveNote({ skipEditorFlush: tagged });
             } catch (error) {
                 console.error('Error during back navigation save:', error);
             }
