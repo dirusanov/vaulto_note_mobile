@@ -92,8 +92,10 @@ export const e2eeApi = {
     // Returns null when the server does not support the endpoint (older build)
     // so callers fall back to legacy detection instead of mistaking a missing
     // endpoint for "encryption disabled" (which would drop a valid key bundle).
-    fetchState: async (transitionToken?: string | null): Promise<E2EEStateResponse | null> => {
+    /** `timeoutMs` shortens the client's 30 s wait where a stalled network must not hold the app up. */
+    fetchState: async (transitionToken?: string | null, timeoutMs?: number): Promise<E2EEStateResponse | null> => {
         const response = await client.get('/e2ee/state', {
+            ...(timeoutMs ? { timeout: timeoutMs } : {}),
             headers: transitionToken
                 ? { 'X-Encryption-Transition-Token': transitionToken }
                 : undefined,
@@ -214,8 +216,9 @@ export const e2eeApi = {
         }
         return { custody_mode: 'standard' };
     },
-    fetchKeyBundle: async (): Promise<KeyBundle | null> => {
+    fetchKeyBundle: async (timeoutMs?: number): Promise<KeyBundle | null> => {
         const response = await client.get('/e2ee/master-key', {
+            ...(timeoutMs ? { timeout: timeoutMs } : {}),
             validateStatus: (status) =>
                 (status >= 200 && status < 300) || status === 401 || status === 404 || status === 405,
         });

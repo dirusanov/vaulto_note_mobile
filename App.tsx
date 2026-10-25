@@ -34,7 +34,8 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
     const [splashHidden, setSplashHidden] = useState(false);
     const [bootTimedOut, setBootTimedOut] = useState(false);
     // Notes already on the device are shown at once and the first sync carries on
-    // in the background; an empty device waits for it so it does not flash empty.
+    // in the background; an empty device waits for it so it does not flash empty,
+    // but not past the boot timeout (offline the sync only fails, slowly).
     const hasLocalNotes = notes.length > 0 || lockedCount > 0;
     // Read before the key was restored, the list is all locked; the key's arrival
     // re-reads it (useNotes), so wait for that instead of showing an empty list.
@@ -43,7 +44,7 @@ const AppBootstrap = ({ children }: { children: React.ReactNode }) => {
         !isLoading &&
         status !== 'loading' &&
         isHydrated &&
-        (isInitialSyncComplete || hasLocalNotes) &&
+        (isInitialSyncComplete || hasLocalNotes || bootTimedOut) &&
         (!listAwaitsKey || bootTimedOut) &&
         (!!userId || bootTimedOut);
 

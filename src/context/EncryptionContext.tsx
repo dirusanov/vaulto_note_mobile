@@ -79,6 +79,14 @@ interface EncryptionContextType {
 }
 
 const EncryptionContext = createContext<EncryptionContextType | undefined>(undefined);
+/**
+ * How long loading the encryption state waits for the server. The app stays on
+ * its splash screen until that state is known, and a network that is up but
+ * goes nowhere (Wi-Fi without internet, a weak signal) held it there for the
+ * client's 30 s per request. A request that times out is treated as offline:
+ * the key and mode stored on the device are used, as with no network at all.
+ */
+const LAUNCH_REQUEST_TIMEOUT_MS = 5000;
 const clampProgress = (value: number): number => Math.max(0, Math.min(100, value));
 const createProgressReporter = (onProgress?: EncryptionProgressCallback): EncryptionProgressCallback => {
     let lastProgress = 0;
@@ -658,7 +666,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
         let serverEncMode: 'off' | 'e2ee' | null = null;
         if (!pendingMigrationState || destructiveResetMarker) {
             try {
-                const serverState = await e2eeApi.fetchState(storedTransitionToken);
+                const serverState = await e2eeApi.fetchState(storedTransitionToken, LAUNCH_REQUEST_TIMEOUT_MS);
                 // null => server doesn't support the state endpoint (older build);
                 // leave serverEncMode unknown and fall back to legacy detection.
                 if (serverState) {
@@ -994,7 +1002,7 @@ export const EncryptionProvider = ({ children }: { children: React.ReactNode }) 
             }
 
             try {
-                const serverBundle = await e2eeApi.fetchKeyBundle();
+                const serverBundle = await e2eeApi.fetchKeyBundle(LAUNCH_REQUEST_TIMEOUT_MS);
                 if (serverBundle && isKeyBundle(serverBundle)) {
                     validServerBundleSeen = true;
                     let hasEncryptedRemoteNotes = false;
