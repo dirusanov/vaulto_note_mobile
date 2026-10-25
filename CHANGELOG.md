@@ -4,8 +4,23 @@
 
 ## [1.0.103] - 2026-10-24
 
+### Added
+- Voice notes get topic tags automatically: the AI suggests up to three, reusing your own tags, written as a line of #hashtags at the end of the note (delete any you don't want). A note started while the list is filtered by a tag gets that tag.
+- The note's latest recording plays from a small button next to the date.
+
 ### Fixed
-- Android: handwriting no longer lags behind the pen or freezes the app. The line under the pen is drawn natively, in a low-latency layer, with pen motion prediction, however much is already on the page; the stroke looks the same before and after the pen lifts.
+- Android: handwriting no longer lags behind the pen or freezes the app. The line under the pen is drawn natively, in a low-latency layer, with pen motion prediction, however much is already on the page; the stroke looks the same before and after the pen lifts, and fast handwriting no longer blinks.
+- The eraser keeps up on a full page: the page is drawn once into an image and only the erased part is redrawn.
+- Text typed just before leaving the app is saved even if the system closes it in the background.
+- The app no longer sits on its splash screen for up to a minute on Wi-Fi without internet or a weak signal.
+- Dictate works without downloading the on-device speech model (the recording is transcribed the usual way).
+- A dropped connection while online is retried automatically and no longer reported as "No internet connection".
+- A long recording that heard almost nothing can be kept instead of being discarded.
+- Deleting from an open note offers Undo, as in the list; "Note moved to trash" reads naturally in every language.
+- "Add text" in Voice recordings no longer adds words that are already in the note; a recording there starts playing on the first tap.
+- Drawing: Back closes an open palette first, a tap that closes a popover draws no dot, a drawing opens with the last pen instead of the lasso or eraser, and the Shapes switch no longer looks like a selected tool.
+- Ticked checklist items are struck through.
+- The big "Notes" heading over the list is gone; the tag chips filter the list.
 
 ## [1.0.102] - 2026-10-23
 
