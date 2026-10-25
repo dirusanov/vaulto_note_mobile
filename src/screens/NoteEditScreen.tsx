@@ -60,6 +60,7 @@ import {
 import { markdownToTiptapHtml } from '../utils/tiptapMarkdownAdapter';
 import { CompareVersionsModal } from '../components/CompareVersionsModal';
 import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
+import { notesPendingDelete } from '../utils/notesPendingDelete';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { enqueuePendingTranscription, getPendingTranscriptions, removePendingTranscription } from '../services/pendingTranscriptions';
@@ -263,6 +264,8 @@ const normalizeAttachedAudioPath = (value?: string | null): string | null => {
 };
 
 type MicInputMode = 'agent' | 'force_text';
+/** Waits before trying a transcription again that broke on the way while online. */
+const NETWORK_RETRY_DELAYS_MS = [3000, 8000];
 
 const TODO_LIST_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/m;
 const CHECKLIST_ITEM_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s*(.*)$/;
@@ -645,14 +648,41 @@ const HeaderTitle = memo(({
     );
 });
 
-const HeaderMeta = memo(({ dateStr, charCount }: { dateStr: string; charCount: number }) => {
+const formatClock = (seconds: number) => {
+    const total = Math.max(0, Math.round(seconds));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
+
+const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, onPlayRecording }: {
+    dateStr: string;
+    charCount: number;
+    /** Length of the note's latest recording; null when it has none. */
+    recordingDuration?: number | null;
+    playerOpen?: boolean;
+    onPlayRecording?: () => void;
+}) => {
     const { t } = useTranslation();
 
     return (
-        <View style={styles.metaInfo}>
+        <View style={[styles.metaInfo, styles.metaRow]}>
             <Text style={styles.metaText}>
                 {dateStr}  ·  {t('edit.charactersCount', '{{count}} characters', { count: charCount })}
             </Text>
+            {recordingDuration != null && onPlayRecording && (
+                // The recording a voice note was made from stays one tap away
+                // once its text is in: the player shown while it was transcribed
+                // gives way to the text, and the audio must not seem gone.
+                <TouchableOpacity
+                    onPress={onPlayRecording}
+                    style={[styles.recordingPill, playerOpen && styles.recordingPillActive]}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('edit.playRecording', 'Play recording')}
+                >
+                    <MaterialIcons name={playerOpen ? 'close' : 'play-arrow'} size={14} color={colors.primary} />
+                    <Text style={styles.recordingPillText}>{formatClock(recordingDuration)}</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 });
@@ -999,6 +1029,7 @@ export const NoteEditScreen = () => {
         createNote,
         updateNote,
         deleteNote,
+        batchDeleteNotes,
         notes,
         createImprovement,
         updateImprovement,
@@ -1161,7 +1192,6 @@ export const NoteEditScreen = () => {
     // The note keeps one title; versions have their own only internally.
     const [noteTitle, setNoteTitle] = useState<string>(existingNote?.title || '');
     const noteTitleSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const [isDeletingNote, setIsDeletingNote] = useState<boolean>(false);
     const [recordingToDelete, setRecordingToDelete] = useState<{ id: string, path: string } | null>(null);
     const [content, setContent] = useState(() => {
         const initialId = getInitialActiveVariantId();
@@ -1652,6 +1682,9 @@ export const NoteEditScreen = () => {
     // Recordings saved without text for lack of network: transcribed as soon as it is back.
     const retryPendingTranscriptionsRef = useRef<(() => Promise<void>) | null>(null);
     const pendingRetryRunningRef = useRef(false);
+    /** Quick retries made for a transcription that failed while online (see the recording flow). */
+    const networkRetryCountRef = useRef(0);
+    const scheduleNetworkRetryRef = useRef<() => void>(() => undefined);
     const recordingFlowsInFlightRef = useRef(0);
     const pendingRetryScopeRef = useRef({ userId, noteId: localNoteId });
     pendingRetryScopeRef.current = { userId, noteId: localNoteId };
@@ -4587,8 +4620,21 @@ export const NoteEditScreen = () => {
                     clearTimeout(saveTimeoutRef.current);
                     saveTimeoutRef.current = null;
                 }
-                // Save immediately when app goes to background
-                saveNote().catch(error => {
+                // Save at once, with the text the editor has already reported: the
+                // paused WebView and timers would hold a full flush until the app
+                // came back, and a note the system closed meanwhile lost its last
+                // edits.
+                if (editMode === 'visual') {
+                    const reported = editorRef.current?.latestReportedContent?.();
+                    if (typeof reported === 'string') {
+                        const latest = stripAudioEmbedsFromRichContent(reported);
+                        currentContentRef.current = latest;
+                        if (activeVariantIdRef.current !== 'original') {
+                            improvementDraftsRef.current[activeVariantIdRef.current] = latest;
+                        }
+                    }
+                }
+                saveNote({ skipEditorFlush: true }).catch(error => {
                     console.error('Error during background auto-save:', error);
                 });
             }
@@ -4597,7 +4643,7 @@ export const NoteEditScreen = () => {
         return () => {
             subscription.remove();
         };
-    }, [clearAgentSessionState, saveNote]);
+    }, [clearAgentSessionState, editMode, saveNote]);
 
     const handleBack = async () => {
         await settleInlineEditorAudioForExit();
@@ -4638,23 +4684,23 @@ export const NoteEditScreen = () => {
         }
     };
 
+    // As from the list: no question first, an Undo bar after (shown by the
+    // list, which the note goes back to). The latest edits are saved first, so
+    // Undo brings back the note as it was left.
     const handleDelete = async () => {
         if (!localNoteId) return;
         setShowMenu(false);
-        setIsDeletingNote(true);
-    };
-
-    const confirmDeleteNote = async () => {
-        if (!localNoteId) return;
-        setIsDeletingNote(false);
+        const noteId = localNoteId;
+        try {
+            await prepareEditorSnapshotForExit();
+            await saveNote();
+        } catch (error) {
+            console.error('Failed to save the note before deleting it:', error);
+        }
         haptics.warning();
         skipAutoSaveRef.current = true;
         navigateBackToList();
-        try {
-            await deleteNote(localNoteId);
-        } catch (error) {
-            console.error('Failed to delete note:', error);
-        }
+        notesPendingDelete.schedule([noteId], batchDeleteNotes);
     };
 
     const openVoiceRecorderForMode = useCallback((mode: MicInputMode) => {
@@ -5863,15 +5909,21 @@ export const NoteEditScreen = () => {
                     // Protected note without the on-device model: its own prompt explains.
                     transcription.error === ON_DEVICE_MODEL_REQUIRED;
 
-                if (skippedOffline || isNetworkError(transcription.error)) {
-                    // Not an error from the user's point of view: the audio is kept.
+                const deviceOffline = skippedOffline || (isNetworkError(transcription.error) && await isDeviceOffline());
+                if (deviceOffline) {
+                    // Not an error from the user's point of view: the audio is kept,
+                    // and transcribed when the network is back.
                     if (LOCAL_WHISPER_ENABLED) {
-                        // A request that failed while the phone reports a network
-                        // (weak signal) gets no "back online" event: offer right away.
                         offlineOfferPendingRef.current = true;
-                        if (!(await isDeviceOffline())) scheduleOfflineOffer();
                     }
                     showToast(t('voice.savedOffline', 'Recording saved. Reopen this note with internet to transcribe it automatically.'), 4500);
+                } else if (isNetworkError(transcription.error)) {
+                    // Online, yet the request broke on the way (a dropped connection,
+                    // a weak signal): not "no internet". The recording waits as a
+                    // pending transcription and is tried again shortly, a few times.
+                    networkRetryCountRef.current = 0;
+                    showToast(t('voice.retryingTranscription', 'Could not reach the server. Trying again…'), 3000);
+                    scheduleNetworkRetryRef.current();
                 } else if (isAuthOrQuotaError) {
                     // Silent failure for auth/guest errors - audio is still saved
                     console.log('[Transparency] Transcription skipped due to auth/guest status');
@@ -6255,17 +6307,24 @@ export const NoteEditScreen = () => {
             return;
         }
         if (type === 'dictate') {
-            if (!LOCAL_WHISPER_ENABLED) return;
-
             if (isRealtimeDictating) {
                 await stopRealtimeDictation(true);
-            } else {
-                await startRealtimeDictationSession();
+                return;
             }
+            // Live dictation runs on the device's speech model. Without it the mic
+            // records and the words go into the note as they are, transcribed the
+            // usual way: asking for a 148 MB download first left the button useless.
+            const modelReady = LOCAL_WHISPER_ENABLED
+                && !!(await getLocalWhisperModelStatus().catch(() => null))?.isDownloaded;
+            if (!modelReady) {
+                openVoiceRecorderForMode('force_text');
+                return;
+            }
+            await startRealtimeDictationSession();
             return;
         }
         editorRef.current?.handleFormat(type);
-    }, [handleNewDrawing, isRealtimeDictating, startRealtimeDictationSession, stopRealtimeDictation]);
+    }, [handleNewDrawing, isRealtimeDictating, openVoiceRecorderForMode, startRealtimeDictationSession, stopRealtimeDictation]);
 
     // Leaving the screen must not leave the microphone and the Whisper job running.
     useEffect(() => {
@@ -6955,6 +7014,7 @@ export const NoteEditScreen = () => {
                 if (!recording) continue;
                 // A crash after saving the transcript must not insert or bill it twice.
                 if (recording.transcription?.trim() || await handleRetryTranscription(recording, { silent: true, variantId: job.variantId, micMode: job.micMode, segments: job.segments, segmentsEncrypted: job.segmentsEncrypted })) {
+                    networkRetryCountRef.current = 0;
                     await removePendingTranscription(userId, localNoteId, job.recordingId);
                     if (job.segmentsEncrypted) for (const path of job.segments ?? []) await AudioService.deleteAudioFile(path).catch(() => undefined);
                 }
@@ -6964,6 +7024,26 @@ export const NoteEditScreen = () => {
         } finally {
             pendingRetryRunningRef.current = false;
         }
+    };
+
+    // Tries the recordings still waiting for text again after a short pause, a
+    // few times, while the note stays open; then says so and leaves them for later.
+    scheduleNetworkRetryRef.current = () => {
+        const attempt = networkRetryCountRef.current;
+        if (attempt >= NETWORK_RETRY_DELAYS_MS.length) {
+            if (LOCAL_WHISPER_ENABLED) scheduleOfflineOffer();
+            showToast(t('voice.savedUnreachable', 'Recording saved. The server could not be reached; it will be transcribed when you reopen this note.'), 4500);
+            return;
+        }
+        networkRetryCountRef.current = attempt + 1;
+        const scope = { userId, noteId: localNoteId };
+        setTimeout(async () => {
+            if (!isMounted.current || !scope.userId || !scope.noteId
+                || pendingRetryScopeRef.current.noteId !== scope.noteId) return;
+            await retryPendingTranscriptionsRef.current?.();
+            const left = await getPendingTranscriptions(scope.userId, scope.noteId).catch(() => []);
+            if (left.length > 0 && isMounted.current) scheduleNetworkRetryRef.current();
+        }, NETWORK_RETRY_DELAYS_MS[attempt]);
     };
 
     useEffect(() => {
@@ -7150,6 +7230,34 @@ export const NoteEditScreen = () => {
         setTitleFocused(false);
     }, []);
 
+    /** True when the note's text already holds these words (spacing and case aside). */
+    const noteContainsText = useCallback((text: string): boolean => {
+        const squash = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+        const needle = squash(text).slice(0, 120);
+        return needle.length > 0 && squash(richContentToPlainText(currentContentRef.current || content || '')).includes(needle);
+    }, [content]);
+
+    // The latest recording, played from the pill next to the date.
+    const latestRecording = useMemo(
+        () => voiceRecordings.reduce<VoiceRecording | null>(
+            (latest, rec) => (!latest || (rec.created_at || '') > (latest.created_at || '') ? rec : latest),
+            null
+        ),
+        [voiceRecordings]
+    );
+    const [topPlayer, setTopPlayer] = useState<{ uri: string; duration: number } | null>(null);
+    const closeTopPlayer = useCallback(() => setTopPlayer(null), []);
+    const toggleTopPlayer = useCallback(async () => {
+        if (topPlayer) {
+            setTopPlayer(null);
+            return;
+        }
+        if (!latestRecording) return;
+        await clearInlineEditorAudio();
+        const uri = await resolveAudioUri(latestRecording.file_path);
+        if (uri) setTopPlayer({ uri, duration: latestRecording.duration });
+    }, [clearInlineEditorAudio, latestRecording, resolveAudioUri, topPlayer]);
+
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
@@ -7164,7 +7272,21 @@ export const NoteEditScreen = () => {
             <HeaderMeta
                 dateStr={dateStr}
                 charCount={charCount}
+                recordingDuration={latestRecording && !isTranscribing ? latestRecording.duration : null}
+                playerOpen={!!topPlayer}
+                onPlayRecording={toggleTopPlayer}
             />
+            {topPlayer && (
+                <View style={styles.topPlayer}>
+                    <AudioPlayer
+                        key={topPlayer.uri}
+                        audioUri={topPlayer.uri}
+                        duration={topPlayer.duration}
+                        autoPlay
+                        onClose={closeTopPlayer}
+                    />
+                </View>
+            )}
 
             <MemoizedImprovementChips
                 noteImprovements={visibleImprovements}
@@ -7208,6 +7330,11 @@ export const NoteEditScreen = () => {
         title,
         variantDisplayLabels,
         visibleImprovements,
+        latestRecording,
+        isTranscribing,
+        topPlayer,
+        toggleTopPlayer,
+        closeTopPlayer,
     ]);
 
     return (
@@ -8082,13 +8209,6 @@ export const NoteEditScreen = () => {
                 onConfirm={confirmDeleteRecording}
             />
 
-            <DeleteConfirmationDialog
-                visible={isDeletingNote}
-                title={t('edit.deleteNote', 'Delete Note')}
-                message={t('trash.deleteHint', 'The note stays in the trash for 30 days.')}
-                onCancel={() => setIsDeletingNote(false)}
-                onConfirm={confirmDeleteNote}
-            />
 
             <ErrorModal
                 visible={errorModalVisible}
@@ -8234,6 +8354,8 @@ export const NoteEditScreen = () => {
                                             duration={recordingsPreviewDuration}
                                             onClose={clearRecordingsPreview}
                                             onDelete={clearRecordingsPreview}
+                                            // The tap on a recording was the play request.
+                                            autoPlay
                                         />
                                     </View>
                                 )}
@@ -8250,11 +8372,15 @@ export const NoteEditScreen = () => {
                                             const isPlaying = playingRecordingId === rec.id;
                                             const isAttachedToNote = embeddedAudioPaths.includes(rec.file_path);
                                             const hasRecognizedText = !!rec.transcription?.trim();
-                                            const isInsertActionDisabled = !hasRecognizedText && isAttachedToNote;
-                                            const insertActionLabel = hasRecognizedText
-                                                ? t('edit.recordings.addText', 'Add text')
-                                                : (isAttachedToNote ? t('edit.recordings.inNote', 'In note') : t('edit.recordings.addAudio', 'Add audio'));
-                                            const insertActionIcon = hasRecognizedText ? 'notes' : (isAttachedToNote ? 'check' : 'add');
+                                            // Its text already in the note (it usually is): adding it again only doubled it.
+                                            const textInNote = hasRecognizedText && noteContainsText(rec.transcription || '');
+                                            const isInsertActionDisabled = (!hasRecognizedText && isAttachedToNote) || textInNote;
+                                            const insertActionLabel = textInNote
+                                                ? t('edit.recordings.inNote', 'In note')
+                                                : hasRecognizedText
+                                                    ? t('edit.recordings.addText', 'Add text')
+                                                    : (isAttachedToNote ? t('edit.recordings.inNote', 'In note') : t('edit.recordings.addAudio', 'Add audio'));
+                                            const insertActionIcon = textInNote ? 'check' : hasRecognizedText ? 'notes' : (isAttachedToNote ? 'check' : 'add');
                                             // Decoupled from transcriptionEnabled per user request
                                             const canTranscribeThisRecording = true;
                                             const isAnyTranscribing = !!transcribingRecordingId;
@@ -8581,6 +8707,36 @@ const styles = createStyles(() => ({
     },
     metaInfo: {
         marginBottom: spacing.l,
+    },
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: spacing.s,
+    },
+    recordingPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        paddingHorizontal: 8,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    recordingPillActive: {
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+    },
+    recordingPillText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    topPlayer: {
+        marginTop: -spacing.s,
+        marginBottom: spacing.m,
     },
     metaText: {
         fontSize: 12,

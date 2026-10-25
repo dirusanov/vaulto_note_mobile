@@ -18,6 +18,16 @@ import { useAuth } from './src/hooks/useAuth';
 import { useEncryption } from './src/context/EncryptionContext';
 import { useNotesContext } from './src/contexts/NotesContext';
 import { hasMasterKey } from './src/crypto/e2ee';
+import NetInfo from '@react-native-community/netinfo';
+import { setNetworkStateSource } from './src/utils/errorMessage';
+
+// The last network state Android reported, so an error message never says "no
+// internet" while there is a network (a request can break on the way anyway).
+let networkUp: boolean | null = null;
+NetInfo.addEventListener((state) => {
+    networkUp = state.isConnected === false ? false : state.isInternetReachable === true ? true : null;
+});
+setNetworkStateSource(() => networkUp);
 
 // Before the first render: called later, the native splash can already be gone and
 // the app shows a blank screen until it is ready.

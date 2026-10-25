@@ -90,6 +90,8 @@ const initialSettings = (): ToolSettings => {
 // Settings survive closing the canvas, like a pen case.
 let rememberedSettings: ToolSettings | null = null;
 let rememberedTool: ActiveTool = 'fountain';
+/** The last pen, pencil, brush or marker, which a drawing opens with. */
+let rememberedInkTool: InkTool = 'fountain';
 let rememberedPaper: PaperStyle = DEFAULT_PAPER;
 let rememberedRecent: string[] = [];
 let rememberedEraser: EraserSettings = { sizeIndex: 1, mode: 'partial' };
@@ -146,6 +148,11 @@ const applyStoredPrefs = (saved: StoredDrawingPrefs) => {
     if (ACTIVE_TOOLS.includes(saved.tool as ActiveTool)) {
         rememberedTool = saved.tool as ActiveTool;
     }
+    if (INK_TOOL_ORDER.includes(saved.inkTool as InkTool)) {
+        rememberedInkTool = saved.inkTool as InkTool;
+    } else if (INK_TOOL_ORDER.includes(saved.tool as InkTool)) {
+        rememberedInkTool = saved.tool as InkTool;
+    }
     const paper = saved.paper as Record<string, unknown> | undefined;
     if (paper && PAPER_PATTERNS.includes(paper.pattern as any) && PAPER_LAYOUTS.includes(paper.layout as any)
         && (paper.color === null || isColor(paper.color))) {
@@ -169,6 +176,7 @@ const applyStoredPrefs = (saved: StoredDrawingPrefs) => {
 const persistPrefs = () => saveDrawingPrefs({
     settings: rememberedSettings,
     tool: rememberedTool,
+    inkTool: rememberedInkTool,
     paper: rememberedPaper,
     recent: rememberedRecent,
     eraser: rememberedEraser,
@@ -274,7 +282,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             }
             // The tools come back as they were last used, even after a restart.
             setSettings(rememberedSettings || initialSettings());
-            setActiveTool(rememberedTool);
+            // A drawing opens with a pen in hand: the eraser, lasso or text tool
+            // used last made the first stroke do nothing visible.
+            setActiveTool(INK_TOOL_ORDER.includes(rememberedTool as InkTool) ? rememberedTool : rememberedInkTool);
             setRecent(rememberedRecent);
             setEraser(rememberedEraser);
             setToolsHidden(rememberedToolsHidden);
@@ -309,6 +319,9 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         }
         rememberedSettings = settings;
         rememberedTool = activeTool;
+        if (INK_TOOL_ORDER.includes(activeTool as InkTool)) {
+            rememberedInkTool = activeTool as InkTool;
+        }
         rememberedRecent = recent;
         rememberedEraser = eraser;
         rememberedToolsHidden = toolsHidden;
@@ -740,13 +753,16 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             >
                 <MaterialCommunityIcons name="lasso" size={22} color={activeTool === 'lasso' ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
+            {/* A setting, not a tool: set apart, and no tool's highlight, so it is
+                never read as a second tool in hand. The icon's colour says on/off. */}
+            <View style={styles.paletteDivider} />
             <TouchableOpacity
                 onPress={() => {
                     const next = !snapShapes;
                     setSnapShapes(next);
                     setTip(next ? t('drawing.shapesOn', 'Draw a shape and hold the pen still to straighten it') : t('drawing.shapesOff', 'Shapes stay as drawn'));
                 }}
-                style={[styles.toolButton, snapShapes && styles.toolButtonActive]}
+                style={styles.toolButton}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: snapShapes }}
                 accessibilityLabel={t('drawing.shapes', 'Shapes')}
@@ -928,7 +944,8 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             visible={open}
             animationType="slide"
             presentationStyle="fullScreen"
-            onRequestClose={handleClose}
+            // Back closes an open palette or paper panel first, as it does any sheet.
+            onRequestClose={popover ? closePopover : handleClose}
             onShow={handleShow}
             supportedOrientations={['portrait', 'landscape']}
         >
@@ -1020,6 +1037,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                             snapShapes={snapShapes}
                                 editingText={textEdit?.index ?? null}
                                 inkBlocked={popover !== null || textEdit !== null}
+                                touchesBlocked={!isTablet && popover !== null}
                                 dark={dark}
                                 themePaperColor={colors.background}
                                 themeLineColor={colors.border}

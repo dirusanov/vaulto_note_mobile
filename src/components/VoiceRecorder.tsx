@@ -43,6 +43,8 @@ interface VoiceRecorderProps {
 const BAR_COUNT = 20;
 const SILENCE_THRESHOLD_DB = -60;
 const MIN_VOICE_SAMPLES = 3;
+/** A silent recording at least this long is offered to keep rather than dropped. */
+const QUIET_KEEP_MIN_SECONDS = 3;
 const MAX_RECORDING_DURATION_SECONDS = Math.floor(MAX_RECORDING_DURATION_MS / 1000);
 const MAX_MEETING_DURATION_SECONDS = Math.floor(MAX_MEETING_DURATION_MS / 1000);
 const MEETING_SEGMENT_SECONDS = Math.floor(MEETING_SEGMENT_MS / 1000);
@@ -522,12 +524,29 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             const hasMetering = meteringSamples.current > 0;
             const hasVoiceSignal = !hasMetering || voiceSamples.current >= MIN_VOICE_SAMPLES;
             if (!hasVoiceSignal) {
-                await AudioService.deleteAudioFile(recording.uri);
+                const discard = async () => {
+                    await AudioService.deleteAudioFile(recording.uri);
+                    onCancel();
+                };
+                // A blip is just dropped. A longer recording that heard almost
+                // nothing may still hold quiet speech: the user decides, it is
+                // not thrown away behind their back.
+                if ((recording.duration || 0) < QUIET_KEEP_MIN_SECONDS) {
+                    appAlert(t("voice.noAudioCaptured"), t("voice.noAudioCapturedDesc"));
+                    await discard();
+                    return;
+                }
                 appAlert(
-                    t("voice.noAudioCaptured"),
-                    t("voice.noAudioCapturedDesc")
+                    t("voice.quietTitle", "Almost nothing was heard"),
+                    t("voice.quietDesc", "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again. Keep this recording anyway?"),
+                    [
+                        { text: t("common.delete"), style: "destructive", onPress: () => { void discard(); } },
+                        { text: t("voice.keepRecording", "Keep"), onPress: () => onFinish(recording, transcribe) },
+                    ],
+                    // One of the two: dismissed, the recorder would sit there with nothing to do.
+                    { cancelable: false }
                 );
-                onCancel();
+                recordingStartAtRef.current = null;
                 return;
             }
             onFinish(recording, transcribe);

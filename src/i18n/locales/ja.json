@@ -58,7 +58,8 @@
     "noSearchResults": "一致するノートはありません",
     "keptLockedTitle": "この端末に残っているアカウントのノート：{{count}}",
     "keptLockedText": "暗号化されています。開くにはアカウントにサインインしてください。",
-    "deletedCount": "ゴミ箱に移動：{{count}}",
+    "deletedCount": "{{count}} 件のメモをゴミ箱に移動しました",
+    "deletedCount_other": "{{count}} 件のメモをゴミ箱に移動しました",
     "offlineSync": "オフラインです。変更は保存され、後で同期されます。",
     "offline": "オフラインです。ノートと端末上の機能はそのまま使えます。",
     "unlockWithKey": "復元キーを入力すると、この端末に表示されます。",
@@ -716,7 +717,8 @@
     "textStyleTitle": "タイトル",
     "textStyleHeading": "見出し",
     "textStyleSubheading": "小見出し",
-    "textStyleBody": "本文"
+    "textStyleBody": "本文",
+    "playRecording": "録音を再生"
   },
   "voice": {
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",
@@ -750,7 +752,12 @@
     "toTextHint": "終了すると、録音がテキストになります",
     "audioOnlyHint": "音声のみ保存され、テキストにはなりません",
     "discardConfirmHint": "もう一度ゴミ箱をタップすると録音を削除します",
-    "instructionHint": "終了すると、指示が入力欄に表示されます"
+    "instructionHint": "終了すると、指示が入力欄に表示されます",
+    "retryingTranscription": "サーバーに接続できませんでした。再試行しています…",
+    "savedUnreachable": "録音を保存しました。サーバーに接続できなかったため、次にこのメモを開いたときに文字起こしします。",
+    "quietTitle": "ほとんど何も聞こえませんでした",
+    "quietDesc": "マイクには無音しか記録されませんでした。ミュート中や通話中の場合は終了してから録音し直してください。それでもこの録音を残しますか？",
+    "keepRecording": "残す"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -1041,7 +1048,8 @@
     "offline": "インターネットに接続されていません。ネットワークを確認して、もう一度お試しください。",
     "serverUnavailable": "サーバーが一時的に利用できません。ノートは安全です。少し待ってから再度お試しください。",
     "timeout": "リクエストに時間がかかりすぎました。接続を確認して、もう一度お試しください。",
-    "localAIMemory": "このAIモデルにはメモリが不足しています。設定で軽いモデルまたはクラウドAIを選んでください。"
+    "localAIMemory": "このAIモデルにはメモリが不足しています。設定で軽いモデルまたはクラウドAIを選んでください。",
+    "unreachable": "サーバーに接続できませんでした。少ししてからもう一度お試しください。"
   },
   "alerts": {
     "shareUnavailable": "この端末では共有できません。",

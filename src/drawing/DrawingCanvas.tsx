@@ -90,6 +90,8 @@ type ToolConfig = {
     stylusOnly: boolean;
     eraserRadius: number;
     snapShapes: boolean;
+    /** A backdrop over the canvas takes touches (it closes a popover): nothing draws. */
+    blocked: boolean;
 };
 
 /** Where a tap in text mode landed, in document and screen coordinates. */
@@ -138,6 +140,8 @@ type Props = {
     editingText: number | null;
     /** Something is open over the canvas (a popover): touches go the usual way, not to the native ink layer. */
     inkBlocked?: boolean;
+    /** A backdrop closes that popover on a tap: the tap must not also draw a dot. */
+    touchesBlocked?: boolean;
     dark: boolean;
     themePaperColor: string;
     themeLineColor: string;
@@ -458,7 +462,7 @@ const Label: React.FC<{ item: InkText }> = ({ item }) => (
 
 export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     bottomInset, strokes, texts, textBoxes, paper, docWidth: docWidthProp, onMeasure, mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes,
-    editingText, inkBlocked = false, dark, themePaperColor, themeLineColor, deskColor,
+    editingText, inkBlocked = false, touchesBlocked = false, dark, themePaperColor, themeLineColor, deskColor,
     onCommit, onErase, onEraseEnd, onTextTap, onTextMove, onStylus, onUndo, onRedo,
     selection, onLasso, onSelectionMove,
 }, ref) => {
@@ -566,7 +570,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // A synchronizable is written from JS at once, under a short lock, and
     // read by the gesture when a touch begins.
     const toolSyncRef = useRef<Synchronizable<ToolConfig> | null>(null);
-    const toolNow = useRef<ToolConfig>({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
+    const toolNow = useRef<ToolConfig>({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, blocked: touchesBlocked });
     if (!toolSyncRef.current) {
         toolSyncRef.current = createSynchronizable<ToolConfig>(toolNow.current);
     }
@@ -612,8 +616,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         pushNativeConfig();
     }, [toolSync, toolSV, pushNativeConfig]);
     useLayoutEffect(() => {
-        setTool({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes });
-    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, setTool]);
+        setTool({ mode: canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, blocked: touchesBlocked });
+    }, [canvasMode, tool, color, size, stylusOnly, eraserRadius, snapShapes, touchesBlocked, setTool]);
     /** The tool a touch started with: it keeps it to the end, whatever is picked meanwhile. */
     const strokeCfg = useSharedValue({ tool, color, size, eraserRadius, snapShapes });
 
@@ -995,6 +999,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     runOnJS(callJs)('onStylus');
                 }
                 const cfg = toolSync.getBlocking();
+                if (cfg.blocked) {
+                    gestureMode.value = 'none';
+                    return;
+                }
                 strokeCfg.value = { tool: cfg.tool, color: cfg.color, size: cfg.size, eraserRadius: cfg.eraserRadius, snapShapes: cfg.snapShapes };
                 // The pen's eraser end or side button (see InkInputView) erases with any tool.
                 const penErases = isStylus && !!e.stylusData && e.stylusData.pressure <= ERASER_PRESSURE / 2;

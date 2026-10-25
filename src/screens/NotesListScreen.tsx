@@ -8,7 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { VoiceRecorder } from '../components/VoiceRecorder';
 import { SelectionActionPanel } from '../components/SelectionActionPanel';
 import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
-import { createPendingDeleteStore } from '../utils/pendingDelete';
+import { notesPendingDelete } from '../utils/notesPendingDelete';
 import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -45,13 +45,8 @@ const LOW_MINUTES_SECONDS = 5 * 60;
 const UNLIMITED_SECONDS = 360000;
 const PROFILE_REFRESH_MS = 20000;
 
-// Notes deleted from the list wait here for the Undo window to close. Kept
-// outside the screen so a remount (a theme change remounts the whole tree) or
-// a re-render can never move them to the trash before the window is over.
-const listPendingDelete = createPendingDeleteStore({
-    windowMs: UNDO_WINDOW_MS,
-    onError: (error) => console.error('[NotesList] Delete failed', error),
-});
+// Shared with the note screen: a note deleted there gets the same Undo bar here.
+const listPendingDelete = notesPendingDelete;
 
 export const NotesListScreen = () => {
     const { t } = useTranslation();

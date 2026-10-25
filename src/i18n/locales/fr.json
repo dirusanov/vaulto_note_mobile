@@ -58,7 +58,9 @@
     "noSearchResults": "Aucune note ne correspond à votre recherche",
     "keptLockedTitle": "Notes du compte conservées sur cet appareil : {{count}}",
     "keptLockedText": "Elles sont chiffrées. Connectez-vous pour les ouvrir.",
-    "deletedCount": "Placées dans la corbeille : {{count}}",
+    "deletedCount": "{{count}} notes placées dans la corbeille",
+    "deletedCount_one": "Note placée dans la corbeille",
+    "deletedCount_other": "{{count}} notes placées dans la corbeille",
     "offlineSync": "Hors ligne. Les modifications sont enregistrées et seront synchronisées plus tard.",
     "offline": "Hors ligne. Les notes et les fonctions sur l’appareil restent disponibles.",
     "unlockWithKey": "Saisissez votre clé de récupération pour les afficher sur cet appareil.",
@@ -718,7 +720,8 @@
     "textStyleTitle": "Titre",
     "textStyleHeading": "En-tête",
     "textStyleSubheading": "Sous-titre",
-    "textStyleBody": "Texte"
+    "textStyleBody": "Texte",
+    "playRecording": "Lire l'enregistrement"
   },
   "voice": {
     "modelNotDownloaded": "Modèle non téléchargé. Vérifiez les paramètres.",
@@ -752,7 +755,12 @@
     "toTextHint": "À la fin, l’enregistrement devient du texte",
     "audioOnlyHint": "Enregistré en audio seulement, sans texte",
     "discardConfirmHint": "Appuyez à nouveau sur la corbeille pour supprimer l’enregistrement",
-    "instructionHint": "Quand vous avez fini, l'instruction apparaît dans le champ"
+    "instructionHint": "Quand vous avez fini, l'instruction apparaît dans le champ",
+    "retryingTranscription": "Impossible de joindre le serveur. Nouvelle tentative…",
+    "savedUnreachable": "Enregistrement sauvegardé. Le serveur n'a pas répondu ; il sera transcrit à la prochaine ouverture de cette note.",
+    "quietTitle": "Presque rien n'a été entendu",
+    "quietDesc": "Le micro n'a capté que du silence. S'il est coupé ou occupé par un appel, arrêtez-le et réenregistrez. Garder quand même cet enregistrement ?",
+    "keepRecording": "Garder"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -1043,7 +1051,8 @@
     "offline": "Pas de connexion internet. Vérifiez votre réseau et réessayez.",
     "serverUnavailable": "Le serveur est momentanément indisponible. Vos notes sont en sécurité ; réessayez dans une minute.",
     "timeout": "La requête a pris trop de temps. Vérifiez votre connexion et réessayez.",
-    "localAIMemory": "Mémoire insuffisante pour cette IA. Choisissez un modèle plus léger ou l’IA cloud dans les réglages."
+    "localAIMemory": "Mémoire insuffisante pour cette IA. Choisissez un modèle plus léger ou l’IA cloud dans les réglages.",
+    "unreachable": "Impossible de joindre le serveur. Réessayez dans un instant."
   },
   "alerts": {
     "shareUnavailable": "Le partage n’est pas disponible sur cet appareil.",

@@ -58,7 +58,8 @@
     "noSearchResults": "没有匹配的笔记",
     "keptLockedTitle": "保留在此设备上的账户笔记：{{count}}",
     "keptLockedText": "它们已加密。登录账户即可打开。",
-    "deletedCount": "已移到回收站：{{count}}",
+    "deletedCount": "已将 {{count}} 条笔记移到回收站",
+    "deletedCount_other": "已将 {{count}} 条笔记移到回收站",
     "offlineSync": "离线。更改已保存，稍后会同步。",
     "offline": "离线。笔记和设备上的功能仍可使用。",
     "unlockWithKey": "输入恢复密钥，在本机上显示它们。",
@@ -716,7 +717,8 @@
     "textStyleTitle": "标题",
     "textStyleHeading": "小标题",
     "textStyleSubheading": "副标题",
-    "textStyleBody": "正文"
+    "textStyleBody": "正文",
+    "playRecording": "播放录音"
   },
   "voice": {
     "modelNotDownloaded": "模型尚未下载，请检查设置。",
@@ -750,7 +752,12 @@
     "toTextHint": "结束后，录音会转成文字",
     "audioOnlyHint": "仅保存音频，不转文字",
     "discardConfirmHint": "再次点按垃圾桶即可删除录音",
-    "instructionHint": "说完后，指令会出现在输入框中"
+    "instructionHint": "说完后，指令会出现在输入框中",
+    "retryingTranscription": "无法连接服务器，正在重试…",
+    "savedUnreachable": "录音已保存。服务器暂时无法连接，下次打开此笔记时会自动转写。",
+    "quietTitle": "几乎没有录到声音",
+    "quietDesc": "麦克风只录到了静音。如果它被静音或正在通话，请结束后重新录制。仍要保留这段录音吗？",
+    "keepRecording": "保留"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -1041,7 +1048,8 @@
     "offline": "没有网络连接。请检查网络后重试。",
     "serverUnavailable": "服务器暂时不可用。你的笔记是安全的，请稍后再试。",
     "timeout": "请求耗时过长。请检查网络后重试。",
-    "localAIMemory": "此设备没有足够内存运行该 AI 模型。请在设置中选择更轻的模型或云端 AI。"
+    "localAIMemory": "此设备没有足够内存运行该 AI 模型。请在设置中选择更轻的模型或云端 AI。",
+    "unreachable": "无法连接服务器，请稍后再试。"
   },
   "alerts": {
     "shareUnavailable": "此设备无法分享。",

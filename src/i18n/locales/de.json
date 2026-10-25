@@ -58,7 +58,9 @@
     "noSearchResults": "Keine Notizen passen zu deiner Suche",
     "keptLockedTitle": "Konto-Notizen auf diesem Gerät behalten: {{count}}",
     "keptLockedText": "Sie sind verschlüsselt. Melde dich an, um sie zu öffnen.",
-    "deletedCount": "In den Papierkorb verschoben: {{count}}",
+    "deletedCount": "{{count}} Notizen in den Papierkorb verschoben",
+    "deletedCount_one": "Notiz in den Papierkorb verschoben",
+    "deletedCount_other": "{{count}} Notizen in den Papierkorb verschoben",
     "offlineSync": "Offline. Änderungen werden gespeichert und später synchronisiert.",
     "offline": "Offline. Notizen und Funktionen auf dem Gerät funktionieren weiter.",
     "unlockWithKey": "Gib deinen Wiederherstellungsschlüssel ein, um sie auf diesem Gerät zu sehen.",
@@ -717,7 +719,8 @@
     "textStyleTitle": "Titel",
     "textStyleHeading": "Überschrift",
     "textStyleSubheading": "Untertitel",
-    "textStyleBody": "Text"
+    "textStyleBody": "Text",
+    "playRecording": "Aufnahme abspielen"
   },
   "voice": {
     "modelNotDownloaded": "Modell nicht heruntergeladen. Prüfe die Einstellungen.",
@@ -751,7 +754,12 @@
     "toTextHint": "Wenn du fertig bist, wird die Aufnahme zu Text",
     "audioOnlyHint": "Wird nur als Audio gespeichert, ohne Text",
     "discardConfirmHint": "Tippe noch einmal auf den Papierkorb, um die Aufnahme zu löschen",
-    "instructionHint": "Wenn du fertig bist, erscheint die Anweisung im Feld"
+    "instructionHint": "Wenn du fertig bist, erscheint die Anweisung im Feld",
+    "retryingTranscription": "Der Server war nicht erreichbar. Neuer Versuch…",
+    "savedUnreachable": "Aufnahme gespeichert. Der Server war nicht erreichbar; sie wird beim nächsten Öffnen dieser Notiz transkribiert.",
+    "quietTitle": "Fast nichts zu hören",
+    "quietDesc": "Das Mikrofon hat nur Stille aufgenommen. Ist es stummgeschaltet oder von einem Anruf belegt, beende das und nimm erneut auf. Die Aufnahme trotzdem behalten?",
+    "keepRecording": "Behalten"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -1042,7 +1050,8 @@
     "offline": "Keine Internetverbindung. Prüfe dein Netzwerk und versuche es erneut.",
     "serverUnavailable": "Der Server ist vorübergehend nicht erreichbar. Deine Notizen sind sicher; versuche es in einer Minute erneut.",
     "timeout": "Die Anfrage hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
-    "localAIMemory": "Nicht genug Arbeitsspeicher für diese KI. Wähle in den Einstellungen ein kleineres Modell oder Cloud-KI."
+    "localAIMemory": "Nicht genug Arbeitsspeicher für diese KI. Wähle in den Einstellungen ein kleineres Modell oder Cloud-KI.",
+    "unreachable": "Der Server war nicht erreichbar. Versuche es gleich noch einmal."
   },
   "alerts": {
     "shareUnavailable": "Teilen ist auf diesem Gerät nicht verfügbar.",

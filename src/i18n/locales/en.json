@@ -58,7 +58,9 @@
     "noSearchResults": "No notes match your search",
     "keptLockedTitle": "Account notes kept on this device: {{count}}",
     "keptLockedText": "They are encrypted. Sign in to your account to open them.",
-    "deletedCount": "Moved to trash: {{count}}",
+    "deletedCount": "{{count}} notes moved to trash",
+    "deletedCount_one": "Note moved to trash",
+    "deletedCount_other": "{{count}} notes moved to trash",
     "offlineSync": "Offline. Changes are saved and will sync later.",
     "offline": "Offline. Notes and on-device features still work.",
     "unlockWithKey": "Enter your recovery key to show them on this device.",
@@ -717,7 +719,8 @@
     "textStyleTitle": "Title",
     "textStyleHeading": "Heading",
     "textStyleSubheading": "Subheading",
-    "textStyleBody": "Body"
+    "textStyleBody": "Body",
+    "playRecording": "Play recording"
   },
   "voice": {
     "modelNotDownloaded": "Model not downloaded. Check Settings.",
@@ -751,7 +754,12 @@
     "toTextHint": "When you finish, the recording becomes text",
     "audioOnlyHint": "Saved as audio only, without text",
     "discardConfirmHint": "Tap the bin again to delete the recording",
-    "instructionHint": "When you finish, the instruction appears in the field"
+    "instructionHint": "When you finish, the instruction appears in the field",
+    "retryingTranscription": "Could not reach the server. Trying again…",
+    "savedUnreachable": "Recording saved. The server could not be reached; it will be transcribed when you reopen this note.",
+    "quietTitle": "Almost nothing was heard",
+    "quietDesc": "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again. Keep this recording anyway?",
+    "keepRecording": "Keep"
   },
   "aux": {
     "emailVerified": "Email verified!",
@@ -1044,7 +1052,8 @@
     "offline": "No internet connection. Check your network and try again.",
     "serverUnavailable": "The server is temporarily unavailable. Your notes are safe; try again in a minute.",
     "timeout": "The request took too long. Check your connection and try again.",
-    "localAIMemory": "Not enough memory for AI on this device. Choose a lighter model or cloud AI in Settings."
+    "localAIMemory": "Not enough memory for AI on this device. Choose a lighter model or cloud AI in Settings.",
+    "unreachable": "Could not reach the server. Try again in a moment."
   },
   "alerts": {
     "shareUnavailable": "Sharing is not available on this device.",

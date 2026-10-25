@@ -6,6 +6,12 @@ export const setErrorMessageTranslator = (fn: Translate) => {
     translate = fn;
 };
 
+/** Whether the device has a network: true, false, or null when unknown (see connectivity.ts). */
+let networkKnown: () => boolean | null = () => null;
+export const setNetworkStateSource = (fn: () => boolean | null) => {
+    networkKnown = fn;
+};
+
 const NETWORK_PATTERN = /network error|network request failed|fetch failed|unknownhost|unable to resolve host|no address associated|enotfound|econnrefused|econnreset|failed to connect|internet connection appears to be offline/i;
 const TIMEOUT_PATTERN = /timeout|timed out/i;
 const SERVER_DOWN_PATTERN = /status code 50[234]|\b50[234]\b.*(bad gateway|unavailable|gateway timeout)/i;
@@ -27,7 +33,11 @@ const describeTransportFailure = (error: unknown): string | null => {
     const status = (error as any)?.response?.status;
     const message = messageOf(error);
     if (isNetworkError(error)) {
-        return translate('errors.offline', 'No internet connection. Check your network and try again.');
+        // A request also breaks on the way with a working network (a dropped
+        // connection, a weak signal): "no internet" only when there is none.
+        return networkKnown() === true
+            ? translate('errors.unreachable', 'Could not reach the server. Try again in a moment.')
+            : translate('errors.offline', 'No internet connection. Check your network and try again.');
     }
     if (status === 502 || status === 503 || status === 504 || SERVER_DOWN_PATTERN.test(message)) {
         return translate('errors.serverUnavailable', 'The server is temporarily unavailable. Your notes are safe; try again in a minute.');

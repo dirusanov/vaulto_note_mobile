@@ -96,6 +96,12 @@ export interface RichTextEditorHandle {
     /** Inserts a new drawing, replaces the one with this id, or removes it (src null). */
     applyDrawing: (command: { id: string; src: string | null; pos?: number; atCaret?: boolean }) => void;
     flushPendingChanges: () => Promise<string>;
+    /**
+     * The last document the editor reported, at once, without asking the page.
+     * In the background Android pauses the WebView and the timers, so anything
+     * that waits for them (flushPendingChanges) only finishes once the app is back.
+     */
+    latestReportedContent: () => string;
     /** Current document as Markdown, serialized from the editor's own JSON. */
     getMarkdown: () => Promise<string>;
     blur: () => void;
@@ -394,6 +400,12 @@ const getEditorCss = (
   .ProseMirror a {
     color: ${colors.primary};
     text-decoration: underline;
+  }
+
+  /* A ticked item reads as done: struck through and quieter, as in Keep. */
+  .ProseMirror li[data-checked="true"] > div {
+    text-decoration: line-through;
+    color: ${colors.textTertiary};
   }
 
   .ProseMirror hr {
@@ -1464,6 +1476,7 @@ const RichTextEditorComponent = forwardRef<RichTextEditorHandle, RichTextEditorP
             editorApi.injectJS?.(buildDrawingCommandJs(command));
         },
         flushPendingChanges: () => flushPendingContent(),
+        latestReportedContent: () => latestHtmlRef.current,
         getMarkdown: async () => tiptapDocumentToMarkdown(await editor.getJSON()),
         blur: () => {
             editor.blur();

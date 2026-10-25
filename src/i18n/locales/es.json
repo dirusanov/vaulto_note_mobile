@@ -58,7 +58,9 @@
     "noSearchResults": "Ninguna nota coincide con la búsqueda",
     "keptLockedTitle": "Notas de la cuenta guardadas en este dispositivo: {{count}}",
     "keptLockedText": "Están cifradas. Inicia sesión para abrirlas.",
-    "deletedCount": "Movidas a la papelera: {{count}}",
+    "deletedCount": "{{count}} notas movidas a la papelera",
+    "deletedCount_one": "Nota movida a la papelera",
+    "deletedCount_other": "{{count}} notas movidas a la papelera",
     "offlineSync": "Sin conexión. Los cambios se guardan y se sincronizarán después.",
     "offline": "Sin conexión. Las notas y las funciones en el dispositivo siguen funcionando.",
     "unlockWithKey": "Introduce tu clave de recuperación para verlas en este dispositivo.",
@@ -718,7 +720,8 @@
     "textStyleTitle": "Título",
     "textStyleHeading": "Encabezado",
     "textStyleSubheading": "Subtítulo",
-    "textStyleBody": "Texto"
+    "textStyleBody": "Texto",
+    "playRecording": "Reproducir grabación"
   },
   "voice": {
     "modelNotDownloaded": "Modelo no descargado. Revisa los ajustes.",
@@ -752,7 +755,12 @@
     "toTextHint": "Al terminar, la grabación se convierte en texto",
     "audioOnlyHint": "Se guarda solo el audio, sin texto",
     "discardConfirmHint": "Toca la papelera otra vez para borrar la grabación",
-    "instructionHint": "Al terminar, la instrucción aparecerá en el campo"
+    "instructionHint": "Al terminar, la instrucción aparecerá en el campo",
+    "retryingTranscription": "No se pudo conectar con el servidor. Reintentando…",
+    "savedUnreachable": "Grabación guardada. No se pudo conectar con el servidor; se transcribirá cuando vuelvas a abrir esta nota.",
+    "quietTitle": "Casi no se oyó nada",
+    "quietDesc": "El micrófono solo captó silencio. Si está silenciado u ocupado por una llamada, deténla y vuelve a grabar. ¿Guardar la grabación de todos modos?",
+    "keepRecording": "Guardar"
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -1043,7 +1051,8 @@
     "offline": "Sin conexión a internet. Revisa tu red e inténtalo de nuevo.",
     "serverUnavailable": "El servidor no está disponible por ahora. Tus notas están a salvo; inténtalo en un minuto.",
     "timeout": "La solicitud tardó demasiado. Revisa tu conexión e inténtalo de nuevo.",
-    "localAIMemory": "No hay memoria suficiente para esta IA. Elige un modelo más ligero o IA en la nube en Ajustes."
+    "localAIMemory": "No hay memoria suficiente para esta IA. Elige un modelo más ligero o IA en la nube en Ajustes.",
+    "unreachable": "No se pudo conectar con el servidor. Inténtalo de nuevo en un momento."
   },
   "alerts": {
     "shareUnavailable": "No se puede compartir en este dispositivo.",
