@@ -7245,6 +7245,10 @@ export const NoteEditScreen = () => {
         ),
         [voiceRecordings]
     );
+    // Its own player already in the text (a recording still without text): no second one.
+    const latestRecordingInText = !!latestRecording && embeddedAudioPaths.some(
+        (path) => normalizeAttachedAudioPath(path) === normalizeAttachedAudioPath(latestRecording.file_path)
+    );
     const [topPlayer, setTopPlayer] = useState<{ uri: string; duration: number } | null>(null);
     const closeTopPlayer = useCallback(() => setTopPlayer(null), []);
     const toggleTopPlayer = useCallback(async () => {
@@ -7272,7 +7276,7 @@ export const NoteEditScreen = () => {
             <HeaderMeta
                 dateStr={dateStr}
                 charCount={charCount}
-                recordingDuration={latestRecording && !isTranscribing ? latestRecording.duration : null}
+                recordingDuration={latestRecording && !isTranscribing && !latestRecordingInText ? latestRecording.duration : null}
                 playerOpen={!!topPlayer}
                 onPlayRecording={toggleTopPlayer}
             />
@@ -7331,6 +7335,7 @@ export const NoteEditScreen = () => {
         variantDisplayLabels,
         visibleImprovements,
         latestRecording,
+        latestRecordingInText,
         isTranscribing,
         topPlayer,
         toggleTopPlayer,

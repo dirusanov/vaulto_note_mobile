@@ -41,8 +41,15 @@ import kotlin.random.Random
  *
  * InkInputView, which sees every touch first, hands the touches meant for ink
  * to the view on screen ([current]). When the pen lifts, the stroke goes to JS
- * (onInkStroke) and stays drawn here, in the multi-buffered layer, until the
- * canvas has drawn it itself and calls [release].
+ * (onInkStroke) and stays drawn here until the canvas has drawn it itself and
+ * calls [release].
+ *
+ * Everything stays in the front buffer: the stroke under the pen, lifted
+ * strokes waiting for the canvas, the hover dot. Each update repaints only the
+ * part of the buffer that changed, with all of them in it. The renderer's
+ * commit to its multi-buffered layer is never used: it hides and clears the
+ * front buffer asynchronously, and a stroke begun meanwhile vanished for a
+ * frame or two (fast handwriting blinked).
  *
  * Coordinates: touches arrive in this view's pixels; the canvas works in
  * density-independent pixels, and the drawing in document units through the
@@ -150,26 +157,33 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     val matrix: Matrix,
   )
 
-  /** What the front buffer shows: the live stroke, or the hover dot, or nothing. */
+  /** The stroke under the pen as last built: shared with the render thread, never changed. */
+  private class LiveInk(
+    val style: Style,
+    /** Frozen pieces and the tail of the outline, in document units. */
+    val pieces: List<Path>,
+    val tail: Path?,
+    /** Centre line of a shape or of the predicted pen path, stroked at [lineWidth]. */
+    val line: Path?,
+    val lineWidth: Float,
+  )
+
+  /** A lifted stroke shown until the canvas draws it; [bounds] in this view's pixels. */
+  private class Held(val id: Int, val style: Style, val path: Path?, val line: Path?, val lineWidth: Float, val bounds: RectF)
+
+  /** The whole picture at one moment, and the pixels it changed. */
   private class Frame(
     /** Pixels to repaint; everything outside them is already right. */
     val dirty: RectF,
-    val style: Style? = null,
-    /** Frozen pieces (shared, never changed) and the tail of the outline, in document units. */
-    val pieces: List<Path> = emptyList(),
-    val tail: Path? = null,
-    /** Centre line of a shape or of the predicted pen path, stroked at [lineWidth]. */
-    val line: Path? = null,
-    val lineWidth: Float = 0f,
-    val lineRound: Boolean = true,
-    val hover: FloatArray? = null,
-    val hoverColor: Int = 0,
+    val held: List<Held>,
+    val live: LiveInk?,
+    val hover: FloatArray?,
+    val hoverColor: Int,
   )
 
-  /** A lifted stroke shown until the canvas draws it. */
-  private class Held(val id: Int, val style: Style, val path: Path?, val line: Path?, val lineWidth: Float)
-
   private val held = CopyOnWriteArrayList<Held>()
+  private var liveInk: LiveInk? = null
+  private var hoverDot: FloatArray? = null
   private val latest = AtomicReference<Frame?>(null)
   private var pendingDirty = RectF()
 
@@ -219,7 +233,12 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
       canvas.save()
       canvas.clipRect(pendingDirty)
       canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
-      param.style?.let { drawInk(canvas, it, param.pieces, param.tail, param.line, param.lineWidth, param.lineRound) }
+      for (stroke in param.held) {
+        if (RectF.intersects(stroke.bounds, pendingDirty)) {
+          drawInk(canvas, stroke.style, stroke.path?.let { listOf(it) } ?: emptyList(), null, stroke.line, stroke.lineWidth, true)
+        }
+      }
+      param.live?.let { drawInk(canvas, it.style, it.pieces, it.tail, it.line, it.lineWidth, true) }
       param.hover?.let { (x, y, r) ->
         hoverPaint.color = param.hoverColor
         hoverPaint.alpha = (0.18f * 255).toInt()
@@ -229,12 +248,9 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
       pendingDirty = RectF()
     }
 
+    // Never committed to (see above); empty when the renderer sets itself up.
     override fun onDrawMultiBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, params: Collection<Frame>) {
-      pendingDirty = RectF()
       canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
-      for (stroke in held) {
-        drawInk(canvas, stroke.style, stroke.path?.let { listOf(it) } ?: emptyList(), null, stroke.line, stroke.lineWidth, true)
-      }
     }
   })
 
@@ -242,7 +258,12 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   private val frontRenderer: CanvasFrontBufferedRenderer<Frame>?
     get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) renderer as? CanvasFrontBufferedRenderer<Frame> else null
 
-  private fun show(frame: Frame) {
+  /** Repaints [dirty] (this view's pixels) with everything as it is now. */
+  private fun show(dirty: RectF) {
+    if (dirty.isEmpty) {
+      return
+    }
+    val frame = Frame(RectF(dirty), held.toList(), liveInk, hoverDot, config.hoverColor)
     latest.set(frame)
     frontRenderer?.renderFrontBufferedLayer(frame)
   }
@@ -321,6 +342,8 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     var lastT = 0L
     var lastP = 0.55
     var tailBounds = RectF()
+    /** Everything the stroke has covered on screen, to clear it if it is cancelled. */
+    val allBounds = RectF()
   }
 
   private var live: Live? = null
@@ -331,7 +354,8 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   fun begin(from: android.view.View, event: MotionEvent, index: Int, isPen: Boolean) {
     val cfg = config
     val t = transform
-    hoverEnd(redraw = false)
+    // The dot goes where it was; the stroke's own frames only repaint around the nib.
+    hoverEnd()
     toLocal(from, 0f, 0f)
     val stroke = Live(
       nextId++,
@@ -399,14 +423,12 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
 
   /** The touch was cancelled (a palm, a second finger): its ink is void. */
   fun cancelStroke() {
-    if (live == null) {
-      return
-    }
+    val stroke = live ?: return
     live = null
     predictor = null
     Choreographer.getInstance().removeFrameCallback(shapeWatch)
-    latest.set(null)
-    frontRenderer?.cancel()
+    liveInk = null
+    show(RectF(stroke.allBounds))
   }
 
   private fun record(event: MotionEvent, index: Int) {
@@ -499,7 +521,13 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
       // Drawn once, when it snaps: the hand-drawn line goes, the shape comes.
       val line = shapeLine(stroke.points)
       val width = shapeWidth(stroke.config.size, stroke.config.spec.thinning, stroke.points).toFloat()
-      show(Frame(RectF(0f, 0f, this.width.toFloat(), height.toFloat()), stroke.style, line = line, lineWidth = width))
+      liveInk = LiveInk(stroke.style, emptyList(), null, line, width)
+      val bounds = RectF().also { line.computeBounds(it, true) }
+      bounds.inset(-width, -width)
+      matrix.mapRect(bounds)
+      bounds.inset(-DIRTY_PAD, -DIRTY_PAD)
+      stroke.allBounds.union(bounds)
+      show(RectF(stroke.allBounds))
       return
     }
     val trace = stroke.trace
@@ -561,7 +589,9 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     val dirty = RectF(bounds)
     dirty.union(stroke.tailBounds)
     stroke.tailBounds = bounds
-    show(Frame(dirty, stroke.style, ArrayList(stroke.pieces), tailPath, prediction, predictionWidth))
+    stroke.allBounds.union(bounds)
+    liveInk = LiveInk(stroke.style, ArrayList(stroke.pieces), tailPath, prediction, predictionWidth)
+    show(dirty)
   }
 
   private fun outlineBounds(outline: DoubleList): RectF {
@@ -613,16 +643,25 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     val points = stroke.points.toArray()
     val all = DoubleList(points.size).also { list -> points.forEach { list.add(it) } }
     // Shown as it will be committed (no prediction), until the canvas has it.
+    val bounds = RectF()
     val entry = if (stroke.snapped) {
-      Held(stroke.id, stroke.style, null, shapeLine(all), shapeWidth(stroke.config.size, stroke.config.spec.thinning, all).toFloat())
+      val line = shapeLine(all)
+      val width = shapeWidth(stroke.config.size, stroke.config.spec.thinning, all).toFloat()
+      line.computeBounds(bounds, true)
+      bounds.inset(-width, -width)
+      Held(stroke.id, stroke.style, null, line, width, bounds)
     } else {
       val path = Path()
       addOutline(path, strokeOutline(all, stroke.config.size, stroke.config.spec, false))
-      Held(stroke.id, stroke.style, path, null, 0f)
+      path.computeBounds(bounds, true)
+      Held(stroke.id, stroke.style, path, null, 0f, bounds)
     }
+    stroke.style.matrix.mapRect(bounds)
+    bounds.inset(-DIRTY_PAD, -DIRTY_PAD)
     held.add(entry)
-    latest.set(null)
-    frontRenderer?.commit()
+    liveInk = null
+    // Over all the live stroke covered: the prediction ahead of the nib goes.
+    show(RectF(stroke.allBounds).apply { union(bounds) })
     onInkStroke(mapOf(
       "id" to stroke.id,
       "tool" to stroke.config.tool,
@@ -638,8 +677,12 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   /** The canvas draws these strokes now: they stop being drawn here, a frame later to be safe. */
   fun release(ids: List<Int>) {
     Choreographer.getInstance().postFrameCallback {
-      if (held.removeAll { it.id in ids }) {
-        frontRenderer?.renderMultiBufferedLayer(emptyList())
+      val gone = held.filter { it.id in ids }
+      if (gone.isNotEmpty()) {
+        held.removeAll(gone.toSet())
+        val dirty = RectF()
+        gone.forEach { dirty.union(it.bounds) }
+        show(dirty)
       }
     }
   }
@@ -661,14 +704,16 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     val dirty = RectF(local[0] - r - DIRTY_PAD, local[1] - r - DIRTY_PAD, local[0] + r + DIRTY_PAD, local[1] + r + DIRTY_PAD)
     hoverDirty?.let { dirty.union(it) }
     hoverDirty = RectF(local[0] - r - DIRTY_PAD, local[1] - r - DIRTY_PAD, local[0] + r + DIRTY_PAD, local[1] + r + DIRTY_PAD)
-    show(Frame(dirty, hover = floatArrayOf(local[0], local[1], r), hoverColor = cfg.hoverColor))
+    hoverDot = floatArrayOf(local[0], local[1], r)
+    show(dirty)
   }
 
   fun hoverEnd(redraw: Boolean = true) {
     val dirty = hoverDirty ?: return
     hoverDirty = null
-    if (redraw && live == null) {
-      show(Frame(dirty))
+    hoverDot = null
+    if (redraw) {
+      show(dirty)
     }
   }
 
