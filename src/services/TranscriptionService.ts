@@ -80,6 +80,8 @@ export interface VoiceNoteResult {
     titleAction?: 'set' | 'none';
     titleValue?: string | null;
     suggestedTitle?: string | null;
+    /** Topic tags the cloud agent suggests for the whole note (no '#'); empty when none fit. */
+    tags?: string[];
     success: boolean;
     error?: string;
     /** The server's code when it refused for a usage limit (e.g. `llm_tokens_exhausted`). */
@@ -317,6 +319,7 @@ const buildBackendAgentFormData = (
     transcript: string,
     currentContent?: string,
     recentMessages: string[] = [],
+    existingTags: string[] = [],
 ): FormData => {
     const formData = new FormData();
     formData.append('transcript', transcript);
@@ -328,6 +331,11 @@ const buildBackendAgentFormData = (
         formData.append('recent_messages', JSON.stringify(recentMessages.slice(-5)));
     }
 
+    // The user's own tags, so a suggested tag reuses one instead of a near-duplicate.
+    if (existingTags.length > 0) {
+        formData.append('existing_tags', JSON.stringify(existingTags.slice(0, 60)));
+    }
+
     return formData;
 };
 
@@ -337,6 +345,7 @@ async function performBackendAgentRequest(
     idempotencyKey: string,
     currentContent?: string,
     recentMessages: string[] = [],
+    existingTags: string[] = [],
 ): Promise<Response> {
     return fetchWithTimeout(
         BACKEND_PROCESS_NOTE_URL,
@@ -347,7 +356,7 @@ async function performBackendAgentRequest(
                 // Retries below must never bill the user twice for the same command.
                 'Idempotency-Key': idempotencyKey,
             },
-            body: buildBackendAgentFormData(transcript, currentContent, recentMessages),
+            body: buildBackendAgentFormData(transcript, currentContent, recentMessages, existingTags),
         },
         BACKEND_AGENT_TIMEOUT_MS,
     );
@@ -358,6 +367,7 @@ async function fetchBackendAgentWithAuth(
     idempotencyKey: string,
     currentContent?: string,
     recentMessages: string[] = [],
+    existingTags: string[] = [],
 ): Promise<Response> {
     const accessToken = await storage.getToken();
     if (!accessToken) {
@@ -372,6 +382,7 @@ async function fetchBackendAgentWithAuth(
         idempotencyKey,
         currentContent,
         recentMessages,
+        existingTags,
     );
 
     if (initialResponse.status !== 401) {
@@ -389,6 +400,7 @@ async function fetchBackendAgentWithAuth(
         idempotencyKey,
         currentContent,
         recentMessages,
+        existingTags,
     );
 }
 
@@ -778,7 +790,7 @@ export async function processVoiceNote(
     currentContent?: string,
     preTranscribedText?: string,
     recentMessages: string[] = [],
-    options: { onDevice?: boolean } = {},
+    options: { onDevice?: boolean; existingTags?: string[] } = {},
 ): Promise<VoiceNoteResult> {
     // There is no agent switch: the caller already chose cloud or device
     // (see resolveVoiceAgentRoute); the on-device agent never sends anything.
@@ -824,6 +836,7 @@ export async function processVoiceNote(
                 agentIdempotencyKey,
                 normalizedCurrentContent,
                 recentMessages,
+                options.existingTags ?? [],
             );
 
             if (response.status === 403) {
@@ -875,7 +888,7 @@ export async function processVoiceNote(
             clearAiLimit();
             // Backend returns: { mode, raw_note, improved_markdown, has_instruction,
             //   content_action, needs_confirmation, confirmation_kind, confirmation_message,
-            //   title_action, title_value, suggested_title }
+            //   title_action, title_value, suggested_title, tags }
 
             return {
                 originalText: result.raw_note || transcriptText || '',
@@ -890,6 +903,8 @@ export async function processVoiceNote(
                 titleAction: result.title_action === 'set' ? 'set' : 'none',
                 titleValue: typeof result.title_value === 'string' ? result.title_value : null,
                 suggestedTitle: typeof result.suggested_title === 'string' ? result.suggested_title : null,
+                // A server older than tags sends none.
+                tags: Array.isArray(result.tags) ? result.tags.filter((tag: unknown): tag is string => typeof tag === 'string') : [],
                 success: true
             };
         } catch (error) {

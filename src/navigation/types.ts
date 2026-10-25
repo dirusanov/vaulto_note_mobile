@@ -11,6 +11,8 @@ export type RootStackParamList = {
         initialPrivacy?: 'normal' | 'hidden';
         /** Text shared from another app ("Share -> Vaulto"). */
         sharedText?: string;
+        /** Created from the list filtered by this tag: the note gets it when the user leaves it. */
+        initialTag?: string;
     };
     /** section: scroll to that group on open (the AI sign-in prompt links to Voice & AI). */
     Settings: { section?: 'voice' } | undefined;

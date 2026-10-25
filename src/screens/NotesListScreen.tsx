@@ -318,13 +318,14 @@ export const NotesListScreen = () => {
         navigation.setParams({ startRecordingAt: undefined });
     }, [navigation, startRecordingAt]);
 
+    // A note started while the list shows one tag belongs under it.
     const handleCreateNote = () => {
-        navigation.navigate('NoteEdit');
+        navigation.navigate('NoteEdit', activeTag ? { initialTag: activeTag } : undefined);
     };
 
     const handleVoiceFinish = (recording: AudioRecording, transcribe: boolean) => {
         setIsVoiceRecorderVisible(false);
-        navigation.navigate('NoteEdit', { initialRecording: recording, initialTranscribe: transcribe });
+        navigation.navigate('NoteEdit', { initialRecording: recording, initialTranscribe: transcribe, ...(activeTag ? { initialTag: activeTag } : {}) });
     };
 
     const handleSearch = (text: string) => {
@@ -507,9 +508,13 @@ export const NotesListScreen = () => {
     });
 
     // Tags come from #hashtags in the notes (all notes, not just the search hits).
+    // The original text counts too: AI tags are written there, also when an AI version is shown.
     const notePlainText = (n: typeof notes[number]) => {
         const activeChild = n.improvements?.find(imp => imp.is_active);
-        return `${n.title || ''}\n${richContentToPlainText(activeChild?.content || n.content || '')}`;
+        const shown = richContentToPlainText(activeChild?.content || n.content || '');
+        return activeChild
+            ? `${n.title || ''}\n${shown}\n${richContentToPlainText(n.content || '')}`
+            : `${n.title || ''}\n${shown}`;
     };
     const allTags = useMemo(
         () => countTags(getAllNotes().filter(n => !n.deleted).map(notePlainText)),

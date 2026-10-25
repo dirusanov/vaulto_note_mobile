@@ -31,3 +31,36 @@ test('splitTags keeps the text intact and marks tags', () => {
     assert.strictEqual(parts.map((p) => p.text).join(''), 'Buy milk #home and #1 more');
     assert.deepStrictEqual(parts.filter((p) => p.tag).map((p) => p.text), ['#home']);
 });
+
+const { withTagLine, keepTagLineLast } = require('../.test-build/tags/tags.js');
+
+test('suggested tags are written as a tag line at the end of a rich note', () => {
+    assert.strictEqual(withTagLine('<p>Call the bank</p><p></p>', ['Work', 'money']), '<p>Call the bank</p><p>#work #money</p>');
+});
+
+test('tags already in the note are not added twice', () => {
+    assert.strictEqual(withTagLine('<p>Plan for #work</p>', ['work', 'trip']), '<p>Plan for #work</p><p>#trip</p>');
+    assert.strictEqual(withTagLine('<p>Plan</p><p>#work</p>', ['work']), '<p>Plan</p><p>#work</p>');
+});
+
+test('text dictated after the tag line goes above it', () => {
+    assert.strictEqual(keepTagLineLast('<p>First</p><p>#work #trip</p><p>Second</p>'), '<p>First</p><p>Second</p><p>#work #trip</p>');
+    assert.strictEqual(keepTagLineLast('<p>First</p><p>#work</p>'), '<p>First</p><p>#work</p>');
+});
+
+test('a list item made of hashtags is not a tag line', () => {
+    const html = '<ul><li><p>#later</p></li></ul><p>Note</p>';
+    assert.strictEqual(keepTagLineLast(html), html);
+    assert.strictEqual(withTagLine(html, ['home']), '<ul><li><p>#later</p></li></ul><p>Note</p><p>#home</p>');
+});
+
+test('plain-text notes get a tag line after a blank line', () => {
+    assert.strictEqual(withTagLine('Buy milk\n', ['дом']), 'Buy milk\n\n#дом');
+    assert.strictEqual(keepTagLineLast('Buy milk\n\n#дом\nand eggs'), 'Buy milk\n\nand eggs\n\n#дом');
+    assert.strictEqual(withTagLine('', ['дом']), '#дом');
+});
+
+test('nothing to write leaves the note as it is', () => {
+    assert.strictEqual(withTagLine('<p>Hello</p>', []), '<p>Hello</p>');
+    assert.strictEqual(withTagLine('<p>Hello</p>', ['#', '']), '<p>Hello</p>');
+});

@@ -134,6 +134,7 @@ import {
     stripAudioEmbedsFromRichContent,
     titleMatchesContextScript,
 } from '../utils/richContent';
+import { countTags, extractTags, keepTagLineLast, withTagLine } from '../utils/tags';
 import {
     splitTitleHandoffText,
     TITLE_HANDOFF_DUPLICATE_SUBMIT_MS,
@@ -1036,6 +1037,7 @@ export const NoteEditScreen = () => {
     const loadedWithTextRef = useRef<Set<string>>(new Set());
     // "New note" from the list: open ready to type, not in reading mode.
     const opensAsBlankNoteRef = useRef(!routeNoteId && !route.params?.initialRecording);
+    const initialTagRef = useRef<string | null>(!routeNoteId ? route.params?.initialTag ?? null : null);
 
     const [localNoteId, setLocalNoteId] = useState(routeNoteId);
     const localNoteIdRef = useRef(localNoteId);
@@ -1084,6 +1086,17 @@ export const NoteEditScreen = () => {
 
     const existingNote = notes.find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
+    // The user's tags, most used first: the voice agent reuses them rather than
+    // inventing near-duplicates. Read by the agent queue, hence the ref.
+    const userTagsRef = useRef<string[]>([]);
+    userTagsRef.current = useMemo(
+        () => countTags(notes.filter((n) => !n.deleted).map((n) => [
+            n.title || '',
+            richContentToPlainText(n.content || ''),
+            ...(n.improvements || []).map((imp) => richContentToPlainText(imp.content || '')),
+        ].join('\n'))).map(({ tag }) => tag),
+        [notes]
+    );
     const [storageScope, setStorageScope] = useState<StorageScope>(
         route.params?.initialStorageScope ?? existingNote?.storage_scope ?? 'sync'
     );
@@ -2977,7 +2990,10 @@ export const NoteEditScreen = () => {
             updateHistory?: boolean;
         }
     ): Promise<boolean> => {
-        const sanitizedText = stripAudioEmbedsFromRichContent(newText);
+        // Text dictated or added by the agent goes above the tag line, which stays last.
+        const sanitizedText = variantId === 'original'
+            ? keepTagLineLast(stripAudioEmbedsFromRichContent(newText))
+            : stripAudioEmbedsFromRichContent(newText);
         const persist = options?.persist ?? true;
         const updateHistoryState = options?.updateHistory ?? true;
         const currentVariantContent = resolveVariantContent(variantId);
@@ -4505,6 +4521,14 @@ export const NoteEditScreen = () => {
                     return;
                 }
 
+                // Started from the list filtered by a tag: the note leaves with that tag
+                // (added now, not while typing, so the cursor never jumps).
+                const initialTag = initialTagRef.current;
+                if (initialTag && activeVariantIdRef.current === 'original' && hasMeaningfulRichContent(currentContentRef.current)) {
+                    initialTagRef.current = null;
+                    currentContentRef.current = withTagLine(currentContentRef.current, [initialTag]);
+                }
+
                 const latestTitle = currentTitleRef.current;
                 const latestContent = currentContentRef.current;
                 const variantId = activeVariantIdRef.current;
@@ -4815,7 +4839,7 @@ export const NoteEditScreen = () => {
                             contextContent,
                             normalizedTaskText,
                             requestHistoryRef.current,
-                            { onDevice: task.agentRoute === 'device' }
+                            { onDevice: task.agentRoute === 'device', existingTags: userTagsRef.current }
                         ),
                         new Promise<never>((_, reject) => {
                             setTimeout(() => reject(new Error('Agent task timeout')), AGENT_TASK_TIMEOUT_MS);
@@ -5194,6 +5218,36 @@ export const NoteEditScreen = () => {
                                 });
                             } else {
                                 await finalizeAsDictation(originalText || normalizedTaskText);
+                            }
+                        }
+
+                        // Topic tags from the same agent call, written once: a note that
+                        // has no tags yet gets a line of them at the end of its text,
+                        // where the user can delete any. A note with tags is the user's to tag.
+                        const suggestedTags = agentResult.tags || [];
+                        if (
+                            suggestedTags.length > 0 &&
+                            !agentResult.needsConfirmation &&
+                            !existingNote?.is_protected &&
+                            localNoteIdRef.current &&
+                            task.sessionId === agentSessionIdRef.current &&
+                            task.noteId === localNoteIdRef.current
+                        ) {
+                            const originalContent = resolveVariantContent('original');
+                            const noteText = [
+                                currentTitleRef.current,
+                                richContentToPlainText(originalContent),
+                                ...noteImprovements.map((imp) => richContentToPlainText(improvementDraftsRef.current[imp.id] ?? imp.content ?? '')),
+                            ].join('\n');
+                            if (extractTags(noteText).length === 0) {
+                                try {
+                                    await setVariantContentWithOptions('original', withTagLine(originalContent, suggestedTags), {
+                                        persist: true,
+                                        updateHistory: true,
+                                    });
+                                } catch (tagError) {
+                                    console.warn('[NoteEditScreen] Could not add suggested tags', tagError);
+                                }
                             }
                         }
                     } else {
