@@ -185,7 +185,6 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   private var liveInk: LiveInk? = null
   private var hoverDot: FloatArray? = null
   private val latest = AtomicReference<Frame?>(null)
-  private var pendingDirty = RectF()
 
   private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
   private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -221,51 +220,50 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   }
 
   @RequiresApi(Build.VERSION_CODES.Q)
-  private fun makeRenderer() = CanvasFrontBufferedRenderer(surface, object : CanvasFrontBufferedRenderer.Callback<Frame> {
+  private fun makeRenderer() = CanvasFrontBufferedRenderer(surface, object : CanvasFrontBufferedRenderer.Callback<Unit> {
     // Both run on the renderer's own thread.
-    override fun onDrawFrontBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, param: Frame) {
-      pendingDirty.union(param.dirty)
-      // Samples come faster than frames: only the newest state is drawn, over
-      // everything the skipped ones changed.
-      if (latest.get() !== param) {
-        return
-      }
+    override fun onDrawFrontBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, param: Unit) {
+      // The renderer retains every parameter until commit(), which this layer
+      // never calls. Pass only Unit; keeping Frames there retained every old
+      // tail Path and every snapshot of the growing list of frozen pieces.
+      // Take the newest state and all changes since the preceding draw together.
+      val frame = latest.getAndSet(null) ?: return
       canvas.save()
-      canvas.clipRect(pendingDirty)
+      canvas.clipRect(frame.dirty)
       canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
-      for (stroke in param.held) {
-        if (RectF.intersects(stroke.bounds, pendingDirty)) {
+      for (stroke in frame.held) {
+        if (RectF.intersects(stroke.bounds, frame.dirty)) {
           drawInk(canvas, stroke.style, stroke.path?.let { listOf(it) } ?: emptyList(), null, stroke.line, stroke.lineWidth, true)
         }
       }
-      param.live?.let { drawInk(canvas, it.style, it.pieces, it.tail, it.line, it.lineWidth, true) }
-      param.hover?.let { (x, y, r) ->
-        hoverPaint.color = param.hoverColor
+      frame.live?.let { drawInk(canvas, it.style, it.pieces, it.tail, it.line, it.lineWidth, true) }
+      frame.hover?.let { (x, y, r) ->
+        hoverPaint.color = frame.hoverColor
         hoverPaint.alpha = (0.18f * 255).toInt()
         canvas.drawCircle(x, y, r, hoverPaint)
       }
       canvas.restore()
-      pendingDirty = RectF()
     }
 
     // Never committed to (see above); empty when the renderer sets itself up.
-    override fun onDrawMultiBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, params: Collection<Frame>) {
+    override fun onDrawMultiBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, params: Collection<Unit>) {
       canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
     }
   })
 
   @Suppress("UNCHECKED_CAST")
-  private val frontRenderer: CanvasFrontBufferedRenderer<Frame>?
-    get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) renderer as? CanvasFrontBufferedRenderer<Frame> else null
+  private val frontRenderer: CanvasFrontBufferedRenderer<Unit>?
+    get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) renderer as? CanvasFrontBufferedRenderer<Unit> else null
 
   /** Repaints [dirty] (this view's pixels) with everything as it is now. */
   private fun show(dirty: RectF) {
     if (dirty.isEmpty) {
       return
     }
-    val frame = Frame(RectF(dirty), held.toList(), liveInk, hoverDot, config.hoverColor)
-    latest.set(frame)
-    frontRenderer?.renderFrontBufferedLayer(frame)
+    latest.updateAndGet { pending ->
+      Frame(RectF(dirty).apply { pending?.let { union(it.dirty) } }, held.toList(), liveInk, hoverDot, config.hoverColor)
+    }
+    frontRenderer?.renderFrontBufferedLayer(Unit)
   }
 
   override fun onAttachedToWindow() {

@@ -642,7 +642,9 @@ const nearStroke = (stroke: InkStroke, x: number, y: number, radius: number): bo
 export const eraseStroke = (stroke: InkStroke, x: number, y: number, radius: number): InkStroke[] | null => {
     const pts = stroke.points;
     const count = Math.floor(pts.length / 3);
-    if (count === 0 || !nearStroke(stroke, x, y, radius)) {
+    // A long scribble's bounding box often contains the eraser even though its
+    // ink does not. Check the segments before copying any surviving samples.
+    if (count === 0 || !strokeHit(stroke, x, y, radius)) {
         return null;
     }
     const reach = eraseReach(stroke, radius);

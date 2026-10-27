@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.105] - 2026-10-27
+
+### Fixed
+- Drawing and eraser cursors redraw at the display frame rate instead of pen sampling frequency; erasing no longer rebuilds the React Skia tree for every edit.
+- Erasing on dense drawings reuses unchanged groups of strokes instead of rebuilding the whole page's ink picture for each pass. Missed strokes no longer allocate copies of their samples.
+- Native handwriting no longer retains obsolete rendering snapshots for the lifetime of the drawing canvas.
+
 ## [1.0.104] - 2026-10-25
 
 ### Added

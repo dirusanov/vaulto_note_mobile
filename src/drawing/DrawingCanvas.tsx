@@ -65,6 +65,7 @@ import {
     traceTail,
 } from './ink';
 import { Selection, TextBox } from './drawingModel';
+import { InkChunk, updateInkChunks } from './inkChunks';
 import { drawingBounds } from './drawingFormat';
 import {
     PAGE_GAP,
@@ -175,12 +176,6 @@ const CANVAS_EXTENT = 1e6;
 const ERASE_STEP = 3;
 /** Shortest time between two erase passes; the path between them is filled in. */
 const ERASE_INTERVAL_MS = 24;
-/**
- * Shortest time between two redraws of the stroke being drawn. A pen reports
- * 240-500 samples a second; rebuilding the stroke for each of them cost more
- * than the time between them, and the ink fell seconds behind the pen.
- */
-const LIVE_FRAME_MS = 7;
 /** Shortest interval over which finger speed (and so ink width) is measured. */
 const SPEED_WINDOW_MS = 8;
 /** How long the pen rests at the end of a stroke before it becomes a shape. */
@@ -433,31 +428,35 @@ const paintFor = (stroke: InkStroke): SkPaint => {
 /** A finished stroke the UI thread draws until the committed picture has it. */
 type PendingStroke = { id: number; stroke: InkStroke };
 
-type InkCache = { strokes: InkStroke[]; picture: SkPicture | null; depth: number };
-/** Pictures nested by appending before the chain is flattened again. */
-const MAX_PICTURE_DEPTH = 24;
+type InkCache = { chunks: InkChunk<InkStroke, SkPicture>[]; picture: SkPicture | null };
+
+const buildInkChunk = (strokes: InkStroke[]): SkPicture => {
+    const recorder = Skia.PictureRecorder();
+    const box = strokeBounds(strokes);
+    // Bounded pictures let Skia skip groups outside the erased region, before
+    // replaying their paths (a clip on one giant picture still visits them all).
+    const canvas = recorder.beginRecording(box
+        ? Skia.XYWHRect(box.minX, box.minY, box.maxX - box.minX, box.maxY - box.minY)
+        : pictureBounds);
+    for (const stroke of strokes) {
+        canvas.drawPath(pathFor(stroke), paintFor(stroke));
+    }
+    return recorder.finishRecordingAsPicture();
+};
 
 /**
  * Finished strokes as one picture: one node for Skia to draw instead of a node
- * per stroke for React to diff. A new stroke on top of the previous ones (the
- * usual case) just draws the previous picture and the new path.
+ * per stroke for React to diff. Erasing only records the small groups it changed;
+ * the rest retain their pictures, including when cuts shift the stroke indices.
  */
 const buildInkPicture = (cache: InkCache, strokes: InkStroke[]): InkCache => {
     const recorder = Skia.PictureRecorder();
     const canvas = recorder.beginRecording(pictureBounds);
-    const previous = cache.strokes;
-    let start = 0;
-    let depth = 0;
-    if (cache.picture && previous.length > 0 && strokes.length > previous.length && cache.depth < MAX_PICTURE_DEPTH
-        && previous.every((stroke, index) => strokes[index] === stroke)) {
-        canvas.drawPicture(cache.picture);
-        start = previous.length;
-        depth = cache.depth + 1;
+    const chunks = updateInkChunks(cache.chunks, strokes, buildInkChunk);
+    for (const chunk of chunks) {
+        canvas.drawPicture(chunk.picture);
     }
-    for (let i = start; i < strokes.length; i++) {
-        canvas.drawPath(pathFor(strokes[i]), paintFor(strokes[i]));
-    }
-    return { strokes, picture: recorder.finishRecordingAsPicture(), depth };
+    return { chunks, picture: recorder.finishRecordingAsPicture() };
 };
 
 const Label: React.FC<{ item: InkText }> = ({ item }) => (
@@ -540,8 +539,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     /** Where and since when the pen has rested; whether the stroke became a shape. */
     const still = useSharedValue({ x: 0, y: 0, t: 0 });
     const snapped = useSharedValue(false);
-    /** The frame callback that watches for a resting pen is running. */
-    const watching = useSharedValue(false);
     const lastSample = useSharedValue({ x: 0, y: 0, t: 0, p: 0.5 });
     const gestureMode = useSharedValue<'draw' | 'erase' | 'scroll' | 'text' | 'lasso' | 'move' | 'none'>('none');
     /** The lasso loop being drawn, in document coordinates. */
@@ -550,12 +547,15 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const selectionBox = useSharedValue<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
     const selectionDrag = useSharedValue({ dx: 0, dy: 0, startX: 0, startY: 0 });
     const eraser = useSharedValue({ x: -100, y: -100, visible: false });
+    // Input samples must not invalidate Skia: RNGH flushes its mappers after
+    // every sample, which would synchronously present the whole canvas at pen
+    // sampling frequency. Only the frame callback publishes the cursor.
+    const eraserTarget = useSharedValue({ x: -100, y: -100 });
     /** Screen point of the last erase pass in the current drag. */
     const lastErase = useSharedValue({ x: 0, y: 0, t: 0 });
     /** When the live stroke was last redrawn, and how many samples it had then. */
     const liveShown = useSharedValue({ t: 0, length: 0 });
     /** How long the last rebuild of the live stroke took (ms): a long stroke is redrawn less often. */
-    const liveCost = useSharedValue(0);
     const hover = useSharedValue({ x: -100, y: -100, visible: false });
     const textBoxesSV = useSharedValue<number[]>([]);
     const textGesture = useSharedValue({ index: -1, startX: 0, startY: 0, screenX: 0, screenY: 0, moved: false });
@@ -932,7 +932,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     // Runs each frame while a stroke is drawn: shows samples that arrived after
     // the last redraw (the pen slowed or stopped), and watches for the pen
     // coming to rest to straighten the stroke into a shape.
-    const strokeFrame = useFrameCallback(() => {
+    const publishStroke = useCallback(() => {
+        'worklet';
         if (gestureMode.value !== 'draw') {
             return;
         }
@@ -952,15 +953,36 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             // Not a shape: try again only after the pen moves and rests anew.
             still.value = { ...still.value, t: Number.MAX_SAFE_INTEGER };
         }
-    }, false);
-    const watchStroke = useCallback((active: boolean) => strokeFrame.setActive(active), [strokeFrame]);
+    }, [gestureMode, live, liveShown, snapped, strokeCfg, still]);
+    // Stay on the UI thread even while JS is committing the erased geometry.
+    // While idle this reads only gestureMode and does not request any redraw.
+    const publishEraserCursor = useCallback(() => {
+        'worklet';
+        if (gestureMode.value !== 'erase') {
+            return;
+        }
+        const target = eraserTarget.value;
+        const shown = eraser.value;
+        if (target.x !== shown.x || target.y !== shown.y) {
+            eraser.value = { ...target, visible: true };
+        }
+    }, [gestureMode, eraserTarget, eraser]);
+    const publishInputFrame = useCallback(() => {
+        'worklet';
+        if (gestureMode.value === 'draw') {
+            publishStroke();
+        } else if (gestureMode.value === 'erase') {
+            publishEraserCursor();
+        }
+    }, [gestureMode, publishStroke, publishEraserCursor]);
+    useFrameCallback(publishInputFrame);
 
     // Gestures are built once (below): rebuilding them on every render made
     // RNGH re-attach handlers after each committed stroke, and a stroke that
     // began during that re-attach was dropped. Worklets call back into JS
     // through one stable function that reads the latest handlers.
     const jsHandlers = {
-        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex, watchStroke,
+        onStylus, onErase, onEraseEnd, onTextTap, onUndo, onRedo, commitLive, finishTextDrag, setDragIndex,
         onLasso, finishMove, onBlockedTouch: () => onBlockedTouch?.(),
     };
     const jsHandlersRef = useRef(jsHandlers);
@@ -1075,6 +1097,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 }
                 if (cfg.mode === 'erase' || penErases) {
                     gestureMode.value = 'erase';
+                    eraserTarget.value = { x: e.x, y: e.y };
                     eraser.value = { x: e.x, y: e.y, visible: true };
                     lastErase.value = { x: e.x, y: e.y, t: Date.now() };
                     runOnJS(callJs)('onErase', pt.x, pt.y, cfg.eraserRadius / scale);
@@ -1088,10 +1111,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 liveShown.value = { t: Date.now(), length: 3 };
                 snapped.value = false;
                 still.value = { x: e.x, y: e.y, t: Date.now() };
-                if (!watching.value) {
-                    watching.value = true;
-                    runOnJS(callJs)('watchStroke', true);
-                }
             })
             .onChange((e) => {
                 if (gestureMode.value === 'scroll') {
@@ -1139,7 +1158,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     return;
                 }
                 if (current === 'erase') {
-                    eraser.value = { x: e.x, y: e.y, visible: true };
+                    eraserTarget.value = { x: e.x, y: e.y };
                     const at = lastErase.value;
                     // Erasing runs on the JS thread over all strokes, so it waits until
                     // the eraser has moved a little. A long jump between two samples is
@@ -1186,18 +1205,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                         pressure = prev.p;
                     }
                 }
-                // Every sample is kept; the stroke is redrawn at most every
-                // LIVE_FRAME_MS (and by strokeFrame once the pen slows down).
-                const now = Date.now();
-                const redraw = now - liveShown.value.t >= Math.max(LIVE_FRAME_MS, liveCost.value * 2);
+                // Keep every sample without flushing Skia on the input event.
+                // publishInputFrame publishes them once per display frame,
+                // including while Android's native ink layer is starting up.
                 live.modify((points) => {
                     'worklet';
                     points.push(pt.x, pt.y, pressure);
                     return points;
-                }, redraw);
-                if (redraw) {
-                    liveShown.value = { t: now, length: live.value.length };
-                }
+                }, false);
             })
             .onEnd((e, success) => {
                 if (gestureMode.value === 'scroll') {
@@ -1272,10 +1287,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                 }
                 if (current !== 'draw') {
                     return;
-                }
-                if (watching.value) {
-                    watching.value = false;
-                    runOnJS(callJs)('watchStroke', false);
                 }
                 // A second finger landing (pinch) or a cancel voids the stroke it interrupted.
                 if (multiTouch.value) {
@@ -1367,7 +1378,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const livePath = useDerivedValue(() => {
         const cfg = strokeCfg.value;
         const points = live.value;
-        const started = performance.now();
         let path: SkPath;
         if (snapped.value) {
             path = shapeSkPath(points, shapeWidth({ tool: cfg.tool, color: cfg.color, size: cfg.size, points }));
@@ -1407,7 +1417,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
             addOutline(builder, traceOutline(trace, tail, from, tail.n - 1, from === 0, true));
             path = builder.build();
         }
-        liveCost.value = performance.now() - started;
         return path;
     });
 
@@ -1481,7 +1490,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         () => (selectedStrokes.size ? strokes.filter((_stroke, index) => !selectedStrokes.has(index)) : strokes),
         [strokes, selectedStrokes]
     );
-    const inkCache = useRef<InkCache>({ strokes: [], picture: null, depth: 0 });
+    const inkCache = useRef<InkCache>({ chunks: [], picture: null });
     const inkPicture = useMemo(() => {
         inkCache.current = buildInkPicture(inkCache.current, baseStrokes);
         return inkCache.current.picture as SkPicture;
@@ -1490,7 +1499,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         if (!selectedStrokes.size) {
             return null;
         }
-        return buildInkPicture({ strokes: [], picture: null, depth: 0 }, strokes.filter((_stroke, index) => selectedStrokes.has(index))).picture;
+        return buildInkPicture({ chunks: [], picture: null }, strokes.filter((_stroke, index) => selectedStrokes.has(index))).picture;
     }, [strokes, selectedStrokes]);
 
     // The scene (desk, paper, finished ink) as it was last drawn into the cache,
@@ -1650,10 +1659,13 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         selectionBox.value = box;
     }, [strokes, texts, textBoxes, selectedStrokes, selectedTexts, selectionBox]);
 
-    const labels = texts.map((item, index) => (
+    const labels = useMemo(() => texts.map((item, index) => (
         index === editingText || index === dragIndex || selectedTexts.has(index) ? null : <Label key={index} item={item} />
-    ));
-    const selectedLabels = [...selectedTexts].map((index) => <Label key={index} item={texts[index]} />);
+    )), [texts, editingText, dragIndex, selectedTexts]);
+    const selectedLabels = useMemo(
+        () => [...selectedTexts].map((index) => <Label key={index} item={texts[index]} />),
+        [texts, selectedTexts]
+    );
     const selectionTransform = useDerivedValue(() => [
         { translateX: selectionDrag.value.dx },
         { translateY: selectionDrag.value.dy },
@@ -1689,11 +1701,70 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const liveBlend = useDerivedValue(() => (strokeCfg.value.tool === 'marker' ? 'multiply' : 'srcOver'));
     const liveGrainMatrix = useDerivedValue(() => pencilGrainMatrix(strokeCfg.value.color));
     const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
-    const inkLayer = invertInk ? (
+    const inkLayer = useMemo(() => invertInk ? (
         <Paint>
             <ColorMatrix matrix={SMART_INVERT_MATRIX} />
         </Paint>
-    ) : undefined;
+    ) : undefined, [invertInk]);
+
+    // Finished ink on Android updates sceneSource, not this React tree. Keeping
+    // the element stable avoids rebuilding Skia's recorder and synchronously
+    // reading all UI shared values on every eraser edit.
+    const directInkPicture = SCENE_CACHE ? null : inkPicture;
+    const canvasElement = useMemo(() => view.width > 0 ? (
+        <Canvas key={surfaceKey} style={styles.fill} opaque>
+            {SCENE_CACHE ? (
+                <Image image={sceneImage} x={0} y={0} width={view.width} height={view.height} fit="fill" />
+            ) : (
+                <Fill color={deskColor} />
+            )}
+            <Group transform={transform}>
+                {!SCENE_CACHE && <Picture picture={paperPictures.sheet} />}
+                {!SCENE_CACHE && paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
+                <Group layer={inkLayer} clip={pageClip}>
+                    {!SCENE_CACHE && <Picture picture={directInkPicture!} />}
+                    <Picture picture={pendingPicture} />
+                    <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={liveBlend}>
+                        {liveGrain && <PencilGrain matrix={liveGrainMatrix} />}
+                    </Path>
+                    {labels}
+                    {dragIndex !== null && texts[dragIndex] && (
+                        <Group transform={dragTransform}>
+                            <Label item={texts[dragIndex]} />
+                        </Group>
+                    )}
+                    {(selectionPicture || selectedLabels.length > 0) && (
+                        <Group transform={selectionTransform}>
+                            {selectionPicture && <Picture picture={selectionPicture} />}
+                            {selectedLabels}
+                        </Group>
+                    )}
+                </Group>
+                {(selectionPicture || selectedLabels.length > 0) && (
+                    <Group transform={selectionTransform}>
+                        <Rect rect={selectionRect} color="rgba(30,136,229,0.06)" />
+                        <Rect rect={selectionRect} color="#1E88E5" style="stroke" strokeWidth={selectionStroke}>
+                            <DashPathEffect intervals={dash} />
+                        </Rect>
+                    </Group>
+                )}
+                <Path path={lassoPath} color="rgba(30,136,229,0.08)" />
+                <Path path={lassoPath} color="#1E88E5" style="stroke" strokeWidth={selectionStroke}>
+                    <DashPathEffect intervals={dash} />
+                </Path>
+            </Group>
+            <Circle cx={eraserX} cy={eraserY} r={eraserR} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
+            <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
+        </Canvas>
+    ) : null, [
+        surfaceKey, view.width, view.height, sceneImage, deskColor, transform,
+        paperPictures, patternOpacity, inkLayer, pageClip, directInkPicture,
+        pendingPicture, livePath, liveColor, liveOpacity, liveBlend, liveGrain,
+        liveGrainMatrix, labels, dragIndex, texts, dragTransform, selectionPicture,
+        selectedLabels, selectionTransform, selectionRect, selectionStroke, dash,
+        lassoPath, eraserX, eraserY, eraserR, lineColor, eraserOpacity,
+        hoverX, hoverY, hoverRadius, invertInk, color, hoverOpacity,
+    ]);
 
     const handleLayout = (event: LayoutChangeEvent) => {
         const { width, height } = event.nativeEvent.layout;
@@ -1703,55 +1774,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     return (
         <GestureDetector gesture={gesture}>
             <View style={[styles.fill, { backgroundColor: deskColor }]} onLayout={handleLayout} collapsable={false}>
-                {view.width > 0 && (
-                    // Opaque puts the canvas on a SurfaceView on Android, which reaches the
-                    // screen a composition step sooner than the default TextureView; it
-                    // then paints the desk itself.
-                    <Canvas key={surfaceKey} style={styles.fill} opaque>
-                        {SCENE_CACHE ? (
-                            <Image image={sceneImage} x={0} y={0} width={view.width} height={view.height} fit="fill" />
-                        ) : (
-                            <Fill color={deskColor} />
-                        )}
-                        <Group transform={transform}>
-                            {!SCENE_CACHE && <Picture picture={paperPictures.sheet} />}
-                            {!SCENE_CACHE && paperPictures.pattern && <Picture picture={paperPictures.pattern} opacity={patternOpacity} />}
-                            <Group layer={inkLayer} clip={pageClip}>
-                                {!SCENE_CACHE && <Picture picture={inkPicture} />}
-                                <Picture picture={pendingPicture} />
-                                <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={liveBlend}>
-                                    {liveGrain && <PencilGrain matrix={liveGrainMatrix} />}
-                                </Path>
-                                {labels}
-                                {dragIndex !== null && texts[dragIndex] && (
-                                    <Group transform={dragTransform}>
-                                        <Label item={texts[dragIndex]} />
-                                    </Group>
-                                )}
-                                {(selectionPicture || selectedLabels.length > 0) && (
-                                    <Group transform={selectionTransform}>
-                                        {selectionPicture && <Picture picture={selectionPicture} />}
-                                        {selectedLabels}
-                                    </Group>
-                                )}
-                            </Group>
-                            {(selectionPicture || selectedLabels.length > 0) && (
-                                <Group transform={selectionTransform}>
-                                    <Rect rect={selectionRect} color="rgba(30,136,229,0.06)" />
-                                    <Rect rect={selectionRect} color="#1E88E5" style="stroke" strokeWidth={selectionStroke}>
-                                        <DashPathEffect intervals={dash} />
-                                    </Rect>
-                                </Group>
-                            )}
-                            <Path path={lassoPath} color="rgba(30,136,229,0.08)" />
-                            <Path path={lassoPath} color="#1E88E5" style="stroke" strokeWidth={selectionStroke}>
-                                <DashPathEffect intervals={dash} />
-                            </Path>
-                        </Group>
-                        <Circle cx={eraserX} cy={eraserY} r={eraserR} color={lineColor} style="stroke" strokeWidth={1.5} opacity={eraserOpacity} />
-                        <Circle cx={hoverX} cy={hoverY} r={hoverRadius} color={invertInk ? '#FFFFFF' : color} opacity={hoverOpacity} />
-                    </Canvas>
-                )}
+                {canvasElement}
                 {NATIVE_INK && view.width > 0 && (
                     <InkLiveView
                         ref={attachNativeInk}

@@ -142,22 +142,44 @@ export const drawingReducer = (state: DrawingState, action: DrawingAction): Draw
             const { strokes, texts } = state.content;
             const centres = [action.x, action.y, ...(action.path || [])];
             let strokesChanged = false;
-            let keptStrokes = strokes;
-            for (let c = 0; c + 1 < centres.length; c += 2) {
-                const [x, y] = [centres[c], centres[c + 1]];
-                keptStrokes = action.mode === 'stroke'
-                    ? keptStrokes.filter((stroke) => !strokeHit(stroke, x, y, action.radius))
-                    : keptStrokes.flatMap((stroke) => {
-                        // Untouched strokes stay the same objects: their cached paths are reused.
-                        const pieces = eraseStroke(stroke, x, y, action.radius);
-                        if (!pieces) {
-                            return [stroke];
+            const keptStrokes: InkStroke[] = [];
+            for (const stroke of strokes) {
+                // Most strokes are untouched. Don't allocate an array per stroke
+                // per eraser sample, or repeatedly copy the whole page's list.
+                let pieces: InkStroke[] | null = null;
+                for (let c = 0; c + 1 < centres.length; c += 2) {
+                    const x = centres[c];
+                    const y = centres[c + 1];
+                    if (action.mode === 'stroke') {
+                        if (strokeHit(stroke, x, y, action.radius)) {
+                            pieces = [];
+                            break;
                         }
-                        strokesChanged = true;
-                        return pieces;
-                    });
+                    } else if (!pieces) {
+                        pieces = eraseStroke(stroke, x, y, action.radius);
+                    } else {
+                        const next: InkStroke[] = [];
+                        for (const piece of pieces) {
+                            const cut = eraseStroke(piece, x, y, action.radius);
+                            if (cut) {
+                                next.push(...cut);
+                            } else {
+                                next.push(piece);
+                            }
+                        }
+                        pieces = next;
+                        if (!pieces.length) {
+                            break;
+                        }
+                    }
+                }
+                if (pieces) {
+                    strokesChanged = true;
+                    keptStrokes.push(...pieces);
+                } else {
+                    keptStrokes.push(stroke);
+                }
             }
-            strokesChanged = strokesChanged || keptStrokes.length !== strokes.length;
             // A label is one piece: rubbing out part of it takes the eraser over it,
             // not just its edge brushing the box.
             const textReach = action.mode === 'stroke' ? action.radius : 0;

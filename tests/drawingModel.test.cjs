@@ -155,3 +155,32 @@ test('restore brings back the content and its undo history', () => {
     s = drawingReducer(s, { type: 'redo' });
     assert.equal(s.content.strokes.length, 2);
 });
+
+test('a batched eraser path matches individual passes for both modes and undoes as one drag', () => {
+    let seed = 12345;
+    const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+    const strokes = Array.from({ length: 50 }, () => ({
+        tool: 'fountain', color: '#000', size: 2,
+        points: Array.from({ length: 20 }, () => [random() * 200, random() * 200, random()]).flat(),
+    }));
+    const original = initialDrawingState({
+        strokes, texts: [label('one', 70), label('two', 150)],
+        paper: { pattern: 'blank', color: null, layout: 'pages' },
+    });
+    const boxes = [{ width: 60, height: 25 }, { width: 60, height: 25 }];
+    const path = [20, 70, 40, 80, 60, 90, 80, 100, 100, 110];
+    for (const mode of ['partial', 'stroke']) {
+        const action = { type: 'eraseAt', x: 10, y: 60, radius: 12, boxes, mode };
+        const batched = drawingReducer(original, { ...action, path });
+        let sequential = drawingReducer(original, action);
+        for (let i = 0; i < path.length; i += 2) {
+            sequential = drawingReducer(sequential, { ...action, x: path[i], y: path[i + 1] });
+        }
+        assert.deepEqual(batched.content, sequential.content);
+        const ended = drawingReducer(batched, { type: 'eraseEnd' });
+        assert.equal(ended.undo.length, 1);
+        assert.equal(drawingReducer(ended, { type: 'undo' }).content, original.content);
+        const undone = drawingReducer(ended, { type: 'undo' });
+        assert.equal(drawingReducer(undone, { type: 'redo' }).content, batched.content);
+    }
+});
