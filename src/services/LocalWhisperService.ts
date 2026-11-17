@@ -442,20 +442,11 @@ export const transcribeWithLocalWhisper = async (
 };
 
 /**
- * whisper.cpp reads 16 kHz mono WAV only, while notes are recorded as AAC/m4a,
- * so everything but WAV goes through the native transcoder first.
+ * whisper.cpp needs canonical 16 kHz mono PCM16 WAV. A .wav suffix alone
+ * does not guarantee sample rate, channels, encoding or header layout.
+ * Normalize imported WAVs too, using the same streaming native converter.
  */
 export const prepareAudioForLocalWhisper = async (audioUri: string): Promise<string> => {
-    const normalizedUri = audioUri.toLowerCase();
-    const isWavInput =
-        normalizedUri.endsWith('.wav') ||
-        normalizedUri.endsWith('.wave') ||
-        normalizedUri.startsWith('data:audio/wav;base64,');
-
-    if (isWavInput) {
-        return audioUri;
-    }
-
     if (Platform.OS === 'web') {
         throw new Error('Local Whisper is not supported in the browser');
     }

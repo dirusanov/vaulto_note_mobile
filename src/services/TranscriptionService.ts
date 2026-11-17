@@ -223,7 +223,8 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
  * exposes `bytes()`, which it can stream as a proper multipart part.
  */
 const appendAudioFilePart = (formData: FormData, audioUri: string) => {
-    formData.append('file', new ExpoFile(audioUri) as unknown as Blob, 'audio.m4a');
+    const file = new ExpoFile(audioUri);
+    formData.append('file', file as unknown as Blob, file.name);
 };
 
 const buildBackendTranscriptionFormData = (audioUri: string, language?: string): FormData => {
@@ -728,7 +729,9 @@ async function transcribeViaBackend(
             const error =
                 response.status === 401
                     ? 'Session expired. Please sign in again.'
-                    : detail || `Transcription request failed (${response.status})`;
+                    : /^external provider error\.?$/i.test(detail?.trim() ?? '')
+                        ? 'transcription_provider_error'
+                        : detail || `Transcription request failed (${response.status})`;
             return {
                 text: '',
                 success: false,

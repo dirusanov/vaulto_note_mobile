@@ -23,8 +23,10 @@ export async function transcribeMeetingParts(
         try {
             const source = encrypted ? (plaintext = await deps.decrypt(paths[index], `transcription_${recordingId}_${index}`)) : paths[index];
             const result = await deps.transcribe(source, `${recordingId}:part:${index}`);
-            if (!result.success || !result.text.trim()) return { success: false, text: '', error: result.error || 'Recording segment returned no text' };
-            parts.push(result.text.trim());
+            if (!result.success) return { success: false, text: '', error: result.error || 'Recording segment transcription failed' };
+            // A successfully recognised silent segment is complete. Continue to
+            // later speech instead of retrying the whole meeting indefinitely.
+            if (result.text.trim()) parts.push(result.text.trim());
         } catch (error) {
             return { success: false, text: '', error: error instanceof Error ? error.message : 'Meeting transcription failed' };
         } finally {

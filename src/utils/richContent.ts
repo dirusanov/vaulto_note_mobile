@@ -448,7 +448,16 @@ export const deriveTitleFromTranscript = (text: string, maxWords: number = 8): s
     const clean = (value: string) => value.replace(/[\s.!?。！？:;,，、…—–-]+$/, '').trim();
     const capitalize = (value: string) => value.charAt(0).toLocaleUpperCase() + value.slice(1);
 
-    const sentence = clean(firstLine.split(/(?<=[.!?。！？])\s*/)[0] || '');
+    let sentenceEnd = firstLine.length;
+    for (let index = 0; index < firstLine.length; index += 1) {
+        const char = firstLine[index];
+        const numericDot = char === '.' && /\d/.test(firstLine[index - 1] || '') && /\d/.test(firstLine[index + 1] || '');
+        if (/[.!?。！？]/.test(char) && !numericDot) {
+            sentenceEnd = index + 1;
+            break;
+        }
+    }
+    const sentence = clean(firstLine.slice(0, sentenceEnd));
     const words = tokens(sentence);
     if (words.length === 0) return '';
     // Scripts without spaces (Chinese, Japanese) arrive as one long token.

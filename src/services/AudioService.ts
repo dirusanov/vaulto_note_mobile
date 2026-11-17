@@ -10,6 +10,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { NativeModules, Platform } from 'react-native';
 import { encrypt, decrypt } from '../crypto/encryption';
+import { audioExtension } from '../utils/audioFormat';
 
 export const MAX_RECORDING_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -360,8 +361,6 @@ class AudioServiceClass {
     ): Promise<string> {
         if (Platform.OS === 'web') return tempUri;
         try {
-            // Generate unique filename
-            const filename = `audio_${Date.now()}.m4a`;
             const audioDir = await this.getAudioDir();
 
             // Ensure directory exists
@@ -370,12 +369,11 @@ class AudioServiceClass {
                 await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
             }
 
-            const targetUri = `${audioDir}${filename}`;
-
             // Read the audio file
             const audioData = await FileSystem.readAsStringAsync(tempUri, {
                 encoding: 'base64',
             });
+            const targetUri = `${audioDir}audio_${Date.now()}.${audioExtension(audioData, tempUri)}`;
 
             // Encrypt the audio data
             const encryptedData = await this.encryptAudioPayload(audioData);
@@ -424,7 +422,7 @@ class AudioServiceClass {
                 throw new Error('No cache directory available for audio playback');
             }
             const sanitizedPrefix = (tempPrefix || 'temp').replace(/[^a-z0-9_-]/gi, '') || 'temp';
-            const tempUri = `${cacheDir}${sanitizedPrefix}_${Date.now()}.m4a`;
+            const tempUri = `${cacheDir}${sanitizedPrefix}_${Date.now()}.${audioExtension(decryptedData, sourceUri)}`;
             await FileSystem.writeAsStringAsync(tempUri, decryptedData, {
                 encoding: 'base64',
             });
@@ -462,7 +460,7 @@ class AudioServiceClass {
      */
     async writeAudioBase64(plainBase64: string): Promise<string> {
         if (Platform.OS === 'web') throw new Error('Audio sync not supported on web');
-        const filename = `audio_${Date.now()}.m4a`;
+        const filename = `audio_${Date.now()}.${audioExtension(plainBase64)}`;
         const audioDir = await this.getAudioDir();
         const dirInfo = await FileSystem.getInfoAsync(audioDir);
         if (!dirInfo.exists) {
@@ -546,7 +544,7 @@ class AudioServiceClass {
         const cache = FileSystem.cacheDirectory;
         await sweep(`${cache}Audio/`, (name) => /\.(m4a|aac|mp4|3gp|wav)$/i.test(name));
         await sweep(`${cache}shared/`, () => true);
-        await sweep(cache, (name) => /^(meeting_|diag_).*\.m4a$/i.test(name));
+        await sweep(cache, (name) => /^(meeting_|diag_).*\.(m4a|wav|mp3|aac|ogg|flac|webm|amr)$/i.test(name));
         return removed;
     }
 
@@ -562,7 +560,7 @@ class AudioServiceClass {
                 .map((prefix) => (prefix || '').replace(/[^a-z0-9_-]/gi, ''))
                 .filter(Boolean);
             const tempAudioFiles = files.filter((file) => (
-                file.endsWith('.m4a')
+                /\.(m4a|wav|mp3|aac|ogg|flac|webm|amr)$/i.test(file)
                 && normalizedPrefixes.some((prefix) => file.startsWith(`${prefix}_`))
             ));
 

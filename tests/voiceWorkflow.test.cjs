@@ -65,11 +65,11 @@ test('failed persistence rejects instead of promising a durable retry', async ()
 });
 function transcription(options = {}) {
   const state = { downloaded: false, offline: false, privateMode: false, localEnabled: true, converted: false, limited: false, networkFailure: false, status: 200, provider: 'vaulto_ai', ...options };
-  const calls = { cloud: 0, local: 0, limit: 0, keys: [], timings: [] };
+  const calls = { cloud: 0, local: 0, limit: 0, keys: [], timings: [], uploads: [] };
   const imports = {
     axios: { isAxiosError: () => false },
     'expo-file-system/legacy': { getInfoAsync: async (uri) => ({ exists: true, size: uri.endsWith('.wav') ? 44 + 32 * 5000 : 100 }), deleteAsync: async () => {} },
-    'expo-file-system': { File: class File {} },
+    'expo-file-system': { File: class File { constructor(uri) { this.name = uri.split('/').pop(); } } },
     'react-native': { Platform: { OS: 'android' } },
     '../utils/env': { API_URL: 'https://qa.invalid' },
     '../utils/storage': { storage: { getToken: async () => 'synthetic-token' }, getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getLocalModelsEnabled: async () => state.localEnabled, getTranscriptionLanguage: async () => 'auto', getOpenAIApiKey: async () => 'synthetic-key', getOpenAIBaseUrl: async () => 'https://qa.invalid' },
@@ -92,17 +92,32 @@ function transcription(options = {}) {
   };
   const service = load('src/services/TranscriptionService.ts', imports, {
     Error, TypeError,
-    FormData: class { append() {} },
+    FormData: class { append(field, value, filename) { if (field === 'file') calls.uploads.push(filename); } },
     fetch: async (_url, init) => {
       calls.cloud++; calls.keys.push(init.headers['Idempotency-Key']);
       if (state.networkFailure === 'timeout') { const error = new Error('Aborted'); error.name = 'AbortError'; throw error; }
       if (state.networkFailure) throw new TypeError('Network request failed');
       const status = state.limited ? 403 : state.status;
-      return { status, ok: status === 200, headers: { get: () => 'application/json' }, json: async () => ({ text: 'Cloud transcript', detail: 'Rejected request' }) };
+      return { status, ok: status === 200, headers: { get: () => 'application/json' }, json: async () => ({ text: 'Cloud transcript', detail: state.detail ?? 'Rejected request' }) };
     },
   });
   return { service, calls, state };
 }
+test('transcription uploads preserve the materialized audio filename for every container', async () => {
+  const { service, calls } = transcription();
+  for (const name of ['legacy-retry.wav', 'native-recording.m4a', 'imported.mp3']) {
+    await service.transcribeAudio(`file:///cache/${name}`);
+  }
+  assert.deepEqual(calls.uploads, ['legacy-retry.wav', 'native-recording.m4a', 'imported.mp3']);
+});
+test('an upstream rejection keeps the recording recoverable and has an actionable error', async () => {
+  const { service, calls } = transcription({ status: 502, detail: 'External provider error', downloaded: true });
+  const result = await service.transcribeAudio('file:///cache/recording.wav');
+  assert.equal(result.success, false);
+  assert.equal(result.error, 'transcription_provider_error');
+  assert.equal(calls.cloud, 1);
+  assert.equal(calls.local, 0);
+});
 test('protected audio never falls back to the cloud, including when no model is available', async () => {
   for (const downloaded of [false, true]) {
     const { service, calls } = transcription({ downloaded });
@@ -302,6 +317,47 @@ test('a failed meeting part is never acknowledged as complete and decrypted temp
   deps.transcribe = async (_uri, key) => ({ success: true, text: key.endsWith(':0') ? 'First part' : 'Second part' });
   const retried = await transcribeMeetingParts(['encrypted:a', 'encrypted:b'], 'recording', true, deps);
   assert.equal(retried.success, true); assert.equal(retried.text, 'First part\n\nSecond part');
+});
+
+test('silent meeting segments do not discard later speech, and all-silence meetings finish once', async () => {
+  const { transcribeMeetingParts } = load('src/services/meetingTranscription.ts');
+  for (const texts of [['', ' Opening ', '  ', 'Closing', ''], ['', ' \n ', '']]) {
+    const calls = [], removed = [], progress = [];
+    const paths = texts.map((_, index) => `encrypted:${index}`);
+    const result = await transcribeMeetingParts(paths, 'meeting', true, {
+      exists: async () => true,
+      decrypt: async (uri) => `plain:${uri}`,
+      remove: async (uri) => { removed.push(uri); },
+      onPart: (part, total) => { progress.push([part, total]); },
+      transcribe: async (uri, key) => {
+        calls.push([uri, key]);
+        return { success: true, text: texts[calls.length - 1] };
+      },
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.text, texts.some((text) => text.trim()) ? 'Opening\n\nClosing' : '');
+    assert.deepEqual(calls, paths.map((uri, index) => [`plain:${uri}`, `meeting:part:${index}`]));
+    assert.deepEqual(removed, paths.map((uri) => `plain:${uri}`));
+    assert.deepEqual(progress, paths.map((_, index) => [index + 1, paths.length]));
+  }
+});
+
+test('a real failure after a successful silent meeting segment retains the retry and hides partial text', async () => {
+  const { transcribeMeetingParts } = load('src/services/meetingTranscription.ts');
+  const calls = [], removed = [];
+  const results = [{ success: true, text: '' }, { success: true, text: 'Opening' }, { success: false, text: '', error: 'upstream unavailable' }];
+  const result = await transcribeMeetingParts(['a', 'b', 'c', 'd'], 'meeting', true, {
+    exists: async () => true,
+    decrypt: async (uri) => `plain:${uri}`,
+    remove: async (uri) => { removed.push(uri); },
+    onPart() {},
+    transcribe: async (_uri, key) => { calls.push(key); return results[calls.length - 1]; },
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.text, '');
+  assert.equal(result.error, 'upstream unavailable');
+  assert.deepEqual(calls, ['meeting:part:0', 'meeting:part:1', 'meeting:part:2']);
+  assert.deepEqual(removed, ['plain:a', 'plain:b', 'plain:c']);
 });
 
 test('an incomplete encrypted meeting save preserves raw input and cleans only its attempted copies', async () => {

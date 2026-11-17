@@ -169,6 +169,11 @@ export const ModelPickerSheet = ({ visible, privateMode, privateVoiceOnly = fals
                                     <>
                                         <Text style={styles.section}>{t('settings.models.speech', 'Speech to text')}</Text>
                                         {choices.speech.map((c) => renderRow('speech', c))}
+                                        {(speechKey === 'tiny' || speechKey === 'base') && (
+                                            <Text style={styles.subtitle}>
+                                                {t('settings.models.compactSpeechHint', 'Compact models can mishear names, numbers and times. Choose Most accurate (Turbo) for better recognition; it needs more storage and memory.')}
+                                            </Text>
+                                        )}
                                         {choices.ai.length > 0 && (
                                             <>
                                                 <Text style={styles.section}>{t('settings.models.ai', 'AI: voice requests, editing, chat')}</Text>

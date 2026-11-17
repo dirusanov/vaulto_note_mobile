@@ -5897,8 +5897,14 @@ export const NoteEditScreen = () => {
             await FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => undefined);
             if (userId && !(await getVoiceRecordingsLocal(userId, currentNoteId)).some((item) => item.id === voiceId)) return;
 
-            isTranscriptionSuccess = transcription.success && !!transcription.text;
+            isTranscriptionSuccess = transcription.success && !!transcription.text.trim();
             transcribedText = isTranscriptionSuccess ? transcription.text : '';
+            const noSpeech = transcription.success && !transcription.text.trim();
+            if (noSpeech && userId) {
+                // An empty successful answer is terminal, not a network failure.
+                // Keep the audio, but never bill automatic silence retries on reopen.
+                await removePendingTranscription(userId, currentNoteId, voiceId);
+            }
 
             // Refresh profile to update balance in UI after deduction
             if (isTranscriptionSuccess) {
@@ -5979,13 +5985,15 @@ export const NoteEditScreen = () => {
                 await removePendingTranscription(userId, currentNoteId, voiceId);
             }
             // Keep meeting parts for a restart until every attempted segment returned.
-            if (meetingParts && (isTranscriptionSuccess || (!shouldTranscribe && !skippedOffline))) {
+            if (meetingParts && (isTranscriptionSuccess || noSpeech || (!shouldTranscribe && !skippedOffline))) {
                 for (const segment of meetingParts) void AudioService.deleteAudioFile(segment).catch(() => undefined);
             }
 
             // 4. STOP IF NO TEXT
             if (!isTranscriptionSuccess) {
-                const status = 'Saved recording (no text)';
+                const status = noSpeech
+                    ? t('voice.noSpeechDetected', 'No speech detected. Recording saved.')
+                    : 'Saved recording (no text)';
                 setRecordingOutcomeStatus(voiceId, status);
                 showVoiceResultStatus(status, voiceId);
                 return;
@@ -6908,7 +6916,7 @@ export const NoteEditScreen = () => {
         };
     }, [editMode, isColorPickerVisible]);
 
-    // Returns whether the recording got its text. `silent` (the automatic retry
+    // Returns whether recognition finished (including a successful empty answer). `silent` (the automatic retry
     // once the network is back) shows no error: the recording simply stays queued.
     const handleRetryTranscription = async (recording?: VoiceRecording, options: { silent?: boolean; variantId?: string; micMode?: MicInputMode; segments?: string[]; segmentsEncrypted?: boolean } = {}): Promise<boolean> => {
         const targetRecording = recording
@@ -6931,7 +6939,7 @@ export const NoteEditScreen = () => {
                 ? await transcribeMeetingSegments(options.segments, onDeviceOnly, targetRecording.id, options.segmentsEncrypted)
                 : await transcribeAudio(sourceUri!, undefined, { onDeviceOnly, idempotencyKey: targetRecording.id, onMode: (mode) => setTranscribingOnDevice(mode === 'device') });
 
-            if (!transcription.success || !transcription.text) {
+            if (!transcription.success) {
                 setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
                 if (!options.silent) {
                     if (transcription.error === ON_DEVICE_MODEL_REQUIRED) {
@@ -6950,13 +6958,14 @@ export const NoteEditScreen = () => {
             if (userId && !(await getVoiceRecordingsLocal(userId, targetRecording.note_id)).some((item) => item.id === targetRecording.id)) return false;
             const text = transcription.text.trim();
             if (!text) {
-                setRecordingOutcomeStatus(targetRecording.id, 'Saved recording');
+                if (userId) await removePendingTranscription(userId, targetRecording.note_id, targetRecording.id);
+                for (const segment of options.segments ?? []) await AudioService.deleteAudioFile(segment).catch(() => undefined);
+                const message = t('voice.noSpeechDetected', 'No speech detected. Recording saved.');
+                setRecordingOutcomeStatus(targetRecording.id, message);
                 if (!options.silent) {
-                    setErrorMessage('Recognition returned empty text');
-                    setErrorShowSettingsAction(false);
-                    setErrorModalVisible(true);
+                    showToast(message);
                 }
-                return false;
+                return true;
             }
 
             const shouldUseAgentModeForRetry = options.micMode !== 'force_text' && (retryAgentRoute === 'cloud'

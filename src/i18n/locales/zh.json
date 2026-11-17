@@ -365,6 +365,7 @@
       "speech": "语音转文字",
       "ai": "AI：语音指令、编辑、对话",
       "fast": "快速",
+      "compactSpeechHint": "小型模型可能会误识别人名、数字和时间。选择“最准确”（Turbo）可提高识别质量，但需要更多存储空间和内存。",
       "balanced": "均衡",
       "accurate": "最准确",
       "smartest": "最智能",
@@ -755,6 +756,7 @@
     "instructionHint": "说完后，指令会出现在输入框中",
     "retryingTranscription": "无法连接服务器，正在重试…",
     "savedUnreachable": "录音已保存。服务器暂时无法连接，下次打开此笔记时会自动转写。",
+    "noSpeechDetected": "未检测到语音。录音已保存。",
     "quietTitle": "几乎没有录到声音",
     "quietDesc": "麦克风只录到了静音。如果它被静音或正在通话，请结束后重新录制。仍要保留这段录音吗？",
     "keepRecording": "保留"
@@ -1046,6 +1048,7 @@
   },
   "errors": {
     "offline": "没有网络连接。请检查网络后重试。",
+    "transcriptionProvider": "无法转写音频，请重试。",
     "serverUnavailable": "服务器暂时不可用。你的笔记是安全的，请稍后再试。",
     "timeout": "请求耗时过长。请检查网络后重试。",
     "localAIMemory": "此设备没有足够内存运行该 AI 模型。请在设置中选择更轻的模型或云端 AI。",

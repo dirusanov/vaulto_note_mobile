@@ -366,6 +366,7 @@
       "speech": "Sprache zu Text",
       "ai": "KI: Sprachbefehle, Bearbeiten, Chat",
       "fast": "Schnell",
+      "compactSpeechHint": "Kompakte Modelle können Namen, Zahlen und Uhrzeiten falsch erkennen. Wählen Sie für genauere Erkennung „Am genauesten“ (Turbo); es braucht mehr Speicherplatz und Arbeitsspeicher.",
       "balanced": "Ausgewogen",
       "accurate": "Am genauesten",
       "smartest": "Am klügsten",
@@ -757,6 +758,7 @@
     "instructionHint": "Wenn du fertig bist, erscheint die Anweisung im Feld",
     "retryingTranscription": "Der Server war nicht erreichbar. Neuer Versuch…",
     "savedUnreachable": "Aufnahme gespeichert. Der Server war nicht erreichbar; sie wird beim nächsten Öffnen dieser Notiz transkribiert.",
+    "noSpeechDetected": "Keine Sprache erkannt. Aufnahme gespeichert.",
     "quietTitle": "Fast nichts zu hören",
     "quietDesc": "Das Mikrofon hat nur Stille aufgenommen. Ist es stummgeschaltet oder von einem Anruf belegt, beende das und nimm erneut auf. Die Aufnahme trotzdem behalten?",
     "keepRecording": "Behalten"
@@ -1048,6 +1050,7 @@
   },
   "errors": {
     "offline": "Keine Internetverbindung. Prüfe dein Netzwerk und versuche es erneut.",
+    "transcriptionProvider": "Die Aufnahme konnte nicht transkribiert werden. Bitte versuchen Sie es erneut.",
     "serverUnavailable": "Der Server ist vorübergehend nicht erreichbar. Deine Notizen sind sicher; versuche es in einer Minute erneut.",
     "timeout": "Die Anfrage hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
     "localAIMemory": "Nicht genug Arbeitsspeicher für diese KI. Wähle in den Einstellungen ein kleineres Modell oder Cloud-KI.",

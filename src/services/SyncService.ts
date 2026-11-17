@@ -24,6 +24,7 @@ import {
     setNoteAudioSyncState,
 } from './DatabaseService';
 import { AudioService } from './AudioService';
+import { audioSyncMimeType } from '../utils/audioFormat';
 import { incomingContentUpdatedAt } from '../utils/contentDate';
 import { audioApi } from '../api/audio';
 
@@ -1075,9 +1076,8 @@ class SyncService {
 
     private async uploadNoteAudio(userId: string, note: Note): Promise<void> {
         const scheme: 'none' | 'e2ee' = getCryptoMode() === 'e2ee' ? 'e2ee' : 'none';
-        const mimeType = scheme === 'e2ee' ? 'application/octet-stream' : 'audio/m4a';
-
         const plainBase64 = await AudioService.readAudioBase64(note.audio_file_path!);
+        const mimeType = scheme === 'e2ee' ? 'application/octet-stream' : audioSyncMimeType(plainBase64);
         const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, plainBase64);
 
         // Same bytes already on the server (e.g. re-login re-marked everything):

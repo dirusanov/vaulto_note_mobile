@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.106] - 2026-11-17
+
+### Fixed
+- Saved and synced audio retains its actual container, including older WAV recordings stored with an M4A filename.
+- Imported WAV audio is normalized before offline speech recognition.
+- Successful silent recordings and quiet meeting segments no longer remain queued for automatic transcription retries; later meeting speech continues processing.
+- Voice-note titles preserve times and decimal numbers such as 3.15.
+- Audio sync MIME types remain compatible with existing servers, and temporary audio cleanup covers supported containers.
+- Transcription provider failures show a readable, translated recovery message.
+
+### Changed
+- Compact speech models explain their accuracy limitations and the storage/memory tradeoff of the more accurate model.
+
 ## [1.0.105] - 2026-10-27
 
 ### Fixed

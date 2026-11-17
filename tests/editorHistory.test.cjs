@@ -165,3 +165,10 @@ test('a guest voice note is titled from its first sentence or clause, on the dev
     assert.equal(deriveTitleFromTranscript('#work Ship the beta?'), 'Ship the beta');
     assert.equal(deriveTitleFromTranscript('   '), '');
 });
+test('voice titles keep numeric time and decimal dots without merging separate sentences', () => {
+    const { deriveTitleFromTranscript } = require('../.test-build/editor/utils/richContent');
+    assert.equal(deriveTitleFromTranscript('Tomorrow at 3.15. Call Anna.'), 'Tomorrow at 3.15');
+    assert.equal(deriveTitleFromTranscript('Budget 3.50 euros. Buy milk.'), 'Budget 3.50 euros');
+    assert.equal(deriveTitleFromTranscript('Release v2.0 tomorrow. Send notes.'), 'Release v2.0 tomorrow');
+    assert.equal(deriveTitleFromTranscript('Hello!Next step.'), 'Hello');
+});

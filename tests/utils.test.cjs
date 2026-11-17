@@ -197,3 +197,7 @@ test('the Aa panel collapses to one row only when little room is left above the 
     assert.equal(shouldUseCompactPanel(1280, 420), false, 'tablet portrait');
     assert.equal(shouldUseCompactPanel(800, 0), false, 'no keyboard (hardware keyboard)');
 });
+test('provider recovery message works for both saved notes and temporary voice instructions', () => {
+    const { getErrorMessage } = require('../.test-build/utils/errorMessage');
+    assert.equal(getErrorMessage('transcription_provider_error'), 'Could not transcribe the audio. Please try again.');
+});

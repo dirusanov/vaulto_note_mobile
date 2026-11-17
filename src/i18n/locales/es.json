@@ -366,6 +366,7 @@
       "speech": "Voz a texto",
       "ai": "IA: peticiones por voz, edición, chat",
       "fast": "Rápido",
+      "compactSpeechHint": "Los modelos compactos pueden confundir nombres, números y horas. Elige «Más preciso» (Turbo) para mejorar el reconocimiento; necesita más almacenamiento y memoria.",
       "balanced": "Equilibrado",
       "accurate": "El más preciso",
       "smartest": "El más inteligente",
@@ -758,6 +759,7 @@
     "instructionHint": "Al terminar, la instrucción aparecerá en el campo",
     "retryingTranscription": "No se pudo conectar con el servidor. Reintentando…",
     "savedUnreachable": "Grabación guardada. No se pudo conectar con el servidor; se transcribirá cuando vuelvas a abrir esta nota.",
+    "noSpeechDetected": "No se detectó voz. Grabación guardada.",
     "quietTitle": "Casi no se oyó nada",
     "quietDesc": "El micrófono solo captó silencio. Si está silenciado u ocupado por una llamada, deténla y vuelve a grabar. ¿Guardar la grabación de todos modos?",
     "keepRecording": "Guardar"
@@ -1049,6 +1051,7 @@
   },
   "errors": {
     "offline": "Sin conexión a internet. Revisa tu red e inténtalo de nuevo.",
+    "transcriptionProvider": "No se pudo transcribir el audio. Vuelve a intentarlo.",
     "serverUnavailable": "El servidor no está disponible por ahora. Tus notas están a salvo; inténtalo en un minuto.",
     "timeout": "La solicitud tardó demasiado. Revisa tu conexión e inténtalo de nuevo.",
     "localAIMemory": "No hay memoria suficiente para esta IA. Elige un modelo más ligero o IA en la nube en Ajustes.",
