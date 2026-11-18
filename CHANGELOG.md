@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.107] - 2026-11-18
+
+### Fixed
+- Long, fast pen strokes no longer blink or show thin gaps while they are being drawn.
+
+### Added
+- Pin a note to the Android home screen; the shortcut follows the note's title.
+
+### Changed
+- The audio player and note editor were reworked; note cards find a recording placed after a drawing or photo.
+- The drawing editor keeps its save action visible on narrow screens and with large text.
+- Settings and the paywall name the right app store, and plans load even when the account lookup fails.
+- Billing library updated (RevenueCat 10); App Store subscriptions prepared for iOS.
+
 ## [1.0.106] - 2026-11-17
 
 ### Fixed
