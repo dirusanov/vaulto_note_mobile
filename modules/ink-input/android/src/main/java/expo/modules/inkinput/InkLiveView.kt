@@ -12,6 +12,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Build
@@ -50,6 +51,12 @@ import kotlin.random.Random
  * commit to its multi-buffered layer is never used: it hides and clears the
  * front buffer asynchronously, and a stroke begun meanwhile vanished for a
  * frame or two (fast handwriting blinked).
+ *
+ * The front buffer is on screen while it is drawn into, so a repaint never
+ * clears pixels first: the new picture of the changed part is put together in
+ * a layer and replaces the old one in a single draw. Clearing and then drawing
+ * left the part around the nib empty in between, and a long stroke, slower to
+ * draw, blinked there. Only the frozen pieces a repaint touches are drawn.
  *
  * Coordinates: touches arrive in this view's pixels; the canvas works in
  * density-independent pixels, and the drawing in document units through the
@@ -162,6 +169,8 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     val style: Style,
     /** Frozen pieces and the tail of the outline, in document units. */
     val pieces: List<Path>,
+    /** Where each of [pieces] is, in this view's pixels. */
+    val pieceBounds: List<RectF>,
     val tail: Path?,
     /** Centre line of a shape or of the predicted pen path, stroked at [lineWidth]. */
     val line: Path?,
@@ -194,11 +203,15 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   /** Draws ink in the layer it needs: one opacity over the whole stroke, as the canvas fills one path. */
   private fun drawInk(canvas: Canvas, style: Style, pieces: List<Path>, tail: Path?, line: Path?, lineWidth: Float, round: Boolean) {
     canvas.save()
-    canvas.concat(style.matrix)
-    style.clip?.let { canvas.clipPath(it) }
     layerPaint.alpha = (style.opacity * 255).toInt().coerceIn(0, 255)
     layerPaint.colorFilter = if (style.invert) INVERT_FILTER else null
+    // The layer is opened in screen pixels, before the drawing's pan and zoom:
+    // its bounds come from the repaint's whole-pixel clip. Opened after them,
+    // they were mapped through the scale and lost the clip's edge column, which
+    // stayed empty — a 1 px gap across a long stroke where its tail had begun.
     canvas.saveLayer(null, layerPaint)
+    canvas.concat(style.matrix)
+    style.clip?.let { canvas.clipPath(it) }
     fillPaint.color = style.color
     fillPaint.alpha = 255
     fillPaint.shader = if (style.grain) grainShader else null
@@ -221,6 +234,9 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
 
   @RequiresApi(Build.VERSION_CODES.Q)
   private fun makeRenderer() = CanvasFrontBufferedRenderer(surface, object : CanvasFrontBufferedRenderer.Callback<Unit> {
+    /** Puts a layer over the buffer as it is, transparent pixels included. */
+    private val replacePaint = Paint().apply { blendMode = BlendMode.SRC }
+
     // Both run on the renderer's own thread.
     override fun onDrawFrontBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, param: Unit) {
       // The renderer retains every parameter until commit(), which this layer
@@ -228,20 +244,28 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
       // tail Path and every snapshot of the growing list of frozen pieces.
       // Take the newest state and all changes since the preceding draw together.
       val frame = latest.getAndSet(null) ?: return
+      // Whole pixels: the layer replaces exactly what the clip lets through.
+      val area = Rect().also { frame.dirty.roundOut(it) }
+      val areaF = RectF(area)
       canvas.save()
-      canvas.clipRect(frame.dirty)
-      canvas.drawColor(Color.TRANSPARENT, BlendMode.CLEAR)
+      canvas.clipRect(area)
+      // Not cleared first: this buffer is on screen (see the class comment).
+      canvas.saveLayer(areaF, replacePaint)
       for (stroke in frame.held) {
-        if (RectF.intersects(stroke.bounds, frame.dirty)) {
+        if (RectF.intersects(stroke.bounds, areaF)) {
           drawInk(canvas, stroke.style, stroke.path?.let { listOf(it) } ?: emptyList(), null, stroke.line, stroke.lineWidth, true)
         }
       }
-      frame.live?.let { drawInk(canvas, it.style, it.pieces, it.tail, it.line, it.lineWidth, true) }
+      frame.live?.let { ink ->
+        val pieces = ink.pieces.filterIndexed { i, _ -> RectF.intersects(ink.pieceBounds[i], areaF) }
+        drawInk(canvas, ink.style, pieces, ink.tail, ink.line, ink.lineWidth, true)
+      }
       frame.hover?.let { (x, y, r) ->
         hoverPaint.color = frame.hoverColor
         hoverPaint.alpha = (0.18f * 255).toInt()
         canvas.drawCircle(x, y, r, hoverPaint)
       }
+      canvas.restore()
       canvas.restore()
     }
 
@@ -330,6 +354,7 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     val points = DoubleList(512)
     val trace = InkTrace(config.size, config.spec.thinning, config.spec.streamline, config.spec.taper, config.spec.nib)
     val pieces = ArrayList<Path>()
+    val pieceBounds = ArrayList<RectF>()
     var frozenTo = -1
     var snapped = false
     var stillX = 0f
@@ -519,7 +544,7 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
       // Drawn once, when it snaps: the hand-drawn line goes, the shape comes.
       val line = shapeLine(stroke.points)
       val width = shapeWidth(stroke.config.size, stroke.config.spec.thinning, stroke.points).toFloat()
-      liveInk = LiveInk(stroke.style, emptyList(), null, line, width)
+      liveInk = LiveInk(stroke.style, emptyList(), emptyList(), null, line, width)
       val bounds = RectF().also { line.computeBounds(it, true) }
       bounds.inset(-width, -width)
       matrix.mapRect(bounds)
@@ -533,8 +558,13 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     var piece = nextFrozenPiece(stroke.frozenTo, trace.done)
     while (piece != null) {
       val path = Path()
-      addOutline(path, trace.outline(null, piece[0], piece[1], piece[0] == 0, false))
+      val pieceOutline = trace.outline(null, piece[0], piece[1], piece[0] == 0, false)
+      addOutline(path, pieceOutline)
       stroke.pieces.add(path)
+      stroke.pieceBounds.add(outlineBounds(pieceOutline).also {
+        matrix.mapRect(it)
+        it.inset(-DIRTY_PAD, -DIRTY_PAD)
+      })
       stroke.frozenTo = piece[1]
       piece = nextFrozenPiece(stroke.frozenTo, trace.done)
     }
@@ -588,7 +618,7 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     dirty.union(stroke.tailBounds)
     stroke.tailBounds = bounds
     stroke.allBounds.union(bounds)
-    liveInk = LiveInk(stroke.style, ArrayList(stroke.pieces), tailPath, prediction, predictionWidth)
+    liveInk = LiveInk(stroke.style, ArrayList(stroke.pieces), ArrayList(stroke.pieceBounds), tailPath, prediction, predictionWidth)
     show(dirty)
   }
 
