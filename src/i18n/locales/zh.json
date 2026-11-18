@@ -152,6 +152,7 @@
       "general": "常规",
       "subscriptionDetails": "订阅详情",
       "manageGooglePlay": "在 Google Play 中管理",
+      "manageAppStore": "在 App Store 中管理",
       "activeCaps": "活跃",
       "makeLocalOnly": "仅本地",
       "makeSync": "同步",
@@ -459,6 +460,9 @@
   "edit": {
     "visualEditor": "可视化编辑器",
     "rawMarkdown": "原始 Markdown",
+    "pinShortcut": "添加到主屏幕",
+    "shortcutUnsupported": "无法添加快捷方式。",
+    "shortcutMissing": "此笔记不可用。",
     "copyPlainText": "复制纯文本",
     "copyMarkdown": "复制 Markdown",
     "shareText": "分享文本",
@@ -702,6 +706,7 @@
       "addAudio": "插入音频"
     },
     "toast": {
+      "audioUnavailable": "无法播放此录音",
       "audioMissing": "此设备上找不到录音文件",
       "transcriptInserted": "文字已添加到笔记",
       "transcriptExists": "这段文字已在笔记中",
@@ -1164,6 +1169,7 @@
     "trialMinutesUsedDesc": "选择一个方案即可继续云端转写。试用结束前 Pro 仍然有效。",
     "keepProRow": "试用结束后继续使用 Pro",
     "keepProRowDetail": "在 Google Play 中选择方案",
+    "keepProRowDetailIos": "在 App Store 中选择方案",
     "trialRowDetail": "免费试用 {{duration}}，无需银行卡",
     "limitTrialOffer": "免费试用 Pro {{duration}}：{{minutes}} 分钟云端转写，AI 不限量。无需银行卡，不收取任何费用。",
     "limitTrialOfferAI": "Pro 的 AI 不限量：免费试用 {{duration}}，无需银行卡。",

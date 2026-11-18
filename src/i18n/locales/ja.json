@@ -152,6 +152,7 @@
       "general": "一般",
       "subscriptionDetails": "サブスクリプションの詳細",
       "manageGooglePlay": "Google Play で管理",
+      "manageAppStore": "App Storeで管理",
       "activeCaps": "アクティブ",
       "makeLocalOnly": "ローカルのみ",
       "makeSync": "同期",
@@ -459,6 +460,9 @@
   "edit": {
     "visualEditor": "ビジュアルエディタ",
     "rawMarkdown": "生のMarkdown",
+    "pinShortcut": "ホーム画面に追加",
+    "shortcutUnsupported": "ショートカットを追加できませんでした。",
+    "shortcutMissing": "このノートは利用できません。",
     "copyPlainText": "プレーンテキストをコピー",
     "copyMarkdown": "Markdownをコピー",
     "shareText": "テキストを共有",
@@ -702,6 +706,7 @@
       "addAudio": "音声を追加"
     },
     "toast": {
+      "audioUnavailable": "この録音を再生できませんでした",
       "audioMissing": "この端末に録音ファイルがありません",
       "transcriptInserted": "テキストをノートに追加しました",
       "transcriptExists": "このテキストはすでにノートにあります",
@@ -1164,6 +1169,7 @@
     "trialMinutesUsedDesc": "クラウドでの文字起こしを続けるにはプランを選んでください。Pro はトライアル終了まで有効です。",
     "keepProRow": "トライアル後も Pro を使う",
     "keepProRowDetail": "Google Play でプランを選ぶ",
+    "keepProRowDetailIos": "App Storeでプランを選択",
     "trialRowDetail": "{{duration}}無料、カード不要",
     "limitTrialOffer": "Pro を{{duration}}無料でお試し：クラウド {{minutes}} 分、AI は無制限。カード不要、料金はかかりません。",
     "limitTrialOfferAI": "Pro なら AI に上限はありません。{{duration}}無料、カード不要でお試しください。",

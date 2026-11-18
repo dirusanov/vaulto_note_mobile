@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     View,
@@ -40,186 +40,71 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     const [position, setPosition] = useState(0);
     const [audioDuration, setAudioDuration] = useState(duration); // Local state for duration
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-    const [isLoading, setIsLoading] = useState(false);
-    const [playableUri, setPlayableUri] = useState<string | null>(null);
-    const soundRef = useRef<Sound | null>(null);
-    const autoPlayAttemptedRef = useRef<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
 
     useEffect(() => {
-        soundRef.current = sound;
-    }, [sound]);
+        let closed = false;
+        let player: Sound | undefined;
+        let ownedUri: string | undefined;
 
-    useEffect(() => {
-        autoPlayAttemptedRef.current = null;
-    }, [playableUri]);
-
-    useEffect(() => {
-        return () => {
-            if (soundRef.current) {
-                void soundRef.current.unloadAsync();
-            }
-            // Critical: remove decrypted playback leftovers when player unmounts.
-            void AudioService.cleanupTempFiles();
+        // Closing while decryption or native loading is pending must never
+        // start playback afterwards. Each preview owns just its decrypted copy.
+        const prepare = async () => {
+            const uri = await AudioService.readAudioFile(audioUri, 'preview');
+            if (uri !== audioUri) ownedUri = uri;
+            if (closed) return;
+            const result = await Sound.createAsync({ uri }, {}, status => {
+                if (closed || !status.isLoaded) return;
+                if (status.durationMillis) setAudioDuration(status.durationMillis / 1000);
+                setPosition((status.didJustFinish ? status.durationMillis ?? status.positionMillis : status.positionMillis) / 1000);
+                setIsPlaying(status.isPlaying && !status.didJustFinish);
+            });
+            player = result.sound;
+            if (closed) return;
+            if (result.status.durationMillis) setAudioDuration(result.status.durationMillis / 1000);
+            setSound(player);
+            if (autoPlay) await player.playAsync();
         };
-    }, []);
-
-    // Resolve persistent/encrypted URI to playable temp URI
-    useEffect(() => {
-        let isMounted = true;
-        const resolveUri = async () => {
-            if (!audioUri) return;
-
-            // If it's already a temp/cache file or web, use as is
-            if (audioUri.includes('cache') || audioUri.includes('temp') || audioUri.startsWith('blob:')) {
-                setPlayableUri(audioUri);
-                return;
-            }
-
-            // Assume it's a persistent encrypted file
-            try {
-                const tempUri = await AudioService.readAudioFile(audioUri);
-                if (isMounted) setPlayableUri(tempUri);
-            } catch (error: any) {
-                // If file is missing (e.g. deleted), don't show scary warning
-                if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT') {
-                    console.log('Audio file missing (likely deleted):', audioUri);
-                } else {
-                    console.warn('Failed to resolve audio URI:', error);
-                }
-                void AudioService.cleanupTempFiles();
-                // Fallback to original
-                if (isMounted) setPlayableUri(audioUri);
-            }
-        };
-        resolveUri();
-        return () => { isMounted = false; };
-    }, [audioUri]);
-
-    // Automatically check duration if it's 0 (unknown)
-    useEffect(() => {
-        let isMounted = true;
-
-        const checkDuration = async () => {
-            if (audioDuration === 0 && playableUri) {
-                try {
-                    const { sound: tempSound, status } = await Sound.createAsync(
-                        { uri: playableUri },
-                        { shouldPlay: false }
-                    );
-
-                    if (isMounted && status.isLoaded && status.durationMillis) {
-                        setAudioDuration(status.durationMillis / 1000);
-                    }
-
-                    await tempSound.unloadAsync();
-                } catch (error: any) {
-                    if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT') {
-                        console.log('Audio file missing for duration check:', playableUri);
-                        setIsMissing(true);
-                        if (onDelete) onDelete();
-                    } else {
-                        console.log('Error checking audio duration:', error);
-                    }
-                    void AudioService.cleanupTempFiles();
-                }
-            }
-        };
-
-        checkDuration();
-
-        return () => { isMounted = false; };
-    }, [playableUri]); // Depend on playableUri
-
-    const [isMissing, setIsMissing] = useState(false);
-
-    const onPlaybackStatusUpdate = useCallback((status: any) => {
-        if (status.isLoaded) {
-            setPosition(status.positionMillis / 1000);
-
-            // Update duration if we didn't know it initially
-            if (status.durationMillis && audioDuration === 0) {
-                setAudioDuration(status.durationMillis / 1000);
-            }
-
-            if (status.didJustFinish) {
-                setIsPlaying(false);
-                setPosition(status.durationMillis ? status.durationMillis / 1000 : 0);
-                // Critical: playback completion should clear temporary decrypted files.
-                void AudioService.cleanupTempFiles();
-            }
-        }
-    }, [audioDuration]);
-
-    const loadAndPlaySound = useCallback(async () => {
-        if (!playableUri) return;
+        setSound(null);
+        setPosition(0);
+        setPlaybackSpeed(1);
+        setIsPlaying(false);
+        setLoadError(false);
         setIsLoading(true);
-        setIsMissing(false);
-        try {
-            const { sound: newSound } = await Sound.createAsync(
-                { uri: playableUri },
-                { shouldPlay: true, rate: playbackSpeed },
-                onPlaybackStatusUpdate
-            );
-            setSound(newSound);
-            setIsPlaying(true);
-        } catch (error: any) {
-            if (error?.message?.includes('ENOENT') || error?.code === 'ENOENT') {
-                console.log('Audio file missing for playback:', playableUri);
-                setIsMissing(true);
-                // Optionally auto-delete if onDelete is safe to call?
-                // For now, we will render a "Missing" state.
-                if (onDelete) onDelete(); // Auto-remove from view if delete handler provided? 
-                // The user requested: "if note has no audio then do not display it".
-                // Calling onDelete() here effectively removes it from the parent list/content if the parent handles it.
-            } else {
-                console.error('Error playing sound:', error);
-            }
-            void AudioService.cleanupTempFiles();
-        } finally {
-            setIsLoading(false);
-        }
-    }, [onDelete, onPlaybackStatusUpdate, playableUri, playbackSpeed]);
+        const ready = prepare().catch(() => {
+            if (!closed) setLoadError(true);
+        }).finally(() => {
+            if (!closed) setIsLoading(false);
+        });
 
-    useEffect(() => {
-        if (!autoPlay || !playableUri || sound || isLoading) {
-            return;
-        }
-
-        if (autoPlayAttemptedRef.current === playableUri) {
-            return;
-        }
-
-        autoPlayAttemptedRef.current = playableUri;
-        void loadAndPlaySound();
-    }, [autoPlay, isLoading, loadAndPlaySound, playableUri, sound]);
+        return () => {
+            closed = true;
+            void ready.then(async () => {
+                await player?.unloadAsync();
+                if (ownedUri) await AudioService.deleteAudioFile(ownedUri);
+            }).catch(error => console.warn('Could not release audio preview:', error));
+        };
+    }, [audioUri, autoPlay]);
 
     const handlePlayPause = async () => {
-        if (!sound) {
-            await loadAndPlaySound();
+        if (!sound) return;
+        if (isPlaying) {
+            await sound.pauseAsync();
         } else {
-            if (isPlaying) {
-                await sound.pauseAsync();
-                setIsPlaying(false);
-            } else {
-                if (audioDuration > 0 && position >= Math.max(0, audioDuration - 0.25)) {
-                    setPosition(0);
-                    await sound.setPositionAsync(0);
-                }
-                await sound.playAsync();
-                setIsPlaying(true);
+            if (audioDuration > 0 && position >= Math.max(0, audioDuration - 0.25)) {
+                await sound.setPositionAsync(0);
             }
+            await sound.playAsync();
         }
     };
 
     const cyclePlaybackSpeed = async () => {
-        const speeds = [1.0, 1.5, 2.0];
-        const currentIndex = speeds.indexOf(playbackSpeed);
-        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+        if (!sound) return;
+        const speeds = [1, 1.5, 2];
+        const nextSpeed = speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
+        await sound.setRateAsync(nextSpeed, true);
         setPlaybackSpeed(nextSpeed);
-
-        if (sound) {
-            await sound.setRateAsync(nextSpeed, true);
-        }
     };
 
     const formatTime = (seconds: number): string => {
@@ -267,7 +152,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     const speedButtonHeight = scaled(42, 24);
     const speedButtonMinWidth = scaled(104, 60);
     const speedButtonRadius = Math.round(speedButtonHeight / 2);
-    const timeFontSize = scaled(15, 10);
+    const timeFontSize = scaled(22, 12);
     const speedFontSize = scaled(18, 11);
     const closeButtonSize = scaled(32, 20);
     const closeIconSize = scaled(18, 12);
@@ -285,7 +170,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
         )
         : 0;
 
-    if (isMissing) return null;
+
 
     return (
         <View
@@ -325,7 +210,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                 </TouchableOpacity>
             )}
 
-            <View style={styles.body}>
+            {loadError ? (
+                <Text accessibilityRole="alert" style={[styles.timeText, { paddingRight: contentRightPadding }]}>{t('edit.toast.audioUnavailable', 'Could not play this recording')}</Text>
+            ) : <View style={styles.body}>
                 <TouchableOpacity
                     style={[
                         styles.playButtonOuter,
@@ -367,54 +254,55 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                 <View style={[styles.content, { paddingRight: contentRightPadding }]}>
                     <View style={styles.contentBody}>
                         <View style={styles.mainColumn}>
-                            <View style={[styles.waveformRow, { height: waveformHeight, marginBottom: rowSpacing }]}>
-                                {AUDIO_PREVIEW_WAVE_HEIGHTS.map((height, index) => (
-                                    <View
-                                        key={`${height}-${index}`}
-                                        style={[
-                                            styles.waveBar,
-                                            {
-                                                width: waveBarWidth,
-                                                height: scaled(height, 6),
-                                                borderRadius: Math.round(waveBarWidth / 2),
-                                                marginRight: index === AUDIO_PREVIEW_WAVE_HEIGHTS.length - 1 ? 0 : waveBarGap,
-                                                backgroundColor: isLoading
-                                                    ? AUDIO_PREVIEW_WAVE_LOADING
-                                                    : (index < playedWaveCount ? colors.primary : AUDIO_PREVIEW_WAVE_IDLE),
-                                            },
-                                        ]}
-                                    />
-                                ))}
-                            </View>
-
                             <TouchableOpacity
                                 activeOpacity={1}
                                 onPress={handleSeek}
                                 accessibilityLabel={t('a11y.playbackPosition', 'Playback position')}
                                 onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
-                                style={[styles.progressTouchArea, { height: progressTouchAreaHeight, marginBottom: rowSpacing }]}
                             >
-                                <View style={[styles.progressBarBackground, { height: progressHeight, borderRadius: Math.round(progressHeight / 2) }]}>
-                                    <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
-                                    <View
-                                        style={[
-                                            styles.progressKnob,
-                                            {
-                                                left: progressKnobOffset,
-                                                top: -(progressKnobSize - progressHeight) / 2,
-                                                width: progressKnobSize,
-                                                height: progressKnobSize,
-                                                borderRadius: Math.round(progressKnobSize / 2),
-                                                borderWidth: Math.max(2, scaled(4, 2)),
-                                            },
-                                        ]}
-                                    />
+                                <View pointerEvents="none" style={[styles.waveformRow, { height: waveformHeight, marginBottom: rowSpacing }]}>
+                                    {AUDIO_PREVIEW_WAVE_HEIGHTS.map((height, index) => (
+                                        <View
+                                            key={`${height}-${index}`}
+                                            style={[
+                                                styles.waveBar,
+                                                {
+                                                    width: waveBarWidth,
+                                                    height: scaled(height, 6),
+                                                    borderRadius: Math.round(waveBarWidth / 2),
+                                                    marginRight: index === AUDIO_PREVIEW_WAVE_HEIGHTS.length - 1 ? 0 : waveBarGap,
+                                                    backgroundColor: isLoading
+                                                        ? AUDIO_PREVIEW_WAVE_LOADING
+                                                        : (index < playedWaveCount ? colors.primary : AUDIO_PREVIEW_WAVE_IDLE),
+                                                },
+                                            ]}
+                                        />
+                                    ))}
+                                </View>
+
+                                <View pointerEvents="none" style={[styles.progressTouchArea, { height: progressTouchAreaHeight, marginBottom: rowSpacing }]}>
+                                    <View pointerEvents="none" style={[styles.progressBarBackground, { height: progressHeight, borderRadius: Math.round(progressHeight / 2) }]}>
+                                        <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
+                                        <View
+                                            style={[
+                                                styles.progressKnob,
+                                                {
+                                                    left: progressKnobOffset,
+                                                    top: -(progressKnobSize - progressHeight) / 2,
+                                                    width: progressKnobSize,
+                                                    height: progressKnobSize,
+                                                    borderRadius: Math.round(progressKnobSize / 2),
+                                                    borderWidth: Math.max(2, scaled(4, 2)),
+                                                },
+                                            ]}
+                                        />
+                                    </View>
                                 </View>
                             </TouchableOpacity>
 
                             <View style={styles.timeRow}>
                                 <Text style={[styles.timeText, { fontSize: timeFontSize }]}>{formatTime(position)}</Text>
-                                <Text style={[styles.timeText, { fontSize: timeFontSize }]}>{formatTime(remaining)}</Text>
+                                <Text style={[styles.timeText, { fontSize: timeFontSize }]}>−{formatTime(remaining)}</Text>
                             </View>
                         </View>
 
@@ -429,6 +317,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                                     paddingHorizontal: scaled(18, 8),
                                 },
                             ]}
+                            accessibilityRole="button"
+                            hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                             onPress={cyclePlaybackSpeed}
                             activeOpacity={0.88}
                         >
@@ -436,7 +326,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                         </TouchableOpacity>
                     </View>
                 </View>
-            </View>
+            </View>}
         </View>
     );
 };

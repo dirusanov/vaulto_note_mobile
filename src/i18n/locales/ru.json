@@ -166,6 +166,7 @@
       "general": "Общее",
       "subscriptionDetails": "Детали подписки",
       "manageGooglePlay": "Управление в Google Play",
+      "manageAppStore": "Управление в App Store",
       "activeCaps": "АКТИВНО",
       "makeLocalOnly": "Сделать локальной",
       "makeSync": "Синхронизировать",
@@ -462,6 +463,9 @@
   "edit": {
     "visualEditor": "Визуальный редактор",
     "rawMarkdown": "Исходный текст",
+    "pinShortcut": "Добавить на главный экран",
+    "shortcutUnsupported": "Не удалось добавить ярлык на главный экран.",
+    "shortcutMissing": "Эта заметка недоступна.",
     "copyPlainText": "Копировать текст",
     "copyMarkdown": "Копировать Markdown",
     "shareText": "Поделиться текстом",
@@ -708,6 +712,7 @@
       "addAudio": "Вставить аудио"
     },
     "toast": {
+      "audioUnavailable": "Не удалось воспроизвести запись",
       "audioMissing": "Файла записи нет на этом устройстве",
       "transcriptInserted": "Текст добавлен в заметку",
       "transcriptExists": "Этот текст уже есть в заметке",
@@ -1186,6 +1191,7 @@
     "trialMinutesUsedDesc": "Выберите тариф, чтобы и дальше расшифровывать в облаке. Pro работает до конца пробного периода.",
     "keepProRow": "Остаться на Pro после пробного периода",
     "keepProRowDetail": "Выберите тариф в Google Play",
+    "keepProRowDetailIos": "Выберите тариф в App Store",
     "trialRowDetail": "Бесплатно {{duration}}, без карты",
     "limitTrialOffer": "Попробуйте Pro бесплатно: {{duration}}, {{minutes}} облачных минут и ИИ без лимитов. Без карты, ничего не спишется.",
     "limitTrialOfferAI": "В Pro у ИИ нет лимита: попробуйте бесплатно, {{duration}}, без карты.",

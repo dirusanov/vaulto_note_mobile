@@ -16,7 +16,7 @@ import {
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { InkInputView } from '../../modules/ink-input';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, getColorScheme, isDarkScheme } from '../theme/colors';
 import { createStyles } from '../theme/createStyles';
@@ -197,10 +197,15 @@ const prefsReady = loadDrawingPrefs().then((saved) => {
 
 export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAutosave, onClose }) => {
     const { t } = useTranslation();
-    const { width, height } = useWindowDimensions();
+    const { width, height, fontScale } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+    const headerWidth = width - insets.left - insets.right;
+    // Keep the save action visible as tools appear or the user enlarges text.
+    const compactDone = headerWidth < 440 || fontScale > 1.4;
+    const settingsInToolRow = headerWidth < 360;
     const isTablet = Math.min(width, height) >= 600;
     /** Wide enough for the tools to sit in the header row itself. */
-    const inlineTools = width >= 1150;
+    const inlineTools = headerWidth >= 1150;
     const dark = isDarkScheme();
 
     // A drawing parked by a theme remount (see parkedDrawing) reopens here with
@@ -882,6 +887,33 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
         </TouchableOpacity>
     ));
 
+    const inputAndPaperButtons = (
+        <>
+            {stylusSeen && (
+                <TouchableOpacity
+                    onPress={() => setStylusOnly((value) => !value)}
+                    style={[styles.headerButton, !stylusOnly && styles.toolButtonActive]}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: !stylusOnly }}
+                    accessibilityLabel={t('drawing.fingerDrawing', 'Draw with finger')}
+                >
+                    <MaterialCommunityIcons name={stylusOnly ? 'hand-back-right-off' : 'hand-back-right'} size={22} color={stylusOnly ? colors.textSecondary : colors.primary} />
+                </TouchableOpacity>
+            )}
+            {/* Its place is kept, so the tools do not shift when the first pen touch adds it. */}
+            {!stylusSeen && inlineTools && <View style={styles.headerButton} />}
+            <TouchableOpacity
+                onPress={() => (popover === 'paper' ? closePopover() : setPopover('paper'))}
+                style={[styles.headerButton, popover === 'paper' && styles.toolButtonActive]}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: popover === 'paper' }}
+                accessibilityLabel={t('drawing.paper.title', 'Paper')}
+            >
+                <MaterialCommunityIcons name="notebook-outline" size={22} color={popover === 'paper' ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
+        </>
+    );
+
     const toolBarContent = activeTool === 'lasso'
         ? (
             <>
@@ -983,30 +1015,11 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                                     />
                                 </TouchableOpacity>
                             )}
-                            {stylusSeen && (
-                                <TouchableOpacity
-                                    onPress={() => setStylusOnly((value) => !value)}
-                                    style={[styles.headerButton, !stylusOnly && styles.toolButtonActive]}
-                                    accessibilityRole="switch"
-                                    accessibilityState={{ checked: !stylusOnly }}
-                                    accessibilityLabel={t('drawing.fingerDrawing', 'Draw with finger')}
-                                >
-                                    <MaterialCommunityIcons name={stylusOnly ? 'hand-back-right-off' : 'hand-back-right'} size={22} color={stylusOnly ? colors.textSecondary : colors.primary} />
-                                </TouchableOpacity>
-                            )}
-                            {/* Its place is kept, so the tools do not shift when the first pen touch adds it. */}
-                            {!stylusSeen && inlineTools && <View style={styles.headerButton} />}
-                            <TouchableOpacity
-                                onPress={() => (popover === 'paper' ? closePopover() : setPopover('paper'))}
-                                style={[styles.headerButton, popover === 'paper' && styles.toolButtonActive]}
-                                accessibilityRole="button"
-                                accessibilityState={{ expanded: popover === 'paper' }}
-                                accessibilityLabel={t('drawing.paper.title', 'Paper')}
-                            >
-                                <MaterialCommunityIcons name="notebook-outline" size={22} color={popover === 'paper' ? colors.primary : colors.textSecondary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleDone} style={[styles.doneButton, { backgroundColor: colors.primary }]} accessibilityRole="button" accessibilityLabel={t('a11y.done', 'Done')}>
-                                <Text style={[styles.doneText, { color: colors.onPrimary }]}>{t('drawing.done', 'Done')}</Text>
+                            {!settingsInToolRow && inputAndPaperButtons}
+                            <TouchableOpacity onPress={handleDone} style={[compactDone ? styles.headerButton : styles.doneButton, { backgroundColor: colors.primary }]} accessibilityRole="button" accessibilityLabel={t('a11y.done', 'Done')}>
+                                {compactDone
+                                    ? <MaterialIcons name="check" size={24} color={colors.onPrimary} />
+                                    : <Text style={[styles.doneText, { color: colors.onPrimary }]}>{t('drawing.done', 'Done')}</Text>}
                             </TouchableOpacity>
                         </View>
 
@@ -1014,6 +1027,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                             // Docked above the canvas, never over it.
                             <View style={[styles.toolRow, { borderBottomColor: colors.border }]}>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolRowContent} keyboardShouldPersistTaps="handled">
+                                    {settingsInToolRow && inputAndPaperButtons}
                                     {toolBarContent}
                                 </ScrollView>
                             </View>

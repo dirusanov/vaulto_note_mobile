@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo, useState, useRef, useCallback, useSyncExternalStore } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform, StyleSheet, BackHandler } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Animated, TextInput, RefreshControl, AppState, LayoutAnimation, UIManager, Platform, StyleSheet, BackHandler, ToastAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { NoteCard } from '../components/NoteCard';
@@ -79,6 +79,7 @@ export const NotesListScreen = () => {
         batchUnpinNotes,
         batchDeleteNotes,
         lockedCount,
+        isHydrated,
         getAllNotes,
     } = useNotesContext();
     const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -304,6 +305,18 @@ export const NotesListScreen = () => {
 
     // Widget / Quick Settings tile: vaultonote://record lands here with a stamp.
     const route = useRoute<any>();
+    const shortcutNoteId = route.params?.shortcutNoteId;
+    useEffect(() => {
+        if (!isFocused || !isHydrated || !shortcutNoteId) return;
+        navigation.setParams({ shortcutNoteId: undefined });
+        const note = getAllNotes().find(item => item.id === shortcutNoteId);
+        if (note && !note.deleted && !note.pending_delete && !note.locked && !hiddenDeleteIds.includes(note.id)) {
+            navigation.navigate('NoteEdit', { noteId: note.id });
+        } else if (Platform.OS === 'android') {
+            ToastAndroid.show(t('edit.shortcutMissing'), ToastAndroid.LONG);
+        }
+    }, [getAllNotes, hiddenDeleteIds, isFocused, isHydrated, navigation, shortcutNoteId, t]);
+
     const startRecordingAt: number | undefined = route.params?.startRecordingAt;
     useEffect(() => {
         if (!startRecordingAt) return;

@@ -425,3 +425,45 @@ test('"no internet" from Android is confirmed against our server before recordin
   assert.equal(await connectivity().isDeviceOffline(), false);
   assert.equal(server.probes, 0);
 });
+
+test('inline player dispatches distinct waveform, track, speed and transport actions at phone widths', () => {
+  const theme = load('src/theme/colors.ts');
+  const embeds = load('src/utils/audioEmbeds.ts', { '../theme/colors': theme });
+  const bridge = load('src/components/richTextAudioBridge.ts', {
+    '@10play/tentap-editor': {},
+    '../utils/audioEmbeds': embeds,
+  });
+  for (const [scheme, width] of [['light', 288], ['dark', 400]]) {
+    theme.setColorScheme(scheme);
+    let src = embeds.buildAudioEmbedPreviewSrc({ path: 'voice.m4a', duration: 120 });
+    const rect = { left: 12, top: 105, width, height: width * 176 / 680 };
+    const image = {
+      closest: () => image,
+      getAttribute: () => src,
+      setAttribute: (_, value) => { src = value; },
+      getBoundingClientRect: () => rect,
+    };
+    const handlers = {};
+    const messages = [];
+    const window = { ReactNativeWebView: { postMessage: message => messages.push(JSON.parse(message)) } };
+    const document = {
+      querySelectorAll: () => [image],
+      addEventListener: (type, listener) => { handlers[type] = listener; },
+    };
+    vm.runInNewContext(bridge.getAudioEmbedRuntimeJs(), { window, document });
+    for (const [x, y, action] of [[94, 88, 'toggle'], [360, 58, 'seek'], [360, 109, 'seek'], [600, 88, 'speed']]) {
+      handlers.click({
+        target: image, clientX: rect.left + x * rect.width / 680, clientY: rect.top + y * rect.height / 176,
+        preventDefault() {}, stopPropagation() {},
+      });
+      const payload = messages.pop().payload;
+      assert.equal(payload.action, action);
+      assert.equal(payload.path, 'voice.m4a');
+      if (action === 'seek') assert.ok(Math.abs(payload.seekRatio - 0.5) < 0.001);
+    }
+    window.__vaultoAudioPreviewApi.setState({ path: 'voice.m4a', position: 31, isPlaying: true });
+    const svg = decodeURIComponent(src.split(embeds.AUDIO_PREVIEW_MARKER)[0]);
+    assert.ok(svg.includes('>0:31</text>') && svg.includes('>−1:29</text>'));
+    assert.ok(svg.includes(theme.colors.surface));
+  }
+});

@@ -13,8 +13,8 @@ export const AUDIO_PREVIEW_VIEWBOX_HEIGHT = 176;
 export const AUDIO_PREVIEW_PLAY_END = 184;
 export const AUDIO_PREVIEW_PROGRESS_START = 196;
 export const AUDIO_PREVIEW_PROGRESS_END = 524;
-export const AUDIO_PREVIEW_PROGRESS_TOP = 98;
-export const AUDIO_PREVIEW_PROGRESS_BOTTOM = 122;
+export const AUDIO_PREVIEW_PROGRESS_TOP = 24;
+export const AUDIO_PREVIEW_PROGRESS_BOTTOM = 152;
 export const AUDIO_PREVIEW_SPEED_START = 544;
 export const AUDIO_PREVIEW_SPEED_END = 648;
 export const AUDIO_PREVIEW_SPEED_TOP = 66;
@@ -242,8 +242,8 @@ ${waveBars}
 <rect x="${AUDIO_PREVIEW_PROGRESS_START}" y="106" width="${progressTrackWidth}" height="8" rx="4" fill="${AUDIO_PREVIEW_TRACK}"/>
 <rect x="${AUDIO_PREVIEW_PROGRESS_START}" y="106" width="${progressWidth}" height="8" rx="4" fill="${AUDIO_PREVIEW_ACCENT}"/>
 <circle cx="${progressKnobX}" cy="110" r="8" fill="#FFFFFF" stroke="${AUDIO_PREVIEW_ACCENT}" stroke-width="4"/>
-<text x="${AUDIO_PREVIEW_PROGRESS_START}" y="144" text-anchor="start" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">${escapeHtml(formatDuration(position))}</text>
-<text x="${AUDIO_PREVIEW_SPEED_END}" y="144" text-anchor="end" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">${escapeHtml(formatDuration(remaining))}</text>
+<text x="${AUDIO_PREVIEW_PROGRESS_START}" y="151" text-anchor="start" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">${escapeHtml(formatDuration(position))}</text>
+<text x="${AUDIO_PREVIEW_SPEED_END}" y="151" text-anchor="end" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">−${escapeHtml(formatDuration(remaining))}</text>
 </svg>`;
 };
 

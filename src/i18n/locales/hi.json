@@ -153,6 +153,7 @@
       "general": "सामान्य",
       "subscriptionDetails": "सदस्यता विवरण",
       "manageGooglePlay": "Google Play में प्रबंधित करें",
+      "manageAppStore": "App Store में प्रबंधित करें",
       "activeCaps": "सक्रिय",
       "makeLocalOnly": "स्थानीय बनाएं",
       "makeSync": "सिंक करें",
@@ -460,6 +461,9 @@
   "edit": {
     "visualEditor": "दृश्य संपादक",
     "rawMarkdown": "कच्चा मार्कडाउन",
+    "pinShortcut": "होम स्क्रीन पर जोड़ें",
+    "shortcutUnsupported": "शॉर्टकट नहीं जोड़ा जा सका।",
+    "shortcutMissing": "यह नोट उपलब्ध नहीं है।",
     "copyPlainText": "सादा पाठ कॉपी करें",
     "copyMarkdown": "मार्कडाउन कॉपी करें",
     "shareText": "पाठ साझा करें",
@@ -704,6 +708,7 @@
       "addAudio": "ऑडियो जोड़ें"
     },
     "toast": {
+      "audioUnavailable": "यह रिकॉर्डिंग नहीं चलाई जा सकी",
       "audioMissing": "इस डिवाइस पर रिकॉर्डिंग फ़ाइल नहीं है",
       "transcriptInserted": "टेक्स्ट नोट में जोड़ दिया",
       "transcriptExists": "यह टेक्स्ट पहले से नोट में है",
@@ -1170,6 +1175,7 @@
     "trialMinutesUsedDesc": "क्लाउड में ट्रांसक्राइब करते रहने के लिए कोई प्लान चुनें। ट्रायल ख़त्म होने तक Pro चालू रहेगा।",
     "keepProRow": "ट्रायल के बाद भी Pro रखें",
     "keepProRowDetail": "Google Play में प्लान चुनें",
+    "keepProRowDetailIos": "App Store में प्लान चुनें",
     "trialRowDetail": "{{duration}} मुफ़्त आज़माएँ, कार्ड नहीं चाहिए",
     "limitTrialOffer": "Pro को {{duration}} मुफ़्त आज़माएँ: {{minutes}} क्लाउड मिनट और बिना सीमा का AI। कार्ड नहीं चाहिए, कोई शुल्क नहीं।",
     "limitTrialOfferAI": "Pro में AI की कोई सीमा नहीं: {{duration}} मुफ़्त आज़माएँ, कार्ड नहीं चाहिए।",

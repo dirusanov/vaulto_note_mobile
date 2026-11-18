@@ -153,6 +153,7 @@
       "general": "عام",
       "subscriptionDetails": "تفاصيل الاشتراك",
       "manageGooglePlay": "إدارة في Google Play",
+      "manageAppStore": "إدارة في App Store",
       "activeCaps": "نشط",
       "makeLocalOnly": "اجعله محليًا",
       "makeSync": "مزامنة",
@@ -460,6 +461,9 @@
   "edit": {
     "visualEditor": "المحرر المرئي",
     "rawMarkdown": "نص Markdown الأصلي",
+    "pinShortcut": "إضافة إلى الشاشة الرئيسية",
+    "shortcutUnsupported": "تعذرت إضافة الاختصار إلى الشاشة الرئيسية.",
+    "shortcutMissing": "هذه الملاحظة غير متاحة.",
     "copyPlainText": "نسخ النص العادي",
     "copyMarkdown": "نسخ Markdown",
     "shareText": "مشاركة النص",
@@ -708,6 +712,7 @@
       "addAudio": "إضافة الصوت"
     },
     "toast": {
+      "audioUnavailable": "تعذر تشغيل هذا التسجيل",
       "audioMissing": "ملف التسجيل غير موجود على هذا الجهاز",
       "transcriptInserted": "تمت إضافة النص إلى الملاحظة",
       "transcriptExists": "هذا النص موجود في الملاحظة بالفعل",
@@ -1190,6 +1195,7 @@
     "trialMinutesUsedDesc": "اختر خطة لمواصلة تحويل الكلام إلى نص في السحابة. يبقى Pro مفعّلًا حتى نهاية التجربة.",
     "keepProRow": "احتفظ بـ Pro بعد التجربة",
     "keepProRowDetail": "اختر خطة في Google Play",
+    "keepProRowDetailIos": "اختر خطة في App Store",
     "trialRowDetail": "جرّبه مجانًا لمدة {{duration}}، بلا بطاقة",
     "limitTrialOffer": "جرّب Pro مجانًا لمدة {{duration}}: {{minutes}} دقيقة سحابية وذكاء اصطناعي بلا حدود. بلا بطاقة، ولا يُخصم أي مبلغ.",
     "limitTrialOfferAI": "لا حدود للذكاء الاصطناعي في Pro: جرّبه مجانًا لمدة {{duration}}، بلا بطاقة.",

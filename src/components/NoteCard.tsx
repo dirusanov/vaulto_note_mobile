@@ -21,10 +21,13 @@ import { CHECKED_LINE, layoutCardPreview, uncheckedFirst } from '../utils/cardPr
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
 
-/** Length of the first audio card embedded in the note, if any. */
-const embeddedAudioDuration = (content: string): number | undefined => {
-    const tag = content.match(/<img\b[^>]*>/i)?.[0];
-    return tag ? getAudioEmbedAttributesFromHtml(tag)?.duration ?? undefined : undefined;
+/** The first recording can follow a drawing or photo in the same note. */
+const firstEmbeddedAudio = (content: string) => {
+    for (const [tag] of content.matchAll(/<(?:img|div)\b[^>]*>/gi)) {
+        const audio = getAudioEmbedAttributesFromHtml(tag);
+        if (audio) return audio;
+    }
+    return null;
 };
 
 const formatVoiceDuration = (seconds?: number | null): string => {
@@ -70,7 +73,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     }
 
     // Determine if audio is present (flag or check content)
-    const hasAudio = note.has_audio || /!\[audio\]\(.*?\)/.test(content);
+    const embeddedAudio = useMemo(() => firstEmbeddedAudio(content), [content]);
+    const hasAudio = note.has_audio || !!embeddedAudio || /!\[audio\]\(.*?\)/.test(content);
 
     const plainContent = richContentToPlainText(content);
 
@@ -167,7 +171,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const isDrawingOnly = !isVoiceOnly && hasDrawing && !title && !fullPreview.trim();
     // A thumbnail shows what is drawn; the stored preview picture is reused.
     const drawingSvg = useMemo(() => (hasDrawing ? firstDrawingSvg(content) : null), [hasDrawing, content]);
-    const voiceDuration = hasAudio ? formatVoiceDuration(note.audio_duration ?? embeddedAudioDuration(content)) : '';
+    const voiceDuration = hasAudio ? formatVoiceDuration(note.audio_duration) || formatVoiceDuration(embeddedAudio?.duration) : '';
 
     // When the text last changed, not when it was last pinned or switched.
     const dateLabel = formatDate(contentDateOf(note));

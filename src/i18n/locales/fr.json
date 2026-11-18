@@ -153,6 +153,7 @@
       "general": "Général",
       "subscriptionDetails": "Détails de l'abonnement",
       "manageGooglePlay": "Gérer dans Google Play",
+      "manageAppStore": "Gérer dans l’App Store",
       "activeCaps": "ACTIF",
       "makeLocalOnly": "Rendre locale",
       "makeSync": "Synchroniser",
@@ -460,6 +461,9 @@
   "edit": {
     "visualEditor": "Éditeur visuel",
     "rawMarkdown": "Markdown brut",
+    "pinShortcut": "Ajouter à l’écran d’accueil",
+    "shortcutUnsupported": "Impossible d’ajouter le raccourci.",
+    "shortcutMissing": "Cette note est indisponible.",
     "copyPlainText": "Copier le texte brut",
     "copyMarkdown": "Copier Markdown",
     "shareText": "Partager le texte",
@@ -705,6 +709,7 @@
       "addAudio": "Ajouter l’audio"
     },
     "toast": {
+      "audioUnavailable": "Impossible de lire cet enregistrement",
       "audioMissing": "Le fichier de l’enregistrement est absent de cet appareil",
       "transcriptInserted": "Texte ajouté à la note",
       "transcriptExists": "Ce texte est déjà dans la note",
@@ -1175,6 +1180,7 @@
     "trialMinutesUsedDesc": "Choisissez une offre pour continuer à transcrire dans le cloud. Pro reste actif jusqu’à la fin de l’essai.",
     "keepProRow": "Garder Pro après l’essai",
     "keepProRowDetail": "Choisir une offre dans Google Play",
+    "keepProRowDetailIos": "Choisissez une offre dans l’App Store",
     "trialRowDetail": "Essai gratuit de {{duration}}, sans carte",
     "limitTrialOffer": "Essayez Pro gratuitement pendant {{duration}} : {{minutes}} minutes cloud et IA sans limite. Sans carte, rien n’est facturé.",
     "limitTrialOfferAI": "Pro n’a pas de limite d’IA : essayez-le gratuitement pendant {{duration}}, sans carte.",

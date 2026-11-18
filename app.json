@@ -14,9 +14,20 @@
       "supportsTablet": true,
       "buildNumber": "106",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes."
+        "NSMicrophoneUsageDescription": "This app needs access to the microphone to record voice notes.",
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+              }
+            ]
+          }
+        }
       },
-      "bundleIdentifier": "com.anonymous.vaultonotemobile"
+      "bundleIdentifier": "com.vaultonotemobile"
     },
     "android": {
       "adaptiveIcon": {

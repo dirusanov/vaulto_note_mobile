@@ -164,6 +164,7 @@
       "general": "General",
       "subscriptionDetails": "Subscription details",
       "manageGooglePlay": "Manage in Google Play",
+      "manageAppStore": "Manage in the App Store",
       "activeCaps": "ACTIVE",
       "makeLocalOnly": "Make local-only",
       "makeSync": "Make sync",
@@ -460,6 +461,9 @@
   "edit": {
     "visualEditor": "Visual editor",
     "rawMarkdown": "Raw Markdown",
+    "pinShortcut": "Add to Home screen",
+    "shortcutUnsupported": "This launcher could not add the shortcut.",
+    "shortcutMissing": "This note is unavailable.",
     "copyPlainText": "Copy plain text",
     "copyMarkdown": "Copy Markdown",
     "shareText": "Share text",
@@ -704,6 +708,7 @@
       "addAudio": "Add audio"
     },
     "toast": {
+      "audioUnavailable": "Could not play this recording",
       "audioMissing": "The recording file is missing on this device",
       "transcriptInserted": "Text added to the note",
       "transcriptExists": "This text is already in the note",
@@ -1172,6 +1177,7 @@
     "trialMinutesUsedDesc": "Choose a plan to keep transcribing in the cloud. Pro stays on until the trial ends.",
     "keepProRow": "Keep Pro after the trial",
     "keepProRowDetail": "Choose a plan in Google Play",
+    "keepProRowDetailIos": "Choose a plan in the App Store",
     "trialRowDetail": "Try it free for {{duration}}, no card",
     "limitTrialOffer": "Try Pro free for {{duration}}: {{minutes}} cloud minutes and AI without limits. No card, nothing is charged.",
     "limitTrialOfferAI": "Pro has no AI limit: try it free for {{duration}}, no card.",

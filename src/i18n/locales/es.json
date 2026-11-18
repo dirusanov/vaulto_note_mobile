@@ -153,6 +153,7 @@
       "general": "General",
       "subscriptionDetails": "Detalles de la suscripción",
       "manageGooglePlay": "Administrar en Google Play",
+      "manageAppStore": "Gestionar en App Store",
       "activeCaps": "ACTIVO",
       "makeLocalOnly": "Hacer solo local",
       "makeSync": "Sincronizar",
@@ -460,6 +461,9 @@
   "edit": {
     "visualEditor": "Editor visual",
     "rawMarkdown": "Markdown original",
+    "pinShortcut": "Añadir a la pantalla de inicio",
+    "shortcutUnsupported": "No se pudo añadir el acceso directo.",
+    "shortcutMissing": "Esta nota no está disponible.",
     "copyPlainText": "Copiar texto sin formato",
     "copyMarkdown": "Copiar Markdown",
     "shareText": "Compartir texto",
@@ -705,6 +709,7 @@
       "addAudio": "Añadir audio"
     },
     "toast": {
+      "audioUnavailable": "No se pudo reproducir esta grabación",
       "audioMissing": "El archivo de la grabación no está en este dispositivo",
       "transcriptInserted": "Texto añadido a la nota",
       "transcriptExists": "Este texto ya está en la nota",
@@ -1175,6 +1180,7 @@
     "trialMinutesUsedDesc": "Elige un plan para seguir transcribiendo en la nube. Pro sigue activo hasta que termine la prueba.",
     "keepProRow": "Seguir con Pro después de la prueba",
     "keepProRowDetail": "Elige un plan en Google Play",
+    "keepProRowDetailIos": "Elige un plan en App Store",
     "trialRowDetail": "Pruébalo gratis durante {{duration}}, sin tarjeta",
     "limitTrialOffer": "Prueba Pro gratis durante {{duration}}: {{minutes}} minutos en la nube e IA sin límites. Sin tarjeta, no se cobra nada.",
     "limitTrialOfferAI": "Pro no tiene límite de IA: pruébalo gratis durante {{duration}}, sin tarjeta.",

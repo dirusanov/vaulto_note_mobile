@@ -192,8 +192,8 @@ const buildAudioEmbedRuntimeJs = () => `
       '<rect x="' + PROGRESS_START + '" y="106" width="' + (PROGRESS_END - PROGRESS_START) + '" height="8" rx="4" fill="${AUDIO_PREVIEW_TRACK}"/>' +
       '<rect x="' + PROGRESS_START + '" y="106" width="' + progressWidth + '" height="8" rx="4" fill="${AUDIO_PREVIEW_ACCENT}"/>' +
       '<circle cx="' + progressKnobX + '" cy="110" r="8" fill="#FFFFFF" stroke="${AUDIO_PREVIEW_ACCENT}" stroke-width="4"/>' +
-      '<text x="' + PROGRESS_START + '" y="144" text-anchor="start" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">' + escapeXml(formatDuration(position)) + '</text>' +
-      '<text x="' + SPEED_END + '" y="144" text-anchor="end" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">' + escapeXml(formatDuration(remaining)) + '</text>' +
+      '<text x="' + PROGRESS_START + '" y="151" text-anchor="start" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">' + escapeXml(formatDuration(position)) + '</text>' +
+      '<text x="' + SPEED_END + '" y="151" text-anchor="end" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="${AUDIO_PREVIEW_SUBTEXT}">−' + escapeXml(formatDuration(remaining)) + '</text>' +
       '</svg>';
 
     const nextPayload = {
@@ -275,7 +275,7 @@ const buildAudioEmbedRuntimeJs = () => `
     let action = 'toggle';
     let seekRatio;
 
-    if (x >= SPEED_START && x <= SPEED_END && y >= SPEED_TOP && y <= SPEED_BOTTOM) {
+    if (x >= SPEED_START - 8 && x <= SPEED_END + 12 && y >= SPEED_TOP - 20 && y <= SPEED_BOTTOM + 20) {
       action = 'speed';
     } else if (x >= PROGRESS_START && x <= PROGRESS_END && y >= PROGRESS_TOP && y <= PROGRESS_BOTTOM) {
       action = 'seek';

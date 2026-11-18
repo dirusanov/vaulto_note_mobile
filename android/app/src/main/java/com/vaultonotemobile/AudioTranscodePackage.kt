@@ -12,6 +12,7 @@ class AudioTranscodePackage : ReactPackage {
         return listOf(
             AudioTranscodeModule(reactContext),
             DeviceCapabilitiesModule(reactContext),
+            NoteShortcutModule(reactContext),
             ShareIntentModule(reactContext),
             AudioConcatModule(reactContext),
             KeyBackupModule(reactContext),

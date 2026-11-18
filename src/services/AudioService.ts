@@ -54,6 +54,7 @@ function flattenRecordingOptions(options: RecordingOptions): Partial<RecordingOp
 
 class AudioServiceClass {
     private recording: AudioRecorder | null = null;
+    private playbackCopySequence = 0;
     private recordingStartTime: number = 0;
     private meteringTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -422,7 +423,7 @@ class AudioServiceClass {
                 throw new Error('No cache directory available for audio playback');
             }
             const sanitizedPrefix = (tempPrefix || 'temp').replace(/[^a-z0-9_-]/gi, '') || 'temp';
-            const tempUri = `${cacheDir}${sanitizedPrefix}_${Date.now()}.${audioExtension(decryptedData, sourceUri)}`;
+            const tempUri = `${cacheDir}${sanitizedPrefix}_${Date.now()}_${++this.playbackCopySequence}.${audioExtension(decryptedData, sourceUri)}`;
             await FileSystem.writeAsStringAsync(tempUri, decryptedData, {
                 encoding: 'base64',
             });
@@ -544,7 +545,7 @@ class AudioServiceClass {
         const cache = FileSystem.cacheDirectory;
         await sweep(`${cache}Audio/`, (name) => /\.(m4a|aac|mp4|3gp|wav)$/i.test(name));
         await sweep(`${cache}shared/`, () => true);
-        await sweep(cache, (name) => /^(meeting_|diag_).*\.(m4a|wav|mp3|aac|ogg|flac|webm|amr)$/i.test(name));
+        await sweep(cache, (name) => /^(meeting_|diag_|preview_|embed_).*\.(m4a|wav|mp3|aac|ogg|flac|webm|amr)$/i.test(name));
         return removed;
     }
 

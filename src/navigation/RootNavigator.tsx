@@ -7,6 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { flushPendingDeepLink, handleDeepLink, navigationRef } from './deepLinks';
 import { useShareIntake } from '../services/shareIntake';
 import { useNotesContext } from '../contexts/NotesContext';
+import { useNoteShortcutLabels } from '../services/noteShortcuts';
 import { useNotificationRouting } from '../services/notifications';
 
 // The ThemeProvider remounts the tree when the color scheme changes; the last
@@ -17,7 +18,8 @@ let initialUrlHandled = false;
 
 export const RootNavigator = () => {
     const { scheme } = useTheme();
-    const { createNote } = useNotesContext();
+    const { createNote, getAllNotes, isHydrated } = useNotesContext();
+    useNoteShortcutLabels(getAllNotes(), isHydrated);
     const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
     const theme = {
         ...base,

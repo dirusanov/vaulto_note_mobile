@@ -1,3 +1,4 @@
+import { noteShortcuts, shortcutLabel } from '../services/noteShortcuts';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, memo } from 'react';
 import {
@@ -1031,6 +1032,7 @@ export const NoteEditScreen = () => {
         updateNote,
         deleteNote,
         batchDeleteNotes,
+        getAllNotes,
         notes,
         createImprovement,
         updateImprovement,
@@ -1118,7 +1120,7 @@ export const NoteEditScreen = () => {
         voiceRecordingsRef.current = voiceRecordings;
     }, [voiceRecordings]);
 
-    const existingNote = notes.find(n => n.id === localNoteId);
+    const existingNote = notes.find(n => n.id === localNoteId) ?? getAllNotes().find(n => n.id === localNoteId);
     const noteImprovements = useMemo(() => existingNote?.improvements ?? [], [existingNote?.improvements]);
     // The user's tags, most used first, sent with a cloud voice request so the
     // agent reuses them rather than inventing near-duplicates. Only from notes
@@ -1304,6 +1306,18 @@ export const NoteEditScreen = () => {
     // open version's internal title.
     const exportTitle = activeVariantId === 'original' ? title : (noteTitle || title);
 
+    const pinShortcut = async () => {
+        setShowMenu(false);
+        if (!existingNote || !noteShortcuts) return;
+        const label = shortcutLabel({ ...existingNote, is_protected: isProtected || existingNote.is_protected }, t);
+        try {
+            if (await noteShortcuts.requestPin(existingNote.id, label)) return;
+        } catch {
+            // Some launchers reject pin requests even when Android advertises support.
+        }
+        showToast(t('edit.shortcutUnsupported'), 3500);
+    };
+
     const handleCopyPlainText = async () => {
         setShowMenu(false);
         const fullText = `${exportTitle}\n\n${richContentToPlainText(content)}`;
@@ -1448,6 +1462,8 @@ export const NoteEditScreen = () => {
     // Audio state
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
     const [showPrivacyWarning, setShowPrivacyWarning] = useState(false);
+    const [topPlayer, setTopPlayer] = useState<{ uri: string; duration: number } | null>(null);
+    const closeTopPlayer = useCallback(() => setTopPlayer(null), []);
     const [recordingsPreviewUri, setRecordingsPreviewUri] = useState<string | null>(null);
     const [recordingsPreviewDuration, setRecordingsPreviewDuration] = useState<number>(0);
     const [isTranscribing, setIsTranscribingState] = useState(false);
@@ -1458,7 +1474,9 @@ export const NoteEditScreen = () => {
     const lastSavedContent = useRef(stripAudioEmbedsFromRichContent(existingNote?.content || ''));
     const skipAutoSaveRef = useRef(false);
     const isMounted = useRef(true);
+    const inlineLoadId = useRef(0);
     const inlineEditorAudioRef = useRef<{
+        ownedUri: string | null;
         path: string | null;
         sound: Sound | null;
         duration: number;
@@ -1467,6 +1485,7 @@ export const NoteEditScreen = () => {
         playbackSpeed: number;
         isLoading: boolean;
     }>({
+        ownedUri: null,
         path: null,
         sound: null,
         duration: 0,
@@ -1615,16 +1634,6 @@ export const NoteEditScreen = () => {
             });
         }
     }, [showRecordingsList, localNoteId]);
-
-    useEffect(() => {
-        return () => {
-            const activeSound = inlineEditorAudioRef.current.sound;
-            if (activeSound) {
-                void activeSound.unloadAsync();
-            }
-            void AudioService.cleanupTempFiles(['embed']);
-        };
-    }, []);
 
     // Custom Instruction State
     const [customInstruction, setCustomInstruction] = useState('');
@@ -3321,6 +3330,9 @@ export const NoteEditScreen = () => {
         const previousPath = controller.path;
         const previousDuration = controller.duration;
         const previousSound = controller.sound;
+        const previousUri = controller.ownedUri;
+        inlineLoadId.current++;
+        controller.ownedUri = null;
 
         controller.path = null;
         controller.sound = null;
@@ -3330,20 +3342,12 @@ export const NoteEditScreen = () => {
         controller.playbackSpeed = 1;
         controller.isLoading = false;
 
-        if (previousSound) {
-            try {
-                await previousSound.unloadAsync();
-            } catch (error) {
-                console.warn('Failed to unload inline editor audio:', error);
-            }
-        }
-
-        if (previousPath) {
-            resetInlineEditorAudioState(previousPath, previousDuration);
-        }
-
-        void AudioService.cleanupTempFiles(['embed']);
+        if (previousPath) resetInlineEditorAudioState(previousPath, previousDuration);
+        await previousSound?.unloadAsync();
+        if (previousUri) await AudioService.deleteAudioFile(previousUri).catch(() => undefined);
     }, [resetInlineEditorAudioState]);
+
+    useEffect(() => () => { void clearInlineEditorAudio(); }, [clearInlineEditorAudio]);
 
     const settleInlineEditorAudioForExit = useCallback(async () => {
         try {
@@ -3363,24 +3367,16 @@ export const NoteEditScreen = () => {
         setShowRecordingsList(false);
     }, [clearRecordingsPreview]);
 
-    const handlePreviewRecording = useCallback(async (recording: VoiceRecording) => {
-        await clearInlineEditorAudio();
-
+    const handlePreviewRecording = useCallback((recording: VoiceRecording) => {
+        void clearInlineEditorAudio();
         if (playingRecordingId === recording.id && recordingsPreviewUri) {
             clearRecordingsPreview();
             return;
         }
-
         setPlayingRecordingId(recording.id);
-        const uri = await resolveAudioUri(recording.file_path);
-        if (!uri) {
-            setPlayingRecordingId(null);
-            return;
-        }
-
-        setRecordingsPreviewUri(uri);
+        setRecordingsPreviewUri(recording.file_path);
         setRecordingsPreviewDuration(recording.duration);
-    }, [clearInlineEditorAudio, clearRecordingsPreview, playingRecordingId, recordingsPreviewUri, resolveAudioUri]);
+    }, [clearInlineEditorAudio, clearRecordingsPreview, playingRecordingId, recordingsPreviewUri]);
 
     const handleInlineEditorPlaybackStatus = useCallback((status: any) => {
         if (!status?.isLoaded) {
@@ -3416,8 +3412,9 @@ export const NoteEditScreen = () => {
 
         const isSamePath = controller.path === normalizedPath;
         if (controller.path && !isSamePath) {
-            await clearInlineEditorAudio();
+            void clearInlineEditorAudio();
         }
+        const loadId = ++inlineLoadId.current;
 
         controller.path = normalizedPath;
         controller.duration = duration > 0 ? duration : controller.duration;
@@ -3430,8 +3427,13 @@ export const NoteEditScreen = () => {
         pushInlineEditorAudioState();
 
         const uri = await resolveAudioUri(normalizedPath, 'embed');
+        const ownedUri = uri && uri !== normalizedPath ? uri : null;
+        const discardCopy = () => ownedUri && AudioService.deleteAudioFile(ownedUri).catch(() => undefined);
+        if (loadId !== inlineLoadId.current) {
+            await discardCopy();
+            return null;
+        }
         if (!uri) {
-            controller.isLoading = false;
             await clearInlineEditorAudio();
             return null;
         }
@@ -3444,9 +3446,15 @@ export const NoteEditScreen = () => {
                     progressUpdateIntervalMillis: 250,
                     rate: controller.playbackSpeed,
                 },
-                handleInlineEditorPlaybackStatus
+                status => { if (loadId === inlineLoadId.current) handleInlineEditorPlaybackStatus(status); }
             );
+            if (loadId !== inlineLoadId.current) {
+                await sound.unloadAsync();
+                await discardCopy();
+                return null;
+            }
 
+            controller.ownedUri = ownedUri;
             controller.sound = sound;
             controller.isLoading = false;
             controller.position = status.isLoaded ? (status.positionMillis ?? 0) / 1000 : 0;
@@ -3458,7 +3466,8 @@ export const NoteEditScreen = () => {
             return sound;
         } catch (error) {
             console.error('Failed to create inline editor audio:', error);
-            await clearInlineEditorAudio();
+            await discardCopy();
+            if (loadId === inlineLoadId.current) await clearInlineEditorAudio();
             return null;
         }
     }, [clearInlineEditorAudio, handleInlineEditorPlaybackStatus, pushInlineEditorAudioState, resolveAudioUri]);
@@ -3518,12 +3527,13 @@ export const NoteEditScreen = () => {
         editorRef.current?.blur();
         visualEditorFocusedRef.current = false;
         closeRecordingsList();
+        closeTopPlayer();
 
         const controller = inlineEditorAudioRef.current;
 
         if (payload.action === 'speed') {
             if (controller.path !== targetPath) {
-                await clearInlineEditorAudio();
+                void clearInlineEditorAudio();
                 controller.path = targetPath;
                 controller.duration = embedDuration;
                 controller.position = 0;
@@ -3543,7 +3553,7 @@ export const NoteEditScreen = () => {
         }
 
         const sound = await ensureInlineEditorAudioSound(targetPath, embedDuration);
-        if (!sound) {
+        if (!sound || sound !== inlineEditorAudioRef.current.sound) {
             return;
         }
 
@@ -3575,7 +3585,7 @@ export const NoteEditScreen = () => {
         }
 
         pushInlineEditorAudioState();
-    }, [clearInlineEditorAudio, closeRecordingsList, ensureInlineEditorAudioSound, pushInlineEditorAudioState]);
+    }, [clearInlineEditorAudio, closeRecordingsList, closeTopPlayer, ensureInlineEditorAudioSound, pushInlineEditorAudioState]);
 
     useEffect(() => {
         const activePath = normalizeAttachedAudioPath(inlineEditorAudioRef.current.path);
@@ -7303,18 +7313,15 @@ export const NoteEditScreen = () => {
     const latestRecordingInText = !!latestRecording && embeddedAudioPaths.some(
         (path) => normalizeAttachedAudioPath(path) === normalizeAttachedAudioPath(latestRecording.file_path)
     );
-    const [topPlayer, setTopPlayer] = useState<{ uri: string; duration: number } | null>(null);
-    const closeTopPlayer = useCallback(() => setTopPlayer(null), []);
-    const toggleTopPlayer = useCallback(async () => {
+    const toggleTopPlayer = useCallback(() => {
         if (topPlayer) {
             setTopPlayer(null);
             return;
         }
         if (!latestRecording) return;
-        await clearInlineEditorAudio();
-        const uri = await resolveAudioUri(latestRecording.file_path);
-        if (uri) setTopPlayer({ uri, duration: latestRecording.duration });
-    }, [clearInlineEditorAudio, latestRecording, resolveAudioUri, topPlayer]);
+        void clearInlineEditorAudio();
+        setTopPlayer({ uri: latestRecording.file_path, duration: latestRecording.duration });
+    }, [clearInlineEditorAudio, latestRecording, topPlayer]);
 
     const editorHeader = useMemo(() => (
         <View>
@@ -7408,6 +7415,7 @@ export const NoteEditScreen = () => {
                     <TouchableOpacity
                         onPress={() => setShowAppearanceModal(true)}
                         style={styles.iconButton}
+                        onLongPress={() => showToast(t("a11y.textAppearance", "Text appearance"), 1600)}
                         accessibilityRole="button" accessibilityLabel={t("a11y.textAppearance", "Text appearance")}
                     >
                         <MaterialIcons name="text-fields" size={24} color={colors.text} />
@@ -7417,6 +7425,7 @@ export const NoteEditScreen = () => {
                         onPress={() => { void handleAiAccess(() => { setImproveSource('original'); setShowAIModal(true); }); }}
                         style={[styles.iconButton, (!canUseAI || isAIProcessing || isProtected) && styles.disabledIcon]}
                         disabled={isAIProcessing || !canUseAI}
+                        onLongPress={() => showToast(t("a11y.improveWithAI", "Improve with AI"), 1600)}
                         accessibilityRole="button" accessibilityLabel={t("a11y.improveWithAI", "Improve with AI")}
                         accessibilityState={{ disabled: isAIProcessing || !canUseAI, busy: isAIProcessing }}
                     >
@@ -7436,9 +7445,11 @@ export const NoteEditScreen = () => {
                         <TouchableOpacity
                             onPress={() => {
                                 void clearInlineEditorAudio();
+                                closeTopPlayer();
                                 setShowRecordingsList(true);
                             }}
                             style={styles.iconButton}
+                            onLongPress={() => showToast(t("a11y.voiceRecordings", "Voice recordings"), 1600)}
                             accessibilityRole="button" accessibilityLabel={t("a11y.voiceRecordings", "Voice recordings")}
                         >
                             <MaterialIcons name="graphic-eq" size={24} color={colors.text} />
@@ -7451,6 +7462,7 @@ export const NoteEditScreen = () => {
                         <TouchableOpacity
                             onPress={handleNewDrawing}
                             style={styles.iconButton}
+                            onLongPress={() => showToast(t("a11y.draw", "Draw"), 1600)}
                             accessibilityRole="button" accessibilityLabel={t("a11y.draw", "Draw")}
                         >
                             <MaterialCommunityIcons name="draw" size={24} color={colors.text} />
@@ -7884,6 +7896,12 @@ export const NoteEditScreen = () => {
                         <View style={[styles.menuContainer, { maxHeight: Dimensions.get('window').height - 80 - Math.max(insets.bottom, spacing.m) }]}>
                         <ScrollView style={styles.menuScroll} bounces={false} showsVerticalScrollIndicator>
                             {/* Visual vs Markdown editing lives in Text appearance (the Aa button). */}
+                            {existingNote && noteShortcuts && (
+                                <TouchableOpacity onPress={pinShortcut} accessibilityRole="button" style={styles.menuItem}>
+                                    <MaterialIcons name="add-to-home-screen" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
+                                    <Text style={styles.menuItemText}>{t('edit.pinShortcut')}</Text>
+                                </TouchableOpacity>
+                            )}
                             <TouchableOpacity onPress={handleCopyPlainText} style={styles.menuItem}>
                                 <MaterialIcons name="content-copy" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
                                 <Text style={styles.menuItemText}>{t("edit.copyPlainText", "Copy Plain Text")}</Text>
@@ -8654,6 +8672,9 @@ const styles = createStyles(() => ({
         marginRight: -12,
     },
     headerRightCompact: {
+        flexShrink: 1,
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
         gap: 0,
     },
     headerEdgeLeft: {

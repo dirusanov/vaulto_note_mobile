@@ -153,6 +153,7 @@
       "general": "Allgemein",
       "subscriptionDetails": "Abo-Details",
       "manageGooglePlay": "In Google Play verwalten",
+      "manageAppStore": "Im App Store verwalten",
       "activeCaps": "AKTIV",
       "makeLocalOnly": "Nur lokal",
       "makeSync": "Synchronisieren",
@@ -460,6 +461,9 @@
   "edit": {
     "visualEditor": "Visueller Editor",
     "rawMarkdown": "Rohes Markdown",
+    "pinShortcut": "Zum Startbildschirm hinzufügen",
+    "shortcutUnsupported": "Die Verknüpfung konnte nicht hinzugefügt werden.",
+    "shortcutMissing": "Diese Notiz ist nicht verfügbar.",
     "copyPlainText": "Reinen Text kopieren",
     "copyMarkdown": "Markdown kopieren",
     "shareText": "Text teilen",
@@ -704,6 +708,7 @@
       "addAudio": "Audio einfügen"
     },
     "toast": {
+      "audioUnavailable": "Diese Aufnahme konnte nicht abgespielt werden",
       "audioMissing": "Die Aufnahmedatei fehlt auf diesem Gerät",
       "transcriptInserted": "Text zur Notiz hinzugefügt",
       "transcriptExists": "Dieser Text ist schon in der Notiz",
@@ -1170,6 +1175,7 @@
     "trialMinutesUsedDesc": "Wähle einen Plan, um weiter in der Cloud zu transkribieren. Pro bleibt bis zum Testende aktiv.",
     "keepProRow": "Pro nach dem Test behalten",
     "keepProRowDetail": "Plan in Google Play wählen",
+    "keepProRowDetailIos": "Wähle einen Tarif im App Store",
     "trialRowDetail": "{{duration}} gratis testen, ohne Karte",
     "limitTrialOffer": "Teste Pro {{duration}} gratis: {{minutes}} Cloud-Minuten und KI ohne Limit. Ohne Karte, es wird nichts berechnet.",
     "limitTrialOfferAI": "Pro hat kein KI-Limit: {{duration}} gratis testen, ohne Karte.",

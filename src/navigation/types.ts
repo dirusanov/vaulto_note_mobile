@@ -2,7 +2,7 @@ export type RootStackParamList = {
     SignIn: undefined;
     SignUp: undefined;
     LegalAcceptance: { legalToken: string; provider?: 'google' | 'email' | string };
-    NotesList: { startRecordingAt?: number } | undefined;
+    NotesList: { startRecordingAt?: number; shortcutNoteId?: string } | undefined;
     NoteEdit: {
         noteId?: string;
         initialRecording?: any;

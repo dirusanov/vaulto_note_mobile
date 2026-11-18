@@ -20,7 +20,7 @@
         "EXPO_PUBLIC_AUTH_AUDIENCE": "vaulto_note_mobile",
         "EXPO_PUBLIC_REDIRECT_URI": "https://auth.expo.io/@random1k11/vaulto-note-mobile",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_EmutWLRibQUpDsKLZTNLExImdJu",
-        "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_YOUR_IOS_KEY",
+        "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_ceCepIacEQFyCqhvmwCxiESnGgd",
         "EXPO_PUBLIC_NOTES_API_HOST": "api.vaultonote.com",
         "EXPO_PUBLIC_NOTES_API_PORT": "443"
       },

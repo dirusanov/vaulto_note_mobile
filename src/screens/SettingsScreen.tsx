@@ -229,7 +229,9 @@ const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
                 <Divider />
                 <Row
                     title={t('paywall.keepProRow', 'Keep Pro after the trial')}
-                    detail={t('paywall.keepProRowDetail', 'Choose a plan in Google Play')}
+                    detail={Platform.OS === 'ios'
+                        ? t('paywall.keepProRowDetailIos', 'Choose a plan in the App Store')
+                        : t('paywall.keepProRowDetail', 'Choose a plan in Google Play')}
                     tone="accent"
                     onPress={onUpgrade}
                 />
@@ -245,7 +247,9 @@ const SubscriptionRows: React.FC<SubscriptionRowsProps> = ({
                 {canManageSubscription && (
                     <>
                         <Divider />
-                        <Row title={t('settings.ui.manageGooglePlay', 'Manage in Google Play')} onPress={onManageSubscription} external />
+                        <Row title={Platform.OS === 'ios'
+                            ? t('settings.ui.manageAppStore', 'Manage in the App Store')
+                            : t('settings.ui.manageGooglePlay', 'Manage in Google Play')} onPress={onManageSubscription} external />
                     </>
                 )}
             </>
@@ -496,7 +500,7 @@ export const SettingsScreen = () => {
     const hasConfiguredKey = encryptionMode === 'e2ee';
     const syncToggleDisabled = !isAuthenticated || isGuest;
     const isGuestOrAnonymous = !isAuthenticated || isGuest;
-    const isSubscriptionActive = Platform.OS === 'android' && !!subscriptionStatus?.isActive && !proTrial.active;
+    const isSubscriptionActive = !!subscriptionStatus?.isActive && !proTrial.active;
 
     // Voice & AI card: the cloud works with no setup; one "Offline mode" switch
     // downloads the best speech and AI models this phone can run; "Only on this
@@ -538,10 +542,10 @@ export const SettingsScreen = () => {
                 : t('settings.voice.offlineNoSpace', 'Not enough free space on this device');
 
     const openManageSubscription = useCallback(async () => {
-        const fallbackGooglePlayUrl = 'https://play.google.com/store/account/subscriptions';
-        const targetUrl = (Platform.OS === 'android'
-            ? (subscriptionStatus?.managementURL || fallbackGooglePlayUrl)
-            : subscriptionStatus?.managementURL) || fallbackGooglePlayUrl;
+        const fallbackUrl = Platform.OS === 'ios'
+            ? 'https://apps.apple.com/account/subscriptions'
+            : 'https://play.google.com/store/account/subscriptions';
+        const targetUrl = subscriptionStatus?.managementURL || fallbackUrl;
 
         try {
             const supported = await Linking.canOpenURL(targetUrl);

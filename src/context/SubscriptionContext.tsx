@@ -9,10 +9,10 @@ import { colors } from '../theme/colors';
 import i18n from 'i18next';
 import { getProTrialState, ProTrialState } from '../utils/proTrial';
 
-// TODO: Replace with your actual RevenueCat API keys in .env
-// RevenueCat Test Store key: lets dev builds (emulators without Play billing)
-// load offerings and run purchases. Never used in release builds.
-const DEV_TEST_STORE_KEY = __DEV__ ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY : undefined;
+// Android emulators can use Test Store; iOS development uses Apple's sandbox
+// with the same App Store products as release builds.
+const DEV_TEST_STORE_KEY = __DEV__ && Platform.OS === 'android'
+    ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY : undefined;
 const API_KEYS = {
     apple: DEV_TEST_STORE_KEY || process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY || 'appl_placeholder',
     google: DEV_TEST_STORE_KEY || process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || 'goog_placeholder',
@@ -271,10 +271,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
                 isConfigured.current = true;
 
+                // A customer lookup failure must not hide the store's purchase options.
+                await loadOfferings();
+
                 const customerInfo = await Purchases.getCustomerInfo();
                 checkSubscriptionStatus(customerInfo);
-
-                await loadOfferings();
             } catch (e) {
                 console.error('RevenueCat init error:', e);
             } finally {
