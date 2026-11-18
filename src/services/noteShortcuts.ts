@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { Note } from '../api/notes';
 
-export const noteShortcuts = Platform.OS === 'android' ? NativeModules.NoteShortcut as {
+// Pinned shortcuts need Android 8 (API 26); below it the menu item could only fail.
+export const noteShortcuts = Platform.OS === 'android' && Number(Platform.Version) >= 26 ? NativeModules.NoteShortcut as {
     requestPin(id: string, label: string): Promise<boolean>;
     getPinnedLabels(): Promise<Record<string, string>>;
     updateLabels(labels: Record<string, string>): Promise<boolean>;

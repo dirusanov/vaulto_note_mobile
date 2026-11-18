@@ -3343,7 +3343,8 @@ export const NoteEditScreen = () => {
         controller.isLoading = false;
 
         if (previousPath) resetInlineEditorAudioState(previousPath, previousDuration);
-        await previousSound?.unloadAsync();
+        // A failed unload must still delete the decrypted copy.
+        await previousSound?.unloadAsync().catch(() => undefined);
         if (previousUri) await AudioService.deleteAudioFile(previousUri).catch(() => undefined);
     }, [resetInlineEditorAudioState]);
 
