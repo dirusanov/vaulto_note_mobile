@@ -2,10 +2,13 @@
 
 ## [Unreleased]
 
-## [1.0.107] - 2026-11-18
+## [1.0.108] - 2026-11-18
+
+1.0.107 was built but never published; its changes ship here.
 
 ### Fixed
 - Long, fast pen strokes no longer blink or show thin gaps while they are being drawn.
+- Wi-Fi and a portrait screen are no longer required to install the app.
 
 ### Added
 - Pin a note to the Android home screen; the shortcut follows the note's title.
