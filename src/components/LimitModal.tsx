@@ -237,7 +237,7 @@ export const LimitModal: React.FC = () => {
 
                             <View style={styles.actionsRow}>
                                 <TouchableOpacity onPress={handleClose} activeOpacity={0.8} style={styles.cancelButton}>
-                                    <Text style={styles.cancelText}>{showUpgrade ? t('aux.maybeLater', 'Maybe Later') : t('common.close', 'Close')}</Text>
+                                    <Text style={styles.cancelText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{showUpgrade ? t('aux.maybeLater', 'Maybe Later') : t('common.close', 'Close')}</Text>
                                 </TouchableOpacity>
 
                                 {showUpgrade && (
@@ -340,7 +340,8 @@ const styles = createStyles(() => ({
     },
     cancelButton: {
         flex: 1,
-        height: 46,
+        minHeight: 46,
+        paddingHorizontal: spacing.s,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
@@ -354,7 +355,8 @@ const styles = createStyles(() => ({
     },
     primaryButton: {
         flex: 1,
-        height: 46,
+        minHeight: 46,
+        paddingHorizontal: spacing.s,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',

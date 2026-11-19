@@ -666,9 +666,7 @@
       "rename": "Renomear",
       "renameTitle": "Renomear versão",
       "renamePlaceholder": "Nome da versão",
-      "swipeHint": "Deslize o texto para a esquerda ou direita para trocar de versão",
-      "headerCount": "Versões ({{count}})",
-      "showAll": "Ver todas",
+      "swipeHint": "Deslize o texto para trocar de versão",
       "showAllA11y": "Ver as {{count}} versões",
       "basedOn": "Baseada em:",
       "basedOnA11y": "Baseada em: {{name}}",
@@ -679,8 +677,6 @@
       "compareShort": "Comparar",
       "compareA11y": "Comparar esta versão com a origem",
       "compareWithSource": "Comparar com a origem",
-      "originalCaption": "Seu texto. Os resultados da IA são salvos como versões.",
-      "sourceUnknown": "Criada por comando de voz",
       "previousOriginalCaption": "O texto principal antes de outra versão o substituir",
       "compareChangesTitle": "O que mudou",
       "compareWith": "Comparar com",
@@ -691,7 +687,8 @@
       "previousChange": "Alteração anterior",
       "nextChange": "Próxima alteração",
       "previousShort": "Anterior",
-      "nextShort": "Próxima"
+      "nextShort": "Próxima",
+      "compareWithOriginal": "Comparar com o original"
     },
     "tasks": {
       "find": "Encontrar tarefas",
@@ -796,8 +793,8 @@
     },
     "voiceEdit": {
       "renamed": "Nota renomeada para “{{title}}”",
-      "listInNewVersion": "Lista criada numa nova versão, “{{version}}”. O original não mudou.",
-      "changedInNewVersion": "Alterado numa nova versão, “{{version}}”. O original não mudou.",
+      "listInNewVersion": "Lista salva como “{{version}}”. O original foi mantido.",
+      "changedInNewVersion": "Alterações salvas como “{{version}}”. O original foi mantido.",
       "listUpdatedIn": "Lista atualizada em “{{version}}”",
       "changedIn": "Alterado em “{{version}}”",
       "checkedIn": "Itens marcados em “{{version}}”",
@@ -877,7 +874,19 @@
       "switchTo": "Toque duas vezes para mudar para “{{mode}}”",
       "micHintEdit": "Editar por voz: pedidos mudam a nota. Segure para ditar uma vez.",
       "micHintDictate": "Ditar: as palavras entram na nota como ditas."
-    }
+    },
+    "routeShort": {
+      "audioOnly": "Só áudio",
+      "devicePrivate": "Só neste telefone",
+      "deviceModelMissing": "Sem modelo de voz",
+      "deviceOffline": "Sem internet · no telefone",
+      "device": "Neste telefone",
+      "later": "Texto quando online",
+      "custom": "Seu serviço de IA",
+      "cloud": "Nuvem Vaulto"
+    },
+    "routeDetailsHint": "Mostra o que acontece com a gravação",
+    "moreOptions": "Opções de gravação"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",

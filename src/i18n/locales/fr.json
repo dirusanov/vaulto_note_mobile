@@ -666,9 +666,7 @@
       "rename": "Renommer",
       "renameTitle": "Renommer la version",
       "renamePlaceholder": "Nom de la version",
-      "swipeHint": "Balayez le texte vers la gauche ou la droite pour changer de version",
-      "headerCount": "Versions ({{count}})",
-      "showAll": "Tout voir",
+      "swipeHint": "Balayez le texte pour changer de version",
       "showAllA11y": "Voir les {{count}} versions",
       "basedOn": "Basée sur :",
       "basedOnA11y": "Basée sur : {{name}}",
@@ -679,8 +677,6 @@
       "compareShort": "Comparer",
       "compareA11y": "Comparer cette version avec sa source",
       "compareWithSource": "Comparer avec la source",
-      "originalCaption": "Votre texte. Les résultats de l’IA sont enregistrés comme versions.",
-      "sourceUnknown": "Créée par une commande vocale",
       "previousOriginalCaption": "Le texte principal avant qu’une autre version ne le remplace",
       "compareChangesTitle": "Ce qui a changé",
       "compareWith": "Comparer avec",
@@ -691,7 +687,8 @@
       "previousChange": "Modification précédente",
       "nextChange": "Modification suivante",
       "previousShort": "Précédente",
-      "nextShort": "Suivante"
+      "nextShort": "Suivante",
+      "compareWithOriginal": "Comparer avec l’original"
     },
     "tasks": {
       "find": "Trouver les tâches",
@@ -796,8 +793,8 @@
     },
     "voiceEdit": {
       "renamed": "Note renommée « {{title}} »",
-      "listInNewVersion": "Liste créée dans une nouvelle version, « {{version}} ». L’original est inchangé.",
-      "changedInNewVersion": "Modifié dans une nouvelle version, « {{version}} ». L’original est inchangé.",
+      "listInNewVersion": "Liste enregistrée sous « {{version}} ». L’original est conservé.",
+      "changedInNewVersion": "Modifications enregistrées sous « {{version}} ». L’original est conservé.",
       "listUpdatedIn": "Liste mise à jour dans « {{version}} »",
       "changedIn": "Modifié dans « {{version}} »",
       "checkedIn": "Éléments cochés dans « {{version}} »",
@@ -877,7 +874,19 @@
       "switchTo": "Touchez deux fois pour passer à « {{mode}} »",
       "micHintEdit": "Modifier à la voix : les demandes modifient la note. Maintenez pour dicter une fois.",
       "micHintDictate": "Dicter : les mots vont dans la note tels que dits."
-    }
+    },
+    "routeShort": {
+      "audioOnly": "Audio seul",
+      "devicePrivate": "Uniquement sur ce téléphone",
+      "deviceModelMissing": "Pas de modèle vocal",
+      "deviceOffline": "Hors ligne · sur le téléphone",
+      "device": "Sur ce téléphone",
+      "later": "Texte une fois en ligne",
+      "custom": "Votre service d’IA",
+      "cloud": "Cloud Vaulto"
+    },
+    "routeDetailsHint": "Indique ce que devient l’enregistrement",
+    "moreOptions": "Options d’enregistrement"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",

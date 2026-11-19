@@ -665,9 +665,7 @@
       "rename": "Umbenennen",
       "renameTitle": "Version umbenennen",
       "renamePlaceholder": "Name der Version",
-      "swipeHint": "Wische über den Text nach links oder rechts, um die Version zu wechseln",
-      "headerCount": "Versionen ({{count}})",
-      "showAll": "Alle",
+      "swipeHint": "Wische über den Text, um die Version zu wechseln",
       "showAllA11y": "Alle {{count}} Versionen anzeigen",
       "basedOn": "Basiert auf:",
       "basedOnA11y": "Basiert auf: {{name}}",
@@ -678,8 +676,6 @@
       "compareShort": "Vergleichen",
       "compareA11y": "Diese Version mit ihrer Quelle vergleichen",
       "compareWithSource": "Mit Quelle vergleichen",
-      "originalCaption": "Dein Text. KI-Ergebnisse werden als Versionen gespeichert.",
-      "sourceUnknown": "Per Sprachbefehl erstellt",
       "previousOriginalCaption": "Der Haupttext, bevor eine andere Version ihn ersetzt hat",
       "compareChangesTitle": "Was sich geändert hat",
       "compareWith": "Vergleichen mit",
@@ -690,7 +686,8 @@
       "previousChange": "Vorherige Änderung",
       "nextChange": "Nächste Änderung",
       "previousShort": "Zurück",
-      "nextShort": "Weiter"
+      "nextShort": "Weiter",
+      "compareWithOriginal": "Mit Original vergleichen"
     },
     "tasks": {
       "find": "Aufgaben finden",
@@ -795,8 +792,8 @@
     },
     "voiceEdit": {
       "renamed": "Notiz umbenannt in „{{title}}“",
-      "listInNewVersion": "Liste in einer neuen Version erstellt: „{{version}}“. Das Original bleibt unverändert.",
-      "changedInNewVersion": "In einer neuen Version geändert: „{{version}}“. Das Original bleibt unverändert.",
+      "listInNewVersion": "Liste gespeichert als „{{version}}“. Original bleibt.",
+      "changedInNewVersion": "Änderungen gespeichert als „{{version}}“. Original bleibt.",
       "listUpdatedIn": "Liste in „{{version}}“ aktualisiert",
       "changedIn": "In „{{version}}“ geändert",
       "checkedIn": "Punkte in „{{version}}“ abgehakt",
@@ -876,7 +873,19 @@
       "switchTo": "Doppeltippen, um zu „{{mode}}“ zu wechseln",
       "micHintEdit": "Per Stimme ändern: Bitten ändern die Notiz. Gedrückt halten, um einmal zu diktieren.",
       "micHintDictate": "Diktieren: Worte kommen so in die Notiz, wie gesagt."
-    }
+    },
+    "routeShort": {
+      "audioOnly": "Nur Audio",
+      "devicePrivate": "Nur auf diesem Telefon",
+      "deviceModelMissing": "Kein Sprachmodell",
+      "deviceOffline": "Offline · auf dem Telefon",
+      "device": "Auf diesem Telefon",
+      "later": "Text, sobald online",
+      "custom": "Dein KI-Dienst",
+      "cloud": "Vaulto Cloud"
+    },
+    "routeDetailsHint": "Zeigt, was mit der Aufnahme passiert",
+    "moreOptions": "Aufnahmeoptionen"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",

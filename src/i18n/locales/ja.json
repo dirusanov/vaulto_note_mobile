@@ -663,9 +663,7 @@
       "rename": "名前を変更",
       "renameTitle": "バージョン名を変更",
       "renamePlaceholder": "バージョン名",
-      "swipeHint": "テキストを左右にスワイプしてバージョンを切り替え",
-      "headerCount": "バージョン（{{count}}）",
-      "showAll": "すべて表示",
+      "swipeHint": "テキストをスワイプしてバージョンを切り替え",
       "showAllA11y": "{{count}} 件のバージョンをすべて表示",
       "basedOn": "元にした版：",
       "basedOnA11y": "元にした版：{{name}}",
@@ -676,8 +674,6 @@
       "compareShort": "比較",
       "compareA11y": "このバージョンを元の版と比較",
       "compareWithSource": "元の版と比較",
-      "originalCaption": "あなたのテキストです。AI の結果は別バージョンとして保存されます。",
-      "sourceUnknown": "音声コマンドで作成",
       "previousOriginalCaption": "別のバージョンに置き換えられる前のメインテキスト",
       "compareChangesTitle": "変更点",
       "compareWith": "比較対象",
@@ -687,7 +683,8 @@
       "previousChange": "前の変更",
       "nextChange": "次の変更",
       "previousShort": "前へ",
-      "nextShort": "次へ"
+      "nextShort": "次へ",
+      "compareWithOriginal": "元のテキストと比較"
     },
     "tasks": {
       "find": "タスクを探す",
@@ -792,8 +789,8 @@
     },
     "voiceEdit": {
       "renamed": "メモ名を「{{title}}」に変更しました",
-      "listInNewVersion": "新しいバージョン「{{version}}」にリストを作成しました。元の文は変わっていません。",
-      "changedInNewVersion": "新しいバージョン「{{version}}」で変更しました。元の文は変わっていません。",
+      "listInNewVersion": "リストを「{{version}}」として保存しました。元の文はそのままです。",
+      "changedInNewVersion": "変更を「{{version}}」として保存しました。元の文はそのままです。",
       "listUpdatedIn": "「{{version}}」のリストを更新しました",
       "changedIn": "「{{version}}」を変更しました",
       "checkedIn": "「{{version}}」の項目にチェックしました",
@@ -873,7 +870,19 @@
       "switchTo": "ダブルタップで「{{mode}}」に切り替え",
       "micHintEdit": "声で編集：依頼でメモを変更します。長押しで一度だけ口述。",
       "micHintDictate": "口述：話した言葉がそのまま入ります。"
-    }
+    },
+    "routeShort": {
+      "audioOnly": "録音のみ",
+      "devicePrivate": "この端末のみ",
+      "deviceModelMissing": "音声モデルなし",
+      "deviceOffline": "オフライン · この端末",
+      "device": "この端末",
+      "later": "オンライン時に文字化",
+      "custom": "ご自身のAIサービス",
+      "cloud": "Vaultoクラウド"
+    },
+    "routeDetailsHint": "録音がどう処理されるかを表示します",
+    "moreOptions": "録音オプション"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",

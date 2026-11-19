@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { PixelRatio, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +27,8 @@ export const InlineNotice = ({ message, actions = [], onDismiss }: InlineNoticeP
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     if (!message) return null;
+    // With large text an inline button would squeeze the message into a column.
+    const inlineAction = actions.length === 1 && PixelRatio.getFontScale() < 1.3 ? actions[0] : null;
     return (
         <View
             pointerEvents="box-none"
@@ -37,6 +39,16 @@ export const InlineNotice = ({ message, actions = [], onDismiss }: InlineNoticeP
             <View style={styles.bar}>
                 <View style={styles.topRow}>
                     <Text style={styles.message}>{message}</Text>
+                    {/* One action reads like the undo bar: on the same line. */}
+                    {inlineAction && (
+                        <TouchableOpacity
+                            onPress={inlineAction.onPress}
+                            style={[styles.actionButton, styles.inlineActionButton]}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.actionText}>{inlineAction.label}</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                         onPress={onDismiss}
                         hitSlop={10}
@@ -47,7 +59,7 @@ export const InlineNotice = ({ message, actions = [], onDismiss }: InlineNoticeP
                         <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.7)" />
                     </TouchableOpacity>
                 </View>
-                {actions.length > 0 && (
+                {actions.length > 0 && !inlineAction && (
                     <View style={styles.actions}>
                         {actions.map((action) => (
                             <TouchableOpacity
@@ -80,15 +92,14 @@ const styles = createStyles(() => ({
         maxWidth: 560,
         backgroundColor: isDarkScheme() ? '#2E333A' : '#1F2328',
         borderRadius: 12,
-        paddingTop: 12,
-        paddingBottom: 4,
+        paddingVertical: spacing.s,
         paddingHorizontal: spacing.m,
     },
     topRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: spacing.s,
-        paddingBottom: 8,
+        minHeight: 32,
     },
     message: {
         flex: 1,
@@ -97,7 +108,14 @@ const styles = createStyles(() => ({
         lineHeight: 20,
     },
     close: {
-        paddingTop: 1,
+        width: 32,
+        height: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginEnd: -spacing.s,
+    },
+    inlineActionButton: {
+        marginVertical: -spacing.s,
     },
     actions: {
         flexDirection: 'row',

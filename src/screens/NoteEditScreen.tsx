@@ -71,7 +71,6 @@ import {
 import { markdownToTiptapHtml } from '../utils/tiptapMarkdownAdapter';
 import { CompareVersionsModal } from '../components/CompareVersionsModal';
 import {
-    VERSIONS_HEADER_MIN_COUNT,
     compareBasesFor,
     defaultImproveSource,
     parentStepsOfLabel,
@@ -595,8 +594,8 @@ const MemoizedImprovementChips = memo(({
      * or only a name when that version is gone. Null on the original.
      */
     source: { id: string | null; label: string } | null,
-    /** Shown instead when the open version's source is not known. */
-    unknownSourceCaption: string,
+    /** Said instead of a source for a version that has none (the previous main text). */
+    unknownSourceCaption: string | null,
     onCompare: () => void,
 }) => {
     const { t } = useTranslation();
@@ -679,28 +678,12 @@ const MemoizedImprovementChips = memo(({
     if (noteImprovements.length === 0) return null;
     const originalActive = selectedVariantId === 'original';
     const versionCount = noteImprovements.length + 1;
-    const showHeader = versionCount >= VERSIONS_HEADER_MIN_COUNT;
-    const sourceTappable = !!source?.id && source.id !== pendingId;
+    const sourceTappable = !!source?.id && source.id !== 'original' && source.id !== pendingId;
+    // Content first: the line under the chips appears only on a version, and
+    // names the source only when it is another version (Original is implied).
+    const sourceIsOriginal = source?.id === 'original';
     return (
         <View style={styles.variantContainer}>
-        {showHeader && (
-            // Many versions: name the row and give the full list a visible way in.
-            <View style={styles.variantHeaderRow}>
-                <Text style={styles.variantHeaderTitle} accessibilityRole="header" numberOfLines={1}>
-                    {t('edit.versions.headerCount', 'Versions ({{count}})', { count: versionCount })}
-                </Text>
-                <TouchableOpacity
-                    onPress={onOpenAllVersions}
-                    style={styles.variantLinkButton}
-                    hitSlop={VERSION_LINK_HIT_SLOP}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('edit.versions.showAllA11y', 'Show all {{count}} versions', { count: versionCount })}
-                >
-                    <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.showAll', 'Show all')}</Text>
-                    <MaterialIcons name="chevron-right" size={18} color={colors.primary} style={rtlFlip} />
-                </TouchableOpacity>
-            </View>
-        )}
         <View style={styles.variantRow}>
             {/* One segmented track, like the theme switch in Settings: the open
                 version is the raised white segment. */}
@@ -819,24 +802,34 @@ const MemoizedImprovementChips = memo(({
             </View>
             {/* Renaming and deleting live in the full list (with undo), not on the
                 chips, where a stray tap could remove a version. */}
-            {!showHeader && (
-                <TouchableOpacity
-                    style={styles.variantAllButton}
-                    onPress={onOpenAllVersions}
-                    hitSlop={CHIP_HIT_SLOP}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("a11y.allVersions", "All versions")}
-                >
-                    <MaterialIcons name="view-list" size={20} color={colors.textSecondary} />
-                    <Text style={styles.variantAllCount}>{noteImprovements.length + 1}</Text>
-                </TouchableOpacity>
-            )}
+            <TouchableOpacity
+                style={styles.variantAllButton}
+                onPress={onOpenAllVersions}
+                hitSlop={CHIP_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityLabel={t('edit.versions.showAllA11y', 'Show all {{count}} versions', { count: versionCount })}
+            >
+                <MaterialIcons name="view-list" size={20} color={colors.textSecondary} />
+                <Text style={styles.variantAllCount}>{versionCount}</Text>
+            </TouchableOpacity>
         </View>
-        {/* What the open text is, in one line: the original, or the version it
-            was made from (tap to open that one). Always present, so switching
-            versions does not move the text up or down. */}
+        {/* On a version only: what it was made from and a way to compare. */}
+        {!originalActive && (
         <View style={styles.variantSourceRow}>
-            {source ? (
+            {(source && sourceIsOriginal) || (!source && !unknownSourceCaption) ? (
+                <TouchableOpacity
+                    onPress={onCompare}
+                    style={[styles.variantLinkButton, styles.variantLinkStart]}
+                    hitSlop={VERSION_LINK_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('edit.versions.compareWithOriginal', 'Compare with original')}
+                >
+                    <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
+                    <Text style={styles.variantLinkText} numberOfLines={1}>
+                        {t('edit.versions.compareWithOriginal', 'Compare with original')}
+                    </Text>
+                </TouchableOpacity>
+            ) : source ? (
                 <>
                     <TouchableOpacity
                         style={styles.variantSourceMain}
@@ -847,8 +840,8 @@ const MemoizedImprovementChips = memo(({
                         accessibilityLabel={t('edit.versions.basedOnA11y', 'Based on: {{name}}', { name: source.label })}
                         accessibilityHint={sourceTappable ? t('edit.versions.basedOnHint', 'Opens that version') : undefined}
                     >
-                        <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textSecondary} style={rtlFlip} />
-                        <Text style={styles.variantSourceText} numberOfLines={2}>
+                        <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textTertiary} style={rtlFlip} />
+                        <Text style={styles.variantSourceText} numberOfLines={1}>
                             {t('edit.versions.basedOn', 'Based on:')}{' '}
                             <Text style={sourceTappable ? styles.variantSourceName : styles.variantSourceNameStatic}>{source.label}</Text>
                         </Text>
@@ -865,16 +858,27 @@ const MemoizedImprovementChips = memo(({
                     </TouchableOpacity>
                 </>
             ) : (
-                <View style={styles.variantSourceMain}>
-                    <MaterialIcons name={originalActive ? 'lock-outline' : 'help-outline'} size={14} color={colors.textTertiary} />
-                    <Text style={styles.variantSourceText} numberOfLines={1}>
-                        {originalActive
-                            ? t('edit.versions.originalCaption', 'Your text. Versions never change it.')
-                            : unknownSourceCaption}
-                    </Text>
-                </View>
+                <>
+                    <View style={styles.variantSourceMain}>
+                        <MaterialIcons name="history" size={16} color={colors.textTertiary} />
+                        <Text style={styles.variantSourceText} numberOfLines={1}>
+                            {unknownSourceCaption}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={onCompare}
+                        style={styles.variantLinkButton}
+                        hitSlop={VERSION_LINK_HIT_SLOP}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('edit.versions.compareWithOriginal', 'Compare with original')}
+                    >
+                        <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
+                        <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
+                    </TouchableOpacity>
+                </>
             )}
         </View>
+        )}
         </View>
     );
 });
@@ -1583,7 +1587,7 @@ export const NoteEditScreen = () => {
         const imp = visibleImprovements.find((item: any) => item.id === activeVariantId);
         return imp?.option_id === PREVIOUS_ORIGINAL_OPTION_ID
             ? t('edit.versions.previousOriginalCaption', 'The main text before another version replaced it')
-            : t('edit.versions.sourceUnknown', 'Made by a voice command');
+            : null;
     }, [activeVariantId, t, visibleImprovements]);
     const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
     const [showPromptBuilder, setShowPromptBuilder] = useState(false);
@@ -4616,7 +4620,10 @@ export const NoteEditScreen = () => {
         if (visibleImprovements.length === 0 || showSwipeHint) return;
         let cancelled = false;
         void getVersionSwipeHintSeen().then((seen) => {
-            if (!cancelled && !seen) setShowSwipeHint(true);
+            if (cancelled || seen) return;
+            // Counted as seen once shown: it stays for this visit, never again.
+            setShowSwipeHint(true);
+            void setVersionSwipeHintSeen();
         });
         return () => { cancelled = true; };
     }, [showSwipeHint, visibleImprovements.length]);
@@ -5396,8 +5403,8 @@ export const NoteEditScreen = () => {
                                     )[createdVersionId] || t('edit.improvement', 'Improvement');
                                     showVoiceEditSummary(
                                         madeList
-                                            ? t('edit.voiceEdit.listInNewVersion', 'Made a list in a new version, “{{version}}”. The original is unchanged.', { version: createdVersionName })
-                                            : t('edit.voiceEdit.changedInNewVersion', 'Changed in a new version, “{{version}}”. The original is unchanged.', { version: createdVersionName }),
+                                            ? t('edit.voiceEdit.listInNewVersion', 'List saved as “{{version}}”. Original kept.', { version: createdVersionName })
+                                            : t('edit.voiceEdit.changedInNewVersion', 'Changes saved as “{{version}}”. Original kept.', { version: createdVersionName }),
                                         // Removing the new version is itself undoable for a few seconds.
                                         async () => { await voiceEditToolsRef.current.requestDeleteVariant(createdVersionId); },
                                     );
@@ -7641,7 +7648,7 @@ export const NoteEditScreen = () => {
             {showSwipeHint && visibleImprovements.length > 0 && (
                 <View style={styles.swipeHint}>
                     <MaterialIcons name="swipe" size={16} color={colors.textTertiary} />
-                    <Text style={styles.swipeHintText}>{t('edit.versions.swipeHint', 'Swipe the text left or right to switch versions')}</Text>
+                    <Text style={styles.swipeHintText}>{t('edit.versions.swipeHint', 'Swipe the text to switch versions')}</Text>
                     <TouchableOpacity
                         onPress={dismissSwipeHint}
                         style={styles.swipeHintClose}
@@ -8578,12 +8585,6 @@ export const NoteEditScreen = () => {
                             accessibilityHint={agentModeIndicatorEnabled ? micHintText : undefined}
                         >
                             <MaterialIcons name="mic" size={28} color="white" />
-                            {/* Edit by voice is on: a small badge instead of curved 8px text. */}
-                            {agentModeIndicatorEnabled && voiceInputMode === 'edit' && (
-                                <View style={styles.micAgentBadge} pointerEvents="none">
-                                    <MaterialIcons name="auto-awesome" size={12} color={colors.primary} />
-                                </View>
-                            )}
                         </TouchableOpacity>
                     </View>
                 )
@@ -8716,7 +8717,8 @@ export const NoteEditScreen = () => {
                     actionLabel={t('edit.slowDevice.useCloud', 'Use cloud')}
                 />
             )}
-            {!undoMessage && !slowDeviceHint && (
+            {/* Hidden while recording: the panel takes that place (the notice stays). */}
+            {!undoMessage && !slowDeviceHint && !showVoiceRecorder && (
                 <InlineNotice
                     message={agentNotice?.message ?? null}
                     actions={agentNoticeActions}
@@ -9288,7 +9290,7 @@ const styles = createStyles(() => ({
         padding: 0,
     },
     metaInfo: {
-        marginBottom: spacing.l,
+        marginBottom: spacing.m,
     },
     metaRow: {
         flexDirection: 'row',
@@ -9301,7 +9303,8 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         gap: 2,
         paddingHorizontal: 8,
-        height: 22,
+        minHeight: 22,
+        paddingVertical: 2,
         borderRadius: 11,
         backgroundColor: colors.backgroundSecondary,
     },
@@ -9354,20 +9357,6 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    variantHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: spacing.s,
-        minHeight: 28,
-        marginBottom: spacing.xs,
-    },
-    variantHeaderTitle: {
-        flexShrink: 1,
-        fontSize: 13,
-        fontWeight: '600',
-        color: colors.textSecondary,
-    },
     variantLinkButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -9375,6 +9364,10 @@ const styles = createStyles(() => ({
         minHeight: 28,
         paddingHorizontal: spacing.xs,
         marginEnd: -spacing.xs,
+    },
+    variantLinkStart: {
+        marginStart: -spacing.xs,
+        marginEnd: 0,
     },
     variantLinkText: {
         fontSize: 13,
@@ -9625,20 +9618,6 @@ const styles = createStyles(() => ({
     micFloatingRow: {
         flexDirection: 'row',
         gap: spacing.s,
-    },
-    // micHintBubble and micHintText removed
-    micAgentBadge: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.surface,
-        borderWidth: 1.5,
-        borderColor: colors.primaryLight,
     },
     micButton: {
         width: FLOATING_MIC_BUTTON_SIZE,

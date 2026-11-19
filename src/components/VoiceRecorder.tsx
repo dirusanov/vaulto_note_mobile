@@ -15,7 +15,9 @@ import { AudioService, AudioRecording, MAX_RECORDING_DURATION_MS, MAX_MEETING_DU
 import {
     AIProvider,
     getAIProvider,
+    getMicHintSeen,
     getTranscriptionEnabled,
+    setMicHintSeen,
     setTranscriptionEnabled
 } from '../utils/storage';
 import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
@@ -28,7 +30,7 @@ import { DISCARD_CONFIRM_AFTER_SECONDS, recorderBackAction } from '../utils/reco
 import NetInfo from '@react-native-community/netinfo';
 import { MicRoute, readMicRoute } from '../services/micRouteState';
 import type { VoiceInputMode } from '../utils/micRoute';
-import { MicRouteNote, VoiceModeSwitch } from './MicModeControls';
+import { MicRouteNote, micHintKind, routeLabel, routeShortLabel, VoiceModeSwitch } from './MicModeControls';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -173,6 +175,18 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     // Where this recording will be processed. Read again when "To text" or the
     // connection changes, so the line never promises a route that no longer applies.
     const [route, setRoute] = useState<MicRoute | null>(null);
+    // Details under a tap; the first recording of each kind explains itself once.
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [optionsOpen, setOptionsOpen] = useState(false);
+    const [firstUseKinds, setFirstUseKinds] = useState<string[]>([]);
+    const firstUseCheckedRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        if (visible) return;
+        setDetailsOpen(false);
+        setOptionsOpen(false);
+        setFirstUseKinds([]);
+        firstUseCheckedRef.current = new Set();
+    }, [visible]);
     const routeProtected = !!routeContext?.protectedNote;
     const routeSignedIn = !!routeContext?.signedIn;
     const hasRouteContext = !!routeContext;
@@ -720,6 +734,38 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 ? 'dictate'
                 : null;
 
+    // One calm layer above the bar: the explanation card shows on its own only
+    // when it matters (the first recording of each kind, a warning, the discard
+    // question, a spoken instruction); otherwise it is one tap on the route line.
+    const hintKind = micHintKind({
+        route,
+        mode: shownMode,
+        meeting: meetingMode && transcribe,
+        transcribe: transcribe || micMode === 'force_text',
+    });
+    // Explain each kind of recording the first time it is made, then keep it
+    // for the rest of that recording so the panel does not change under you.
+    useEffect(() => {
+        if (!visible || !hintKind || isInstruction || !hasRouteContext || !route) return;
+        if (firstUseCheckedRef.current.has(hintKind)) return;
+        firstUseCheckedRef.current.add(hintKind);
+        void getMicHintSeen(hintKind).then((seen) => {
+            if (seen) return;
+            setFirstUseKinds((prev) => (prev.includes(hintKind) ? prev : [...prev, hintKind]));
+            void setMicHintSeen(hintKind);
+        });
+    }, [visible, hintKind, isInstruction, hasRouteContext, route]);
+    const routeInfo = route ? routeLabel(t, route.transcription, route.cloudFallback) : null;
+    const showRouteCaption = hasRouteContext && !isInstruction;
+    const detailsShown = !!confirmDiscard
+        || isInstruction
+        || detailsOpen
+        || (!!hintKind && firstUseKinds.includes(hintKind))
+        || routeInfo?.tone === 'warning';
+    // "Meeting" and "To text" fold away behind one button while the mode switch
+    // is shown; turning either on brings the chips back (the switch then hides).
+    const optionsFolded = showModeSwitch && !optionsOpen;
+
     return (
         <Modal
             visible={visible && (!autoStart || isRecording || permissionSettled)}
@@ -733,14 +779,29 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 pointerEvents="box-none"
             >
                 <View style={styles.container} pointerEvents="box-none">
-                    {/* Dictate / Edit by voice: applies when the recording finishes,
-                        so it can still be switched while speaking. */}
-                    {showModeSwitch && voiceMode && onVoiceModeChange && (
-                        <VoiceModeSwitch value={voiceMode} onChange={onVoiceModeChange} />
+                    {/* Where it is processed and what happens on Done: shown on its own
+                        only when it matters, otherwise one tap on the route line. */}
+                    {detailsShown && (
+                        <MicRouteNote
+                            route={route}
+                            mode={shownMode}
+                            // The bar already names the route; the full line only on request or a warning.
+                            showRoute={hasRouteContext && !isInstruction && (detailsOpen || routeInfo?.tone === 'warning')}
+                            alert={confirmDiscard ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording") : null}
+                            outcome={isInstruction
+                                ? t("voice.instructionHint", "When you finish, the instruction appears in the field")
+                                : meetingMode && transcribe
+                                    ? t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")
+                                    : !hasRouteContext
+                                        ? (transcribe || micMode === 'force_text'
+                                            ? t("voice.toTextHint", "When you finish, the recording becomes text")
+                                            : t("voice.audioOnlyHint", "Saved as audio only, without text"))
+                                        : null}
+                        />
                     )}
 
-                    {/* Toggles Row */}
-                    {!isInstruction && (
+                    {/* Meeting / To text */}
+                    {!isInstruction && !optionsFolded && (
                     <View style={styles.togglesRow}>
                         {/* Joining meeting parts is Android-only for now (native AudioConcat). */}
                         {micMode !== 'force_text' && Platform.OS === 'android' && (
@@ -817,22 +878,30 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     </View>
                     )}
 
-                    {/* Where it is processed and what happens on Done, so the choices above explain themselves. */}
-                    <MicRouteNote
-                        route={route}
-                        mode={shownMode}
-                        showRoute={hasRouteContext && !isInstruction}
-                        alert={confirmDiscard ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording") : null}
-                        outcome={isInstruction
-                            ? t("voice.instructionHint", "When you finish, the instruction appears in the field")
-                            : meetingMode && transcribe
-                                ? t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")
-                                : !hasRouteContext
-                                    ? (transcribe || micMode === 'force_text'
-                                        ? t("voice.toTextHint", "When you finish, the recording becomes text")
-                                        : t("voice.audioOnlyHint", "Saved as audio only, without text"))
-                                    : null}
-                    />
+                    {/* Dictate / Edit by voice (applies when the recording finishes, so it
+                        can still be switched while speaking), with the other options folded. */}
+                    {showModeSwitch && voiceMode && onVoiceModeChange && (
+                        <View style={styles.modeRow}>
+                            <VoiceModeSwitch value={voiceMode} onChange={onVoiceModeChange} />
+                            <TouchableOpacity
+                                style={[styles.optionsButton, optionsOpen && styles.optionsButtonOpen]}
+                                onPress={() => {
+                                    haptics.selection();
+                                    setOptionsOpen((prev) => !prev);
+                                }}
+                                activeOpacity={0.75}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: optionsOpen }}
+                                accessibilityLabel={t('voice.moreOptions', 'Recording options')}
+                            >
+                                <MaterialIcons
+                                    name="tune"
+                                    size={20}
+                                    color={optionsOpen ? colors.primary : colors.textSecondary}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {/* Inline Warning Banner */}
                     {showModelMissingWarning && (
@@ -862,6 +931,21 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             />
                         </TouchableOpacity>
 
+                        {/* Timer and waveform, with where the recording goes underneath:
+                            tap for what happens on Done. */}
+                        <TouchableOpacity
+                            style={styles.centerColumn}
+                            onPress={showRouteCaption ? () => {
+                                haptics.selection();
+                                setDetailsOpen((prev) => !prev);
+                            } : undefined}
+                            disabled={!showRouteCaption}
+                            activeOpacity={0.6}
+                            accessibilityRole={showRouteCaption ? 'button' : undefined}
+                            accessibilityState={showRouteCaption ? { expanded: detailsShown } : undefined}
+                            accessibilityLabel={showRouteCaption && routeInfo ? routeInfo.text : undefined}
+                            accessibilityHint={showRouteCaption ? t('voice.routeDetailsHint', 'Shows what happens to the recording') : undefined}
+                        >
                         <View style={styles.centerSection}>
                             <Text style={[styles.timerCompact, isMainScreen && styles.timerCompactLarge, isPaused && { color: colors.error }]}>
                                 {formatDuration(duration)}
@@ -882,6 +966,28 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 ))}
                             </View>
                         </View>
+                        {showRouteCaption && (
+                            // Kept in place while the route is read, so nothing jumps.
+                            <View style={[styles.routeCaption, !routeInfo && styles.invisible]}>
+                                <MaterialIcons
+                                    name={routeInfo?.icon ?? 'cloud-queue'}
+                                    size={13}
+                                    color={routeInfo?.tone === 'warning' ? colors.warning : colors.textTertiary}
+                                />
+                                <Text
+                                    style={[styles.routeCaptionText, routeInfo?.tone === 'warning' && styles.routeCaptionWarning]}
+                                    numberOfLines={1}
+                                >
+                                    {route ? routeShortLabel(t, route.transcription) : ' '}
+                                </Text>
+                                <MaterialIcons
+                                    name={detailsShown ? 'expand-more' : 'info-outline'}
+                                    size={13}
+                                    color={colors.textTertiary}
+                                />
+                            </View>
+                        )}
+                        </TouchableOpacity>
 
                         <TouchableOpacity
                             style={styles.pauseButtonCompact}
@@ -1002,8 +1108,59 @@ const styles = createStyles(() => ({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    centerSection: {
+    centerColumn: {
         flex: 1,
+        alignSelf: 'stretch',
+        justifyContent: 'center',
+        minHeight: 48,
+    },
+    routeCaption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: spacing.s,
+        marginTop: -2,
+    },
+    routeCaptionText: {
+        ...typography.caption,
+        fontSize: 12,
+        lineHeight: 16,
+        color: colors.textSecondary,
+        flexShrink: 1,
+    },
+    routeCaptionWarning: {
+        color: colors.warning,
+    },
+    invisible: {
+        opacity: 0,
+    },
+    modeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.s,
+        alignSelf: 'stretch',
+        marginBottom: spacing.s,
+    },
+    optionsButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    optionsButtonOpen: {
+        borderColor: colors.primary,
+    },
+    centerSection: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: spacing.s,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { PixelRatio, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -46,6 +46,40 @@ export const routeLabel = (
     }
 };
 
+/** The route in two or three words, for the line under the recorder's timer. */
+export const routeShortLabel = (t: TFunction, route: TranscriptionRoute): string => {
+    switch (route) {
+        case 'audio_only': return t('voice.routeShort.audioOnly', 'Audio only');
+        case 'device_private': return t('voice.routeShort.devicePrivate', 'Only on this phone');
+        case 'device_model_missing': return t('voice.routeShort.deviceModelMissing', 'No speech model');
+        case 'device_offline': return t('voice.routeShort.deviceOffline', 'Offline · on this phone');
+        case 'device': return t('voice.routeShort.device', 'On this phone');
+        case 'later': return t('voice.routeShort.later', 'Text when online');
+        case 'custom': return t('voice.routeShort.custom', 'Your AI service');
+        case 'cloud':
+        default: return t('voice.routeShort.cloud', 'Vaulto cloud');
+    }
+};
+
+/**
+ * Which explanation the recorder would show: one per kind of recording, so
+ * each is shown on its own once. Warnings (no text yet) are not one-time.
+ */
+export const micHintKind = ({ route, mode, meeting, transcribe }: {
+    route: MicRoute | null;
+    mode: VoiceInputMode | null;
+    meeting: boolean;
+    transcribe: boolean;
+}): string | null => {
+    if (!route) return null;
+    if (route.transcription === 'later' || route.transcription === 'device_model_missing') return null;
+    if (!transcribe || route.transcription === 'audio_only') return 'audioOnly';
+    if (meeting) return 'meeting';
+    if (mode === 'edit') return route.agent === 'device' ? 'editDevice' : 'editCloud';
+    if (mode === 'dictate') return 'dictate';
+    return 'toText';
+};
+
 /** What Done will do with the words, for the chosen mode and route. */
 export const outcomeText = (
     t: TFunction,
@@ -90,9 +124,11 @@ export const VoiceModeSwitch = ({
     large?: boolean;
 }) => {
     const { t } = useTranslation();
+    // Large text: the words matter more than the icons, and may take two lines.
+    const bigText = PixelRatio.getFontScale() >= 1.3;
     return (
         <View
-            style={[styles.segments, large && styles.segmentsLarge]}
+            style={[styles.segments, large && styles.segmentsLarge, bigText && styles.segmentsBigText]}
             accessibilityRole="radiogroup"
             accessibilityLabel={t('voice.mode.label', 'Microphone mode')}
         >
@@ -101,7 +137,7 @@ export const VoiceModeSwitch = ({
                 return (
                     <TouchableOpacity
                         key={mode}
-                        style={[styles.segment, selected && styles.segmentSelected]}
+                        style={[styles.segment, selected && styles.segmentSelected, bigText && styles.segmentBigText]}
                         onPress={() => {
                             if (selected) return;
                             haptics.selection();
@@ -115,14 +151,18 @@ export const VoiceModeSwitch = ({
                             ? t('voice.mode.dictateHint', 'Words go into the note as spoken')
                             : t('voice.mode.editHint', 'Requests change the note; other speech goes in as text')}
                     >
-                        <MaterialIcons
-                            name={MODE_ICON[mode]}
-                            size={16}
-                            color={selected ? colors.onPrimary : colors.textSecondary}
-                        />
+                        {!bigText && (
+                            <MaterialIcons
+                                name={MODE_ICON[mode]}
+                                size={16}
+                                color={selected ? colors.onPrimary : colors.textSecondary}
+                            />
+                        )}
                         <Text
                             style={[styles.segmentText, selected && styles.segmentTextSelected]}
                             numberOfLines={1}
+                            adjustsFontSizeToFit={bigText}
+                            minimumFontScale={0.7}
                         >
                             {modeLabel(t, mode)}
                         </Text>
@@ -213,7 +253,9 @@ export const VoiceModePill = ({
             <Text style={styles.pillText} numberOfLines={1}>
                 {modeLabel(t, mode)}
             </Text>
-            <MaterialIcons name="swap-horiz" size={16} color={colors.textTertiary} />
+            {PixelRatio.getFontScale() < 1.3 && (
+                <MaterialIcons name="swap-horiz" size={16} color={colors.textTertiary} />
+            )}
         </TouchableOpacity>
     );
 };
@@ -230,7 +272,7 @@ const styles = createStyles(() => ({
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
-        marginBottom: spacing.s,
+        flexShrink: 1,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
@@ -247,8 +289,16 @@ const styles = createStyles(() => ({
         flexShrink: 1,
         minHeight: 44,
         paddingHorizontal: 14,
+        paddingVertical: 4,
         borderRadius: 21,
         gap: 6,
+    },
+    segmentsBigText: {
+        flex: 1,
+    },
+    segmentBigText: {
+        flex: 1,
+        paddingHorizontal: spacing.s,
     },
     segmentSelected: {
         backgroundColor: colors.primary,
@@ -258,6 +308,7 @@ const styles = createStyles(() => ({
         fontSize: 13,
         color: colors.textSecondary,
         flexShrink: 1,
+        textAlign: 'center',
     },
     segmentTextSelected: {
         color: colors.onPrimary,
@@ -267,9 +318,10 @@ const styles = createStyles(() => ({
         maxWidth: '100%',
         backgroundColor: colors.surface,
         borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
         paddingHorizontal: spacing.m,
-        paddingVertical: 8,
-        marginTop: -spacing.xs,
+        paddingVertical: spacing.s,
         marginBottom: spacing.s,
         gap: 2,
     },
@@ -302,7 +354,7 @@ const styles = createStyles(() => ({
     pill: {
         flexDirection: 'row',
         alignItems: 'center',
-        maxWidth: 260,
+        maxWidth: 300,
         minHeight: 36,
         paddingHorizontal: 12,
         borderRadius: 18,

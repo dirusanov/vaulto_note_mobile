@@ -65,6 +65,7 @@ const LOCAL_WHISPER_MODEL_KEY = 'vaulto_local_whisper_model_v1';
 const TRANSCRIPTION_LANGUAGE_KEY = 'vaulto_transcription_language_v1';
 const LOCAL_LLM_MODEL_KEY = 'vaulto_local_llm_model_v1';
 const VERSION_SWIPE_HINT_SEEN_KEY = 'vaulto_version_swipe_hint_seen_v1';
+const MIC_HINT_SEEN_KEY_PREFIX = 'vaulto_mic_hint_seen_v1_';
 // NOTE: legacy App Lock keys may still exist on user devices, but the feature was removed.
 
 // Helper for SecureStore with web fallback (since SecureStore doesn't support web)
@@ -1131,6 +1132,23 @@ export const getVersionSwipeHintSeen = async (): Promise<boolean> => {
         return (await AsyncStorage.getItem(VERSION_SWIPE_HINT_SEEN_KEY)) === '1';
     } catch {
         return true;
+    }
+};
+
+/** The recorder explains each kind of recording (dictate, edit by voice, …) once. */
+export const getMicHintSeen = async (kind: string): Promise<boolean> => {
+    try {
+        return (await AsyncStorage.getItem(MIC_HINT_SEEN_KEY_PREFIX + kind)) === '1';
+    } catch {
+        return true;
+    }
+};
+
+export const setMicHintSeen = async (kind: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(MIC_HINT_SEEN_KEY_PREFIX + kind, '1');
+    } catch {
+        // The explanation may simply show once more.
     }
 };
 

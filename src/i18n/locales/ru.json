@@ -669,9 +669,7 @@
       "rename": "Переименовать",
       "renameTitle": "Переименовать версию",
       "renamePlaceholder": "Название версии",
-      "swipeHint": "Проведите по тексту влево или вправо, чтобы переключать версии",
-      "headerCount": "Версии ({{count}})",
-      "showAll": "Все",
+      "swipeHint": "Проведите по тексту, чтобы сменить версию",
       "showAllA11y": "Показать все версии: {{count}}",
       "basedOn": "На основе:",
       "basedOnA11y": "На основе: {{name}}",
@@ -682,8 +680,6 @@
       "compareShort": "Сравнить",
       "compareA11y": "Сравнить эту версию с источником",
       "compareWithSource": "Сравнить с источником",
-      "originalCaption": "Ваш текст. Результаты ИИ сохраняются как версии.",
-      "sourceUnknown": "Создана голосовой командой",
       "previousOriginalCaption": "Основной текст до замены другой версией",
       "compareChangesTitle": "Что изменилось",
       "compareWith": "Сравнить с",
@@ -696,7 +692,8 @@
       "previousChange": "Предыдущее изменение",
       "nextChange": "Следующее изменение",
       "previousShort": "Назад",
-      "nextShort": "Далее"
+      "nextShort": "Далее",
+      "compareWithOriginal": "Сравнить с оригиналом"
     },
     "tasks": {
       "find": "Найти задачи",
@@ -801,8 +798,8 @@
     },
     "voiceEdit": {
       "renamed": "Заметка переименована: «{{title}}»",
-      "listInNewVersion": "Список — в новой версии «{{version}}». Оригинал не изменился.",
-      "changedInNewVersion": "Изменения — в новой версии «{{version}}». Оригинал не изменился.",
+      "listInNewVersion": "Список сохранён как «{{version}}». Оригинал не тронут.",
+      "changedInNewVersion": "Изменения сохранены как «{{version}}». Оригинал не тронут.",
       "listUpdatedIn": "Список обновлён в версии «{{version}}»",
       "changedIn": "Изменена версия «{{version}}»",
       "checkedIn": "Пункты отмечены в версии «{{version}}»",
@@ -882,7 +879,19 @@
       "switchTo": "Дважды коснитесь, чтобы переключить на «{{mode}}»",
       "micHintEdit": "Изменить голосом: просьбы меняют заметку. Удерживайте, чтобы один раз просто надиктовать.",
       "micHintDictate": "Диктовать: слова попадут в заметку как сказаны."
-    }
+    },
+    "routeShort": {
+      "audioOnly": "Только аудио",
+      "devicePrivate": "Только на телефоне",
+      "deviceModelMissing": "Нет модели речи",
+      "deviceOffline": "Без сети · на телефоне",
+      "device": "На телефоне",
+      "later": "Текст — при сети",
+      "custom": "Ваш ИИ-сервис",
+      "cloud": "Облако Vaulto"
+    },
+    "routeDetailsHint": "Показывает, что будет с записью",
+    "moreOptions": "Параметры записи"
   },
   "aux": {
     "emailVerified": "Email подтвержден!",
@@ -1009,7 +1018,7 @@
     "transcriptionLimitTitle": "Достигнут лимит транскрипции",
     "transcriptionLimitDescDate": "Вы израсходовали все минуты транскрипции PRO за этот период. Лимит обновится {{date}}.",
     "transcriptionLimitDescNoDate": "Вы израсходовали все минуты транскрипции PRO за этот период. Лимит обновится в начале следующего расчётного периода.",
-    "maybeLater": "Может быть, позже",
+    "maybeLater": "Не сейчас",
     "privacyTitle": "Конфиденциальность",
     "disableEncryptionFailed": "Не удалось отключить шифрование.",
     "changeAccessKeyFailed": "Не удалось сменить ключ доступа.",
