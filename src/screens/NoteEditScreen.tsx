@@ -61,6 +61,15 @@ import {
 } from '../utils/taskExtraction';
 import { markdownToTiptapHtml } from '../utils/tiptapMarkdownAdapter';
 import { CompareVersionsModal } from '../components/CompareVersionsModal';
+import {
+    VERSIONS_HEADER_MIN_COUNT,
+    compareBasesFor,
+    defaultImproveSource,
+    parentStepsOfLabel,
+    resolveVersionSource,
+} from '../utils/versionLineage';
+import { loadVersionSources, recordVersionSource } from '../services/versionSources';
+import { IMPROVE_LABEL_MAX_FONT_SCALE, editorHeaderLayout } from '../utils/toolbarLayout';
 import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
 import { notesPendingDelete } from '../utils/notesPendingDelete';
 
@@ -557,6 +566,9 @@ const MemoizedImprovementChips = memo(({
     onOpenAllVersions,
     optionIcons,
     displayLabels,
+    source,
+    unknownSourceCaption,
+    onCompare,
 }: {
     noteImprovements: any[],
     activeVariantId: string,
@@ -566,6 +578,14 @@ const MemoizedImprovementChips = memo(({
     optionIcons: Record<string, string>,
     /** variant id -> localized step label ("Summarize", "Professional → Summarize"). */
     displayLabels: Record<string, string>,
+    /**
+     * What the open version was made from: a version id or 'original' (tappable),
+     * or only a name when that version is gone. Null on the original.
+     */
+    source: { id: string | null; label: string } | null,
+    /** Shown instead when the open version's source is not known. */
+    unknownSourceCaption: string,
+    onCompare: () => void,
 }) => {
     const { t } = useTranslation();
     const scrollRef = useRef<any>(null);
@@ -601,10 +621,12 @@ const MemoizedImprovementChips = memo(({
     }, []);
 
     // Switching a variant first flushes the editor and saves the draft, so the
-    // real active id lands a few hundred ms after the tap. Highlight the tapped
-    // chip immediately instead of leaving the row looking unresponsive.
+    // real active id lands a few hundred ms after the tap. The highlight stays on
+    // the version whose text is on screen until then; the tapped chip shows a
+    // small spinner in place of its icon, so the row still answers the tap.
     const [pendingVariantId, setPendingVariantId] = useState<string | null>(null);
-    const selectedVariantId = pendingVariantId ?? activeVariantId;
+    const selectedVariantId = activeVariantId;
+    const pendingId = pendingVariantId !== activeVariantId ? pendingVariantId : null;
     // Fades on the edges where versions are scrolled out of view, so a chip
     // cut by the edge reads as "more this way" rather than as a broken label.
     const [hiddenEdges, setHiddenEdges] = useState({ start: false, end: false });
@@ -636,16 +658,38 @@ const MemoizedImprovementChips = memo(({
     }, [selectedVariantId, noteImprovements.length, revealChip]);
 
     const selectVariant = useCallback((variantId: string) => {
-        if (variantId === selectedVariantId) return;
+        if (variantId === selectedVariantId || variantId === pendingVariantId) return;
         void Haptics.selectionAsync().catch(() => undefined);
         setPendingVariantId(variantId);
         handleVariantSelect(variantId);
-    }, [selectedVariantId, handleVariantSelect]);
+    }, [selectedVariantId, pendingVariantId, handleVariantSelect]);
 
     if (noteImprovements.length === 0) return null;
     const originalActive = selectedVariantId === 'original';
+    const versionCount = noteImprovements.length + 1;
+    const showHeader = versionCount >= VERSIONS_HEADER_MIN_COUNT;
+    const sourceTappable = !!source?.id && source.id !== pendingId;
     return (
-        <View style={[styles.variantContainer, styles.variantRow]}>
+        <View style={styles.variantContainer}>
+        {showHeader && (
+            // Many versions: name the row and give the full list a visible way in.
+            <View style={styles.variantHeaderRow}>
+                <Text style={styles.variantHeaderTitle} accessibilityRole="header" numberOfLines={1}>
+                    {t('edit.versions.headerCount', 'Versions ({{count}})', { count: versionCount })}
+                </Text>
+                <TouchableOpacity
+                    onPress={onOpenAllVersions}
+                    style={styles.variantLinkButton}
+                    hitSlop={VERSION_LINK_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('edit.versions.showAllA11y', 'Show all {{count}} versions', { count: versionCount })}
+                >
+                    <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.showAll', 'Show all')}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={colors.primary} style={rtlFlip} />
+                </TouchableOpacity>
+            </View>
+        )}
+        <View style={styles.variantRow}>
             {/* One segmented track, like the theme switch in Settings: the open
                 version is the raised white segment. */}
             <View style={styles.variantTrack}>
@@ -655,15 +699,19 @@ const MemoizedImprovementChips = memo(({
                 onPress={() => selectVariant('original')}
                 hitSlop={CHIP_HIT_SLOP}
                 accessibilityRole="button"
-                accessibilityState={{ selected: originalActive }}
+                accessibilityState={{ selected: originalActive, busy: pendingId === 'original' }}
                 accessibilityLabel={t("a11y.originalVersion", "Original version")}
             >
-                <MaterialIcons
-                    name="article"
-                    size={14}
-                    color={originalActive ? colors.text : colors.textSecondary}
-                    style={styles.variantChipIcon}
-                />
+                {pendingId === 'original' ? (
+                    <ChipSpinner />
+                ) : (
+                    <MaterialIcons
+                        name="article"
+                        size={14}
+                        color={originalActive ? colors.text : colors.textSecondary}
+                        style={styles.variantChipIcon}
+                    />
+                )}
                 <Text style={[styles.variantChipText, originalActive && styles.variantChipTextActive]}>
                     {t("edit.original")}
                 </Text>
@@ -696,6 +744,7 @@ const MemoizedImprovementChips = memo(({
             >
                 {noteImprovements.map((imp: any, index: number) => {
                     const isActive = selectedVariantId === imp.id;
+                    const isPending = pendingId === imp.id;
                     const chipIcon = variantIconFor(imp, optionIcons);
                     const chipLabel = displayLabels[imp.id] || `${t("edit.improvement")} ${index + 1}`;
                     const hasCustomName = !!userVariantName(imp.title);
@@ -717,7 +766,7 @@ const MemoizedImprovementChips = memo(({
                                 onLongPress={onOpenAllVersions}
                                 delayLongPress={400}
                                 accessibilityRole="button"
-                                accessibilityState={{ selected: isActive }}
+                                accessibilityState={{ selected: isActive, busy: isPending }}
                                 accessibilityLabel={chipLabel}
                             >
                                 {!hasCustomName && isDerivedLabel(chipLabel) && (
@@ -728,12 +777,16 @@ const MemoizedImprovementChips = memo(({
                                         color={isActive ? colors.text : colors.textSecondary}
                                     />
                                 )}
-                                <MaterialIcons
-                                    name={chipIcon as any}
-                                    size={14}
-                                    color={isActive ? colors.text : colors.textSecondary}
-                                    style={styles.variantChipIcon}
-                                />
+                                {isPending ? (
+                                    <ChipSpinner />
+                                ) : (
+                                    <MaterialIcons
+                                        name={chipIcon as any}
+                                        size={14}
+                                        color={isActive ? colors.text : colors.textSecondary}
+                                        style={styles.variantChipIcon}
+                                    />
+                                )}
                                 <Text
                                     numberOfLines={1}
                                     style={[
@@ -754,7 +807,7 @@ const MemoizedImprovementChips = memo(({
             </View>
             {/* Renaming and deleting live in the full list (with undo), not on the
                 chips, where a stray tap could remove a version. */}
-            {noteImprovements.length >= 1 && (
+            {!showHeader && (
                 <TouchableOpacity
                     style={styles.variantAllButton}
                     onPress={onOpenAllVersions}
@@ -767,8 +820,63 @@ const MemoizedImprovementChips = memo(({
                 </TouchableOpacity>
             )}
         </View>
+        {/* What the open text is, in one line: the original, or the version it
+            was made from (tap to open that one). Always present, so switching
+            versions does not move the text up or down. */}
+        <View style={styles.variantSourceRow}>
+            {source ? (
+                <>
+                    <TouchableOpacity
+                        style={styles.variantSourceMain}
+                        onPress={sourceTappable ? () => selectVariant(source.id as string) : undefined}
+                        disabled={!sourceTappable}
+                        hitSlop={VERSION_LINK_HIT_SLOP}
+                        accessibilityRole={sourceTappable ? 'button' : 'text'}
+                        accessibilityLabel={t('edit.versions.basedOnA11y', 'Based on: {{name}}', { name: source.label })}
+                        accessibilityHint={sourceTappable ? t('edit.versions.basedOnHint', 'Opens that version') : undefined}
+                    >
+                        <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textSecondary} style={rtlFlip} />
+                        <Text style={styles.variantSourceText} numberOfLines={1}>
+                            {t('edit.versions.basedOn', 'Based on:')}{' '}
+                            <Text style={sourceTappable ? styles.variantSourceName : styles.variantSourceNameStatic}>{source.label}</Text>
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={onCompare}
+                        style={styles.variantLinkButton}
+                        hitSlop={VERSION_LINK_HIT_SLOP}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('edit.versions.compareA11y', 'Compare this version with its source')}
+                    >
+                        <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
+                        <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
+                    </TouchableOpacity>
+                </>
+            ) : (
+                <View style={styles.variantSourceMain}>
+                    <MaterialIcons name={originalActive ? 'lock-outline' : 'help-outline'} size={14} color={colors.textTertiary} />
+                    <Text style={styles.variantSourceText} numberOfLines={1}>
+                        {originalActive
+                            ? t('edit.versions.originalCaption', 'Your text. Versions never change it.')
+                            : unknownSourceCaption}
+                    </Text>
+                </View>
+            )}
+        </View>
+        </View>
     );
 });
+
+/** Same footprint as a chip icon, so a pending chip does not change width. */
+const ChipSpinner = () => (
+    <View style={[styles.variantChipIcon, styles.variantChipSpinner]}>
+        {/* "small" is 20pt on both platforms (a numeric size is Android-only). */}
+        <ActivityIndicator size="small" color={colors.textSecondary} style={{ transform: [{ scale: 0.65 }] }} />
+    </View>
+);
+
+/** Small text links reach a 44pt target without a taller row. */
+const VERSION_LINK_HIT_SLOP = { top: 8, bottom: 8, left: 4, right: 4 };
 
 const buildAgentImprovementLabel = (
     primaryTitle?: string | null,
@@ -878,9 +986,13 @@ const subscribeNoteProcessingState = (
 
 export const NoteEditScreen = () => {
     // On a phone all header buttons (with Undo/Redo shown) only fit without gaps.
-    const { width: windowWidth } = useWindowDimensions();
+    const { width: windowWidth, fontScale } = useWindowDimensions();
     const compactHeader = windowWidth < 480;
     const { t, i18n } = useTranslation();
+    const headerLayout = useMemo(
+        () => editorHeaderLayout(windowWidth, fontScale, t('edit.improveAction', 'Improve')),
+        [fontScale, t, windowWidth]
+    );
     const AGENT_HISTORY_LIMIT = 5;
     // Outer safety net only. It must stay above the inner deadlines
     // (transcription + agent), otherwise it aborts work that is still healthy.
@@ -1041,7 +1153,9 @@ export const NoteEditScreen = () => {
     });
     // Which text a preset runs on while a version is open; results are always saved
     // as a new version, so choosing "this version" never overwrites anything.
-    const [improveSource, setImproveSource] = useState<'original' | 'current'>('original');
+    /** The version Improve runs on: 'original' or a version id (the one being read by default). */
+    const [improveSource, setImproveSource] = useState<string>('original');
+    const [showImproveSourcePicker, setShowImproveSourcePicker] = useState(false);
     // Deleting a version hides it at once and only deletes after the undo window.
     const [hiddenVariantIds, setHiddenVariantIds] = useState<string[]>([]);
     const hiddenVariantIdsRef = useRef<string[]>([]);
@@ -1410,6 +1524,43 @@ export const NoteEditScreen = () => {
         () => buildVariantDisplayLabels(visibleImprovements, t, aiOptionsById, (index) => `${t("edit.improvement")} ${index + 1}`),
         [aiOptionsById, t, visibleImprovements]
     );
+    // Which version each version was made from (recorded on this device).
+    const [knownVersionSources, setKnownVersionSources] = useState<Record<string, string>>({});
+    useEffect(() => {
+        let cancelled = false;
+        void loadVersionSources().then((sources) => {
+            if (!cancelled) setKnownVersionSources({ ...sources });
+        });
+        return () => { cancelled = true; };
+    }, []);
+    const rememberVersionSource = useCallback((versionId: string, sourceId: string) => {
+        setKnownVersionSources((prev) => ({ ...prev, [versionId]: sourceId }));
+        void recordVersionSource(versionId, sourceId);
+    }, []);
+    const versionLabelOf = useCallback((variantId: string): string => (
+        variantId === 'original'
+            ? t('edit.original', 'Original')
+            : (variantDisplayLabels[variantId] || t('edit.versions.thisVersion', 'This version'))
+    ), [t, variantDisplayLabels]);
+    /** The open version's source for the versions bar: id + name, a name only, or null. */
+    const sourceOfVersion = useCallback((variantId: string): { id: string | null; label: string } | null => {
+        if (variantId === 'original') return null;
+        const sourceId = resolveVersionSource(variantId, visibleImprovements, {
+            optionsById: aiOptionsById,
+            knownSources: knownVersionSources,
+        });
+        if (sourceId) return { id: sourceId, label: versionLabelOf(sourceId) };
+        // Deleted source still named in the chain ("Professional → Summarize").
+        const parentName = parentStepsOfLabel(variantDisplayLabels[variantId] || '');
+        return parentName ? { id: null, label: parentName } : null;
+    }, [aiOptionsById, knownVersionSources, variantDisplayLabels, versionLabelOf, visibleImprovements]);
+    const activeVersionSource = useMemo(() => sourceOfVersion(activeVariantId), [activeVariantId, sourceOfVersion]);
+    const activeVersionUnknownCaption = useMemo(() => {
+        const imp = visibleImprovements.find((item: any) => item.id === activeVariantId);
+        return imp?.option_id === PREVIOUS_ORIGINAL_OPTION_ID
+            ? t('edit.versions.previousOriginalCaption', 'The main text before another version replaced it')
+            : t('edit.versions.sourceUnknown', 'Made by a voice command');
+    }, [activeVariantId, t, visibleImprovements]);
     const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
     const [showPromptBuilder, setShowPromptBuilder] = useState(false);
     const [newPromptTitle, setNewPromptTitle] = useState('');
@@ -1519,6 +1670,8 @@ export const NoteEditScreen = () => {
         variantId: string;
     } | null>(null);
     const [isPreviewRegenerating, setIsPreviewRegenerating] = useState(false);
+    /** The AI result against the text it was made from, opened from the preview. */
+    const [showPreviewCompare, setShowPreviewCompare] = useState(false);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
         const originalErrorMsg = getErrorMessage(errorValue, '');
         const raw = originalErrorMsg.toLowerCase();
@@ -5088,6 +5241,7 @@ export const NoteEditScreen = () => {
                                         optionId: agentOptionId,
                                     });
                                     derivedVariantBySourceRef.current[task.targetVariantId || 'original'] = improvement.id;
+                                    rememberVersionSource(improvement.id, task.targetVariantId || 'original');
 
                                     improvementDraftsRef.current[improvement.id] = newText;
                                     improvementSavedRef.current[improvement.id] = newText;
@@ -6369,10 +6523,12 @@ export const NoteEditScreen = () => {
             text: getLocalizedPresetLabel(option, t) || t('edit.improvePreview.working'),
             isTranscribing: false,
         });
-        // The version the preset runs on: the original unless the user chose the open version.
-        const variantAtRequestStart = activeVariantIdRef.current !== 'original' && improveSource === 'current'
-            ? activeVariantIdRef.current
-            : 'original';
+        // The version the preset runs on: the one shown as "Based on" (by default
+        // the one being read). A version deleted meanwhile falls back to the original.
+        const variantAtRequestStart = defaultImproveSource(
+            improveSource,
+            visibleImprovements.map((imp: any) => imp.id),
+        );
         try {
             const consentGranted = await requestPrivateAIConsent();
             if (!consentGranted) {
@@ -6491,6 +6647,7 @@ export const NoteEditScreen = () => {
                 label: improvementLabel || undefined,
                 optionId: option.id,
             });
+            rememberVersionSource(improvement.id, variantAtRequestStart);
             improvementDraftsRef.current[improvement.id] = finalText;
             improvementSavedRef.current[improvement.id] = finalText;
             improvementTitleDraftsRef.current[improvement.id] = improvementTitle;
@@ -6530,11 +6687,13 @@ export const NoteEditScreen = () => {
     const handlePreviewAccept = async () => {
         const preview = improvementPreview;
         if (!preview) return;
+        setShowPreviewCompare(false);
         setImprovementPreview(null);
         await commitImprovement(preview.option, preview.resultText, preview.variantId);
     };
 
     const handlePreviewDiscard = useCallback(() => {
+        setShowPreviewCompare(false);
         setImprovementPreview(null);
     }, []);
 
@@ -7243,6 +7402,18 @@ export const NoteEditScreen = () => {
         setTopPlayer({ uri: latestRecording.file_path, duration: latestRecording.duration });
     }, [clearInlineEditorAudio, latestRecording, topPlayer]);
 
+    // Improve starts from the version being read, never silently from the original.
+    const openImprove = () => {
+        void handleAiAccess(() => {
+            setImproveSource(defaultImproveSource(activeVariantIdRef.current, visibleImprovements.map((imp: any) => imp.id)));
+            setShowImproveSourcePicker(false);
+            setShowAIModal(true);
+        });
+    };
+    const openCompareForActive = useCallback(() => {
+        void flushVisualEditorContent().finally(() => setShowCompareVersions(true));
+    }, [flushVisualEditorContent]);
+
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
@@ -7280,6 +7451,9 @@ export const NoteEditScreen = () => {
                 onOpenAllVersions={openVersionsSheet}
                 optionIcons={improvementOptionIcons}
                 displayLabels={variantDisplayLabels}
+                source={activeVersionSource}
+                unknownSourceCaption={activeVersionUnknownCaption}
+                onCompare={openCompareForActive}
             />
             {showSwipeHint && visibleImprovements.length > 0 && (
                 <View style={styles.swipeHint}>
@@ -7298,6 +7472,9 @@ export const NoteEditScreen = () => {
         </View>
     ), [
         activeVariantId,
+        activeVersionSource,
+        activeVersionUnknownCaption,
+        openCompareForActive,
         charCount,
         dateStr,
         handleHeaderTitleFocus,
@@ -7331,64 +7508,9 @@ export const NoteEditScreen = () => {
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                 </TouchableOpacity>
                 <View style={[styles.headerRight, compactHeader && styles.headerRightCompact]}>
-                    {/* Text Appearance Button */}
-                    <TouchableOpacity
-                        onPress={() => setShowAppearanceModal(true)}
-                        style={styles.iconButton}
-                        onLongPress={() => showToast(t("a11y.textAppearance", "Text appearance"), 1600)}
-                        accessibilityRole="button" accessibilityLabel={t("a11y.textAppearance", "Text appearance")}
-                    >
-                        <MaterialIcons name="text-fields" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    {/* AI Improvement Button */}
-                    <TouchableOpacity
-                        onPress={() => { void handleAiAccess(() => { setImproveSource('original'); setShowAIModal(true); }); }}
-                        style={[styles.iconButton, (!canUseAI || isAIProcessing || isProtected) && styles.disabledIcon]}
-                        disabled={isAIProcessing || !canUseAI}
-                        onLongPress={() => showToast(t("a11y.improveWithAI", "Improve with AI"), 1600)}
-                        accessibilityRole="button" accessibilityLabel={t("a11y.improveWithAI", "Improve with AI")}
-                        accessibilityState={{ disabled: isAIProcessing || !canUseAI, busy: isAIProcessing }}
-                    >
-                        {isAIProcessing ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
-                        ) : (
-                            <MaterialIcons
-                                name="auto-awesome"
-                                size={24}
-                                color={canUseAI ? colors.text : colors.textMuted}
-                            />
-                        )}
-                    </TouchableOpacity>
-
-                    {/* Voice Recordings List Button - Only show if recordings exist */}
-                    {voiceRecordings.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => {
-                                void clearInlineEditorAudio();
-                                closeTopPlayer();
-                                setShowRecordingsList(true);
-                            }}
-                            style={styles.iconButton}
-                            onLongPress={() => showToast(t("a11y.voiceRecordings", "Voice recordings"), 1600)}
-                            accessibilityRole="button" accessibilityLabel={t("a11y.voiceRecordings", "Voice recordings")}
-                        >
-                            <MaterialIcons name="graphic-eq" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    )}
-
-
-
-                    {DRAWING_ENABLED && editMode === 'visual' && (
-                        <TouchableOpacity
-                            onPress={handleNewDrawing}
-                            style={styles.iconButton}
-                            onLongPress={() => showToast(t("a11y.draw", "Draw"), 1600)}
-                            accessibilityRole="button" accessibilityLabel={t("a11y.draw", "Draw")}
-                        >
-                            <MaterialCommunityIcons name="draw" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    )}
-
+                    {/* Fixed places, counted from the right edge: ⋮ (✓ while typing),
+                        Improve, Aa. What comes and goes (Undo/Redo, recordings, draw)
+                        sits further left, so the frequent actions never move. */}
                     {/* Redo/Undo Buttons - Visible if there is history to navigate */}
                     {((variantHistories.current[activeVariantId]?.index > 0) || (variantHistories.current[activeVariantId]?.index < (variantHistories.current[activeVariantId]?.history?.length || 0) - 1)) && (
                         <>
@@ -7418,6 +7540,78 @@ export const NoteEditScreen = () => {
                             </TouchableOpacity>
                         </>
                     )}
+
+                    {/* Voice Recordings List Button - Only show if recordings exist */}
+                    {/* On phones these two live in the ⋮ menu (see editorHeaderLayout). */}
+                    {!headerLayout.secondaryInMenu && voiceRecordings.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => {
+                                void clearInlineEditorAudio();
+                                closeTopPlayer();
+                                setShowRecordingsList(true);
+                            }}
+                            style={styles.iconButton}
+                            onLongPress={() => showToast(t("a11y.voiceRecordings", "Voice recordings"), 1600)}
+                            accessibilityRole="button" accessibilityLabel={t("a11y.voiceRecordings", "Voice recordings")}
+                        >
+                            <MaterialIcons name="graphic-eq" size={24} color={colors.text} />
+                        </TouchableOpacity>
+                    )}
+
+
+
+                    {!headerLayout.secondaryInMenu && DRAWING_ENABLED && editMode === 'visual' && (
+                        <TouchableOpacity
+                            onPress={handleNewDrawing}
+                            style={styles.iconButton}
+                            onLongPress={() => showToast(t("a11y.draw", "Draw"), 1600)}
+                            accessibilityRole="button" accessibilityLabel={t("a11y.draw", "Draw")}
+                        >
+                            <MaterialCommunityIcons name="draw" size={24} color={colors.text} />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Text Appearance Button */}
+                    <TouchableOpacity
+                        onPress={() => setShowAppearanceModal(true)}
+                        style={styles.iconButton}
+                        onLongPress={() => showToast(t("a11y.textAppearance", "Text appearance"), 1600)}
+                        accessibilityRole="button" accessibilityLabel={t("a11y.textAppearance", "Text appearance")}
+                    >
+                        <MaterialIcons name="text-fields" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    {/* Improve: a labelled pill where it fits, so the sparkle is not
+                        mistaken for "ask AI". Same place in every state. */}
+                    <TouchableOpacity
+                        onPress={openImprove}
+                        style={[
+                            headerLayout.labelImprove ? styles.improvePill : styles.iconButton,
+                            (!canUseAI || isAIProcessing || isProtected) && styles.disabledIcon,
+                        ]}
+                        disabled={isAIProcessing || !canUseAI}
+                        onLongPress={() => showToast(t("a11y.improveWithAI", "Improve with AI"), 1600)}
+                        accessibilityRole="button" accessibilityLabel={t("a11y.improveWithAI", "Improve with AI")}
+                        accessibilityState={{ disabled: isAIProcessing || !canUseAI, busy: isAIProcessing }}
+                    >
+                        <View style={headerLayout.labelImprove ? styles.improvePillInner : undefined}>
+                            {isAIProcessing ? (
+                                <View style={headerLayout.labelImprove ? styles.improvePillIcon : undefined}>
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                </View>
+                            ) : (
+                                <MaterialIcons
+                                    name="auto-awesome"
+                                    size={headerLayout.labelImprove ? 18 : 24}
+                                    color={canUseAI ? (headerLayout.labelImprove ? colors.primary : colors.text) : colors.textMuted}
+                                />
+                            )}
+                            {headerLayout.labelImprove && (
+                                <Text style={styles.improvePillText} numberOfLines={1} maxFontSizeMultiplier={IMPROVE_LABEL_MAX_FONT_SCALE}>
+                                    {t('edit.improveAction', 'Improve')}
+                                </Text>
+                            )}
+                        </View>
+                    </TouchableOpacity>
 
                     {isEditing ? (
                         <>
@@ -7453,6 +7647,15 @@ export const NoteEditScreen = () => {
                                     </TouchableOpacity>
                                 </View>
 
+                                {improvementPreview && (
+                                    <View style={styles.previewSourceLine}>
+                                        <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textSecondary} style={rtlFlip} />
+                                        <Text style={styles.previewSourceText} numberOfLines={1}>
+                                            {t('edit.versions.basedOn', 'Based on:')}{' '}
+                                            <Text style={styles.improveSourceName}>{versionLabelOf(improvementPreview.variantId)}</Text>
+                                        </Text>
+                                    </View>
+                                )}
                                 <Text style={styles.previewReviewHint}>
                                     {t('edit.improvePreview.reviewHint', 'Check names, amounts and dates. Accept creates a separate version; the original stays safe.')}
                                 </Text>
@@ -7474,17 +7677,33 @@ export const NoteEditScreen = () => {
                                 {/* The app's dialog pattern: the main action as a pill, the
                                     others as quiet text buttons under it. */}
                                 <View style={styles.previewActions}>
-                                    <TouchableOpacity
-                                        style={[styles.previewButtonPrimary, isPreviewRegenerating && { opacity: 0.5 }]}
-                                        onPress={handlePreviewAccept}
-                                        disabled={isPreviewRegenerating}
-                                        activeOpacity={0.85}
-                                        accessibilityRole="button"
-                                    >
-                                        <Text style={styles.previewButtonPrimaryText}>
-                                            {t('edit.improvePreview.accept')}
-                                        </Text>
-                                    </TouchableOpacity>
+                                    {/* Compare sits beside Accept: check what changed, then decide. */}
+                                    <View style={styles.previewMainRow}>
+                                        <TouchableOpacity
+                                            style={[styles.previewButtonOutline, isPreviewRegenerating && { opacity: 0.5 }]}
+                                            onPress={() => setShowPreviewCompare(true)}
+                                            disabled={isPreviewRegenerating}
+                                            activeOpacity={0.7}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={t('edit.improvePreview.compareA11y', 'Compare the result with {{name}}', { name: improvementPreview ? versionLabelOf(improvementPreview.variantId) : '' })}
+                                        >
+                                            <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
+                                            <Text style={styles.previewButtonOutlineText} numberOfLines={2}>
+                                                {t('edit.improvePreview.compare', 'Compare with source')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.previewButtonPrimary, styles.previewButtonPrimaryInRow, isPreviewRegenerating && { opacity: 0.5 }]}
+                                            onPress={handlePreviewAccept}
+                                            disabled={isPreviewRegenerating}
+                                            activeOpacity={0.85}
+                                            accessibilityRole="button"
+                                        >
+                                            <Text style={styles.previewButtonPrimaryText} numberOfLines={2}>
+                                                {t('edit.improvePreview.accept')}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
                                     <View style={styles.previewSecondaryRow}>
                                         <TouchableOpacity
                                             style={styles.previewButtonSecondary}
@@ -7516,6 +7735,18 @@ export const NoteEditScreen = () => {
                         </TouchableWithoutFeedback>
                     </View>
                 </TouchableWithoutFeedback>
+                {/* Inside the preview's modal: iOS presents it on top of the sheet. */}
+                <CompareVersionsModal
+                    visible={showPreviewCompare && !!improvementPreview}
+                    versionLabel={getLocalizedPresetLabel(improvementPreview?.option, t) || t('edit.improvePreview.title')}
+                    bases={improvementPreview ? [{
+                        id: improvementPreview.variantId,
+                        label: versionLabelOf(improvementPreview.variantId),
+                        text: improvementPreview.sourceText,
+                    }] : []}
+                    versionText={improvementPreview ? richContentToTaskAwarePlainText(normalizeModelMarkdownForEditor(improvementPreview.resultText)) : ''}
+                    onClose={() => setShowPreviewCompare(false)}
+                />
             </Modal>
 
             {/* AI Options Modal */}
@@ -7543,34 +7774,64 @@ export const NoteEditScreen = () => {
                                         </View>
                                     </View>
 
-                                    {activeVariantId !== 'original' && (
-                                        // With a version open, choose what the preset runs on. The
-                                        // result is always saved as a new version either way.
-                                        <View style={styles.improveSourceRow}>
-                                            <Text style={styles.improveSourceLabel}>{t('edit.versions.improveFrom', 'Improve')}</Text>
-                                            <View style={styles.improveSourceSegments}>
-                                                {(['original', 'current'] as const).map((source) => {
-                                                    const selected = improveSource === source;
-                                                    return (
-                                                        <TouchableOpacity
-                                                            key={source}
-                                                            style={[styles.improveSourceSegment, selected && styles.improveSourceSegmentActive]}
-                                                            onPress={() => setImproveSource(source)}
-                                                            accessibilityRole="radio"
-                                                            accessibilityState={{ selected }}
-                                                        >
-                                                            <Text
-                                                                style={[styles.improveSourceSegmentText, selected && styles.improveSourceSegmentTextActive]}
-                                                                numberOfLines={1}
+                                    {visibleImprovements.length > 0 && (
+                                        // What the action will work on: the version being read
+                                        // by default, changeable. The result is always a new version.
+                                        <View style={styles.improveSourceBox}>
+                                            <TouchableOpacity
+                                                style={styles.improveSourceRow}
+                                                onPress={() => setShowImproveSourcePicker((open) => !open)}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={t('edit.versions.basedOnA11y', 'Based on: {{name}}', { name: versionLabelOf(improveSource) })}
+                                                accessibilityHint={t('edit.versions.basedOnChangeHint', 'Choose another version to work on')}
+                                                accessibilityState={{ expanded: showImproveSourcePicker }}
+                                            >
+                                                <MaterialIcons
+                                                    name={improveSource === 'original' ? 'article' : (variantIconFor(visibleImprovements.find((imp: any) => imp.id === improveSource) || { id: improveSource }, improvementOptionIcons) as any)}
+                                                    size={18}
+                                                    color={colors.textSecondary}
+                                                />
+                                                <Text style={styles.improveSourceText} numberOfLines={1}>
+                                                    {t('edit.versions.basedOn', 'Based on:')}{' '}
+                                                    <Text style={styles.improveSourceName}>{versionLabelOf(improveSource)}</Text>
+                                                </Text>
+                                                <Text style={styles.improveSourceChange}>{t('edit.versions.change', 'Change')}</Text>
+                                                <MaterialIcons name={showImproveSourcePicker ? 'expand-less' : 'expand-more'} size={20} color={colors.primary} />
+                                            </TouchableOpacity>
+                                            {showImproveSourcePicker && (
+                                                <ScrollView style={styles.improveSourceList} nestedScrollEnabled>
+                                                    {['original', ...visibleImprovements.map((imp: any) => imp.id)].map((id) => {
+                                                        const selected = id === improveSource;
+                                                        return (
+                                                            <TouchableOpacity
+                                                                key={id}
+                                                                style={styles.improveSourceOption}
+                                                                onPress={() => { setImproveSource(id); setShowImproveSourcePicker(false); }}
+                                                                accessibilityRole="radio"
+                                                                accessibilityState={{ selected }}
+                                                                accessibilityLabel={versionLabelOf(id)}
                                                             >
-                                                                {source === 'original'
-                                                                    ? t('edit.original', 'Original')
-                                                                    : (variantDisplayLabels[activeVariantId] || t('edit.versions.thisVersion', 'This version'))}
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    );
-                                                })}
-                                            </View>
+                                                                <Text
+                                                                    style={[styles.improveSourceOptionText, selected && styles.improveSourceOptionTextActive]}
+                                                                    numberOfLines={2}
+                                                                >
+                                                                    {versionLabelOf(id)}
+                                                                </Text>
+                                                                {id === activeVariantId && (
+                                                                    <Text style={styles.improveSourceOptionMeta} numberOfLines={1}>
+                                                                        {t('edit.versions.openNow', 'open now')}
+                                                                    </Text>
+                                                                )}
+                                                                <MaterialIcons
+                                                                    name={selected ? 'radio-button-checked' : 'radio-button-unchecked'}
+                                                                    size={20}
+                                                                    color={selected ? colors.primary : colors.textTertiary}
+                                                                />
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })}
+                                                </ScrollView>
+                                            )}
                                         </View>
                                     )}
 
@@ -7840,6 +8101,38 @@ export const NoteEditScreen = () => {
                                     </TouchableOpacity>
                                 </>
                             )}
+                            {/* Phones: occasional header actions, so the header keeps fixed places. */}
+                            {headerLayout.secondaryInMenu && (voiceRecordings.length > 0 || (DRAWING_ENABLED && editMode === 'visual')) && (
+                                <>
+                                    <View style={styles.menuDivider} />
+                                    {voiceRecordings.length > 0 && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setShowMenu(false);
+                                                void clearInlineEditorAudio();
+                                                closeTopPlayer();
+                                                setShowRecordingsList(true);
+                                            }}
+                                            style={styles.menuItem}
+                                        >
+                                            <MaterialIcons name="graphic-eq" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
+                                            <Text style={styles.menuItemText}>{t("a11y.voiceRecordings", "Voice recordings")}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    {DRAWING_ENABLED && editMode === 'visual' && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setShowMenu(false);
+                                                void handleNewDrawing();
+                                            }}
+                                            style={styles.menuItem}
+                                        >
+                                            <MaterialCommunityIcons name="draw" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
+                                            <Text style={styles.menuItemText}>{t("a11y.draw", "Draw")}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </>
+                            )}
                             {visibleImprovements.length > 0 && (
                                 <>
                                     <View style={styles.menuDivider} />
@@ -7854,12 +8147,16 @@ export const NoteEditScreen = () => {
                                         <TouchableOpacity
                                             onPress={() => {
                                                 setShowMenu(false);
-                                                void flushVisualEditorContent().finally(() => setShowCompareVersions(true));
+                                                openCompareForActive();
                                             }}
                                             style={styles.menuItem}
                                         >
                                             <MaterialIcons name="compare-arrows" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                            <Text style={styles.menuItemText}>{t("edit.versions.compare", "Compare with Original")}</Text>
+                                            <Text style={styles.menuItemText}>
+                                                {activeVersionSource?.id && activeVersionSource.id !== 'original'
+                                                    ? t("edit.versions.compareWithSource", "Compare with source")
+                                                    : t("edit.versions.compare", "Compare with Original")}
+                                            </Text>
                                         </TouchableOpacity>
                                     )}
                                 </>
@@ -8167,7 +8464,13 @@ export const NoteEditScreen = () => {
             <CompareVersionsModal
                 visible={showCompareVersions}
                 versionLabel={variantDisplayLabels[activeVariantId] || ''}
-                originalText={showCompareVersions ? richContentToTaskAwarePlainText(resolveVariantContent('original')) : ''}
+                bases={showCompareVersions
+                    ? compareBasesFor(activeVariantId, activeVersionSource?.id ?? null).map((id) => ({
+                        id,
+                        label: versionLabelOf(id),
+                        text: richContentToTaskAwarePlainText(resolveVariantContent(id)),
+                    }))
+                    : []}
                 versionText={showCompareVersions ? richContentToTaskAwarePlainText(content) : ''}
                 onClose={() => setShowCompareVersions(false)}
             />
@@ -8610,6 +8913,33 @@ const styles = createStyles(() => ({
     disabledIcon: {
         opacity: 0.3,
     },
+    // The labelled Improve action: 48dp tall like the icons, a soft tinted pill inside.
+    improvePill: {
+        height: 48,
+        justifyContent: 'center',
+        paddingHorizontal: 2,
+    },
+    improvePillInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 36,
+        paddingHorizontal: 12,
+        borderRadius: 18,
+        backgroundColor: colors.primaryLight,
+    },
+    improvePillIcon: {
+        width: 18,
+        height: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        transform: [{ scale: 0.8 }],
+    },
+    improvePillText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.primary,
+    },
     disabledText: {
         color: colors.textMuted,
     },
@@ -8766,11 +9096,72 @@ const styles = createStyles(() => ({
         fontWeight: '600',
     },
     variantContainer: {
-        marginBottom: spacing.m,
+        marginBottom: spacing.s,
     },
     variantRow: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    variantHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing.s,
+        minHeight: 28,
+        marginBottom: spacing.xs,
+    },
+    variantHeaderTitle: {
+        flexShrink: 1,
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    variantLinkButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        minHeight: 28,
+        paddingHorizontal: spacing.xs,
+        marginEnd: -spacing.xs,
+    },
+    variantLinkText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    // One quiet line under the chips; its height is the same for every version.
+    variantSourceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        minHeight: 32,
+        marginTop: spacing.xs,
+    },
+    variantSourceMain: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 28,
+    },
+    variantSourceText: {
+        flexShrink: 1,
+        fontSize: 13,
+        color: colors.textSecondary,
+    },
+    variantSourceName: {
+        color: colors.primary,
+        fontWeight: '600',
+    },
+    variantSourceNameStatic: {
+        color: colors.text,
+        fontWeight: '600',
+    },
+    variantChipSpinner: {
+        width: 14,
+        height: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     swipeHint: {
         flexDirection: 'row',
@@ -8841,47 +9232,58 @@ const styles = createStyles(() => ({
         color: colors.primary,
         fontWeight: '700',
     },
+    // "Based on: <version>" in the Improve sheet: one tappable row, the list opens under it.
+    improveSourceBox: {
+        marginBottom: spacing.m,
+        borderRadius: 12,
+        backgroundColor: colors.backgroundSecondary,
+        overflow: 'hidden',
+    },
     improveSourceRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: spacing.m,
         gap: spacing.s,
+        minHeight: 48,
+        paddingHorizontal: spacing.m - 4,
     },
-    improveSourceLabel: {
+    improveSourceText: {
+        flex: 1,
         fontSize: 14,
-        fontWeight: '600',
         color: colors.textSecondary,
     },
-    improveSourceSegments: {
-        flex: 1,
-        flexDirection: 'row',
-        backgroundColor: colors.backgroundSecondary,
-        borderRadius: 10,
-        padding: 3,
-    },
-    improveSourceSegment: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 7,
-        paddingHorizontal: spacing.s,
-        borderRadius: 8,
-    },
-    improveSourceSegmentActive: {
-        backgroundColor: isDarkScheme() ? colors.borderHover : colors.surface,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 3,
-        shadowOffset: { width: 0, height: 1 },
-        elevation: 1,
-    },
-    improveSourceSegmentText: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: colors.textSecondary,
-    },
-    improveSourceSegmentTextActive: {
+    improveSourceName: {
         color: colors.text,
         fontWeight: '600',
+    },
+    improveSourceChange: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    improveSourceList: {
+        maxHeight: 240,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors.border,
+    },
+    improveSourceOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        minHeight: 48,
+        paddingHorizontal: spacing.m - 4,
+        paddingVertical: 6,
+    },
+    improveSourceOptionText: {
+        flex: 1,
+        fontSize: 15,
+        color: colors.text,
+    },
+    improveSourceOptionTextActive: {
+        fontWeight: '600',
+    },
+    improveSourceOptionMeta: {
+        fontSize: 12,
+        color: colors.textSecondary,
     },
     variantOriginalChip: {
         marginRight: spacing.xs,
@@ -9083,6 +9485,49 @@ const styles = createStyles(() => ({
         fontSize: 16,
         fontWeight: '600',
         color: colors.onPrimary,
+        textAlign: 'center',
+    },
+    // Compare and Accept share a row; with large text they stack instead of squeezing.
+    previewMainRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.s,
+    },
+    previewButtonPrimaryInRow: {
+        flexGrow: 1,
+        flexBasis: 140,
+        paddingHorizontal: spacing.m,
+    },
+    previewButtonOutline: {
+        flexGrow: 1,
+        flexBasis: 140,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        minHeight: 48,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        paddingHorizontal: spacing.m,
+    },
+    previewButtonOutlineText: {
+        flexShrink: 1,
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.primary,
+        textAlign: 'center',
+    },
+    previewSourceLine: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: spacing.xs,
+    },
+    previewSourceText: {
+        flexShrink: 1,
+        fontSize: 14,
+        color: colors.textSecondary,
     },
     previewSecondaryRow: {
         flexDirection: 'row',
