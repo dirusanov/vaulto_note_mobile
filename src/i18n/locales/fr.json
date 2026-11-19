@@ -391,6 +391,34 @@
       "aiReadyTitle": "L’IA sur l’appareil est prête",
       "aiReadyGuest": "Sans compte, l’IA fonctionne sur cet appareil. Activez « {{option}} » pour l’utiliser : la voix et l’IA restent alors sur l’appareil.",
       "turnOn": "Activer"
+    },
+    "privacySummary": {
+      "title": "Mon enregistrement quitte-t-il le téléphone ?",
+      "answerNo": "Non. Les enregistrements restent sur ce téléphone.",
+      "answerSyncE2ee": "Seulement comme copie synchronisée, chiffrée de bout en bout.",
+      "answerSync": "Seulement comme copie synchronisée.",
+      "answerTextOnline": "Oui, en ligne : le cloud transforme la voix en texte.",
+      "answerText": "Oui : le cloud transforme la voix en texte.",
+      "storage": "Notes et enregistrements",
+      "speech": "Voix en texte",
+      "ai": "Actions IA et modifications vocales",
+      "storageDevice": "Uniquement sur ce téléphone",
+      "storageSyncE2ee": "Synchronisé, chiffré de bout en bout",
+      "storageSync": "Synchronisé avec le cloud Vaulto",
+      "speechDeviceAlways": "Sur ce téléphone, même en ligne",
+      "speechModelMissing": "Sur ce téléphone · modèle vocal absent, les enregistrements attendent",
+      "speechDevice": "Sur ce téléphone",
+      "speechCloudFallback": "Cloud Vaulto · hors ligne, sur ce téléphone",
+      "speechCloud": "Cloud Vaulto · hors ligne, les enregistrements attendent",
+      "custom": "Votre service d’IA",
+      "aiDevice": "Sur ce téléphone",
+      "aiCloudFallback": "Cloud Vaulto, texte seulement · hors ligne, sur ce téléphone",
+      "aiCloud": "Cloud Vaulto, texte seulement",
+      "aiNeedsModel": "Sur ce téléphone · modèle d’IA non téléchargé",
+      "aiSignIn": "Désactivé · connectez-vous pour l’IA cloud ou utilisez l’IA du téléphone",
+      "aiNone": "Désactivé",
+      "change": "Modifier",
+      "changeStorageHint": "Ouvre les réglages de synchronisation"
     }
   },
   "languages": {
@@ -735,6 +763,15 @@
       "message": "Vos dernières modifications n'ont pas pu être enregistrées. Elles sont toujours là : réessayez, ou restez et copiez le texte.",
       "retry": "Réessayer",
       "leave": "Quitter sans enregistrer"
+    },
+    "voiceEdit": {
+      "renamed": "Note renommée « {{title}} »",
+      "listInNewVersion": "Liste créée dans une nouvelle version. L’original est inchangé.",
+      "changedInNewVersion": "Modifié dans une nouvelle version. L’original est inchangé.",
+      "listUpdatedIn": "Liste mise à jour dans « {{version}} »",
+      "changedIn": "Modifié dans « {{version}} »",
+      "checkedIn": "Éléments cochés dans « {{version}} »",
+      "undoStale": "La note a changé depuis. Utilisez Annuler dans l’éditeur."
     }
   },
   "voice": {
@@ -779,7 +816,37 @@
     "exitTitle": "Garder cet enregistrement ?",
     "exitDesc": "En revenant en arrière, ce qui a été enregistré serait supprimé.",
     "continueRecording": "Continuer l’enregistrement",
-    "saveRecording": "Enregistrer"
+    "saveRecording": "Enregistrer",
+    "route": {
+      "audioOnly": "Enregistrement seul · pas encore de texte",
+      "devicePrivate": "Uniquement sur ce téléphone · rien n’est envoyé",
+      "deviceModelMissing": "Uniquement sur ce téléphone · modèle vocal non téléchargé",
+      "deviceOffline": "Pas d’internet · le texte est créé sur ce téléphone",
+      "device": "Sur ce téléphone · fonctionne hors ligne",
+      "later": "Pas d’internet · le texte viendra une fois en ligne",
+      "custom": "Votre service d’IA · internet requis",
+      "cloudFallback": "Cloud Vaulto · hors ligne, sur ce téléphone",
+      "cloud": "Cloud Vaulto · internet requis"
+    },
+    "outcome": {
+      "audioOnly": "Enregistré en audio. Créez le texte plus tard depuis les enregistrements de la note.",
+      "later": "L’enregistrement est sauvegardé. Ouvrez la note avec internet pour obtenir le texte.",
+      "modelMissing": "L’enregistrement est sauvegardé. Téléchargez le modèle vocal pour obtenir le texte.",
+      "dictate": "Vos mots vont dans la note tels que vous les dites.",
+      "editDevice": "Sur ce téléphone : demandes courtes pour créer une checklist ou une liste, ou renommer la note. Le reste devient du texte.",
+      "editCloud": "Dites une modification : « fais une checklist », « enlève les œufs », « renomme-la Voyage ». Le reste devient du texte."
+    },
+    "mode": {
+      "dictate": "Dicter",
+      "edit": "Modifier à la voix",
+      "label": "Mode du micro",
+      "dictateHint": "Les mots vont dans la note tels que dits",
+      "editHint": "Les demandes modifient la note ; le reste devient du texte",
+      "current": "Mode du micro : {{mode}}",
+      "switchTo": "Touchez deux fois pour passer à « {{mode}} »",
+      "micHintEdit": "Modifier à la voix : les demandes modifient la note. Maintenez pour dicter une fois.",
+      "micHintDictate": "Dicter : les mots vont dans la note tels que dits."
+    }
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",

@@ -85,6 +85,9 @@ import {
     extractTasks,
 } from '../services/AIService';
 import { isDeviceAgentCandidate, resolveVoiceAgentRoute, VoiceAgentRoute } from '../services/voiceAgent';
+import { getVoiceInputMode, setVoiceInputMode } from '../services/micRouteState';
+import { DEFAULT_VOICE_INPUT_MODE, VoiceInputMode } from '../utils/micRoute';
+import { VoiceModePill } from '../components/MicModeControls';
 import {
     AIProvider,
     getTranscriptionEnabled,
@@ -1106,7 +1109,8 @@ export const NoteEditScreen = () => {
     // Retry), or the once-per-session note that the AI allowance is used up.
     const [agentNotice, setAgentNotice] = useState<{
         // 'aiHint': a guest dictated a request; it went in as text (once per session).
-        kind: 'command' | 'limit' | 'aiHint';
+        // 'voiceEdit': what a voice request changed and where, with Undo.
+        kind: 'command' | 'limit' | 'aiHint' | 'voiceEdit';
         message: string;
         text?: string;
         variantId?: string;
@@ -1140,6 +1144,13 @@ export const NoteEditScreen = () => {
         agentNoticeTimerRef.current = null;
         setAgentNotice(null);
     }, []);
+    // After a voice request changed the note: one calm line saying what changed
+    // and in which version, with Undo beside it.
+    const voiceEditUndoRef = useRef<(() => Promise<void>) | null>(null);
+    const showVoiceEditSummary = useCallback((message: string, undo: () => Promise<void>) => {
+        voiceEditUndoRef.current = undo;
+        showAgentNotice({ kind: 'voiceEdit', message });
+    }, [showAgentNotice]);
     useEffect(() => () => {
         if (agentNoticeTimerRef.current) clearTimeout(agentNoticeTimerRef.current);
     }, []);
@@ -1430,6 +1441,24 @@ export const NoteEditScreen = () => {
     const rawSourceContentRef = useRef<string | null>(null);
     const pendingMicInputModeRef = useRef<MicInputMode>('agent');
     const micLongPressHandledRef = useRef(false);
+    // "Dictate" or "Edit by voice", shown at the mic and remembered between notes.
+    // A tap records in this mode; holding the mic still dictates once.
+    const [voiceInputMode, setVoiceInputModeState] = useState<VoiceInputMode>(DEFAULT_VOICE_INPUT_MODE);
+    const voiceInputModeRef = useRef<VoiceInputMode>(DEFAULT_VOICE_INPUT_MODE);
+    useEffect(() => {
+        let active = true;
+        void getVoiceInputMode().then((mode) => {
+            if (!active) return;
+            voiceInputModeRef.current = mode;
+            setVoiceInputModeState(mode);
+        });
+        return () => { active = false; };
+    }, []);
+    const changeVoiceInputMode = useCallback((mode: VoiceInputMode) => {
+        voiceInputModeRef.current = mode;
+        setVoiceInputModeState(mode);
+        void setVoiceInputMode(mode);
+    }, []);
     const visualSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
     const showVoiceResultStatus = useCallback((_message: string, _recordingId?: string) => {
@@ -4241,6 +4270,22 @@ export const NoteEditScreen = () => {
         setUndoMessage(t('edit.versions.deleted', 'Version deleted'));
     }, [finalizePendingVariantDelete, handleVariantSelect, t]);
 
+    // Undo after a voice edit runs later than the agent loop that offered it:
+    // always the latest helpers, never the ones captured when the loop started.
+    const voiceEditToolsRef = useRef({ requestDeleteVariant, setVariantContentWithOptions, resolveVariantContent, variantDisplayLabels });
+    voiceEditToolsRef.current = { requestDeleteVariant, setVariantContentWithOptions, resolveVariantContent, variantDisplayLabels };
+
+    /** Puts a version's text back as it was before a voice edit, unless it was edited since. */
+    const undoVoiceContentEdit = useCallback(async (variantId: string, written: string, before: string) => {
+        const tools = voiceEditToolsRef.current;
+        if (!areTextsEquivalent(tools.resolveVariantContent(variantId), written)) {
+            showToast(t('edit.voiceEdit.undoStale', 'The note has changed since. Use Undo in the editor instead.'), 3500);
+            return;
+        }
+        await tools.setVariantContentWithOptions(variantId, before, { persist: true, updateHistory: true });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [t]);
+
     const undoVariantDelete = useCallback(() => {
         const pending = pendingVariantDeleteRef.current;
         if (!pending) return;
@@ -4908,6 +4953,8 @@ export const NoteEditScreen = () => {
                                 persist: true,
                                 updateHistory: false,
                             });
+                            const titleBeforeVoiceEdit = noteTitleRef.current;
+                            let voiceRenameApplied = false;
                             try {
                                 // The note keeps one title across its versions, so "rename the
                                 // note" renames the note whichever version the command came from.
@@ -4929,6 +4976,7 @@ export const NoteEditScreen = () => {
                                 if (taskVariantId === 'original') {
                                     updateHistoryImmediate(explicitTitle, commandBaseContent, taskVariantId);
                                 }
+                                voiceRenameApplied = true;
                             } catch (titleError) {
                                 console.error('[NoteEditScreen] Failed to apply explicit agent title', titleError);
                             }
@@ -4937,6 +4985,25 @@ export const NoteEditScreen = () => {
                                 setRecordingOutcomeStatus(id, titleStatus);
                                 showVoiceResultStatus(titleStatus, id);
                             });
+                            if (voiceRenameApplied && titleBeforeVoiceEdit !== explicitTitle) {
+                                const renamedNoteId = localNoteIdRef.current;
+                                showVoiceEditSummary(
+                                    t('edit.voiceEdit.renamed', 'Note renamed to “{{title}}”', { title: explicitTitle }),
+                                    async () => {
+                                        // Renamed again since (by hand or by voice): leave it.
+                                        if (!renamedNoteId || localNoteIdRef.current !== renamedNoteId || noteTitleRef.current !== explicitTitle) return;
+                                        noteTitleSavedByScreenRef.current = titleBeforeVoiceEdit.trim();
+                                        await updateNote(renamedNoteId, { title: titleBeforeVoiceEdit });
+                                        setNoteTitle(titleBeforeVoiceEdit);
+                                        noteTitleRef.current = titleBeforeVoiceEdit;
+                                        lastSavedTitle.current = titleBeforeVoiceEdit;
+                                        if (activeVariantIdRef.current === 'original') {
+                                            setTitle(titleBeforeVoiceEdit);
+                                            currentTitleRef.current = titleBeforeVoiceEdit;
+                                        }
+                                    },
+                                );
+                            }
                             // Explicit title command should not mutate note content.
                             continue;
                         }
@@ -5117,6 +5184,15 @@ export const NoteEditScreen = () => {
                                         setRecordingOutcomeStatus(id, status);
                                         showVoiceResultStatus(status, id);
                                     });
+                                    const createdVersionId = improvement.id;
+                                    const madeList = agentResult.mode === 'todo' || agentResult.mode === 'list';
+                                    showVoiceEditSummary(
+                                        madeList
+                                            ? t('edit.voiceEdit.listInNewVersion', 'Made a list in a new version. The original is unchanged.')
+                                            : t('edit.voiceEdit.changedInNewVersion', 'Changed in a new version. The original is unchanged.'),
+                                        // Removing the new version is itself undoable for a few seconds.
+                                        async () => { await voiceEditToolsRef.current.requestDeleteVariant(createdVersionId); },
+                                    );
                                 } else {
                                     if (hasPendingDraft) {
                                         validBatch.forEach(t => {
@@ -5157,6 +5233,17 @@ export const NoteEditScreen = () => {
                                         setRecordingOutcomeStatus(id, status);
                                         showVoiceResultStatus(status, id);
                                     });
+                                    const editedVersionName = voiceEditToolsRef.current.variantDisplayLabels[taskVariantId]
+                                        || t('edit.improvement', 'Improvement');
+                                    const contentBeforeVoiceEdit = commandBaseContent;
+                                    const contentWrittenByVoice = newText;
+                                    const editedVariantId = taskVariantId;
+                                    showVoiceEditSummary(
+                                        agentResult.mode === 'todo' || agentResult.mode === 'list'
+                                            ? t('edit.voiceEdit.listUpdatedIn', 'List updated in “{{version}}”', { version: editedVersionName })
+                                            : t('edit.voiceEdit.changedIn', 'Changed in “{{version}}”', { version: editedVersionName }),
+                                        () => undoVoiceContentEdit(editedVariantId, contentWrittenByVoice, contentBeforeVoiceEdit),
+                                    );
                                 }
                             } else {
                                 // Command was recognized but resulted in no effective content diff.
@@ -5214,6 +5301,18 @@ export const NoteEditScreen = () => {
                                     setRecordingOutcomeStatus(id, checklistStatus);
                                     showVoiceResultStatus(checklistStatus, id);
                                 });
+                                {
+                                    const checkedVariantId = taskVariantId;
+                                    const checkedVersionName = checkedVariantId === 'original'
+                                        ? t('edit.original', 'Original')
+                                        : voiceEditToolsRef.current.variantDisplayLabels[checkedVariantId] || t('edit.improvement', 'Improvement');
+                                    const contentBeforeCheck = commandBaseContent;
+                                    const contentAfterCheck = localChecklistFallbackText;
+                                    showVoiceEditSummary(
+                                        t('edit.voiceEdit.checkedIn', 'Items checked off in “{{version}}”', { version: checkedVersionName }),
+                                        () => undoVoiceContentEdit(checkedVariantId, contentAfterCheck, contentBeforeCheck),
+                                    );
+                                }
                             } else {
                                 await finalizeAsDictation(originalText || normalizedTaskText);
                             }
@@ -6709,6 +6808,17 @@ export const NoteEditScreen = () => {
                 },
             },
         );
+    } else if (agentNotice?.kind === 'voiceEdit') {
+        agentNoticeActions.push({
+            label: t('edit.versions.undo', 'Undo'),
+            onPress: () => {
+                const undo = voiceEditUndoRef.current;
+                voiceEditUndoRef.current = null;
+                dismissAgentNotice();
+                haptics.selection();
+                void undo?.().catch((error) => console.warn('[NoteEditScreen] Voice edit undo failed', error));
+            },
+        });
     } else if (agentNotice?.kind === 'aiHint') {
         agentNoticeActions.push({
             label: t('auth.signIn', 'Sign in'),
@@ -6735,7 +6845,9 @@ export const NoteEditScreen = () => {
             },
         });
     }
-    const micHintText = t('edit.micHintHold', 'Hold: no agent');
+    const micHintText = voiceInputMode === 'edit'
+        ? t('voice.mode.micHintEdit', 'Edit by voice: requests change the note. Hold to dictate once.')
+        : t('voice.mode.micHintDictate', 'Dictate: words go into the note as spoken.');
     const floatingMicBottomOffset = editMode === 'visual' && (keyboardVisibleState || isColorPickerVisible)
         ? (keyboardVisibleState ? keyboardHeight : insets.bottom) + toolbarHeight + FLOATING_MIC_KEYBOARD_GAP
         : FLOATING_MIC_BASE_BOTTOM_OFFSET;
@@ -8078,7 +8190,14 @@ export const NoteEditScreen = () => {
                 one microphone on screen at a time. */}
             {
                 !showVoiceRecorder && !(LOCAL_WHISPER_ENABLED && editMode === 'visual' && keyboardVisibleState) && (
-                    <View style={[styles.micFloatingContainer, { bottom: floatingMicBottomOffset }]}>
+                    <View style={[styles.micFloatingContainer, styles.micFloatingRow, { bottom: floatingMicBottomOffset }]}>
+                        {/* The mode the next recording uses, readable before recording. */}
+                        {agentModeIndicatorEnabled && (
+                            <VoiceModePill
+                                mode={voiceInputMode}
+                                onToggle={() => changeVoiceInputMode(voiceInputMode === 'edit' ? 'dictate' : 'edit')}
+                            />
+                        )}
                         <TouchableOpacity
                             style={styles.micButton}
                             onPress={handleMicPress}
@@ -8090,8 +8209,8 @@ export const NoteEditScreen = () => {
                             accessibilityHint={agentModeIndicatorEnabled ? micHintText : undefined}
                         >
                             <MaterialIcons name="mic" size={28} color="white" />
-                            {/* The agent is on: a small badge instead of curved 8px text. */}
-                            {agentModeIndicatorEnabled && (
+                            {/* Edit by voice is on: a small badge instead of curved 8px text. */}
+                            {agentModeIndicatorEnabled && voiceInputMode === 'edit' && (
                                 <View style={styles.micAgentBadge} pointerEvents="none">
                                     <MaterialIcons name="auto-awesome" size={12} color={colors.primary} />
                                 </View>
@@ -8283,11 +8402,21 @@ export const NoteEditScreen = () => {
                 micMode={pendingMicInputMode}
                 isMainScreen={false}
                 purpose={isRecordingInstruction ? 'instruction' : 'note'}
+                routeContext={{ protectedNote: isProtected, signedIn: isAuthenticated && !isGuest }}
+                voiceMode={voiceInputMode}
+                onVoiceModeChange={changeVoiceInputMode}
+                voiceModeAvailable={agentModeIndicatorEnabled}
                 onFinish={(rec, transcribe) => {
                     if (isRecordingInstruction) {
                         handleInstructionRecordingFinish(rec);
                     } else {
-                        handleRecordingFinish(rec, transcribe, pendingMicInputModeRef.current);
+                        // Hold dictates once; otherwise the mode chosen at the mic,
+                        // read when the recording ends (it may change while speaking).
+                        const finishMode: MicInputMode = pendingMicInputModeRef.current === 'force_text'
+                            || voiceInputModeRef.current === 'dictate'
+                            ? 'force_text'
+                            : 'agent';
+                        handleRecordingFinish(rec, transcribe, finishMode);
                     }
                     setPendingMicInputMode('agent');
                     pendingMicInputModeRef.current = 'agent';
@@ -8967,6 +9096,10 @@ const styles = createStyles(() => ({
         bottom: spacing.xxl + 20,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    micFloatingRow: {
+        flexDirection: 'row',
+        gap: spacing.s,
     },
     // micHintBubble and micHintText removed
     micAgentBadge: {

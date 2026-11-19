@@ -1098,6 +1098,8 @@ export const NotesListScreen = () => {
                 onCancel={() => setIsVoiceRecorderVisible(false)}
                 autoStart={true}
                 isMainScreen={true}
+                // A new note from the list is never protected yet.
+                routeContext={{ protectedNote: false, signedIn }}
             />
 
             <UndoSnackbar

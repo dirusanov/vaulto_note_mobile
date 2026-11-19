@@ -391,6 +391,34 @@
       "aiReadyTitle": "AI on this device is ready",
       "aiReadyGuest": "Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.",
       "turnOn": "Turn on"
+    },
+    "privacySummary": {
+      "title": "Does my recording leave the phone?",
+      "answerNo": "No. Recordings stay on this phone.",
+      "answerSyncE2ee": "Only as your sync copy, end-to-end encrypted.",
+      "answerSync": "Only as your sync copy.",
+      "answerTextOnline": "Yes, when online: the cloud turns speech into text.",
+      "answerText": "Yes: the cloud turns speech into text.",
+      "storage": "Notes and recordings",
+      "speech": "Speech to text",
+      "ai": "AI actions and voice edits",
+      "storageDevice": "On this phone only",
+      "storageSyncE2ee": "Synced, end-to-end encrypted",
+      "storageSync": "Synced to Vaulto cloud",
+      "speechDeviceAlways": "On this phone, even online",
+      "speechModelMissing": "On this phone · speech model not downloaded, recordings wait",
+      "speechDevice": "On this phone",
+      "speechCloudFallback": "Vaulto cloud · this phone when offline",
+      "speechCloud": "Vaulto cloud · offline recordings wait for internet",
+      "custom": "Your AI service",
+      "aiDevice": "On this phone",
+      "aiCloudFallback": "Vaulto cloud, text only · this phone when offline",
+      "aiCloud": "Vaulto cloud, text only",
+      "aiNeedsModel": "On this phone · AI model not downloaded",
+      "aiSignIn": "Off · sign in for cloud AI, or use AI on this phone",
+      "aiNone": "Off",
+      "change": "Change",
+      "changeStorageHint": "Opens sync settings"
     }
   },
   "languages": {
@@ -734,6 +762,15 @@
       "message": "Your latest changes could not be saved. They are still here: try again, or stay and copy the text.",
       "retry": "Try again",
       "leave": "Leave without saving"
+    },
+    "voiceEdit": {
+      "renamed": "Note renamed to “{{title}}”",
+      "listInNewVersion": "Made a list in a new version. The original is unchanged.",
+      "changedInNewVersion": "Changed in a new version. The original is unchanged.",
+      "listUpdatedIn": "List updated in “{{version}}”",
+      "changedIn": "Changed in “{{version}}”",
+      "checkedIn": "Items checked off in “{{version}}”",
+      "undoStale": "The note has changed since. Use Undo in the editor instead."
     }
   },
   "voice": {
@@ -778,7 +815,37 @@
     "exitTitle": "Keep this recording?",
     "exitDesc": "Going back would delete what you have recorded.",
     "continueRecording": "Continue recording",
-    "saveRecording": "Save"
+    "saveRecording": "Save",
+    "route": {
+      "audioOnly": "Recording only · no text yet",
+      "devicePrivate": "Only on this phone · nothing is sent",
+      "deviceModelMissing": "Only on this phone · speech model not downloaded",
+      "deviceOffline": "No internet · text is made on this phone",
+      "device": "On this phone · works offline",
+      "later": "No internet · text comes when you are online",
+      "custom": "Your AI service · needs internet",
+      "cloudFallback": "Vaulto cloud · this phone when offline",
+      "cloud": "Vaulto cloud · needs internet"
+    },
+    "outcome": {
+      "audioOnly": "Saved as audio. Make text later from the note’s recordings.",
+      "later": "The recording is saved now. Open the note with internet to get the text.",
+      "modelMissing": "The recording is saved. Download the speech model to get the text.",
+      "dictate": "Your words go into the note exactly as spoken.",
+      "editDevice": "On this phone: short requests to make a checklist or a list, or rename the note. Anything else goes in as text.",
+      "editCloud": "Say a change: “make a checklist”, “remove the eggs”, “rename it Trip”. Anything else goes in as text."
+    },
+    "mode": {
+      "dictate": "Dictate",
+      "edit": "Edit by voice",
+      "label": "Microphone mode",
+      "dictateHint": "Words go into the note as spoken",
+      "editHint": "Requests change the note; other speech goes in as text",
+      "current": "Microphone mode: {{mode}}",
+      "switchTo": "Double tap to switch to {{mode}}",
+      "micHintEdit": "Edit by voice: requests change the note. Hold to dictate once.",
+      "micHintDictate": "Dictate: words go into the note as spoken."
+    }
   },
   "aux": {
     "emailVerified": "Email verified!",

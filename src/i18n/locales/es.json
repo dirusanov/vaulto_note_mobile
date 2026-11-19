@@ -391,6 +391,34 @@
       "aiReadyTitle": "La IA en el dispositivo está lista",
       "aiReadyGuest": "Sin cuenta, la IA funciona en este dispositivo. Activa «{{option}}» para usarla: la voz y la IA no saldrán del dispositivo.",
       "turnOn": "Activar"
+    },
+    "privacySummary": {
+      "title": "¿Sale mi grabación del teléfono?",
+      "answerNo": "No. Las grabaciones se quedan en este teléfono.",
+      "answerSyncE2ee": "Solo como tu copia sincronizada, con cifrado de extremo a extremo.",
+      "answerSync": "Solo como tu copia sincronizada.",
+      "answerTextOnline": "Sí, con conexión: la nube convierte la voz en texto.",
+      "answerText": "Sí: la nube convierte la voz en texto.",
+      "storage": "Notas y grabaciones",
+      "speech": "Voz a texto",
+      "ai": "Acciones de IA y ediciones por voz",
+      "storageDevice": "Solo en este teléfono",
+      "storageSyncE2ee": "Sincronizado, cifrado de extremo a extremo",
+      "storageSync": "Sincronizado con la nube de Vaulto",
+      "speechDeviceAlways": "En este teléfono, incluso con conexión",
+      "speechModelMissing": "En este teléfono · falta el modelo de voz, las grabaciones esperan",
+      "speechDevice": "En este teléfono",
+      "speechCloudFallback": "Nube de Vaulto · sin conexión, en este teléfono",
+      "speechCloud": "Nube de Vaulto · sin conexión, las grabaciones esperan",
+      "custom": "Tu servicio de IA",
+      "aiDevice": "En este teléfono",
+      "aiCloudFallback": "Nube de Vaulto, solo texto · sin conexión, en este teléfono",
+      "aiCloud": "Nube de Vaulto, solo texto",
+      "aiNeedsModel": "En este teléfono · modelo de IA no descargado",
+      "aiSignIn": "Desactivado · inicia sesión para la IA en la nube o usa la IA del teléfono",
+      "aiNone": "Desactivado",
+      "change": "Cambiar",
+      "changeStorageHint": "Abre los ajustes de sincronización"
     }
   },
   "languages": {
@@ -735,6 +763,15 @@
       "message": "No se pudieron guardar tus últimos cambios. Siguen aquí: inténtalo de nuevo o quédate y copia el texto.",
       "retry": "Reintentar",
       "leave": "Salir sin guardar"
+    },
+    "voiceEdit": {
+      "renamed": "Nota renombrada a «{{title}}»",
+      "listInNewVersion": "Lista creada en una versión nueva. El original no cambia.",
+      "changedInNewVersion": "Cambiado en una versión nueva. El original no cambia.",
+      "listUpdatedIn": "Lista actualizada en «{{version}}»",
+      "changedIn": "Cambiado en «{{version}}»",
+      "checkedIn": "Elementos marcados en «{{version}}»",
+      "undoStale": "La nota cambió desde entonces. Usa Deshacer en el editor."
     }
   },
   "voice": {
@@ -779,7 +816,37 @@
     "exitTitle": "¿Conservar la grabación?",
     "exitDesc": "Si vuelves atrás, se borrará lo grabado.",
     "continueRecording": "Seguir grabando",
-    "saveRecording": "Guardar"
+    "saveRecording": "Guardar",
+    "route": {
+      "audioOnly": "Solo grabación · sin texto aún",
+      "devicePrivate": "Solo en este teléfono · no se envía nada",
+      "deviceModelMissing": "Solo en este teléfono · modelo de voz no descargado",
+      "deviceOffline": "Sin internet · el texto se hace en este teléfono",
+      "device": "En este teléfono · funciona sin conexión",
+      "later": "Sin internet · el texto llegará con conexión",
+      "custom": "Tu servicio de IA · requiere internet",
+      "cloudFallback": "Nube de Vaulto · sin conexión, en este teléfono",
+      "cloud": "Nube de Vaulto · requiere internet"
+    },
+    "outcome": {
+      "audioOnly": "Se guarda como audio. Haz el texto luego desde las grabaciones de la nota.",
+      "later": "La grabación se guarda ahora. Abre la nota con internet para obtener el texto.",
+      "modelMissing": "La grabación se guarda. Descarga el modelo de voz para obtener el texto.",
+      "dictate": "Tus palabras entran en la nota tal como las dices.",
+      "editDevice": "En este teléfono: peticiones cortas para crear una lista de tareas o una lista, o renombrar la nota. Lo demás entra como texto.",
+      "editCloud": "Di un cambio: «haz una lista de tareas», «quita los huevos», «llámala Viaje». Lo demás entra como texto."
+    },
+    "mode": {
+      "dictate": "Dictar",
+      "edit": "Editar por voz",
+      "label": "Modo del micrófono",
+      "dictateHint": "Las palabras entran en la nota tal como se dicen",
+      "editHint": "Las peticiones cambian la nota; lo demás entra como texto",
+      "current": "Modo del micrófono: {{mode}}",
+      "switchTo": "Toca dos veces para cambiar a «{{mode}}»",
+      "micHintEdit": "Editar por voz: las peticiones cambian la nota. Mantén pulsado para dictar una vez.",
+      "micHintDictate": "Dictar: las palabras entran en la nota tal como se dicen."
+    }
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",

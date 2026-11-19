@@ -390,6 +390,34 @@
       "aiReadyTitle": "端末上の AI の準備ができました",
       "aiReadyGuest": "アカウントなしでは、AI はこの端末で動作します。使うには「{{option}}」をオンにしてください。音声と AI は端末の外に出ません。",
       "turnOn": "オンにする"
+    },
+    "privacySummary": {
+      "title": "録音は端末の外に出ますか？",
+      "answerNo": "いいえ。録音はこの端末に残ります。",
+      "answerSyncE2ee": "同期用のコピーとしてのみ（エンドツーエンド暗号化）。",
+      "answerSync": "同期用のコピーとしてのみ。",
+      "answerTextOnline": "はい、オンライン時はクラウドで文字にします。",
+      "answerText": "はい、クラウドで文字にします。",
+      "storage": "メモと録音",
+      "speech": "音声の文字起こし",
+      "ai": "AI操作と声での編集",
+      "storageDevice": "この端末のみ",
+      "storageSyncE2ee": "同期中（エンドツーエンド暗号化）",
+      "storageSync": "Vaultoクラウドと同期",
+      "speechDeviceAlways": "オンライン時もこの端末で",
+      "speechModelMissing": "この端末で · 音声モデル未ダウンロードのため録音は待機",
+      "speechDevice": "この端末で",
+      "speechCloudFallback": "Vaultoクラウド · オフライン時はこの端末",
+      "speechCloud": "Vaultoクラウド · オフラインの録音は接続を待機",
+      "custom": "ご自身のAIサービス",
+      "aiDevice": "この端末で",
+      "aiCloudFallback": "Vaultoクラウド（テキストのみ）· オフライン時はこの端末",
+      "aiCloud": "Vaultoクラウド（テキストのみ）",
+      "aiNeedsModel": "この端末で · AIモデル未ダウンロード",
+      "aiSignIn": "オフ · クラウドAIはログイン、または端末のAIを使用",
+      "aiNone": "オフ",
+      "change": "変更",
+      "changeStorageHint": "同期の設定を開きます"
     }
   },
   "languages": {
@@ -732,6 +760,15 @@
       "message": "最新の変更を保存できませんでした。変更はまだここにあります。もう一度試すか、このままテキストをコピーしてください。",
       "retry": "再試行",
       "leave": "保存せずに閉じる"
+    },
+    "voiceEdit": {
+      "renamed": "メモ名を「{{title}}」に変更しました",
+      "listInNewVersion": "新しいバージョンにリストを作成しました。元の文は変わっていません。",
+      "changedInNewVersion": "新しいバージョンで変更しました。元の文は変わっていません。",
+      "listUpdatedIn": "「{{version}}」のリストを更新しました",
+      "changedIn": "「{{version}}」を変更しました",
+      "checkedIn": "「{{version}}」の項目にチェックしました",
+      "undoStale": "その後メモが変更されました。エディタの元に戻すを使ってください。"
     }
   },
   "voice": {
@@ -776,7 +813,37 @@
     "exitTitle": "この録音を残しますか？",
     "exitDesc": "戻ると、録音した内容は削除されます。",
     "continueRecording": "録音を続ける",
-    "saveRecording": "保存"
+    "saveRecording": "保存",
+    "route": {
+      "audioOnly": "録音のみ · まだ文字にしません",
+      "devicePrivate": "この端末のみ · 何も送信しません",
+      "deviceModelMissing": "この端末のみ · 音声モデル未ダウンロード",
+      "deviceOffline": "オフライン · この端末で文字にします",
+      "device": "この端末で · オフラインで動作",
+      "later": "オフライン · オンラインになったら文字にします",
+      "custom": "ご自身のAIサービス · ネット接続が必要",
+      "cloudFallback": "Vaultoクラウド · オフライン時はこの端末",
+      "cloud": "Vaultoクラウド · ネット接続が必要"
+    },
+    "outcome": {
+      "audioOnly": "音声として保存します。文字起こしは後でメモの録音から。",
+      "later": "録音は今保存されます。ネット接続中にメモを開くと文字になります。",
+      "modelMissing": "録音は保存されます。文字にするには音声モデルをダウンロードしてください。",
+      "dictate": "話した言葉がそのままメモに入ります。",
+      "editDevice": "この端末では、チェックリストやリストの作成、メモ名の変更など短い依頼に対応。それ以外は文字として入ります。",
+      "editCloud": "変更を話してください：「チェックリストにして」「卵を消して」「名前を旅行にして」。それ以外は文字として入ります。"
+    },
+    "mode": {
+      "dictate": "口述",
+      "edit": "声で編集",
+      "label": "マイクのモード",
+      "dictateHint": "話した言葉がそのまま入ります",
+      "editHint": "依頼はメモを変更し、それ以外は文字になります",
+      "current": "マイクのモード：{{mode}}",
+      "switchTo": "ダブルタップで「{{mode}}」に切り替え",
+      "micHintEdit": "声で編集：依頼でメモを変更します。長押しで一度だけ口述。",
+      "micHintDictate": "口述：話した言葉がそのまま入ります。"
+    }
   },
   "aux": {
     "emailVerified": "メールを確認しました！",

@@ -25,6 +25,10 @@ import { haptics } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { appAlert } from './AppAlert';
 import { DISCARD_CONFIRM_AFTER_SECONDS, recorderBackAction } from '../utils/recordingClock';
+import NetInfo from '@react-native-community/netinfo';
+import { MicRoute, readMicRoute } from '../services/micRouteState';
+import type { VoiceInputMode } from '../utils/micRoute';
+import { MicRouteNote, VoiceModeSwitch } from './MicModeControls';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -38,6 +42,16 @@ interface VoiceRecorderProps {
      * Meeting and To text choices do not apply and are hidden.
      */
     purpose?: 'note' | 'instruction';
+    /**
+     * Shows where the recording is processed (phone, cloud, saved for later),
+     * read the way the recording flow reads it.
+     */
+    routeContext?: { protectedNote: boolean; signedIn: boolean };
+    /** The editor's "Dictate / Edit by voice" choice; switchable while recording. */
+    voiceMode?: VoiceInputMode;
+    onVoiceModeChange?: (mode: VoiceInputMode) => void;
+    /** A voice agent exists for this note, so the choice means something. */
+    voiceModeAvailable?: boolean;
 }
 
 
@@ -61,6 +75,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     micMode = 'agent',
     isMainScreen = false,
     purpose = 'note',
+    routeContext,
+    voiceMode,
+    onVoiceModeChange,
+    voiceModeAvailable = false,
 }) => {
     const isInstruction = purpose === 'instruction';
     const { t } = useTranslation();
@@ -151,6 +169,31 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             recordingStartAtRef.current = null;
         }
     }, [visible, autoStart]);
+
+    // Where this recording will be processed. Read again when "To text" or the
+    // connection changes, so the line never promises a route that no longer applies.
+    const [route, setRoute] = useState<MicRoute | null>(null);
+    const routeProtected = !!routeContext?.protectedNote;
+    const routeSignedIn = !!routeContext?.signedIn;
+    const hasRouteContext = !!routeContext;
+    useEffect(() => {
+        if (!visible || !hasRouteContext) {
+            setRoute(null);
+            return;
+        }
+        let active = true;
+        const refresh = () => {
+            readMicRoute({ protectedNote: routeProtected, signedIn: routeSignedIn, transcribe })
+                .then((next) => { if (active) setRoute(next); })
+                .catch(() => undefined);
+        };
+        refresh();
+        const unsubscribe = NetInfo.addEventListener(() => refresh());
+        return () => {
+            active = false;
+            unsubscribe();
+        };
+    }, [visible, hasRouteContext, routeProtected, routeSignedIn, transcribe]);
 
     const handleTranscriptionToggle = async (value: boolean) => {
         if (value && (aiProvider === 'local' || aiProvider === 'local_whisper')) {
@@ -661,6 +704,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         );
     };
 
+    // The mode choice only means something when an agent can act on requests.
+    const showModeSwitch = !!voiceMode
+        && voiceModeAvailable
+        && micMode !== 'force_text'
+        && !isInstruction
+        && !meetingMode
+        && transcribe
+        && (route === null || route.agent !== null);
+    const shownMode: VoiceInputMode | null = micMode === 'force_text'
+        ? 'dictate'
+        : showModeSwitch
+            ? voiceMode ?? null
+            : voiceMode && route && route.agent === null
+                ? 'dictate'
+                : null;
+
     return (
         <Modal
             visible={visible && (!autoStart || isRecording || permissionSettled)}
@@ -674,6 +733,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 pointerEvents="box-none"
             >
                 <View style={styles.container} pointerEvents="box-none">
+                    {/* Dictate / Edit by voice: applies when the recording finishes,
+                        so it can still be switched while speaking. */}
+                    {showModeSwitch && voiceMode && onVoiceModeChange && (
+                        <VoiceModeSwitch value={voiceMode} onChange={onVoiceModeChange} />
+                    )}
+
                     {/* Toggles Row */}
                     {!isInstruction && (
                     <View style={styles.togglesRow}>
@@ -752,22 +817,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     </View>
                     )}
 
-                    {/* What happens on Done, so the chips above explain themselves. */}
-                    <Text
-                        style={[styles.modeHint, confirmDiscard && styles.modeHintWarning]}
-                        numberOfLines={2}
-                        accessibilityLiveRegion="polite"
-                    >
-                        {confirmDiscard
-                            ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording")
-                            : isInstruction
-                                ? t("voice.instructionHint", "When you finish, the instruction appears in the field")
-                            : meetingMode
+                    {/* Where it is processed and what happens on Done, so the choices above explain themselves. */}
+                    <MicRouteNote
+                        route={route}
+                        mode={shownMode}
+                        showRoute={hasRouteContext && !isInstruction}
+                        alert={confirmDiscard ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording") : null}
+                        outcome={isInstruction
+                            ? t("voice.instructionHint", "When you finish, the instruction appears in the field")
+                            : meetingMode && transcribe
                                 ? t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")
-                                : transcribe || micMode === 'force_text'
-                                    ? t("voice.toTextHint", "When you finish, the recording becomes text")
-                                    : t("voice.audioOnlyHint", "Saved as audio only, without text")}
-                    </Text>
+                                : !hasRouteContext
+                                    ? (transcribe || micMode === 'force_text'
+                                        ? t("voice.toTextHint", "When you finish, the recording becomes text")
+                                        : t("voice.audioOnlyHint", "Saved as audio only, without text"))
+                                    : null}
+                    />
 
                     {/* Inline Warning Banner */}
                     {showModelMissingWarning && (
@@ -888,24 +953,6 @@ const styles = createStyles(() => ({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
-    },
-    modeHint: {
-        alignSelf: 'center',
-        maxWidth: '100%',
-        fontSize: 13,
-        lineHeight: 18,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        backgroundColor: colors.surface,
-        borderRadius: 12,
-        overflow: 'hidden',
-        paddingHorizontal: spacing.m,
-        paddingVertical: 6,
-        marginTop: -spacing.xs,
-        marginBottom: spacing.s,
-    },
-    modeHintWarning: {
-        color: colors.error,
     },
     badgeToggleOn: {
         backgroundColor: colors.primary,

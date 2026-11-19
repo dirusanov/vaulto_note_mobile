@@ -52,6 +52,7 @@ import { syncService } from '../services/SyncService';
 import { useSubscription } from '../context/SubscriptionContext';
 import { CurrentPeriodUsage, subscriptionApi } from '../api/subscription';
 import { DEFAULT_OPENAI_BASE_URL, normalizeOpenAIBaseUrl } from '../utils/openaiCompat';
+import { ProcessingSummaryCard } from '../components/ProcessingSummaryCard';
 import { SecurityInfoModal } from '../components/SecurityInfoModal';
 import { CUSTOM_AI_ENABLED, LOCAL_MODELS_ENABLED, LOCAL_WHISPER_ENABLED, isLocalAIProvider } from '../utils/featureFlags';
 import { getLocalWhisperModelStatus } from '../services/LocalWhisperService';
@@ -278,6 +279,7 @@ export const SettingsScreen = () => {
     const route = useRoute<any>();
     const scrollRef = useRef<ScrollView>(null);
     const voiceSectionYRef = useRef<number | null>(null);
+    const syncSectionYRef = useRef<number | null>(null);
     const requestedSectionRef = useRef<string | undefined>(route.params?.section);
     // "Set up AI on this device" opens Settings at the voice group: the models sheet
     // then opens by itself with an AI model chosen, so the next step is one button.
@@ -1277,6 +1279,7 @@ export const SettingsScreen = () => {
                 {/* Cloud Sync */}
                 {/* Guests have nothing to sync yet; the account card above offers sign-in. */}
                 {!isGuestOrAnonymous && (
+                    <View onLayout={(event) => { syncSectionYRef.current = event.nativeEvent.layout.y; }}>
                     <Section
                         label={t("settings.ui.cloudSync", "Cloud Sync")}
                         labelAccessory={(
@@ -1424,6 +1427,7 @@ export const SettingsScreen = () => {
                             </>
                         )}
                     </Section>
+                    </View>
                 )}
 
                 {/* Voice & AI: works out of the box (cloud), one switch for offline */}
@@ -1432,6 +1436,25 @@ export const SettingsScreen = () => {
                     label={t("settings.voice.title", "Voice & AI")}
                     footer={privateMode ? undefined : t('settings.voice.routingHint', 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.')}
                 >
+                    {/* "Does my recording leave the phone?" answered from the settings below. */}
+                    <ProcessingSummaryCard
+                        signedIn={!isGuestOrAnonymous}
+                        syncEnabled={syncEnabled}
+                        e2ee={hasConfiguredKey}
+                        refreshKey={[
+                            aiProvider,
+                            onDeviceTranscription,
+                            localModelsEnabled,
+                            offlineStatus?.speechReady,
+                            offlineStatus?.aiReady,
+                            modelSummary,
+                        ].join('|')}
+                        onChangeStorage={isGuestOrAnonymous ? undefined : () => {
+                            const y = syncSectionYRef.current;
+                            if (y !== null) scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.m), animated: true });
+                        }}
+                    />
+                    <Divider />
                     {LOCAL_WHISPER_ENABLED && (
                         <>
                             <Row

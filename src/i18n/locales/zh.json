@@ -390,6 +390,34 @@
       "aiReadyTitle": "设备端 AI 已就绪",
       "aiReadyGuest": "未登录时，AI 在本设备上运行。开启“{{option}}”即可使用：语音和 AI 都不会离开设备。",
       "turnOn": "开启"
+    },
+    "privacySummary": {
+      "title": "我的录音会离开手机吗？",
+      "answerNo": "不会。录音只保存在本机。",
+      "answerSyncE2ee": "仅作为同步副本，并经端到端加密。",
+      "answerSync": "仅作为同步副本。",
+      "answerTextOnline": "会，联网时由云端把语音转为文字。",
+      "answerText": "会，由云端把语音转为文字。",
+      "storage": "笔记和录音",
+      "speech": "语音转文字",
+      "ai": "AI 操作与语音修改",
+      "storageDevice": "仅在本机",
+      "storageSyncE2ee": "已同步，端到端加密",
+      "storageSync": "同步到 Vaulto 云端",
+      "speechDeviceAlways": "始终在本机，联网时也是",
+      "speechModelMissing": "在本机 · 语音模型未下载，录音等待处理",
+      "speechDevice": "在本机",
+      "speechCloudFallback": "Vaulto 云端 · 离线时在本机",
+      "speechCloud": "Vaulto 云端 · 离线录音等联网后处理",
+      "custom": "您的 AI 服务",
+      "aiDevice": "在本机",
+      "aiCloudFallback": "Vaulto 云端，仅文字 · 离线时在本机",
+      "aiCloud": "Vaulto 云端，仅文字",
+      "aiNeedsModel": "在本机 · AI 模型未下载",
+      "aiSignIn": "关闭 · 登录以使用云端 AI，或使用本机 AI",
+      "aiNone": "关闭",
+      "change": "更改",
+      "changeStorageHint": "打开同步设置"
     }
   },
   "languages": {
@@ -732,6 +760,15 @@
       "message": "无法保存你最近的更改。更改仍在这里：请重试，或留在此处复制文本。",
       "retry": "重试",
       "leave": "不保存并离开"
+    },
+    "voiceEdit": {
+      "renamed": "笔记已重命名为“{{title}}”",
+      "listInNewVersion": "已在新版本中生成列表，原文未改动。",
+      "changedInNewVersion": "已在新版本中修改，原文未改动。",
+      "listUpdatedIn": "已在“{{version}}”中更新列表",
+      "changedIn": "已修改“{{version}}”",
+      "checkedIn": "已在“{{version}}”中勾选项目",
+      "undoStale": "笔记已有新的改动，请使用编辑器中的撤销。"
     }
   },
   "voice": {
@@ -776,7 +813,37 @@
     "exitTitle": "保留这段录音吗？",
     "exitDesc": "返回将删除已录制的内容。",
     "continueRecording": "继续录音",
-    "saveRecording": "保存"
+    "saveRecording": "保存",
+    "route": {
+      "audioOnly": "仅录音 · 暂不转文字",
+      "devicePrivate": "仅在本机 · 不发送任何内容",
+      "deviceModelMissing": "仅在本机 · 语音模型未下载",
+      "deviceOffline": "无网络 · 在本机转文字",
+      "device": "在本机 · 离线可用",
+      "later": "无网络 · 联网后再转文字",
+      "custom": "您的 AI 服务 · 需要网络",
+      "cloudFallback": "Vaulto 云端 · 离线时在本机",
+      "cloud": "Vaulto 云端 · 需要网络"
+    },
+    "outcome": {
+      "audioOnly": "保存为音频。之后可在笔记的录音中转文字。",
+      "later": "录音现已保存。联网后打开笔记即可获得文字。",
+      "modelMissing": "录音已保存。下载语音模型后即可获得文字。",
+      "dictate": "您说的话会原样写入笔记。",
+      "editDevice": "在本机：可用简短指令创建清单或列表、重命名笔记。其他内容作为文字写入。",
+      "editCloud": "说出修改：“做个清单”“删掉鸡蛋”“把笔记改名为旅行”。其他内容作为文字写入。"
+    },
+    "mode": {
+      "dictate": "听写",
+      "edit": "语音修改",
+      "label": "麦克风模式",
+      "dictateHint": "原样写入笔记",
+      "editHint": "指令会修改笔记，其他内容写为文字",
+      "current": "麦克风模式：{{mode}}",
+      "switchTo": "轻点两下切换到“{{mode}}”",
+      "micHintEdit": "语音修改：指令会修改笔记。长按可单次听写。",
+      "micHintDictate": "听写：原样写入笔记。"
+    }
   },
   "aux": {
     "emailVerified": "邮箱已验证！",

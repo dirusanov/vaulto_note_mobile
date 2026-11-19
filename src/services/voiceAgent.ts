@@ -3,6 +3,7 @@ import { isDeviceOffline } from '../utils/connectivity';
 import { isLocalLLMReady } from './effectiveProvider';
 import { generateWithLocalLLM, getSelectedLocalLLMModel } from './LocalLLMService';
 import type { VoiceNoteResult } from './TranscriptionService';
+import { DEVICE_COMMAND_MAX_WORDS, isDeviceCommandCandidate } from '../utils/voiceCommand';
 
 /**
  * The voice agent has no switch: every recording is understood as either plain
@@ -17,7 +18,7 @@ import type { VoiceNoteResult } from './TranscriptionService';
 export type VoiceAgentRoute = 'cloud' | 'device' | null;
 
 /** Requests are short; anything longer is dictation and skips the on-device model. */
-export const DEVICE_AGENT_MAX_WORDS = 40;
+export const DEVICE_AGENT_MAX_WORDS = DEVICE_COMMAND_MAX_WORDS;
 
 /**
  * Qwen3.5 0.8B mistakes plain dictation for list requests (tested 2026-10-06), so
@@ -41,13 +42,14 @@ export const resolveVoiceAgentRoute = async (options: {
     return deviceReady ? 'device' : null;
 };
 
-const countWords = (text: string): number => text.trim().split(/\s+/).filter(Boolean).length;
-
-/** Whether the on-device model should look at this transcript at all. */
-export const isDeviceAgentCandidate = (transcript: string): boolean => {
-    const words = countWords(transcript);
-    return words >= 2 && words <= DEVICE_AGENT_MAX_WORDS;
-};
+/**
+ * Whether the on-device model should look at this transcript at all: 2-40 words
+ * that plainly ask for a checklist, a list or a new name, not negated
+ * (voiceCommand.deviceCommandGate). Everything else is dictation, so a small
+ * model never gets the chance to turn plain speech into an edit.
+ */
+export const isDeviceAgentCandidate = (transcript: string, currentContent?: string): boolean =>
+    isDeviceCommandCandidate(transcript, currentContent);
 
 const RESPONSE_SCHEMA = {
     type: 'object',
@@ -123,7 +125,7 @@ export const processVoiceNoteOnDevice = async (
     currentContent: string,
 ): Promise<VoiceNoteResult> => {
     const text = transcript.trim();
-    if (!isDeviceAgentCandidate(text)) return dictation(text);
+    if (!isDeviceAgentCandidate(text, currentContent)) return dictation(text);
     const startedAt = Date.now();
     let raw: string;
     try {

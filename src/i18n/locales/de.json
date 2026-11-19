@@ -391,6 +391,34 @@
       "aiReadyTitle": "KI auf dem Gerät ist bereit",
       "aiReadyGuest": "Ohne Konto läuft KI auf diesem Gerät. Schalte „{{option}}“ ein, um sie zu nutzen: Sprache und KI bleiben dann auf dem Gerät.",
       "turnOn": "Einschalten"
+    },
+    "privacySummary": {
+      "title": "Verlässt meine Aufnahme das Telefon?",
+      "answerNo": "Nein. Aufnahmen bleiben auf diesem Telefon.",
+      "answerSyncE2ee": "Nur als Ihre Sync-Kopie, Ende-zu-Ende-verschlüsselt.",
+      "answerSync": "Nur als Ihre Sync-Kopie.",
+      "answerTextOnline": "Ja, wenn online: Die Cloud macht aus Sprache Text.",
+      "answerText": "Ja: Die Cloud macht aus Sprache Text.",
+      "storage": "Notizen und Aufnahmen",
+      "speech": "Sprache zu Text",
+      "ai": "KI-Aktionen und Sprachänderungen",
+      "storageDevice": "Nur auf diesem Telefon",
+      "storageSyncE2ee": "Synchronisiert, Ende-zu-Ende-verschlüsselt",
+      "storageSync": "Mit der Vaulto-Cloud synchronisiert",
+      "speechDeviceAlways": "Auf diesem Telefon, auch online",
+      "speechModelMissing": "Auf diesem Telefon · Sprachmodell fehlt, Aufnahmen warten",
+      "speechDevice": "Auf diesem Telefon",
+      "speechCloudFallback": "Vaulto-Cloud · offline auf diesem Telefon",
+      "speechCloud": "Vaulto-Cloud · Offline-Aufnahmen warten auf Internet",
+      "custom": "Ihr KI-Dienst",
+      "aiDevice": "Auf diesem Telefon",
+      "aiCloudFallback": "Vaulto-Cloud, nur Text · offline auf diesem Telefon",
+      "aiCloud": "Vaulto-Cloud, nur Text",
+      "aiNeedsModel": "Auf diesem Telefon · KI-Modell nicht geladen",
+      "aiSignIn": "Aus · für Cloud-KI anmelden oder KI auf dem Telefon nutzen",
+      "aiNone": "Aus",
+      "change": "Ändern",
+      "changeStorageHint": "Öffnet die Sync-Einstellungen"
     }
   },
   "languages": {
@@ -734,6 +762,15 @@
       "message": "Deine letzten Änderungen konnten nicht gespeichert werden. Sie sind noch hier: versuche es erneut oder bleib und kopiere den Text.",
       "retry": "Erneut versuchen",
       "leave": "Ohne Speichern verlassen"
+    },
+    "voiceEdit": {
+      "renamed": "Notiz umbenannt in „{{title}}“",
+      "listInNewVersion": "Liste in einer neuen Version erstellt. Das Original bleibt unverändert.",
+      "changedInNewVersion": "In einer neuen Version geändert. Das Original bleibt unverändert.",
+      "listUpdatedIn": "Liste in „{{version}}“ aktualisiert",
+      "changedIn": "In „{{version}}“ geändert",
+      "checkedIn": "Punkte in „{{version}}“ abgehakt",
+      "undoStale": "Die Notiz hat sich inzwischen geändert. Nutzen Sie Rückgängig im Editor."
     }
   },
   "voice": {
@@ -778,7 +815,37 @@
     "exitTitle": "Aufnahme behalten?",
     "exitDesc": "Beim Zurückgehen würde das Aufgenommene gelöscht.",
     "continueRecording": "Weiter aufnehmen",
-    "saveRecording": "Speichern"
+    "saveRecording": "Speichern",
+    "route": {
+      "audioOnly": "Nur Aufnahme · noch kein Text",
+      "devicePrivate": "Nur auf diesem Telefon · nichts wird gesendet",
+      "deviceModelMissing": "Nur auf diesem Telefon · Sprachmodell nicht geladen",
+      "deviceOffline": "Kein Internet · Text entsteht auf diesem Telefon",
+      "device": "Auf diesem Telefon · funktioniert offline",
+      "later": "Kein Internet · Text folgt, wenn Sie online sind",
+      "custom": "Ihr KI-Dienst · braucht Internet",
+      "cloudFallback": "Vaulto-Cloud · offline auf diesem Telefon",
+      "cloud": "Vaulto-Cloud · braucht Internet"
+    },
+    "outcome": {
+      "audioOnly": "Wird als Audio gespeichert. Text später über die Aufnahmen der Notiz.",
+      "later": "Die Aufnahme wird jetzt gespeichert. Öffnen Sie die Notiz mit Internet, um den Text zu erhalten.",
+      "modelMissing": "Die Aufnahme wird gespeichert. Laden Sie das Sprachmodell, um Text zu erhalten.",
+      "dictate": "Ihre Worte kommen genau so in die Notiz, wie Sie sie sagen.",
+      "editDevice": "Auf diesem Telefon: kurze Bitten wie Checkliste, Liste oder Notiz umbenennen. Alles andere wird Text.",
+      "editCloud": "Sagen Sie eine Änderung: „Mach eine Checkliste“, „Entferne die Eier“, „Nenne sie Reise“. Alles andere wird Text."
+    },
+    "mode": {
+      "dictate": "Diktieren",
+      "edit": "Per Stimme ändern",
+      "label": "Mikrofonmodus",
+      "dictateHint": "Worte kommen so in die Notiz, wie gesagt",
+      "editHint": "Bitten ändern die Notiz; anderes wird Text",
+      "current": "Mikrofonmodus: {{mode}}",
+      "switchTo": "Doppeltippen, um zu „{{mode}}“ zu wechseln",
+      "micHintEdit": "Per Stimme ändern: Bitten ändern die Notiz. Gedrückt halten, um einmal zu diktieren.",
+      "micHintDictate": "Diktieren: Worte kommen so in die Notiz, wie gesagt."
+    }
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",

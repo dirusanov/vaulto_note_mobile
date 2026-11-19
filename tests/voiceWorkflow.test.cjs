@@ -149,6 +149,7 @@ test('phone-only voice never selects the cloud command agent, even with only spe
     '../utils/connectivity': { isDeviceOffline: async () => state.offline },
     './effectiveProvider': { isLocalLLMReady: async () => state.ready },
     './LocalLLMService': { getSelectedLocalLLMModel: async () => ({ key: state.model }) },
+    '../utils/voiceCommand': load('src/utils/voiceCommand.ts'),
   });
   assert.equal(await resolveVoiceAgentRoute({ signedIn: true }), 'cloud');
   state.privateMode = true;

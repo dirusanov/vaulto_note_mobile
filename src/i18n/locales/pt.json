@@ -391,6 +391,34 @@
       "aiReadyTitle": "A IA no dispositivo está pronta",
       "aiReadyGuest": "Sem conta, a IA funciona neste dispositivo. Ative “{{option}}” para a usar: a voz e a IA ficam então no dispositivo.",
       "turnOn": "Ativar"
+    },
+    "privacySummary": {
+      "title": "Minha gravação sai do telefone?",
+      "answerNo": "Não. As gravações ficam neste telefone.",
+      "answerSyncE2ee": "Só como sua cópia sincronizada, com criptografia de ponta a ponta.",
+      "answerSync": "Só como sua cópia sincronizada.",
+      "answerTextOnline": "Sim, quando online: a nuvem transforma a fala em texto.",
+      "answerText": "Sim: a nuvem transforma a fala em texto.",
+      "storage": "Notas e gravações",
+      "speech": "Fala para texto",
+      "ai": "Ações de IA e edições por voz",
+      "storageDevice": "Só neste telefone",
+      "storageSyncE2ee": "Sincronizado, criptografia de ponta a ponta",
+      "storageSync": "Sincronizado com a nuvem Vaulto",
+      "speechDeviceAlways": "Neste telefone, mesmo online",
+      "speechModelMissing": "Neste telefone · modelo de voz ausente, gravações aguardam",
+      "speechDevice": "Neste telefone",
+      "speechCloudFallback": "Nuvem Vaulto · offline, neste telefone",
+      "speechCloud": "Nuvem Vaulto · gravações offline aguardam internet",
+      "custom": "Seu serviço de IA",
+      "aiDevice": "Neste telefone",
+      "aiCloudFallback": "Nuvem Vaulto, só texto · offline, neste telefone",
+      "aiCloud": "Nuvem Vaulto, só texto",
+      "aiNeedsModel": "Neste telefone · modelo de IA não baixado",
+      "aiSignIn": "Desligado · entre para IA na nuvem ou use a IA do telefone",
+      "aiNone": "Desligado",
+      "change": "Alterar",
+      "changeStorageHint": "Abre as configurações de sincronização"
     }
   },
   "languages": {
@@ -735,6 +763,15 @@
       "message": "Não foi possível salvar suas últimas alterações. Elas continuam aqui: tente novamente ou fique e copie o texto.",
       "retry": "Tentar novamente",
       "leave": "Sair sem salvar"
+    },
+    "voiceEdit": {
+      "renamed": "Nota renomeada para “{{title}}”",
+      "listInNewVersion": "Lista criada numa nova versão. O original não mudou.",
+      "changedInNewVersion": "Alterado numa nova versão. O original não mudou.",
+      "listUpdatedIn": "Lista atualizada em “{{version}}”",
+      "changedIn": "Alterado em “{{version}}”",
+      "checkedIn": "Itens marcados em “{{version}}”",
+      "undoStale": "A nota mudou desde então. Use Desfazer no editor."
     }
   },
   "voice": {
@@ -779,7 +816,37 @@
     "exitTitle": "Manter esta gravação?",
     "exitDesc": "Voltar apagaria o que foi gravado.",
     "continueRecording": "Continuar a gravar",
-    "saveRecording": "Guardar"
+    "saveRecording": "Guardar",
+    "route": {
+      "audioOnly": "Só gravação · ainda sem texto",
+      "devicePrivate": "Só neste telefone · nada é enviado",
+      "deviceModelMissing": "Só neste telefone · modelo de voz não baixado",
+      "deviceOffline": "Sem internet · o texto é feito neste telefone",
+      "device": "Neste telefone · funciona offline",
+      "later": "Sem internet · o texto vem quando estiver online",
+      "custom": "Seu serviço de IA · precisa de internet",
+      "cloudFallback": "Nuvem Vaulto · offline, neste telefone",
+      "cloud": "Nuvem Vaulto · precisa de internet"
+    },
+    "outcome": {
+      "audioOnly": "Salvo como áudio. Faça o texto depois nas gravações da nota.",
+      "later": "A gravação é salva agora. Abra a nota com internet para obter o texto.",
+      "modelMissing": "A gravação é salva. Baixe o modelo de voz para obter o texto.",
+      "dictate": "Suas palavras entram na nota exatamente como ditas.",
+      "editDevice": "Neste telefone: pedidos curtos para criar checklist ou lista, ou renomear a nota. O resto entra como texto.",
+      "editCloud": "Diga uma mudança: “faça uma checklist”, “tire os ovos”, “renomeie para Viagem”. O resto entra como texto."
+    },
+    "mode": {
+      "dictate": "Ditar",
+      "edit": "Editar por voz",
+      "label": "Modo do microfone",
+      "dictateHint": "As palavras entram na nota como ditas",
+      "editHint": "Pedidos mudam a nota; o resto entra como texto",
+      "current": "Modo do microfone: {{mode}}",
+      "switchTo": "Toque duas vezes para mudar para “{{mode}}”",
+      "micHintEdit": "Editar por voz: pedidos mudam a nota. Segure para ditar uma vez.",
+      "micHintDictate": "Ditar: as palavras entram na nota como ditas."
+    }
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
