@@ -477,8 +477,9 @@ const TASKS_RESPONSE_SCHEMA = {
                     title: { type: 'string' },
                     date: { type: ['string', 'null'] },
                     time: { type: ['string', 'null'] },
+                    quote: { type: ['string', 'null'] },
                 },
-                required: ['title', 'date', 'time'],
+                required: ['title', 'date', 'time', 'quote'],
             },
         },
     },
@@ -496,7 +497,8 @@ export async function extractTasks(noteMarkdown: string, now: Date = new Date())
     const raw = await runInstruction(buildTaskExtractionPrompt(now), noteMarkdown, {
         json: true,
         jsonSchema: TASKS_RESPONSE_SCHEMA,
-        maxTokens: 768,
+        // Each task also quotes its source words.
+        maxTokens: 1200,
     });
     return parseExtractedTasks(raw, noteMarkdown, now);
 }

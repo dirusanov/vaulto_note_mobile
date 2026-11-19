@@ -712,7 +712,10 @@
       "notifyOffText": "Erlaube Benachrichtigungen für Vaulto in den Geräteeinstellungen, um Erinnerungen zu bekommen.",
       "openSettings": "Einstellungen öffnen",
       "reminderPast": "Diese Zeit ist schon vorbei",
-      "reviewHint": "Prüfe Aufgaben und Termine vor dem Hinzufügen anhand der Notiz."
+      "reviewHint": "Prüfe Aufgaben und Termine vor dem Hinzufügen anhand der Notiz.",
+      "quoted": "„{{quote}}“",
+      "listen": "Anhören",
+      "listenA11y": "Anhören, wo das gesagt wurde: {{quote}}"
     },
     "protected": {
       "protectNote": "Notiz schützen",
@@ -1364,5 +1367,19 @@
       "pagesHint": "Seite für Seite, wie ein Heft",
       "canvasHint": "Endlos in alle Richtungen"
     }
+  },
+  "listen": {
+    "title": "Text und Audio",
+    "hint": "Tippe auf einen Satz, um ihn zu hören.",
+    "hintWithEdits": "Tippe auf einen Satz, um ihn zu hören. Geänderte Sätze haben keine Zeit.",
+    "rewritten": "Diese Version wurde umgeschrieben, daher siehst du den Text der Aufnahme selbst.",
+    "playHint": "Spielt die Aufnahme ab diesem Satz ab",
+    "unlinked": "Nach der Aufnahme geändert, ohne Audio-Verknüpfung",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "position": "{{position}} von {{duration}}",
+    "failed": "Die Aufnahme konnte nicht abgespielt werden",
+    "follow": "Aktuellen Satz zeigen",
+    "entryHint": "Tippe auf einen Satz, um ihn zu hören"
   }
 }

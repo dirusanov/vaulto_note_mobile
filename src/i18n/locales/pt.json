@@ -713,7 +713,10 @@
       "notifyOffText": "Permita as notificações do Vaulto nas configurações do dispositivo para receber lembretes.",
       "openSettings": "Abrir configurações",
       "reminderPast": "Esse horário já passou",
-      "reviewHint": "Confira as tarefas e datas na nota antes de adicioná-las."
+      "reviewHint": "Confira as tarefas e datas na nota antes de adicioná-las.",
+      "quoted": "“{{quote}}”",
+      "listen": "Ouvir",
+      "listenA11y": "Ouvir onde isto foi dito: {{quote}}"
     },
     "protected": {
       "protectNote": "Proteger nota",
@@ -1369,5 +1372,19 @@
       "pagesHint": "Página por página, como um caderno",
       "canvasHint": "Infinita em todas as direções"
     }
+  },
+  "listen": {
+    "title": "Texto e áudio",
+    "hint": "Toque numa frase para ouvi-la.",
+    "hintWithEdits": "Toque numa frase para ouvi-la. Frases alteradas não têm tempo.",
+    "rewritten": "Esta versão foi reescrita, por isso aparece o texto da própria gravação.",
+    "playHint": "Reproduz a gravação a partir desta frase",
+    "unlinked": "Alterada depois da gravação, sem ligação ao áudio",
+    "play": "Reproduzir",
+    "pause": "Pausar",
+    "position": "{{position}} de {{duration}}",
+    "failed": "Não foi possível reproduzir a gravação",
+    "follow": "Mostrar a frase atual",
+    "entryHint": "Toque numa frase para ouvi-la"
   }
 }

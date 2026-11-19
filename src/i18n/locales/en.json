@@ -712,7 +712,10 @@
       "notifyOffText": "Allow notifications for Vaulto in the device settings to get reminders.",
       "openSettings": "Open settings",
       "reminderPast": "This time has already passed",
-      "reviewHint": "Check tasks and dates against the note before adding them."
+      "reviewHint": "Check tasks and dates against the note before adding them.",
+      "quoted": "“{{quote}}”",
+      "listen": "Listen",
+      "listenA11y": "Listen to where this was said: {{quote}}"
     },
     "protected": {
       "protectNote": "Protect note",
@@ -1366,5 +1369,19 @@
       "pagesHint": "Page by page, like a notebook",
       "canvasHint": "Endless in every direction"
     }
+  },
+  "listen": {
+    "title": "Text and audio",
+    "hint": "Tap a sentence to hear it.",
+    "hintWithEdits": "Tap a sentence to hear it. Sentences you changed have no time.",
+    "rewritten": "This version was rewritten, so here is the recording’s own text.",
+    "playHint": "Plays the recording from this sentence",
+    "unlinked": "Changed after recording, no audio link",
+    "play": "Play",
+    "pause": "Pause",
+    "position": "{{position}} of {{duration}}",
+    "failed": "Could not play this recording",
+    "follow": "Show the current sentence",
+    "entryHint": "Tap a sentence to hear it"
   }
 }

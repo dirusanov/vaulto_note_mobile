@@ -87,7 +87,7 @@ function transcription(options = {}) {
         return { isDownloaded: state.downloaded };
       },
       prepareAudioForLocalWhisper: async (uri) => (state.converted ? 'file://converted.wav' : uri),
-      transcribeWithLocalWhisper: async () => { calls.local++; return 'Local transcript'; },
+      transcribeWithLocalWhisperTimed: async () => { calls.local++; return { text: 'Local transcript', segments: [{ text: 'Local transcript', start: 0, end: 1.2 }] }; },
     },
   };
   const service = load('src/services/TranscriptionService.ts', imports, {
@@ -98,11 +98,26 @@ function transcription(options = {}) {
       if (state.networkFailure === 'timeout') { const error = new Error('Aborted'); error.name = 'AbortError'; throw error; }
       if (state.networkFailure) throw new TypeError('Network request failed');
       const status = state.limited ? 403 : state.status;
-      return { status, ok: status === 200, headers: { get: () => 'application/json' }, json: async () => ({ text: 'Cloud transcript', detail: state.detail ?? 'Rejected request' }) };
+      return { status, ok: status === 200, headers: { get: () => 'application/json' }, json: async () => ({ text: 'Cloud transcript', detail: state.detail ?? 'Rejected request', ...(state.serverSegments || {}) }) };
     },
   });
   return { service, calls, state };
 }
+test('phrase timestamps: requested opt-in, read when the server sends them, absent otherwise', async () => {
+  const old = transcription();
+  const plainResult = await old.service.transcribeAudio('file:///cache/a.m4a');
+  assert.equal(plainResult.success, true);
+  assert.equal(plainResult.segments, undefined);
+  const timed = transcription({ serverSegments: { segments: [{ start: 0, end: 1.5, text: 'Cloud transcript' }, { start: 'x', end: 2, text: 'bad' }], segments_source: 'aligned', duration: 1.5 } });
+  const timedResult = await timed.service.transcribeAudio('file:///cache/a.m4a');
+  assert.deepEqual(plain(timedResult.segments), [{ start: 0, end: 1.5, text: 'Cloud transcript' }]);
+  assert.equal(timedResult.segmentsSource, 'aligned');
+  assert.equal(timedResult.durationSeconds, 1.5);
+  const local = transcription({ downloaded: true, privateMode: true, converted: true });
+  const localResult = await local.service.transcribeAudio('file:///cache/a.m4a');
+  assert.equal(localResult.segmentsSource, 'device');
+  assert.equal(localResult.durationSeconds, 5);
+});
 test('transcription uploads preserve the materialized audio filename for every container', async () => {
   const { service, calls } = transcription();
   for (const name of ['legacy-retry.wav', 'native-recording.m4a', 'imported.mp3']) {

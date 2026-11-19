@@ -22,7 +22,8 @@ import { generateUUID } from '../utils/uuid';
 import { onUnauthorized } from '../utils/authEvents';
 import { refreshSession } from '../api/tokenRefresh';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
-import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisper } from './LocalWhisperService';
+import { getLocalWhisperModelStatus, prepareAudioForLocalWhisper, transcribeWithLocalWhisperTimed } from './LocalWhisperService';
+import type { TimedSegment, TimingSource } from '../utils/phraseTiming';
 import { isDeviceOffline } from '../utils/connectivity';
 import { recordLocalTranscription } from './localSpeechSpeed';
 import { clearAiLimit, isLlmLimitReason, markAiLimitReached } from '../utils/aiLimitState';
@@ -46,7 +47,24 @@ export interface TranscriptionResult {
     error?: string;
     /** A transport failure can use a downloaded speech model without changing settings. */
     errorKind?: 'network';
+    /**
+     * When each part of the audio was said, if the transcriber told us
+     * (on-device whisper always, the server when it supports timestamps).
+     * Seconds from the start of this file.
+     */
+    segments?: TimedSegment[];
+    /** device: whisper on the phone; cloud: same pass as the text; aligned: a separate timing pass. */
+    segmentsSource?: TimingSource;
+    /** Length of the transcribed file, when known (meeting parts add up). */
+    durationSeconds?: number;
 }
+
+/** Server segments are plain JSON from the network: keep only well-formed ones. */
+const parseServerSegments = (value: unknown): TimedSegment[] => (Array.isArray(value) ? value : [])
+    .map((item) => item as { start?: unknown; end?: unknown; text?: unknown })
+    .filter((item) => typeof item?.text === 'string' && typeof item.start === 'number' && typeof item.end === 'number'
+        && Number.isFinite(item.start) && Number.isFinite(item.end))
+    .map((item) => ({ text: item.text as string, start: item.start as number, end: item.end as number }));
 
 /** How the returned content relates to the note it was built from. */
 export type AgentContentAction = 'append' | 'replace' | 'none';
@@ -233,6 +251,8 @@ const buildBackendTranscriptionFormData = (audioUri: string, language?: string):
     if (language) {
         formData.append('language', language);
     }
+    // Opt-in: servers that know it add phrase timestamps; older ones ignore it.
+    formData.append('timestamps', 'segment');
     return formData;
 };
 
@@ -664,16 +684,20 @@ async function transcribeViaLocalWhisper(audioUri: string, language?: string): P
         const startedAt = Date.now();
         preparedAudioUri = await prepareAudioForLocalWhisper(audioUri);
         const resolvedLanguage = await resolvePreferredLocalWhisperLanguage(language);
-        const text = await transcribeWithLocalWhisper(preparedAudioUri, { language: resolvedLanguage });
+        const { text, segments } = await transcribeWithLocalWhisperTimed(preparedAudioUri, { language: resolvedLanguage });
+        let durationSeconds: number | undefined;
         if (preparedAudioUri !== audioUri) {
             // The converted file is 16 kHz mono 16-bit PCM: its size gives the length.
             const wavInfo = await FileSystem.getInfoAsync(preparedAudioUri).catch(() => null);
             const audioMs = wavInfo?.exists ? Math.max(0, wavInfo.size - WAV_HEADER_BYTES) / WAV_BYTES_PER_MS : 0;
+            if (audioMs > 0) durationSeconds = audioMs / 1000;
             await recordLocalTranscription(Date.now() - startedAt, audioMs);
         }
         return {
             text,
             success: true,
+            ...(segments.length ? { segments, segmentsSource: 'device' as const } : {}),
+            ...(durationSeconds ? { durationSeconds } : {}),
         };
     } catch (error) {
         console.error('[Transcription] Local Whisper failed', error);
@@ -740,9 +764,15 @@ async function transcribeViaBackend(
         }
 
         const result = await response.json();
+        const segments = parseServerSegments(result?.segments);
+        const duration = typeof result?.duration === 'number' && Number.isFinite(result.duration) && result.duration > 0
+            ? result.duration
+            : undefined;
         return {
             text: result.text || '',
             success: true,
+            ...(segments.length ? { segments, segmentsSource: result?.segments_source === 'aligned' ? 'aligned' as const : 'cloud' as const } : {}),
+            ...(duration ? { durationSeconds: duration } : {}),
         };
     } catch (error) {
         console.error('[Transcription] Backend call failed', error);

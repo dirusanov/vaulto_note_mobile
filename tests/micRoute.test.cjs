@@ -57,6 +57,7 @@ function transcriptionService(state) {
       getLocalWhisperModelStatus: async () => ({ isDownloaded: state.speechDownloaded }),
       prepareAudioForLocalWhisper: async (uri) => uri,
       transcribeWithLocalWhisper: async () => { calls.local++; return 'Local transcript'; },
+      transcribeWithLocalWhisperTimed: async () => { calls.local++; return { text: 'Local transcript', segments: [] }; },
     },
   };
   const service = load('src/services/TranscriptionService.ts', imports, {

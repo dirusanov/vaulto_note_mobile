@@ -16,6 +16,8 @@ import {
     ModelDownloadProgress,
 } from './modelDownload';
 
+import type { TimedSegment } from '../utils/phraseTiming';
+
 export type LocalWhisperModelKey = 'tiny' | 'base' | 'large' | 'turbo';
 
 export interface LocalWhisperModelDescriptor {
@@ -43,6 +45,8 @@ export interface RealtimeDictationHandle {
 type WhisperTranscriptPayload = {
     result?: string;
     text?: string;
+    /** whisper.cpp segments; t0/t1 are in centiseconds (10 ms). */
+    segments?: Array<{ text?: string; t0?: number; t1?: number }>;
 };
 
 type WhisperRealtimeEvent = {
@@ -411,7 +415,13 @@ export const deleteLocalWhisperModel = async (key?: string): Promise<void> => {
 export const transcribeWithLocalWhisper = async (
     audioUri: string,
     options?: { language?: string }
-): Promise<string> => {
+): Promise<string> => (await transcribeWithLocalWhisperTimed(audioUri, options)).text;
+
+/** The transcript plus whisper's segments in seconds, for "tap a phrase to hear it". */
+export const transcribeWithLocalWhisperTimed = async (
+    audioUri: string,
+    options?: { language?: string }
+): Promise<{ text: string; segments: TimedSegment[] }> => {
     if (Platform.OS === 'web') {
         throw new Error('Local Whisper is not supported in the browser');
     }
@@ -435,7 +445,10 @@ export const transcribeWithLocalWhisper = async (
             : await response;
 
         const text = result?.result || result?.text || '';
-        return stripWhisperHallucinations(text);
+        const segments: TimedSegment[] = (Array.isArray(result?.segments) ? result.segments : [])
+            .filter((segment) => typeof segment?.text === 'string' && Number.isFinite(segment.t0) && Number.isFinite(segment.t1))
+            .map((segment) => ({ text: segment.text as string, start: (segment.t0 as number) / 100, end: (segment.t1 as number) / 100 }));
+        return { text: stripWhisperHallucinations(text), segments };
     } finally {
         endJob('transcribe');
     }

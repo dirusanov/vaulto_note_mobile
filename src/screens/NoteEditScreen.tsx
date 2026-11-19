@@ -51,6 +51,15 @@ import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog
 import { EdgeFade } from '../components/EdgeFade';
 import { VersionsSheet, VersionListItem } from '../components/VersionsSheet';
 import { TasksSheet, TaskSheetItem } from '../components/TasksSheet';
+import { ListenSheet } from '../components/ListenSheet';
+import type { PhraseAudio } from '../hooks/usePhrasePlayer';
+import {
+    findQuoteLink,
+    linkTextToRecordings,
+    parseTimings,
+    timingsFromTranscription,
+    type TimingSourceRecording,
+} from '../utils/phraseTiming';
 import {
     checklistTitlesFromMarkdown,
     googleCalendarUrl,
@@ -75,7 +84,7 @@ import { notesPendingDelete } from '../utils/notesPendingDelete';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
 import { enqueuePendingTranscription, getPendingTranscriptions, removePendingTranscription } from '../services/pendingTranscriptions';
-import { persistMeetingParts, transcribeMeetingParts } from '../services/meetingTranscription';
+import { persistMeetingParts, transcribeMeetingParts, type MeetingTranscriptionResult } from '../services/meetingTranscription';
 import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive, ON_DEVICE_MODEL_REQUIRED } from '../services/TranscriptionService';
 import { getCryptoMode } from '../crypto/encryption';
 import { saveVoiceRecordingLocal, getVoiceRecordingsLocal, deleteVoiceRecordingLocal } from '../services/DatabaseService';
@@ -1586,6 +1595,10 @@ export const NoteEditScreen = () => {
     // Voice Recordings List State
     const [showRecordingsList, setShowRecordingsList] = useState(false);
     const [showRecordingTextModal, setShowRecordingTextModal] = useState(false);
+    // "Text and audio": the note (or one recording) with tap-to-hear phrases.
+    const [listenSheet, setListenSheet] = useState<{ visible: boolean; text: string; recordingId: string | null }>({
+        visible: false, text: '', recordingId: null,
+    });
     const [selectedRecordingForText, setSelectedRecordingForText] = useState<VoiceRecording | null>(null);
     const [pendingMicInputMode, setPendingMicInputMode] = useState<MicInputMode>('agent');
     const [rawSelection, setRawSelection] = useState({ start: 0, end: 0 });
@@ -4169,6 +4182,30 @@ export const NoteEditScreen = () => {
         return richContentToMarkdown(await flushVisualEditorContent());
     }, [editMode, flushVisualEditorContent]);
 
+    // Recordings of this note that know when each phrase was said.
+    const timingSources = useMemo<TimingSourceRecording[]>(() => voiceRecordings
+        .map((rec) => ({ recordingId: rec.id, timings: parseTimings(rec.timings) }))
+        .filter((item): item is TimingSourceRecording => !!item.timings)
+        // Oldest first: the order the note was spoken in.
+        .reverse(), [voiceRecordings]);
+    const phraseAudio = useMemo<PhraseAudio[]>(() => voiceRecordings
+        .map((rec) => ({ id: rec.id, path: rec.file_path, duration: rec.duration })), [voiceRecordings]);
+
+    const listenSheetSources = useMemo(() => (listenSheet.recordingId
+        ? timingSources.filter((source) => source.recordingId === listenSheet.recordingId)
+        : timingSources), [listenSheet.recordingId, timingSources]);
+
+    const openListenSheet = useCallback(async (recording?: VoiceRecording) => {
+        void clearInlineEditorAudio();
+        closeTopPlayer();
+        clearRecordingsPreview();
+        setShowRecordingsList(false);
+        const text = recording
+            ? recording.transcription || ''
+            : richContentToPlainText(await currentNoteMarkdown());
+        setListenSheet({ visible: true, text, recordingId: recording?.id ?? null });
+    }, [clearInlineEditorAudio, clearRecordingsPreview, closeTopPlayer, currentNoteMarkdown]);
+
     // Bumped when a search starts or the sheet closes, so a late answer cannot reopen it.
     const tasksRequestRef = useRef(0);
     const closeTasksSheet = useCallback(() => {
@@ -4184,11 +4221,19 @@ export const NoteEditScreen = () => {
             const found = markdown ? await extractTasks(markdown) : [];
             if (request !== tasksRequestRef.current) return;
             const existing = checklistTitlesFromMarkdown(markdown);
+            // A task can be heard where its words are still the recorded ones.
+            const phrases = timingSources.length && found.some((task) => task.quote)
+                ? linkTextToRecordings(richContentToPlainText(markdown), timingSources)
+                : [];
             setTasksSheet({
                 visible: true,
                 loading: false,
                 error: null,
-                tasks: found.map((task) => ({ ...task, inNote: isTaskInNote(task, existing) })),
+                tasks: found.map((task) => ({
+                    ...task,
+                    inNote: isTaskInNote(task, existing),
+                    source: findQuoteLink(task.quote, phrases)?.link ?? null,
+                })),
             });
         } catch (error) {
             if (request !== tasksRequestRef.current) return;
@@ -4204,7 +4249,7 @@ export const NoteEditScreen = () => {
                 tasks: [],
             });
         }
-    }, [currentNoteMarkdown, t]);
+    }, [currentNoteMarkdown, t, timingSources]);
 
     const handleFindTasks = () => {
         setShowMenu(false);
@@ -5779,7 +5824,7 @@ export const NoteEditScreen = () => {
     /** Meeting: each segment is transcribed on its own, then the texts are joined. */
     const transcribeMeetingSegments = async (
         segments: string[], onDeviceOnly: boolean, recordingId: string, encrypted: boolean = false,
-    ): Promise<{ success: boolean; text: string; error?: string }> => {
+    ): Promise<MeetingTranscriptionResult> => {
         try {
             return await transcribeMeetingParts(segments, recordingId, encrypted, {
                 exists: async (uri) => (await FileSystem.getInfoAsync(uri)).exists,
@@ -6026,7 +6071,7 @@ export const NoteEditScreen = () => {
                 }
             }
 
-            let transcription: { success: boolean; text: string; error?: string } = { success: false, text: '' };
+            let transcription: MeetingTranscriptionResult = { success: false, text: '' };
             let isTranscriptionSuccess = false;
             let transcribedText = '';
             let insertedPlainTextEarly = false;
@@ -6166,7 +6211,11 @@ export const NoteEditScreen = () => {
             }
 
             if (userId && isTranscriptionSuccess) {
-                await saveVoiceRecordingLocal(userId, { ...voiceRecording, transcription: transcribedText });
+                await saveVoiceRecordingLocal(userId, {
+                    ...voiceRecording,
+                    transcription: transcribedText,
+                    timings: timingsFromTranscription(transcribedText, transcription),
+                });
                 setVoiceRecordings(await getVoiceRecordingsLocal(userId, currentNoteId));
                 await updateNote(currentNoteId, { encrypted_transcription: transcribedText, has_audio: true });
                 await removeAudioEmbedsForRecording(savedPath);
@@ -6372,6 +6421,10 @@ export const NoteEditScreen = () => {
 
     const openRecordingTextView = (recording: VoiceRecording) => {
         setSelectedRecordingForText(recording);
+        if (timingSources.some((source) => source.recordingId === recording.id)) {
+            void openListenSheet(recording);
+            return;
+        }
         setShowRecordingTextModal(true);
     };
 
@@ -7194,6 +7247,7 @@ export const NoteEditScreen = () => {
                 await saveVoiceRecordingLocal(userId, {
                     ...targetRecording,
                     transcription: text,
+                    timings: timingsFromTranscription(text, transcription),
                 });
                 if (localNoteId) {
                     const refreshed = await getVoiceRecordingsLocal(userId, localNoteId);
@@ -8552,6 +8606,37 @@ export const NoteEditScreen = () => {
                 onAddToNote={(tasks) => { void handleAddTasksToNote(tasks); }}
                 onAddToCalendar={handleAddTaskToCalendar}
                 onRemind={handleRemindTask}
+                audio={phraseAudio}
+            />
+
+            <ListenSheet
+                visible={listenSheet.visible}
+                onClose={() => setListenSheet((prev) => ({ ...prev, visible: false }))}
+                text={listenSheet.text}
+                sources={listenSheetSources}
+                audio={phraseAudio}
+                title={listenSheet.recordingId ? t('edit.recognizedText', 'Recognized text') : undefined}
+                footer={listenSheet.recordingId ? (
+                    <View style={styles.listenFooter}>
+                        <TouchableOpacity
+                            style={[styles.recordingActionButton, styles.listenFooterButton]}
+                            onPress={() => {
+                                setListenSheet((prev) => ({ ...prev, visible: false }));
+                                void handleInsertSelectedRecordingText();
+                            }}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.recordingActionText}>{t('edit.insert', 'Insert')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.recordingSecondaryAction, styles.listenFooterButton]}
+                            onPress={() => { void handleCopySelectedRecordingText(); }}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.recordingSecondaryText}>{t('common.copy', 'Copy')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : null}
             />
 
             <VersionsSheet
@@ -8793,6 +8878,25 @@ export const NoteEditScreen = () => {
                         <TouchableWithoutFeedback>
                             <View style={[styles.aiModalContent, { paddingBottom: Math.max(insets.bottom, 0) + spacing.s }]}>
                                 <Text style={styles.aiModalTitle}>{t("edit.voiceRecordings", "Voice Recordings")}</Text>
+
+                                {timingSources.length > 0 && (
+                                    <TouchableOpacity
+                                        style={styles.listenEntry}
+                                        onPress={() => { void openListenSheet(); }}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={t('listen.title', 'Text and audio')}
+                                        accessibilityHint={t('listen.entryHint', 'Tap a sentence to hear it')}
+                                    >
+                                        <View style={styles.listenEntryIcon}>
+                                            <MaterialIcons name="record-voice-over" size={22} color={colors.primary} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.recordingTitle}>{t('listen.title', 'Text and audio')}</Text>
+                                            <Text style={styles.recordingSubtitle}>{t('listen.entryHint', 'Tap a sentence to hear it')}</Text>
+                                        </View>
+                                        <MaterialIcons name="chevron-right" size={22} color={colors.textTertiary} style={rtlFlip} />
+                                    </TouchableOpacity>
+                                )}
 
                                 {!!recordingsPreviewUri && (
                                     <View style={{ marginBottom: spacing.m, width: '100%', alignSelf: 'stretch' }}>
@@ -10051,6 +10155,35 @@ const styles = createStyles(() => ({
     recordingItemDivided: {
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
+    },
+    listenEntry: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.m,
+        minHeight: 64,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        marginBottom: spacing.m,
+        borderRadius: 16,
+        backgroundColor: colors.primaryLight,
+    },
+    listenEntryIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+    },
+    listenFooter: {
+        flexDirection: 'row',
+        gap: spacing.s,
+        paddingHorizontal: spacing.m,
+        paddingTop: spacing.s,
+    },
+    listenFooterButton: {
+        flex: 1,
+        marginBottom: 0,
     },
     recordingsEmpty: {
         fontSize: 15,
