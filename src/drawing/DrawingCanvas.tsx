@@ -1,6 +1,8 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState, LayoutChangeEvent, NativeSyntheticEvent, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
 import {
+    AlphaType,
+    BlendColor,
     BlendMode,
     Canvas,
     Circle,
@@ -9,9 +11,11 @@ import {
     DashPathEffect,
     Fill,
     FilterMode,
-    FractalNoise,
+    ColorType,
     Group,
     Image,
+    ImageShader,
+    MipmapMode,
     Paint,
     PaintStyle,
     Path,
@@ -54,7 +58,6 @@ import {
     createTrace,
     liveTailStart,
     nextFrozenPiece,
-    pencilGrainMatrix,
     recognizeShape,
     shapeIsClosed,
     shapeWidth,
@@ -67,6 +70,7 @@ import {
 import { Selection, TextBox } from './drawingModel';
 import { InkChunk, updateInkChunks } from './inkChunks';
 import { drawingBounds } from './drawingFormat';
+import { GRAIN_PER_UNIT, GRAIN_SIZE, GRAIN_UNITS, grainAlpha } from './grain';
 import {
     PAGE_GAP,
     PAPER_MARGIN_COLOR,
@@ -346,12 +350,38 @@ const buildPaper = (
     return { sheet, pattern: patternRecorder.finishRecordingAsPicture() };
 };
 
-// Graphite texture: fractal noise mapped to the ink colour's alpha. The noise is
-// in document space, so the grain stays put while you scroll or zoom.
-const PencilGrain: React.FC<{ matrix: SharedValue<number[]> }> = ({ matrix }) => (
+// Graphite texture: the ink colour through the alpha of grain.ts's tile, in
+// document space, so the grain stays put while you scroll or zoom. The native
+// ink layer draws the same tile, so a pencil stroke keeps its grain when the pen
+// lifts (fractal noise here and an approximation there made it jump).
+const grainImage = (): SkImage | null => {
+    'worklet';
+    // Once per runtime (JS and UI): worklets cannot share the image.
+    const store = globalThis as unknown as { __vaultoGrain?: SkImage | null };
+    if (store.__vaultoGrain === undefined) {
+        const alpha = grainAlpha();
+        const rgba = new Uint8Array(alpha.length * 4);
+        for (let i = 0; i < alpha.length; i++) {
+            rgba[i * 4] = 255;
+            rgba[i * 4 + 1] = 255;
+            rgba[i * 4 + 2] = 255;
+            rgba[i * 4 + 3] = alpha[i];
+        }
+        store.__vaultoGrain = Skia.Image.MakeImage(
+            { width: GRAIN_SIZE, height: GRAIN_SIZE, colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul },
+            Skia.Data.fromBytes(rgba),
+            GRAIN_SIZE * 4,
+        );
+    }
+    return store.__vaultoGrain;
+};
+
+const GRAIN_RECT = { x: 0, y: 0, width: GRAIN_UNITS, height: GRAIN_UNITS };
+
+const PencilGrain: React.FC<{ color: SharedValue<string> }> = ({ color }) => (
     <>
-        <FractalNoise freqX={0.9} freqY={0.9} octaves={2} seed={3} />
-        <ColorMatrix matrix={matrix} />
+        <ImageShader image={grainImage()} tx="repeat" ty="repeat" fit="fill" rect={GRAIN_RECT} sampling={{ filter: FilterMode.Linear, mipmap: MipmapMode.None }} />
+        <BlendColor color={color} mode="srcIn" />
     </>
 );
 
@@ -396,16 +426,15 @@ const makeInkPaint = (stroke: InkStroke): SkPaint => {
     paint.setAntiAlias(true);
     paint.setColor(Skia.Color(stroke.color));
     if (spec.grain) {
-        // Same graphite as the live stroke (PencilGrain), opacity folded into the alpha row.
-        const matrix = pencilGrainMatrix(stroke.color);
-        for (let i = 15; i < 20; i++) {
-            matrix[i] *= spec.opacity;
+        // Same graphite as the live stroke (PencilGrain) and the native layer.
+        const image = grainImage();
+        if (image) {
+            const scale = 1 / GRAIN_PER_UNIT;
+            paint.setShader(image.makeShaderOptions(TileMode.Repeat, TileMode.Repeat, FilterMode.Linear, MipmapMode.None, Skia.Matrix().scale(scale, scale)));
+            paint.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color(stroke.color), BlendMode.SrcIn));
         }
-        paint.setShader(Skia.Shader.MakeFractalNoise(0.9, 0.9, 2, 3, 0, 0));
-        paint.setColorFilter(Skia.ColorFilter.MakeMatrix(matrix));
-    } else {
-        paint.setAlphaf(spec.opacity);
     }
+    paint.setAlphaf(spec.opacity);
     if (stroke.tool === 'marker') {
         // A highlighter darkens what is under it, as on paper, instead of washing
         // the ink out: black text stays black under yellow.
@@ -1699,7 +1728,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
     const liveColor = useDerivedValue(() => strokeCfg.value.color);
     const liveOpacity = useDerivedValue(() => INK_TOOLS[strokeCfg.value.tool]?.opacity ?? 1);
     const liveBlend = useDerivedValue(() => (strokeCfg.value.tool === 'marker' ? 'multiply' : 'srcOver'));
-    const liveGrainMatrix = useDerivedValue(() => pencilGrainMatrix(strokeCfg.value.color));
     const liveGrain = canvasMode === 'ink' && INK_TOOLS[tool]?.grain;
     const inkLayer = useMemo(() => invertInk ? (
         <Paint>
@@ -1725,7 +1753,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
                     {!SCENE_CACHE && <Picture picture={directInkPicture!} />}
                     <Picture picture={pendingPicture} />
                     <Path path={livePath} color={liveColor} opacity={liveOpacity} blendMode={liveBlend}>
-                        {liveGrain && <PencilGrain matrix={liveGrainMatrix} />}
+                        {liveGrain && <PencilGrain color={liveColor} />}
                     </Path>
                     {labels}
                     {dragIndex !== null && texts[dragIndex] && (
@@ -1760,7 +1788,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(({
         surfaceKey, view.width, view.height, sceneImage, deskColor, transform,
         paperPictures, patternOpacity, inkLayer, pageClip, directInkPicture,
         pendingPicture, livePath, liveColor, liveOpacity, liveBlend, liveGrain,
-        liveGrainMatrix, labels, dragIndex, texts, dragTransform, selectionPicture,
+        labels, dragIndex, texts, dragTransform, selectionPicture,
         selectedLabels, selectionTransform, selectionRect, selectionStroke, dash,
         lassoPath, eraserX, eraserY, eraserR, lineColor, eraserOpacity,
         hoverX, hoverY, hoverRadius, invertInk, color, hoverOpacity,

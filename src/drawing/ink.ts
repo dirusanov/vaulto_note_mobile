@@ -96,24 +96,6 @@ export const invertedInkColor = (hex: string): string => {
     return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
 };
 
-/**
- * Colour matrix applied to fractal noise to get pencil graphite: the ink colour
- * with alpha taken from the noise, so the paper shows through in a grain.
- */
-export const pencilGrainMatrix = (hex: string): number[] => {
-    'worklet';
-    const value = parseInt(hex.replace('#', ''), 16) || 0;
-    const r = ((value >> 16) & 255) / 255;
-    const g = ((value >> 8) & 255) / 255;
-    const b = (value & 255) / 255;
-    return [
-        0, 0, 0, 0, r,
-        0, 0, 0, 0, g,
-        0, 0, 0, 0, b,
-        2.6, 0, 0, 0, -0.55,
-    ];
-};
-
 const CAP_STEPS = 8;
 
 /**

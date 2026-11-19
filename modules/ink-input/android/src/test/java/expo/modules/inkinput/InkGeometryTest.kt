@@ -89,4 +89,10 @@ class InkGeometryTest {
       assertSame(numbers(lines[c * 3 + 2]), whole, "case $c (incremental)")
     }
   }
+
+  @Test
+  fun grainMatchesTheCanvas() {
+    // Same checksum as tests/grain.test.cjs: the canvas and this layer draw identical graphite.
+    assertEquals(365598374L, grainChecksum(grainAlpha()))
+  }
 }

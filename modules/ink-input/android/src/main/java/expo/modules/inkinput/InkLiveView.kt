@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.random.Random
 
 /**
  * Draws the stroke under the pen (or finger) natively, in a front-buffered
@@ -195,8 +194,8 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   private var hoverDot: FloatArray? = null
   private val latest = AtomicReference<Frame?>(null)
 
-  private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-  private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+  private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { style = Paint.Style.FILL }
+  private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { style = Paint.Style.STROKE }
   private val layerPaint = Paint()
   private val hoverPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
@@ -697,10 +696,15 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     postDelayed({ release(listOf(stroke.id)) }, HELD_TIMEOUT_MS)
   }
 
-  /** The canvas draws these strokes now: they stop being drawn here, a frame later to be safe. */
+  /**
+   * The canvas draws these strokes now: they stop being drawn here once its
+   * frame is surely on screen. The canvas reports a frame when it has drawn it,
+   * and its surface shows it a frame or two later; letting go one frame after
+   * the report left the stroke blank for a frame at about every third lift.
+   */
   fun release(ids: List<Int>) {
     ids.forEach { unacked.remove(it) }
-    Choreographer.getInstance().postFrameCallback {
+    afterFrames(RELEASE_FRAMES) {
       val gone = held.filter { it.id in ids }
       if (gone.isNotEmpty()) {
         held.removeAll(gone.toSet())
@@ -708,6 +712,12 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
         gone.forEach { dirty.union(it.bounds) }
         show(dirty)
       }
+    }
+  }
+
+  private fun afterFrames(frames: Int, action: () -> Unit) {
+    Choreographer.getInstance().postFrameCallback {
+      if (frames <= 1) action() else afterFrames(frames - 1, action)
     }
   }
 
@@ -779,7 +789,9 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     private const val SPEED_WINDOW_MS = 8
     private const val SHAPE_HOLD_MS = 700L
     private const val SHAPE_STILL_DP = 6.0
-    private const val MAX_PREDICTION_DP = 24.0
+    /** Short: what the prediction drew past the last sample goes when the pen lifts. */
+    private const val MAX_PREDICTION_DP = 12.0
+    private const val RELEASE_FRAMES = 4
     private const val DIRTY_PAD = 3f
     private const val HELD_TIMEOUT_MS = 10_000L
 
@@ -792,48 +804,17 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     )))
 
     /**
-     * Pencil graphite: fine noise in the ink's alpha, close to the canvas's
-     * fractal noise run through pencilGrainMatrix (alpha = 2.6·noise − 0.55).
-     * In document units, so it stays put under the moving pen.
+     * Pencil graphite: the tile of grain.ts (grainAlpha), in document units, so
+     * it stays put under the moving pen and matches the canvas's pencil exactly
+     * when the pen lifts. (An approximation of the canvas's noise made the
+     * grain jump at every lift.)
      */
     private val grainShader: Shader by lazy {
-      // The canvas's noise (base frequency 0.9, two octaves) shows as grain finer
-      // than a document unit: cells of half and a quarter unit, drawn at 8 px a unit.
-      val units = 64
-      val perUnit = 8
-      val size = units * perUnit
-      val random = Random(3)
-      fun grid(n: Int) = Array(n) { FloatArray(n) { random.nextFloat() * 2 - 1 } }
-      val coarse = grid(units * 2)
-      val fine = grid(units * 4)
-      fun sample(g: Array<FloatArray>, u: Float, v: Float): Float {
-        val n = g.size
-        val x0 = u.toInt()
-        val y0 = v.toInt()
-        val fx = u - x0
-        val fy = v - y0
-        val sx = fx * fx * (3 - 2 * fx)
-        val sy = fy * fy * (3 - 2 * fy)
-        val a = g[y0 % n][x0 % n]
-        val b = g[y0 % n][(x0 + 1) % n]
-        val c = g[(y0 + 1) % n][x0 % n]
-        val d = g[(y0 + 1) % n][(x0 + 1) % n]
-        return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy
-      }
-      val pixels = IntArray(size * size)
-      for (y in 0 until size) {
-        for (x in 0 until size) {
-          val u = x.toFloat() / perUnit
-          val v = y.toFloat() / perUnit
-          val noise = sample(coarse, u * 2, v * 2) * 0.5f + sample(fine, u * 4, v * 4) * 0.35f
-          val value = 0.54f + noise * 0.5f
-          val alpha = (2.6f * value - 0.55f).coerceIn(0f, 1f)
-          pixels[y * size + x] = Color.argb((alpha * 255).toInt(), 255, 255, 255)
-        }
-      }
-      val bitmap = Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888).extractAlpha()
+      val alpha = grainAlpha()
+      val pixels = IntArray(alpha.size) { Color.argb(alpha[it].toInt() and 0xFF, 255, 255, 255) }
+      val bitmap = Bitmap.createBitmap(pixels, GRAIN_SIZE, GRAIN_SIZE, Bitmap.Config.ARGB_8888).extractAlpha()
       BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).apply {
-        setLocalMatrix(Matrix().apply { setScale(1f / perUnit, 1f / perUnit) })
+        setLocalMatrix(Matrix().apply { setScale(1f / GRAIN_PER_UNIT, 1f / GRAIN_PER_UNIT) })
       }
     }
 

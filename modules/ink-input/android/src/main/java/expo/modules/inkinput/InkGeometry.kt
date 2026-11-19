@@ -604,3 +604,62 @@ fun recognizeShape(points: DoubleList): DoubleList? {
   }
   return null
 }
+
+// ------------------------------------------------------------- pencil grain
+
+/** grain.ts: tile size in document units, and pixels per unit. */
+const val GRAIN_UNITS = 64
+const val GRAIN_PER_UNIT = 8
+const val GRAIN_SIZE = GRAIN_UNITS * GRAIN_PER_UNIT
+
+private fun grainHash(x: Int, y: Int, seed: Int): Double {
+  var h = x * 374761393 + y * 668265263 + seed * 1442695041
+  h = (h xor (h ushr 13)) * 1274126177
+  h = h xor (h ushr 16)
+  return ((h.toLong() and 0xFFFFFFFFL).toDouble() / 4294967295.0) * 2 - 1
+}
+
+private fun grainSample(n: Int, seed: Int, u: Double, v: Double): Double {
+  val x0 = floor(u).toInt()
+  val y0 = floor(v).toInt()
+  val fx = u - x0
+  val fy = v - y0
+  val sx = fx * fx * (3 - 2 * fx)
+  val sy = fy * fy * (3 - 2 * fy)
+  val xa = x0 % n
+  val xb = (x0 + 1) % n
+  val ya = y0 % n
+  val yb = (y0 + 1) % n
+  val a = grainHash(xa, ya, seed)
+  val b = grainHash(xb, ya, seed)
+  val c = grainHash(xa, yb, seed)
+  val d = grainHash(xb, yb, seed)
+  val top = a + (b - a) * sx
+  val bottom = c + (d - c) * sx
+  return top + (bottom - top) * sy
+}
+
+/** grainAlpha of grain.ts: the same bytes, so the canvas and this layer draw the same graphite. */
+fun grainAlpha(): ByteArray {
+  val out = ByteArray(GRAIN_SIZE * GRAIN_SIZE)
+  for (y in 0 until GRAIN_SIZE) {
+    val v = y.toDouble() / GRAIN_PER_UNIT
+    for (x in 0 until GRAIN_SIZE) {
+      val u = x.toDouble() / GRAIN_PER_UNIT
+      val noise = grainSample(GRAIN_UNITS * 2, 1, u * 2, v * 2) * 0.5 + grainSample(GRAIN_UNITS * 4, 2, u * 4, v * 4) * 0.35
+      val value = 0.54 + noise * 0.5
+      val alpha = min(1.0, max(0.0, 2.6 * value - 0.55))
+      out[y * GRAIN_SIZE + x] = floor(alpha * 255).toInt().toByte()
+    }
+  }
+  return out
+}
+
+/** FNV-1a of the tile (grainChecksum of grain.ts). */
+fun grainChecksum(bytes: ByteArray): Long {
+  var h = 0x811c9dc5.toInt()
+  for (b in bytes) {
+    h = (h xor (b.toInt() and 0xFF)) * 16777619
+  }
+  return h.toLong() and 0xFFFFFFFFL
+}
