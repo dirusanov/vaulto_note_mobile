@@ -1,5 +1,14 @@
 import type { TranscriptionResult } from './TranscriptionService';
 
+/** Timing of one meeting part, in that part's own clock (see phraseTiming.joinPartSegments). */
+export interface MeetingPartTiming {
+    segments?: TranscriptionResult['segments'];
+    segmentsSource?: TranscriptionResult['segmentsSource'];
+    durationSeconds?: number;
+}
+
+export type MeetingTranscriptionResult = TranscriptionResult & { parts?: MeetingPartTiming[] };
+
 interface MeetingDependencies {
     exists: (uri: string) => Promise<boolean>;
     decrypt: (uri: string, prefix: string) => Promise<string>;
@@ -11,12 +20,13 @@ interface MeetingDependencies {
 /** Never acknowledge a partial meeting as a complete transcript. */
 export async function transcribeMeetingParts(
     paths: string[], recordingId: string, encrypted: boolean, deps: MeetingDependencies,
-): Promise<TranscriptionResult> {
+): Promise<MeetingTranscriptionResult> {
     if (!paths.length) return { success: false, text: '', error: 'Recording segments unavailable' };
     for (const uri of paths) {
         if (!(await deps.exists(uri))) return { success: false, text: '', error: 'Recording segment unavailable' };
     }
     const parts: string[] = [];
+    const timing: MeetingPartTiming[] = [];
     for (let index = 0; index < paths.length; index += 1) {
         deps.onPart(index + 1, paths.length);
         let plaintext: string | undefined;
@@ -27,13 +37,14 @@ export async function transcribeMeetingParts(
             // A successfully recognised silent segment is complete. Continue to
             // later speech instead of retrying the whole meeting indefinitely.
             if (result.text.trim()) parts.push(result.text.trim());
+            timing.push({ segments: result.segments, segmentsSource: result.segmentsSource, durationSeconds: result.durationSeconds });
         } catch (error) {
             return { success: false, text: '', error: error instanceof Error ? error.message : 'Meeting transcription failed' };
         } finally {
             if (plaintext) await deps.remove(plaintext).catch(() => undefined);
         }
     }
-    return { success: true, text: parts.join('\n\n') };
+    return { success: true, text: parts.join('\n\n'), parts: timing };
 }
 
 /** Keep raw parts until all encrypted copies exist; clean up a failed attempt. */

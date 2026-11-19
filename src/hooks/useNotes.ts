@@ -707,6 +707,7 @@ export const useNotes = () => {
                 file_path: recording.file_path,
                 duration: recording.duration,
                 transcription: recording.transcription,
+                timings: recording.timings,
             })),
             improvements: (existing.improvements || [])
                 .filter((imp) => !imp.deleted && hasMeaningfulRichContent(imp.content || ''))
@@ -1307,6 +1308,7 @@ export const useNotes = () => {
                     file_path: recording.file_path,
                     duration: recording.duration,
                     transcription: recording.transcription,
+                    timings: recording.timings,
                     created_at: new Date().toISOString(),
                 });
             }

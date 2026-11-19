@@ -7,10 +7,14 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import type { ExtractedTask } from '../utils/taskExtraction';
 import { createStyles } from '../theme/createStyles';
+import { usePhrasePlayer, type PhraseAudio } from '../hooks/usePhrasePlayer';
+import { formatPhraseTime, type PhraseLink } from '../utils/phraseTiming';
 
 export interface TaskSheetItem extends ExtractedTask {
     /** Already a checklist item in the note. */
     inNote: boolean;
+    /** Where the task's words were said, if the sentence still matches the recording. */
+    source?: PhraseLink | null;
 }
 
 interface TasksSheetProps {
@@ -25,13 +29,28 @@ interface TasksSheetProps {
     onAddToCalendar: (task: ExtractedTask) => Promise<boolean>;
     /** Schedules a local notification; only offered for tasks with a date. */
     onRemind?: (task: ExtractedTask) => Promise<{ ok: boolean; message?: string }>;
+    /** The note's recordings, to play a task's source phrase. */
+    audio?: PhraseAudio[];
 }
+
+const NO_AUDIO: PhraseAudio[] = [];
 
 /** Action items the AI found in the note: add them as a checklist or to the calendar. */
 export const TasksSheet = ({
-    visible, loading, error, tasks, formatDue, onClose, onRetry, onAddToNote, onAddToCalendar, onRemind,
+    visible, loading, error, tasks, formatDue, onClose, onRetry, onAddToNote, onAddToCalendar, onRemind, audio,
 }: TasksSheetProps) => {
     const { t } = useTranslation();
+    const player = usePhrasePlayer(audio || NO_AUDIO, visible);
+    const [listeningId, setListeningId] = useState<string | null>(null);
+    const listen = (task: TaskSheetItem) => {
+        if (!task.source) return;
+        if (listeningId === task.id && player.state.isPlaying) {
+            void player.toggle();
+            return;
+        }
+        setListeningId(task.id);
+        void player.playFrom(task.source.recordingId, task.source.start, task.source.end);
+    };
     const insets = useSafeAreaInsets();
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [scheduled, setScheduled] = useState<Set<string>>(new Set());
@@ -119,8 +138,12 @@ export const TasksSheet = ({
                                             const isSelected = selected.has(task.id);
                                             const isScheduled = scheduled.has(task.id);
                                             const due = task.date ? formatDue(task) : '';
+                                            const source = task.source;
+                                            const playing = listeningId === task.id && player.state.isPlaying;
+                                            const loadingSource = listeningId === task.id && player.state.isLoading;
                                             return (
-                                                <View key={task.id} style={styles.row}>
+                                                <View key={task.id} style={styles.item}>
+                                                <View style={styles.row}>
                                                     <TouchableOpacity
                                                         style={styles.rowMain}
                                                         onPress={() => toggle(task.id)}
@@ -140,6 +163,11 @@ export const TasksSheet = ({
                                                                     {[due, task.inNote ? t('edit.tasks.inNote', 'Already in the note') : '']
                                                                         .filter(Boolean)
                                                                         .join(' · ')}
+                                                                </Text>
+                                                            ) : null}
+                                                            {task.quote && !source ? (
+                                                                <Text style={styles.quote} numberOfLines={3}>
+                                                                    {t('edit.tasks.quoted', '“{{quote}}”', { quote: task.quote })}
                                                                 </Text>
                                                             ) : null}
                                                         </View>
@@ -171,6 +199,36 @@ export const TasksSheet = ({
                                                             color={isScheduled ? colors.success : colors.primary}
                                                         />
                                                     </TouchableOpacity>
+                                                </View>
+                                                {source ? (
+                                                    // The words the task came from, and a tap to hear them said.
+                                                    <TouchableOpacity
+                                                        style={[styles.listen, playing && styles.listenActive]}
+                                                        onPress={() => listen(task)}
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={playing
+                                                            ? t('listen.pause', 'Pause')
+                                                            : t('edit.tasks.listenA11y', 'Listen to where this was said: {{quote}}', { quote: task.quote || task.title })}
+                                                        accessibilityState={{ busy: loadingSource }}
+                                                    >
+                                                        {loadingSource ? (
+                                                            <ActivityIndicator size="small" color={colors.primary} style={styles.listenIcon} />
+                                                        ) : (
+                                                            <MaterialIcons
+                                                                name={playing ? 'pause-circle-filled' : 'play-circle-outline'}
+                                                                size={22}
+                                                                color={colors.primary}
+                                                                style={styles.listenIcon}
+                                                            />
+                                                        )}
+                                                        <Text style={styles.listenText} numberOfLines={3}>
+                                                            <Text style={styles.listenTime}>{formatPhraseTime(source.start)}{'  '}</Text>
+                                                            {task.quote
+                                                                ? t('edit.tasks.quoted', '“{{quote}}”', { quote: task.quote })
+                                                                : t('edit.tasks.listen', 'Listen')}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ) : null}
                                                 </View>
                                             );
                                         })}
@@ -256,6 +314,9 @@ const styles = createStyles(() => ({
     list: {
         paddingHorizontal: spacing.s,
     },
+    item: {
+        paddingVertical: spacing.xxs,
+    },
     row: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -263,6 +324,45 @@ const styles = createStyles(() => ({
         minHeight: 56,
         paddingVertical: spacing.xs,
         paddingHorizontal: spacing.s,
+    },
+    quote: {
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 18,
+        fontStyle: 'italic',
+        color: colors.textSecondary,
+    },
+    listen: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 44,
+        marginLeft: 22 + spacing.s + spacing.s,
+        marginRight: spacing.s,
+        marginBottom: spacing.xs,
+        paddingVertical: 6,
+        paddingHorizontal: spacing.s,
+        borderRadius: 12,
+        backgroundColor: colors.backgroundSecondary,
+        gap: spacing.s,
+    },
+    listenActive: {
+        backgroundColor: colors.activeWordHighlight,
+    },
+    listenIcon: {
+        width: 22,
+    },
+    listenText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        fontStyle: 'italic',
+        color: colors.text,
+    },
+    listenTime: {
+        fontStyle: 'normal',
+        fontWeight: '600',
+        color: colors.primary,
+        fontVariant: ['tabular-nums'],
     },
     rowMain: {
         flex: 1,

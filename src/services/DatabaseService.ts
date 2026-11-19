@@ -12,8 +12,19 @@ import { clearPendingTranscriptions, movePendingTranscriptions } from './pending
 const STORAGE_KEY_PREFIX = 'vaulto_notes_local_store_';
 
 type StoredRecording = VoiceRecording & { user_id: string; note_ciphertext?: string; note_title_ciphertext?: string; note_transcript_ciphertext?: string };
+/** Timings are a convenience: unreadable ones (locked, damaged) are simply absent. */
+const decodeTimings = async (value: string | null | undefined): Promise<string | undefined> => {
+    if (!value) return undefined;
+    try {
+        return (await decrypt(value)) || undefined;
+    } catch {
+        return undefined;
+    }
+};
+
 const decodeRecordings = async (rows: StoredRecording[]): Promise<VoiceRecording[]> => Promise.all(rows.map(async (row) => {
-    const { note_ciphertext, note_title_ciphertext, note_transcript_ciphertext, ...recording } = row;
+    const { note_ciphertext, note_title_ciphertext, note_transcript_ciphertext, timings: storedTimings, ...rest } = row;
+    const recording = { ...rest, timings: rest.transcription ? await decodeTimings(storedTimings) : undefined };
     if (!recording.transcription) return recording;
     try {
         const previous = recording.transcription;
@@ -28,10 +39,12 @@ const decodeRecordings = async (rows: StoredRecording[]): Promise<VoiceRecording
             ));
             recording.transcription = wrapped;
         }
-        return { ...recording, transcription: locked ? undefined : await decrypt(recording.transcription) };
+        return locked
+            ? { ...recording, transcription: undefined, timings: undefined }
+            : { ...recording, transcription: await decrypt(recording.transcription) };
     } catch (error) {
         console.warn('[DatabaseService] Voice transcript remains unavailable', recording.id, error);
-        return { ...recording, transcription: undefined };
+        return { ...recording, transcription: undefined, timings: undefined };
     }
 }));
 
@@ -228,6 +241,8 @@ const openDb = async (): Promise<SQLite.SQLiteDatabase> => {
     } catch (e) {}
     try { await database.runAsync('ALTER TABLE note_improvements ADD COLUMN user_id TEXT;'); } catch (e) {}
     try { await database.runAsync('ALTER TABLE voice_recordings ADD COLUMN user_id TEXT;'); } catch (e) {}
+    // Phrase timestamps ("tap a phrase to hear it"), device-encrypted like the transcription.
+    try { await database.runAsync('ALTER TABLE voice_recordings ADD COLUMN timings TEXT;'); } catch (e) {}
 
     // VERSION MIGRATION
     try { await database.runAsync('ALTER TABLE notes ADD COLUMN version INTEGER DEFAULT 0;'); } catch (e) {}
@@ -1333,11 +1348,13 @@ export const saveVoiceRecordingLocal = async (userId: string, recording: VoiceRe
     if (Platform.OS === 'web') return;
     try {
         const transcript = recording.transcription ? await encryptForDevice(recording.transcription) : null;
+        const timings = recording.transcription && recording.timings ? await encryptForDevice(recording.timings) : null;
+        // A save without timings keeps earlier ones: they describe the same audio file.
         await withDbRetry('save voice', (database) => (
             database.runAsync(
-                `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, file_path=excluded.file_path, transcription=excluded.transcription, iso_code=excluded.iso_code`,
-                [recording.id, recording.note_id, userId, recording.file_path, recording.duration, transcript, recording.created_at, recording.iso_code || null]
+                `INSERT INTO voice_recordings (id, note_id, user_id, file_path, duration, transcription, created_at, iso_code, timings)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, file_path=excluded.file_path, transcription=excluded.transcription, iso_code=excluded.iso_code, timings=COALESCE(excluded.timings, voice_recordings.timings)`,
+                [recording.id, recording.note_id, userId, recording.file_path, recording.duration, transcript, recording.created_at, recording.iso_code || null, timings]
             )
         ));
     } catch (e) { throw e; }
@@ -1456,6 +1473,8 @@ export interface TrashedRecording {
     file_path: string;
     duration: number;
     transcription?: string;
+    /** Phrase timings (see VoiceRecording.timings); the whole entry is encrypted. */
+    timings?: string;
 }
 
 export interface TrashEntry {

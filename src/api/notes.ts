@@ -89,6 +89,12 @@ export interface VoiceRecording {
     transcription?: string;
     created_at: string;
     iso_code?: string; // language code
+    /**
+     * Serialized RecordingTimings (utils/phraseTiming): when each phrase was
+     * said. Stored encrypted with the device key, like the transcription, and
+     * kept with the recording's audio. Missing on older recordings.
+     */
+    timings?: string;
 }
 
 export interface SyncChangeRequest {
