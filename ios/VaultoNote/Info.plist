@@ -47,6 +47,8 @@
     </dict>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Vaulto Note uses your camera to scan a recovery key QR code when you restore access to your encrypted notes.</string>
     <key>NSCalendarsUsageDescription</key>
     <string>Vaulto Note adds tasks from your notes to your calendar when you ask it to.</string>
     <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
