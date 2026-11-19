@@ -4,16 +4,17 @@
  * bytes, so a pencil stroke keeps its grain when the pen lifts and the canvas
  * takes it over. Integer hashing and double arithmetic only, in the same
  * order on both sides: tests/grain.test.cjs and InkGeometryTest pin the bytes.
+ * The app ships the tile precomputed (grainTile.ts): built in JS it took seconds
+ * on an interpreter.
  */
 
 /** Tile size in document units, and pixels per unit. */
 export const GRAIN_UNITS = 64;
-export const GRAIN_PER_UNIT = 8;
+export const GRAIN_PER_UNIT = 4;
 export const GRAIN_SIZE = GRAIN_UNITS * GRAIN_PER_UNIT;
 
 /** A grid value in -1..1 for cell (x, y) of grid `seed`. */
 const hash = (x: number, y: number, seed: number): number => {
-    'worklet';
     let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1442695041)) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     h ^= h >>> 16;
@@ -22,7 +23,6 @@ const hash = (x: number, y: number, seed: number): number => {
 
 /** Smooth value noise of a grid of n × n cells that wraps around, at (u, v) in cells. */
 const sample = (n: number, seed: number, u: number, v: number): number => {
-    'worklet';
     const x0 = Math.floor(u);
     const y0 = Math.floor(v);
     const fx = u - x0;
@@ -44,7 +44,6 @@ const sample = (n: number, seed: number, u: number, v: number): number => {
 
 /** Alpha (0..255) of every pixel of the tile, row by row. */
 export const grainAlpha = (): Uint8Array => {
-    'worklet';
     const out = new Uint8Array(GRAIN_SIZE * GRAIN_SIZE);
     for (let y = 0; y < GRAIN_SIZE; y++) {
         const v = y / GRAIN_PER_UNIT;

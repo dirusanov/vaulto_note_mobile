@@ -93,6 +93,6 @@ class InkGeometryTest {
   @Test
   fun grainMatchesTheCanvas() {
     // Same checksum as tests/grain.test.cjs: the canvas and this layer draw identical graphite.
-    assertEquals(365598374L, grainChecksum(grainAlpha()))
+    assertEquals(599074111L, grainChecksum(grainAlpha()))
   }
 }

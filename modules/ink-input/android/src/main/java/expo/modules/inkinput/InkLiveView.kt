@@ -12,6 +12,8 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -78,6 +80,8 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
 
   init {
     addView(surface)
+    // Built off the render thread before the first pencil stroke needs it.
+    Thread { grainShader }.start()
   }
 
   // ---------------------------------------------------------------- config
@@ -198,6 +202,8 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
   private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { style = Paint.Style.STROKE }
   private val layerPaint = Paint()
   private val hoverPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+  /** Keeps the ink drawn so far where the grain lets paper through. */
+  private val grainMaskPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
 
   /** Draws ink in the layer it needs: one opacity over the whole stroke, as the canvas fills one path. */
   private fun drawInk(canvas: Canvas, style: Style, pieces: List<Path>, tail: Path?, line: Path?, lineWidth: Float, round: Boolean) {
@@ -213,7 +219,10 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     style.clip?.let { canvas.clipPath(it) }
     fillPaint.color = style.color
     fillPaint.alpha = 255
-    fillPaint.shader = if (style.grain) grainShader else null
+    // Pencil: the pieces and tail are filled solid and the grain applied once
+    // over all of them, as the canvas fills one path. Grain in each piece made
+    // the overlaps between pieces darker until the pen lifted.
+    fillPaint.shader = null
     for (piece in pieces) {
       canvas.drawPath(piece, fillPaint)
     }
@@ -221,11 +230,15 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     if (line != null) {
       linePaint.color = style.color
       linePaint.alpha = 255
-      linePaint.shader = fillPaint.shader
+      linePaint.shader = null
       linePaint.strokeWidth = lineWidth
       linePaint.strokeCap = if (round) Paint.Cap.ROUND else Paint.Cap.BUTT
       linePaint.strokeJoin = Paint.Join.ROUND
       canvas.drawPath(line, linePaint)
+    }
+    if (style.grain) {
+      grainMaskPaint.shader = grainShader
+      canvas.drawPaint(grainMaskPaint)
     }
     canvas.restore()
     canvas.restore()
@@ -812,7 +825,9 @@ class InkLiveView(context: Context, appContext: AppContext) : ExpoView(context, 
     private val grainShader: Shader by lazy {
       val alpha = grainAlpha()
       val pixels = IntArray(alpha.size) { Color.argb(alpha[it].toInt() and 0xFF, 255, 255, 255) }
-      val bitmap = Bitmap.createBitmap(pixels, GRAIN_SIZE, GRAIN_SIZE, Bitmap.Config.ARGB_8888).extractAlpha()
+      // Mipmapped like the canvas's, so the fine grain does not shimmer or alias
+      // differently in the two layers when zoomed out.
+      val bitmap = Bitmap.createBitmap(pixels, GRAIN_SIZE, GRAIN_SIZE, Bitmap.Config.ARGB_8888).extractAlpha().apply { setHasMipMap(true) }
       BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).apply {
         setLocalMatrix(Matrix().apply { setScale(1f / GRAIN_PER_UNIT, 1f / GRAIN_PER_UNIT) })
       }

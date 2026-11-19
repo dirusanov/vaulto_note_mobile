@@ -609,7 +609,7 @@ fun recognizeShape(points: DoubleList): DoubleList? {
 
 /** grain.ts: tile size in document units, and pixels per unit. */
 const val GRAIN_UNITS = 64
-const val GRAIN_PER_UNIT = 8
+const val GRAIN_PER_UNIT = 4
 const val GRAIN_SIZE = GRAIN_UNITS * GRAIN_PER_UNIT
 
 private fun grainHash(x: Int, y: Int, seed: Int): Double {

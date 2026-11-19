@@ -70,7 +70,8 @@ import {
 import { Selection, TextBox } from './drawingModel';
 import { InkChunk, updateInkChunks } from './inkChunks';
 import { drawingBounds } from './drawingFormat';
-import { GRAIN_PER_UNIT, GRAIN_SIZE, GRAIN_UNITS, grainAlpha } from './grain';
+import { GRAIN_PER_UNIT, GRAIN_SIZE, GRAIN_UNITS } from './grain';
+import { GRAIN_TILE_BASE64 } from './grainTile';
 import {
     PAGE_GAP,
     PAPER_MARGIN_COLOR,
@@ -356,21 +357,14 @@ const buildPaper = (
 // lifts (fractal noise here and an approximation there made it jump).
 const grainImage = (): SkImage | null => {
     'worklet';
-    // Once per runtime (JS and UI): worklets cannot share the image.
+    // Once per runtime (JS and UI): worklets cannot share the image. The bytes
+    // are decoded natively; computing the tile in JS froze the UI thread.
     const store = globalThis as unknown as { __vaultoGrain?: SkImage | null };
     if (store.__vaultoGrain === undefined) {
-        const alpha = grainAlpha();
-        const rgba = new Uint8Array(alpha.length * 4);
-        for (let i = 0; i < alpha.length; i++) {
-            rgba[i * 4] = 255;
-            rgba[i * 4 + 1] = 255;
-            rgba[i * 4 + 2] = 255;
-            rgba[i * 4 + 3] = alpha[i];
-        }
         store.__vaultoGrain = Skia.Image.MakeImage(
-            { width: GRAIN_SIZE, height: GRAIN_SIZE, colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul },
-            Skia.Data.fromBytes(rgba),
-            GRAIN_SIZE * 4,
+            { width: GRAIN_SIZE, height: GRAIN_SIZE, colorType: ColorType.Alpha_8, alphaType: AlphaType.Premul },
+            Skia.Data.fromBase64(GRAIN_TILE_BASE64),
+            GRAIN_SIZE,
         );
     }
     return store.__vaultoGrain;
@@ -380,7 +374,7 @@ const GRAIN_RECT = { x: 0, y: 0, width: GRAIN_UNITS, height: GRAIN_UNITS };
 
 const PencilGrain: React.FC<{ color: SharedValue<string> }> = ({ color }) => (
     <>
-        <ImageShader image={grainImage()} tx="repeat" ty="repeat" fit="fill" rect={GRAIN_RECT} sampling={{ filter: FilterMode.Linear, mipmap: MipmapMode.None }} />
+        <ImageShader image={grainImage()} tx="repeat" ty="repeat" fit="fill" rect={GRAIN_RECT} sampling={{ filter: FilterMode.Linear, mipmap: MipmapMode.Linear }} />
         <BlendColor color={color} mode="srcIn" />
     </>
 );
@@ -430,7 +424,7 @@ const makeInkPaint = (stroke: InkStroke): SkPaint => {
         const image = grainImage();
         if (image) {
             const scale = 1 / GRAIN_PER_UNIT;
-            paint.setShader(image.makeShaderOptions(TileMode.Repeat, TileMode.Repeat, FilterMode.Linear, MipmapMode.None, Skia.Matrix().scale(scale, scale)));
+            paint.setShader(image.makeShaderOptions(TileMode.Repeat, TileMode.Repeat, FilterMode.Linear, MipmapMode.Linear, Skia.Matrix().scale(scale, scale)));
             paint.setColorFilter(Skia.ColorFilter.MakeBlend(Skia.Color(stroke.color), BlendMode.SrcIn));
         }
     }
