@@ -9,9 +9,6 @@ import type { DiffSegment } from './textDiff';
 
 export const ORIGINAL_VERSION_ID = 'original';
 
-/** From this many versions (the original included) the bar gets a "Versions (N)" header. */
-export const VERSIONS_HEADER_MIN_COUNT = 5;
-
 type ImprovementLike = { id: string; label?: string | null; title?: string | null; option_id?: string | null };
 type OptionLike = { id: string; label?: string; isCustom?: boolean };
 

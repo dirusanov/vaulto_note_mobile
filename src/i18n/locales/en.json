@@ -665,9 +665,7 @@
       "rename": "Rename",
       "renameTitle": "Rename version",
       "renamePlaceholder": "Version name",
-      "swipeHint": "Swipe the text left or right to switch versions",
-      "headerCount": "Versions ({{count}})",
-      "showAll": "Show all",
+      "swipeHint": "Swipe the text to switch versions",
       "showAllA11y": "Show all {{count}} versions",
       "basedOn": "Based on:",
       "basedOnA11y": "Based on: {{name}}",
@@ -678,8 +676,6 @@
       "compareShort": "Compare",
       "compareA11y": "Compare this version with its source",
       "compareWithSource": "Compare with source",
-      "originalCaption": "Your text. AI results are saved as versions.",
-      "sourceUnknown": "Made by a voice command",
       "previousOriginalCaption": "The main text before another version replaced it",
       "compareChangesTitle": "What changed",
       "compareWith": "Compare with",
@@ -690,7 +686,8 @@
       "previousChange": "Previous change",
       "nextChange": "Next change",
       "previousShort": "Previous",
-      "nextShort": "Next"
+      "nextShort": "Next",
+      "compareWithOriginal": "Compare with original"
     },
     "tasks": {
       "find": "Find tasks",
@@ -792,8 +789,8 @@
     },
     "voiceEdit": {
       "renamed": "Note renamed to “{{title}}”",
-      "listInNewVersion": "Made a list in a new version, “{{version}}”. The original is unchanged.",
-      "changedInNewVersion": "Changed in a new version, “{{version}}”. The original is unchanged.",
+      "listInNewVersion": "List saved as “{{version}}”. Original kept.",
+      "changedInNewVersion": "Changes saved as “{{version}}”. Original kept.",
       "listUpdatedIn": "List updated in “{{version}}”",
       "changedIn": "Changed in “{{version}}”",
       "checkedIn": "Items checked off in “{{version}}”",
@@ -873,7 +870,19 @@
       "switchTo": "Double tap to switch to {{mode}}",
       "micHintEdit": "Edit by voice: requests change the note. Hold to dictate once.",
       "micHintDictate": "Dictate: words go into the note as spoken."
-    }
+    },
+    "routeShort": {
+      "audioOnly": "Audio only",
+      "devicePrivate": "Only on this phone",
+      "deviceModelMissing": "No speech model",
+      "deviceOffline": "Offline · on this phone",
+      "device": "On this phone",
+      "later": "Text when online",
+      "custom": "Your AI service",
+      "cloud": "Vaulto cloud"
+    },
+    "routeDetailsHint": "Shows what happens to the recording",
+    "moreOptions": "Recording options"
   },
   "aux": {
     "emailVerified": "Email verified!",
@@ -998,7 +1007,7 @@
     "transcriptionLimitTitle": "Transcription limit reached",
     "transcriptionLimitDescDate": "You have used all your PRO transcription minutes for this period. Your limit will reset on {{date}}.",
     "transcriptionLimitDescNoDate": "You have used all your PRO transcription minutes for this period. Your limit will reset at the start of your next billing cycle.",
-    "maybeLater": "Maybe later",
+    "maybeLater": "Not now",
     "privacyTitle": "Privacy",
     "disableEncryptionFailed": "Failed to disable encryption.",
     "changeAccessKeyFailed": "Failed to change access key.",

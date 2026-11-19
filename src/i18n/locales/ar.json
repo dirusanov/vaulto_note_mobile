@@ -669,9 +669,7 @@
       "rename": "إعادة تسمية",
       "renameTitle": "إعادة تسمية النسخة",
       "renamePlaceholder": "اسم النسخة",
-      "swipeHint": "اسحب النص يسارًا أو يمينًا للتبديل بين النسخ",
-      "headerCount": "النسخ ({{count}})",
-      "showAll": "عرض الكل",
+      "swipeHint": "اسحب النص للتبديل بين النسخ",
       "showAllA11y": "عرض كل النسخ ({{count}})",
       "basedOn": "مبنية على:",
       "basedOnA11y": "مبنية على: {{name}}",
@@ -682,8 +680,6 @@
       "compareShort": "مقارنة",
       "compareA11y": "قارن هذه النسخة بمصدرها",
       "compareWithSource": "قارن بالمصدر",
-      "originalCaption": "نصك. تُحفظ نتائج الذكاء الاصطناعي كنسخ منفصلة.",
-      "sourceUnknown": "أُنشئت بأمر صوتي",
       "previousOriginalCaption": "النص الرئيسي قبل أن تحل محله نسخة أخرى",
       "compareChangesTitle": "ما الذي تغيّر",
       "compareWith": "قارن مع",
@@ -698,7 +694,8 @@
       "previousChange": "التغيير السابق",
       "nextChange": "التغيير التالي",
       "previousShort": "السابق",
-      "nextShort": "التالي"
+      "nextShort": "التالي",
+      "compareWithOriginal": "قارن بالنص الأصلي"
     },
     "tasks": {
       "find": "البحث عن المهام",
@@ -800,8 +797,8 @@
     },
     "voiceEdit": {
       "renamed": "أُعيدت تسمية الملاحظة إلى «{{title}}»",
-      "listInNewVersion": "أُنشئت قائمة في نسخة جديدة «{{version}}». الأصل لم يتغيّر.",
-      "changedInNewVersion": "عُدّلت في نسخة جديدة «{{version}}». الأصل لم يتغيّر.",
+      "listInNewVersion": "حُفظت القائمة باسم «{{version}}». الأصل محفوظ.",
+      "changedInNewVersion": "حُفظت التعديلات باسم «{{version}}». الأصل محفوظ.",
       "listUpdatedIn": "حُدّثت القائمة في «{{version}}»",
       "changedIn": "عُدّلت «{{version}}»",
       "checkedIn": "وُضعت علامة على عناصر في «{{version}}»",
@@ -881,7 +878,19 @@
       "switchTo": "انقر مرتين للتبديل إلى «{{mode}}»",
       "micHintEdit": "تعديل بالصوت: الطلبات تغيّر الملاحظة. اضغط مطولًا للإملاء مرة واحدة.",
       "micHintDictate": "إملاء: تدخل الكلمات كما قيلت."
-    }
+    },
+    "routeShort": {
+      "audioOnly": "صوت فقط",
+      "devicePrivate": "على هذا الهاتف فقط",
+      "deviceModelMissing": "لا يوجد نموذج كلام",
+      "deviceOffline": "بلا إنترنت · على الهاتف",
+      "device": "على هذا الهاتف",
+      "later": "النص عند الاتصال",
+      "custom": "خدمة الذكاء الاصطناعي الخاصة بك",
+      "cloud": "سحابة Vaulto"
+    },
+    "routeDetailsHint": "يوضح ما سيحدث للتسجيل",
+    "moreOptions": "خيارات التسجيل"
   },
   "aux": {
     "emailVerified": "تم التحقق من البريد الإلكتروني!",

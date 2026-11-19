@@ -665,9 +665,7 @@
       "rename": "नाम बदलें",
       "renameTitle": "संस्करण का नाम बदलें",
       "renamePlaceholder": "संस्करण का नाम",
-      "swipeHint": "संस्करण बदलने के लिए टेक्स्ट को बाएँ या दाएँ स्वाइप करें",
-      "headerCount": "संस्करण ({{count}})",
-      "showAll": "सभी देखें",
+      "swipeHint": "संस्करण बदलने के लिए टेक्स्ट पर स्वाइप करें",
       "showAllA11y": "सभी {{count}} संस्करण देखें",
       "basedOn": "आधार:",
       "basedOnA11y": "आधार: {{name}}",
@@ -678,8 +676,6 @@
       "compareShort": "तुलना करें",
       "compareA11y": "इस संस्करण की उसके स्रोत से तुलना करें",
       "compareWithSource": "स्रोत से तुलना करें",
-      "originalCaption": "आपका टेक्स्ट। AI के नतीजे संस्करण के रूप में सहेजे जाते हैं।",
-      "sourceUnknown": "वॉइस कमांड से बना",
       "previousOriginalCaption": "दूसरे संस्करण से बदले जाने से पहले का मुख्य टेक्स्ट",
       "compareChangesTitle": "क्या बदला",
       "compareWith": "इससे तुलना करें",
@@ -690,7 +686,8 @@
       "previousChange": "पिछला बदलाव",
       "nextChange": "अगला बदलाव",
       "previousShort": "पिछला",
-      "nextShort": "अगला"
+      "nextShort": "अगला",
+      "compareWithOriginal": "मूल से तुलना करें"
     },
     "tasks": {
       "find": "काम खोजें",
@@ -792,8 +789,8 @@
     },
     "voiceEdit": {
       "renamed": "नोट का नाम “{{title}}” किया गया",
-      "listInNewVersion": "नए संस्करण “{{version}}” में सूची बनाई गई। मूल नहीं बदला।",
-      "changedInNewVersion": "नए संस्करण “{{version}}” में बदला गया। मूल नहीं बदला।",
+      "listInNewVersion": "सूची “{{version}}” के रूप में सहेजी गई। मूल सुरक्षित है।",
+      "changedInNewVersion": "बदलाव “{{version}}” के रूप में सहेजे गए। मूल सुरक्षित है।",
       "listUpdatedIn": "“{{version}}” में सूची अपडेट हुई",
       "changedIn": "“{{version}}” में बदलाव हुआ",
       "checkedIn": "“{{version}}” में आइटम पर निशान लगाए",
@@ -873,7 +870,19 @@
       "switchTo": "“{{mode}}” पर जाने के लिए दो बार टैप करें",
       "micHintEdit": "आवाज़ से बदलें: अनुरोध नोट बदलते हैं। एक बार डिक्टेट करने के लिए दबाए रखें।",
       "micHintDictate": "डिक्टेट: शब्द जैसे बोले वैसे ही नोट में जाएँगे।"
-    }
+    },
+    "routeShort": {
+      "audioOnly": "सिर्फ़ ऑडियो",
+      "devicePrivate": "सिर्फ़ इस फ़ोन पर",
+      "deviceModelMissing": "स्पीच मॉडल नहीं",
+      "deviceOffline": "ऑफ़लाइन · इसी फ़ोन पर",
+      "device": "इस फ़ोन पर",
+      "later": "ऑनलाइन होने पर टेक्स्ट",
+      "custom": "आपकी AI सेवा",
+      "cloud": "Vaulto क्लाउड"
+    },
+    "routeDetailsHint": "बताता है कि रिकॉर्डिंग का क्या होगा",
+    "moreOptions": "रिकॉर्डिंग विकल्प"
   },
   "aux": {
     "emailVerified": "ईमेल सत्यापित!",

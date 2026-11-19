@@ -663,9 +663,7 @@
       "rename": "重命名",
       "renameTitle": "重命名版本",
       "renamePlaceholder": "版本名称",
-      "swipeHint": "在文本上左右滑动即可切换版本",
-      "headerCount": "版本（{{count}}）",
-      "showAll": "全部",
+      "swipeHint": "滑动文字切换版本",
       "showAllA11y": "查看全部 {{count}} 个版本",
       "basedOn": "基于：",
       "basedOnA11y": "基于：{{name}}",
@@ -676,8 +674,6 @@
       "compareShort": "对比",
       "compareA11y": "将此版本与来源对比",
       "compareWithSource": "与来源对比",
-      "originalCaption": "你的文本。AI 结果会另存为版本。",
-      "sourceUnknown": "由语音指令生成",
       "previousOriginalCaption": "被其他版本替换之前的正文",
       "compareChangesTitle": "改动",
       "compareWith": "对比对象",
@@ -687,7 +683,8 @@
       "previousChange": "上一处改动",
       "nextChange": "下一处改动",
       "previousShort": "上一处",
-      "nextShort": "下一处"
+      "nextShort": "下一处",
+      "compareWithOriginal": "与原文对比"
     },
     "tasks": {
       "find": "查找任务",
@@ -789,8 +786,8 @@
     },
     "voiceEdit": {
       "renamed": "笔记已重命名为“{{title}}”",
-      "listInNewVersion": "已在新版本“{{version}}”中生成列表，原文未改动。",
-      "changedInNewVersion": "已在新版本“{{version}}”中修改，原文未改动。",
+      "listInNewVersion": "列表已另存为“{{version}}”，原文保留。",
+      "changedInNewVersion": "修改已另存为“{{version}}”，原文保留。",
       "listUpdatedIn": "已在“{{version}}”中更新列表",
       "changedIn": "已修改“{{version}}”",
       "checkedIn": "已在“{{version}}”中勾选项目",
@@ -870,7 +867,19 @@
       "switchTo": "轻点两下切换到“{{mode}}”",
       "micHintEdit": "语音修改：指令会修改笔记。长按可单次听写。",
       "micHintDictate": "听写：原样写入笔记。"
-    }
+    },
+    "routeShort": {
+      "audioOnly": "仅音频",
+      "devicePrivate": "仅在本机",
+      "deviceModelMissing": "无语音模型",
+      "deviceOffline": "离线 · 在本机",
+      "device": "在本机",
+      "later": "联网后转文字",
+      "custom": "您的 AI 服务",
+      "cloud": "Vaulto 云端"
+    },
+    "routeDetailsHint": "显示录音将如何处理",
+    "moreOptions": "录音选项"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",

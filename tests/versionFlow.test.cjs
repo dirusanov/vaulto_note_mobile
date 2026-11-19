@@ -15,7 +15,6 @@ const {
     changeIndexOfSegment,
     splitDiffIntoParagraphs,
     stepChange,
-    VERSIONS_HEADER_MIN_COUNT,
 } = require('../.test-build/versionFlow/utils/versionLineage');
 const { diffWords } = require('../.test-build/versionFlow/utils/textDiff');
 const { editorHeaderLayout, estimateLabelWidth } = require('../.test-build/versionFlow/utils/toolbarLayout');
@@ -78,10 +77,6 @@ test('compare bases: the source first, then the original', () => {
     assert.deepEqual(compareBasesFor('s', 'original'), ['original']);
     assert.deepEqual(compareBasesFor('l', null), ['original']);
     assert.deepEqual(compareBasesFor('original', null), []);
-});
-
-test('the versions bar gets a header from five versions', () => {
-    assert.equal(VERSIONS_HEADER_MIN_COUNT, 5);
 });
 
 // --- stepping through changes -------------------------------------------------
