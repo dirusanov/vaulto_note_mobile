@@ -31,6 +31,33 @@ test('sentences split on punctuation and line breaks, with offsets', () => {
     assert.deepEqual(splitSentences('  ...  \n\n'), []);
 });
 
+test('a run-on recognised sentence is split at commas into phrases of a few words', () => {
+    // Real whisper "base" output on the emulator: one sentence, commas only.
+    const text = 'Итак, план на неделю, я отправлю Ири сметок пятницы, а звонок пока не назначай, сначала дождемся ответа, еще нужно купить молоко и хлеб, и не забудь забронировать столик на субботу.';
+    const parts = splitSentences(text);
+    assert.deepEqual(parts.map((p) => p.text), [
+        'Итак, план на неделю,',
+        'я отправлю Ири сметок пятницы,',
+        'а звонок пока не назначай,',
+        'сначала дождемся ответа, еще нужно купить молоко и хлеб,',
+        'и не забудь забронировать столик на субботу.',
+    ]);
+    for (const part of parts) assert.equal(text.slice(part.from, part.to), part.text);
+    // Short sentences keep their commas.
+    assert.equal(splitSentences('Yes, of course, we can do that.').length, 1);
+});
+
+test('sentences inside a longer recorded phrase link to their estimated place in it', () => {
+    const long = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen';
+    const rec = { recordingId: 'r', timings: { v: 1, source: 'device', phrases: [{ text: long, start: 10, end: 26 }] } };
+    const linked = linkTextToRecordings('Five six seven eight nine.', [rec]);
+    assert.equal(linked[0].link.start, 14);
+    assert.equal(linked[0].link.end, 19);
+    // Too short or not in order: no link.
+    assert.equal(linkTextToRecordings('Five six seven.', [rec])[0].link, null);
+    assert.equal(linkTextToRecordings('Nine eight seven six five.', [rec])[0].link, null);
+});
+
 test('device segments become one timed phrase per sentence', () => {
     const timings = buildRecordingTimings(RU, RU_SEGMENTS, 'device');
     assert.equal(timings.source, 'device');

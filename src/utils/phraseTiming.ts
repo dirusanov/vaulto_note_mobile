@@ -63,7 +63,7 @@ export interface TimingSourceRecording {
 }
 
 // Same script ranges as noteSearch / taskExtraction (Hermes: no \p{…}).
-const WORD_REGEX = /[0-9A-Za-zÀ-ɏͰ-ϿЀ-ӿ֐-׿؀-ۿऀ-ॿ぀-ヿ㐀-䶿一-鿿가-힯]+/g;
+const WORD_REGEX = /[0-9A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u0900-\u097F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF]+/g;
 
 /** Starts a phrase slightly early: a word's estimated start is never exact. */
 export const PHRASE_PREROLL_SECONDS = 0.25;
@@ -103,20 +103,51 @@ const HAS_WORD = new RegExp(WORD_REGEX.source);
 
 const SENTENCE_END = /[.!?…。！？]+["»”')\]]*(?=\s|$)|\n+/g;
 
+type Span = { text: string; from: number; to: number };
+
+const countWords = (text: string): number => (text.match(WORD_REGEX) || []).length;
+/** Longer sentences are split at clause punctuation into phrases of a few words. */
+const LONG_SENTENCE_WORDS = 14;
+const MIN_PHRASE_WORDS = 4;
+const CLAUSE_END = /[,;:—–]+(?=\s)/g;
+
 /**
- * Sentences of a text with their offsets. Line breaks end a sentence too, so a
- * checklist item or heading is its own phrase.
+ * Splits a long run-on sentence (speech recognisers often write a whole
+ * minute as one sentence with commas) at its commas, keeping every piece at
+ * least a few words long so it stays recognisable.
  */
-export const splitSentences = (text: string): Array<{ text: string; from: number; to: number }> => {
+const splitLongSentence = (sentence: Span): Span[] => {
+    if (countWords(sentence.text) <= LONG_SENTENCE_WORDS) return [sentence];
+    const pieces: Span[] = [];
+    let start = 0;
+    const cuts = Array.from(sentence.text.matchAll(CLAUSE_END)).map((match) => (match.index ?? 0) + match[0].length);
+    for (const cut of [...cuts, sentence.text.length]) {
+        const chunk = sentence.text.slice(start, cut);
+        const remaining = sentence.text.slice(cut);
+        if (cut < sentence.text.length && (countWords(chunk) < MIN_PHRASE_WORDS || countWords(remaining) < MIN_PHRASE_WORDS)) continue;
+        const lead = chunk.length - chunk.replace(/^\s+/, '').length;
+        const trimmed = chunk.trim();
+        if (trimmed) pieces.push({ text: trimmed, from: sentence.from + start + lead, to: sentence.from + start + lead + trimmed.length });
+        start = cut;
+    }
+    return pieces.length ? pieces : [sentence];
+};
+
+/**
+ * Phrases of a text with their offsets: sentences, with line breaks ending a
+ * sentence too (a checklist item or heading is its own phrase), and long
+ * sentences split at commas.
+ */
+export const splitSentences = (text: string): Span[] => {
     const source = text || '';
-    const sentences: Array<{ text: string; from: number; to: number }> = [];
+    const sentences: Span[] = [];
     let start = 0;
     const push = (end: number) => {
         const raw = source.slice(start, end);
         const lead = raw.length - raw.replace(/^\s+/, '').length;
         const trimmed = raw.trim();
         if (trimmed && HAS_WORD.test(trimmed)) {
-            sentences.push({ text: trimmed, from: start + lead, to: start + lead + trimmed.length });
+            sentences.push(...splitLongSentence({ text: trimmed, from: start + lead, to: start + lead + trimmed.length }));
         }
     };
     for (const match of source.matchAll(SENTENCE_END)) {
@@ -333,12 +364,35 @@ interface Shape {
     exact: string;
     counts: Map<string, number>;
     size: number;
+    stems: string[];
 }
 
 const shapeOf = (text: string): Shape => {
     const tokens = tokenize(text);
     const counts = stemCounts(tokens);
-    return { exact: tokens.map((token) => token.word).join(' '), counts, size: tokens.length };
+    return { exact: tokens.map((token) => token.word).join(' '), counts, size: tokens.length, stems: tokens.map((token) => token.stem) };
+};
+
+/** A sentence must be this long, and this much of it in order, to be found inside a longer phrase. */
+const MIN_CONTAINED_WORDS = 4;
+const CONTAINED_SHARE = 0.85;
+
+/**
+ * Where a sentence sits inside a longer recorded phrase (the note split a
+ * long recognised sentence differently), as a share of the phrase's words.
+ */
+const containedRun = (sentence: Shape, phrase: Shape): { from: number; to: number } | null => {
+    if (sentence.size < MIN_CONTAINED_WORDS || phrase.size <= sentence.size) return null;
+    let best: { at: number; hits: number } | null = null;
+    for (let at = 0; at + sentence.size <= phrase.size; at += 1) {
+        let hits = 0;
+        for (let k = 0; k < sentence.size; k += 1) {
+            if (phrase.stems[at + k] === sentence.stems[k]) hits += 1;
+        }
+        if (!best || hits > best.hits) best = { at, hits };
+    }
+    if (!best || best.hits / sentence.size < CONTAINED_SHARE) return null;
+    return { from: best.at / phrase.size, to: (best.at + sentence.size) / phrase.size };
 };
 
 const scoreShapes = (a: Shape, b: Shape): number => {
@@ -383,9 +437,16 @@ export const linkTextToRecordings = (text: string, sources: TimingSourceRecordin
     const used = new Set<Candidate>();
     let previous: Candidate | null = null;
     return sentences.map((sentence, index) => {
-        let best: { candidate: Candidate; score: number } | null = null;
+        let best: { candidate: Candidate; score: number; part?: { from: number; to: number } } | null = null;
         const shape = shapeOf(sentence.text);
         for (const candidate of candidates) {
+            const part = containedRun(shape, candidate.shape);
+            if (part) {
+                // Part of a longer recorded phrase: its time is estimated by word position.
+                const score = 0.8 + (previous && candidate.recordingId === previous.recordingId && candidate.order >= previous.order ? 0.01 : 0);
+                if (!best || score > best.score) best = { candidate, score, part };
+                continue;
+            }
             const sizes = [shape.size, candidate.shape.size];
             if (Math.min(...sizes) < SIZE_RATIO * Math.max(...sizes)) continue;
             let score = scoreShapes(shape, candidate.shape);
@@ -399,15 +460,19 @@ export const linkTextToRecordings = (text: string, sources: TimingSourceRecordin
             used.add(best.candidate);
             previous = best.candidate;
         }
-        return {
-            key: `p${index}`,
-            text: sentence.text,
-            from: sentence.from,
-            to: sentence.to,
-            link: best
-                ? { recordingId: best.candidate.recordingId, start: best.candidate.phrase.start, end: best.candidate.phrase.end }
-                : null,
-        };
+        let link: PhraseLink | null = null;
+        if (best) {
+            const { phrase } = best.candidate;
+            const span = phrase.end - phrase.start;
+            link = best.part
+                ? {
+                    recordingId: best.candidate.recordingId,
+                    start: round(phrase.start + span * best.part.from),
+                    end: round(phrase.start + span * best.part.to),
+                }
+                : { recordingId: best.candidate.recordingId, start: phrase.start, end: phrase.end };
+        }
+        return { key: `p${index}`, text: sentence.text, from: sentence.from, to: sentence.to, link };
     });
 };
 

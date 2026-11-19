@@ -7,6 +7,7 @@ import {
     Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
+    useWindowDimensions,
     View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -47,14 +48,16 @@ interface PhraseRowProps {
     onLayoutY: (key: string, y: number) => void;
     playHint: string;
     unlinkedLabel: string;
+    /** Width of the time column, so every sentence starts at the same edge. */
+    gutter: number;
 }
 
-const PhraseRow = memo(({ phrase, active, onPress, onLayoutY, playHint, unlinkedLabel }: PhraseRowProps) => {
+const PhraseRow = memo(({ phrase, active, onPress, onLayoutY, playHint, unlinkedLabel, gutter }: PhraseRowProps) => {
     const link = phrase.link;
     const time = link ? formatPhraseTime(link.start) : '';
     const content = (
         <>
-            <Text style={[styles.time, active && styles.timeActive]} importantForAccessibility="no">
+            <Text style={[styles.time, { width: gutter }, active && styles.timeActive]} importantForAccessibility="no" numberOfLines={1}>
                 {time}
             </Text>
             <Text style={[styles.phrase, !link && styles.phraseUnlinked]}>{phrase.text}</Text>
@@ -100,6 +103,8 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
     const scrollRef = useRef<ScrollView>(null);
     const rowY = useRef<Record<string, number>>({});
     const [follow, setFollow] = useState(true);
+    // "0:00" at the system text size; "1:02:05" needs more room.
+    const { fontScale } = useWindowDimensions();
 
     const { phrases, rewritten, hasUnlinked } = useMemo(() => {
         if (!visible) return { phrases: [] as LinkedPhrase[], rewritten: false, hasUnlinked: false };
@@ -113,6 +118,8 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
     }, [visible, text, sources]);
 
     const activeKey = activePhraseKey(phrases, state.recordingId, state.position);
+    const longest = phrases.reduce((max, phrase) => Math.max(max, phrase.link?.start ?? 0), 0);
+    const gutter = Math.ceil((longest >= 3600 ? 60 : 38) * Math.max(1, fontScale));
 
     useEffect(() => {
         if (!visible) {
@@ -198,6 +205,7 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
                                         onLayoutY={handleLayoutY}
                                         playHint={playHint}
                                         unlinkedLabel={unlinkedLabel}
+                                        gutter={gutter}
                                     />
                                 ))}
                             </ScrollView>
@@ -301,6 +309,7 @@ const styles = createStyles(() => ({
     },
     list: {
         flexGrow: 0,
+        flexShrink: 1,
     },
     listContent: {
         paddingHorizontal: spacing.s,
@@ -308,7 +317,8 @@ const styles = createStyles(() => ({
     },
     row: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        // First lines share a baseline at any text size.
+        alignItems: 'baseline',
         minHeight: 44,
         borderRadius: 12,
         paddingVertical: 10,
@@ -322,8 +332,6 @@ const styles = createStyles(() => ({
         backgroundColor: colors.backgroundSecondary,
     },
     time: {
-        minWidth: 40,
-        paddingTop: 3,
         fontSize: 13,
         lineHeight: 18,
         color: colors.textSecondary,
