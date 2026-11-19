@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.109] - 2026-11-19
+
+### Fixed
+- A pen stroke no longer disappears for a moment when the pen lifts.
+- Pencil strokes keep their graphite texture when the pen lifts, and show no darker bands while being drawn.
+- Less of the predicted line ahead of the pen disappears when a fast stroke ends.
+
 ## [1.0.108] - 2026-11-18
 
 1.0.107 was built but never published; its changes ship here.
