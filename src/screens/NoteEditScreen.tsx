@@ -836,7 +836,7 @@ const MemoizedImprovementChips = memo(({
                         accessibilityHint={sourceTappable ? t('edit.versions.basedOnHint', 'Opens that version') : undefined}
                     >
                         <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textSecondary} style={rtlFlip} />
-                        <Text style={styles.variantSourceText} numberOfLines={1}>
+                        <Text style={styles.variantSourceText} numberOfLines={2}>
                             {t('edit.versions.basedOn', 'Based on:')}{' '}
                             <Text style={sourceTappable ? styles.variantSourceName : styles.variantSourceNameStatic}>{source.label}</Text>
                         </Text>
@@ -993,6 +993,8 @@ export const NoteEditScreen = () => {
         () => editorHeaderLayout(windowWidth, fontScale, t('edit.improveAction', 'Improve')),
         [fontScale, t, windowWidth]
     );
+    // Large text: Compare and Accept stack (Accept on top) instead of truncating.
+    const previewStacked = fontScale > IMPROVE_LABEL_MAX_FONT_SCALE;
     const AGENT_HISTORY_LIMIT = 5;
     // Outer safety net only. It must stay above the inner deadlines
     // (transcription + agent), otherwise it aborts work that is still healthy.
@@ -7405,11 +7407,19 @@ export const NoteEditScreen = () => {
     // Improve starts from the version being read, never silently from the original.
     const openImprove = () => {
         void handleAiAccess(() => {
+            improveSourceChosenRef.current = false;
             setImproveSource(defaultImproveSource(activeVariantIdRef.current, visibleImprovements.map((imp: any) => imp.id)));
             setShowImproveSourcePicker(false);
             setShowAIModal(true);
         });
     };
+    // A version switch that lands while the sheet is open (tapped just before
+    // Improve) moves the default along, unless the person picked a source.
+    const improveSourceChosenRef = useRef(false);
+    useEffect(() => {
+        if (!showAIModal || improveSourceChosenRef.current) return;
+        setImproveSource(defaultImproveSource(activeVariantId, visibleImprovements.map((imp: any) => imp.id)));
+    }, [activeVariantId, showAIModal, visibleImprovements]);
     const openCompareForActive = useCallback(() => {
         void flushVisualEditorContent().finally(() => setShowCompareVersions(true));
     }, [flushVisualEditorContent]);
@@ -7650,7 +7660,7 @@ export const NoteEditScreen = () => {
                                 {improvementPreview && (
                                     <View style={styles.previewSourceLine}>
                                         <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textSecondary} style={rtlFlip} />
-                                        <Text style={styles.previewSourceText} numberOfLines={1}>
+                                        <Text style={styles.previewSourceText} numberOfLines={2}>
                                             {t('edit.versions.basedOn', 'Based on:')}{' '}
                                             <Text style={styles.improveSourceName}>{versionLabelOf(improvementPreview.variantId)}</Text>
                                         </Text>
@@ -7678,9 +7688,9 @@ export const NoteEditScreen = () => {
                                     others as quiet text buttons under it. */}
                                 <View style={styles.previewActions}>
                                     {/* Compare sits beside Accept: check what changed, then decide. */}
-                                    <View style={styles.previewMainRow}>
+                                    <View style={[styles.previewMainRow, previewStacked && styles.previewMainRowStacked]}>
                                         <TouchableOpacity
-                                            style={[styles.previewButtonOutline, isPreviewRegenerating && { opacity: 0.5 }]}
+                                            style={[styles.previewButtonOutline, previewStacked && styles.previewButtonStacked, isPreviewRegenerating && { opacity: 0.5 }]}
                                             onPress={() => setShowPreviewCompare(true)}
                                             disabled={isPreviewRegenerating}
                                             activeOpacity={0.7}
@@ -7693,7 +7703,7 @@ export const NoteEditScreen = () => {
                                             </Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
-                                            style={[styles.previewButtonPrimary, styles.previewButtonPrimaryInRow, isPreviewRegenerating && { opacity: 0.5 }]}
+                                            style={[styles.previewButtonPrimary, styles.previewButtonPrimaryInRow, previewStacked && styles.previewButtonStacked, isPreviewRegenerating && { opacity: 0.5 }]}
                                             onPress={handlePreviewAccept}
                                             disabled={isPreviewRegenerating}
                                             activeOpacity={0.85}
@@ -7791,11 +7801,12 @@ export const NoteEditScreen = () => {
                                                     size={18}
                                                     color={colors.textSecondary}
                                                 />
-                                                <Text style={styles.improveSourceText} numberOfLines={1}>
+                                                <Text style={styles.improveSourceText} numberOfLines={2}>
                                                     {t('edit.versions.basedOn', 'Based on:')}{' '}
                                                     <Text style={styles.improveSourceName}>{versionLabelOf(improveSource)}</Text>
                                                 </Text>
-                                                <Text style={styles.improveSourceChange}>{t('edit.versions.change', 'Change')}</Text>
+                                                {/* With large text the version name needs the room; the chevron stays. */}
+                                                {fontScale <= 1.3 && <Text style={styles.improveSourceChange}>{t('edit.versions.change', 'Change')}</Text>}
                                                 <MaterialIcons name={showImproveSourcePicker ? 'expand-less' : 'expand-more'} size={20} color={colors.primary} />
                                             </TouchableOpacity>
                                             {showImproveSourcePicker && (
@@ -7806,7 +7817,7 @@ export const NoteEditScreen = () => {
                                                             <TouchableOpacity
                                                                 key={id}
                                                                 style={styles.improveSourceOption}
-                                                                onPress={() => { setImproveSource(id); setShowImproveSourcePicker(false); }}
+                                                                onPress={() => { improveSourceChosenRef.current = true; setImproveSource(id); setShowImproveSourcePicker(false); }}
                                                                 accessibilityRole="radio"
                                                                 accessibilityState={{ selected }}
                                                                 accessibilityLabel={versionLabelOf(id)}
@@ -8463,7 +8474,8 @@ export const NoteEditScreen = () => {
 
             <CompareVersionsModal
                 visible={showCompareVersions}
-                versionLabel={variantDisplayLabels[activeVariantId] || ''}
+                // Its own step only: the subtitle already reads "<base> → <version>".
+                versionLabel={chipTextForLabel(variantDisplayLabels[activeVariantId] || '')}
                 bases={showCompareVersions
                     ? compareBasesFor(activeVariantId, activeVersionSource?.id ?? null).map((id) => ({
                         id,
@@ -9492,6 +9504,14 @@ const styles = createStyles(() => ({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: spacing.s,
+    },
+    previewMainRowStacked: {
+        flexDirection: 'column-reverse',
+        flexWrap: 'nowrap',
+    },
+    previewButtonStacked: {
+        flexBasis: 'auto',
+        flexGrow: 0,
     },
     previewButtonPrimaryInRow: {
         flexGrow: 1,
