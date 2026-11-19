@@ -16,7 +16,7 @@ import {
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { InkInputView } from '../../modules/ink-input';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { colors, getColorScheme, isDarkScheme } from '../theme/colors';
 import { createStyles } from '../theme/createStyles';
@@ -46,6 +46,8 @@ type Props = {
 };
 
 type ActiveTool = InkTool | 'eraser' | 'text' | 'lasso';
+// The full-screen iOS modal needs its own native safe-area provider.
+const ModalSafeAreaProvider = Platform.OS === 'ios' ? SafeAreaProvider : React.Fragment;
 type SettingsKey = InkTool | 'text';
 type ToolSettings = Record<SettingsKey, { color: string; sizeIndex: number }>;
 
@@ -984,6 +986,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
             {/* Palm rejection and every pen sample: above the gesture root, so gestures see the filtered touches. */}
             <InkInputView style={styles.root} collapsable={false}>
                 <GestureHandlerRootView style={styles.root}>
+                    <ModalSafeAreaProvider>
                     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
                         <View style={[styles.header, { borderBottomColor: colors.border }]}>
                             <TouchableOpacity onPress={handleClose} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('a11y.close', 'Close')}>
@@ -1103,6 +1106,7 @@ export const DrawingEditor: React.FC<Props> = ({ visible, document, onSave, onAu
                             {popoverView}
                         </View>
                     </SafeAreaView>
+                    </ModalSafeAreaProvider>
                 </GestureHandlerRootView>
             </InkInputView>
         </Modal>
