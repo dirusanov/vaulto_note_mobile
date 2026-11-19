@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.110] - 2026-11-19
+
+### Fixed
+- Pressing Back while recording no longer deletes the recording: you can continue, save or delete it.
+- Leaving a note whose original text is empty no longer moves it to the trash when an improved version has text.
+- Saying "I haven't bought milk yet" no longer ticks "milk" in a checklist.
+- If a note can't be saved, the editor stays open and offers to try again.
+- Comparing versions shows when a task was ticked or unticked, and AI actions see which tasks are done.
+- A version you renamed keeps its name after a voice command; Undo keeps working after switching versions.
+- Recording length no longer includes paused time.
+
+### Changed
+- The recovery key screen no longer promises an automatic restore it can't confirm; the recovery words are shown after setup.
+- Clearer empty search under a tag, an export summary before the ZIP, more readable subscription terms with the price on the button.
+- After signing in from Ask you return to your question; the email check shows network errors with a retry.
+- The playback position can be read and changed with TalkBack and VoiceOver.
+
 ## [1.0.109] - 2026-11-19
 
 ### Fixed
