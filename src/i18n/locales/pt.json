@@ -571,7 +571,9 @@
       "emptyText": "Digite algo antes de pedir uma melhoria.",
       "grammarPerfect": "Perfeito! Nenhum erro encontrado.",
       "working": "Pensando…",
-      "reviewHint": "Confira nomes, valores e datas. O resultado será uma versão separada; o original será mantido."
+      "reviewHint": "Confira nomes, valores e datas. O resultado será uma versão separada; o original será mantido.",
+      "compare": "Comparar com a origem",
+      "compareA11y": "Comparar o resultado com “{{name}}”"
     },
     "dictation": {
       "errorTitle": "Erro de ditado",
@@ -664,7 +666,32 @@
       "rename": "Renomear",
       "renameTitle": "Renomear versão",
       "renamePlaceholder": "Nome da versão",
-      "swipeHint": "Deslize o texto para a esquerda ou direita para trocar de versão"
+      "swipeHint": "Deslize o texto para a esquerda ou direita para trocar de versão",
+      "headerCount": "Versões ({{count}})",
+      "showAll": "Ver todas",
+      "showAllA11y": "Ver as {{count}} versões",
+      "basedOn": "Baseada em:",
+      "basedOnA11y": "Baseada em: {{name}}",
+      "basedOnHint": "Abre essa versão",
+      "basedOnChangeHint": "Escolher outra versão como base",
+      "change": "Alterar",
+      "openNow": "aberta",
+      "compareShort": "Comparar",
+      "compareA11y": "Comparar esta versão com a origem",
+      "compareWithSource": "Comparar com a origem",
+      "originalCaption": "Seu texto. Os resultados da IA são salvos como versões.",
+      "sourceUnknown": "Criada por comando de voz",
+      "previousOriginalCaption": "O texto principal antes de outra versão o substituir",
+      "compareChangesTitle": "O que mudou",
+      "compareWith": "Comparar com",
+      "changeCount_one": "{{count}} alteração",
+      "changeCount_other": "{{count}} alterações",
+      "changeOf": "{{current}} de {{total}}",
+      "noDifferencesFrom": "Sem diferenças em relação a “{{name}}”.",
+      "previousChange": "Alteração anterior",
+      "nextChange": "Próxima alteração",
+      "previousShort": "Anterior",
+      "nextShort": "Próxima"
     },
     "tasks": {
       "find": "Encontrar tarefas",
@@ -772,7 +799,8 @@
       "changedIn": "Alterado em “{{version}}”",
       "checkedIn": "Itens marcados em “{{version}}”",
       "undoStale": "A nota mudou desde então. Use Desfazer no editor."
-    }
+    },
+    "improveAction": "Melhorar"
   },
   "voice": {
     "modelNotDownloaded": "Modelo não baixado. Verifique as configurações.",

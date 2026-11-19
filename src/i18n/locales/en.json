@@ -571,7 +571,9 @@
       "emptyText": "Enter some text before requesting an improvement.",
       "grammarPerfect": "Perfect! No grammar errors found.",
       "working": "Thinking…",
-      "reviewHint": "Check names, amounts and dates. Accept creates a separate version; the original stays safe."
+      "reviewHint": "Check names, amounts and dates. Accept creates a separate version; the original stays safe.",
+      "compare": "Compare with source",
+      "compareA11y": "Compare the result with {{name}}"
     },
     "dictation": {
       "errorTitle": "Dictation error",
@@ -663,7 +665,32 @@
       "rename": "Rename",
       "renameTitle": "Rename version",
       "renamePlaceholder": "Version name",
-      "swipeHint": "Swipe the text left or right to switch versions"
+      "swipeHint": "Swipe the text left or right to switch versions",
+      "headerCount": "Versions ({{count}})",
+      "showAll": "Show all",
+      "showAllA11y": "Show all {{count}} versions",
+      "basedOn": "Based on:",
+      "basedOnA11y": "Based on: {{name}}",
+      "basedOnHint": "Opens that version",
+      "basedOnChangeHint": "Choose another version to work on",
+      "change": "Change",
+      "openNow": "open now",
+      "compareShort": "Compare",
+      "compareA11y": "Compare this version with its source",
+      "compareWithSource": "Compare with source",
+      "originalCaption": "Your text. AI results are saved as versions.",
+      "sourceUnknown": "Made by a voice command",
+      "previousOriginalCaption": "The main text before another version replaced it",
+      "compareChangesTitle": "What changed",
+      "compareWith": "Compare with",
+      "changeCount_one": "{{count}} change",
+      "changeCount_other": "{{count}} changes",
+      "changeOf": "{{current}} of {{total}}",
+      "noDifferencesFrom": "No differences from {{name}}.",
+      "previousChange": "Previous change",
+      "nextChange": "Next change",
+      "previousShort": "Previous",
+      "nextShort": "Next"
     },
     "tasks": {
       "find": "Find tasks",
@@ -771,7 +798,8 @@
       "changedIn": "Changed in “{{version}}”",
       "checkedIn": "Items checked off in “{{version}}”",
       "undoStale": "The note has changed since. Use Undo in the editor instead."
-    }
+    },
+    "improveAction": "Improve"
   },
   "voice": {
     "modelNotDownloaded": "Model not downloaded. Check Settings.",

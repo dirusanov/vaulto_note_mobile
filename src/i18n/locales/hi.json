@@ -571,7 +571,9 @@
       "emptyText": "सुधार माँगने से पहले कुछ लिखें।",
       "grammarPerfect": "बढ़िया! कोई गलती नहीं मिली।",
       "working": "सोच रहा हूँ…",
-      "reviewHint": "नाम, रकम और तारीखें जाँचें। परिणाम अलग संस्करण में सहेजा जाएगा; मूल सुरक्षित रहेगा।"
+      "reviewHint": "नाम, रकम और तारीखें जाँचें। परिणाम अलग संस्करण में सहेजा जाएगा; मूल सुरक्षित रहेगा।",
+      "compare": "स्रोत से तुलना करें",
+      "compareA11y": "नतीजे की “{{name}}” से तुलना करें"
     },
     "dictation": {
       "errorTitle": "श्रुतलेखन त्रुटि",
@@ -663,7 +665,32 @@
       "rename": "नाम बदलें",
       "renameTitle": "संस्करण का नाम बदलें",
       "renamePlaceholder": "संस्करण का नाम",
-      "swipeHint": "संस्करण बदलने के लिए टेक्स्ट को बाएँ या दाएँ स्वाइप करें"
+      "swipeHint": "संस्करण बदलने के लिए टेक्स्ट को बाएँ या दाएँ स्वाइप करें",
+      "headerCount": "संस्करण ({{count}})",
+      "showAll": "सभी देखें",
+      "showAllA11y": "सभी {{count}} संस्करण देखें",
+      "basedOn": "आधार:",
+      "basedOnA11y": "आधार: {{name}}",
+      "basedOnHint": "वह संस्करण खोलता है",
+      "basedOnChangeHint": "आधार के लिए कोई दूसरा संस्करण चुनें",
+      "change": "बदलें",
+      "openNow": "अभी खुला",
+      "compareShort": "तुलना करें",
+      "compareA11y": "इस संस्करण की उसके स्रोत से तुलना करें",
+      "compareWithSource": "स्रोत से तुलना करें",
+      "originalCaption": "आपका टेक्स्ट। AI के नतीजे संस्करण के रूप में सहेजे जाते हैं।",
+      "sourceUnknown": "वॉइस कमांड से बना",
+      "previousOriginalCaption": "दूसरे संस्करण से बदले जाने से पहले का मुख्य टेक्स्ट",
+      "compareChangesTitle": "क्या बदला",
+      "compareWith": "इससे तुलना करें",
+      "changeCount_one": "{{count}} बदलाव",
+      "changeCount_other": "{{count}} बदलाव",
+      "changeOf": "{{total}} में से {{current}}",
+      "noDifferencesFrom": "“{{name}}” से कोई अंतर नहीं।",
+      "previousChange": "पिछला बदलाव",
+      "nextChange": "अगला बदलाव",
+      "previousShort": "पिछला",
+      "nextShort": "अगला"
     },
     "tasks": {
       "find": "काम खोजें",
@@ -771,7 +798,8 @@
       "changedIn": "“{{version}}” में बदलाव हुआ",
       "checkedIn": "“{{version}}” में आइटम पर निशान लगाए",
       "undoStale": "तब से नोट बदल चुका है। संपादक में Undo का उपयोग करें।"
-    }
+    },
+    "improveAction": "बेहतर करें"
   },
   "voice": {
     "modelNotDownloaded": "मॉडल डाउनलोड नहीं हुआ है। सेटिंग्स जांचें।",

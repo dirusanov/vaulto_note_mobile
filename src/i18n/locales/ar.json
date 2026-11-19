@@ -571,7 +571,9 @@
       "emptyText": "أدخل نصاً قبل طلب التحسين.",
       "grammarPerfect": "ممتاز! لم يتم العثور على أخطاء.",
       "working": "جارٍ التفكير…",
-      "reviewHint": "تحقق من الأسماء والمبالغ والمواعيد. تُحفظ النتيجة كإصدار منفصل ويُحتفظ بالأصل."
+      "reviewHint": "تحقق من الأسماء والمبالغ والمواعيد. تُحفظ النتيجة كإصدار منفصل ويُحتفظ بالأصل.",
+      "compare": "قارن بالمصدر",
+      "compareA11y": "قارن النتيجة بـ «{{name}}»"
     },
     "dictation": {
       "errorTitle": "خطأ في الإملاء",
@@ -667,7 +669,36 @@
       "rename": "إعادة تسمية",
       "renameTitle": "إعادة تسمية النسخة",
       "renamePlaceholder": "اسم النسخة",
-      "swipeHint": "اسحب النص يسارًا أو يمينًا للتبديل بين النسخ"
+      "swipeHint": "اسحب النص يسارًا أو يمينًا للتبديل بين النسخ",
+      "headerCount": "النسخ ({{count}})",
+      "showAll": "عرض الكل",
+      "showAllA11y": "عرض كل النسخ ({{count}})",
+      "basedOn": "مبنية على:",
+      "basedOnA11y": "مبنية على: {{name}}",
+      "basedOnHint": "يفتح تلك النسخة",
+      "basedOnChangeHint": "اختر نسخة أخرى للعمل عليها",
+      "change": "تغيير",
+      "openNow": "مفتوحة الآن",
+      "compareShort": "مقارنة",
+      "compareA11y": "قارن هذه النسخة بمصدرها",
+      "compareWithSource": "قارن بالمصدر",
+      "originalCaption": "نصك. تُحفظ نتائج الذكاء الاصطناعي كنسخ منفصلة.",
+      "sourceUnknown": "أُنشئت بأمر صوتي",
+      "previousOriginalCaption": "النص الرئيسي قبل أن تحل محله نسخة أخرى",
+      "compareChangesTitle": "ما الذي تغيّر",
+      "compareWith": "قارن مع",
+      "changeCount_zero": "لا تغييرات",
+      "changeCount_one": "تغيير واحد",
+      "changeCount_two": "تغييران",
+      "changeCount_few": "{{count}} تغييرات",
+      "changeCount_many": "{{count}} تغييرًا",
+      "changeCount_other": "{{count}} تغيير",
+      "changeOf": "{{current}} من {{total}}",
+      "noDifferencesFrom": "لا اختلاف عن «{{name}}».",
+      "previousChange": "التغيير السابق",
+      "nextChange": "التغيير التالي",
+      "previousShort": "السابق",
+      "nextShort": "التالي"
     },
     "tasks": {
       "find": "البحث عن المهام",
@@ -775,7 +806,8 @@
       "changedIn": "عُدّلت «{{version}}»",
       "checkedIn": "وُضعت علامة على عناصر في «{{version}}»",
       "undoStale": "تغيّرت الملاحظة منذ ذلك الحين. استخدم التراجع في المحرر."
-    }
+    },
+    "improveAction": "تحسين"
   },
   "voice": {
     "modelNotDownloaded": "النموذج غير مُنزَّل. تحقق من الإعدادات.",

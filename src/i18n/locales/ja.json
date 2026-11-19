@@ -570,7 +570,9 @@
       "emptyText": "改善を依頼する前にテキストを入力してください。",
       "grammarPerfect": "完璧です！誤りは見つかりませんでした。",
       "working": "処理中…",
-      "reviewHint": "名前、金額、日時を確認してください。結果は別のバージョンとして保存され、原文は残ります。"
+      "reviewHint": "名前、金額、日時を確認してください。結果は別のバージョンとして保存され、原文は残ります。",
+      "compare": "元の版と比較",
+      "compareA11y": "結果を「{{name}}」と比較"
     },
     "dictation": {
       "errorTitle": "音声入力エラー",
@@ -661,7 +663,31 @@
       "rename": "名前を変更",
       "renameTitle": "バージョン名を変更",
       "renamePlaceholder": "バージョン名",
-      "swipeHint": "テキストを左右にスワイプしてバージョンを切り替え"
+      "swipeHint": "テキストを左右にスワイプしてバージョンを切り替え",
+      "headerCount": "バージョン（{{count}}）",
+      "showAll": "すべて表示",
+      "showAllA11y": "{{count}} 件のバージョンをすべて表示",
+      "basedOn": "元にした版：",
+      "basedOnA11y": "元にした版：{{name}}",
+      "basedOnHint": "そのバージョンを開きます",
+      "basedOnChangeHint": "処理する別のバージョンを選ぶ",
+      "change": "変更",
+      "openNow": "表示中",
+      "compareShort": "比較",
+      "compareA11y": "このバージョンを元の版と比較",
+      "compareWithSource": "元の版と比較",
+      "originalCaption": "あなたのテキストです。AI の結果は別バージョンとして保存されます。",
+      "sourceUnknown": "音声コマンドで作成",
+      "previousOriginalCaption": "別のバージョンに置き換えられる前のメインテキスト",
+      "compareChangesTitle": "変更点",
+      "compareWith": "比較対象",
+      "changeCount_other": "{{count}} か所の変更",
+      "changeOf": "{{current}} / {{total}}",
+      "noDifferencesFrom": "「{{name}}」との違いはありません。",
+      "previousChange": "前の変更",
+      "nextChange": "次の変更",
+      "previousShort": "前へ",
+      "nextShort": "次へ"
     },
     "tasks": {
       "find": "タスクを探す",
@@ -769,7 +795,8 @@
       "changedIn": "「{{version}}」を変更しました",
       "checkedIn": "「{{version}}」の項目にチェックしました",
       "undoStale": "その後メモが変更されました。エディタの元に戻すを使ってください。"
-    }
+    },
+    "improveAction": "改善"
   },
   "voice": {
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",

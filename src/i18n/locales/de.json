@@ -571,7 +571,9 @@
       "emptyText": "Gib Text ein, bevor du eine Verbesserung anforderst.",
       "grammarPerfect": "Perfekt! Keine Fehler gefunden.",
       "working": "Denke nach…",
-      "reviewHint": "Prüfe Namen, Beträge und Termine. Das Ergebnis wird als eigene Version gespeichert; das Original bleibt erhalten."
+      "reviewHint": "Prüfe Namen, Beträge und Termine. Das Ergebnis wird als eigene Version gespeichert; das Original bleibt erhalten.",
+      "compare": "Mit Quelle vergleichen",
+      "compareA11y": "Ergebnis mit „{{name}}“ vergleichen"
     },
     "dictation": {
       "errorTitle": "Diktierfehler",
@@ -663,7 +665,32 @@
       "rename": "Umbenennen",
       "renameTitle": "Version umbenennen",
       "renamePlaceholder": "Name der Version",
-      "swipeHint": "Wische über den Text nach links oder rechts, um die Version zu wechseln"
+      "swipeHint": "Wische über den Text nach links oder rechts, um die Version zu wechseln",
+      "headerCount": "Versionen ({{count}})",
+      "showAll": "Alle",
+      "showAllA11y": "Alle {{count}} Versionen anzeigen",
+      "basedOn": "Basiert auf:",
+      "basedOnA11y": "Basiert auf: {{name}}",
+      "basedOnHint": "Öffnet diese Version",
+      "basedOnChangeHint": "Eine andere Version als Grundlage wählen",
+      "change": "Ändern",
+      "openNow": "geöffnet",
+      "compareShort": "Vergleichen",
+      "compareA11y": "Diese Version mit ihrer Quelle vergleichen",
+      "compareWithSource": "Mit Quelle vergleichen",
+      "originalCaption": "Dein Text. KI-Ergebnisse werden als Versionen gespeichert.",
+      "sourceUnknown": "Per Sprachbefehl erstellt",
+      "previousOriginalCaption": "Der Haupttext, bevor eine andere Version ihn ersetzt hat",
+      "compareChangesTitle": "Was sich geändert hat",
+      "compareWith": "Vergleichen mit",
+      "changeCount_one": "{{count}} Änderung",
+      "changeCount_other": "{{count}} Änderungen",
+      "changeOf": "{{current}} von {{total}}",
+      "noDifferencesFrom": "Keine Unterschiede zu „{{name}}“.",
+      "previousChange": "Vorherige Änderung",
+      "nextChange": "Nächste Änderung",
+      "previousShort": "Zurück",
+      "nextShort": "Weiter"
     },
     "tasks": {
       "find": "Aufgaben finden",
@@ -771,7 +798,8 @@
       "changedIn": "In „{{version}}“ geändert",
       "checkedIn": "Punkte in „{{version}}“ abgehakt",
       "undoStale": "Die Notiz hat sich inzwischen geändert. Nutzen Sie Rückgängig im Editor."
-    }
+    },
+    "improveAction": "Verbessern"
   },
   "voice": {
     "modelNotDownloaded": "Modell nicht heruntergeladen. Prüfe die Einstellungen.",

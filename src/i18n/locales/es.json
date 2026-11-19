@@ -571,7 +571,9 @@
       "emptyText": "Escribe algo antes de pedir una mejora.",
       "grammarPerfect": "¡Perfecto! No se encontraron errores.",
       "working": "Pensando…",
-      "reviewHint": "Revisa nombres, importes y fechas. El resultado se guarda como otra versión; el original se conserva."
+      "reviewHint": "Revisa nombres, importes y fechas. El resultado se guarda como otra versión; el original se conserva.",
+      "compare": "Comparar con el origen",
+      "compareA11y": "Comparar el resultado con «{{name}}»"
     },
     "dictation": {
       "errorTitle": "Error de dictado",
@@ -664,7 +666,32 @@
       "rename": "Renombrar",
       "renameTitle": "Renombrar versión",
       "renamePlaceholder": "Nombre de la versión",
-      "swipeHint": "Desliza el texto a izquierda o derecha para cambiar de versión"
+      "swipeHint": "Desliza el texto a izquierda o derecha para cambiar de versión",
+      "headerCount": "Versiones ({{count}})",
+      "showAll": "Ver todas",
+      "showAllA11y": "Ver las {{count}} versiones",
+      "basedOn": "Basada en:",
+      "basedOnA11y": "Basada en: {{name}}",
+      "basedOnHint": "Abre esa versión",
+      "basedOnChangeHint": "Elegir otra versión como base",
+      "change": "Cambiar",
+      "openNow": "abierta",
+      "compareShort": "Comparar",
+      "compareA11y": "Comparar esta versión con su origen",
+      "compareWithSource": "Comparar con el origen",
+      "originalCaption": "Tu texto. Los resultados de la IA se guardan como versiones.",
+      "sourceUnknown": "Creada con un comando de voz",
+      "previousOriginalCaption": "El texto principal antes de que otra versión lo reemplazara",
+      "compareChangesTitle": "Qué ha cambiado",
+      "compareWith": "Comparar con",
+      "changeCount_one": "{{count}} cambio",
+      "changeCount_other": "{{count}} cambios",
+      "changeOf": "{{current}} de {{total}}",
+      "noDifferencesFrom": "No hay diferencias con «{{name}}».",
+      "previousChange": "Cambio anterior",
+      "nextChange": "Cambio siguiente",
+      "previousShort": "Anterior",
+      "nextShort": "Siguiente"
     },
     "tasks": {
       "find": "Buscar tareas",
@@ -772,7 +799,8 @@
       "changedIn": "Cambiado en «{{version}}»",
       "checkedIn": "Elementos marcados en «{{version}}»",
       "undoStale": "La nota cambió desde entonces. Usa Deshacer en el editor."
-    }
+    },
+    "improveAction": "Mejorar"
   },
   "voice": {
     "modelNotDownloaded": "Modelo no descargado. Revisa los ajustes.",
