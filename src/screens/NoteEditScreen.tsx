@@ -21,6 +21,7 @@ import {
     Linking,
     useWindowDimensions,
 } from 'react-native';
+import type { AlertButton } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -126,6 +127,7 @@ import {
     extractEmbeddedAudioPaths,
     hasMeaningfulRichContent,
     isEditorEchoOf,
+    isEditorRenderingOf,
     isRichHtmlContent,
     removeAudioFromRichContent,
     normalizeModelMarkdownForEditor,
@@ -133,6 +135,7 @@ import {
     richContentToAgentMarkdown,
     richContentToMarkdown,
     richContentToPlainText,
+    richContentToTaskAwarePlainText,
     stripAudioEmbedsFromRichContent,
     titleMatchesContextScript,
 } from '../utils/richContent';
@@ -146,6 +149,8 @@ import {
     isHistoryEchoExpected,
     pushHistoryStep,
     recordHistoryChange,
+    resumeHistoryOnSwitch,
+    retitleHistory,
     type VariantHistory,
 } from '../utils/editHistory';
 import { getLocalizedPresetDescription, getLocalizedPresetLabel } from '../i18n/presetLabels';
@@ -159,6 +164,7 @@ import {
     englishStepName,
     isDerivedLabel,
     markUserVariantName,
+    variantTitleAfterAction,
     plainVariantTitle,
     userVariantName,
     PREVIOUS_ORIGINAL_OPTION_ID,
@@ -169,6 +175,9 @@ import {
     resolveChecklistScaleForContent,
 } from '../utils/checklistScale';
 import { buildAudioEmbedHtml } from '../utils/audioEmbeds';
+import { normalizeChecklistCommandText, resolveDirectChecklistCheckFallback } from '../utils/checklistVoiceCommand';
+import { shouldAutoCleanEmptyNote } from '../utils/emptyNote';
+import { saveThenProceed } from '../utils/saveThenProceed';
 import { sanitizeDisplayLabel, stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { createStyles } from '../theme/createStyles';
@@ -271,11 +280,6 @@ const NETWORK_RETRY_DELAYS_MS = [3000, 8000];
 
 const TODO_LIST_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s+/m;
 const CHECKLIST_ITEM_LINE_REGEX = /^\s*[-*]\s*\[(?:[ xX])?\]\s*(.*)$/;
-const CHECKLIST_MUTABLE_LINE_REGEX = /^(\s*[-*]\s*)\[(?:([ xX]))?\](\s*)(.*)$/;
-const RICH_TASK_ITEM_BLOCK_REGEX = /<li\b(?=[^>]*data-type=(["'])taskItem\1)[^>]*>[\s\S]*?<\/li>/gi;
-const RICH_CHECKBOX_INPUT_TAG_REGEX = /<input\b(?=[^>]*type=(["'])checkbox\1)[^>]*>/i;
-const RICH_DATA_CHECKED_ATTR_REGEX = /data-checked=(["'])(true|false)\1/i;
-const RICH_BOOLEAN_CHECKED_ATTR_REGEX = /\schecked(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/i;
 const STRUCTURED_LIST_LINE_REGEX = /^\s*(?:[-*]\s*\[(?:[ xX])?\]\s+|[-*]\s+|\d+[\.\)]\s+)/;
 
 const stripListMarker = (value: string): string =>
@@ -329,13 +333,6 @@ const contentAlreadyContainsStructuredListBlock = (base: string, block: string):
     return hasContiguousLineBlock(baseLines, blockLines);
 };
 
-const normalizeChecklistCommandText = (value: string): string =>
-    value
-        .toLocaleLowerCase()
-        .replace(/\u00a0/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
 const extractChecklistItemTexts = (content: string): string[] => {
     const comparableContent = isRichHtmlContent(content)
         ? richContentToAgentMarkdown(content)
@@ -367,142 +364,6 @@ const transcriptDirectlyMentionsChecklistItem = (content: string, transcript: st
     return extractChecklistItemTexts(content).some((itemText) => (
         itemText.length >= 2 && normalizedTranscript.includes(itemText)
     ));
-};
-
-type ParsedChecklistItem = {
-    checked: boolean;
-    text: string;
-};
-
-const parseChecklistLineForCommandFallback = (line: string): ParsedChecklistItem | null => {
-    const match = line.match(CHECKLIST_MUTABLE_LINE_REGEX);
-    if (!match) return null;
-
-    const text = normalizeChecklistCommandText(match[4] || '');
-    if (!text) return null;
-
-    return {
-        checked: typeof match[2] === 'string' && match[2].toLowerCase() === 'x',
-        text,
-    };
-};
-
-const parseChecklistItemsForCommandFallback = (content: string): ParsedChecklistItem[] => {
-    if (!content) return [];
-
-    if (!isRichHtmlContent(content)) {
-        return (content || '')
-            .split(/\r?\n/)
-            .map(parseChecklistLineForCommandFallback)
-            .filter((item): item is ParsedChecklistItem => !!item);
-    }
-
-    return Array.from(content.matchAll(RICH_TASK_ITEM_BLOCK_REGEX))
-        .map((match) => parseChecklistLineForCommandFallback(richContentToAgentMarkdown(match[0])))
-        .filter((item): item is ParsedChecklistItem => !!item);
-};
-
-const updateMarkdownChecklistItemsCheckedPreservingFormat = (
-    content: string,
-    itemTextsToCheck: Set<string>,
-): string | null => {
-    if (!content || itemTextsToCheck.size === 0) return null;
-
-    let changed = false;
-    const nextContent = content.replace(/^(\s*[-*]\s*)\[(?:([ xX]))?\](\s*)(.*)$/gm, (line, prefix, marker, spacing, text) => {
-        const normalizedItemText = normalizeChecklistCommandText(text || '');
-        const isChecked = typeof marker === 'string' && marker.toLowerCase() === 'x';
-        if (!normalizedItemText || isChecked || !itemTextsToCheck.has(normalizedItemText)) {
-            return line;
-        }
-
-        changed = true;
-        return `${prefix}[x]${spacing}${text}`;
-    });
-
-    return changed ? nextContent : null;
-};
-
-const setRichTaskItemCheckedState = (block: string, checked: boolean): string => {
-    let nextBlock = block;
-
-    if (RICH_DATA_CHECKED_ATTR_REGEX.test(nextBlock)) {
-        nextBlock = nextBlock.replace(
-            RICH_DATA_CHECKED_ATTR_REGEX,
-            (_match, quote: string) => `data-checked=${quote}${checked ? 'true' : 'false'}${quote}`
-        );
-    } else {
-        nextBlock = nextBlock.replace(/^<li\b/i, `<li data-checked="${checked ? 'true' : 'false'}"`);
-    }
-
-    nextBlock = nextBlock.replace(RICH_CHECKBOX_INPUT_TAG_REGEX, (inputTag) => {
-        const hasCheckedAttr = RICH_BOOLEAN_CHECKED_ATTR_REGEX.test(inputTag);
-        if (checked) {
-            if (hasCheckedAttr) return inputTag;
-            return inputTag.replace(/\/?>$/, (closing) => ` checked${closing}`);
-        }
-
-        return inputTag.replace(RICH_BOOLEAN_CHECKED_ATTR_REGEX, '');
-    });
-
-    return nextBlock;
-};
-
-const updateRichChecklistItemsCheckedPreservingFormat = (
-    content: string,
-    itemTextsToCheck: Set<string>,
-): string | null => {
-    if (!content || itemTextsToCheck.size === 0) return null;
-
-    let changed = false;
-    const nextContent = content.replace(RICH_TASK_ITEM_BLOCK_REGEX, (block) => {
-        const parsedItem = parseChecklistLineForCommandFallback(richContentToAgentMarkdown(block));
-        if (!parsedItem || parsedItem.checked || !itemTextsToCheck.has(parsedItem.text)) {
-            return block;
-        }
-
-        const updatedBlock = setRichTaskItemCheckedState(block, true);
-        changed = changed || updatedBlock !== block;
-        return updatedBlock;
-    });
-
-    return changed ? nextContent : null;
-};
-
-const resolveDirectChecklistCheckFallback = (content: string, transcript: string): string | null => {
-    const normalizedTranscript = normalizeChecklistCommandText(transcript);
-    if (!normalizedTranscript) return null;
-
-    const items = parseChecklistItemsForCommandFallback(content);
-    if (items.length === 0) return null;
-
-    const directlyMentionedUncheckedItems = items.filter((item) => (
-        !item.checked &&
-        item.text.length >= 2 &&
-        normalizedTranscript.includes(item.text)
-    ));
-    if (directlyMentionedUncheckedItems.length === 0) return null;
-
-    let residualIntent = normalizedTranscript;
-    directlyMentionedUncheckedItems
-        .slice()
-        .sort((left, right) => right.text.length - left.text.length)
-        .forEach((item) => {
-            residualIntent = residualIntent.replace(item.text, ' ');
-        });
-    residualIntent = residualIntent
-        .replace(/[.,!?;:()[\]{}"'`/\\+-]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    if (!residualIntent) {
-        return null;
-    }
-
-    const itemTextsToCheck = new Set(directlyMentionedUncheckedItems.map((item) => item.text));
-    return isRichHtmlContent(content)
-        ? updateRichChecklistItemsCheckedPreservingFormat(content, itemTextsToCheck)
-        : updateMarkdownChecklistItemsCheckedPreservingFormat(content, itemTextsToCheck);
 };
 
 const extractListLikeItems = (text: string): string[] => {
@@ -3804,6 +3665,8 @@ export const NoteEditScreen = () => {
             }
         } catch (error) {
             console.error('Failed to save improvement:', error);
+            // The caller decides: leaving or switching must not go on as if saved.
+            throw error;
         } finally {
             if (isMounted.current) {
                 setIsSaving(false);
@@ -4008,6 +3871,26 @@ export const NoteEditScreen = () => {
             });
         }, 500); // Reduced from 2000ms to 500ms for faster auto-save
     }, []);
+
+    // A save that failed when the user leaves the note or switches the version:
+    // the editor stays open with the unsaved text, and the user can try again,
+    // stay (and copy the text), or, when leaving, give the edits up knowingly.
+    const showSaveFailedAlert = useCallback((error: unknown, retry: () => void, leave?: () => void) => {
+        console.error('Save failed:', error);
+        haptics.warning();
+        const buttons: AlertButton[] = [
+            { text: t('edit.saveFailed.retry', 'Try again'), onPress: retry },
+        ];
+        if (leave) {
+            buttons.push({ text: t('edit.saveFailed.leave', 'Leave without saving'), style: 'destructive', onPress: leave });
+        }
+        buttons.push({ text: t('common.cancel', 'Cancel'), style: 'cancel' });
+        appAlert(
+            t('edit.saveFailed.title', 'Not saved'),
+            t('edit.saveFailed.message', 'Your latest changes could not be saved. They are still here: try again, or stay and copy the text.'),
+            buttons,
+        );
+    }, [t]);
 
     const handleTitleChange = useCallback((text: string) => {
         const variantId = activeVariantIdRef.current;
@@ -4243,10 +4126,17 @@ export const NoteEditScreen = () => {
         if (variantId === activeVariantId) {
             return;
         }
+        // Save current content before switching; a failed save keeps the
+        // version (and its unsaved text) on screen.
+        const saved = await saveThenProceed(
+            () => saveNote(),
+            () => undefined,
+            (error) => showSaveFailedAlert(error, () => { void handleVariantSelectRef.current(variantId); }),
+        );
+        if (!saved) {
+            return;
+        }
         try {
-            // Save current content before switching
-            await saveNote();
-
             // Update is_active flags in database
             if (localNoteId) {
                 await setActiveVariant(
@@ -4255,7 +4145,7 @@ export const NoteEditScreen = () => {
                 );
             }
         } catch (error) {
-            console.error('Failed to save before switching variant:', error);
+            console.error('Failed to mark the selected version active:', error);
         }
 
         // What the version shows once selected.
@@ -4269,13 +4159,18 @@ export const NoteEditScreen = () => {
             ? existingNote?.title || ''
             : resolveImprovementVariantTitle(variantId);
 
-        // Undo starts over at what the version shows now. Steps recorded for it
-        // earlier (or while the screen loaded, before its text arrived) used to
-        // let Undo right after switching empty the version, and that got saved.
-        variantHistories.current[variantId] = {
-            history: [{ title: variantTitle, content: visibleContent }],
-            index: 0
-        };
+        // Undo keeps the version's earlier steps while the editor is open, so
+        // its last edit can still be undone after reading another version. They
+        // are dropped only when the shown text is not the step the history is at
+        // (changed elsewhere, or recorded before the text loaded: Undo right
+        // after switching used to empty the version, and that got saved).
+        variantHistories.current[variantId] = resumeHistoryOnSwitch(
+            variantHistories.current[variantId],
+            { title: variantTitle, content: visibleContent },
+            (stepContent, shownContent) => isEditorEchoOf(stepContent, shownContent)
+                || isEditorEchoOf(shownContent, stepContent)
+                || isEditorRenderingOf(stepContent, shownContent)
+        );
         expectHistoryEcho(variantId);
         if (hasMeaningfulRichContent(visibleContent)) loadedWithTextRef.current.add(variantId);
         else loadedWithTextRef.current.delete(variantId);
@@ -4294,7 +4189,9 @@ export const NoteEditScreen = () => {
         }
         syncVisibleContent(visibleContent);
         setReparseTrigger(prev => prev + 1);
-    }, [activeVariantId, existingNote?.content, existingNote?.title, flushNoteTitleSave, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, syncVisibleContent, syncVisibleTitle]);
+    }, [activeVariantId, existingNote?.content, existingNote?.title, flushNoteTitleSave, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, showSaveFailedAlert, syncVisibleContent, syncVisibleTitle]);
+    const handleVariantSelectRef = useRef(handleVariantSelect);
+    handleVariantSelectRef.current = handleVariantSelect;
 
     // ---- Versions: undoable delete, promote, copy, swipe -------------------------
 
@@ -4457,6 +4354,9 @@ export const NoteEditScreen = () => {
             await updateImprovement(noteId, target.id, { title: nextTitle });
             improvementTitleDraftsRef.current[target.id] = nextTitle;
             improvementTitleSavedRef.current[target.id] = nextTitle;
+            // Undo/Redo of the version's text must not bring the old name back.
+            const renamedHistory = retitleHistory(variantHistories.current[target.id], nextTitle);
+            if (renamedHistory) variantHistories.current[target.id] = renamedHistory;
         } catch (error) {
             console.error('Failed to rename version', error);
             appAlert(t('common.errorTitle', 'Error'), getErrorMessage(error, ''));
@@ -4590,22 +4490,22 @@ export const NoteEditScreen = () => {
                     return;
                 }
 
-                try {
-                    await saveNote({ skipEditorFlush: tagged });
-                } catch (error) {
-                    console.error('Error during navigation auto-save:', error);
-                    finishNavigation();
-                    return;
-                }
-
-                finishNavigation();
+                await saveThenProceed(
+                    () => saveNote({ skipEditorFlush: tagged }),
+                    finishNavigation,
+                    (error) => showSaveFailedAlert(
+                        error,
+                        () => { void saveAndExit(); },
+                        finishNavigation,
+                    ),
+                );
             };
 
             saveAndExit();
         });
 
         return unsubscribe;
-    }, [clearAgentSessionState, navigation, prepareEditorSnapshotForExit, resolveImprovementVariantTitle, saveNote, settleInlineEditorAudioForExit]);
+    }, [clearAgentSessionState, navigation, prepareEditorSnapshotForExit, resolveImprovementVariantTitle, saveNote, settleInlineEditorAudioForExit, showSaveFailedAlert]);
 
     useFocusEffect(
         useCallback(() => {
@@ -4691,13 +4591,19 @@ export const NoteEditScreen = () => {
         const isViewingOriginal = activeVariantIdRef.current === 'original';
         const latestTitle = currentTitleRef.current;
         const latestContent = currentContentRef.current;
-        const isContentEmpty =
+        // A version with text keeps the note, as in saveNote: only a draft with
+        // nothing anywhere is cleaned away.
+        const latestImprovements = notesRef.current.find((n) => n.id === localNoteIdRef.current)?.improvements ?? noteImprovements;
+        const isEmptyDraft =
             isViewingOriginal &&
-            !latestTitle.trim() &&
-            !hasMeaningfulRichContent(latestContent);
-        const hasNoAudio = !existingNote?.has_audio && voiceRecordings.length === 0;
+            shouldAutoCleanEmptyNote({
+                title: latestTitle,
+                originalContent: latestContent,
+                hasAudio: !!existingNote?.has_audio || voiceRecordings.length > 0,
+                variantContents: latestImprovements.map((imp) => improvementDraftsRef.current[imp.id] ?? imp.content ?? ''),
+            });
 
-        if (isContentEmpty && hasNoAudio && localNoteId) {
+        if (isEmptyDraft && localNoteId) {
             skipAutoSaveRef.current = true;
             navigateBackToList();
             // Auto-delete empty notes to keep list clean
@@ -4707,14 +4613,15 @@ export const NoteEditScreen = () => {
             });
         } else {
             const tagged = applyTagsOnLeave();
-            try {
-                await saveNote({ skipEditorFlush: tagged });
-            } catch (error) {
-                console.error('Error during back navigation save:', error);
-            }
-
-            skipAutoSaveRef.current = true;
-            navigateBackToList();
+            const leave = () => {
+                skipAutoSaveRef.current = true;
+                navigateBackToList();
+            };
+            await saveThenProceed(
+                () => saveNote({ skipEditorFlush: tagged }),
+                leave,
+                (error) => showSaveFailedAlert(error, () => { void handleBack(); }, leave),
+            );
         }
     };
 
@@ -5221,8 +5128,16 @@ export const NoteEditScreen = () => {
                                             commandBaseContent
                                         );
                                     }
-                                    const nextVariantTitle = suggestedTitle || resolveImprovementVariantTitle(taskVariantId);
-                                    if (localNoteIdRef.current && nextVariantTitle) {
+                                    // A name the user gave the version is kept; the model's
+                                    // suggestion only replaces a title it made itself.
+                                    const storedVariantTitle = improvementTitleDraftsRef.current[taskVariantId]
+                                        ?? notesRef.current.find((n) => n.id === localNoteIdRef.current)?.improvements?.find((imp) => imp.id === taskVariantId)?.title
+                                        ?? '';
+                                    const currentVariantTitle = userVariantName(storedVariantTitle)
+                                        ? storedVariantTitle
+                                        : resolveImprovementVariantTitle(taskVariantId);
+                                    const nextVariantTitle = variantTitleAfterAction(currentVariantTitle, suggestedTitle);
+                                    if (localNoteIdRef.current && nextVariantTitle && nextVariantTitle !== currentVariantTitle) {
                                         await updateImprovement(localNoteIdRef.current, taskVariantId, {
                                             title: nextVariantTitle,
                                         });
@@ -6396,12 +6311,15 @@ export const NoteEditScreen = () => {
         setIsColorPickerVisible(false);
         setIsEditing(false);
 
-        prepareEditorSnapshotForExit()
-            .then(() => saveNote())
-            .catch(error => {
-                console.error('Error during manual save:', error);
-            });
-    }, [prepareEditorSnapshotForExit, saveNote]);
+        const save = () => {
+            void saveThenProceed(
+                () => prepareEditorSnapshotForExit().then(() => saveNote()),
+                () => undefined,
+                (error) => showSaveFailedAlert(error, save),
+            );
+        };
+        save();
+    }, [prepareEditorSnapshotForExit, saveNote, showSaveFailedAlert]);
 
     /**
      * Runs one improvement request and returns the text to apply, or null when the
@@ -6463,7 +6381,8 @@ export const NoteEditScreen = () => {
             const sourceRichText = variantAtRequestStart === activeVariantIdRef.current
                 ? content
                 : resolveVariantContent(variantAtRequestStart);
-            const sourceText = richContentToPlainText(sourceRichText).trim();
+            // Checklist state stays visible to the model ("keep only what is not done").
+            const sourceText = richContentToTaskAwarePlainText(sourceRichText).trim();
             if (!sourceText) {
                 appAlert(t('edit.improvePreview.title'), t('edit.improvePreview.emptyText'));
                 return;
@@ -8248,8 +8167,8 @@ export const NoteEditScreen = () => {
             <CompareVersionsModal
                 visible={showCompareVersions}
                 versionLabel={variantDisplayLabels[activeVariantId] || ''}
-                originalText={showCompareVersions ? richContentToPlainText(resolveVariantContent('original')) : ''}
-                versionText={showCompareVersions ? richContentToPlainText(content) : ''}
+                originalText={showCompareVersions ? richContentToTaskAwarePlainText(resolveVariantContent('original')) : ''}
+                versionText={showCompareVersions ? richContentToTaskAwarePlainText(content) : ''}
                 onClose={() => setShowCompareVersions(false)}
             />
 

@@ -72,7 +72,11 @@
     "lockedListHint": "解锁后，你的笔记会显示在这里。",
     "lockedNotBackedUp": "在此之前，新笔记不会备份。",
     "lockedSyncNotice": "未同步：解锁加密即可备份新笔记。",
-    "tryProFree": "免费试用 Pro"
+    "tryProFree": "免费试用 Pro",
+    "tagNoResults": "在 #{{tag}} 中未找到结果",
+    "tagEmpty": "#{{tag}} 中没有笔记",
+    "tagSearchAll": "搜索全部笔记",
+    "tagShowAll": "显示全部笔记"
   },
   "settings": {
     "title": "设置",
@@ -108,9 +112,9 @@
       "turnOffE2ee": "关闭端到端加密",
       "encryptingTitle": "正在加密笔记",
       "encryptingSubtitle": "之后只有你能阅读。",
-      "keyInGoogle": "在 Google 备份中 · 在新设备上打开笔记",
-      "keyInIcloud": "在 iCloud 钥匙串中 · 在新 iPhone 上打开笔记",
-      "keyOnlyHere": "仅在本机 · 请另存一份，以免丢失笔记"
+      "keyOnlyHere": "仅在本机 · 请另存一份，以免丢失笔记",
+      "keyRequestedIcloud": "在此设备上 · 已请求 iCloud 钥匙串副本 · 请同时自行保存一份",
+      "keyRequestedGoogle": "在此设备上 · 已请求 Google 备份副本 · 请同时自行保存一份"
     },
     "account": {
       "signOut": "登出",
@@ -228,7 +232,7 @@
       "encryptionDisabledTitle": "加密已关闭",
       "minutesWarningText": "本月的分钟数已用完，接下来将使用试用额度。",
       "minutesWarningTextLow": "本月的转写分钟数快用完了",
-      "saveRecoveryFirst": "笔记以端到端加密方式保留在服务器上。重新登录即可打开：密钥会从设备备份中恢复，或输入你的恢复密钥。",
+      "saveRecoveryFirst": "笔记以端到端加密方式保留在服务器上。重新登录即可打开：如果密钥已保存在设备备份中，可能会从中恢复；否则你需要恢复密钥。",
       "signOutMessage": "本机上的笔记要如何处理？",
       "syncPendingMessage": "本机已关闭端到端加密。但你的笔记暂时无法同步到服务器，联网后会自动更新为普通文本。",
       "unableDisableSync": "无法关闭同步。",
@@ -273,14 +277,12 @@
       "explain": "只有这个密钥能在新设备上打开你的笔记。请妥善保存，例如存入密码管理器。任何人（包括 Vaulto）都无法找回它。",
       "share": "分享",
       "savedIt": "我已保存密钥",
-      "inGoogle": "已保存到你的 Google 备份：在新设备上笔记会自动打开。",
-      "inIcloud": "已保存到 iCloud 钥匙串：在新 iPhone 上笔记会自动打开。",
-      "explainBackup": "也请另存一份，以防备份被关闭：最好存在密码管理器中。任何人（包括 Vaulto）都无法找回此密钥。",
-      "enableBackupTip": "开启屏幕锁定和 Google 备份，Vaulto 会自动为你保存此密钥",
       "authReason": "显示恢复密钥",
-      "bannerTitle": "笔记已端到端加密",
-      "bannerGoogle": "密钥已保存到 Google 备份。也可在 设置 → 恢复密钥 中查看。",
-      "bannerIcloud": "密钥已保存到 iCloud 钥匙串。也可在 设置 → 恢复密钥 中查看。"
+      "requestedIcloud": "已保存在此设备上。已请求在 iCloud 钥匙串中保存副本；Vaulto 无法确认钥匙串已开启并完成同步。",
+      "requestedGoogle": "已保存在此设备上。已请求在你的 Google 备份中保存副本；Vaulto 无法确认备份已开启并完成。",
+      "onDeviceOnly": "仅保存在此设备上。",
+      "explainRequested": "为确保在新手机上也能打开笔记，请你自己也保存这个密钥，例如保存在密码管理器中。任何人（包括 Vaulto）都无法恢复它。",
+      "backupTip": "开启屏幕锁定和 Google 备份，这样此密钥的副本也可以保存在那里"
     },
     "resetRecovery": {
       "title": "加密保险库已重置",
@@ -724,7 +726,13 @@
     "textStyleHeading": "小标题",
     "textStyleSubheading": "副标题",
     "textStyleBody": "正文",
-    "playRecording": "播放录音"
+    "playRecording": "播放录音",
+    "saveFailed": {
+      "title": "未保存",
+      "message": "无法保存你最近的更改。更改仍在这里：请重试，或留在此处复制文本。",
+      "retry": "重试",
+      "leave": "不保存并离开"
+    }
   },
   "voice": {
     "modelNotDownloaded": "模型尚未下载，请检查设置。",
@@ -764,7 +772,11 @@
     "noSpeechDetected": "未检测到语音。录音已保存。",
     "quietTitle": "几乎没有录到声音",
     "quietDesc": "麦克风只录到了静音。如果它被静音或正在通话，请结束后重新录制。仍要保留这段录音吗？",
-    "keepRecording": "保留"
+    "keepRecording": "保留",
+    "exitTitle": "保留这段录音吗？",
+    "exitDesc": "返回将删除已录制的内容。",
+    "continueRecording": "继续录音",
+    "saveRecording": "保存"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -907,7 +919,9 @@
     "guestUnverifiedDesc": "此设备无法使用无需账户的免费云端转写。请登录（免费），或直接在此设备上离线将语音转为文字。",
     "aiLimitDescDate": "本月的 AI 额度已用完，将于 {{date}} 重置。",
     "aiLimitDescNoDate": "本月的 AI 额度已用完，将在下一个周期开始时重置。",
-    "aiLimitGuestDesc": "登录即可获得属于你自己的每月 AI 额度。"
+    "aiLimitGuestDesc": "登录即可获得属于你自己的每月 AI 额度。",
+    "verificationSentTo": "我们已将验证链接发送至",
+    "verificationCheckFailed": "无法检查你的邮箱是否已验证。请检查网络连接后重试。"
   },
   "a11y": {
     "checked": "已完成",
@@ -944,6 +958,7 @@
     "play": "播放",
     "pause": "暂停",
     "playbackPosition": "播放进度",
+    "playbackPositionValue": "{{position}} / {{total}}",
     "checklist": "清单",
     "bulletList": "项目符号列表",
     "bold": "粗体",
@@ -1108,14 +1123,18 @@
     "hint": "导出：ZIP 中的 Markdown 文件。导入：.md、.txt、.zip 或 Google Keep（Takeout）。",
     "exportTitle": "导出笔记",
     "exportNothing": "没有可导出的笔记。",
-    "exportSkippedProtected": "受保护的笔记（{{count}} 条）未导出：它们不会以未加密形式离开设备。",
     "exportFailed": "无法导出笔记。",
     "importTitle": "导入笔记",
     "importNothing": "这些文件中没有找到笔记。支持 .md、.txt、.zip 和 Google Keep（Takeout）。",
     "importDone": "已导入笔记：{{count}}",
     "importFailed": "无法导入笔记。",
     "exportDesc": "Markdown 文件打包为 ZIP",
-    "importDesc": ".md、.txt、.zip 或 Google Keep（Takeout）"
+    "importDesc": ".md、.txt、.zip 或 Google Keep（Takeout）",
+    "exportSummaryCount": "ZIP 中的笔记：{{count}} 条，为应用中当前显示版本的 Markdown 文本。",
+    "exportSummaryExcluded": "不包含：录音、手绘以及笔记的其他版本。它们仍保留在应用中。",
+    "exportSkippedProtectedCount": "已跳过受保护的笔记：{{count}} 条。它们绝不会以未加密形式离开设备。",
+    "exportSkippedLockedCount": "已跳过此设备上尚未解锁的笔记：{{count}} 条。",
+    "exportNothingReadable": "没有可导出的内容：所有笔记均受保护或尚未在此设备上解锁。"
   },
   "notify": {
     "remindersChannel": "任务提醒",
@@ -1173,7 +1192,23 @@
     "trialRowDetail": "免费试用 {{duration}}，无需银行卡",
     "limitTrialOffer": "免费试用 Pro {{duration}}：{{minutes}} 分钟云端转写，AI 不限量。无需银行卡，不收取任何费用。",
     "limitTrialOfferAI": "Pro 的 AI 不限量：免费试用 {{duration}}，无需银行卡。",
-    "tryFree": "免费试用"
+    "tryFree": "免费试用",
+    "ctaTrialThen": "开始免费试用，之后 {{price}}",
+    "ctaSubscribe": "订阅：{{price}}",
+    "ctaSubscribeOffer": "订阅：{{offer}}",
+    "planYearlyPro": "Pro（年付）",
+    "planMonthlyPro": "Pro（月付）",
+    "purchaseWelcomeTitle": "欢迎使用 Pro！",
+    "purchaseDoneTitle": "购买完成",
+    "purchaseActivated": "你的订阅已生效。当前方案：{{plan}}。",
+    "purchaseSyncing": "购买已完成。正在为你的账户开通 {{plan}}。",
+    "purchaseFailed": "购买未成功。请重试，或检查商店账户中的付款方式。",
+    "restoredTitle": "购买已恢复",
+    "restoreDoneTitle": "恢复完成",
+    "restoredActive": "你的 Pro 订阅已恢复。",
+    "restoredSyncing": "购买已恢复。正在为你的账户开通订阅。",
+    "restoreNoActive": "此商店账户下未找到有效订阅。",
+    "restoreFailed": "无法恢复购买。请检查网络连接和商店账户后重试。"
   },
   "drawing": {
     "done": "完成",

@@ -20,6 +20,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
 import { appAlert } from '../components/AppAlert';
+import { finishSignIn } from '../navigation/finishSignIn';
 
 type LegalParams = {
     legalToken?: string;
@@ -76,10 +77,10 @@ export const LegalAcceptanceScreen = () => {
                 throw new Error('Invalid auth response');
             }
             await signIn(tokens.access_token, tokens.refresh_token);
-            navigation.reset({
+            finishSignIn(navigation, () => navigation.reset({
                 index: 0,
                 routes: [{ name: 'NotesList' }],
-            });
+            }));
         } catch (error) {
             appAlert(t("common.failedTitle"), getErrorMessage(error, t("common.pleaseSignInAgain")));
             navigation.navigate('SignIn');

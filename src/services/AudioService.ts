@@ -11,6 +11,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { NativeModules, Platform } from 'react-native';
 import { encrypt, decrypt } from '../crypto/encryption';
 import { audioExtension } from '../utils/audioFormat';
+import { ActiveClock, msToStoredSeconds, resolveRecordedMs } from '../utils/recordingClock';
 
 export const MAX_RECORDING_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -56,6 +57,10 @@ class AudioServiceClass {
     private recording: AudioRecorder | null = null;
     private playbackCopySequence = 0;
     private recordingStartTime: number = 0;
+    // Recording time without pauses, for the saved duration (the start time above
+    // includes pauses). Meetings add their finished segments' lengths.
+    private activeClock = new ActiveClock();
+    private completedSegmentsMs = 0;
     private meteringTimer: ReturnType<typeof setInterval> | null = null;
 
     private stopMetering(): void {
@@ -222,6 +227,8 @@ class AudioServiceClass {
             console.log('[V3] Recording created successfully');
             this.recording = recording;
             this.recordingStartTime = Date.now();
+            this.activeClock.start(this.recordingStartTime);
+            this.completedSegmentsMs = 0;
         } catch (error) {
             console.error('Failed to start recording:', error);
             throw error;
@@ -240,6 +247,9 @@ class AudioServiceClass {
 
             const recorder = this.recording;
             this.stopMetering();
+            // Read before stop: the recorder's own count skips paused time.
+            const nativeMs = this.readNativeDurationMs(recorder);
+            const trackedMs = this.activeClock.elapsedMs(Date.now());
             await recorder.stop();
             const uri = recorder.uri;
             recorder.release();
@@ -248,8 +258,8 @@ class AudioServiceClass {
                 return null;
             }
 
-            // Calculate duration
-            const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+            // Paused time is not part of the recording (nor of a meeting's earlier parts).
+            const duration = msToStoredSeconds(this.completedSegmentsMs + resolveRecordedMs(nativeMs, trackedMs));
 
             return {
                 uri,
@@ -262,12 +272,20 @@ class AudioServiceClass {
         } finally {
             this.recording = null;
             this.recordingStartTime = 0;
+            this.activeClock.reset();
+            this.completedSegmentsMs = 0;
         }
     }
 
-    /**
-     * Pause recording
-     */
+    private readNativeDurationMs(recorder: AudioRecorder): number | null {
+        try {
+            const value = recorder.getStatus()?.durationMillis;
+            return typeof value === 'number' && Number.isFinite(value) ? value : null;
+        } catch {
+            return null;
+        }
+    }
+
     /**
      * Meeting mode: closes the current segment and continues recording into a
      * new one with the same settings; returns the finished segment's file.
@@ -277,6 +295,8 @@ class AudioServiceClass {
         if (!this.recording) return { uri: null, restarted: false };
         const recorder = this.recording;
         this.stopMetering();
+        const segmentMs = resolveRecordedMs(this.readNativeDurationMs(recorder), this.activeClock.elapsedMs(Date.now()));
+        const completedBefore = this.completedSegmentsMs;
         await recorder.stop();
         const uri = recorder.uri ?? null;
         recorder.release();
@@ -292,6 +312,8 @@ class AudioServiceClass {
         }
         // The caller tracks the total length; keep the original start for it.
         this.recordingStartTime = startedAt;
+        // startRecording reset the counters; the finished part still counts.
+        this.completedSegmentsMs = completedBefore + segmentMs;
         return { uri, restarted: true };
     }
 
@@ -308,6 +330,7 @@ class AudioServiceClass {
     async pauseRecording(): Promise<void> {
         if (this.recording) {
             this.recording.pause();
+            this.activeClock.pause(Date.now());
         }
     }
 
@@ -317,6 +340,7 @@ class AudioServiceClass {
     async resumeRecording(): Promise<void> {
         if (this.recording) {
             this.recording.record();
+            this.activeClock.resume(Date.now());
         }
     }
 
@@ -349,6 +373,8 @@ class AudioServiceClass {
             } finally {
                 this.recording = null;
                 this.recordingStartTime = 0;
+                this.activeClock.reset();
+                this.completedSegmentsMs = 0;
             }
         }
     }

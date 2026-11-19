@@ -73,7 +73,11 @@
     "lockedListHint": "Deine Notizen erscheinen hier, sobald du sie entsperrst.",
     "lockedNotBackedUp": "Bis dahin werden neue Notizen nicht gesichert.",
     "lockedSyncNotice": "Nicht synchronisiert: Entsperre die Verschlüsselung, um neue Notizen zu sichern.",
-    "tryProFree": "Pro gratis testen"
+    "tryProFree": "Pro gratis testen",
+    "tagNoResults": "Nichts gefunden in #{{tag}}",
+    "tagEmpty": "Keine Notizen in #{{tag}}",
+    "tagSearchAll": "Alle Notizen durchsuchen",
+    "tagShowAll": "Alle Notizen anzeigen"
   },
   "settings": {
     "title": "Einstellungen",
@@ -109,9 +113,9 @@
       "turnOffE2ee": "Ende-zu-Ende-Verschlüsselung ausschalten",
       "encryptingTitle": "Notizen werden verschlüsselt",
       "encryptingSubtitle": "Nur du wirst sie lesen können.",
-      "keyInGoogle": "In deiner Google-Sicherung · öffnet Notizen auf einem neuen Gerät",
-      "keyInIcloud": "Im iCloud-Schlüsselbund · öffnet Notizen auf einem neuen iPhone",
-      "keyOnlyHere": "Nur auf diesem Gerät · sichere eine Kopie, damit du keine Notizen verlierst"
+      "keyOnlyHere": "Nur auf diesem Gerät · sichere eine Kopie, damit du keine Notizen verlierst",
+      "keyRequestedIcloud": "Auf diesem Gerät · Kopie im iCloud-Schlüsselbund angefordert · behalte auch eine eigene Kopie",
+      "keyRequestedGoogle": "Auf diesem Gerät · Kopie in der Google-Sicherung angefordert · behalte auch eine eigene Kopie"
     },
     "account": {
       "signOut": "Abmelden",
@@ -229,7 +233,7 @@
       "encryptionDisabledTitle": "Verschlüsselung deaktiviert",
       "minutesWarningText": "Du hast alle Minuten des Monats verbraucht. Als Nächstes wird die Testreserve genutzt.",
       "minutesWarningTextLow": "Die Transkriptionsminuten für diesen Monat gehen zur Neige",
-      "saveRecoveryFirst": "Deine Notizen bleiben Ende-zu-Ende-verschlüsselt auf dem Server. Zum erneuten Öffnen melde dich an: Der Schlüssel kommt aus der Gerätesicherung, oder gib deinen Wiederherstellungsschlüssel ein.",
+      "saveRecoveryFirst": "Deine Notizen bleiben Ende-zu-Ende-verschlüsselt auf dem Server. Zum erneuten Öffnen melde dich an: Der Schlüssel kann aus der Gerätesicherung kommen, falls er dort gespeichert wurde; sonst brauchst du deinen Wiederherstellungsschlüssel.",
       "signOutMessage": "Was sollen wir mit deinen Notizen auf diesem Gerät tun?",
       "syncPendingMessage": "Die Ende-zu-Ende-Verschlüsselung wurde auf diesem Gerät deaktiviert. Deine Notizen konnten jedoch gerade nicht mit dem Server synchronisiert werden. Sie werden automatisch in Klartext umgewandelt, sobald du eine Internetverbindung hast.",
       "unableDisableSync": "Synchronisierung konnte nicht deaktiviert werden.",
@@ -274,14 +278,12 @@
       "explain": "Nur dieser Schlüssel öffnet deine Notizen auf einem neuen Gerät. Bewahre ihn sicher auf, z. B. in einem Passwortmanager. Niemand, auch nicht Vaulto, kann ihn wiederherstellen.",
       "share": "Teilen",
       "savedIt": "Schlüssel gespeichert",
-      "inGoogle": "In deiner Google-Sicherung gespeichert: Auf einem neuen Gerät öffnen sich deine Notizen von selbst.",
-      "inIcloud": "Im iCloud-Schlüsselbund gespeichert: Auf einem neuen iPhone öffnen sich deine Notizen von selbst.",
-      "explainBackup": "Bewahre auch eine Kopie auf, falls die Sicherung einmal aus ist – am besten im Passwortmanager. Niemand, auch nicht Vaulto, kann diesen Schlüssel wiederherstellen.",
-      "enableBackupTip": "Aktiviere eine Displaysperre und die Google-Sicherung, dann bewahrt Vaulto den Schlüssel automatisch auf",
       "authReason": "Wiederherstellungsschlüssel anzeigen",
-      "bannerTitle": "Notizen sind Ende-zu-Ende-verschlüsselt",
-      "bannerGoogle": "Schlüssel in deiner Google-Sicherung gespeichert. Er ist auch unter Einstellungen → Wiederherstellungsschlüssel.",
-      "bannerIcloud": "Schlüssel im iCloud-Schlüsselbund gespeichert. Er ist auch unter Einstellungen → Wiederherstellungsschlüssel."
+      "requestedIcloud": "Auf diesem Gerät gespeichert. Eine Kopie wurde im iCloud-Schlüsselbund angefordert; Vaulto kann nicht prüfen, ob er aktiviert und synchronisiert ist.",
+      "requestedGoogle": "Auf diesem Gerät gespeichert. Eine Kopie wurde in deiner Google-Sicherung angefordert; Vaulto kann nicht prüfen, ob die Sicherung aktiv und abgeschlossen ist.",
+      "onDeviceOnly": "Nur auf diesem Gerät gespeichert.",
+      "explainRequested": "Damit du deine Notizen sicher auf einem neuen Telefon öffnen kannst, speichere diesen Schlüssel auch selbst, z. B. in einem Passwortmanager. Niemand, auch nicht Vaulto, kann ihn wiederherstellen.",
+      "backupTip": "Aktiviere eine Displaysperre und die Google-Sicherung, damit auch dort eine Kopie dieses Schlüssels liegen kann"
     },
     "resetRecovery": {
       "title": "Verschlüsselter Tresor wurde zurückgesetzt",
@@ -726,7 +728,13 @@
     "textStyleHeading": "Überschrift",
     "textStyleSubheading": "Untertitel",
     "textStyleBody": "Text",
-    "playRecording": "Aufnahme abspielen"
+    "playRecording": "Aufnahme abspielen",
+    "saveFailed": {
+      "title": "Nicht gespeichert",
+      "message": "Deine letzten Änderungen konnten nicht gespeichert werden. Sie sind noch hier: versuche es erneut oder bleib und kopiere den Text.",
+      "retry": "Erneut versuchen",
+      "leave": "Ohne Speichern verlassen"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Modell nicht heruntergeladen. Prüfe die Einstellungen.",
@@ -766,7 +774,11 @@
     "noSpeechDetected": "Keine Sprache erkannt. Aufnahme gespeichert.",
     "quietTitle": "Fast nichts zu hören",
     "quietDesc": "Das Mikrofon hat nur Stille aufgenommen. Ist es stummgeschaltet oder von einem Anruf belegt, beende das und nimm erneut auf. Die Aufnahme trotzdem behalten?",
-    "keepRecording": "Behalten"
+    "keepRecording": "Behalten",
+    "exitTitle": "Aufnahme behalten?",
+    "exitDesc": "Beim Zurückgehen würde das Aufgenommene gelöscht.",
+    "continueRecording": "Weiter aufnehmen",
+    "saveRecording": "Speichern"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -909,7 +921,9 @@
     "guestUnverifiedDesc": "Kostenlose Cloud-Transkription ohne Konto ist auf diesem Gerät nicht verfügbar. Melde dich an – das ist kostenlos – oder wandle Sprache direkt auf diesem Gerät offline in Text um.",
     "aiLimitDescDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird am {{date}} zurückgesetzt.",
     "aiLimitDescNoDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird zu Beginn des nächsten Zeitraums zurückgesetzt.",
-    "aiLimitGuestDesc": "Melde dich an, um ein eigenes monatliches KI-Kontingent zu erhalten."
+    "aiLimitGuestDesc": "Melde dich an, um ein eigenes monatliches KI-Kontingent zu erhalten.",
+    "verificationSentTo": "Wir haben einen Bestätigungslink gesendet an",
+    "verificationCheckFailed": "Es konnte nicht geprüft werden, ob deine E-Mail bestätigt ist. Prüfe deine Verbindung und versuche es erneut."
   },
   "a11y": {
     "checked": "erledigt",
@@ -946,6 +960,7 @@
     "play": "Abspielen",
     "pause": "Pausieren",
     "playbackPosition": "Wiedergabeposition",
+    "playbackPositionValue": "{{position}} von {{total}}",
     "checklist": "Checkliste",
     "bulletList": "Aufzählung",
     "bold": "Fett",
@@ -1110,14 +1125,18 @@
     "hint": "Export: Markdown-Dateien in einem ZIP. Import: .md, .txt, .zip oder Google Keep (Takeout).",
     "exportTitle": "Notizen exportieren",
     "exportNothing": "Keine Notizen zum Exportieren.",
-    "exportSkippedProtected": "Geschützte Notizen ({{count}}) wurden nicht exportiert: Sie verlassen das Gerät nie unverschlüsselt.",
     "exportFailed": "Die Notizen konnten nicht exportiert werden.",
     "importTitle": "Notizen importieren",
     "importNothing": "In diesen Dateien wurden keine Notizen gefunden. Unterstützt: .md, .txt, .zip und Google Keep (Takeout).",
     "importDone": "Importierte Notizen: {{count}}",
     "importFailed": "Die Notizen konnten nicht importiert werden.",
     "exportDesc": "Markdown-Dateien als ZIP",
-    "importDesc": ".md, .txt, .zip oder Google Keep (Takeout)"
+    "importDesc": ".md, .txt, .zip oder Google Keep (Takeout)",
+    "exportSummaryCount": "Notizen im ZIP: {{count}}, als Markdown-Text der in der App angezeigten Version.",
+    "exportSummaryExcluded": "Nicht enthalten: Aufnahmen, Zeichnungen und andere Versionen von Notizen. Sie bleiben in der App.",
+    "exportSkippedProtectedCount": "Übersprungene geschützte Notizen: {{count}}. Sie verlassen das Gerät nie unverschlüsselt.",
+    "exportSkippedLockedCount": "Übersprungene, auf diesem Gerät nicht entsperrte Notizen: {{count}}.",
+    "exportNothingReadable": "Nichts kann exportiert werden: Alle Notizen sind geschützt oder auf diesem Gerät nicht entsperrt."
   },
   "notify": {
     "remindersChannel": "Aufgaben-Erinnerungen",
@@ -1179,7 +1198,23 @@
     "trialRowDetail": "{{duration}} gratis testen, ohne Karte",
     "limitTrialOffer": "Teste Pro {{duration}} gratis: {{minutes}} Cloud-Minuten und KI ohne Limit. Ohne Karte, es wird nichts berechnet.",
     "limitTrialOfferAI": "Pro hat kein KI-Limit: {{duration}} gratis testen, ohne Karte.",
-    "tryFree": "Gratis testen"
+    "tryFree": "Gratis testen",
+    "ctaTrialThen": "Gratis testen, danach {{price}}",
+    "ctaSubscribe": "Abonnieren für {{price}}",
+    "ctaSubscribeOffer": "Abonnieren: {{offer}}",
+    "planYearlyPro": "Pro (jährlich)",
+    "planMonthlyPro": "Pro (monatlich)",
+    "purchaseWelcomeTitle": "Willkommen bei Pro!",
+    "purchaseDoneTitle": "Kauf abgeschlossen",
+    "purchaseActivated": "Dein Abo ist aktiv. Dein Tarif: {{plan}}.",
+    "purchaseSyncing": "Kauf abgeschlossen. Dein Zugang {{plan}} wird jetzt in deinem Konto aktiviert.",
+    "purchaseFailed": "Der Kauf wurde nicht abgeschlossen. Versuche es erneut oder prüfe die Zahlungsmethode in deinem Store-Konto.",
+    "restoredTitle": "Käufe wiederhergestellt",
+    "restoreDoneTitle": "Wiederherstellung abgeschlossen",
+    "restoredActive": "Dein Pro-Abo wurde wiederhergestellt.",
+    "restoredSyncing": "Käufe wiederhergestellt. Dein Abo wird in deinem Konto aktiviert.",
+    "restoreNoActive": "Für dieses Store-Konto wurde kein aktives Abo gefunden.",
+    "restoreFailed": "Käufe konnten nicht wiederhergestellt werden. Prüfe deine Verbindung und dein Store-Konto und versuche es erneut."
   },
   "drawing": {
     "done": "Fertig",

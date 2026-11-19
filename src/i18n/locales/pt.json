@@ -73,7 +73,11 @@
     "lockedListHint": "Suas notas aparecerão aqui depois de desbloqueadas.",
     "lockedNotBackedUp": "Até lá, as notas novas não têm backup.",
     "lockedSyncNotice": "Não sincronizado: desbloqueie a criptografia para fazer backup das notas novas.",
-    "tryProFree": "Pro grátis"
+    "tryProFree": "Pro grátis",
+    "tagNoResults": "Nada encontrado em #{{tag}}",
+    "tagEmpty": "Nenhuma nota em #{{tag}}",
+    "tagSearchAll": "Pesquisar em todas as notas",
+    "tagShowAll": "Mostrar todas as notas"
   },
   "settings": {
     "title": "Configurações",
@@ -109,9 +113,9 @@
       "turnOffE2ee": "Desativar a criptografia de ponta a ponta",
       "encryptingTitle": "Criptografando suas notas",
       "encryptingSubtitle": "Só você poderá lê-las.",
-      "keyInGoogle": "No seu backup do Google · abre suas notas em um dispositivo novo",
-      "keyInIcloud": "Nas Chaves do iCloud · abre suas notas em um iPhone novo",
-      "keyOnlyHere": "Só neste dispositivo · guarde uma cópia para nunca perder suas notas"
+      "keyOnlyHere": "Só neste dispositivo · guarde uma cópia para nunca perder suas notas",
+      "keyRequestedIcloud": "Neste dispositivo · cópia nas Chaves do iCloud solicitada · guarde também sua própria cópia",
+      "keyRequestedGoogle": "Neste dispositivo · cópia no backup do Google solicitada · guarde também sua própria cópia"
     },
     "account": {
       "signOut": "Sair",
@@ -229,7 +233,7 @@
       "encryptionDisabledTitle": "Criptografia desativada",
       "minutesWarningText": "Você usou todos os minutos do mês. A reserva de teste será usada em seguida.",
       "minutesWarningTextLow": "Seus minutos de transcrição do mês estão acabando",
-      "saveRecoveryFirst": "Suas notas continuam no servidor, com criptografia de ponta a ponta. Para abri-las de novo, entre: a chave volta do backup do dispositivo, ou digite sua chave de recuperação.",
+      "saveRecoveryFirst": "Suas notas continuam no servidor, com criptografia de ponta a ponta. Para abri-las de novo, entre: a chave pode voltar do backup do dispositivo, se tiver sido guardada lá; caso contrário, você precisará da sua chave de recuperação.",
       "signOutMessage": "O que fazer com suas notas neste dispositivo?",
       "syncPendingMessage": "A criptografia de ponta a ponta foi desativada neste dispositivo. Porém, suas notas não puderam ser sincronizadas com o servidor agora. Elas serão atualizadas automaticamente para texto simples assim que você tiver conexão com a internet.",
       "unableDisableSync": "Não foi possível desativar a sincronização.",
@@ -274,14 +278,12 @@
       "explain": "Só esta chave abre suas notas em um dispositivo novo. Guarde-a em lugar seguro, como um gerenciador de senhas. Ninguém, nem a Vaulto, consegue recuperá-la.",
       "share": "Compartilhar",
       "savedIt": "Já salvei a chave",
-      "inGoogle": "Salva no seu backup do Google: suas notas abrem sozinhas em um dispositivo novo.",
-      "inIcloud": "Salva nas Chaves do iCloud: suas notas abrem sozinhas em um iPhone novo.",
-      "explainBackup": "Guarde também uma cópia, caso o backup seja desativado: o ideal é um gerenciador de senhas. Ninguém, nem a Vaulto, consegue recuperar esta chave.",
-      "enableBackupTip": "Ative o bloqueio de tela e o backup do Google, e a Vaulto guarda esta chave para você",
       "authReason": "Mostrar sua chave de recuperação",
-      "bannerTitle": "Suas notas têm criptografia de ponta a ponta",
-      "bannerGoogle": "Chave salva no seu backup do Google. Ela também está em Ajustes → Chave de recuperação.",
-      "bannerIcloud": "Chave salva nas Chaves do iCloud. Ela também está em Ajustes → Chave de recuperação."
+      "requestedIcloud": "Salva neste dispositivo. Uma cópia foi solicitada nas Chaves do iCloud; o Vaulto não consegue verificar se elas estão ativadas e sincronizadas.",
+      "requestedGoogle": "Salva neste dispositivo. Uma cópia foi solicitada no seu backup do Google; o Vaulto não consegue verificar se o backup está ativado e concluído.",
+      "onDeviceOnly": "Salva apenas neste dispositivo.",
+      "explainRequested": "Para ter certeza de que poderá abrir suas notas em um telefone novo, salve esta chave você também, por exemplo em um gerenciador de senhas. Ninguém, nem mesmo o Vaulto, pode recuperá-la.",
+      "backupTip": "Ative um bloqueio de tela e o backup do Google para que uma cópia desta chave também possa ficar lá"
     },
     "resetRecovery": {
       "title": "O cofre criptografado foi redefinido",
@@ -727,7 +729,13 @@
     "textStyleHeading": "Cabeçalho",
     "textStyleSubheading": "Subtítulo",
     "textStyleBody": "Texto",
-    "playRecording": "Reproduzir gravação"
+    "playRecording": "Reproduzir gravação",
+    "saveFailed": {
+      "title": "Não salvo",
+      "message": "Não foi possível salvar suas últimas alterações. Elas continuam aqui: tente novamente ou fique e copie o texto.",
+      "retry": "Tentar novamente",
+      "leave": "Sair sem salvar"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Modelo não baixado. Verifique as configurações.",
@@ -767,7 +775,11 @@
     "noSpeechDetected": "Nenhuma fala detectada. Gravação salva.",
     "quietTitle": "Quase nada foi ouvido",
     "quietDesc": "O microfone só captou silêncio. Se estiver silenciado ou ocupado por uma chamada, termine-a e grave de novo. Guardar a gravação mesmo assim?",
-    "keepRecording": "Guardar"
+    "keepRecording": "Guardar",
+    "exitTitle": "Manter esta gravação?",
+    "exitDesc": "Voltar apagaria o que foi gravado.",
+    "continueRecording": "Continuar a gravar",
+    "saveRecording": "Guardar"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -910,7 +922,9 @@
     "guestUnverifiedDesc": "A transcrição gratuita na nuvem sem conta não está disponível neste dispositivo. Entre (é grátis) ou transforme fala em texto direto neste dispositivo, offline.",
     "aiLimitDescDate": "Você usou sua cota de IA deste mês. Ela será renovada em {{date}}.",
     "aiLimitDescNoDate": "Você usou sua cota de IA deste mês. Ela será renovada no início do próximo período.",
-    "aiLimitGuestDesc": "Entre na sua conta para ter sua própria cota mensal de IA."
+    "aiLimitGuestDesc": "Entre na sua conta para ter sua própria cota mensal de IA.",
+    "verificationSentTo": "Enviamos um link de verificação para",
+    "verificationCheckFailed": "Não foi possível verificar se seu e-mail foi confirmado. Verifique sua conexão e tente novamente."
   },
   "a11y": {
     "checked": "marcado",
@@ -947,6 +961,7 @@
     "play": "Reproduzir",
     "pause": "Pausar",
     "playbackPosition": "Posição da reprodução",
+    "playbackPositionValue": "{{position}} de {{total}}",
     "checklist": "Lista de tarefas",
     "bulletList": "Lista com marcadores",
     "bold": "Negrito",
@@ -1111,14 +1126,18 @@
     "hint": "Exportar: arquivos Markdown em um ZIP. Importar: .md, .txt, .zip ou Google Keep (Takeout).",
     "exportTitle": "Exportar notas",
     "exportNothing": "Não há notas para exportar.",
-    "exportSkippedProtected": "Notas protegidas ({{count}}) não foram exportadas: elas nunca saem do dispositivo sem criptografia.",
     "exportFailed": "Não foi possível exportar as notas.",
     "importTitle": "Importar notas",
     "importNothing": "Nenhuma nota encontrada nesses arquivos. Suportados: .md, .txt, .zip e Google Keep (Takeout).",
     "importDone": "Notas importadas: {{count}}",
     "importFailed": "Não foi possível importar as notas.",
     "exportDesc": "Arquivos Markdown em um ZIP",
-    "importDesc": ".md, .txt, .zip ou Google Keep (Takeout)"
+    "importDesc": ".md, .txt, .zip ou Google Keep (Takeout)",
+    "exportSummaryCount": "Notas no ZIP: {{count}}, como texto Markdown da versão exibida no app.",
+    "exportSummaryExcluded": "Não incluídos: gravações, desenhos e outras versões das notas. Eles continuam no app.",
+    "exportSkippedProtectedCount": "Notas protegidas ignoradas: {{count}}. Elas nunca saem do dispositivo sem criptografia.",
+    "exportSkippedLockedCount": "Notas não desbloqueadas neste dispositivo ignoradas: {{count}}.",
+    "exportNothingReadable": "Nada pode ser exportado: todas as notas estão protegidas ou não desbloqueadas neste dispositivo."
   },
   "notify": {
     "remindersChannel": "Lembretes de tarefas",
@@ -1184,7 +1203,23 @@
     "trialRowDetail": "Grátis por {{duration}}, sem cartão",
     "limitTrialOffer": "Experimente o Pro grátis por {{duration}}: {{minutes}} minutos na nuvem e IA sem limites. Sem cartão, nada é cobrado.",
     "limitTrialOfferAI": "O Pro não tem limite de IA: experimente grátis por {{duration}}, sem cartão.",
-    "tryFree": "Experimentar"
+    "tryFree": "Experimentar",
+    "ctaTrialThen": "Começar teste grátis, depois {{price}}",
+    "ctaSubscribe": "Assinar por {{price}}",
+    "ctaSubscribeOffer": "Assinar: {{offer}}",
+    "planYearlyPro": "Pro (anual)",
+    "planMonthlyPro": "Pro (mensal)",
+    "purchaseWelcomeTitle": "Bem-vindo ao Pro!",
+    "purchaseDoneTitle": "Compra concluída",
+    "purchaseActivated": "Sua assinatura está ativa. Seu plano: {{plan}}.",
+    "purchaseSyncing": "Compra concluída. Seu acesso {{plan}} está sendo ativado na sua conta agora.",
+    "purchaseFailed": "A compra não foi concluída. Tente novamente ou verifique a forma de pagamento na sua conta da loja.",
+    "restoredTitle": "Compras restauradas",
+    "restoreDoneTitle": "Restauração concluída",
+    "restoredActive": "Sua assinatura Pro foi restaurada.",
+    "restoredSyncing": "Compras restauradas. Sua assinatura está sendo ativada na sua conta.",
+    "restoreNoActive": "Nenhuma assinatura ativa foi encontrada para esta conta da loja.",
+    "restoreFailed": "Não foi possível restaurar as compras. Verifique sua conexão e sua conta da loja e tente novamente."
   },
   "drawing": {
     "done": "Concluído",

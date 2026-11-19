@@ -28,7 +28,11 @@ interface RecoveryCodeModalProps {
     recoveryCode: string | null;
     /** Shown right after encryption was set up: the user confirms the key is saved. */
     firstTime?: boolean;
-    /** Where the platform keeps the key: cloud = restores on a new phone by itself. */
+    /**
+     * The platform store's answer: the key is saved on this device, and cloud =
+     * Google / iCloud backup was requested. The app cannot confirm that backup
+     * is on or has synced, so the personal copy is always asked for.
+     */
     backup?: { cloud: boolean } | null;
 }
 
@@ -99,19 +103,24 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                         </Text>
                     </View>
 
-                    {backup?.cloud ? (
-                        <View style={styles.backupOk}>
-                            <MaterialCommunityIcons name="cloud-check-outline" size={20} color={colors.success} />
-                            <Text style={styles.backupOkText}>
-                                {Platform.OS === 'ios'
-                                    ? t('settings.recovery.inIcloud', 'Saved in iCloud Keychain: your notes open on a new iPhone by themselves.')
-                                    : t('settings.recovery.inGoogle', 'Saved in your Google backup: your notes open on a new device by themselves.')}
+                    {/* Only what the app knows: saved here, and a system backup was requested.
+                        Whether iCloud Keychain / Google backup is on and synced is not visible
+                        to apps, so a new phone opening the notes by itself is never promised. */}
+                    {backup ? (
+                        <View style={styles.backupStatus}>
+                            <MaterialCommunityIcons name="cellphone-key" size={20} color={colors.textSecondary} />
+                            <Text style={styles.backupStatusText}>
+                                {backup.cloud
+                                    ? (Platform.OS === 'ios'
+                                        ? t('settings.recovery.requestedIcloud', 'Saved on this device. A copy was requested in iCloud Keychain; Vaulto cannot check that it is turned on and synced.')
+                                        : t('settings.recovery.requestedGoogle', 'Saved on this device. A copy was requested in your Google backup; Vaulto cannot check that backup is on and complete.'))
+                                    : t('settings.recovery.onDeviceOnly', 'Saved on this device only.')}
                             </Text>
                         </View>
                     ) : null}
                     <Text style={styles.warning}>
                         {backup?.cloud
-                            ? t('settings.recovery.explainBackup', 'Keep a copy too, in case that backup is ever off: a password manager is ideal. Nobody, including Vaulto, can restore this key.')
+                            ? t('settings.recovery.explainRequested', 'To be sure you can open your notes on a new phone, save this key yourself too, for example in a password manager. Nobody, including Vaulto, can restore it.')
                             : t('settings.recovery.explain', 'Only this key opens your notes on a new device. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.')}
                     </Text>
                     {!backup?.cloud && Platform.OS === 'android' ? (
@@ -124,7 +133,7 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                         >
                             <MaterialCommunityIcons name="shield-lock-outline" size={18} color={colors.primary} />
                             <Text style={styles.backupTipText}>
-                                {t('settings.recovery.enableBackupTip', 'Turn on a screen lock and Google backup, and Vaulto keeps this key for you automatically')}
+                                {t('settings.recovery.backupTip', 'Turn on a screen lock and Google backup so a copy of this key can also be kept there')}
                             </Text>
                         </TouchableOpacity>
                     ) : null}
@@ -175,7 +184,8 @@ export const RecoveryCodeModal: React.FC<RecoveryCodeModalProps> = ({
                         </View>
 
                         <Button
-                            title={firstTime && !backup?.cloud ? t('settings.recovery.savedIt', 'I saved the key') : t('common.done', 'Done')}
+                            // After setup the button confirms the user's own copy, never the system backup.
+                            title={firstTime ? t('settings.recovery.savedIt', 'I saved the key') : t('common.close', 'Close')}
                             onPress={onClose}
                             style={styles.doneButton}
                         />
@@ -305,16 +315,16 @@ const styles = createStyles(() => ({
         gap: spacing.s,
         marginTop: spacing.xs,
     },
-    backupOk: {
+    backupStatus: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.s,
         padding: spacing.m,
         borderRadius: 12,
-        backgroundColor: colors.success + '14',
+        backgroundColor: colors.backgroundSecondary,
         marginBottom: spacing.m,
     },
-    backupOkText: {
+    backupStatusText: {
         ...typography.bodySmall,
         flex: 1,
         color: colors.text,

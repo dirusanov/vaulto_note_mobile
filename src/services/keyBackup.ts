@@ -21,7 +21,11 @@ const native: NativeKeyBackup | undefined =
 export type KeyBackupStatus = {
     /** The platform store exists in this build and on this phone. */
     available: boolean;
-    /** Encrypted Google/iCloud backup is available, not confirmation of a completed cloud upload. */
+    /**
+     * Encrypted Google/iCloud backup is available, not confirmation of a completed
+     * cloud upload. On iOS it only means an iCloud account is signed in: apps
+     * cannot read whether iCloud Keychain is on. Never present it as a guarantee.
+     */
     cloud: boolean;
 };
 
@@ -35,7 +39,11 @@ export const getKeyBackupStatus = async (): Promise<KeyBackupStatus> => {
     }
 };
 
-/** Saves locally; reports whether encrypted cloud backup was requested, or null on failure. */
+/**
+ * Saves locally; reports whether encrypted cloud backup was requested, or null
+ * on failure. `cloud: true` is a request, not a confirmed upload: the UI says
+ * "saved on this device, backup requested" and still asks for a personal copy.
+ */
 export const backupKey = async (userId: string, recoveryKey: string): Promise<{ cloud: boolean } | null> => {
     if (!native || !userId || !recoveryKey) return null;
     try {

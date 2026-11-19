@@ -73,7 +73,11 @@
     "lockedListHint": "Your notes will appear here once they are unlocked.",
     "lockedNotBackedUp": "Until then, new notes are not backed up.",
     "lockedSyncNotice": "Not synced: unlock encryption to back up new notes.",
-    "tryProFree": "Try Pro free"
+    "tryProFree": "Try Pro free",
+    "tagNoResults": "Nothing found in #{{tag}}",
+    "tagEmpty": "No notes in #{{tag}}",
+    "tagSearchAll": "Search all notes",
+    "tagShowAll": "Show all notes"
   },
   "settings": {
     "title": "Settings",
@@ -120,9 +124,9 @@
       "turnOffE2ee": "Turn off end-to-end encryption",
       "encryptingTitle": "Encrypting your notes",
       "encryptingSubtitle": "Only you will be able to read them.",
-      "keyInGoogle": "In your Google backup · opens your notes on a new device",
-      "keyInIcloud": "In iCloud Keychain · opens your notes on a new iPhone",
-      "keyOnlyHere": "Only on this device · save a copy so you never lose your notes"
+      "keyOnlyHere": "Only on this device · save a copy so you never lose your notes",
+      "keyRequestedIcloud": "On this device · iCloud Keychain copy requested · keep your own copy too",
+      "keyRequestedGoogle": "On this device · Google backup copy requested · keep your own copy too"
     },
     "account": {
       "signOut": "Sign out",
@@ -240,7 +244,7 @@
       "encryptionDisabledTitle": "Encryption disabled",
       "minutesWarningText": "You've used all monthly minutes. Trial reserve will be used next.",
       "minutesWarningTextLow": "Running low on monthly transcription minutes",
-      "saveRecoveryFirst": "Your notes stay on the server, end-to-end encrypted. To open them again, sign in: the key is restored from your device backup, or enter your recovery key.",
+      "saveRecoveryFirst": "Your notes stay on the server, end-to-end encrypted. To open them again, sign in: the key may come back from your device backup if it was kept there; otherwise you will need your recovery key.",
       "signOutMessage": "What should we do with your notes on this device?",
       "syncPendingMessage": "End-to-end encryption has been disabled on this device. However, your notes could not be synced to the server right now. They will be automatically updated to plain text as soon as you have an internet connection.",
       "unableDisableSync": "Unable to disable sync.",
@@ -285,14 +289,12 @@
       "explain": "Only this key opens your notes on a new device. Keep it somewhere safe, like a password manager. Nobody, including Vaulto, can restore it.",
       "share": "Share",
       "savedIt": "I saved the key",
-      "inGoogle": "Saved in your Google backup: your notes open on a new device by themselves.",
-      "inIcloud": "Saved in iCloud Keychain: your notes open on a new iPhone by themselves.",
-      "explainBackup": "Keep a copy too, in case that backup is ever off: a password manager is ideal. Nobody, including Vaulto, can restore this key.",
-      "enableBackupTip": "Turn on a screen lock and Google backup, and Vaulto keeps this key for you automatically",
       "authReason": "Show your recovery key",
-      "bannerTitle": "Notes are end-to-end encrypted",
-      "bannerGoogle": "Key saved in your Google backup. It is also in Settings → Recovery key.",
-      "bannerIcloud": "Key saved in iCloud Keychain. It is also in Settings → Recovery key."
+      "requestedIcloud": "Saved on this device. A copy was requested in iCloud Keychain; Vaulto cannot check that it is turned on and synced.",
+      "requestedGoogle": "Saved on this device. A copy was requested in your Google backup; Vaulto cannot check that backup is on and complete.",
+      "onDeviceOnly": "Saved on this device only.",
+      "explainRequested": "To be sure you can open your notes on a new phone, save this key yourself too, for example in a password manager. Nobody, including Vaulto, can restore it.",
+      "backupTip": "Turn on a screen lock and Google backup so a copy of this key can also be kept there"
     },
     "security": {
       "localProtection": "Local protection",
@@ -726,7 +728,13 @@
     "textStyleHeading": "Heading",
     "textStyleSubheading": "Subheading",
     "textStyleBody": "Body",
-    "playRecording": "Play recording"
+    "playRecording": "Play recording",
+    "saveFailed": {
+      "title": "Not saved",
+      "message": "Your latest changes could not be saved. They are still here: try again, or stay and copy the text.",
+      "retry": "Try again",
+      "leave": "Leave without saving"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Model not downloaded. Check Settings.",
@@ -766,7 +774,11 @@
     "noSpeechDetected": "No speech detected. Recording saved.",
     "quietTitle": "Almost nothing was heard",
     "quietDesc": "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again. Keep this recording anyway?",
-    "keepRecording": "Keep"
+    "keepRecording": "Keep",
+    "exitTitle": "Keep this recording?",
+    "exitDesc": "Going back would delete what you have recorded.",
+    "continueRecording": "Continue recording",
+    "saveRecording": "Save"
   },
   "aux": {
     "emailVerified": "Email verified!",
@@ -911,7 +923,9 @@
     "guestUnverifiedDesc": "Free cloud transcription without an account is not available on this device. Sign in — it is free — or turn speech into text right on this device, offline.",
     "aiLimitDescDate": "You have used this month's AI allowance. It resets on {{date}}.",
     "aiLimitDescNoDate": "You have used this month's AI allowance. It resets at the start of your next period.",
-    "aiLimitGuestDesc": "Sign in to get your own monthly AI allowance."
+    "aiLimitGuestDesc": "Sign in to get your own monthly AI allowance.",
+    "verificationSentTo": "We sent a verification link to",
+    "verificationCheckFailed": "Could not check whether your email is verified. Check your connection and try again."
   },
   "a11y": {
     "checked": "checked",
@@ -948,6 +962,7 @@
     "play": "Play",
     "pause": "Pause",
     "playbackPosition": "Playback position",
+    "playbackPositionValue": "{{position}} of {{total}}",
     "checklist": "Checklist",
     "bulletList": "Bulleted list",
     "bold": "Bold",
@@ -1112,14 +1127,18 @@
     "hint": "Export: Markdown files in a ZIP. Import: .md, .txt, .zip or Google Keep (Takeout).",
     "exportTitle": "Export notes",
     "exportNothing": "There are no notes to export.",
-    "exportSkippedProtected": "Protected notes ({{count}}) were not exported: they never leave the device unencrypted.",
     "exportFailed": "Could not export the notes.",
     "importTitle": "Import notes",
     "importNothing": "No notes found in these files. Supported: .md, .txt, .zip and Google Keep (Takeout).",
     "importDone": "Imported notes: {{count}}",
     "importFailed": "Could not import the notes.",
     "exportDesc": "Markdown files in a ZIP",
-    "importDesc": ".md, .txt, .zip or Google Keep (Takeout)"
+    "importDesc": ".md, .txt, .zip or Google Keep (Takeout)",
+    "exportSummaryCount": "Notes in the ZIP: {{count}}, as Markdown text of the version shown in the app.",
+    "exportSummaryExcluded": "Not included: recordings, drawings and other versions of notes. They stay in the app.",
+    "exportSkippedProtectedCount": "Protected notes skipped: {{count}}. They never leave the device unencrypted.",
+    "exportSkippedLockedCount": "Notes not unlocked on this device skipped: {{count}}.",
+    "exportNothingReadable": "Nothing can be exported: every note is protected or not unlocked on this device."
   },
   "notify": {
     "remindersChannel": "Task reminders",
@@ -1181,7 +1200,23 @@
     "trialRowDetail": "Try it free for {{duration}}, no card",
     "limitTrialOffer": "Try Pro free for {{duration}}: {{minutes}} cloud minutes and AI without limits. No card, nothing is charged.",
     "limitTrialOfferAI": "Pro has no AI limit: try it free for {{duration}}, no card.",
-    "tryFree": "Try free"
+    "tryFree": "Try free",
+    "ctaTrialThen": "Start free trial, then {{price}}",
+    "ctaSubscribe": "Subscribe for {{price}}",
+    "ctaSubscribeOffer": "Subscribe: {{offer}}",
+    "planYearlyPro": "Pro (yearly)",
+    "planMonthlyPro": "Pro (monthly)",
+    "purchaseWelcomeTitle": "Welcome to Pro!",
+    "purchaseDoneTitle": "Purchase complete",
+    "purchaseActivated": "Your subscription is active. Your plan: {{plan}}.",
+    "purchaseSyncing": "Purchase completed. Your {{plan}} access is being activated on your account now.",
+    "purchaseFailed": "The purchase did not go through. Try again, or check the payment method in your store account.",
+    "restoredTitle": "Purchases restored",
+    "restoreDoneTitle": "Restore complete",
+    "restoredActive": "Your Pro subscription has been restored.",
+    "restoredSyncing": "Purchases restored. Your subscription is being activated on your account.",
+    "restoreNoActive": "No active subscription was found for this store account.",
+    "restoreFailed": "Could not restore purchases. Check your connection and store account, then try again."
   },
   "drawing": {
     "done": "Done",

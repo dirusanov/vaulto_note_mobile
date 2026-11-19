@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import i18n from 'i18next';
 import { getProTrialState, ProTrialState } from '../utils/proTrial';
+import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 
 // Android emulators can use Test Store; iOS development uses Apple's sandbox
 // with the same App Store products as release builds.
@@ -78,6 +79,13 @@ const getFirstEntitlement = (source: any): any | null => {
     const firstKey = Object.keys(source)[0];
     if (!firstKey) return null;
     return source[firstKey] ?? null;
+};
+
+// Store errors arrive in the store SDK's language (often English): the user gets
+// a translated sentence, or the translated "no connection" text when offline.
+const storeErrorText = (lead: string, error: unknown): string => {
+    console.warn('[Subscription] Store error:', getErrorMessage(error, 'unknown'));
+    return isNetworkError(error) ? getErrorMessage(error, lead) : lead;
 };
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
@@ -366,7 +374,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const purchasePackage = async (pack: MergedPackage) => {
         try {
             if (!isAuthenticated || isGuest || !userId) {
-                setError('Sign in required to purchase.');
+                setError(i18n.t('aux.purchaseProRequired', 'Create an account to purchase Pro.'));
                 return false;
             }
             setIsLoading(true);
@@ -380,16 +388,18 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             }
 
             const planLabel = revenueCatStatus.billingPeriod === 'yearly'
-                ? 'Yearly Pro'
+                ? i18n.t('paywall.planYearlyPro', 'Pro (yearly)')
                 : revenueCatStatus.billingPeriod === 'monthly'
-                    ? 'Monthly Pro'
+                    ? i18n.t('paywall.planMonthlyPro', 'Pro (monthly)')
                     : 'Pro';
 
             setSuccess({
-                title: backendConfirmed ? 'Welcome to Pro!' : 'Purchase Successful',
+                title: backendConfirmed
+                    ? i18n.t('paywall.purchaseWelcomeTitle', 'Welcome to Pro!')
+                    : i18n.t('paywall.purchaseDoneTitle', 'Purchase complete'),
                 message: backendConfirmed
-                    ? `Subscription successfully activated. You are now on the ${planLabel} plan.`
-                    : `Purchase completed. We're syncing your ${planLabel} access now.`,
+                    ? i18n.t('paywall.purchaseActivated', 'Your subscription is active. Your plan: {{plan}}.', { plan: planLabel })
+                    : i18n.t('paywall.purchaseSyncing', 'Purchase completed. Your {{plan}} access is being activated on your account now.', { plan: planLabel }),
                 iconName: 'workspace-premium',
                 iconColor: colors.primary,
             });
@@ -397,7 +407,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return true;
         } catch (e: any) {
             if (!e.userCancelled) {
-                setError(e.message);
+                setError(storeErrorText(i18n.t('paywall.purchaseFailed', 'The purchase did not go through. Try again, or check the payment method in your store account.'), e));
             }
             return false;
         } finally {
@@ -445,7 +455,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const restorePurchases = async () => {
         try {
             if (!isAuthenticated || isGuest || !userId) {
-                setError('Sign in required to restore purchases.');
+                setError(i18n.t('aux.signInRestorePurchases', 'Sign in to restore purchases.'));
                 return;
             }
             setIsLoading(true);
@@ -460,17 +470,19 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             const hasActiveSubscription = revenueCatStatus.isActive || backendConfirmed;
 
             setSuccess({
-                title: hasActiveSubscription ? 'Purchases Restored' : 'Restore Complete',
+                title: hasActiveSubscription
+                    ? i18n.t('paywall.restoredTitle', 'Purchases restored')
+                    : i18n.t('paywall.restoreDoneTitle', 'Restore complete'),
                 message: hasActiveSubscription
                     ? backendConfirmed
-                        ? 'Your Pro subscription has been restored.'
-                        : 'Purchases restored. Subscription is syncing with your account.'
-                    : 'Purchases restored. No active subscription found.',
+                        ? i18n.t('paywall.restoredActive', 'Your Pro subscription has been restored.')
+                        : i18n.t('paywall.restoredSyncing', 'Purchases restored. Your subscription is being activated on your account.')
+                    : i18n.t('paywall.restoreNoActive', 'No active subscription was found for this store account.'),
                 iconName: hasActiveSubscription ? 'workspace-premium' : 'check-circle-outline',
                 iconColor: hasActiveSubscription ? colors.primary : undefined,
             });
         } catch (e: any) {
-            setError(e.message);
+            setError(storeErrorText(i18n.t('paywall.restoreFailed', 'Could not restore purchases. Check your connection and store account, then try again.'), e));
         } finally {
             setIsLoading(false);
         }

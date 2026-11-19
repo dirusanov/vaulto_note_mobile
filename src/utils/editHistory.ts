@@ -83,3 +83,35 @@ export const recordHistoryChange = (
 
     return { history: pushHistoryStep(base, entry, options.limit), kind: 'step' };
 };
+
+/**
+ * A version renamed by the user: every step gets the new name, so Undo/Redo
+ * of its text no longer brings the old name back (and saves it).
+ */
+export const retitleHistory = (current: VariantHistory | undefined, title: string): VariantHistory | undefined =>
+    current
+        ? { history: current.history.map((entry) => ({ ...entry, title })), index: current.index }
+        : current;
+
+/**
+ * Undo/Redo of a version the user comes back to. Its steps are kept for as
+ * long as the editor is open, so the last edit of a version can still be
+ * undone after reading another one. The steps are dropped (and the history
+ * starts at what is shown) only when the shown text is not the step the
+ * history stands at: then the text was changed elsewhere meanwhile, or the
+ * steps were recorded before the text loaded, and Undo would restore the wrong thing.
+ * `isSameDocument` tells the editor's rendering of a text from a real change.
+ */
+export const resumeHistoryOnSwitch = (
+    current: VariantHistory | undefined,
+    shown: HistoryEntry,
+    isSameDocument: (stepContent: string, shownContent: string) => boolean
+): VariantHistory => {
+    const step = current && current.index >= 0 ? current.history[current.index] : undefined;
+    if (!current || !step || !(step.content === shown.content || isSameDocument(step.content, shown.content))) {
+        return { history: [{ title: shown.title, content: shown.content }], index: 0 };
+    }
+    const history = [...current.history];
+    history[current.index] = { title: shown.title, content: shown.content };
+    return { history, index: current.index };
+};

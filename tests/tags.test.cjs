@@ -75,3 +75,14 @@ test('nothing to write leaves the note as it is', () => {
     assert.strictEqual(withTagLine('<p>Hello</p>', []), '<p>Hello</p>');
     assert.strictEqual(withTagLine('<p>Hello</p>', ['#', '']), '<p>Hello</p>');
 });
+
+const { tagFilterEmptyReason } = require('../.test-build/tags/tags.js');
+
+test('a tag with no hits while other notes match is explained, not left blank', () => {
+    // "рецепт" under #работа, matches only under #дом.
+    assert.strictEqual(tagFilterEmptyReason('работа', 2, 0), 'elsewhere');
+    assert.strictEqual(tagFilterEmptyReason('работа', 2, 1), null);
+    // Nothing matches at all: the list's own "no results" covers it.
+    assert.strictEqual(tagFilterEmptyReason('работа', 0, 0), null);
+    assert.strictEqual(tagFilterEmptyReason(null, 3, 0), null);
+});

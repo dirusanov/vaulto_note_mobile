@@ -23,7 +23,7 @@ import { UnlockSyncModal } from '../components/UnlockSyncModal';
 import { ResetEncryptionModal } from '../components/ResetEncryptionModal';
 import { UnlockingOverlay } from '../components/UnlockingOverlay';
 import { hasMeaningfulRichContent, richContentToPlainText } from '../utils/richContent';
-import { countTags, hasTag } from '../utils/tags';
+import { countTags, hasTag, tagFilterEmptyReason } from '../utils/tags';
 import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { compareByContentDateDesc } from '../utils/contentDate';
@@ -534,6 +534,8 @@ export const NotesListScreen = () => {
         if (activeTag && !allTags.some(item => item.tag === activeTag)) setActiveTag(null);
     }, [activeTag, allTags]);
     const tagFilteredNotes = activeTag ? filteredNotes.filter(n => hasTag(notePlainText(n), activeTag)) : filteredNotes;
+    // Matches exist, just not under the selected tag: explain it instead of a blank list.
+    const tagEmptyReason = !loading ? tagFilterEmptyReason(activeTag, filteredNotes.length, tagFilteredNotes.length) : null;
 
     const canShowEmptyState = !!userId && !loading && filteredNotes.length === 0;
     // First launch: nothing to search yet, so the bar keeps only the avatar.
@@ -958,6 +960,27 @@ export const NotesListScreen = () => {
                                             : t('notes.unlockToRestore')
                                 : ''}
                         />
+                    </View>
+                ) : tagEmptyReason === 'elsewhere' && activeTag ? (
+                    <View style={[styles.emptyContainer, styles.tagEmpty]}>
+                        <EmptyState
+                            variant="search"
+                            message={searchQuery.trim()
+                                ? t('notes.tagNoResults', 'Nothing found in #{{tag}}', { tag: activeTag })
+                                : t('notes.tagEmpty', 'No notes in #{{tag}}', { tag: activeTag })}
+                        />
+                        <TouchableOpacity
+                            style={styles.tagEmptyAction}
+                            onPress={() => setActiveTag(null)}
+                            disabled={isSelectionMode}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.tagEmptyActionText}>
+                                {searchQuery.trim()
+                                    ? t('notes.tagSearchAll', 'Search all notes')
+                                    : t('notes.tagShowAll', 'Show all notes')}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <>
@@ -1438,6 +1461,21 @@ const styles = createStyles(() => ({
     column: {
         flex: 1,
         marginHorizontal: spacing.xs,
+    },
+    tagEmpty: {
+        alignItems: 'center',
+    },
+    tagEmptyAction: {
+        minHeight: 44,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.l,
+        borderRadius: 22,
+        backgroundColor: colors.primaryLight,
+    },
+    tagEmptyActionText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.primary,
     },
     emptyContainer: {
         marginTop: spacing.xl,

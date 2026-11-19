@@ -166,3 +166,14 @@ test('the checklist preset, its version label and the toolbar button share one n
         assert.equal(locale.a11y.checklist, preset, `${file}: toolbar button`);
     }
 });
+
+test('a version the user renamed keeps its name after a voice action (UX audit 2026-11-19)', () => {
+    const { variantTitleAfterAction } = require('../.test-build/versions/i18n/variantLabels');
+    const named = markUserVariantName('Для Анны');
+    assert.equal(variantTitleAfterAction(named, 'Список покупок'), named);
+    assert.equal(userVariantName(variantTitleAfterAction(named, 'Shopping list')), 'Для Анны');
+    // A title the model made itself is replaced by its next suggestion.
+    assert.equal(variantTitleAfterAction('Покупки', 'Список покупок'), 'Список покупок');
+    assert.equal(variantTitleAfterAction('Покупки', ''), 'Покупки');
+    assert.equal(variantTitleAfterAction('', undefined), '');
+});

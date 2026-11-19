@@ -68,6 +68,12 @@ const lightColors = {
     activeWordHighlight: 'rgba(0, 102, 255, 0.1)',
     /** Text and icons drawn on a `primary` (or other saturated) fill. */
     onPrimary: '#FFFFFF',
+    /**
+     * Small print that must stay readable (subscription terms, dates): at least
+     * 4.5:1 on background, surface and the primaryLight wash. textSecondary is
+     * 4.45:1 on background and textTertiary about 2:1, both too faint for it.
+     */
+    textFinePrint: '#5C636A',
     /** Translucent wash behind warnings and errors. */
     errorLight: 'rgba(220, 53, 69, 0.08)',
     warningLight: 'rgba(245, 158, 11, 0.1)',
@@ -118,6 +124,7 @@ const darkColors: Palette = {
 
     activeWordHighlight: 'rgba(61, 139, 255, 0.2)',
     onPrimary: '#FFFFFF',
+    textFinePrint: '#A1A8B1',
     errorLight: 'rgba(242, 107, 120, 0.14)',
     warningLight: 'rgba(251, 191, 36, 0.14)',
     successLight: 'rgba(52, 211, 153, 0.14)',

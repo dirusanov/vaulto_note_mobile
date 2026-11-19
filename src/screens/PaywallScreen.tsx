@@ -51,6 +51,18 @@ export const PaywallScreen = () => {
     }, [packages, selectedId, yearlyPack]);
     const selectedPack = packages.find((pack) => pack.identifier === selectedId) ?? null;
 
+    // Every price says what period it pays for, also on the purchase button.
+    const periodPrice = (pack: MergedPackage) => {
+        const id = pack.identifier.toLowerCase();
+        if (id.includes('annual') || id.includes('yearly')) {
+            return t("aux.perYear", { price: pack.product.priceString, defaultValue: '{{price}} / year' });
+        }
+        if (id.includes('monthly')) {
+            return t("aux.perMonth", { price: pack.product.priceString, defaultValue: '{{price}} / month' });
+        }
+        return pack.product.priceString;
+    };
+
     // The store's own trial or intro price, if the product carries one (Google Play:
     // the default subscription option; App Store: introPrice). Null when there is none.
     const describeOffer = (pack: MergedPackage, regularPrice: string): { text: string; free: boolean } | null => {
@@ -95,6 +107,8 @@ export const PaywallScreen = () => {
             navigation.goBack();
         }
     };
+
+    const selectedOffer = selectedPack ? describeOffer(selectedPack, periodPrice(selectedPack)) : null;
 
     const handlePurchase = async (pack: MergedPackage) => {
         if (!canPurchase) {
@@ -227,13 +241,7 @@ export const PaywallScreen = () => {
                                 );
 
                                 const isBestValue = isYearly(pack);
-                                const isMonthly = pack.identifier.toLowerCase().includes('monthly');
-                                // Every price says what period it pays for.
-                                const price = isBestValue
-                                    ? t("aux.perYear", { price: product.priceString, defaultValue: '{{price}} / year' })
-                                    : isMonthly
-                                        ? t("aux.perMonth", { price: product.priceString, defaultValue: '{{price}} / month' })
-                                        : product.priceString;
+                                const price = periodPrice(pack);
                                 const selected = pack.identifier === selectedId;
                                 const perMonth = isBestValue ? product.pricePerMonthString : null;
                                 // The feature list already names the minutes; a plan repeats them only if it differs.
@@ -296,10 +304,14 @@ export const PaywallScreen = () => {
                             activeOpacity={0.85}
                             accessibilityRole="button"
                         >
+                            {/* What is bought and what it costs, on the button itself. */}
                             <Text style={styles.ctaText}>
-                                {describeOffer(selectedPack, selectedPack.product.priceString)?.free
-                                    ? t("paywall.startTrial", "Start free trial")
-                                    : t("auth.continue", "Continue")}
+                                {selectedOffer?.free
+                                    ? t("paywall.ctaTrialThen", "Start free trial, then {{price}}", { price: periodPrice(selectedPack) })
+                                    : selectedOffer
+                                        // An intro price: the button names it and the regular price after it.
+                                        ? t("paywall.ctaSubscribeOffer", "Subscribe: {{offer}}", { offer: selectedOffer.text })
+                                        : t("paywall.ctaSubscribe", "Subscribe for {{price}}", { price: periodPrice(selectedPack) })}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -422,7 +434,7 @@ const styles = createStyles(() => ({
     includedLabel: {
         fontSize: 13,
         lineHeight: 18,
-        color: colors.textTertiary,
+        color: colors.textFinePrint,
         marginTop: spacing.xs,
     },
     trialNotice: {
@@ -447,7 +459,7 @@ const styles = createStyles(() => ({
     trialNoticeText: {
         fontSize: 13,
         lineHeight: 18,
-        color: colors.textSecondary,
+        color: colors.textFinePrint,
     },
     trialButton: {
         alignItems: 'center',
@@ -472,7 +484,7 @@ const styles = createStyles(() => ({
     trialButtonHint: {
         fontSize: 13,
         lineHeight: 18,
-        color: colors.textSecondary,
+        color: colors.textFinePrint,
         textAlign: 'center',
     },
     planOffer: {
@@ -489,12 +501,12 @@ const styles = createStyles(() => ({
     legalLink: {
         fontSize: 12,
         lineHeight: 16,
-        color: colors.textSecondary,
+        color: colors.textFinePrint,
         textDecorationLine: 'underline',
     },
     legalDot: {
         fontSize: 12,
-        color: colors.textTertiary,
+        color: colors.textFinePrint,
     },
     packagesContainer: {
         gap: 10,
@@ -625,16 +637,19 @@ const styles = createStyles(() => ({
         backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: spacing.l,
+        paddingVertical: spacing.s,
     },
     ctaText: {
         color: colors.onPrimary,
         fontSize: 17,
         fontWeight: '600',
+        textAlign: 'center',
     },
     termsText: {
-        fontSize: 12,
-        lineHeight: 16,
-        color: colors.textTertiary,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textFinePrint,
         textAlign: 'center',
     },
     restoreButton: {

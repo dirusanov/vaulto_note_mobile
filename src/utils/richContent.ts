@@ -244,6 +244,39 @@ export const richContentToPlainText = (content: string): string => {
         .trim();
 };
 
+// Private-use sentinels for a checklist marker while the rest of the Markdown is stripped.
+const TASK_OPEN_TOKEN = '';
+const TASK_DONE_TOKEN = '';
+
+/**
+ * Plain text like richContentToPlainText, but a checklist item keeps its state
+ * as "- [ ] item" / "- [x] item". Plain text drops the checkbox, so a ticked
+ * and an unticked item read the same: comparing versions showed no change and
+ * an instruction such as "keep only what is not done" could not see what was
+ * done. Used where the state matters (version compare, text sent to the AI);
+ * search, previews and tags keep using the plain text.
+ */
+export const richContentToTaskAwarePlainText = (content: string): string => {
+    if (!content) {
+        return '';
+    }
+    const sanitized = stripAudioEmbedsFromRichContent(content);
+    const markdown = isRichHtmlContent(sanitized)
+        ? richContentToAgentMarkdown(sanitized)
+        : sanitized;
+    const marked = markdown.replace(
+        /^([ \t]*)[-*+][ \t]*\[([ xX])?\](?:[ \t]+|$)/gm,
+        (_match, indent: string, mark?: string) => `${indent}${mark && mark.toLowerCase() === 'x' ? TASK_DONE_TOKEN : TASK_OPEN_TOKEN}`
+    );
+    return stripMarkdownSyntax(marked.replace(/!\[audio\]\([^)]+\)/gi, ' '))
+        .split(TASK_OPEN_TOKEN).join('- [ ] ')
+        .split(TASK_DONE_TOKEN).join('- [x] ')
+        .replace(/ /g, ' ')
+        .replace(/[ \t]+$/gm, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+};
+
 export const richContentToAgentMarkdown = (content: string): string => {
     if (!content) {
         return '';

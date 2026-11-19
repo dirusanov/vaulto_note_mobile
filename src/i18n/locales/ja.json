@@ -72,7 +72,11 @@
     "lockedListHint": "ロックを解除すると、ここにノートが表示されます。",
     "lockedNotBackedUp": "それまでは、新しいメモはバックアップされません。",
     "lockedSyncNotice": "未同期:新しいメモをバックアップするには暗号化のロックを解除してください。",
-    "tryProFree": "Pro を無料で試す"
+    "tryProFree": "Pro を無料で試す",
+    "tagNoResults": "#{{tag}} には見つかりませんでした",
+    "tagEmpty": "#{{tag}} にノートはありません",
+    "tagSearchAll": "すべてのノートを検索",
+    "tagShowAll": "すべてのノートを表示"
   },
   "settings": {
     "title": "設定",
@@ -108,9 +112,9 @@
       "turnOffE2ee": "エンドツーエンド暗号化をオフにする",
       "encryptingTitle": "メモを暗号化しています",
       "encryptingSubtitle": "読めるのはあなただけになります。",
-      "keyInGoogle": "Google バックアップ内 · 新しい端末でメモを開けます",
-      "keyInIcloud": "iCloud キーチェーン内 · 新しい iPhone でメモを開けます",
-      "keyOnlyHere": "この端末のみ · メモを失わないよう控えを保存してください"
+      "keyOnlyHere": "この端末のみ · メモを失わないよう控えを保存してください",
+      "keyRequestedIcloud": "この端末に保存 · iCloud キーチェーンへのコピーを依頼済み · ご自身でもコピーを保管してください",
+      "keyRequestedGoogle": "この端末に保存 · Google バックアップへのコピーを依頼済み · ご自身でもコピーを保管してください"
     },
     "account": {
       "signOut": "サインアウト",
@@ -228,7 +232,7 @@
       "encryptionDisabledTitle": "暗号化を無効にしました",
       "minutesWarningText": "今月の分数をすべて使い切りました。次はトライアル分が使用されます。",
       "minutesWarningTextLow": "今月の文字起こし分数が残りわずかです",
-      "saveRecoveryFirst": "メモはエンドツーエンド暗号化されたままサーバーに残ります。再度開くにはサインインしてください。キーは端末のバックアップから復元されるか、復元キーを入力します。",
+      "saveRecoveryFirst": "メモはエンドツーエンド暗号化されたままサーバーに残ります。再度開くにはサインインしてください。キーが端末のバックアップに保存されていればそこから戻る場合がありますが、そうでなければ復元キーが必要です。",
       "signOutMessage": "この端末のノートをどうしますか？",
       "syncPendingMessage": "この端末でエンドツーエンド暗号化を無効にしました。ただし、今はノートをサーバーに同期できませんでした。インターネットに接続すると自動的に平文へ更新されます。",
       "unableDisableSync": "同期を無効にできませんでした。",
@@ -273,14 +277,12 @@
       "explain": "新しい端末でメモを開けるのはこのキーだけです。パスワードマネージャーなど安全な場所に保管してください。Vaulto を含め誰も復元できません。",
       "share": "共有",
       "savedIt": "キーを保存しました",
-      "inGoogle": "Google のバックアップに保存済み：新しい端末でもメモが自動で開きます。",
-      "inIcloud": "iCloud キーチェーンに保存済み：新しい iPhone でもメモが自動で開きます。",
-      "explainBackup": "バックアップがオフになった場合に備えて、パスワードマネージャーなどにも控えを保存してください。Vaulto を含め誰もこのキーを復元できません。",
-      "enableBackupTip": "画面ロックと Google バックアップをオンにすると、Vaulto がこのキーを自動で保管します",
       "authReason": "復元キーを表示",
-      "bannerTitle": "メモはエンドツーエンドで暗号化されています",
-      "bannerGoogle": "キーは Google のバックアップに保存されました。設定 → 復元キー でも確認できます。",
-      "bannerIcloud": "キーは iCloud キーチェーンに保存されました。設定 → 復元キー でも確認できます。"
+      "requestedIcloud": "この端末に保存しました。iCloud キーチェーンへのコピーを依頼しましたが、キーチェーンがオンで同期済みかどうかは Vaulto から確認できません。",
+      "requestedGoogle": "この端末に保存しました。Google バックアップへのコピーを依頼しましたが、バックアップがオンで完了しているかどうかは Vaulto から確認できません。",
+      "onDeviceOnly": "この端末にのみ保存されています。",
+      "explainRequested": "新しいスマートフォンで確実にノートを開けるよう、このキーはパスワードマネージャーなどにご自身でも保存してください。Vaulto を含め、誰も復元できません。",
+      "backupTip": "画面ロックと Google バックアップをオンにすると、このキーのコピーをそこにも保存できます"
     },
     "resetRecovery": {
       "title": "暗号化ボールトがリセットされました",
@@ -724,7 +726,13 @@
     "textStyleHeading": "見出し",
     "textStyleSubheading": "小見出し",
     "textStyleBody": "本文",
-    "playRecording": "録音を再生"
+    "playRecording": "録音を再生",
+    "saveFailed": {
+      "title": "保存されていません",
+      "message": "最新の変更を保存できませんでした。変更はまだここにあります。もう一度試すか、このままテキストをコピーしてください。",
+      "retry": "再試行",
+      "leave": "保存せずに閉じる"
+    }
   },
   "voice": {
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",
@@ -764,7 +772,11 @@
     "noSpeechDetected": "音声は検出されませんでした。録音は保存されました。",
     "quietTitle": "ほとんど何も聞こえませんでした",
     "quietDesc": "マイクには無音しか記録されませんでした。ミュート中や通話中の場合は終了してから録音し直してください。それでもこの録音を残しますか？",
-    "keepRecording": "残す"
+    "keepRecording": "残す",
+    "exitTitle": "この録音を残しますか？",
+    "exitDesc": "戻ると、録音した内容は削除されます。",
+    "continueRecording": "録音を続ける",
+    "saveRecording": "保存"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -907,7 +919,9 @@
     "guestUnverifiedDesc": "このデバイスでは、アカウントなしの無料クラウド文字起こしは利用できません。サインイン（無料）するか、このデバイス上でオフラインで音声をテキストに変換してください。",
     "aiLimitDescDate": "今月の AI 利用枠を使い切りました。{{date}} にリセットされます。",
     "aiLimitDescNoDate": "今月の AI 利用枠を使い切りました。次の期間の開始時にリセットされます。",
-    "aiLimitGuestDesc": "サインインすると、毎月の AI 利用枠を自分用に使えます。"
+    "aiLimitGuestDesc": "サインインすると、毎月の AI 利用枠を自分用に使えます。",
+    "verificationSentTo": "確認用リンクを次のアドレスに送信しました",
+    "verificationCheckFailed": "メールが確認済みかどうかを確認できませんでした。接続を確認して、もう一度お試しください。"
   },
   "a11y": {
     "checked": "完了",
@@ -944,6 +958,7 @@
     "play": "再生",
     "pause": "一時停止",
     "playbackPosition": "再生位置",
+    "playbackPositionValue": "{{total}}中{{position}}",
     "checklist": "チェックリスト",
     "bulletList": "箇条書き",
     "bold": "太字",
@@ -1108,14 +1123,18 @@
     "hint": "エクスポート：Markdown ファイルを ZIP で。インポート：.md、.txt、.zip、Google Keep（Takeout）。",
     "exportTitle": "ノートをエクスポート",
     "exportNothing": "エクスポートするノートがありません。",
-    "exportSkippedProtected": "保護されたノート（{{count}} 件）はエクスポートされません：暗号化なしで端末の外に出ることはありません。",
     "exportFailed": "ノートをエクスポートできませんでした。",
     "importTitle": "ノートをインポート",
     "importNothing": "これらのファイルにノートが見つかりません。対応形式：.md、.txt、.zip、Google Keep（Takeout）。",
     "importDone": "インポートしたノート：{{count}}",
     "importFailed": "ノートをインポートできませんでした。",
     "exportDesc": "Markdown ファイルを ZIP で",
-    "importDesc": ".md、.txt、.zip または Google Keep（Takeout）"
+    "importDesc": ".md、.txt、.zip または Google Keep（Takeout）",
+    "exportSummaryCount": "ZIP に含まれるノート：{{count}} 件（アプリで表示中のバージョンの Markdown テキスト）。",
+    "exportSummaryExcluded": "含まれないもの：録音、手書き、ノートの他のバージョン。これらはアプリ内に残ります。",
+    "exportSkippedProtectedCount": "スキップした保護ノート：{{count}} 件。保護ノートは暗号化なしで端末の外に出ることはありません。",
+    "exportSkippedLockedCount": "この端末でロック解除されていないためスキップしたノート：{{count}} 件。",
+    "exportNothingReadable": "書き出せるノートがありません。すべてのノートが保護されているか、この端末でロック解除されていません。"
   },
   "notify": {
     "remindersChannel": "タスクのリマインダー",
@@ -1173,7 +1192,23 @@
     "trialRowDetail": "{{duration}}無料、カード不要",
     "limitTrialOffer": "Pro を{{duration}}無料でお試し：クラウド {{minutes}} 分、AI は無制限。カード不要、料金はかかりません。",
     "limitTrialOfferAI": "Pro なら AI に上限はありません。{{duration}}無料、カード不要でお試しください。",
-    "tryFree": "無料で試す"
+    "tryFree": "無料で試す",
+    "ctaTrialThen": "無料トライアルを開始、その後 {{price}}",
+    "ctaSubscribe": "{{price}} で登録",
+    "ctaSubscribeOffer": "登録：{{offer}}",
+    "planYearlyPro": "Pro（年額）",
+    "planMonthlyPro": "Pro（月額）",
+    "purchaseWelcomeTitle": "Pro へようこそ！",
+    "purchaseDoneTitle": "購入が完了しました",
+    "purchaseActivated": "サブスクリプションが有効になりました。プラン：{{plan}}。",
+    "purchaseSyncing": "購入が完了しました。{{plan}} をアカウントで有効化しています。",
+    "purchaseFailed": "購入が完了しませんでした。もう一度試すか、ストアアカウントのお支払い方法をご確認ください。",
+    "restoredTitle": "購入を復元しました",
+    "restoreDoneTitle": "復元が完了しました",
+    "restoredActive": "Pro サブスクリプションを復元しました。",
+    "restoredSyncing": "購入を復元しました。サブスクリプションをアカウントで有効化しています。",
+    "restoreNoActive": "このストアアカウントに有効なサブスクリプションは見つかりませんでした。",
+    "restoreFailed": "購入を復元できませんでした。接続とストアアカウントを確認して、もう一度お試しください。"
   },
   "drawing": {
     "done": "完了",

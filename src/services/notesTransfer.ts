@@ -6,11 +6,13 @@ import type { Note } from '../api/notes';
 import { richContentToMarkdown } from '../utils/richContent';
 import { stripStoredTitleMarkdown } from '../utils/markdownUtils';
 import {
+    ExportSummary,
     ImportedNote,
     noteToMarkdownFile,
     parseKeepNote,
     parseTextNote,
     safeFileName,
+    summarizeExport,
 } from '../utils/noteTransferFormat';
 
 const MAX_IMPORT = 1000;
@@ -21,10 +23,26 @@ export interface ExportResult {
     skippedProtected: number;
 }
 
+const exportedText = (note: Note) => {
+    const active = note.improvements?.find((improvement) => improvement.is_active);
+    const title = stripStoredTitleMarkdown(note.title || '').trim();
+    const markdown = richContentToMarkdown(active?.content || note.content || '').trim();
+    return { title, markdown };
+};
+
+/**
+ * What exportNotesAsZip would write, without writing it: shown to the user
+ * before the export so a ZIP of texts is not mistaken for a full backup.
+ */
+export const planNotesExport = (notes: Note[]): ExportSummary => summarizeExport(notes, (note) => {
+    const { title, markdown } = exportedText(note);
+    return !!(title || markdown);
+});
+
 /**
  * All readable notes as Markdown files in one ZIP, handed to the share sheet
- * (Files, Drive, mail...). Each note uses its active version. Recordings stay
- * in the app: they are encrypted on this phone.
+ * (Files, Drive, mail...). Each note uses its active version, text only:
+ * recordings, drawings and the other versions stay in the app.
  */
 export const exportNotesAsZip = async (notes: Note[]): Promise<ExportResult> => {
     const zip = new JSZip();
@@ -32,14 +50,12 @@ export const exportNotesAsZip = async (notes: Note[]): Promise<ExportResult> => 
     let exported = 0;
     let skippedProtected = 0;
     for (const note of notes) {
-        if (note.deleted || note.locked) continue;
+        if (note.deleted || note.pending_delete || note.locked) continue;
         if (note.is_protected) {
             skippedProtected += 1;
             continue;
         }
-        const active = note.improvements?.find((improvement) => improvement.is_active);
-        const title = stripStoredTitleMarkdown(note.title || '').trim();
-        const markdown = richContentToMarkdown(active?.content || note.content || '').trim();
+        const { title, markdown } = exportedText(note);
         if (!title && !markdown) continue;
         const name = safeFileName(title || markdown.split('\n')[0].replace(/^[#>*\-\s[\]x]+/, ''), used);
         zip.file(name, noteToMarkdownFile(title, markdown, note.created_at));

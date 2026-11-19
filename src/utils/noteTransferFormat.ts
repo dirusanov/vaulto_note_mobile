@@ -87,3 +87,54 @@ export const parseKeepNote = (json: string): ImportedNote | null => {
     const title = (data.title || '').trim().slice(0, MAX_TITLE);
     return title || content ? { title, content } : null;
 };
+
+/** The fields of a note that decide whether and how it is exported. */
+export interface ExportCandidate {
+    deleted?: boolean;
+    pending_delete?: boolean;
+    locked?: boolean;
+    is_protected?: boolean;
+    has_audio?: boolean;
+    improvements?: Array<{ deleted?: boolean }> | null;
+}
+
+/** What the ZIP will hold, told to the user before anything is shared. */
+export interface ExportSummary {
+    /** Notes written out: the version shown in the app, as Markdown text. */
+    exportable: number;
+    /** Protected notes never leave the device unencrypted. */
+    skippedProtected: number;
+    /** Not decrypted on this device yet (no key): nothing readable to write. */
+    skippedLocked: number;
+    /** Exported notes whose recordings stay in the app. */
+    withAudio: number;
+    /** Exported notes that have other versions (original or AI), which stay in the app. */
+    withOtherVersions: number;
+}
+
+/**
+ * Counts what an export will contain. `hasText` says whether a readable note
+ * has a title or text to write (an empty one is left out silently).
+ */
+export const summarizeExport = <T extends ExportCandidate>(
+    notes: T[],
+    hasText: (note: T) => boolean,
+): ExportSummary => {
+    const summary: ExportSummary = { exportable: 0, skippedProtected: 0, skippedLocked: 0, withAudio: 0, withOtherVersions: 0 };
+    for (const note of notes) {
+        if (note.deleted || note.pending_delete) continue;
+        if (note.is_protected) {
+            summary.skippedProtected += 1;
+            continue;
+        }
+        if (note.locked) {
+            summary.skippedLocked += 1;
+            continue;
+        }
+        if (!hasText(note)) continue;
+        summary.exportable += 1;
+        if (note.has_audio) summary.withAudio += 1;
+        if ((note.improvements || []).some((version) => !version.deleted)) summary.withOtherVersions += 1;
+    }
+    return summary;
+};

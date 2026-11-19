@@ -65,7 +65,7 @@ import { haptics } from '../utils/haptics';
 import { rtlFlip } from '../i18n/direction';
 import { useNotesContext } from '../contexts/NotesContext';
 import { isWeeklyDigestEnabled, setWeeklyDigestEnabled } from '../services/notifications';
-import { exportNotesAsZip, pickNotesToImport } from '../services/notesTransfer';
+import { exportNotesAsZip, pickNotesToImport, planNotesExport } from '../services/notesTransfer';
 import { appAlert } from '../components/AppAlert';
 
 const formatSubscriptionDate = (isoDate: string | null) => {
@@ -322,23 +322,52 @@ export const SettingsScreen = () => {
         }
     };
 
-    const handleExport = async () => {
+    const runExport = async () => {
         setTransferBusy('export');
         try {
             const result = await exportNotesAsZip(getAllNotes());
             if (result.exported === 0) {
                 appAlert(t('data.exportTitle', 'Export notes'), t('data.exportNothing', 'There are no notes to export.'));
-            } else if (result.skippedProtected > 0) {
-                appAlert(
-                    t('data.exportTitle', 'Export notes'),
-                    t('data.exportSkippedProtected', 'Protected notes ({{count}}) were not exported: they never leave the device unencrypted.', { count: result.skippedProtected }),
-                );
             }
         } catch (error) {
             appAlert(t('data.exportTitle', 'Export notes'), getErrorMessage(error, t('data.exportFailed', 'Could not export the notes.')));
         } finally {
             setTransferBusy(null);
         }
+    };
+
+    // Before anything is shared: how many notes go into the ZIP, which are
+    // skipped and why, and that it holds text only (not a full backup).
+    const handleExport = () => {
+        const plan = planNotesExport(getAllNotes());
+        const skipped: string[] = [];
+        if (plan.skippedProtected > 0) {
+            skipped.push(t('data.exportSkippedProtectedCount', 'Protected notes skipped: {{count}}. They never leave the device unencrypted.', { count: plan.skippedProtected }));
+        }
+        if (plan.skippedLocked > 0) {
+            skipped.push(t('data.exportSkippedLockedCount', 'Notes not unlocked on this device skipped: {{count}}.', { count: plan.skippedLocked }));
+        }
+        if (plan.exportable === 0) {
+            appAlert(
+                t('data.exportTitle', 'Export notes'),
+                skipped.length > 0
+                    ? [t('data.exportNothingReadable', 'Nothing can be exported: every note is protected or not unlocked on this device.'), ...skipped].join('\n\n')
+                    : t('data.exportNothing', 'There are no notes to export.'),
+            );
+            return;
+        }
+        appAlert(
+            t('data.exportTitle', 'Export notes'),
+            [
+                t('data.exportSummaryCount', 'Notes in the ZIP: {{count}}, as Markdown text of the version shown in the app.', { count: plan.exportable }),
+                t('data.exportSummaryExcluded', 'Not included: recordings, drawings and other versions of notes. They stay in the app.'),
+                ...skipped,
+            ].join('\n\n'),
+            [
+                { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                { text: t('data.export', 'Export'), onPress: () => { void runExport(); } },
+            ],
+        );
     };
 
     const handleImport = async () => {
@@ -1231,7 +1260,7 @@ export const SettingsScreen = () => {
                     <Row
                         title={t('data.exportTitle', 'Export notes')}
                         detail={t('data.exportDesc', 'Markdown files in a ZIP')}
-                        onPress={() => { void handleExport(); }}
+                        onPress={handleExport}
                         disabled={transferBusy !== null}
                         accessory={transferBusy === 'export' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined}
                     />
@@ -1381,10 +1410,11 @@ export const SettingsScreen = () => {
                                         <Divider />
                                         <Row
                                             title={t('settings.recovery.keyTitle', 'Recovery key')}
+                                            // A requested system backup is not a confirmed one: keep asking for a copy.
                                             detail={keyBackup?.cloud
                                                 ? (Platform.OS === 'ios'
-                                                    ? t('settings.sync.keyInIcloud', 'In iCloud Keychain · opens your notes on a new iPhone')
-                                                    : t('settings.sync.keyInGoogle', 'In your Google backup · opens your notes on a new device'))
+                                                    ? t('settings.sync.keyRequestedIcloud', 'On this device · iCloud Keychain copy requested · keep your own copy too')
+                                                    : t('settings.sync.keyRequestedGoogle', 'On this device · Google backup copy requested · keep your own copy too'))
                                                 : t('settings.sync.keyOnlyHere', 'Only on this device · save a copy so you never lose your notes')}
                                             attention={!keyBackup?.cloud}
                                             onPress={() => { void openRecoveryKey(); }}

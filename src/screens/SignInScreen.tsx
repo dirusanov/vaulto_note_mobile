@@ -29,6 +29,7 @@ import { rtlFlip } from '../i18n/direction';
 import { GoogleLogo } from '../components/GoogleLogo';
 import { appAlert } from '../components/AppAlert';
 import { storage } from '../utils/storage';
+import { finishSignIn } from '../navigation/finishSignIn';
 
 // Trial minutes a new account gets: the registration plan on the gateway
 // (subscription_plans.apply_on_registration, 30 on prod; see also auth.signUpPerk).
@@ -71,7 +72,8 @@ export const SignInScreen = () => {
             throw new Error('Invalid login response');
         }
         await signIn(result.access_token, result.refresh_token);
-        navigation.navigate('NotesList');
+        // Back where the sign-in was asked for (e.g. Ask your notes), else the library.
+        finishSignIn(navigation, () => navigation.navigate('NotesList'));
     };
 
     const handleEmailSignIn = async () => {

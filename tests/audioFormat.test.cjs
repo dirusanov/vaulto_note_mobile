@@ -44,6 +44,7 @@ function audioStore() {
     'expo-audio': {},
     'react-native': { Platform: { OS: 'android' }, NativeModules: {} },
     '../utils/audioFormat': format,
+    '../utils/recordingClock': load('src/utils/recordingClock.ts'),
     '../crypto/encryption': {
       encrypt: async value => `sealed:${value}`,
       decrypt: async value => { assert.ok(value.startsWith('sealed:')); return value.slice(7); },

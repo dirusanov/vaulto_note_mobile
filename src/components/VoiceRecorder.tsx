@@ -24,6 +24,7 @@ import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { appAlert } from './AppAlert';
+import { DISCARD_CONFIRM_AFTER_SECONDS, recorderBackAction } from '../utils/recordingClock';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -48,8 +49,8 @@ const QUIET_KEEP_MIN_SECONDS = 3;
 const MAX_RECORDING_DURATION_SECONDS = Math.floor(MAX_RECORDING_DURATION_MS / 1000);
 const MAX_MEETING_DURATION_SECONDS = Math.floor(MAX_MEETING_DURATION_MS / 1000);
 const MEETING_SEGMENT_SECONDS = Math.floor(MEETING_SEGMENT_MS / 1000);
-// Longer recordings ask for a second tap on the bin before they are thrown away.
-const DISCARD_CONFIRM_AFTER_SECONDS = 5;
+// Longer recordings ask for a second tap on the bin before they are thrown away
+// (DISCARD_CONFIRM_AFTER_SECONDS, shared with the system Back rule).
 const DISCARD_CONFIRM_WINDOW_MS = 4000;
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
@@ -612,12 +613,60 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
     };
 
+    // The choice offered on Back acts on the state at the time it is tapped,
+    // not when it was shown (the recording may have stopped in between).
+    const latestActionsRef = useRef({ stop: handleStopRecording, cancel: handleCancel, finishMeeting, isRecording });
+    latestActionsRef.current = { stop: handleStopRecording, cancel: handleCancel, finishMeeting, isRecording };
+
+    // Android Back / back gesture: "close the panel" must not mean "delete the
+    // recording". A short take is still just dropped; anything longer, or a
+    // meeting with finished parts, asks: continue, save or delete.
+    const handleBackRequest = () => {
+        const action = recorderBackAction({
+            isRecording,
+            isStopping,
+            durationSeconds: duration,
+            meetingSegments: meetingSegmentsRef.current.length,
+        });
+        if (action === 'ignore') return;
+        if (action === 'close') {
+            void handleCancel();
+            return;
+        }
+        haptics.medium();
+        appAlert(
+            t("voice.exitTitle", "Keep this recording?"),
+            t("voice.exitDesc", "Going back would delete what you have recorded."),
+            [
+                { text: t("voice.continueRecording", "Continue recording"), style: 'cancel' },
+                {
+                    text: t("common.delete"),
+                    style: 'destructive',
+                    onPress: () => { void latestActionsRef.current.cancel(); },
+                },
+                {
+                    text: t("voice.saveRecording", "Save"),
+                    onPress: () => {
+                        const latest = latestActionsRef.current;
+                        if (latest.isRecording) {
+                            void latest.stop();
+                        } else if (meetingSegmentsRef.current.length > 0) {
+                            void latest.finishMeeting(null);
+                        }
+                    },
+                },
+            ],
+            // Dismissing the question (Back again, tap outside) keeps recording.
+            { cancelable: true }
+        );
+    };
+
     return (
         <Modal
             visible={visible && (!autoStart || isRecording || permissionSettled)}
             animationType="slide"
             transparent
-            onRequestClose={handleCancel}
+            onRequestClose={handleBackRequest}
         >
             {/* On the notes list the panel takes the dock's place (the list hides the dock). */}
             <View

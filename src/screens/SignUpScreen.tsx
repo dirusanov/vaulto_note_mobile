@@ -27,6 +27,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
 import { appAlert } from '../components/AppAlert';
+import { finishSignIn } from '../navigation/finishSignIn';
 
 export const SignUpScreen = () => {
     const { t } = useTranslation();
@@ -55,7 +56,7 @@ export const SignUpScreen = () => {
                 throw new Error('Invalid login response');
             }
             await signIn(result.access_token, result.refresh_token);
-            navigation.navigate('NotesList');
+            finishSignIn(navigation, () => navigation.navigate('NotesList'));
         } catch (err) {
             appAlert(t("auth.googleSignInFailed"), getErrorMessage(err, t("auth.googleSignInFailed")));
         }

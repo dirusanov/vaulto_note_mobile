@@ -33,3 +33,24 @@ test('Google Keep notes: text, checklists, labels; trashed and foreign JSON skip
     assert.strictEqual(f.parseKeepNote(JSON.stringify({ foo: 1 })), null);
     assert.strictEqual(f.parseKeepNote('not json'), null);
 });
+
+test('export summary counts what goes in the ZIP and what is skipped', () => {
+    const hasText = (note) => !!note.text;
+    const s = f.summarizeExport([
+        { text: 'a', has_audio: true },
+        { text: 'b', improvements: [{ deleted: false }] },
+        { text: 'c', improvements: [{ deleted: true }] },
+        { text: 'secret', is_protected: true },
+        { text: '', locked: true },
+        { text: 'gone', deleted: true },
+        { text: 'undo', pending_delete: true },
+        { text: '' },
+    ], hasText);
+    assert.deepStrictEqual(s, { exportable: 3, skippedProtected: 1, skippedLocked: 1, withAudio: 1, withOtherVersions: 1 });
+});
+
+test('all notes protected: nothing exportable, and the reason is counted (not "no notes")', () => {
+    const s = f.summarizeExport([{ text: 'x', is_protected: true }, { text: 'y', is_protected: true }], (n) => !!n.text);
+    assert.strictEqual(s.exportable, 0);
+    assert.strictEqual(s.skippedProtected, 2);
+});

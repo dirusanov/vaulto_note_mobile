@@ -73,7 +73,11 @@
     "lockedListHint": "Vos notes apparaîtront ici une fois déverrouillées.",
     "lockedNotBackedUp": "D’ici là, les nouvelles notes ne sont pas sauvegardées.",
     "lockedSyncNotice": "Non synchronisé : déverrouillez le chiffrement pour sauvegarder les nouvelles notes.",
-    "tryProFree": "Essayer Pro gratuitement"
+    "tryProFree": "Essayer Pro gratuitement",
+    "tagNoResults": "Rien trouvé dans #{{tag}}",
+    "tagEmpty": "Aucune note dans #{{tag}}",
+    "tagSearchAll": "Chercher dans toutes les notes",
+    "tagShowAll": "Afficher toutes les notes"
   },
   "settings": {
     "title": "Paramètres",
@@ -109,9 +113,9 @@
       "turnOffE2ee": "Désactiver le chiffrement de bout en bout",
       "encryptingTitle": "Chiffrement de vos notes",
       "encryptingSubtitle": "Vous seul pourrez les lire.",
-      "keyInGoogle": "Dans votre sauvegarde Google · ouvre vos notes sur un nouvel appareil",
-      "keyInIcloud": "Dans le trousseau iCloud · ouvre vos notes sur un nouvel iPhone",
-      "keyOnlyHere": "Uniquement sur cet appareil · gardez une copie pour ne jamais perdre vos notes"
+      "keyOnlyHere": "Uniquement sur cet appareil · gardez une copie pour ne jamais perdre vos notes",
+      "keyRequestedIcloud": "Sur cet appareil · copie dans le trousseau iCloud demandée · gardez aussi votre propre copie",
+      "keyRequestedGoogle": "Sur cet appareil · copie dans la sauvegarde Google demandée · gardez aussi votre propre copie"
     },
     "account": {
       "signOut": "Se déconnecter",
@@ -229,7 +233,7 @@
       "encryptionDisabledTitle": "Chiffrement désactivé",
       "minutesWarningText": "Vous avez utilisé toutes les minutes du mois. La réserve d'essai sera utilisée ensuite.",
       "minutesWarningTextLow": "Il vous reste peu de minutes de transcription ce mois-ci",
-      "saveRecoveryFirst": "Vos notes restent sur le serveur, chiffrées de bout en bout. Pour les rouvrir, connectez-vous : la clé est restaurée depuis la sauvegarde de l’appareil, ou saisissez votre clé de récupération.",
+      "saveRecoveryFirst": "Vos notes restent sur le serveur, chiffrées de bout en bout. Pour les rouvrir, connectez-vous : la clé peut revenir de la sauvegarde de l’appareil si elle y a été conservée ; sinon, il vous faudra votre clé de récupération.",
       "signOutMessage": "Que faire de vos notes sur cet appareil ?",
       "syncPendingMessage": "Le chiffrement de bout en bout a été désactivé sur cet appareil. Vos notes n'ont toutefois pas pu être synchronisées avec le serveur pour le moment. Elles seront automatiquement converties en texte clair dès que vous aurez une connexion internet.",
       "unableDisableSync": "Impossible de désactiver la synchronisation.",
@@ -274,14 +278,12 @@
       "explain": "Seule cette clé ouvre vos notes sur un nouvel appareil. Gardez-la en lieu sûr, par exemple dans un gestionnaire de mots de passe. Personne, pas même Vaulto, ne peut la récupérer.",
       "share": "Partager",
       "savedIt": "J’ai enregistré la clé",
-      "inGoogle": "Enregistrée dans votre sauvegarde Google : vos notes s’ouvriront seules sur un nouvel appareil.",
-      "inIcloud": "Enregistrée dans le trousseau iCloud : vos notes s’ouvriront seules sur un nouvel iPhone.",
-      "explainBackup": "Gardez aussi une copie au cas où la sauvegarde serait désactivée : idéalement dans un gestionnaire de mots de passe. Personne, pas même Vaulto, ne peut récupérer cette clé.",
-      "enableBackupTip": "Activez un verrouillage d’écran et la sauvegarde Google, et Vaulto conservera cette clé pour vous",
       "authReason": "Afficher votre clé de récupération",
-      "bannerTitle": "Vos notes sont chiffrées de bout en bout",
-      "bannerGoogle": "Clé enregistrée dans votre sauvegarde Google. Elle est aussi dans Réglages → Clé de récupération.",
-      "bannerIcloud": "Clé enregistrée dans le trousseau iCloud. Elle est aussi dans Réglages → Clé de récupération."
+      "requestedIcloud": "Enregistrée sur cet appareil. Une copie a été demandée dans le trousseau iCloud ; Vaulto ne peut pas vérifier qu'il est activé et synchronisé.",
+      "requestedGoogle": "Enregistrée sur cet appareil. Une copie a été demandée dans votre sauvegarde Google ; Vaulto ne peut pas vérifier qu'elle est activée et terminée.",
+      "onDeviceOnly": "Enregistrée uniquement sur cet appareil.",
+      "explainRequested": "Pour être sûr de pouvoir ouvrir vos notes sur un nouveau téléphone, enregistrez aussi cette clé vous-même, par exemple dans un gestionnaire de mots de passe. Personne, pas même Vaulto, ne peut la restaurer.",
+      "backupTip": "Activez un verrouillage de l'écran et la sauvegarde Google pour qu'une copie de cette clé puisse aussi y être conservée"
     },
     "resetRecovery": {
       "title": "Le coffre chiffré a été réinitialisé",
@@ -727,7 +729,13 @@
     "textStyleHeading": "En-tête",
     "textStyleSubheading": "Sous-titre",
     "textStyleBody": "Texte",
-    "playRecording": "Lire l'enregistrement"
+    "playRecording": "Lire l'enregistrement",
+    "saveFailed": {
+      "title": "Non enregistré",
+      "message": "Vos dernières modifications n'ont pas pu être enregistrées. Elles sont toujours là : réessayez, ou restez et copiez le texte.",
+      "retry": "Réessayer",
+      "leave": "Quitter sans enregistrer"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Modèle non téléchargé. Vérifiez les paramètres.",
@@ -767,7 +775,11 @@
     "noSpeechDetected": "Aucune parole détectée. Enregistrement conservé.",
     "quietTitle": "Presque rien n'a été entendu",
     "quietDesc": "Le micro n'a capté que du silence. S'il est coupé ou occupé par un appel, arrêtez-le et réenregistrez. Garder quand même cet enregistrement ?",
-    "keepRecording": "Garder"
+    "keepRecording": "Garder",
+    "exitTitle": "Garder cet enregistrement ?",
+    "exitDesc": "En revenant en arrière, ce qui a été enregistré serait supprimé.",
+    "continueRecording": "Continuer l’enregistrement",
+    "saveRecording": "Enregistrer"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -910,7 +922,9 @@
     "guestUnverifiedDesc": "La transcription gratuite dans le cloud sans compte n’est pas disponible sur cet appareil. Connectez-vous (c’est gratuit) ou transcrivez directement sur cet appareil, hors ligne.",
     "aiLimitDescDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé le {{date}}.",
     "aiLimitDescNoDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé au début de la prochaine période.",
-    "aiLimitGuestDesc": "Connectez-vous pour obtenir votre propre quota mensuel d’IA."
+    "aiLimitGuestDesc": "Connectez-vous pour obtenir votre propre quota mensuel d’IA.",
+    "verificationSentTo": "Nous avons envoyé un lien de vérification à",
+    "verificationCheckFailed": "Impossible de vérifier si votre e-mail est confirmé. Vérifiez votre connexion et réessayez."
   },
   "a11y": {
     "checked": "coché",
@@ -947,6 +961,7 @@
     "play": "Lire",
     "pause": "Pause",
     "playbackPosition": "Position de lecture",
+    "playbackPositionValue": "{{position}} sur {{total}}",
     "checklist": "Liste de tâches",
     "bulletList": "Liste à puces",
     "bold": "Gras",
@@ -1111,14 +1126,18 @@
     "hint": "Export : fichiers Markdown dans un ZIP. Import : .md, .txt, .zip ou Google Keep (Takeout).",
     "exportTitle": "Exporter les notes",
     "exportNothing": "Aucune note à exporter.",
-    "exportSkippedProtected": "Les notes protégées ({{count}}) n’ont pas été exportées : elles ne quittent jamais l’appareil sans chiffrement.",
     "exportFailed": "Impossible d’exporter les notes.",
     "importTitle": "Importer des notes",
     "importNothing": "Aucune note trouvée dans ces fichiers. Formats : .md, .txt, .zip et Google Keep (Takeout).",
     "importDone": "Notes importées : {{count}}",
     "importFailed": "Impossible d’importer les notes.",
     "exportDesc": "Fichiers Markdown dans un ZIP",
-    "importDesc": ".md, .txt, .zip ou Google Keep (Takeout)"
+    "importDesc": ".md, .txt, .zip ou Google Keep (Takeout)",
+    "exportSummaryCount": "Notes dans le ZIP : {{count}}, en texte Markdown de la version affichée dans l'app.",
+    "exportSummaryExcluded": "Non inclus : enregistrements, dessins et autres versions des notes. Ils restent dans l'app.",
+    "exportSkippedProtectedCount": "Notes protégées ignorées : {{count}}. Elles ne quittent jamais l'appareil sans chiffrement.",
+    "exportSkippedLockedCount": "Notes non déverrouillées sur cet appareil ignorées : {{count}}.",
+    "exportNothingReadable": "Rien ne peut être exporté : toutes les notes sont protégées ou non déverrouillées sur cet appareil."
   },
   "notify": {
     "remindersChannel": "Rappels de tâches",
@@ -1184,7 +1203,23 @@
     "trialRowDetail": "Essai gratuit de {{duration}}, sans carte",
     "limitTrialOffer": "Essayez Pro gratuitement pendant {{duration}} : {{minutes}} minutes cloud et IA sans limite. Sans carte, rien n’est facturé.",
     "limitTrialOfferAI": "Pro n’a pas de limite d’IA : essayez-le gratuitement pendant {{duration}}, sans carte.",
-    "tryFree": "Essayer"
+    "tryFree": "Essayer",
+    "ctaTrialThen": "Commencer l'essai gratuit, puis {{price}}",
+    "ctaSubscribe": "S'abonner pour {{price}}",
+    "ctaSubscribeOffer": "S'abonner : {{offer}}",
+    "planYearlyPro": "Pro (annuel)",
+    "planMonthlyPro": "Pro (mensuel)",
+    "purchaseWelcomeTitle": "Bienvenue dans Pro !",
+    "purchaseDoneTitle": "Achat effectué",
+    "purchaseActivated": "Votre abonnement est actif. Votre formule : {{plan}}.",
+    "purchaseSyncing": "Achat effectué. Votre accès {{plan}} est en cours d'activation sur votre compte.",
+    "purchaseFailed": "L'achat n'a pas abouti. Réessayez ou vérifiez le moyen de paiement de votre compte de la boutique.",
+    "restoredTitle": "Achats restaurés",
+    "restoreDoneTitle": "Restauration terminée",
+    "restoredActive": "Votre abonnement Pro a été restauré.",
+    "restoredSyncing": "Achats restaurés. Votre abonnement est en cours d'activation sur votre compte.",
+    "restoreNoActive": "Aucun abonnement actif n'a été trouvé pour ce compte de la boutique.",
+    "restoreFailed": "Impossible de restaurer les achats. Vérifiez votre connexion et votre compte de la boutique, puis réessayez."
   },
   "drawing": {
     "done": "Terminé",

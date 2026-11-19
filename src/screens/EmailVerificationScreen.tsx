@@ -11,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errorMessage';
 import { createStyles } from '../theme/createStyles';
+import { finishSignIn } from '../navigation/finishSignIn';
 
 export const EmailVerificationScreen = () => {
     const { t } = useTranslation();
@@ -23,7 +24,11 @@ export const EmailVerificationScreen = () => {
 
 
     const [isVerified, setIsVerified] = useState(false);
+    // Why the last automatic check failed (offline, server down); null while checks work.
+    const [checkError, setCheckError] = useState<string | null>(null);
+    const [checking, setChecking] = useState(false);
     const pollInterval = useRef<NodeJS.Timeout | null>(null);
+    const checkNowRef = useRef<(() => Promise<void>) | null>(null);
 
     useEffect(() => {
         if (!email) {
@@ -31,11 +36,12 @@ export const EmailVerificationScreen = () => {
             return;
         }
 
+        let active = true;
         const checkStatus = async () => {
             try {
-                console.log(`Polling verification status for: ${email}`);
                 const profile = await authApi.checkVerificationStatus(email);
-                console.log('Verification status response:', profile);
+                if (!active) return;
+                setCheckError(null);
 
                 if (profile.is_verified) {
                     console.log('User is verified!');
@@ -46,18 +52,34 @@ export const EmailVerificationScreen = () => {
                     setTimeout(() => handleVerified(), 3000);
                 }
             } catch (error) {
-                // Ignore errors during polling (e.g. network issues)
-                console.log('Polling error:', error);
+                // Say so instead of "waiting" forever: offline, or the server is down.
+                // Polling goes on, so the screen recovers by itself once it is back.
+                console.warn('[EmailVerification] Status check failed:', getErrorMessage(error, 'unknown'));
+                if (active) {
+                    setCheckError(getErrorMessage(error, t('aux.verificationCheckFailed', 'Could not check whether your email is verified. Check your connection and try again.')));
+                }
+            }
+        };
+        checkNowRef.current = async () => {
+            setChecking(true);
+            try {
+                await checkStatus();
+            } finally {
+                if (active) setChecking(false);
             }
         };
 
         // Initial check
-        checkStatus();
+        void checkStatus();
 
         // Start polling
         pollInterval.current = setInterval(checkStatus, 3000);
 
-        return () => stopPolling();
+        return () => {
+            active = false;
+            checkNowRef.current = null;
+            stopPolling();
+        };
     }, [email]);
 
     const stopPolling = () => {
@@ -91,11 +113,11 @@ export const EmailVerificationScreen = () => {
                 await signIn(loginResult.access_token, loginResult.refresh_token);
                 console.log('Auto-login successful');
 
-                // Reset navigation stack to Main screen
-                navigation.reset({
+                // Back to where the sign-in started (e.g. Ask your notes), else the library.
+                finishSignIn(navigation, () => navigation.reset({
                     index: 0,
                     routes: [{ name: 'NotesList' }],
-                });
+                }));
             } catch (e) {
                 // Fallback if auto-login fails
                 console.log('Auto-login failed:', e);
@@ -138,14 +160,35 @@ export const EmailVerificationScreen = () => {
                 <Text style={styles.title}>{t("aux.checkInbox")}</Text>
 
                 <Text style={styles.subtitle}>
-                    We sent a verification link to{'\n'}
+                    {t('aux.verificationSentTo', 'We sent a verification link to')}{'\n'}
                     <Text style={styles.email}>{email}</Text>
                 </Text>
 
-                <View style={styles.statusContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={styles.statusText}>{t("aux.waitingVerification")}</Text>
-                </View>
+                {checkError ? (
+                    <View style={[styles.statusContainer, styles.statusError]} accessibilityRole="alert">
+                        <View style={styles.statusRow}>
+                            <MaterialIcons name="cloud-off" size={20} color={colors.error} />
+                            <Text style={[styles.statusText, styles.statusErrorText]}>{checkError}</Text>
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => { void checkNowRef.current?.(); }}
+                            disabled={checking}
+                            style={styles.retryButton}
+                            accessibilityRole="button"
+                        >
+                            {checking
+                                ? <ActivityIndicator size="small" color={colors.primary} />
+                                : <Text style={styles.retryButtonText}>{t('aux.paywallRetry', 'Try again')}</Text>}
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={styles.statusContainer}>
+                        <View style={styles.statusRow}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                            <Text style={styles.statusText}>{t("aux.waitingVerification")}</Text>
+                        </View>
+                    </View>
+                )}
 
                 <View style={styles.infoBox}>
                     <Text style={styles.infoText}>
@@ -208,10 +251,33 @@ const styles = createStyles(() => ({
         borderWidth: 1,
         borderColor: colors.border,
     },
+    statusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     statusText: {
         ...typography.body,
         marginLeft: spacing.s,
         color: colors.textSecondary,
+        flexShrink: 1,
+    },
+    statusError: {
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        borderColor: colors.error,
+        gap: spacing.s,
+    },
+    statusErrorText: {
+        color: colors.text,
+    },
+    retryButton: {
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    retryButtonText: {
+        ...typography.button,
+        color: colors.primary,
     },
     infoBox: {
         backgroundColor: colors.backgroundSecondary,

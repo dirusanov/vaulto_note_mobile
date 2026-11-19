@@ -109,6 +109,21 @@ export const userVariantName = (title: string | null | undefined): string | null
     return name || null;
 };
 
+/**
+ * The title a version keeps after an action on its text (a voice command, an
+ * edit by the agent). A name the user gave it stays: the model's suggested
+ * title used to replace "For Anna" on the next command. Otherwise the
+ * suggestion wins, and without one the current title stays.
+ */
+export const variantTitleAfterAction = (
+    currentTitle: string | null | undefined,
+    suggestedTitle: string | null | undefined,
+): string => {
+    const current = currentTitle || '';
+    if (userVariantName(current)) return current;
+    return (suggestedTitle || '').trim() || current;
+};
+
 /** Longest name taken from a custom instruction, in characters. */
 const CUSTOM_NAME_MAX_CHARS = 32;
 const CUSTOM_NAME_MAX_WORDS = 5;

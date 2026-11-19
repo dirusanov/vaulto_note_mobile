@@ -165,3 +165,18 @@ export const appendAboveTagLine = (content: string, append: (body: string) => st
     }
     return `${append(body)}${tagBlock}`;
 };
+
+/**
+ * Why a tag-filtered list is empty, so the screen can explain it instead of
+ * showing a blank area: 'elsewhere' when notes outside the tag match (offer to
+ * search all notes); null when the tag filter has results or is off, or when
+ * nothing matches at all (the list's own empty state covers that).
+ */
+export const tagFilterEmptyReason = (
+    activeTag: string | null | undefined,
+    matchingNotes: number,
+    matchingUnderTag: number,
+): 'elsewhere' | null => {
+    if (!activeTag || matchingUnderTag > 0) return null;
+    return matchingNotes > 0 ? 'elsewhere' : null;
+};

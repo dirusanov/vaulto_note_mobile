@@ -5,6 +5,7 @@ import {
     Text,
     TouchableOpacity,
     ActivityIndicator,
+    AccessibilityActionEvent,
 } from 'react-native';
 import { Sound } from '../services/audioPlayback';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import {
     AUDIO_PREVIEW_WAVE_IDLE,
     AUDIO_PREVIEW_WAVE_LOADING,
 } from '../utils/audioEmbeds';
+import { accessibleSeekTarget, formatClock } from '../utils/audioSeek';
 
 interface AudioPlayerProps {
     audioUri: string;
@@ -119,12 +121,24 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
     const handleSeek = async (event: any) => {
         if (!sound || audioDuration <= 0 || progressBarWidth <= 0) return;
 
-        const { locationX } = event.nativeEvent;
+        // A screen reader's double tap has no touch point: seeking is done with
+        // the increment/decrement actions below instead.
+        const locationX = event?.nativeEvent?.locationX;
+        if (typeof locationX !== 'number' || !Number.isFinite(locationX)) return;
         const percentage = Math.max(0, Math.min(1, locationX / progressBarWidth));
         const seekPosition = percentage * audioDuration;
 
         setPosition(seekPosition);
         await sound.setPositionAsync(seekPosition * 1000);
+    };
+
+    // VoiceOver/TalkBack: swipe up/down on the bar steps through the recording.
+    const handleAccessibilitySeek = async (event: AccessibilityActionEvent) => {
+        const name = event.nativeEvent.actionName;
+        if (!sound || audioDuration <= 0 || (name !== 'increment' && name !== 'decrement')) return;
+        const target = accessibleSeekTarget(position, audioDuration, name === 'increment' ? 1 : -1);
+        setPosition(target);
+        await sound.setPositionAsync(target * 1000);
     };
 
     const progressRatio = audioDuration > 0 ? Math.max(0, Math.min(1, position / audioDuration)) : 0;
@@ -257,7 +271,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUri, duration, on
                             <TouchableOpacity
                                 activeOpacity={1}
                                 onPress={handleSeek}
+                                accessibilityRole="adjustable"
                                 accessibilityLabel={t('a11y.playbackPosition', 'Playback position')}
+                                accessibilityValue={{
+                                    min: 0,
+                                    max: Math.max(0, Math.round(audioDuration)),
+                                    now: Math.max(0, Math.min(Math.round(audioDuration), Math.round(position))),
+                                    text: t('a11y.playbackPositionValue', '{{position}} of {{total}}', {
+                                        position: formatClock(position),
+                                        total: formatClock(audioDuration),
+                                    }),
+                                }}
+                                accessibilityState={{ disabled: !sound }}
+                                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                                onAccessibilityAction={handleAccessibilitySeek}
                                 onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
                             >
                                 <View pointerEvents="none" style={[styles.waveformRow, { height: waveformHeight, marginBottom: rowSpacing }]}>

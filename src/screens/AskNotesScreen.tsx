@@ -19,6 +19,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { LimitModal } from '../components/LimitModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
+import { clearAuthReturn, rememberAuthReturn, takeAuthReturnDraft } from '../utils/authReturn';
 import { useNotesContext } from '../contexts/NotesContext';
 import { answerFromNotes, isOnDeviceAI } from '../services/AIService';
 import { colors, isDarkScheme } from '../theme/colors';
@@ -58,7 +59,8 @@ export const AskNotesScreen = () => {
     // `notes` may be narrowed by the list's search box; the chat searches everything.
     const { notes, getAllNotes, isHydrated } = useNotesContext();
     const { isAuthenticated, isGuest, user } = useAuth();
-    const [input, setInput] = useState('');
+    // A question typed before signing in comes back with the screen.
+    const [input, setInput] = useState(() => takeAuthReturnDraft());
     const [messages, setMessages] = useState<Message[]>([]);
     const [busy, setBusy] = useState(false);
     const [privateAllowed, setPrivateAllowed] = useState(false);
@@ -84,6 +86,8 @@ export const AskNotesScreen = () => {
     // Again on every return: the user may have signed in or set up the model meanwhile.
     useFocusEffect(useCallback(() => {
         let active = true;
+        // Back here without finishing a sign-in: forget the pending return.
+        clearAuthReturn();
         void isOnDeviceAI().then((value) => { if (active) setOnDeviceAI(value); }).catch(() => undefined);
         void checkAILocked().then((locked) => {
             if (!active) return;
@@ -125,6 +129,8 @@ export const AskNotesScreen = () => {
         if (await checkAILocked()) {
             setAiLocked(true);
             setShowGate(true);
+            // Keep the question (also one passed from the library) for after sign-in.
+            setInput(question);
             return;
         }
         haptics.light();
@@ -383,7 +389,8 @@ export const AskNotesScreen = () => {
                         >
                             <MaterialIcons name="lock-outline" size={18} color={colors.textTertiary} />
                             <Text style={styles.lockedInputText} numberOfLines={1}>
-                                {t('ask.lockedPlaceholder', 'Sign in or set up AI to ask')}
+                                {/* The kept question, so it is clearly not lost while signing in. */}
+                                {input.trim() || t('ask.lockedPlaceholder', 'Sign in or set up AI to ask')}
                             </Text>
                         </TouchableOpacity>
                     ) : (
@@ -420,6 +427,8 @@ export const AskNotesScreen = () => {
                 onClose={() => setShowGate(false)}
                 onSignIn={() => {
                     setShowGate(false);
+                    // Sign-in returns here with the question, not to the library.
+                    rememberAuthReturn('AskNotes', input);
                     navigation.navigate('SignIn');
                 }}
                 secondaryLabel={canSetUpOnDevice ? t('alerts.aiSetUpOnDevice', 'Set up AI on this device') : undefined}
