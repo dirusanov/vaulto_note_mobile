@@ -765,8 +765,8 @@
     },
     "voiceEdit": {
       "renamed": "नोट का नाम “{{title}}” किया गया",
-      "listInNewVersion": "नए संस्करण में सूची बनाई गई। मूल नहीं बदला।",
-      "changedInNewVersion": "नए संस्करण में बदला गया। मूल नहीं बदला।",
+      "listInNewVersion": "नए संस्करण “{{version}}” में सूची बनाई गई। मूल नहीं बदला।",
+      "changedInNewVersion": "नए संस्करण “{{version}}” में बदला गया। मूल नहीं बदला।",
       "listUpdatedIn": "“{{version}}” में सूची अपडेट हुई",
       "changedIn": "“{{version}}” में बदलाव हुआ",
       "checkedIn": "“{{version}}” में आइटम पर निशान लगाए",

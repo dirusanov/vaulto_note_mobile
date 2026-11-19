@@ -763,8 +763,8 @@
     },
     "voiceEdit": {
       "renamed": "メモ名を「{{title}}」に変更しました",
-      "listInNewVersion": "新しいバージョンにリストを作成しました。元の文は変わっていません。",
-      "changedInNewVersion": "新しいバージョンで変更しました。元の文は変わっていません。",
+      "listInNewVersion": "新しいバージョン「{{version}}」にリストを作成しました。元の文は変わっていません。",
+      "changedInNewVersion": "新しいバージョン「{{version}}」で変更しました。元の文は変わっていません。",
       "listUpdatedIn": "「{{version}}」のリストを更新しました",
       "changedIn": "「{{version}}」を変更しました",
       "checkedIn": "「{{version}}」の項目にチェックしました",

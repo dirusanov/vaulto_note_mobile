@@ -769,8 +769,8 @@
     },
     "voiceEdit": {
       "renamed": "أُعيدت تسمية الملاحظة إلى «{{title}}»",
-      "listInNewVersion": "أُنشئت قائمة في نسخة جديدة. الأصل لم يتغيّر.",
-      "changedInNewVersion": "عُدّلت في نسخة جديدة. الأصل لم يتغيّر.",
+      "listInNewVersion": "أُنشئت قائمة في نسخة جديدة «{{version}}». الأصل لم يتغيّر.",
+      "changedInNewVersion": "عُدّلت في نسخة جديدة «{{version}}». الأصل لم يتغيّر.",
       "listUpdatedIn": "حُدّثت القائمة في «{{version}}»",
       "changedIn": "عُدّلت «{{version}}»",
       "checkedIn": "وُضعت علامة على عناصر في «{{version}}»",

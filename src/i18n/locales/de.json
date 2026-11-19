@@ -765,8 +765,8 @@
     },
     "voiceEdit": {
       "renamed": "Notiz umbenannt in „{{title}}“",
-      "listInNewVersion": "Liste in einer neuen Version erstellt. Das Original bleibt unverändert.",
-      "changedInNewVersion": "In einer neuen Version geändert. Das Original bleibt unverändert.",
+      "listInNewVersion": "Liste in einer neuen Version erstellt: „{{version}}“. Das Original bleibt unverändert.",
+      "changedInNewVersion": "In einer neuen Version geändert: „{{version}}“. Das Original bleibt unverändert.",
       "listUpdatedIn": "Liste in „{{version}}“ aktualisiert",
       "changedIn": "In „{{version}}“ geändert",
       "checkedIn": "Punkte in „{{version}}“ abgehakt",

@@ -888,6 +888,8 @@ export const NoteEditScreen = () => {
     // Outer safety net only. It must stay above the inner deadlines
     // (transcription + agent), otherwise it aborts work that is still healthy.
     const AGENT_TASK_TIMEOUT_MS = 240000;
+    // A voice edit's summary keeps its Undo long enough to read the change first.
+    const VOICE_EDIT_NOTICE_MS = 30000;
     const navigation = useNavigation<NoteEditScreenNavigationProp>();
     const route = useRoute<NoteEditScreenRouteProp>();
     const insets = useSafeAreaInsets();
@@ -1136,7 +1138,7 @@ export const NoteEditScreen = () => {
             agentNoticeTimerRef.current = setTimeout(() => {
                 agentNoticeTimerRef.current = null;
                 setAgentNotice(null);
-            }, 15000);
+            }, notice.kind === 'voiceEdit' ? VOICE_EDIT_NOTICE_MS : 15000);
         }
     }, []);
     const dismissAgentNotice = useCallback(() => {
@@ -4272,8 +4274,8 @@ export const NoteEditScreen = () => {
 
     // Undo after a voice edit runs later than the agent loop that offered it:
     // always the latest helpers, never the ones captured when the loop started.
-    const voiceEditToolsRef = useRef({ requestDeleteVariant, setVariantContentWithOptions, resolveVariantContent, variantDisplayLabels });
-    voiceEditToolsRef.current = { requestDeleteVariant, setVariantContentWithOptions, resolveVariantContent, variantDisplayLabels };
+    const voiceEditToolsRef = useRef({ requestDeleteVariant, setVariantContentWithOptions, resolveVariantContent, variantDisplayLabels, aiOptionsById });
+    voiceEditToolsRef.current = { requestDeleteVariant, setVariantContentWithOptions, resolveVariantContent, variantDisplayLabels, aiOptionsById };
 
     /** Puts a version's text back as it was before a voice edit, unless it was edited since. */
     const undoVoiceContentEdit = useCallback(async (variantId: string, written: string, before: string) => {
@@ -5186,10 +5188,15 @@ export const NoteEditScreen = () => {
                                     });
                                     const createdVersionId = improvement.id;
                                     const madeList = agentResult.mode === 'todo' || agentResult.mode === 'list';
+                                    // Named as its chip will be, so the summary points at what is on screen.
+                                    const createdVersionName = buildVariantDisplayLabels(
+                                        [improvement], t, voiceEditToolsRef.current.aiOptionsById,
+                                        () => t('edit.improvement', 'Improvement'),
+                                    )[createdVersionId] || t('edit.improvement', 'Improvement');
                                     showVoiceEditSummary(
                                         madeList
-                                            ? t('edit.voiceEdit.listInNewVersion', 'Made a list in a new version. The original is unchanged.')
-                                            : t('edit.voiceEdit.changedInNewVersion', 'Changed in a new version. The original is unchanged.'),
+                                            ? t('edit.voiceEdit.listInNewVersion', 'Made a list in a new version, “{{version}}”. The original is unchanged.', { version: createdVersionName })
+                                            : t('edit.voiceEdit.changedInNewVersion', 'Changed in a new version, “{{version}}”. The original is unchanged.', { version: createdVersionName }),
                                         // Removing the new version is itself undoable for a few seconds.
                                         async () => { await voiceEditToolsRef.current.requestDeleteVariant(createdVersionId); },
                                     );

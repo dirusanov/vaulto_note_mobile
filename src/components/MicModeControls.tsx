@@ -174,7 +174,7 @@ export const MicRouteNote = ({
                             </Text>
                         </View>
                     )}
-                    <Text style={styles.noteOutcome} numberOfLines={3}>
+                    <Text style={styles.noteOutcome} numberOfLines={6}>
                         {outcomeLine}
                     </Text>
                 </>
@@ -263,7 +263,7 @@ const styles = createStyles(() => ({
         color: colors.onPrimary,
     },
     note: {
-        alignSelf: 'center',
+        alignSelf: 'stretch',
         maxWidth: '100%',
         backgroundColor: colors.surface,
         borderRadius: 14,
@@ -302,7 +302,7 @@ const styles = createStyles(() => ({
     pill: {
         flexDirection: 'row',
         alignItems: 'center',
-        maxWidth: 220,
+        maxWidth: 260,
         minHeight: 36,
         paddingHorizontal: 12,
         borderRadius: 18,

@@ -1439,7 +1439,8 @@ export const SettingsScreen = () => {
                     {/* "Does my recording leave the phone?" answered from the settings below. */}
                     <ProcessingSummaryCard
                         signedIn={!isGuestOrAnonymous}
-                        syncEnabled={syncEnabled}
+                        // A locked vault does not sync: notes stay on the phone until it is unlocked.
+                        syncEnabled={syncEnabled && !(hasConfiguredKey && encryptionStatus === 'locked')}
                         e2ee={hasConfiguredKey}
                         refreshKey={[
                             aiProvider,

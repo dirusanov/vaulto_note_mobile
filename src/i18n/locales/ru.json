@@ -769,8 +769,8 @@
     },
     "voiceEdit": {
       "renamed": "Заметка переименована: «{{title}}»",
-      "listInNewVersion": "Список — в новой версии. Оригинал не изменился.",
-      "changedInNewVersion": "Изменения — в новой версии. Оригинал не изменился.",
+      "listInNewVersion": "Список — в новой версии «{{version}}». Оригинал не изменился.",
+      "changedInNewVersion": "Изменения — в новой версии «{{version}}». Оригинал не изменился.",
       "listUpdatedIn": "Список обновлён в версии «{{version}}»",
       "changedIn": "Изменена версия «{{version}}»",
       "checkedIn": "Пункты отмечены в версии «{{version}}»",

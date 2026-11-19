@@ -763,8 +763,8 @@
     },
     "voiceEdit": {
       "renamed": "笔记已重命名为“{{title}}”",
-      "listInNewVersion": "已在新版本中生成列表，原文未改动。",
-      "changedInNewVersion": "已在新版本中修改，原文未改动。",
+      "listInNewVersion": "已在新版本“{{version}}”中生成列表，原文未改动。",
+      "changedInNewVersion": "已在新版本“{{version}}”中修改，原文未改动。",
       "listUpdatedIn": "已在“{{version}}”中更新列表",
       "changedIn": "已修改“{{version}}”",
       "checkedIn": "已在“{{version}}”中勾选项目",

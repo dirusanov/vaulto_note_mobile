@@ -766,8 +766,8 @@
     },
     "voiceEdit": {
       "renamed": "Note renommée « {{title}} »",
-      "listInNewVersion": "Liste créée dans une nouvelle version. L’original est inchangé.",
-      "changedInNewVersion": "Modifié dans une nouvelle version. L’original est inchangé.",
+      "listInNewVersion": "Liste créée dans une nouvelle version, « {{version}} ». L’original est inchangé.",
+      "changedInNewVersion": "Modifié dans une nouvelle version, « {{version}} ». L’original est inchangé.",
       "listUpdatedIn": "Liste mise à jour dans « {{version}} »",
       "changedIn": "Modifié dans « {{version}} »",
       "checkedIn": "Éléments cochés dans « {{version}} »",

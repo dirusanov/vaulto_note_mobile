@@ -765,8 +765,8 @@
     },
     "voiceEdit": {
       "renamed": "Note renamed to “{{title}}”",
-      "listInNewVersion": "Made a list in a new version. The original is unchanged.",
-      "changedInNewVersion": "Changed in a new version. The original is unchanged.",
+      "listInNewVersion": "Made a list in a new version, “{{version}}”. The original is unchanged.",
+      "changedInNewVersion": "Changed in a new version, “{{version}}”. The original is unchanged.",
       "listUpdatedIn": "List updated in “{{version}}”",
       "changedIn": "Changed in “{{version}}”",
       "checkedIn": "Items checked off in “{{version}}”",
