@@ -423,7 +423,7 @@
       "change": "Modifier",
       "changeStorageHint": "Ouvre les réglages de synchronisation",
       "answerNoLocked": "Non. Les nouveaux enregistrements restent sur ce téléphone jusqu’au déverrouillage de la synchronisation.",
-      "storageLocked": "Sur le serveur, chiffrées de bout en bout · verrouillé sur ce téléphone, les nouvelles notes attendent ici"
+      "storageLocked": "Sur le serveur, chiffré de bout en bout · verrouillé sur ce téléphone"
     }
   },
   "languages": {

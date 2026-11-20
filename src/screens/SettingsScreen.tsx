@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Linking, Modal, Pressable, Platform, Image, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Linking, Modal, Pressable, Platform, Image, StyleSheet, useWindowDimensions } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
@@ -130,9 +130,13 @@ const Row: React.FC<RowProps> = ({
     title, detail, attention, value, tone = 'default', onPress, disabled, accessory, external, accessibilityLabel,
 }) => {
     const showChevron = !!onPress && accessory === undefined && tone !== 'danger';
+    // Large text: a word action ("Unlock") goes under the text instead of
+    // squeezing it into a column of broken words (UX review 2026-11-20, P2-16).
+    const { fontScale } = useWindowDimensions();
+    const stackAction = fontScale >= 1.3 && React.isValidElement(accessory) && accessory.type === Text;
     const content = (
         <>
-            <View style={styles.rowText}>
+            <View style={[styles.rowText, stackAction && styles.rowTextFull]}>
                 <View style={styles.rowTitleLine}>
                     <Text
                         style={[styles.rowTitle, tone === 'accent' && styles.rowTitleAccent, tone === 'danger' && styles.rowTitleDanger]}
@@ -155,10 +159,10 @@ const Row: React.FC<RowProps> = ({
             )}
         </>
     );
-    if (!onPress) return <View style={styles.row}>{content}</View>;
+    if (!onPress) return <View style={[styles.row, stackAction && styles.rowStacked]}>{content}</View>;
     return (
         <TouchableOpacity
-            style={[styles.row, disabled && styles.rowDisabled]}
+            style={[styles.row, stackAction && styles.rowStacked, disabled && styles.rowDisabled]}
             onPress={onPress}
             disabled={disabled}
             activeOpacity={0.6}
@@ -2073,6 +2077,13 @@ const styles = createStyles(() => ({
     rowText: {
         flex: 1,
         gap: 2,
+    },
+    rowStacked: {
+        flexWrap: 'wrap',
+        rowGap: spacing.s,
+    },
+    rowTextFull: {
+        flexBasis: '100%',
     },
     rowTitle: {
         fontSize: 16,

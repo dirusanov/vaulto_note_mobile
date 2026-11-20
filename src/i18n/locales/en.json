@@ -423,7 +423,7 @@
       "change": "Change",
       "changeStorageHint": "Opens sync settings",
       "answerNoLocked": "No. New recordings stay on this phone until you unlock sync.",
-      "storageLocked": "End-to-end encrypted on the server · locked on this phone, new notes wait here"
+      "storageLocked": "On the server, end-to-end encrypted · locked on this phone"
     }
   },
   "languages": {

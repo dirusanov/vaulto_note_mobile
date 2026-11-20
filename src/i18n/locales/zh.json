@@ -422,7 +422,7 @@
       "change": "更改",
       "changeStorageHint": "打开同步设置",
       "answerNoLocked": "不会。在你解锁同步之前，新录音只保存在这部手机上。",
-      "storageLocked": "服务器上端到端加密 · 本机已锁定，新笔记暂存在这里"
+      "storageLocked": "服务器上端到端加密 · 本机已锁定"
     }
   },
   "languages": {

@@ -423,7 +423,7 @@
       "change": "Ändern",
       "changeStorageHint": "Öffnet die Sync-Einstellungen",
       "answerNoLocked": "Nein. Neue Aufnahmen bleiben auf diesem Telefon, bis du die Synchronisierung entsperrst.",
-      "storageLocked": "Auf dem Server, Ende-zu-Ende-verschlüsselt · auf diesem Telefon gesperrt, neue Notizen warten hier"
+      "storageLocked": "Auf dem Server, Ende-zu-Ende-verschlüsselt · auf diesem Telefon gesperrt"
     }
   },
   "languages": {

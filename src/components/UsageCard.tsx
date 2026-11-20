@@ -273,17 +273,18 @@ const styles = createStyles(() => ({
         paddingStart: 0,
         gap: 10,
     },
+    // Large text: the value moves under the title instead of breaking words.
     embeddedHeader: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'baseline',
         justifyContent: 'space-between',
-        gap: spacing.m,
+        columnGap: spacing.m,
     },
     embeddedTitle: {
         fontSize: 15,
         lineHeight: 20,
         color: colors.textSecondary,
-        flexShrink: 1,
     },
     embeddedValue: {
         fontSize: 15,

@@ -155,7 +155,7 @@ export const CompareVersionsModal = ({ visible, versionLabel, versionText, bases
                     <Text style={[styles.legendItem, styles.added]}>{addedWord}</Text>
                     {changes.length === 1 && (
                         // More than one: the count lives in the Previous / Next bar.
-                        <Text style={styles.changeCount} numberOfLines={1}>
+                        <Text style={styles.changeCount}>
                             {t('edit.versions.changeCount', { count: changes.length, defaultValue: '{{count}} changes' })}
                         </Text>
                     )}
@@ -334,6 +334,7 @@ const styles = createStyles(() => ({
         maxWidth: READABLE_WIDTH,
         alignSelf: 'center',
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
         gap: spacing.s,
         paddingHorizontal: spacing.m,
@@ -346,8 +347,9 @@ const styles = createStyles(() => ({
         borderRadius: 4,
         overflow: 'hidden',
     },
+    // Large text: wraps under the legend instead of being cut.
     changeCount: {
-        flex: 1,
+        flexGrow: 1,
         textAlign: 'right',
         fontSize: 13,
         color: colors.textSecondary,

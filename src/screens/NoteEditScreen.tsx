@@ -658,7 +658,9 @@ const VersionBar = memo(({
                     <MaterialIcons name={shownIcon as any} size={iconSize} color={colors.textSecondary} />
                 )}
                 <Text style={styles.versionButtonText} numberOfLines={1}>{shownLabel}</Text>
-                <Text style={styles.versionButtonCount}>{`${shownIndex + 1}/${versionCount}`}</Text>
+                {fontScale < 1.3 && (
+                    <Text style={styles.versionButtonCount}>{`${shownIndex + 1}/${versionCount}`}</Text>
+                )}
                 <MaterialIcons name="expand-more" size={iconSize + 2} color={colors.textSecondary} />
             </TouchableOpacity>
             {onCompare && (
@@ -670,8 +672,11 @@ const VersionBar = memo(({
                     accessibilityRole="button"
                     accessibilityLabel={t('edit.versions.compareA11y', 'Compare this version with its source')}
                 >
-                    <MaterialIcons name="compare-arrows" size={iconSize + 2} color={colors.primary} />
-                    <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
+                    <MaterialIcons name="compare-arrows" size={iconSize + 4} color={colors.primary} />
+                    {/* Large text: the icon alone keeps the row to one line. */}
+                    {fontScale < 1.3 && (
+                        <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
+                    )}
                 </TouchableOpacity>
             )}
         </View>
@@ -9259,8 +9264,7 @@ const styles = createStyles(() => ({
     versionBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        columnGap: spacing.m,
+        columnGap: spacing.s,
         marginBottom: spacing.s,
     },
     versionButton: {
@@ -9294,8 +9298,10 @@ const styles = createStyles(() => ({
     versionCompare: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 4,
         minHeight: 44,
+        minWidth: 44,
         paddingHorizontal: spacing.xs,
         marginStart: 'auto',
         marginEnd: -spacing.xs,

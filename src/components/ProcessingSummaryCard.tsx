@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -28,7 +28,7 @@ const storageText = (t: TFunction, v: StorageSummary): string => ({
     device: t('settings.privacySummary.storageDevice', 'On this phone only'),
     sync_e2ee: t('settings.privacySummary.storageSyncE2ee', 'Synced, end-to-end encrypted'),
     sync: t('settings.privacySummary.storageSync', 'Synced to Vaulto cloud'),
-    sync_locked: t('settings.privacySummary.storageLocked', 'End-to-end encrypted on the server · locked on this phone, new notes wait here'),
+    sync_locked: t('settings.privacySummary.storageLocked', 'On the server, end-to-end encrypted · locked on this phone'),
 }[v]);
 
 const speechText = (t: TFunction, v: SpeechSummary): string => ({
@@ -75,6 +75,9 @@ export const ProcessingSummaryCard = ({
 }) => {
     const { t } = useTranslation();
     const focused = useIsFocused();
+    // Large text: "Change"/"Unlock" under the value, not squeezing it.
+    const { fontScale } = useWindowDimensions();
+    const stacked = fontScale >= 1.3;
     const [summary, setSummary] = useState<ProcessingSummary | null>(null);
 
     useEffect(() => {
@@ -113,7 +116,7 @@ export const ProcessingSummaryCard = ({
                 {lines.map((line) => {
                     const body = (
                         <>
-                            <View style={styles.lineText}>
+                            <View style={[styles.lineText, stacked && styles.lineTextFull]}>
                                 <Text style={styles.lineLabel}>{line.label}</Text>
                                 <Text style={styles.lineValue}>{line.value}</Text>
                             </View>
@@ -129,7 +132,7 @@ export const ProcessingSummaryCard = ({
                     return line.onPress ? (
                         <TouchableOpacity
                             key={line.key}
-                            style={styles.line}
+                            style={[styles.line, stacked && styles.lineStacked]}
                             onPress={line.onPress}
                             activeOpacity={0.6}
                             accessibilityRole="button"
@@ -182,6 +185,13 @@ const styles = createStyles(() => ({
     },
     lineText: {
         flex: 1,
+    },
+    lineStacked: {
+        flexWrap: 'wrap',
+        rowGap: 4,
+    },
+    lineTextFull: {
+        flexBasis: '100%',
     },
     lineLabel: {
         fontSize: 13,

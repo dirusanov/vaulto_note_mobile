@@ -423,7 +423,7 @@
       "change": "Alterar",
       "changeStorageHint": "Abre as configurações de sincronização",
       "answerNoLocked": "Não. As novas gravações ficam neste telefone até você desbloquear a sincronização.",
-      "storageLocked": "No servidor, com criptografia de ponta a ponta · bloqueado neste telefone, novas notas aguardam aqui"
+      "storageLocked": "No servidor, com criptografia de ponta a ponta · bloqueado neste telefone"
     }
   },
   "languages": {

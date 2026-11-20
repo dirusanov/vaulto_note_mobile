@@ -817,14 +817,18 @@ export const NotesListScreen = () => {
                             <Text style={styles.lockBannerTitle}>
                                 {t("notes.syncLocked")}
                             </Text>
-                            {/* Large text: a few lines, not half the screen (P2-16). */}
-                            <Text style={styles.lockBannerText} numberOfLines={largeText ? 2 : undefined}>
-                                {encryptionBundle?.secret_mode === 'recovery_code'
-                                    ? t("notes.unlockWithKey", "Enter your recovery key to show them on this device.")
-                                    : t("notes.unlockToRestore")}
-                                {/* Nothing uploads while locked: new notes stay on this phone only. */}
-                                {` ${t('notes.lockedNotBackedUp', 'Until then, new notes are not backed up.')}`}
-                            </Text>
+                            {/* Large text: the title and Unlock say enough; the
+                                explanation took half the screen (P2-16). Unlock
+                                opens the same explanation. */}
+                            {!largeText && (
+                                <Text style={styles.lockBannerText}>
+                                    {encryptionBundle?.secret_mode === 'recovery_code'
+                                        ? t("notes.unlockWithKey", "Enter your recovery key to show them on this device.")
+                                        : t("notes.unlockToRestore")}
+                                    {/* Nothing uploads while locked: new notes stay on this phone only. */}
+                                    {` ${t('notes.lockedNotBackedUp', 'Until then, new notes are not backed up.')}`}
+                                </Text>
+                            )}
                         </View>
                     </View>
                     <View style={styles.lockActionsRow}>
@@ -1585,7 +1589,7 @@ const styles = createStyles(() => ({
     },
     // Two buttons until there is something to ask about.
     dockCompact: {
-        width: 176,
+        width: 152,
     },
     dockButtonRow: {
         flexDirection: 'row',

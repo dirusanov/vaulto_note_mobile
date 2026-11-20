@@ -423,7 +423,7 @@
       "change": "Cambiar",
       "changeStorageHint": "Abre los ajustes de sincronización",
       "answerNoLocked": "No. Las grabaciones nuevas se quedan en este teléfono hasta que desbloquees la sincronización.",
-      "storageLocked": "En el servidor, con cifrado de extremo a extremo · bloqueado en este teléfono, las notas nuevas esperan aquí"
+      "storageLocked": "En el servidor, cifrado de extremo a extremo · bloqueado en este teléfono"
     }
   },
   "languages": {
