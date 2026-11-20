@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Modal,
     Animated,
+    type LayoutChangeEvent,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -58,6 +59,11 @@ interface VoiceRecorderProps {
 
 
 const BAR_COUNT = 20;
+/**
+ * At most this many bars (each one is a JS-driven animation loop); on a wide
+ * bar they grow a little and spread out to fill it instead of multiplying.
+ */
+const MAX_BAR_COUNT = 32;
 const SILENCE_THRESHOLD_DB = -60;
 const MIN_VOICE_SAMPLES = 3;
 /** A silent recording at least this long is offered to keep rather than dropped. */
@@ -119,7 +125,17 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const INTERRUPTION_GRACE_MS = 1800;
 
     // Waveform animations
-    const animations = useRef([...Array(BAR_COUNT)].map(() => new Animated.Value(0.3))).current;
+    const animations = useRef([...Array(MAX_BAR_COUNT)].map(() => new Animated.Value(0.3))).current;
+    // The waveform fills its bar (a tablet's wide bar showed a short stub of
+    // 20 at its start): as many bars as fit, up to MAX_BAR_COUNT.
+    const [barCount, setBarCount] = useState(BAR_COUNT);
+    const handleWaveformLayout = (event: LayoutChangeEvent) => {
+        const width = event.nativeEvent.layout.width;
+        const gap = isMainScreen ? 5 : 3;
+        const pitch = (isMainScreen ? 5 : 3) + gap;
+        const next = Math.max(8, Math.min(MAX_BAR_COUNT, Math.floor((width + gap) / pitch)));
+        setBarCount((prev) => (prev === next ? prev : next));
+    };
 
     useEffect(() => {
         if (visible) {
@@ -248,12 +264,17 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     };
 
     useEffect(() => {
-        if (isRecording && !isPaused) {
-            // Start timer
-            const interval = setInterval(() => {
-                setDuration(d => d + 1);
-            }, 1000);
+        if (!isRecording || isPaused) return;
+        const interval = setInterval(() => {
+            setDuration(d => d + 1);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [isRecording, isPaused]);
 
+    // Kept apart from the timer: a new bar count restarts only the bars.
+    useEffect(() => {
+        const bars = animations.slice(0, barCount);
+        if (isRecording && !isPaused) {
             // Animate bars based on metering
             const animateBar = (anim: Animated.Value) => {
                 // Normalize dB (-160 to 0) to (0 to 1)
@@ -294,15 +315,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 });
             };
 
-            animations.forEach(anim => animateBar(anim));
+            bars.forEach(anim => animateBar(anim));
 
             return () => {
-                clearInterval(interval);
-                animations.forEach(anim => anim.stopAnimation());
+                bars.forEach(anim => anim.stopAnimation());
             };
         } else {
             // Reset bars smoothly
-            animations.forEach(anim => {
+            bars.forEach(anim => {
                 anim.stopAnimation();
                 Animated.timing(anim, {
                     toValue: 0.3,
@@ -311,7 +331,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 }).start();
             });
         }
-    }, [isRecording, isPaused]);
+    }, [isRecording, isPaused, barCount]);
 
     const promptRecordingInterruption = (message: string) => {
         if (interruptionHandledRef.current) {
@@ -950,13 +970,21 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             <Text style={[styles.timerCompact, isMainScreen && styles.timerCompactLarge, isPaused && { color: colors.error }]}>
                                 {formatDuration(duration)}
                             </Text>
-                            <View style={[styles.waveformContainerCompact, isMainScreen && styles.waveformContainerCompactLarge]}>
-                                {animations.map((anim, index) => (
+                            <View
+                                style={[
+                                    styles.waveformContainerCompact,
+                                    isMainScreen && styles.waveformContainerCompactLarge,
+                                    barCount >= MAX_BAR_COUNT && styles.waveformContainerSpread,
+                                ]}
+                                onLayout={handleWaveformLayout}
+                            >
+                                {animations.slice(0, barCount).map((anim, index) => (
                                     <Animated.View
                                         key={index}
                                         style={[
                                             styles.barCompact,
                                             isMainScreen && styles.barCompactLarge,
+                                            barCount >= MAX_BAR_COUNT && (isMainScreen ? styles.barSpreadLarge : styles.barSpread),
                                             {
                                                 transform: [{ scaleY: anim }],
                                                 opacity: isRecording && !isPaused ? 1 : 0.2,
@@ -1188,6 +1216,17 @@ const styles = createStyles(() => ({
     waveformContainerCompactLarge: {
         height: 56,
         gap: 5,
+    },
+    waveformContainerSpread: {
+        justifyContent: 'space-between',
+    },
+    barSpread: {
+        flexGrow: 1,
+        maxWidth: 5,
+    },
+    barSpreadLarge: {
+        flexGrow: 1,
+        maxWidth: 8,
     },
     barCompact: {
         width: 3,

@@ -314,7 +314,9 @@ const styles = createStyles(() => ({
         color: colors.onPrimary,
     },
     note: {
-        alignSelf: 'stretch',
+        // Sized to what it says, centred over the choices below it: a
+        // full-width card over narrow chips read as a separate banner.
+        alignSelf: 'center',
         maxWidth: '100%',
         backgroundColor: colors.surface,
         borderRadius: 14,
