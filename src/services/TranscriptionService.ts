@@ -755,7 +755,10 @@ async function transcribeViaBackend(
                     ? 'Session expired. Please sign in again.'
                     : /^external provider error\.?$/i.test(detail?.trim() ?? '')
                         ? 'transcription_provider_error'
-                        : detail || `Transcription request failed (${response.status})`;
+                        // The server's own words stay in the log; the user gets plain
+                        // copy for the status (utils/errorMessage).
+                        : `Transcription request failed (${response.status})`;
+            if (detail) console.warn('[Transcription] backend refused', response.status, detail);
             return {
                 text: '',
                 success: false,
@@ -907,12 +910,13 @@ export async function processVoiceNote(
                 }
 
                 const detail = await extractResponseMessage(response);
+                if (detail) console.warn('[Agent] backend refused', response.status, detail);
                 return {
                     originalText: transcriptText || preTranscribedText || '',
                     success: false,
                     error: response.status === 401
                         ? 'Session expired. Please sign in again.'
-                        : detail || `Agent request failed (${response.status})`,
+                        : `Agent request failed (${response.status})`,
                     hasInstruction: false
                 };
             }

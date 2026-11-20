@@ -78,7 +78,9 @@
     "tagEmpty": "Nenhuma nota em #{{tag}}",
     "tagSearchAll": "Pesquisar em todas as notas",
     "tagShowAll": "Mostrar todas as notas",
-    "tagsHint": "Dica: escreva #trabalho em uma nota para filtrar por tag."
+    "tagsHint": "Dica: escreva #trabalho em uma nota para filtrar por tag.",
+    "lockedNote": "Nota bloqueada",
+    "lockedNoteText": "Esta nota foi bloqueada com uma chave que não está mais neste telefone, por isso não pode ser aberta aqui. Se ela foi sincronizada, você pode abri-la nos seus outros dispositivos."
   },
   "settings": {
     "title": "Configurações",
@@ -250,7 +252,11 @@
       "guestMinutesLeft": "Voz para texto grátis restante: {{minutes}} min. Entre para ganhar mais e sincronizar suas notas.",
       "guestMinutesUsed": "Os minutos grátis acabaram. Entre para ganhar mais ou ative “Usar sem internet” abaixo.",
       "trialInfoAccount": "Entre para ganhar minutos grátis de voz para texto e sincronizar suas notas.",
-      "vaultLocked": "O cofre está bloqueado"
+      "vaultLocked": "O cofre está bloqueado",
+      "unlockTimeUnknown": "Em alguns telefones, isso pode levar um minuto.",
+      "unlockTimeAlmost": "Quase pronto…",
+      "unlockTimeSeconds": "Faltam cerca de {{count}} s. Mantenha o Vaulto aberto.",
+      "unlockTimeMinutes": "Faltam cerca de {{count}} min. Mantenha o Vaulto aberto."
     },
     "recovery": {
       "title": "Código de recuperação",
@@ -393,7 +399,8 @@
       "aiReadyGuest": "Sem conta, a IA funciona neste dispositivo. Ative “{{option}}” para a usar: a voz e a IA ficam então no dispositivo.",
       "turnOn": "Ativar",
       "summarySpeech": "Voz: {{tier}}",
-      "summaryAI": "IA: {{tier}}"
+      "summaryAI": "IA: {{tier}}",
+      "aiReadyGuestOff": "Sem conta, a IA roda neste dispositivo. Os modelos baixados estão desativados; ative-os para usá-la."
     },
     "privacySummary": {
       "title": "Minha gravação sai do telefone?",
@@ -491,7 +498,12 @@
     "benefitAI": "A IA arruma o texto, encontra tarefas e responde a perguntas sobre as suas notas",
     "benefitSync": "Sincronização entre os seus dispositivos com encriptação ponta a ponta",
     "benefitKeepNotes": "As notas que criou sem conta vêm consigo",
-    "orWithEmail": "ou com e-mail"
+    "orWithEmail": "ou com e-mail",
+    "sessionExpiredTitle": "Sua sessão expirou",
+    "sessionExpiredText": "Entre novamente para continuar usando a IA e a sincronização. Suas notas ficam neste telefone.",
+    "signInAgain": "Entrar novamente",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha"
   },
   "edit": {
     "visualEditor": "Editor Visual",
@@ -913,7 +925,10 @@
     "recordAgain": "Gravar de novo",
     "recordAgainHint": "Exclui esta gravação silenciosa e começa uma nova",
     "noSpeechInRecording": "Não há fala nesta gravação",
-    "playRecording": "Reproduzir a gravação"
+    "playRecording": "Reproduzir a gravação",
+    "micAllowTitle": "Permita o microfone para gravar",
+    "micAllowText": "O Vaulto precisa do microfone para gravar notas de voz. Você pode permitir nas configurações do app.",
+    "micOpenSettings": "Abrir configurações"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -1061,7 +1076,21 @@
     "verificationCheckFailed": "Não foi possível verificar se seu e-mail foi confirmado. Verifique sua conexão e tente novamente.",
     "cloudMinutes": "Transcrição na nuvem",
     "cloudMinutesMonth": "Transcrição na nuvem este mês",
-    "minutesUsedOf": "{{used}} de {{total}} min usados"
+    "minutesUsedOf": "{{used}} de {{total}} min usados",
+    "unlockedTitle": "Notas desbloqueadas",
+    "unlockedText": "Suas notas podem ser lidas neste telefone novamente.",
+    "unlockedCount_one": "{{count}} nota pode ser lida neste telefone novamente.",
+    "unlockedCount_many": "{{count}} notas podem ser lidas neste telefone novamente.",
+    "unlockedCount_other": "{{count}} notas podem ser lidas neste telefone novamente.",
+    "unlockedSomeLocked_one": "{{count}} nota ainda não pode ser aberta: foi bloqueada com uma chave que não está mais neste telefone.",
+    "unlockedSomeLocked_many": "{{count}} notas ainda não podem ser abertas: foram bloqueadas com uma chave que não está mais neste telefone.",
+    "unlockedSomeLocked_other": "{{count}} notas ainda não podem ser abertas: foram bloqueadas com uma chave que não está mais neste telefone.",
+    "passphraseMismatch": "Essa frase-senha não confere. Verifique e tente novamente.",
+    "unlockFailedRetry": "Não foi possível desbloquear agora. Tente novamente.",
+    "forgotPassphrase": "Esqueceu a frase-senha?",
+    "forgotTitle": "Esqueceu a frase-senha?",
+    "forgotText": "Suas notas são criptografadas com ela, então ninguém consegue lê-las sem ela, nem mesmo o Vaulto. Se você salvou o código de recuperação, use-o: as notas continuam. Se não tiver nenhum dos dois, pode redefinir a criptografia: as notas criptografadas no servidor são apagadas e você recomeça.",
+    "forgotReset": "Redefinir criptografia…"
   },
   "a11y": {
     "checked": "marcado",
@@ -1212,7 +1241,13 @@
     "serverUnavailable": "O servidor está temporariamente indisponível. Suas notas estão seguras; tente em um minuto.",
     "timeout": "A solicitação demorou demais. Verifique sua conexão e tente novamente.",
     "localAIMemory": "Memória insuficiente para esta IA. Escolha um modelo mais leve ou IA na nuvem nas configurações.",
-    "unreachable": "Não foi possível contactar o servidor. Tente novamente daqui a pouco."
+    "unreachable": "Não foi possível contactar o servidor. Tente novamente daqui a pouco.",
+    "sessionExpired": "Sua sessão expirou. Entre novamente para continuar.",
+    "tooLong": "É longo demais para enviar de uma vez. Tente uma parte menor.",
+    "tooManyRequests": "Muitas solicitações agora. Tente novamente em um minuto.",
+    "requestFailed": "Algo deu errado. Tente novamente.",
+    "signInForAI": "Entre para usar o Vaulto AI.",
+    "aiEmpty": "A IA não retornou nada. Tente novamente."
   },
   "alerts": {
     "shareUnavailable": "Não é possível compartilhar neste dispositivo.",

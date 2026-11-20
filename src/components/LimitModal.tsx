@@ -14,7 +14,8 @@ import { typography } from '../theme/typography';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { subscriptionApi, CurrentPeriodUsage } from '../api/subscription';
 import { onLimitReached, setLimitSheetOpen } from '../utils/limitEvents';
-import { LLM_LIMIT_REASON, markAiLimitReached } from '../utils/aiLimitState';
+import { aiLimitResetAt, LLM_LIMIT_REASON, markAiLimitReached } from '../utils/aiLimitState';
+import { formatAppDate } from '../utils/dateFormat';
 import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
 import { isOnDeviceTranscriptionActive } from '../services/TranscriptionService';
 import { LocalWhisperDownloadModal } from './LocalWhisperDownloadModal';
@@ -23,7 +24,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useSubscription } from '../context/SubscriptionContext';
 
 export const LimitModal: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
     const navigation = useNavigation();
     const { isAuthenticated, isGuest, user } = useAuth();
@@ -109,13 +110,13 @@ export const LimitModal: React.FC = () => {
     const isAiLimit = limitReason ? limitReason === LLM_LIMIT_REASON : llmEmpty;
 
     if (isAiLimit) {
-        const resetAt = usage?.period_end_at ?? user?.current_usage_period_end_at ?? null;
+        const resetAt = usage?.period_end_at ?? user?.current_usage_period_end_at ?? aiLimitResetAt() ?? null;
         title = t('aux.aiLimitTitle', 'AI Limit Reached');
         message = isGuestUser
             ? t('aux.aiLimitGuestDesc', 'Sign in to get your own monthly AI allowance.')
             : resetAt
                 ? t('aux.aiLimitDescDate', 'You have used this month\'s AI allowance. It resets on {{date}}.', {
-                    date: new Date(resetAt).toLocaleDateString(),
+                    date: formatAppDate(resetAt, i18n.language),
                 })
                 : t('aux.aiLimitDescNoDate', 'You have used this month\'s AI allowance. It resets at the start of your next period.');
         iconName = 'auto-awesome';
@@ -150,7 +151,7 @@ export const LimitModal: React.FC = () => {
             title = t('aux.transcriptionLimitTitle', 'Transcription Limit Reached');
             message = usage.subscription_next_refill_at
                 ? t('aux.transcriptionLimitDescDate', 'You have used all your PRO transcription minutes for this period. Your limit will reset on {{date}}.', {
-                    date: new Date(usage.subscription_next_refill_at).toLocaleDateString(),
+                    date: formatAppDate(usage.subscription_next_refill_at, i18n.language),
                 })
                 : t('aux.transcriptionLimitDescNoDate', 'You have used all your PRO transcription minutes for this period. Your limit will reset at the start of your next billing cycle.');
             iconName = 'mic-off';

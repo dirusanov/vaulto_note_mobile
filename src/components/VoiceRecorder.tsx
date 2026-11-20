@@ -31,6 +31,7 @@ import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { appAlert } from './AppAlert';
+import { showMicPermissionDenied } from '../utils/micPermission';
 import {
     DISCARD_CONFIRM_AFTER_SECONDS,
     DISCARD_CONFIRM_WINDOW_MS,
@@ -536,7 +537,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             const granted = await AudioService.requestPermissions();
             if (startCancelledRef.current) return;
             if (!granted) {
-                appAlert(t("common.permission", "Permission"), t("voice.micPermissionDenied"));
+                showMicPermissionDenied();
                 onCancel();
                 return;
             }

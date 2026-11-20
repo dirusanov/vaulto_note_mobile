@@ -1,4 +1,4 @@
-import { getAIProvider, getLocalModelsEnabled, getOnDeviceTranscription } from '../utils/storage';
+import { getAIProvider, getLocalModelsEnabled, getOnDeviceTranscription, storage } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import { LOCAL_MODELS_ENABLED } from '../utils/featureFlags';
 import { getLocalLLMModelStatus, isLocalLLMRuntimeAvailable } from './LocalLLMService';
@@ -32,5 +32,21 @@ export const getEffectiveAIProvider = async (): Promise<Provider> => {
     if (((await getOnDeviceTranscription()) || (await isDeviceOffline())) && (await isLocalLLMReady())) {
         return 'local' as Provider;
     }
+    // Cloud AI needs an account. A guest who downloaded the model uses it without
+    // a further switch: the text stays on the phone, and nothing goes anywhere
+    // that a guest could have sent before. Speech routing is not affected.
+    if (provider === 'vaulto_ai' && (await isGuestSession()) && (await isLocalLLMReady())) {
+        return 'local' as Provider;
+    }
     return provider;
+};
+
+/** Signed in without an account (an anonymous guest session). */
+const isGuestSession = async (): Promise<boolean> => {
+    try {
+        const profile = await storage.getUserProfile();
+        return !!profile && !profile.is_verified && profile.provider === 'anonymous';
+    } catch {
+        return false;
+    }
 };

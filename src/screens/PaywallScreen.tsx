@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { formatAppDate } from '../utils/dateFormat';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, ScrollView, Linking, Platform } from 'react-native';
 import { useSubscription, MergedPackage } from '../context/SubscriptionContext';
@@ -14,7 +15,7 @@ import { haptics } from '../utils/haptics';
 import { appAlert } from '../components/AppAlert';
 
 export const PaywallScreen = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const {
         packages, purchasePackage, restorePurchases, reloadOfferings, isLoading, isPro,
         proTrial, startProTrial, isStartingProTrial,
@@ -178,7 +179,7 @@ export const PaywallScreen = () => {
                                 </Text>
                                 <Text style={styles.trialNoticeText}>
                                     {proTrial.endsAt
-                                        ? t('paywall.trialKeepPro', 'Choose a plan to keep Pro after {{date}}. Nothing is charged until you do.', { date: proTrial.endsAt.toLocaleDateString() })
+                                        ? t('paywall.trialKeepPro', 'Choose a plan to keep Pro after {{date}}. Nothing is charged until you do.', { date: formatAppDate(proTrial.endsAt, i18n.language) })
                                         : t('paywall.trialKeepProNoDate', 'Choose a plan to keep Pro after the trial. Nothing is charged until you do.')}
                                 </Text>
                             </View>

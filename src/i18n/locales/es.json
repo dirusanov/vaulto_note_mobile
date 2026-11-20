@@ -78,7 +78,9 @@
     "tagEmpty": "No hay notas en #{{tag}}",
     "tagSearchAll": "Buscar en todas las notas",
     "tagShowAll": "Mostrar todas las notas",
-    "tagsHint": "Consejo: escribe #trabajo en una nota para filtrar por etiqueta."
+    "tagsHint": "Consejo: escribe #trabajo en una nota para filtrar por etiqueta.",
+    "lockedNote": "Nota bloqueada",
+    "lockedNoteText": "Esta nota se bloqueó con una clave que ya no está en este teléfono, así que no se puede abrir aquí. Si se sincronizó, puedes abrirla en tus otros dispositivos."
   },
   "settings": {
     "title": "Ajustes",
@@ -250,7 +252,11 @@
       "guestMinutesLeft": "Voz a texto gratis restante: {{minutes}} min. Inicia sesión para obtener más y sincronizar tus notas.",
       "guestMinutesUsed": "Se acabaron los minutos gratis. Inicia sesión para obtener más o activa «Trabajar sin internet» abajo.",
       "trialInfoAccount": "Inicia sesión para obtener minutos gratis de voz a texto y sincronizar tus notas.",
-      "vaultLocked": "La bóveda está bloqueada"
+      "vaultLocked": "La bóveda está bloqueada",
+      "unlockTimeUnknown": "En algunos teléfonos puede tardar un minuto.",
+      "unlockTimeAlmost": "Casi listo…",
+      "unlockTimeSeconds": "Quedan unos {{count}} s. Mantén Vaulto abierta.",
+      "unlockTimeMinutes": "Quedan unos {{count}} min. Mantén Vaulto abierta."
     },
     "recovery": {
       "title": "Código de recuperación",
@@ -393,7 +399,8 @@
       "aiReadyGuest": "Sin cuenta, la IA funciona en este dispositivo. Activa «{{option}}» para usarla: la voz y la IA no saldrán del dispositivo.",
       "turnOn": "Activar",
       "summarySpeech": "Voz: {{tier}}",
-      "summaryAI": "IA: {{tier}}"
+      "summaryAI": "IA: {{tier}}",
+      "aiReadyGuestOff": "Sin cuenta, la IA funciona en este dispositivo. Los modelos descargados están desactivados; actívalos para usarla."
     },
     "privacySummary": {
       "title": "¿Sale mi grabación del teléfono?",
@@ -491,7 +498,12 @@
     "benefitAI": "La IA pule el texto, encuentra tareas y responde preguntas sobre tus notas",
     "benefitSync": "Sincronización entre tus dispositivos con cifrado de extremo a extremo",
     "benefitKeepNotes": "Las notas que creaste sin cuenta se vienen contigo",
-    "orWithEmail": "o con correo electrónico"
+    "orWithEmail": "o con correo electrónico",
+    "sessionExpiredTitle": "Tu sesión ha caducado",
+    "sessionExpiredText": "Vuelve a iniciar sesión para seguir usando la IA y la sincronización. Tus notas se quedan en este teléfono.",
+    "signInAgain": "Volver a iniciar sesión",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña"
   },
   "edit": {
     "visualEditor": "Editor visual",
@@ -913,7 +925,10 @@
     "recordAgain": "Grabar de nuevo",
     "recordAgainHint": "Elimina esta grabación en silencio y empieza una nueva",
     "noSpeechInRecording": "No hay voz en esta grabación",
-    "playRecording": "Reproducir la grabación"
+    "playRecording": "Reproducir la grabación",
+    "micAllowTitle": "Permite el micrófono para grabar",
+    "micAllowText": "Vaulto necesita el micrófono para grabar notas de voz. Puedes permitirlo en los ajustes de la app.",
+    "micOpenSettings": "Abrir ajustes"
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -1061,7 +1076,21 @@
     "verificationCheckFailed": "No se pudo comprobar si tu correo está verificado. Revisa tu conexión y vuelve a intentarlo.",
     "cloudMinutes": "Voz a texto en la nube",
     "cloudMinutesMonth": "Voz a texto en la nube este mes",
-    "minutesUsedOf": "{{used}} de {{total}} min usados"
+    "minutesUsedOf": "{{used}} de {{total}} min usados",
+    "unlockedTitle": "Notas desbloqueadas",
+    "unlockedText": "Tus notas vuelven a poder leerse en este teléfono.",
+    "unlockedCount_one": "{{count}} nota vuelve a poder leerse en este teléfono.",
+    "unlockedCount_many": "{{count}} notas vuelven a poder leerse en este teléfono.",
+    "unlockedCount_other": "{{count}} notas vuelven a poder leerse en este teléfono.",
+    "unlockedSomeLocked_one": "{{count}} nota sigue sin poder abrirse: se bloqueó con una clave que ya no está en este teléfono.",
+    "unlockedSomeLocked_many": "{{count}} notas siguen sin poder abrirse: se bloquearon con una clave que ya no está en este teléfono.",
+    "unlockedSomeLocked_other": "{{count}} notas siguen sin poder abrirse: se bloquearon con una clave que ya no está en este teléfono.",
+    "passphraseMismatch": "Esa frase de contraseña no coincide. Revísala e inténtalo de nuevo.",
+    "unlockFailedRetry": "No se pudo desbloquear ahora. Inténtalo de nuevo.",
+    "forgotPassphrase": "¿Olvidaste la frase de contraseña?",
+    "forgotTitle": "¿Olvidaste la frase de contraseña?",
+    "forgotText": "Tus notas están cifradas con ella, así que nadie puede leerlas sin ella, ni siquiera Vaulto. Si guardaste el código de recuperación, úsalo: las notas se conservan. Si no tienes ninguno de los dos, puedes restablecer el cifrado: las notas cifradas del servidor se eliminan y empiezas de cero.",
+    "forgotReset": "Restablecer el cifrado…"
   },
   "a11y": {
     "checked": "marcado",
@@ -1212,7 +1241,13 @@
     "serverUnavailable": "El servidor no está disponible por ahora. Tus notas están a salvo; inténtalo en un minuto.",
     "timeout": "La solicitud tardó demasiado. Revisa tu conexión e inténtalo de nuevo.",
     "localAIMemory": "No hay memoria suficiente para esta IA. Elige un modelo más ligero o IA en la nube en Ajustes.",
-    "unreachable": "No se pudo conectar con el servidor. Inténtalo de nuevo en un momento."
+    "unreachable": "No se pudo conectar con el servidor. Inténtalo de nuevo en un momento.",
+    "sessionExpired": "Tu sesión ha caducado. Vuelve a iniciar sesión para continuar.",
+    "tooLong": "Es demasiado largo para enviarlo de una vez. Prueba con una parte más corta.",
+    "tooManyRequests": "Demasiadas solicitudes ahora mismo. Inténtalo de nuevo en un minuto.",
+    "requestFailed": "Algo salió mal. Inténtalo de nuevo.",
+    "signInForAI": "Inicia sesión para usar Vaulto AI.",
+    "aiEmpty": "La IA no devolvió nada. Inténtalo de nuevo."
   },
   "alerts": {
     "shareUnavailable": "No se puede compartir en este dispositivo.",

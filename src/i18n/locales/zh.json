@@ -77,7 +77,9 @@
     "tagEmpty": "#{{tag}} 中没有笔记",
     "tagSearchAll": "搜索全部笔记",
     "tagShowAll": "显示全部笔记",
-    "tagsHint": "提示：在笔记里写 #工作，即可按标签筛选。"
+    "tagsHint": "提示：在笔记里写 #工作，即可按标签筛选。",
+    "lockedNote": "已锁定的笔记",
+    "lockedNoteText": "这条笔记是用这部手机上已不存在的密钥锁定的，因此无法在这里打开。如果它已同步，你仍可以在其他设备上打开。"
   },
   "settings": {
     "title": "设置",
@@ -249,7 +251,11 @@
       "guestMinutesLeft": "剩余免费语音转文字：{{minutes}} 分钟。登录可获得更多并同步笔记。",
       "guestMinutesUsed": "免费分钟已用完。登录可获得更多，或在下方开启“无网络也可用”。",
       "trialInfoAccount": "登录可获得免费语音转文字分钟并同步笔记。",
-      "vaultLocked": "保险箱已锁定"
+      "vaultLocked": "保险箱已锁定",
+      "unlockTimeUnknown": "在部分手机上可能需要一分钟左右。",
+      "unlockTimeAlmost": "即将完成…",
+      "unlockTimeSeconds": "大约还需 {{count}} 秒。请保持 Vaulto 打开。",
+      "unlockTimeMinutes": "大约还需 {{count}} 分钟。请保持 Vaulto 打开。"
     },
     "recovery": {
       "title": "恢复密钥",
@@ -392,7 +398,8 @@
       "aiReadyGuest": "未登录时，AI 在本设备上运行。开启“{{option}}”即可使用：语音和 AI 都不会离开设备。",
       "turnOn": "开启",
       "summarySpeech": "语音：{{tier}}",
-      "summaryAI": "AI：{{tier}}"
+      "summaryAI": "AI：{{tier}}",
+      "aiReadyGuestOff": "没有账户时，AI 在本设备上运行。已下载的模型目前处于关闭状态，请将其开启后使用。"
     },
     "privacySummary": {
       "title": "我的录音会离开手机吗？",
@@ -490,7 +497,12 @@
     "benefitAI": "AI 帮你整理文字、找出待办，并回答关于笔记的问题",
     "benefitSync": "在你的设备间同步，端到端加密",
     "benefitKeepNotes": "未登录时写的笔记会一并保留",
-    "orWithEmail": "或使用邮箱"
+    "orWithEmail": "或使用邮箱",
+    "sessionExpiredTitle": "登录已过期",
+    "sessionExpiredText": "请重新登录以继续使用 AI 和同步。你的笔记仍保留在这部手机上。",
+    "signInAgain": "重新登录",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "edit": {
     "visualEditor": "可视化编辑器",
@@ -909,7 +921,10 @@
     "recordAgain": "重新录音",
     "recordAgainHint": "删除这段静音录音并开始新的录音",
     "noSpeechInRecording": "这段录音中没有语音",
-    "playRecording": "播放录音"
+    "playRecording": "播放录音",
+    "micAllowTitle": "允许使用麦克风以录音",
+    "micAllowText": "Vaulto 需要麦克风来录制语音笔记。你可以在应用设置中允许。",
+    "micOpenSettings": "打开设置"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -1057,7 +1072,17 @@
     "verificationCheckFailed": "无法检查你的邮箱是否已验证。请检查网络连接后重试。",
     "cloudMinutes": "云端语音转文字",
     "cloudMinutesMonth": "本月云端语音转文字",
-    "minutesUsedOf": "已用 {{used}}/{{total}} 分钟"
+    "minutesUsedOf": "已用 {{used}}/{{total}} 分钟",
+    "unlockedTitle": "笔记已解锁",
+    "unlockedText": "你的笔记在这部手机上又可以阅读了。",
+    "unlockedCount_other": "{{count}} 条笔记在这部手机上又可以阅读了。",
+    "unlockedSomeLocked_other": "仍有 {{count}} 条笔记无法打开：它们是用这部手机上已不存在的密钥锁定的。",
+    "passphraseMismatch": "密码短语不匹配。请检查后重试。",
+    "unlockFailedRetry": "暂时无法解锁。请重试。",
+    "forgotPassphrase": "忘记密码短语？",
+    "forgotTitle": "忘记密码短语？",
+    "forgotText": "你的笔记是用它加密的，没有它任何人都无法读取，包括 Vaulto。如果你保存了恢复码，请改用恢复码：笔记会保留。如果两者都没有，可以重置加密：服务器上的加密笔记会被删除，一切从头开始。",
+    "forgotReset": "重置加密…"
   },
   "a11y": {
     "checked": "已完成",
@@ -1208,7 +1233,13 @@
     "serverUnavailable": "服务器暂时不可用。你的笔记是安全的，请稍后再试。",
     "timeout": "请求耗时过长。请检查网络后重试。",
     "localAIMemory": "此设备没有足够内存运行该 AI 模型。请在设置中选择更轻的模型或云端 AI。",
-    "unreachable": "无法连接服务器，请稍后再试。"
+    "unreachable": "无法连接服务器，请稍后再试。",
+    "sessionExpired": "登录已过期。请重新登录以继续。",
+    "tooLong": "内容太长，无法一次发送。请尝试较短的部分。",
+    "tooManyRequests": "当前请求过多。请一分钟后再试。",
+    "requestFailed": "出了点问题。请重试。",
+    "signInForAI": "登录后即可使用 Vaulto AI。",
+    "aiEmpty": "AI 没有返回任何内容。请重试。"
   },
   "alerts": {
     "shareUnavailable": "此设备无法分享。",

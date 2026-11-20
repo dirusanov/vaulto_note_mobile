@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:encryption-lifecycle && npm run test:utils && npm run test:versions && npm run test:voice-workflow && npm run test:search && npm run test:tasks && npm run test:tags && npm run test:transfer && npm run test:drawing && npm run test:pending-delete && npm run test:editor && npm run test:checklist-command && npm run test:content-date && npm run test:guest-integrity && npm run test:pro-trial && npm run test:recorder-audio && npm run test:ux-audit && npm run test:mic-route && npm run test:version-flow && npm run test:phrase-timing",
+    "test": "npm run typecheck && npm run test:encryption-state && npm run test:formatting && npm run test:e2ee && npm run test:encryption-lifecycle && npm run test:utils && npm run test:versions && npm run test:voice-workflow && npm run test:search && npm run test:tasks && npm run test:tags && npm run test:transfer && npm run test:drawing && npm run test:pending-delete && npm run test:editor && npm run test:checklist-command && npm run test:content-date && npm run test:guest-integrity && npm run test:pro-trial && npm run test:recorder-audio && npm run test:ux-audit && npm run test:mic-route && npm run test:version-flow && npm run test:phrase-timing && npm run test:errors",
     "test:mic-route": "node --test tests/micRoute.test.cjs",
     "typecheck": "tsc --noEmit",
     "test:recorder-audio": "tsc --ignoreConfig src/utils/recordingClock.ts src/utils/audioSeek.ts --target ES2020 --module commonjs --outDir .test-build/recorderAudio --skipLibCheck --esModuleInterop && node --test tests/recorderAudio.test.cjs",
@@ -33,7 +33,8 @@
     "test:content-date": "tsc --ignoreConfig src/utils/contentDate.ts --target ES2020 --module commonjs --outDir .test-build/contentDate --skipLibCheck --esModuleInterop && node --test tests/contentDate.test.cjs",
     "test:voice-workflow": "node --test tests/voiceWorkflow.test.cjs tests/aiFlows.test.cjs tests/audioFormat.test.cjs tests/audioSyncUpload.test.cjs tests/audioPreparation.test.cjs",
     "test:guest-integrity": "tsc --ignoreConfig src/utils/guestIntegrity.ts --target ES2020 --module commonjs --outDir .test-build/guestIntegrity --skipLibCheck --esModuleInterop && node --test tests/guestIntegrity.test.cjs",
-    "test:ink-native": "tsc --ignoreConfig src/drawing/ink.ts --target ES2020 --module commonjs --outDir .test-build/drawing/drawing --skipLibCheck --esModuleInterop && node tests/inkNativeFixtures.cjs && cd android && ./gradlew :ink-input:testDebugUnitTest -q"
+    "test:ink-native": "tsc --ignoreConfig src/drawing/ink.ts --target ES2020 --module commonjs --outDir .test-build/drawing/drawing --skipLibCheck --esModuleInterop && node tests/inkNativeFixtures.cjs && cd android && ./gradlew :ink-input:testDebugUnitTest -q",
+    "test:errors": "tsc --ignoreConfig src/utils/errorMessage.ts src/utils/sessionRetry.ts src/utils/sessionErrors.ts src/utils/aiLimitState.ts src/utils/dateFormat.ts src/utils/unreadableNote.ts src/utils/progressEstimate.ts --target ES2020 --module commonjs --outDir .test-build/errorPaths --skipLibCheck --esModuleInterop && node --test tests/errorPaths.test.cjs"
   },
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",

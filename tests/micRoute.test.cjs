@@ -223,6 +223,9 @@ test('settings summary answers "does my recording leave the phone?" from the con
   const guest = s({ signedIn: false, syncEnabled: true });
   assert.equal(guest.storage, 'device');
   assert.equal(guest.ai, 'sign_in');
+  // A guest's downloaded model answers AI actions without a further switch.
+  assert.equal(s({ signedIn: false, aiDownloaded: true }).ai, 'device');
+  assert.equal(s({ signedIn: false, aiDownloaded: true }).speech, 'cloud', 'speech routing is unchanged');
   assert.equal(s({ provider: 'local', aiDownloaded: true, speechDownloaded: true }).ai, 'device');
   assert.equal(s({ provider: 'local', aiDownloaded: false }).ai, 'device_needs_model');
   assert.equal(s({ provider: 'local_whisper', speechDownloaded: true }).ai, 'none');

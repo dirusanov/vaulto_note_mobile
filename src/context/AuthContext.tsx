@@ -5,6 +5,7 @@ import { syncService } from '../services/SyncService';
 import { wipeLocalDatabase } from '../services/DatabaseService';
 import { getDeviceId, getPlatformName } from '../utils/deviceIdentity';
 import { onUnauthorized } from '../utils/authEvents';
+import { noteAccountPlan, noteAiTokensRemaining } from '../utils/aiLimitState';
 
 interface AuthContextType {
     token: string | null;
@@ -106,6 +107,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             isRecreatingSessionRef.current = false;
         }
     }, []);
+
+    // The profile's usage figures tell up front whether the AI allowance is used
+    // up, so AI actions open the limit sheet at once instead of after a request.
+    useEffect(() => {
+        if (!user || isGuest || user.provider === 'anonymous') return;
+        noteAccountPlan(user.plan);
+        // Pro has no monthly AI cap to read from these figures.
+        if (user.is_pro || (user.plan || '').trim().toLowerCase() === 'pro') return;
+        noteAiTokensRemaining(user.llm_remaining_tokens, user.current_usage_period_end_at ?? null);
+    }, [user, isGuest]);
 
     // Subscribe to 401 unauthorized events
     useEffect(() => {

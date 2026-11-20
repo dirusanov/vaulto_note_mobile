@@ -78,7 +78,9 @@
     "tagEmpty": "No notes in #{{tag}}",
     "tagSearchAll": "Search all notes",
     "tagShowAll": "Show all notes",
-    "tagsHint": "Tip: write #work in a note to filter notes by tag."
+    "tagsHint": "Tip: write #work in a note to filter notes by tag.",
+    "lockedNote": "Locked note",
+    "lockedNoteText": "This note was locked with a key that is no longer on this phone, so it can’t be opened here. If it was synced, you can still open it on your other devices."
   },
   "settings": {
     "title": "Settings",
@@ -261,7 +263,11 @@
       "guestMinutesLeft": "Free speech-to-text left: {{minutes}} min. Sign in to get more and sync your notes.",
       "guestMinutesUsed": "Free minutes are used up. Sign in to get more, or turn on \"Work without internet\" below.",
       "trialInfoAccount": "Sign in to get free speech-to-text minutes and sync your notes.",
-      "vaultLocked": "Vault is locked"
+      "vaultLocked": "Vault is locked",
+      "unlockTimeUnknown": "This can take a minute on some phones.",
+      "unlockTimeAlmost": "Almost done…",
+      "unlockTimeSeconds": "About {{count}} s left. Keep Vaulto open.",
+      "unlockTimeMinutes": "About {{count}} min left. Keep Vaulto open."
     },
     "recovery": {
       "title": "Recovery code",
@@ -393,7 +399,8 @@
       "aiReadyGuest": "Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.",
       "turnOn": "Turn on",
       "summarySpeech": "Speech: {{tier}}",
-      "summaryAI": "AI: {{tier}}"
+      "summaryAI": "AI: {{tier}}",
+      "aiReadyGuestOff": "Without an account, AI runs on this device. Downloaded models are switched off; turn them on to use it."
     },
     "privacySummary": {
       "title": "Does my recording leave the phone?",
@@ -491,7 +498,12 @@
     "benefitAI": "AI tidies up text, finds tasks and answers questions about your notes",
     "benefitSync": "Sync across your devices with end-to-end encryption",
     "benefitKeepNotes": "Notes you made without an account come with you",
-    "orWithEmail": "or with email"
+    "orWithEmail": "or with email",
+    "sessionExpiredTitle": "Your session has expired",
+    "sessionExpiredText": "Sign in again to keep using AI and sync. Your notes stay on this phone.",
+    "signInAgain": "Sign in again",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "edit": {
     "visualEditor": "Visual editor",
@@ -912,7 +924,10 @@
     "recordAgain": "Record again",
     "recordAgainHint": "Deletes this silent recording and starts a new one",
     "noSpeechInRecording": "No speech in this recording",
-    "playRecording": "Play the recording"
+    "playRecording": "Play the recording",
+    "micAllowTitle": "Allow the microphone to record",
+    "micAllowText": "Vaulto needs the microphone to record voice notes. You can allow it in the app’s settings.",
+    "micOpenSettings": "Open settings"
   },
   "aux": {
     "emailVerified": "Email verified!",
@@ -1062,7 +1077,19 @@
     "verificationCheckFailed": "Could not check whether your email is verified. Check your connection and try again.",
     "cloudMinutes": "Cloud speech-to-text",
     "cloudMinutesMonth": "Cloud speech-to-text this month",
-    "minutesUsedOf": "{{used}} of {{total}} min used"
+    "minutesUsedOf": "{{used}} of {{total}} min used",
+    "unlockedTitle": "Notes unlocked",
+    "unlockedText": "Your notes are readable on this phone again.",
+    "unlockedCount_one": "{{count}} note is readable on this phone again.",
+    "unlockedCount_other": "{{count}} notes are readable on this phone again.",
+    "unlockedSomeLocked_one": "{{count}} note still can’t be opened: it was locked with a key that is no longer on this phone.",
+    "unlockedSomeLocked_other": "{{count}} notes still can’t be opened: they were locked with a key that is no longer on this phone.",
+    "passphraseMismatch": "That passphrase didn’t match. Check it and try again.",
+    "unlockFailedRetry": "Couldn’t unlock right now. Please try again.",
+    "forgotPassphrase": "Forgot the passphrase?",
+    "forgotTitle": "Forgot the passphrase?",
+    "forgotText": "Your notes are encrypted with it, so nobody can read them without it, not even Vaulto. If you saved the recovery code, use it instead: the notes stay. If you have neither, you can reset encryption: the encrypted notes on the server are deleted and you start over.",
+    "forgotReset": "Reset encryption…"
   },
   "a11y": {
     "checked": "checked",
@@ -1213,7 +1240,13 @@
     "serverUnavailable": "The server is temporarily unavailable. Your notes are safe; try again in a minute.",
     "timeout": "The request took too long. Check your connection and try again.",
     "localAIMemory": "Not enough memory for AI on this device. Choose a lighter model or cloud AI in Settings.",
-    "unreachable": "Could not reach the server. Try again in a moment."
+    "unreachable": "Could not reach the server. Try again in a moment.",
+    "sessionExpired": "Your session has expired. Sign in again to continue.",
+    "tooLong": "This is too long to send at once. Try a shorter part.",
+    "tooManyRequests": "Too many requests right now. Try again in a minute.",
+    "requestFailed": "Something went wrong. Please try again.",
+    "signInForAI": "Sign in to use Vaulto AI.",
+    "aiEmpty": "The AI sent back nothing. Please try again."
   },
   "alerts": {
     "shareUnavailable": "Sharing is not available on this device.",
