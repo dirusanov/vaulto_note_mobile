@@ -771,8 +771,9 @@
       "inNote": "Dans la note",
       "add": "Ajouter",
       "transcribe": "Transcrire",
-      "view": "Voir",
-      "addAudio": "Ajouter l’audio"
+      "addAudio": "Ajouter l’audio",
+      "alreadyInNote": "Dans la note",
+      "showText": "Afficher le texte"
     },
     "toast": {
       "audioUnavailable": "Impossible de lire cet enregistrement",
@@ -859,8 +860,6 @@
     "savedUnreachable": "Enregistrement sauvegardé. Le serveur n'a pas répondu ; il sera transcrit à la prochaine ouverture de cette note.",
     "noSpeechDetected": "Aucune parole détectée. Enregistrement conservé.",
     "quietTitle": "Presque rien n'a été entendu",
-    "quietDesc": "Le micro n'a capté que du silence. S'il est coupé ou occupé par un appel, arrêtez-le et réenregistrez. Garder quand même cet enregistrement ?",
-    "keepRecording": "Garder",
     "exitTitle": "Garder cet enregistrement ?",
     "exitDesc": "En revenant en arrière, ce qui a été enregistré serait supprimé.",
     "continueRecording": "Continuer l’enregistrement",
@@ -890,10 +889,11 @@
       "label": "Mode du micro",
       "dictateHint": "Les mots vont dans la note tels que dits",
       "editHint": "Les demandes modifient la note ; le reste devient du texte",
-      "current": "Mode du micro : {{mode}}",
-      "switchTo": "Touchez deux fois pour passer à « {{mode}} »",
       "micHintEdit": "Modifier à la voix : les demandes modifient la note. Maintenez pour dicter une fois.",
-      "micHintDictate": "Dicter : les mots vont dans la note tels que dits."
+      "micHintDictate": "Dicter : les mots vont dans la note tels que dits.",
+      "dictateOnce": "Dicter une fois",
+      "stateOn": "Modifier à la voix est activé pour cette note",
+      "stateOffHint": "Touchez deux fois pour dicter à nouveau"
     },
     "routeShort": {
       "audioOnly": "Audio seul",
@@ -906,7 +906,14 @@
       "cloud": "Cloud Vaulto"
     },
     "routeDetailsHint": "Indique ce que devient l’enregistrement",
-    "moreOptions": "Options d’enregistrement"
+    "moreOptions": "Options d’enregistrement",
+    "starting": "Démarrage…",
+    "quietDescAgain": "Le micro n’a capté que du silence. S’il est coupé ou occupé par un appel, arrêtez-le et enregistrez à nouveau.",
+    "keepAnyway": "Garder quand même",
+    "recordAgain": "Réenregistrer",
+    "recordAgainHint": "Supprime cet enregistrement silencieux et en commence un nouveau",
+    "noSpeechInRecording": "Aucune parole dans cet enregistrement",
+    "playRecording": "Écouter l’enregistrement"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -1408,15 +1415,15 @@
   "listen": {
     "title": "Texte et audio",
     "hint": "Touchez une phrase pour l’entendre.",
-    "hintWithEdits": "Touchez une phrase pour l’entendre. Les phrases modifiées n’ont pas de minutage.",
     "rewritten": "Cette version a été réécrite : voici le texte de l’enregistrement lui-même.",
     "playHint": "Lit l’enregistrement à partir de cette phrase",
-    "unlinked": "Modifiée après l’enregistrement, sans lien audio",
     "play": "Lire",
     "pause": "Pause",
     "position": "{{position}} sur {{duration}}",
     "failed": "Impossible de lire cet enregistrement",
     "follow": "Afficher la phrase en cours",
-    "entryHint": "Touchez une phrase pour l’entendre"
+    "entryHint": "Touchez une phrase pour l’entendre",
+    "unlinkedLine": "Modifiée, lecture impossible",
+    "hintEdited": "Touchez une phrase pour l’écouter. Les lignes modifiées ne peuvent pas être lues."
   }
 }

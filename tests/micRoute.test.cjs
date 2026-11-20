@@ -187,6 +187,9 @@ test('mode: remembered value is parsed safely; meeting, hold and no agent always
   assert.equal(micRoute.parseVoiceInputMode('edit'), 'edit');
   assert.equal(micRoute.parseVoiceInputMode(null), micRoute.DEFAULT_VOICE_INPUT_MODE);
   assert.equal(micRoute.parseVoiceInputMode('agent'), micRoute.DEFAULT_VOICE_INPUT_MODE);
+  // Review 2026-11-20 P1-4: the mic always dictates unless editing by voice is chosen.
+  assert.equal(micRoute.DEFAULT_VOICE_INPUT_MODE, 'dictate');
+  assert.equal(micRoute.effectiveVoiceInputMode(micRoute.DEFAULT_VOICE_INPUT_MODE, 'cloud'), 'dictate');
   assert.equal(micRoute.effectiveVoiceInputMode('edit', 'cloud'), 'edit');
   assert.equal(micRoute.effectiveVoiceInputMode('dictate', 'cloud'), 'dictate');
   assert.equal(micRoute.effectiveVoiceInputMode('edit', null), 'dictate');

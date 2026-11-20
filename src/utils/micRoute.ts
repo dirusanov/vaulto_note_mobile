@@ -104,7 +104,8 @@ export const pickVoiceAgentRoute = (i: VoiceAgentInputs): VoiceAgentRouteValue =
 /** What the editor microphone does with speech: insert it, or let the agent act on requests. */
 export type VoiceInputMode = 'dictate' | 'edit';
 
-export const DEFAULT_VOICE_INPUT_MODE: VoiceInputMode = 'edit';
+/** The microphone dictates unless editing by voice is chosen for the note being edited. */
+export const DEFAULT_VOICE_INPUT_MODE: VoiceInputMode = 'dictate';
 
 export const parseVoiceInputMode = (value: unknown): VoiceInputMode =>
     value === 'dictate' || value === 'edit' ? value : DEFAULT_VOICE_INPUT_MODE;

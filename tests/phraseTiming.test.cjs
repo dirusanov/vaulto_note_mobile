@@ -195,7 +195,7 @@ test('a task quote finds its sentence, and an edited sentence gives no Listen', 
     assert.equal(findQuoteLink('Смету Ирине пришлю в понедельник', linkTextToRecordings(editedText, [rec])), null);
 });
 
-test('the phrase being heard is highlighted, nothing in long pauses or other recordings', () => {
+test('the phrase being heard is highlighted, nothing past the end or in other recordings', () => {
     const rec = source('r1', RU, RU_SEGMENTS);
     const linked = linkTextToRecordings(RU, [rec]);
     assert.equal(activePhraseKey(linked, 'r1', 0.1), 'p0');
@@ -204,6 +204,24 @@ test('the phrase being heard is highlighted, nothing in long pauses or other rec
     assert.equal(activePhraseKey(linked, 'r1', 30), null);
     assert.equal(activePhraseKey(linked, 'other', 3), null);
     assert.equal(activePhraseKey(linked, null, 3), null);
+});
+
+test('the highlight follows the playhead through pauses, not through edited text', () => {
+    // A long pause between two sentences: the first stays lit until the second starts.
+    const gap = source('r1', RU, [
+        { start: 0, end: 2.0, text: ' Я отправлю Ире смету к пятнице.' },
+        { start: 9.0, end: 11.0, text: ' А звонок пока не назначай.' },
+        { start: 11.2, end: 12.4, text: ' Купить молоко.' },
+    ]);
+    const linked = linkTextToRecordings(RU, [gap]);
+    assert.equal(activePhraseKey(linked, 'r1', 6), 'p0');
+    assert.equal(activePhraseKey(linked, 'r1', 8.9), 'p1'); // pre-roll of the next one
+    assert.equal(activePhraseKey(linked, 'r1', 30), null); // past the last sentence
+    // The middle sentence was rewritten: its audio has no sentence on screen.
+    const edited = linkTextToRecordings('Я отправлю Ире смету к пятнице. Звонок назначим потом, когда будет ясно. Купить молоко.', [gap]);
+    assert.equal(edited[1].link, null);
+    assert.equal(activePhraseKey(edited, 'r1', 1), edited[0].key);
+    assert.equal(activePhraseKey(edited, 'r1', 6), null);
 });
 
 test('whole-recording fallback, playback start and clock labels', () => {

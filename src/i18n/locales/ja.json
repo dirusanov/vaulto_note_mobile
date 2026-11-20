@@ -767,8 +767,9 @@
       "inNote": "ノートに追加済み",
       "add": "追加",
       "transcribe": "文字起こし",
-      "view": "表示",
-      "addAudio": "音声を追加"
+      "addAudio": "音声を追加",
+      "alreadyInNote": "メモに追加済み",
+      "showText": "テキストを表示"
     },
     "toast": {
       "audioUnavailable": "この録音を再生できませんでした",
@@ -855,8 +856,6 @@
     "savedUnreachable": "録音を保存しました。サーバーに接続できなかったため、次にこのメモを開いたときに文字起こしします。",
     "noSpeechDetected": "音声は検出されませんでした。録音は保存されました。",
     "quietTitle": "ほとんど何も聞こえませんでした",
-    "quietDesc": "マイクには無音しか記録されませんでした。ミュート中や通話中の場合は終了してから録音し直してください。それでもこの録音を残しますか？",
-    "keepRecording": "残す",
     "exitTitle": "この録音を残しますか？",
     "exitDesc": "戻ると、録音した内容は削除されます。",
     "continueRecording": "録音を続ける",
@@ -886,10 +885,11 @@
       "label": "マイクのモード",
       "dictateHint": "話した言葉がそのまま入ります",
       "editHint": "依頼はメモを変更し、それ以外は文字になります",
-      "current": "マイクのモード：{{mode}}",
-      "switchTo": "ダブルタップで「{{mode}}」に切り替え",
       "micHintEdit": "声で編集：依頼でメモを変更します。長押しで一度だけ口述。",
-      "micHintDictate": "口述：話した言葉がそのまま入ります。"
+      "micHintDictate": "口述：話した言葉がそのまま入ります。",
+      "dictateOnce": "1回だけ音声入力",
+      "stateOn": "このメモでは音声で編集がオンです",
+      "stateOffHint": "ダブルタップで音声入力に戻ります"
     },
     "routeShort": {
       "audioOnly": "録音のみ",
@@ -902,7 +902,14 @@
       "cloud": "Vaultoクラウド"
     },
     "routeDetailsHint": "録音がどう処理されるかを表示します",
-    "moreOptions": "録音オプション"
+    "moreOptions": "録音オプション",
+    "starting": "開始しています…",
+    "quietDescAgain": "マイクは無音しか拾いませんでした。ミュートや通話中の場合はそれを終えてから、もう一度録音してください。",
+    "keepAnyway": "このまま保存",
+    "recordAgain": "録音し直す",
+    "recordAgainHint": "この無音の録音を削除して、新しく録音します",
+    "noSpeechInRecording": "この録音には音声がありません",
+    "playRecording": "録音を再生"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -1396,15 +1403,15 @@
   "listen": {
     "title": "テキストと音声",
     "hint": "文をタップすると、その部分を再生します。",
-    "hintWithEdits": "文をタップすると、その部分を再生します。変更した文には時刻がありません。",
     "rewritten": "このバージョンは書き直されているため、録音そのもののテキストを表示しています。",
     "playHint": "この文から録音を再生します",
-    "unlinked": "録音後に変更されたため、音声とのリンクはありません",
     "play": "再生",
     "pause": "一時停止",
     "position": "{{position}} / {{duration}}",
     "failed": "この録音を再生できませんでした",
     "follow": "再生中の文を表示",
-    "entryHint": "文をタップすると再生します"
+    "entryHint": "文をタップすると再生します",
+    "unlinkedLine": "編集済みのため再生できません",
+    "hintEdited": "文をタップすると再生します。編集した行は再生できません。"
   }
 }

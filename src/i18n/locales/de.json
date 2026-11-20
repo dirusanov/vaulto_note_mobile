@@ -770,8 +770,9 @@
       "inNote": "In der Notiz",
       "add": "Einfügen",
       "transcribe": "Transkribieren",
-      "view": "Ansehen",
-      "addAudio": "Audio einfügen"
+      "addAudio": "Audio einfügen",
+      "alreadyInNote": "In der Notiz",
+      "showText": "Text anzeigen"
     },
     "toast": {
       "audioUnavailable": "Diese Aufnahme konnte nicht abgespielt werden",
@@ -858,8 +859,6 @@
     "savedUnreachable": "Aufnahme gespeichert. Der Server war nicht erreichbar; sie wird beim nächsten Öffnen dieser Notiz transkribiert.",
     "noSpeechDetected": "Keine Sprache erkannt. Aufnahme gespeichert.",
     "quietTitle": "Fast nichts zu hören",
-    "quietDesc": "Das Mikrofon hat nur Stille aufgenommen. Ist es stummgeschaltet oder von einem Anruf belegt, beende das und nimm erneut auf. Die Aufnahme trotzdem behalten?",
-    "keepRecording": "Behalten",
     "exitTitle": "Aufnahme behalten?",
     "exitDesc": "Beim Zurückgehen würde das Aufgenommene gelöscht.",
     "continueRecording": "Weiter aufnehmen",
@@ -889,10 +888,11 @@
       "label": "Mikrofonmodus",
       "dictateHint": "Worte kommen so in die Notiz, wie gesagt",
       "editHint": "Bitten ändern die Notiz; anderes wird Text",
-      "current": "Mikrofonmodus: {{mode}}",
-      "switchTo": "Doppeltippen, um zu „{{mode}}“ zu wechseln",
       "micHintEdit": "Per Stimme ändern: Bitten ändern die Notiz. Gedrückt halten, um einmal zu diktieren.",
-      "micHintDictate": "Diktieren: Worte kommen so in die Notiz, wie gesagt."
+      "micHintDictate": "Diktieren: Worte kommen so in die Notiz, wie gesagt.",
+      "dictateOnce": "Einmal diktieren",
+      "stateOn": "Per Stimme bearbeiten ist für diese Notiz an",
+      "stateOffHint": "Doppeltippen, um wieder zu diktieren"
     },
     "routeShort": {
       "audioOnly": "Nur Audio",
@@ -905,7 +905,14 @@
       "cloud": "Vaulto Cloud"
     },
     "routeDetailsHint": "Zeigt, was mit der Aufnahme passiert",
-    "moreOptions": "Aufnahmeoptionen"
+    "moreOptions": "Aufnahmeoptionen",
+    "starting": "Wird gestartet…",
+    "quietDescAgain": "Das Mikrofon hat nur Stille aufgenommen. Wenn es stummgeschaltet oder durch einen Anruf belegt ist, beende das und nimm erneut auf.",
+    "keepAnyway": "Trotzdem behalten",
+    "recordAgain": "Neu aufnehmen",
+    "recordAgainHint": "Löscht diese stille Aufnahme und startet eine neue",
+    "noSpeechInRecording": "Keine Sprache in dieser Aufnahme",
+    "playRecording": "Aufnahme abspielen"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -1403,15 +1410,15 @@
   "listen": {
     "title": "Text und Audio",
     "hint": "Tippe auf einen Satz, um ihn zu hören.",
-    "hintWithEdits": "Tippe auf einen Satz, um ihn zu hören. Geänderte Sätze haben keine Zeit.",
     "rewritten": "Diese Version wurde umgeschrieben, daher siehst du den Text der Aufnahme selbst.",
     "playHint": "Spielt die Aufnahme ab diesem Satz ab",
-    "unlinked": "Nach der Aufnahme geändert, ohne Audio-Verknüpfung",
     "play": "Abspielen",
     "pause": "Pause",
     "position": "{{position}} von {{duration}}",
     "failed": "Die Aufnahme konnte nicht abgespielt werden",
     "follow": "Aktuellen Satz zeigen",
-    "entryHint": "Tippe auf einen Satz, um ihn zu hören"
+    "entryHint": "Tippe auf einen Satz, um ihn zu hören",
+    "unlinkedLine": "Bearbeitet, nicht abspielbar",
+    "hintEdited": "Tippe auf einen Satz, um ihn zu hören. Bearbeitete Zeilen lassen sich nicht abspielen."
   }
 }

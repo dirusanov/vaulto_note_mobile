@@ -512,8 +512,16 @@ export const activePhraseKey = (
         }
     }
     if (!current) return null;
-    // Past the end of that phrase and in a pause (or edited text): nothing lit.
-    return position <= current.link!.end + 1.5 ? current.key : null;
+    if (position <= current.link!.end + 1.5) return current.key;
+    // A pause before the next sentence of the same recording keeps this one
+    // lit, so the highlight follows the playhead through the recording
+    // instead of blinking off between sentences. Past the last sentence, or
+    // where edited text (no time) follows, nothing is lit: that audio has no
+    // sentence on screen.
+    const next = phrases[phrases.indexOf(current) + 1];
+    const nextLink = next?.link;
+    if (nextLink && nextLink.recordingId === recordingId && nextLink.start > current.link!.start) return current.key;
+    return null;
 };
 
 /** Where to start playing a phrase: a little before its first word. */

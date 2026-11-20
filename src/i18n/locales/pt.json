@@ -771,8 +771,9 @@
       "inNote": "Na nota",
       "add": "Inserir",
       "transcribe": "Transcrever",
-      "view": "Ver",
-      "addAudio": "Inserir áudio"
+      "addAudio": "Inserir áudio",
+      "alreadyInNote": "Na nota",
+      "showText": "Mostrar texto"
     },
     "toast": {
       "audioUnavailable": "Não foi possível reproduzir esta gravação",
@@ -859,8 +860,6 @@
     "savedUnreachable": "Gravação guardada. O servidor não respondeu; será transcrita quando voltar a abrir esta nota.",
     "noSpeechDetected": "Nenhuma fala detectada. Gravação salva.",
     "quietTitle": "Quase nada foi ouvido",
-    "quietDesc": "O microfone só captou silêncio. Se estiver silenciado ou ocupado por uma chamada, termine-a e grave de novo. Guardar a gravação mesmo assim?",
-    "keepRecording": "Guardar",
     "exitTitle": "Manter esta gravação?",
     "exitDesc": "Voltar apagaria o que foi gravado.",
     "continueRecording": "Continuar a gravar",
@@ -890,10 +889,11 @@
       "label": "Modo do microfone",
       "dictateHint": "As palavras entram na nota como ditas",
       "editHint": "Pedidos mudam a nota; o resto entra como texto",
-      "current": "Modo do microfone: {{mode}}",
-      "switchTo": "Toque duas vezes para mudar para “{{mode}}”",
       "micHintEdit": "Editar por voz: pedidos mudam a nota. Segure para ditar uma vez.",
-      "micHintDictate": "Ditar: as palavras entram na nota como ditas."
+      "micHintDictate": "Ditar: as palavras entram na nota como ditas.",
+      "dictateOnce": "Ditar uma vez",
+      "stateOn": "Editar por voz está ativado para esta nota",
+      "stateOffHint": "Toque duas vezes para voltar a ditar"
     },
     "routeShort": {
       "audioOnly": "Só áudio",
@@ -906,7 +906,14 @@
       "cloud": "Nuvem Vaulto"
     },
     "routeDetailsHint": "Mostra o que acontece com a gravação",
-    "moreOptions": "Opções de gravação"
+    "moreOptions": "Opções de gravação",
+    "starting": "Iniciando…",
+    "quietDescAgain": "O microfone captou só silêncio. Se estiver mudo ou ocupado com uma chamada, encerre isso e grave de novo.",
+    "keepAnyway": "Manter mesmo assim",
+    "recordAgain": "Gravar de novo",
+    "recordAgainHint": "Exclui esta gravação silenciosa e começa uma nova",
+    "noSpeechInRecording": "Não há fala nesta gravação",
+    "playRecording": "Reproduzir a gravação"
   },
   "aux": {
     "emailVerified": "E-mail verificado!",
@@ -1408,15 +1415,15 @@
   "listen": {
     "title": "Texto e áudio",
     "hint": "Toque numa frase para ouvi-la.",
-    "hintWithEdits": "Toque numa frase para ouvi-la. Frases alteradas não têm tempo.",
     "rewritten": "Esta versão foi reescrita, por isso aparece o texto da própria gravação.",
     "playHint": "Reproduz a gravação a partir desta frase",
-    "unlinked": "Alterada depois da gravação, sem ligação ao áudio",
     "play": "Reproduzir",
     "pause": "Pausar",
     "position": "{{position}} de {{duration}}",
     "failed": "Não foi possível reproduzir a gravação",
     "follow": "Mostrar a frase atual",
-    "entryHint": "Toque numa frase para ouvi-la"
+    "entryHint": "Toque numa frase para ouvi-la",
+    "unlinkedLine": "Editada, não pode ser reproduzida",
+    "hintEdited": "Toque numa frase para ouvi-la. Linhas editadas não podem ser reproduzidas."
   }
 }

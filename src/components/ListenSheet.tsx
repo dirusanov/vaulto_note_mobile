@@ -119,7 +119,10 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
         return { phrases: sources.flatMap(phrasesOfRecording), rewritten: !!(text && text.trim()), hasUnlinked: false };
     }, [visible, text, sources]);
 
-    const activeKey = activePhraseKey(phrases, state.recordingId, state.position);
+    // Lit only once sound actually comes out (not while loading or buffering),
+    // then it follows the playhead; a pause keeps the sentence lit.
+    const heard = state.hasPlayed && !state.isLoading;
+    const activeKey = heard ? activePhraseKey(phrases, state.recordingId, state.position) : null;
     const longest = phrases.reduce((max, phrase) => Math.max(max, phrase.link?.start ?? 0), 0);
     const gutter = Math.ceil((longest >= 3600 ? 60 : 38) * Math.max(1, fontScale));
 
@@ -174,13 +177,24 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
         }
     };
 
-    const progress = state.duration > 0 ? Math.min(1, state.position / state.duration) : 0;
+    // The length is known before anything plays (no "0:00 / 0:00") and is the
+    // one the note's play chip shows: the stored length of the recording,
+    // the player's own reading only when none was stored.
+    const shownRecordingId = state.recordingId ?? firstLinked?.link?.recordingId ?? null;
+    const storedDuration = audio.find((item) => item.id === shownRecordingId)?.duration ?? 0;
+    const shownDuration = storedDuration > 0 ? storedDuration : state.duration;
+    // Played to the end reads "0:14 / 0:14", whatever fraction of a second the file differs by.
+    const atEnd = state.duration > 0 && !state.isPlaying && state.position >= state.duration - 0.05;
+    const shownPosition = atEnd
+        ? shownDuration
+        : shownDuration > 0 ? Math.min(state.position, shownDuration) : state.position;
+    const progress = shownDuration > 0 ? Math.min(1, shownPosition / shownDuration) : 0;
     const playHint = t('listen.playHint', 'Plays the recording from this sentence');
-    const unlinkedLabel = t('listen.unlinked', 'Changed after recording, no audio link');
+    const unlinkedLabel = t('listen.unlinkedLine', 'Edited, can’t be played');
     const hint = rewritten
         ? t('listen.rewritten', 'This version was rewritten, so here is the recording’s own text.')
         : hasUnlinked
-            ? t('listen.hintWithEdits', 'Tap a sentence to hear it. Sentences you changed have no time.')
+            ? t('listen.hintEdited', 'Tap a sentence to hear it. Edited lines can’t be played.')
             : t('listen.hint', 'Tap a sentence to hear it.');
 
     return (
@@ -247,13 +261,13 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
                                     <Text
                                         style={styles.clock}
                                         accessibilityLabel={t('listen.position', '{{position}} of {{duration}}', {
-                                            position: formatPhraseTime(state.position),
-                                            duration: formatPhraseTime(state.duration),
+                                            position: formatPhraseTime(shownPosition),
+                                            duration: formatPhraseTime(shownDuration),
                                         })}
                                     >
                                         {state.failed
                                             ? t('listen.failed', 'Could not play this recording')
-                                            : `${formatPhraseTime(state.position)} / ${formatPhraseTime(state.duration)}`}
+                                            : `${formatPhraseTime(shownPosition)} / ${formatPhraseTime(shownDuration)}`}
                                     </Text>
                                 </View>
                                 {!follow && state.isPlaying ? (

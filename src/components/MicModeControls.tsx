@@ -1,9 +1,9 @@
 import React from 'react';
-import { PixelRatio, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { PixelRatio, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { colors } from '../theme/colors';
+import { colors, isDarkScheme } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
@@ -118,17 +118,20 @@ export const VoiceModeSwitch = ({
     value,
     onChange,
     large = false,
+    flat = false,
 }: {
     value: VoiceInputMode;
     onChange: (mode: VoiceInputMode) => void;
     large?: boolean;
+    /** Inside a card: full width, no shadow of its own. */
+    flat?: boolean;
 }) => {
     const { t } = useTranslation();
     // Large text: the words matter more than the icons, and may take two lines.
     const bigText = PixelRatio.getFontScale() >= 1.3;
     return (
         <View
-            style={[styles.segments, large && styles.segmentsLarge, bigText && styles.segmentsBigText]}
+            style={[styles.segments, large && styles.segmentsLarge, (bigText || flat) && styles.segmentsBigText, flat && styles.segmentsFlat]}
             accessibilityRole="radiogroup"
             accessibilityLabel={t('voice.mode.label', 'Microphone mode')}
         >
@@ -137,7 +140,7 @@ export const VoiceModeSwitch = ({
                 return (
                     <TouchableOpacity
                         key={mode}
-                        style={[styles.segment, selected && styles.segmentSelected, bigText && styles.segmentBigText]}
+                        style={[styles.segment, selected && styles.segmentSelected, (bigText || flat) && styles.segmentBigText]}
                         onPress={() => {
                             if (selected) return;
                             haptics.selection();
@@ -160,9 +163,8 @@ export const VoiceModeSwitch = ({
                         )}
                         <Text
                             style={[styles.segmentText, selected && styles.segmentTextSelected]}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit={bigText}
-                            minimumFontScale={0.7}
+                            // Large text wraps to a second line rather than shrinking.
+                            numberOfLines={bigText ? 2 : 1}
                         >
                             {modeLabel(t, mode)}
                         </Text>
@@ -224,41 +226,83 @@ export const MicRouteNote = ({
 };
 
 /**
- * Beside the editor's microphone: the mode the next recording uses, readable
- * before recording. One tap switches it.
+ * Beside the editor's microphone, only while "Edit by voice" is chosen for
+ * this note: a state, not a command. The microphone otherwise always
+ * dictates, so nothing is shown then. Tapping it goes back to dictation.
  */
-export const VoiceModePill = ({
-    mode,
-    onToggle,
-}: {
-    mode: VoiceInputMode;
-    onToggle: () => void;
-}) => {
+export const VoiceEditStateChip = ({ onReset }: { onReset: () => void }) => {
     const { t } = useTranslation();
-    const other: VoiceInputMode = mode === 'dictate' ? 'edit' : 'dictate';
     return (
         <TouchableOpacity
-            style={styles.pill}
+            style={styles.stateChip}
             onPress={() => {
                 haptics.selection();
-                onToggle();
+                onReset();
             }}
             activeOpacity={0.75}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             accessibilityRole="button"
-            accessibilityLabel={t('voice.mode.current', 'Microphone mode: {{mode}}', { mode: modeLabel(t, mode) })}
-            accessibilityHint={t('voice.mode.switchTo', 'Double tap to switch to {{mode}}', { mode: modeLabel(t, other) })}
+            accessibilityLabel={t('voice.mode.stateOn', 'Edit by voice is on for this note')}
+            accessibilityHint={t('voice.mode.stateOffHint', 'Double tap to dictate again')}
         >
-            <MaterialIcons name={MODE_ICON[mode]} size={16} color={colors.primary} />
-            <Text style={styles.pillText} numberOfLines={1}>
-                {modeLabel(t, mode)}
+            <MaterialIcons name={MODE_ICON.edit} size={16} color={colors.primary} />
+            <Text style={styles.stateChipText}>
+                {modeLabel(t, 'edit')}
             </Text>
-            {PixelRatio.getFontScale() < 1.3 && (
-                <MaterialIcons name="swap-horiz" size={16} color={colors.textTertiary} />
-            )}
+            <MaterialIcons name="close" size={16} color={colors.textSecondary} />
         </TouchableOpacity>
     );
 };
+
+/** One choice in the recorder's options: a label, what it does, and a switch. */
+export const OptionSwitchRow = ({
+    icon,
+    label,
+    description,
+    value,
+    onChange,
+    disabled = false,
+}: {
+    icon: IconName;
+    label: string;
+    description?: string | null;
+    value: boolean;
+    onChange: (next: boolean) => void;
+    disabled?: boolean;
+}) => (
+    <TouchableOpacity
+        style={[styles.switchRow, disabled && styles.switchRowDisabled]}
+        onPress={() => {
+            if (disabled) return;
+            haptics.selection();
+            onChange(!value);
+        }}
+        disabled={disabled}
+        activeOpacity={0.7}
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityHint={description || undefined}
+        accessibilityState={{ checked: value, disabled }}
+    >
+        <MaterialIcons name={icon} size={20} color={colors.textSecondary} style={styles.switchIcon} />
+        <View style={styles.switchTexts}>
+            <Text style={styles.switchLabel}>{label}</Text>
+            {!!description && <Text style={styles.switchDescription}>{description}</Text>}
+        </View>
+        <Switch
+            value={value}
+            onValueChange={(next) => {
+                haptics.selection();
+                onChange(next);
+            }}
+            disabled={disabled}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            // A light thumb that shows on light and dark cards alike.
+            thumbColor={value || !isDarkScheme() ? '#FFFFFF' : '#BDC1C6'}
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+        />
+    </TouchableOpacity>
+);
 
 export type { VoiceAgentRouteValue };
 
@@ -295,6 +339,14 @@ const styles = createStyles(() => ({
     },
     segmentsBigText: {
         flex: 1,
+    },
+    segmentsFlat: {
+        // In a column: its own height, the full width.
+        flex: 0,
+        alignSelf: 'stretch',
+        backgroundColor: colors.background,
+        shadowOpacity: 0,
+        elevation: 0,
     },
     segmentBigText: {
         flex: 1,
@@ -353,14 +405,16 @@ const styles = createStyles(() => ({
     noteWarning: {
         color: colors.error,
     },
-    pill: {
+    stateChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        maxWidth: 300,
-        minHeight: 36,
-        paddingHorizontal: 12,
-        borderRadius: 18,
+        maxWidth: 260,
+        minHeight: 44,
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 22,
         gap: 6,
+        // Opaque: it floats over the note's text.
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
@@ -370,10 +424,38 @@ const styles = createStyles(() => ({
         shadowRadius: 3,
         elevation: 2,
     },
-    pillText: {
+    stateChipText: {
         ...typography.captionBold,
         fontSize: 13,
-        color: colors.text,
+        color: colors.primary,
         flexShrink: 1,
+    },
+    switchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 52,
+        paddingVertical: spacing.xs,
+        gap: spacing.s,
+    },
+    switchRowDisabled: {
+        opacity: 0.5,
+    },
+    switchIcon: {
+        width: 22,
+    },
+    switchTexts: {
+        flex: 1,
+        gap: 1,
+    },
+    switchLabel: {
+        ...typography.body,
+        fontSize: 15,
+        lineHeight: 20,
+        color: colors.text,
+    },
+    switchDescription: {
+        fontSize: 12,
+        lineHeight: 16,
+        color: colors.textSecondary,
     },
 }));

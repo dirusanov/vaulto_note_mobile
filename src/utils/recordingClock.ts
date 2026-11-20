@@ -57,8 +57,19 @@ export const resolveRecordedMs = (nativeMs: number | null | undefined, trackedMs
 export const msToStoredSeconds = (ms: number): number =>
     Number.isFinite(ms) && ms > 0 ? Math.round(ms / 1000) : 0;
 
+/**
+ * Whole seconds the recorder's timer shows for `ms` of recorded time. Done
+ * freezes this value and it is what the recording is stored with, so the
+ * note's chip and the player never disagree with the timer by a second.
+ */
+export const shownRecordingSeconds = (ms: number): number =>
+    Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
+
 /** Longer recordings ask before they are thrown away (bin tap or system Back). */
 export const DISCARD_CONFIRM_AFTER_SECONDS = 5;
+
+/** How long the second tap on the bin is waited for (shown as a draining ring). */
+export const DISCARD_CONFIRM_WINDOW_MS = 6000;
 
 export type RecorderBackAction = 'close' | 'ask' | 'ignore';
 

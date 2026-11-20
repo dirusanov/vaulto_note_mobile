@@ -177,3 +177,25 @@ test('a version the user renamed keeps its name after a voice action (UX audit 2
     assert.equal(variantTitleAfterAction('Покупки', ''), 'Покупки');
     assert.equal(variantTitleAfterAction('', undefined), '');
 });
+
+test('a voice edit names its version after what was asked, not "AI agent" (review 2026-11-20 P2-11)', () => {
+    const { voiceEditVersionName, variantTitleAfterAction, buildVariantDisplayLabels } = require('../.test-build/versions/i18n/variantLabels');
+    assert.equal(voiceEditVersionName('Please remove the eggs'), 'Remove the eggs');
+    assert.equal(voiceEditVersionName('Can you remove the eggs please?'), 'Remove the eggs');
+    assert.equal(voiceEditVersionName('А теперь убери яйца, пожалуйста'), 'Убери яйца');
+    assert.equal(voiceEditVersionName('Ну давай переведи на английский'), 'Переведи на английский');
+    assert.equal(voiceEditVersionName('пожалуйста'), '');
+    assert.equal(voiceEditVersionName(''), '');
+    // Long requests are cut to a few words; pasted text after a colon is left out.
+    assert.equal(voiceEditVersionName('Rewrite this as a short polite email to my landlord about the heating'), 'Rewrite this as a short…');
+    assert.equal(voiceEditVersionName('Add: milk, bread'), 'Add');
+    // Stored like a name the user gave: shown on the chip, kept after later edits.
+    const title = markUserVariantName(voiceEditVersionName('Убери яйца'));
+    assert.equal(variantTitleAfterAction(title, 'Покупки'), title);
+    const t = (key, fallback) => fallback;
+    const labels = buildVariantDisplayLabels([
+        { id: 'a', label: 'AI Agent', option_id: 'agent', title },
+        { id: 'b', label: 'AI Agent', option_id: 'agent', title: markUserVariantName('Remove the eggs') },
+    ], t);
+    assert.deepEqual(labels, { a: 'Убери яйца', b: 'Remove the eggs' });
+});
