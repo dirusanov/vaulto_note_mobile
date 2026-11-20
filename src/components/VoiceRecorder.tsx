@@ -1091,7 +1091,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                     />
                                     <Text
                                         style={[styles.routeCaptionText, routeInfo?.tone === 'warning' && styles.routeCaptionWarning]}
-                                        numberOfLines={bigText ? 2 : 1}
+                                        // Not cut at large text: the mode and route wrap instead.
+                                        numberOfLines={bigText ? undefined : 2}
                                     >
                                         {captionText || ' '}
                                     </Text>
