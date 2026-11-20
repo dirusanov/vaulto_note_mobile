@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { formatAppDate } from '../utils/dateFormat';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,7 +53,7 @@ type Message =
  * unless the user allowed AI for private notes.
  */
 export const AskNotesScreen = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const route = useRoute<any>();
@@ -183,7 +184,7 @@ export const AskNotesScreen = () => {
                     ? t('ask.limitGeneric', 'A usage limit was reached, so this question was not answered. Try again later.')
                     : resetAt
                         ? t('ask.aiLimitDate', 'This month\'s AI allowance is used up, so this question was not answered. It resets on {{date}}.', {
-                            date: new Date(resetAt).toLocaleDateString(),
+                            date: formatAppDate(resetAt, i18n.language),
                         })
                         : t('ask.aiLimit', 'This month\'s AI allowance is used up, so this question was not answered. It resets at the start of your next period.');
                 setMessages((prev) => [...prev, { id: `l-${stamp}`, role: 'limit', text, upgrade: !isGuestUser && !isPro }]);

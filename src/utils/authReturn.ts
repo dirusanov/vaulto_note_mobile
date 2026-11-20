@@ -5,7 +5,8 @@
  * Pure (no React Native imports), so tests can load it.
  */
 
-export type AuthReturnTarget = 'AskNotes';
+/** NoteEdit: an AI action in a note asked for the sign-in and resumes there. */
+export type AuthReturnTarget = 'AskNotes' | 'NoteEdit';
 
 let pendingTarget: AuthReturnTarget | null = null;
 let pendingDraft = '';
@@ -50,5 +51,7 @@ export const planAfterSignIn = (
 ): AfterSignIn => {
     if (!target) return { kind: 'default' };
     if (stackRouteNames.includes(target)) return { kind: 'back', screen: target };
+    // A note cannot be rebuilt without knowing which one: the library then.
+    if (target === 'NoteEdit') return { kind: 'default' };
     return { kind: 'reset', routes: [{ name: 'NotesList' }, { name: target }] };
 };

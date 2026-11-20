@@ -7,6 +7,7 @@ import { SuccessModal } from '../components/SuccessModal';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import i18n from 'i18next';
+import { formatAppDate } from '../utils/dateFormat';
 import { getProTrialState, ProTrialState } from '../utils/proTrial';
 import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 
@@ -432,7 +433,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
             setSuccess({
                 title: i18n.t('paywall.trialStartedTitle', 'Pro is on'),
                 message: i18n.t('paywall.trialStartedText', 'Pro is free until {{date}}. Nothing is charged: when it ends, the app goes back to the free plan and your notes stay.', {
-                    date: new Date(started.expires_at).toLocaleDateString(),
+                    date: formatAppDate(started.expires_at, i18n.language),
                 }),
                 iconName: 'workspace-premium',
                 iconColor: colors.primary,

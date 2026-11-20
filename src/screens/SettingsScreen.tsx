@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Switch, Li
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 import appConfig from '../../app.json';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { Button } from '../components/Button';
@@ -73,7 +74,8 @@ const formatSubscriptionDate = (isoDate: string | null) => {
     if (!isoDate) return null;
     const date = new Date(isoDate);
     if (Number.isNaN(date.getTime())) return null;
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    // In the app's language, not the device's.
+    return date.toLocaleDateString(i18next.language || undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const getDaysUntilDate = (isoDate: string | null) => {

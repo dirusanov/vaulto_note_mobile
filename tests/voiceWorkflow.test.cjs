@@ -239,9 +239,14 @@ test('missing offline models and rejected HTTP requests are not disguised as suc
 });
 
 test('text improvements return to the chosen cloud after reconnecting and respect an explicit local choice', async () => {
-  const state = { provider: 'vaulto_ai', offline: false, downloaded: true, privateMode: false, localEnabled: true };
+  const state = { provider: 'vaulto_ai', offline: false, downloaded: true, privateMode: false, localEnabled: true, guest: false };
   const { getEffectiveAIProvider } = load('src/services/effectiveProvider.ts', {
-    '../utils/storage': { getAIProvider: async () => state.provider, getOnDeviceTranscription: async () => state.privateMode, getLocalModelsEnabled: async () => state.localEnabled },
+    '../utils/storage': {
+      getAIProvider: async () => state.provider,
+      getOnDeviceTranscription: async () => state.privateMode,
+      getLocalModelsEnabled: async () => state.localEnabled,
+      storage: { getUserProfile: async () => (state.guest ? { is_verified: false, provider: 'anonymous' } : { is_verified: true, provider: 'email' }) },
+    },
     '../utils/connectivity': { isDeviceOffline: async () => state.offline },
     '../utils/featureFlags': { LOCAL_MODELS_ENABLED: true },
     './LocalLLMService': { isLocalLLMRuntimeAvailable: () => true, getLocalLLMModelStatus: async () => ({ isDownloaded: state.downloaded }) },
@@ -260,6 +265,17 @@ test('text improvements return to the chosen cloud after reconnecting and respec
   assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
   state.localEnabled = true;
   state.provider = 'vaulto_ai'; state.offline = true; state.downloaded = false;
+  assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
+  // A guest (no cloud AI) with the model on the phone uses it online too...
+  state.offline = false; state.guest = true; state.downloaded = true;
+  assert.equal(await getEffectiveAIProvider(), 'local');
+  // ...but not without the model, nor with the models switched off.
+  state.downloaded = false;
+  assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
+  state.downloaded = true; state.localEnabled = false;
+  assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
+  // A signed-in user online keeps the cloud they chose.
+  state.localEnabled = true; state.guest = false;
   assert.equal(await getEffectiveAIProvider(), 'vaulto_ai');
 });
 

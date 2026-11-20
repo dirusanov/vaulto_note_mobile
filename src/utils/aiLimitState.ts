@@ -14,6 +14,7 @@ export const LLM_LIMIT_REASON = 'llm_tokens_exhausted';
 const UNKNOWN_RESET_RECHECK_MS = 6 * 60 * 60 * 1000;
 
 let limitedUntil: number | null = null;
+let knownResetAt: number | null = null;
 let noticeShown = false;
 let knownPlan: string | null = null;
 
@@ -29,21 +30,38 @@ export const isLlmLimitReason = (reason: string | null | undefined, fromAiEndpoi
 
 export const markAiLimitReached = (resetAt?: string | number | null, now: number = Date.now()): void => {
     const reset = typeof resetAt === 'string' ? Date.parse(resetAt) : typeof resetAt === 'number' ? resetAt : NaN;
-    limitedUntil = Number.isFinite(reset) && reset > now ? reset : now + UNKNOWN_RESET_RECHECK_MS;
+    if (Number.isFinite(reset) && reset > now) {
+        limitedUntil = reset;
+        knownResetAt = reset;
+        return;
+    }
+    // A refusal without a date keeps a reset date learned earlier.
+    if (knownResetAt !== null && knownResetAt > now) {
+        limitedUntil = knownResetAt;
+        return;
+    }
+    knownResetAt = null;
+    limitedUntil = now + UNKNOWN_RESET_RECHECK_MS;
 };
 
 export const clearAiLimit = (): void => {
     limitedUntil = null;
+    knownResetAt = null;
 };
 
 export const isAiLimitKnown = (now: number = Date.now()): boolean => {
     if (limitedUntil === null) return false;
     if (now >= limitedUntil) {
         limitedUntil = null;
+        knownResetAt = null;
         return false;
     }
     return true;
 };
+
+/** When the used-up allowance comes back, if the server said so (ms since epoch). */
+export const aiLimitResetAt = (now: number = Date.now()): number | null =>
+    isAiLimitKnown(now) ? knownResetAt : null;
 
 /** True once per session: the quiet notice that recordings go in as plain text. */
 export const takeAiLimitNotice = (): boolean => {
@@ -96,5 +114,6 @@ export const usageLimitReasonOf = (error: unknown): string | undefined => {
 export const resetAiLimitStateForTests = (): void => {
     limitedUntil = null;
     noticeShown = false;
+    knownResetAt = null;
     knownPlan = null;
 };

@@ -77,7 +77,9 @@
     "tagNoResults": "Rien trouvé dans #{{tag}}",
     "tagEmpty": "Aucune note dans #{{tag}}",
     "tagSearchAll": "Chercher dans toutes les notes",
-    "tagShowAll": "Afficher toutes les notes"
+    "tagShowAll": "Afficher toutes les notes",
+    "lockedNote": "Note verrouillée",
+    "lockedNoteText": "Cette note a été verrouillée avec une clé qui n’est plus sur ce téléphone, elle ne peut donc pas être ouverte ici. Si elle a été synchronisée, vous pouvez l’ouvrir sur vos autres appareils."
   },
   "settings": {
     "title": "Paramètres",
@@ -249,7 +251,11 @@
       "guestMinutesLeft": "Transcription gratuite restante : {{minutes}} min. Connectez-vous pour en avoir plus et synchroniser vos notes.",
       "guestMinutesUsed": "Les minutes gratuites sont épuisées. Connectez-vous pour en obtenir plus ou activez « Travailler sans internet » ci-dessous.",
       "trialInfoAccount": "Connectez-vous pour obtenir des minutes de transcription gratuites et synchroniser vos notes.",
-      "vaultLocked": "Le coffre est verrouillé"
+      "vaultLocked": "Le coffre est verrouillé",
+      "unlockTimeUnknown": "Sur certains téléphones, cela peut prendre une minute.",
+      "unlockTimeAlmost": "Presque terminé…",
+      "unlockTimeSeconds": "Encore environ {{count}} s. Gardez Vaulto ouvert.",
+      "unlockTimeMinutes": "Encore environ {{count}} min. Gardez Vaulto ouvert."
     },
     "recovery": {
       "title": "Code de récupération",
@@ -390,7 +396,8 @@
       "remove": "Supprimer de cet appareil · {{size}}",
       "aiReadyTitle": "L’IA sur l’appareil est prête",
       "aiReadyGuest": "Sans compte, l’IA fonctionne sur cet appareil. Activez « {{option}} » pour l’utiliser : la voix et l’IA restent alors sur l’appareil.",
-      "turnOn": "Activer"
+      "turnOn": "Activer",
+      "aiReadyGuestOff": "Sans compte, l’IA fonctionne sur cet appareil. Les modèles téléchargés sont désactivés ; activez-les pour l’utiliser."
     },
     "privacySummary": {
       "title": "Mon enregistrement quitte-t-il le téléphone ?",
@@ -486,7 +493,12 @@
     "benefitAI": "L’IA met en forme le texte, trouve les tâches et répond à vos questions sur vos notes",
     "benefitSync": "Synchronisation entre vos appareils avec chiffrement de bout en bout",
     "benefitKeepNotes": "Les notes créées sans compte vous suivent",
-    "orWithEmail": "ou par e-mail"
+    "orWithEmail": "ou par e-mail",
+    "sessionExpiredTitle": "Votre session a expiré",
+    "sessionExpiredText": "Reconnectez-vous pour continuer à utiliser l’IA et la synchronisation. Vos notes restent sur ce téléphone.",
+    "signInAgain": "Se reconnecter",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe"
   },
   "edit": {
     "visualEditor": "Éditeur visuel",
@@ -888,7 +900,10 @@
       "cloud": "Cloud Vaulto"
     },
     "routeDetailsHint": "Indique ce que devient l’enregistrement",
-    "moreOptions": "Options d’enregistrement"
+    "moreOptions": "Options d’enregistrement",
+    "micAllowTitle": "Autorisez le micro pour enregistrer",
+    "micAllowText": "Vaulto a besoin du micro pour enregistrer des notes vocales. Vous pouvez l’autoriser dans les réglages de l’app.",
+    "micOpenSettings": "Ouvrir les réglages"
   },
   "aux": {
     "emailVerified": "E-mail vérifié !",
@@ -1033,7 +1048,21 @@
     "aiLimitDescNoDate": "Vous avez utilisé votre quota d’IA de ce mois. Il sera renouvelé au début de la prochaine période.",
     "aiLimitGuestDesc": "Connectez-vous pour obtenir votre propre quota mensuel d’IA.",
     "verificationSentTo": "Nous avons envoyé un lien de vérification à",
-    "verificationCheckFailed": "Impossible de vérifier si votre e-mail est confirmé. Vérifiez votre connexion et réessayez."
+    "verificationCheckFailed": "Impossible de vérifier si votre e-mail est confirmé. Vérifiez votre connexion et réessayez.",
+    "unlockedTitle": "Notes déverrouillées",
+    "unlockedText": "Vos notes sont de nouveau lisibles sur ce téléphone.",
+    "unlockedCount_one": "{{count}} note est de nouveau lisible sur ce téléphone.",
+    "unlockedCount_many": "{{count}} notes sont de nouveau lisibles sur ce téléphone.",
+    "unlockedCount_other": "{{count}} notes sont de nouveau lisibles sur ce téléphone.",
+    "unlockedSomeLocked_one": "{{count}} note ne peut toujours pas être ouverte : elle a été verrouillée avec une clé qui n’est plus sur ce téléphone.",
+    "unlockedSomeLocked_many": "{{count}} notes ne peuvent toujours pas être ouvertes : elles ont été verrouillées avec une clé qui n’est plus sur ce téléphone.",
+    "unlockedSomeLocked_other": "{{count}} notes ne peuvent toujours pas être ouvertes : elles ont été verrouillées avec une clé qui n’est plus sur ce téléphone.",
+    "passphraseMismatch": "Cette phrase secrète ne correspond pas. Vérifiez-la et réessayez.",
+    "unlockFailedRetry": "Impossible de déverrouiller pour le moment. Veuillez réessayer.",
+    "forgotPassphrase": "Phrase secrète oubliée ?",
+    "forgotTitle": "Phrase secrète oubliée ?",
+    "forgotText": "Vos notes sont chiffrées avec elle : sans elle, personne ne peut les lire, pas même Vaulto. Si vous avez enregistré le code de récupération, utilisez-le : les notes sont conservées. Si vous n’avez ni l’un ni l’autre, vous pouvez réinitialiser le chiffrement : les notes chiffrées sur le serveur sont supprimées et vous repartez de zéro.",
+    "forgotReset": "Réinitialiser le chiffrement…"
   },
   "a11y": {
     "checked": "coché",
@@ -1184,7 +1213,13 @@
     "serverUnavailable": "Le serveur est momentanément indisponible. Vos notes sont en sécurité ; réessayez dans une minute.",
     "timeout": "La requête a pris trop de temps. Vérifiez votre connexion et réessayez.",
     "localAIMemory": "Mémoire insuffisante pour cette IA. Choisissez un modèle plus léger ou l’IA cloud dans les réglages.",
-    "unreachable": "Impossible de joindre le serveur. Réessayez dans un instant."
+    "unreachable": "Impossible de joindre le serveur. Réessayez dans un instant.",
+    "sessionExpired": "Votre session a expiré. Reconnectez-vous pour continuer.",
+    "tooLong": "C’est trop long pour un seul envoi. Essayez avec une partie plus courte.",
+    "tooManyRequests": "Trop de demandes en ce moment. Réessayez dans une minute.",
+    "requestFailed": "Un problème est survenu. Veuillez réessayer.",
+    "signInForAI": "Connectez-vous pour utiliser Vaulto AI.",
+    "aiEmpty": "L’IA n’a rien renvoyé. Veuillez réessayer."
   },
   "alerts": {
     "shareUnavailable": "Le partage n’est pas disponible sur cet appareil.",

@@ -18,6 +18,8 @@ import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
 import { DRAWING_MARKER, firstDrawingSvg } from '../drawing/drawingFormat';
 import { DrawingThumbnail } from '../drawing/DrawingThumbnail';
 import { CHECKED_LINE, layoutCardPreview, uncheckedFirst } from '../utils/cardPreview';
+import { isUnreadableNote } from '../utils/unreadableNote';
+import { appAlert } from './AppAlert';
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
 
@@ -89,6 +91,15 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 
     // Extract title
     const title = buildTitle();
+
+    // None of this phone's keys opens it: a lock and plain words, never "[Encrypted]".
+    const unreadable = isUnreadableNote(note);
+    const explainUnreadable = () => {
+        appAlert(
+            t('notes.lockedNote', 'Locked note'),
+            t('notes.lockedNoteText', 'This note was locked with a key that is no longer on this phone, so it can’t be opened here. If it was synced, you can still open it on your other devices.'),
+        );
+    };
 
     // Line breaks and checklist state survive, so a list reads as a list. A
     // checklist with ticked items is read further, so moving those items to
@@ -184,8 +195,8 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     // One spoken summary for the whole card: what it is first ("Voice
     // recording, 0:18", "Drawing" or its text), then its date and badges.
     const cardLabel = [
-        isVoiceOnly ? voiceLabel : isDrawingOnly ? t('notes.drawing', 'Drawing') : isChecklistOnly ? '' : spokenLine(titleIsCutFirstLine ? leadLine : title),
-        !isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)
+        unreadable ? t('notes.lockedNote', 'Locked note') : isVoiceOnly ? voiceLabel : isDrawingOnly ? t('notes.drawing', 'Drawing') : isChecklistOnly ? '' : spokenLine(titleIsCutFirstLine ? leadLine : title),
+        !unreadable && !isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)
             ? shownPreviewLines.map(spokenLine).filter(Boolean).join(', ').slice(0, 200)
             : '',
         foldedChecked ? t('notes.checkedMore', '+{{count}} checked', { count: foldedChecked }) : '',
@@ -205,7 +216,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
 
     return (
         <Pressable
-            onPress={onPress}
+            onPress={unreadable && !isSelectionMode ? explainUnreadable : onPress}
             onLongPress={onLongPress}
             delayLongPress={350}
             onPressIn={() => animatePress(0.98)}
@@ -225,7 +236,14 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                 </View>
             )}
             <View style={styles.content}>
-                {isVoiceOnly ? (
+                {unreadable ? (
+                    <View style={[styles.voiceRow, isSelectionMode && { paddingEnd: 28 }]}>
+                        <View style={styles.lockedIcon}>
+                            <MaterialIcons name="lock-outline" size={18} color={colors.textSecondary} />
+                        </View>
+                        <Text style={styles.drawingLabel} numberOfLines={2}>{t('notes.lockedNote', 'Locked note')}</Text>
+                    </View>
+                ) : isVoiceOnly ? (
                     // A recording without text yet: show it as audio (icon, wave,
                     // length) instead of a placeholder title in any language.
                     <View
@@ -265,7 +283,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         {title || ' '}
                     </Text>
                 )}
-                {(!isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)) && (
+                {(!unreadable && !isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)) && (
                     <>
                         <Text
                             style={[styles.preview, isChecklistOnly && styles.checklistPreview, textAlignFor(previewString), isChecklistOnly && isSelectionMode && { paddingEnd: 28 }]}
@@ -434,6 +452,14 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.primaryLight,
+    },
+    lockedIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.backgroundSecondary,
     },
     voiceWave: {
         flex: 1,

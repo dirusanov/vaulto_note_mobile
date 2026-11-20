@@ -1,12 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     Text,
     TextInput,
     TouchableOpacity,
     View,
     KeyboardAvoidingView,
-    Platform,
     ScrollView,
     Linking,
     StyleSheet,
@@ -28,6 +27,7 @@ import { createStyles } from '../theme/createStyles';
 import { rtlFlip } from '../i18n/direction';
 import { appAlert } from '../components/AppAlert';
 import { finishSignIn } from '../navigation/finishSignIn';
+import { useFormKeyboard } from '../hooks/useFormKeyboard';
 
 export const SignUpScreen = () => {
     const { t } = useTranslation();
@@ -39,6 +39,10 @@ export const SignUpScreen = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
+    const form = useFormKeyboard();
+    const emailRef = useRef<TextInput>(null);
+    const passwordRef = useRef<TextInput>(null);
+    const confirmRef = useRef<TextInput>(null);
     const { signIn } = useAuth();
     const { signInWithGoogle, loading: googleLoading } = useGoogleOAuth();
 
@@ -106,14 +110,21 @@ export const SignUpScreen = () => {
     return (
         <ScreenContainer>
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={form.keyboardBehavior}
                 style={styles.container}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent}>
+                <ScrollView
+                    ref={form.scrollRef}
+                    contentContainerStyle={[styles.scrollContent, { paddingBottom: form.bottomInset + spacing.m }]}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View ref={form.contentRef} collapsable={false}>
                     <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.back', 'Back')}
                     >
                         <MaterialIcons name="arrow-back" size={24} color={colors.text} style={rtlFlip} />
                     </TouchableOpacity>
@@ -141,11 +152,20 @@ export const SignUpScreen = () => {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>{t("auth.email")}</Text>
                             <TextInput
+                                ref={emailRef}
                                 style={styles.input}
                                 placeholder={t("auth.emailPlaceholder", "name@example.com")}
                                 placeholderTextColor={colors.textSecondary}
                                 autoCapitalize="none"
+                                autoCorrect={false}
                                 keyboardType="email-address"
+                                autoComplete="email"
+                                textContentType="emailAddress"
+                                returnKeyType="next"
+                                submitBehavior="submit"
+                                onSubmitEditing={() => passwordRef.current?.focus()}
+                                onFocus={() => form.onFieldFocus(emailRef)}
+                                accessibilityLabel={t("auth.email")}
                                 value={email}
                                 onChangeText={setEmail}
                             />
@@ -155,10 +175,18 @@ export const SignUpScreen = () => {
                             <Text style={styles.label}>{t("auth.password")}</Text>
                             <View style={styles.passwordInputWrapper}>
                                 <TextInput
+                                    ref={passwordRef}
                                     style={[styles.input, styles.passwordInput]}
                                     placeholder={t("auth.createPasswordPlaceholder", "Create a password")}
                                     placeholderTextColor={colors.textSecondary}
                                     secureTextEntry={!showPassword}
+                                    autoComplete="new-password"
+                                    textContentType="newPassword"
+                                    returnKeyType="next"
+                                    submitBehavior="submit"
+                                    onSubmitEditing={() => confirmRef.current?.focus()}
+                                    onFocus={() => form.onFieldFocus(passwordRef)}
+                                    accessibilityLabel={t("auth.password")}
                                     value={password}
                                     onChangeText={setPassword}
                                 />
@@ -166,6 +194,10 @@ export const SignUpScreen = () => {
                                     style={styles.eyeButton}
                                     onPress={() => setShowPassword(prev => !prev)}
                                     activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={showPassword
+                                        ? t("auth.hidePassword", "Hide password")
+                                        : t("auth.showPassword", "Show password")}
                                 >
                                     <MaterialIcons
                                         name={showPassword ? 'visibility-off' : 'visibility'}
@@ -180,10 +212,16 @@ export const SignUpScreen = () => {
                             <Text style={styles.label}>{t("auth.confirmPassword", "Confirm Password")}</Text>
                             <View style={styles.passwordInputWrapper}>
                                 <TextInput
+                                    ref={confirmRef}
                                     style={[styles.input, styles.passwordInput]}
                                     placeholder={t("auth.repeatPasswordPlaceholder", "Repeat your password")}
                                     placeholderTextColor={colors.textSecondary}
                                     secureTextEntry={!showConfirmPassword}
+                                    autoComplete="new-password"
+                                    textContentType="newPassword"
+                                    returnKeyType="done"
+                                    onFocus={() => form.onFieldFocus(confirmRef)}
+                                    accessibilityLabel={t("auth.confirmPassword", "Confirm Password")}
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                 />
@@ -191,6 +229,10 @@ export const SignUpScreen = () => {
                                     style={styles.eyeButton}
                                     onPress={() => setShowConfirmPassword(prev => !prev)}
                                     activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={showConfirmPassword
+                                        ? t("auth.hidePassword", "Hide password")
+                                        : t("auth.showPassword", "Show password")}
                                 >
                                     <MaterialIcons
                                         name={showConfirmPassword ? 'visibility-off' : 'visibility'}
@@ -249,6 +291,7 @@ export const SignUpScreen = () => {
                         <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
                             <Text style={styles.footerLink}>{t("auth.signIn", "Sign In")}</Text>
                         </TouchableOpacity>
+                    </View>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>

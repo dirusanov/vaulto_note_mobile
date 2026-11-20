@@ -1,12 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Text,
     TextInput,
     TouchableOpacity,
     View,
     KeyboardAvoidingView,
-    Platform,
     ScrollView,
     StyleSheet,
 } from 'react-native';
@@ -30,6 +29,7 @@ import { GoogleLogo } from '../components/GoogleLogo';
 import { appAlert } from '../components/AppAlert';
 import { storage } from '../utils/storage';
 import { finishSignIn } from '../navigation/finishSignIn';
+import { useFormKeyboard } from '../hooks/useFormKeyboard';
 
 // Trial minutes a new account gets: the registration plan on the gateway
 // (subscription_plans.apply_on_registration, 30 on prod; see also auth.signUpPerk).
@@ -56,6 +56,9 @@ export const SignInScreen = () => {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const form = useFormKeyboard();
+    const emailRef = useRef<TextInput>(null);
+    const passwordRef = useRef<TextInput>(null);
 
     const handlePostLogin = async (result: LoginResult, provider: 'google' | 'email') => {
         if (result.needs_legal_acceptance) {
@@ -109,10 +112,15 @@ export const SignInScreen = () => {
     return (
         <ScreenContainer>
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={form.keyboardBehavior}
                 style={styles.container}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                <ScrollView
+                    ref={form.scrollRef}
+                    contentContainerStyle={[styles.scrollContent, { paddingBottom: form.bottomInset + spacing.m }]}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View ref={form.contentRef} collapsable={false} style={styles.formContent}>
                     <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
@@ -163,11 +171,20 @@ export const SignInScreen = () => {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>{t("auth.email")}</Text>
                                 <TextInput
+                                    ref={emailRef}
                                     style={styles.input}
                                     placeholder={t("auth.emailPlaceholder", "name@example.com")}
                                     placeholderTextColor={colors.textSecondary}
                                     autoCapitalize="none"
+                                    autoCorrect={false}
                                     keyboardType="email-address"
+                                    autoComplete="email"
+                                    textContentType="emailAddress"
+                                    returnKeyType="next"
+                                    submitBehavior="submit"
+                                    onSubmitEditing={() => passwordRef.current?.focus()}
+                                    onFocus={() => form.onFieldFocus(emailRef)}
+                                    accessibilityLabel={t("auth.email")}
                                     value={email}
                                     onChangeText={setEmail}
                                 />
@@ -177,10 +194,17 @@ export const SignInScreen = () => {
                                 <Text style={styles.label}>{t("auth.password")}</Text>
                                 <View style={styles.passwordInputWrapper}>
                                     <TextInput
+                                        ref={passwordRef}
                                         style={[styles.input, styles.passwordInput]}
                                         placeholder={t("auth.passwordPlaceholder", "Enter your password")}
                                         placeholderTextColor={colors.textSecondary}
                                         secureTextEntry={!showPassword}
+                                        autoComplete="current-password"
+                                        textContentType="password"
+                                        returnKeyType="go"
+                                        onSubmitEditing={() => { void handleEmailSignIn(); }}
+                                        onFocus={() => form.onFieldFocus(passwordRef)}
+                                        accessibilityLabel={t("auth.password")}
                                         value={password}
                                         onChangeText={setPassword}
                                     />
@@ -188,6 +212,10 @@ export const SignInScreen = () => {
                                         style={styles.eyeButton}
                                         onPress={() => setShowPassword(prev => !prev)}
                                         activeOpacity={0.8}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={showPassword
+                                            ? t("auth.hidePassword", "Hide password")
+                                            : t("auth.showPassword", "Show password")}
                                     >
                                         <MaterialIcons
                                             name={showPassword ? 'visibility-off' : 'visibility'}
@@ -234,6 +262,7 @@ export const SignInScreen = () => {
                             </TouchableOpacity>
                         </View>
                     </View>
+                    </View>
                 </ScrollView>
             </KeyboardAvoidingView>
         </ScreenContainer>
@@ -268,6 +297,9 @@ const styles = createStyles(() => ({
         paddingHorizontal: spacing.m,
         paddingTop: spacing.l,
         paddingBottom: spacing.xxl,
+    },
+    formContent: {
+        flexGrow: 1,
     },
     scrollContent: {
         width: '100%',

@@ -20,6 +20,11 @@ import { TextInput } from './TextInput';
 import { ResetEncryptionModal } from './ResetEncryptionModal';
 import { UseRecoveryCodeModal } from './UseRecoveryCodeModal';
 import { createStyles } from '../theme/createStyles';
+import { appAlert } from './AppAlert';
+import { useAuth } from '../hooks/useAuth';
+import { getNotesLocal } from '../services/DatabaseService';
+import { summarizeUnlock, type UnlockSummary } from '../utils/unreadableNote';
+import { getErrorMessage, isNetworkError } from '../utils/errorMessage';
 
 interface UnlockSyncModalProps {
     visible: boolean;
@@ -35,6 +40,35 @@ const waitForCompletionFrame = () => new Promise<void>((resolve) => {
     setTimeout(resolve, 350);
 });
 
+type Translate = ReturnType<typeof useTranslation>['t'];
+
+/** "12 notes are readable again", plus the ones this phone still cannot open. */
+const describeUnlockResult = (summary: UnlockSummary | null, t: Translate): string => {
+    if (!summary) return t('aux.unlockedText', 'Your notes are readable on this phone again.');
+    const parts = [
+        summary.readable > 0
+            ? t('aux.unlockedCount', { count: summary.readable, defaultValue: '{{count}} notes are readable on this phone again.' })
+            : t('aux.unlockedText', 'Your notes are readable on this phone again.'),
+    ];
+    if (summary.unreadable > 0) {
+        parts.push(t('aux.unlockedSomeLocked', {
+            count: summary.unreadable,
+            defaultValue: '{{count}} notes still can’t be opened: they were locked with a key that is no longer on this phone.',
+        }));
+    }
+    return parts.join('\n\n');
+};
+
+/** A failed unlock in plain words, never the raw error. */
+const describeUnlockError = (error: unknown, t: Translate): string => {
+    const message = String((error as any)?.message || '');
+    if (/incorrect passphrase|invalid access key/i.test(message)) {
+        return t('aux.passphraseMismatch', 'That passphrase didn’t match. Check it and try again.');
+    }
+    if (isNetworkError(error)) return getErrorMessage(error);
+    return t('aux.unlockFailedRetry', 'Couldn’t unlock right now. Please try again.');
+};
+
 export const UnlockSyncModal = ({
     visible,
     onClose,
@@ -47,6 +81,7 @@ export const UnlockSyncModal = ({
     const { t } = useTranslation();
 
     const { unlock, bundle } = useEncryption();
+    const { userId } = useAuth();
     const isLegacyNumericPassphrase = bundle?.secret_mode === 'pin';
     const [secret, setSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
@@ -75,6 +110,15 @@ export const UnlockSyncModal = ({
         setShowReset(false);
     }, [visible, errorMessage]);
 
+    // Every unlock ends in a sentence: what is readable now, and what still is
+    // not (notes sealed with a key this phone no longer has).
+    const announceUnlocked = async () => {
+        const summary = userId
+            ? summarizeUnlock(await getNotesLocal(userId).catch(() => []))
+            : null;
+        appAlert(t('aux.unlockedTitle', 'Notes unlocked'), describeUnlockResult(summary, t));
+    };
+
     const handleClose = () => {
         if (loading) return;
         reset();
@@ -93,7 +137,8 @@ export const UnlockSyncModal = ({
         } else {
             const validationError = getSecretValidationError(rawSecret, 'passphrase');
             if (validationError) {
-                setError(validationError);
+                // Too short to be any passphrase this app accepts: it cannot match.
+                setError(t('aux.passphraseMismatch', 'That passphrase didn’t match. Check it and try again.'));
                 return;
             }
         }
@@ -111,8 +156,9 @@ export const UnlockSyncModal = ({
                     await waitForCompletionFrame();
                     reset();
                     onUnlocked?.();
+                    await announceUnlocked();
                 } catch (e: any) {
-                    const message = e?.message || t("aux.unlockFailed");
+                    const message = describeUnlockError(e, t);
                     setError(message);
                     onError?.(message);
                 } finally {
@@ -120,6 +166,21 @@ export const UnlockSyncModal = ({
                 }
             })();
         }, 0);
+    };
+
+    // Before anything destructive: what forgetting the passphrase means, and the
+    // way back that keeps the notes (the recovery code) first.
+    const handleForgot = () => {
+        appAlert(
+            t('aux.forgotTitle', 'Forgot the passphrase?'),
+            t('aux.forgotText', 'Your notes are encrypted with it, so nobody can read them without it, not even Vaulto. If you saved the recovery code, use it instead: the notes stay. If you have neither, you can reset encryption: the encrypted notes on the server are deleted and you start over.'),
+            [
+                { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                { text: t('aux.forgotReset', 'Reset encryption…'), style: 'destructive', onPress: () => setShowReset(true) },
+                { text: t('settings.recovery.useBtn', 'Use Recovery Code'), onPress: () => setShowUseRecoveryCode(true) },
+            ],
+            { cancelable: true },
+        );
     };
 
     // Accounts encrypted with a recovery key (no passphrase) unlock with that key
@@ -132,6 +193,7 @@ export const UnlockSyncModal = ({
                 onSuccess={() => {
                     handleClose();
                     onUnlocked?.();
+                    void announceUnlocked();
                 }}
             />
         );
@@ -223,11 +285,12 @@ export const UnlockSyncModal = ({
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        onPress={() => setShowReset(true)}
+                                        onPress={handleForgot}
                                         style={styles.resetButton}
                                         disabled={loading}
+                                        accessibilityRole="button"
                                     >
-                                        <Text style={styles.resetButtonText}>{t("aux.forgotPassReset", "Forgot passphrase? Reset encryption")}</Text>
+                                        <Text style={styles.resetButtonText}>{t("aux.forgotPassphrase", "Forgot the passphrase?")}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -250,6 +313,7 @@ export const UnlockSyncModal = ({
                     setShowUseRecoveryCode(false);
                     handleClose();
                     onUnlocked?.();
+                    void announceUnlocked();
                 }}
             />
         </Modal>
@@ -369,7 +433,7 @@ const styles = createStyles(() => ({
     },
     resetButtonText: {
         fontSize: 14,
-        color: colors.error,
+        color: colors.textSecondary,
         textAlign: 'center',
     },
 }));

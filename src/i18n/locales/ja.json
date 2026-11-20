@@ -76,7 +76,9 @@
     "tagNoResults": "#{{tag}} には見つかりませんでした",
     "tagEmpty": "#{{tag}} にノートはありません",
     "tagSearchAll": "すべてのノートを検索",
-    "tagShowAll": "すべてのノートを表示"
+    "tagShowAll": "すべてのノートを表示",
+    "lockedNote": "ロックされたメモ",
+    "lockedNoteText": "このメモは、このスマートフォンにもう存在しない鍵でロックされているため、ここでは開けません。同期済みであれば、ほかのデバイスで開けます。"
   },
   "settings": {
     "title": "設定",
@@ -248,7 +250,11 @@
       "guestMinutesLeft": "無料の文字起こし残り：{{minutes}} 分。サインインで追加とメモの同期ができます。",
       "guestMinutesUsed": "無料の分数を使い切りました。サインインで追加するか、下の「オフラインで使う」をオンにしてください。",
       "trialInfoAccount": "サインインすると無料の文字起こし時間とメモの同期が使えます。",
-      "vaultLocked": "保管庫はロックされています"
+      "vaultLocked": "保管庫はロックされています",
+      "unlockTimeUnknown": "端末によっては1分ほどかかることがあります。",
+      "unlockTimeAlmost": "もうすぐ完了します…",
+      "unlockTimeSeconds": "残り約{{count}}秒。Vaulto を開いたままにしてください。",
+      "unlockTimeMinutes": "残り約{{count}}分。Vaulto を開いたままにしてください。"
     },
     "recovery": {
       "title": "復元コード",
@@ -389,7 +395,8 @@
       "remove": "このデバイスから削除 · {{size}}",
       "aiReadyTitle": "端末上の AI の準備ができました",
       "aiReadyGuest": "アカウントなしでは、AI はこの端末で動作します。使うには「{{option}}」をオンにしてください。音声と AI は端末の外に出ません。",
-      "turnOn": "オンにする"
+      "turnOn": "オンにする",
+      "aiReadyGuestOff": "アカウントなしでは、AI はこのデバイス上で動作します。ダウンロード済みのモデルがオフになっています。使うにはオンにしてください。"
     },
     "privacySummary": {
       "title": "録音は端末の外に出ますか？",
@@ -485,7 +492,12 @@
     "benefitAI": "AI が文章を整え、タスクを見つけ、メモについての質問に答えます",
     "benefitSync": "エンドツーエンド暗号化で端末間を同期",
     "benefitKeepNotes": "アカウントなしで作ったメモもそのまま引き継がれます",
-    "orWithEmail": "またはメールで"
+    "orWithEmail": "またはメールで",
+    "sessionExpiredTitle": "セッションの有効期限が切れました",
+    "sessionExpiredText": "AI と同期を使い続けるには、もう一度サインインしてください。メモはこのスマートフォンに残ります。",
+    "signInAgain": "もう一度サインイン",
+    "showPassword": "パスワードを表示",
+    "hidePassword": "パスワードを隠す"
   },
   "edit": {
     "visualEditor": "ビジュアルエディタ",
@@ -884,7 +896,10 @@
       "cloud": "Vaultoクラウド"
     },
     "routeDetailsHint": "録音がどう処理されるかを表示します",
-    "moreOptions": "録音オプション"
+    "moreOptions": "録音オプション",
+    "micAllowTitle": "録音するにはマイクを許可してください",
+    "micAllowText": "ボイスメモを録音するには、Vaulto にマイクへのアクセスが必要です。アプリの設定で許可できます。",
+    "micOpenSettings": "設定を開く"
   },
   "aux": {
     "emailVerified": "メールを確認しました！",
@@ -1029,7 +1044,17 @@
     "aiLimitDescNoDate": "今月の AI 利用枠を使い切りました。次の期間の開始時にリセットされます。",
     "aiLimitGuestDesc": "サインインすると、毎月の AI 利用枠を自分用に使えます。",
     "verificationSentTo": "確認用リンクを次のアドレスに送信しました",
-    "verificationCheckFailed": "メールが確認済みかどうかを確認できませんでした。接続を確認して、もう一度お試しください。"
+    "verificationCheckFailed": "メールが確認済みかどうかを確認できませんでした。接続を確認して、もう一度お試しください。",
+    "unlockedTitle": "メモのロックを解除しました",
+    "unlockedText": "このスマートフォンでメモを再び読めるようになりました。",
+    "unlockedCount_other": "{{count}}件のメモをこのスマートフォンで再び読めるようになりました。",
+    "unlockedSomeLocked_other": "{{count}}件のメモはまだ開けません。このスマートフォンにもう存在しない鍵でロックされているためです。",
+    "passphraseMismatch": "パスフレーズが一致しません。確認してもう一度お試しください。",
+    "unlockFailedRetry": "今はロックを解除できませんでした。もう一度お試しください。",
+    "forgotPassphrase": "パスフレーズを忘れた場合",
+    "forgotTitle": "パスフレーズを忘れましたか？",
+    "forgotText": "メモはこのパスフレーズで暗号化されているため、Vaulto を含め誰もパスフレーズなしでは読めません。リカバリーコードを保存している場合はそちらを使ってください。メモはそのまま残ります。どちらもない場合は暗号化をリセットできます。サーバー上の暗号化されたメモは削除され、最初からやり直しになります。",
+    "forgotReset": "暗号化をリセット…"
   },
   "a11y": {
     "checked": "完了",
@@ -1180,7 +1205,13 @@
     "serverUnavailable": "サーバーが一時的に利用できません。ノートは安全です。少し待ってから再度お試しください。",
     "timeout": "リクエストに時間がかかりすぎました。接続を確認して、もう一度お試しください。",
     "localAIMemory": "このAIモデルにはメモリが不足しています。設定で軽いモデルまたはクラウドAIを選んでください。",
-    "unreachable": "サーバーに接続できませんでした。少ししてからもう一度お試しください。"
+    "unreachable": "サーバーに接続できませんでした。少ししてからもう一度お試しください。",
+    "sessionExpired": "セッションの有効期限が切れました。続けるにはもう一度サインインしてください。",
+    "tooLong": "一度に送るには長すぎます。短い部分で試してください。",
+    "tooManyRequests": "現在リクエストが集中しています。1分後にもう一度お試しください。",
+    "requestFailed": "問題が発生しました。もう一度お試しください。",
+    "signInForAI": "Vaulto AI を使うにはサインインしてください。",
+    "aiEmpty": "AI から何も返ってきませんでした。もう一度お試しください。"
   },
   "alerts": {
     "shareUnavailable": "この端末では共有できません。",

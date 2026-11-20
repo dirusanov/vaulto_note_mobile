@@ -48,7 +48,63 @@ const describeTransportFailure = (error: unknown): string | null => {
     return null;
 };
 
+const SESSION_EXPIRED_COPY = () =>
+    translate('errors.sessionExpired', 'Your session has expired. Sign in again to continue.');
+
+/** Our own services name the HTTP status of a failed request: "LLM API error: 500". */
+const OWN_SERVICE_STATUS = /^(?:LLM API error|Agent request failed|Transcription request failed)\D{0,4}(\d{3})/i;
+
+/**
+ * Plain words for an HTTP status of our own API. The server's text is never
+ * shown: it is English, technical, and sometimes says the opposite of what
+ * the user sees ("Invalid credentials" while signed in).
+ */
+export const describeServerStatus = (status: number): string => {
+    if (status === 401) return SESSION_EXPIRED_COPY();
+    if (status === 408 || status === 504) {
+        return translate('errors.timeout', 'The request took too long. Check your connection and try again.');
+    }
+    if (status === 413) {
+        return translate('errors.tooLong', 'This is too long to send at once. Try a shorter part.');
+    }
+    if (status === 429) {
+        return translate('errors.tooManyRequests', 'Too many requests right now. Try again in a minute.');
+    }
+    if (status >= 500) {
+        return translate('errors.serverUnavailable', 'The server is temporarily unavailable. Your notes are safe; try again in a minute.');
+    }
+    return translate('errors.requestFailed', 'Something went wrong. Please try again.');
+};
+
+/** Errors the app itself raises around a request, in plain words; null for others. */
+const describeKnownFailure = (error: unknown): string | null => {
+    const name = (error as any)?.name;
+    const message = messageOf(error);
+    if (name === 'SessionExpiredError' || message === 'session_expired' || message === 'Session expired. Please sign in again.') {
+        return SESSION_EXPIRED_COPY();
+    }
+    if (name === 'ServerUnreachableError' || message === 'server_unreachable') {
+        return translate('errors.unreachable', 'Could not reach the server. Try again in a moment.');
+    }
+    if (message === 'Sign in required to use Vaulto AI.') {
+        return translate('errors.signInForAI', 'Sign in to use Vaulto AI.');
+    }
+    if (message === 'LLM returned empty response') {
+        return translate('errors.aiEmpty', 'The AI sent back nothing. Please try again.');
+    }
+    const ownStatus = OWN_SERVICE_STATUS.exec(message);
+    if (ownStatus) return describeServerStatus(Number(ownStatus[1]));
+    // An expired session on any API call (sign-in itself answers 401 for a wrong password).
+    const response = (error as any)?.response;
+    const url = String((error as any)?.config?.url ?? '');
+    if (response?.status === 401 && !/\/auth\//.test(url)) return SESSION_EXPIRED_COPY();
+    if (response?.status === 429) return describeServerStatus(429);
+    return null;
+};
+
 export const getErrorMessage = (error: unknown, fallback = 'Something went wrong'): string => {
+    const known = describeKnownFailure(error);
+    if (known) return known;
     if (messageOf(error) === 'transcription_provider_error') {
         return translate('errors.transcriptionProvider', 'Could not transcribe the audio. Please try again.');
     }

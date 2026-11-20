@@ -77,7 +77,9 @@
     "tagNoResults": "Nichts gefunden in #{{tag}}",
     "tagEmpty": "Keine Notizen in #{{tag}}",
     "tagSearchAll": "Alle Notizen durchsuchen",
-    "tagShowAll": "Alle Notizen anzeigen"
+    "tagShowAll": "Alle Notizen anzeigen",
+    "lockedNote": "Gesperrte Notiz",
+    "lockedNoteText": "Diese Notiz wurde mit einem Schlüssel gesperrt, der nicht mehr auf diesem Telefon ist, deshalb lässt sie sich hier nicht öffnen. Wenn sie synchronisiert wurde, kannst du sie auf deinen anderen Geräten öffnen."
   },
   "settings": {
     "title": "Einstellungen",
@@ -249,7 +251,11 @@
       "guestMinutesLeft": "Verbleibende kostenlose Spracherkennung: {{minutes}} Min. Melde dich an für mehr und zum Synchronisieren.",
       "guestMinutesUsed": "Die Freiminuten sind aufgebraucht. Melde dich an für mehr oder aktiviere unten „Ohne Internet arbeiten“.",
       "trialInfoAccount": "Melde dich an für kostenlose Spracherkennungsminuten und Synchronisierung deiner Notizen.",
-      "vaultLocked": "Tresor ist gesperrt"
+      "vaultLocked": "Tresor ist gesperrt",
+      "unlockTimeUnknown": "Auf manchen Telefonen dauert das etwa eine Minute.",
+      "unlockTimeAlmost": "Fast fertig…",
+      "unlockTimeSeconds": "Noch etwa {{count}} s. Lass Vaulto geöffnet.",
+      "unlockTimeMinutes": "Noch etwa {{count}} Min. Lass Vaulto geöffnet."
     },
     "recovery": {
       "title": "Wiederherstellungscode",
@@ -390,7 +396,8 @@
       "remove": "Von diesem Gerät entfernen · {{size}}",
       "aiReadyTitle": "KI auf dem Gerät ist bereit",
       "aiReadyGuest": "Ohne Konto läuft KI auf diesem Gerät. Schalte „{{option}}“ ein, um sie zu nutzen: Sprache und KI bleiben dann auf dem Gerät.",
-      "turnOn": "Einschalten"
+      "turnOn": "Einschalten",
+      "aiReadyGuestOff": "Ohne Konto läuft die KI auf diesem Gerät. Heruntergeladene Modelle sind ausgeschaltet; schalte sie ein, um sie zu nutzen."
     },
     "privacySummary": {
       "title": "Verlässt meine Aufnahme das Telefon?",
@@ -486,7 +493,12 @@
     "benefitAI": "KI bringt Texte in Form, findet Aufgaben und beantwortet Fragen zu deinen Notizen",
     "benefitSync": "Synchronisierung zwischen deinen Geräten mit Ende-zu-Ende-Verschlüsselung",
     "benefitKeepNotes": "Notizen, die du ohne Konto erstellt hast, kommen mit",
-    "orWithEmail": "oder mit E-Mail"
+    "orWithEmail": "oder mit E-Mail",
+    "sessionExpiredTitle": "Deine Sitzung ist abgelaufen",
+    "sessionExpiredText": "Melde dich erneut an, um KI und Synchronisierung weiter zu nutzen. Deine Notizen bleiben auf diesem Telefon.",
+    "signInAgain": "Erneut anmelden",
+    "showPassword": "Passwort anzeigen",
+    "hidePassword": "Passwort verbergen"
   },
   "edit": {
     "visualEditor": "Visueller Editor",
@@ -887,7 +899,10 @@
       "cloud": "Vaulto Cloud"
     },
     "routeDetailsHint": "Zeigt, was mit der Aufnahme passiert",
-    "moreOptions": "Aufnahmeoptionen"
+    "moreOptions": "Aufnahmeoptionen",
+    "micAllowTitle": "Mikrofon zum Aufnehmen erlauben",
+    "micAllowText": "Vaulto braucht das Mikrofon, um Sprachnotizen aufzunehmen. Du kannst es in den App-Einstellungen erlauben.",
+    "micOpenSettings": "Einstellungen öffnen"
   },
   "aux": {
     "emailVerified": "E-Mail bestätigt!",
@@ -1032,7 +1047,19 @@
     "aiLimitDescNoDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird zu Beginn des nächsten Zeitraums zurückgesetzt.",
     "aiLimitGuestDesc": "Melde dich an, um ein eigenes monatliches KI-Kontingent zu erhalten.",
     "verificationSentTo": "Wir haben einen Bestätigungslink gesendet an",
-    "verificationCheckFailed": "Es konnte nicht geprüft werden, ob deine E-Mail bestätigt ist. Prüfe deine Verbindung und versuche es erneut."
+    "verificationCheckFailed": "Es konnte nicht geprüft werden, ob deine E-Mail bestätigt ist. Prüfe deine Verbindung und versuche es erneut.",
+    "unlockedTitle": "Notizen entsperrt",
+    "unlockedText": "Deine Notizen sind auf diesem Telefon wieder lesbar.",
+    "unlockedCount_one": "{{count}} Notiz ist auf diesem Telefon wieder lesbar.",
+    "unlockedCount_other": "{{count}} Notizen sind auf diesem Telefon wieder lesbar.",
+    "unlockedSomeLocked_one": "{{count}} Notiz lässt sich weiterhin nicht öffnen: Sie wurde mit einem Schlüssel gesperrt, der nicht mehr auf diesem Telefon ist.",
+    "unlockedSomeLocked_other": "{{count}} Notizen lassen sich weiterhin nicht öffnen: Sie wurden mit einem Schlüssel gesperrt, der nicht mehr auf diesem Telefon ist.",
+    "passphraseMismatch": "Diese Passphrase passt nicht. Prüfe sie und versuche es erneut.",
+    "unlockFailedRetry": "Entsperren hat gerade nicht geklappt. Bitte versuche es erneut.",
+    "forgotPassphrase": "Passphrase vergessen?",
+    "forgotTitle": "Passphrase vergessen?",
+    "forgotText": "Deine Notizen sind damit verschlüsselt, ohne sie kann niemand sie lesen, auch Vaulto nicht. Wenn du den Wiederherstellungscode gespeichert hast, nutze ihn: Die Notizen bleiben erhalten. Hast du beides nicht, kannst du die Verschlüsselung zurücksetzen: Die verschlüsselten Notizen auf dem Server werden gelöscht und du fängst neu an.",
+    "forgotReset": "Verschlüsselung zurücksetzen…"
   },
   "a11y": {
     "checked": "erledigt",
@@ -1183,7 +1210,13 @@
     "serverUnavailable": "Der Server ist vorübergehend nicht erreichbar. Deine Notizen sind sicher; versuche es in einer Minute erneut.",
     "timeout": "Die Anfrage hat zu lange gedauert. Prüfe deine Verbindung und versuche es erneut.",
     "localAIMemory": "Nicht genug Arbeitsspeicher für diese KI. Wähle in den Einstellungen ein kleineres Modell oder Cloud-KI.",
-    "unreachable": "Der Server war nicht erreichbar. Versuche es gleich noch einmal."
+    "unreachable": "Der Server war nicht erreichbar. Versuche es gleich noch einmal.",
+    "sessionExpired": "Deine Sitzung ist abgelaufen. Melde dich erneut an, um weiterzumachen.",
+    "tooLong": "Das ist zu lang für eine Anfrage. Versuche einen kürzeren Teil.",
+    "tooManyRequests": "Gerade zu viele Anfragen. Versuche es in einer Minute erneut.",
+    "requestFailed": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "signInForAI": "Melde dich an, um Vaulto AI zu nutzen.",
+    "aiEmpty": "Die KI hat nichts zurückgegeben. Bitte versuche es erneut."
   },
   "alerts": {
     "shareUnavailable": "Teilen ist auf diesem Gerät nicht verfügbar.",

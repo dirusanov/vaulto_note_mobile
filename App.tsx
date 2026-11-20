@@ -20,6 +20,7 @@ import { useNotesContext } from './src/contexts/NotesContext';
 import { hasMasterKey } from './src/crypto/e2ee';
 import NetInfo from '@react-native-community/netinfo';
 import { setNetworkStateSource } from './src/utils/errorMessage';
+import { installSessionExpiredPrompt } from './src/navigation/sessionExpiredPrompt';
 
 // The last network state Android reported, so an error message never says "no
 // internet" while there is a network (a request can break on the way anyway).
@@ -28,6 +29,9 @@ NetInfo.addEventListener((state) => {
     networkUp = state.isConnected === false ? false : state.isInternetReachable === true ? true : null;
 });
 setNetworkStateSource(() => networkUp);
+
+// A session that could not be renewed asks for a sign-in in plain words.
+installSessionExpiredPrompt();
 
 // Before the first render: called later, the native splash can already be gone and
 // the app shows a blank screen until it is ready.

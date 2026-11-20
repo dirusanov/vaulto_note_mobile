@@ -3,8 +3,8 @@ import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
-import { hmac } from '@noble/hashes/hmac';
-import { bytesToHex, clean, createView, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { pbkdf2Sha256Async } from './pbkdf2Sha256';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import { gcm } from '@noble/ciphers/aes';
 
@@ -173,70 +173,20 @@ const yieldToUi = () => new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
 });
 
-const deriveKeyAsync = async (
+const deriveKeyAsync = (
     material: string,
     salt: Uint8Array,
     iterations: number,
     onProgress?: KdfProgressCallback,
-): Promise<Uint8Array> => {
-    const materialBytes = utf8ToBytes(material);
-    const dkLen = 32;
-    const derivedKey = new Uint8Array(dkLen);
-    const prf = hmac.create(sha256, materialBytes);
-    const prfSalt = prf._cloneInto().update(salt);
-    let prfWorking: ReturnType<typeof hmac.create> | undefined;
-    const arr = new Uint8Array(4);
-    const view = createView(arr);
-    const u = new Uint8Array(prf.outputLen);
-    const blocks = Math.ceil(dkLen / prf.outputLen);
-    const totalInnerIterations = Math.max(1, blocks * Math.max(1, iterations - 1));
-    let completedInnerIterations = 0;
-    let lastYieldAt = Date.now();
-    let lastReportedStep = -1;
+): Promise<Uint8Array> =>
+    // Specialised PBKDF2 (the same bytes as noble's pbkdf2, about 3x faster without
+    // a JIT), run in slices so the UI keeps drawing while it works.
+    pbkdf2Sha256Async(utf8ToBytes(material), salt, iterations, 32, {
+        onProgress,
+        pause: yieldToUi,
+        sliceMs: KDF_ASYNC_TICK_MS,
+    });
 
-    const report = () => {
-        if (!onProgress) return;
-        const progress = Math.max(0, Math.min(1, completedInnerIterations / totalInnerIterations));
-        const step = Math.floor(progress * 200);
-        if (step !== lastReportedStep) {
-            lastReportedStep = step;
-            onProgress(progress);
-        }
-    };
-
-    try {
-        for (let ti = 1, pos = 0; pos < dkLen; ti++, pos += prf.outputLen) {
-            const target = derivedKey.subarray(pos, pos + prf.outputLen);
-            view.setInt32(0, ti, false);
-            (prfWorking = prfSalt._cloneInto(prfWorking)).update(arr).digestInto(u);
-            target.set(u.subarray(0, target.length));
-
-            for (let ui = 1; ui < iterations; ui++) {
-                prf._cloneInto(prfWorking).update(u).digestInto(u);
-                for (let i = 0; i < target.length; i++) {
-                    target[i] ^= u[i];
-                }
-                completedInnerIterations++;
-                report();
-
-                const elapsed = Date.now() - lastYieldAt;
-                if (elapsed >= KDF_ASYNC_TICK_MS || elapsed < 0) {
-                    await yieldToUi();
-                    lastYieldAt = Date.now();
-                }
-            }
-        }
-
-        completedInnerIterations = totalInnerIterations;
-        report();
-        return derivedKey;
-    } finally {
-        prf.destroy();
-        prfSalt.destroy();
-        prfWorking?.destroy();
-        clean(u, arr);
-    }
-};
 
 export const createKeyBundle = async (
     secret: string,
@@ -305,9 +255,10 @@ export const unwrapMasterKeyAsync = async (
         kdf: KeyBundleKdf,
         wrap: KeyBundleWrap,
         wrappedKeyHex: string,
+        onProgress?: KdfProgressCallback,
     ): Promise<Uint8Array | null> => {
         try {
-            const derived = await deriveKeyAsync(material, hexToBytes(kdf.salt), kdf.iterations, onKdfProgress);
+            const derived = await deriveKeyAsync(material, hexToBytes(kdf.salt), kdf.iterations, onProgress);
             const nonce = hexToBytes(wrap.nonce);
             const wrappedKey = hexToBytes(wrappedKeyHex);
 
@@ -324,9 +275,17 @@ export const unwrapMasterKeyAsync = async (
         }
     };
 
-    for (const candidate of candidates) {
-        const unwrapped = await tryUnwrap(candidate, bundle.kdf, bundle.wrap, bundle.wrapped_key);
-        if (unwrapped) return unwrapped;
+    // Each spelling of the secret is a full key derivation: progress spans them
+    // all, so the bar never reaches the end and then starts over.
+    const list = [...candidates];
+    for (let index = 0; index < list.length; index++) {
+        const unwrapped = await tryUnwrap(list[index], bundle.kdf, bundle.wrap, bundle.wrapped_key, (progress) => {
+            onKdfProgress?.((index + progress) / list.length);
+        });
+        if (unwrapped) {
+            onKdfProgress?.(1);
+            return unwrapped;
+        }
     }
     throw new Error('Invalid access key');
 };

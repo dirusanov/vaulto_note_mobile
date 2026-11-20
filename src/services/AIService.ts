@@ -1,10 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildTaskExtractionPrompt, parseExtractedTasks, type ExtractedTask } from '../utils/taskExtraction';
 import { API_URL } from '../utils/env';
-import { getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel, storage } from '../utils/storage';
+import { getOpenAIApiKey, getOpenAIBaseUrl, getOpenAIModel } from '../utils/storage';
 import { buildOpenAICompatibleUrl, DEFAULT_OPENAI_BASE_URL, modelSupportsTemperature } from '../utils/openaiCompat';
 import { generateUUID } from '../utils/uuid';
-import { clearAiLimit, isLlmLimitReason, markAiLimitReached, UsageLimitError } from '../utils/aiLimitState';
+import {
+    clearAiLimit,
+    isAiLimitKnown,
+    isLlmLimitReason,
+    LLM_LIMIT_REASON,
+    markAiLimitReached,
+    UsageLimitError,
+} from '../utils/aiLimitState';
+import { fetchWithSession } from '../api/sessionFetch';
 import { generateWithLocalLLM } from './LocalLLMService';
 import { getEffectiveAIProvider } from './effectiveProvider';
 
@@ -314,14 +322,27 @@ async function refuseForLimit(response: Response, announce: boolean): Promise<Us
     return new UsageLimitError(reason);
 }
 
+/**
+ * The allowance is already known to be used up (a refusal earlier this session,
+ * or the usage figures of the profile): the limit sheet opens at once instead of
+ * after a request that can only be refused.
+ */
+async function refuseKnownLimit(announce: boolean): Promise<void> {
+    if (!isAiLimitKnown()) return;
+    if (announce) {
+        const { onLimitReached } = await import('../utils/limitEvents');
+        onLimitReached.emit(LLM_LIMIT_REASON);
+    }
+    throw new UsageLimitError(LLM_LIMIT_REASON);
+}
+
+/** A non-OK answer of the AI endpoint, without the server's own words. */
+const aiRequestFailed = (status: number): Error => new Error(`LLM API error: ${status}`);
+
 async function improveViaBackend(text: string, option: AIImprovementOption): Promise<string> {
-    const token = await storage.getToken();
     const baseUrl = BACKEND_IMPROVE_URL;
     const idempotencyKey = await generateUUID();
-
-    if (!token) {
-        throw new Error('Sign in required to use Vaulto AI.');
-    }
+    await refuseKnownLimit(true);
 
     // JSON options carry their own output contract. Prefixing the plain-text
     // instruction here made the two contradict each other and broke the parse.
@@ -337,7 +358,9 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
         json_mode: wantsJson,
     };
 
-    const response = await fetch(baseUrl, {
+    // An access token that expired since the last request is renewed and the
+    // request sent again; the same idempotency key keeps that from billing twice.
+    const response = await fetchWithSession(baseUrl, (token) => ({
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -345,15 +368,15 @@ async function improveViaBackend(text: string, option: AIImprovementOption): Pro
             'Idempotency-Key': idempotencyKey,
         },
         body: JSON.stringify(body),
-    });
+    }));
 
     if (response.status === 403) {
         throw await refuseForLimit(response, true);
     }
 
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`LLM API error: ${response.status} - ${errorText}`);
+        console.warn('[AI] improve failed', response.status, await response.text().catch(() => ''));
+        throw aiRequestFailed(response.status);
     }
 
     const data = await response.json();
@@ -402,22 +425,23 @@ async function runInstruction(
     }
 
     if (provider === 'vaulto_ai') {
-        const token = await storage.getToken();
-        if (!token) throw new Error('Sign in required to use Vaulto AI.');
-        const response = await fetch(BACKEND_IMPROVE_URL, {
+        await refuseKnownLimit(announceLimit);
+        const idempotencyKey = await generateUUID();
+        const response = await fetchWithSession(BACKEND_IMPROVE_URL, (token) => ({
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
-                'Idempotency-Key': await generateUUID(),
+                'Idempotency-Key': idempotencyKey,
             },
             body: JSON.stringify({ text, prompt: instruction, json_mode: json }),
-        });
+        }));
         if (response.status === 403) {
             throw await refuseForLimit(response, announceLimit);
         }
         if (!response.ok) {
-            throw new Error(`LLM API error: ${response.status} - ${await response.text()}`);
+            console.warn('[AI] request failed', response.status, await response.text().catch(() => ''));
+            throw aiRequestFailed(response.status);
         }
         const data = await response.json();
         if (!data.text) throw new Error('LLM returned empty response');

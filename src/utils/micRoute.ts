@@ -183,9 +183,9 @@ export const summarizeProcessing = (i: ProcessingSummaryInputs): ProcessingSumma
     else if (i.provider === 'local_whisper') ai = 'none';
     else if (i.privateMode && i.aiDownloaded) ai = 'device';
     else if (i.provider === 'openai') ai = 'custom';
-    // Cloud AI needs an account; a guest's downloaded model is used offline or
-    // with "Only on this device" on.
-    else if (!i.signedIn) ai = 'sign_in';
+    // Cloud AI needs an account; a guest's downloaded model answers instead
+    // (effectiveProvider), so the card says so right after the download.
+    else if (!i.signedIn) ai = i.aiDownloaded ? 'device' : 'sign_in';
     else ai = i.aiDownloaded ? 'cloud_device_offline' : 'cloud';
 
     const speechUploads = speech === 'cloud' || speech === 'cloud_device_offline' || speech === 'custom';

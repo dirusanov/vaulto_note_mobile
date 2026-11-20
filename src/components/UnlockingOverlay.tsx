@@ -1,11 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Easing, Modal, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { createStyles } from '../theme/createStyles';
+import { estimateSecondsLeft, roundTimeLeft, type ProgressSample } from '../utils/progressEstimate';
 
 interface UnlockingOverlayProps {
     visible: boolean;
@@ -29,6 +30,34 @@ export const UnlockingOverlay = ({ visible, title, subtitle, progress, progressL
     const progressText = progressValue < 10 && progressValue % 1 !== 0
         ? progressValue.toFixed(1)
         : String(Math.round(progressValue));
+
+    // Honest time left, from how fast the bar has actually moved on this phone.
+    const firstSample = useRef<ProgressSample | null>(null);
+    const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+    useEffect(() => {
+        if (!visible || !isDeterminate) {
+            firstSample.current = null;
+            setSecondsLeft(null);
+            return;
+        }
+        const sample = { at: Date.now(), progress: progressValue };
+        if (!firstSample.current || progressValue < firstSample.current.progress) {
+            firstSample.current = sample;
+            return;
+        }
+        setSecondsLeft(estimateSecondsLeft(firstSample.current, sample));
+    }, [visible, isDeterminate, progressValue]);
+    const timeLeftText = (() => {
+        if (secondsLeft === null) {
+            return t('settings.ui.unlockTimeUnknown', 'This can take a minute on some phones.');
+        }
+        const left = roundTimeLeft(secondsLeft);
+        if (left.unit === 'almost') return t('settings.ui.unlockTimeAlmost', 'Almost done…');
+        if (left.unit === 'seconds') {
+            return t('settings.ui.unlockTimeSeconds', 'About {{count}} s left. Keep Vaulto open.', { count: left.value });
+        }
+        return t('settings.ui.unlockTimeMinutes', 'About {{count}} min left. Keep Vaulto open.', { count: left.value });
+    })();
 
     const pulseStyle = useMemo(() => ({
         opacity: pulse.interpolate({
@@ -112,13 +141,24 @@ export const UnlockingOverlay = ({ visible, title, subtitle, progress, progressL
                             <Text style={styles.progressPercent}>{progressText}%</Text>
                         </View>
                     )}
-                    <View style={styles.progressTrack}>
+                    <View
+                        style={styles.progressTrack}
+                        accessible
+                        accessibilityRole="progressbar"
+                        accessibilityLabel={progressLabel ?? t('common.progress', 'Progress')}
+                        accessibilityValue={isDeterminate ? { min: 0, max: 100, now: Math.round(progressValue) } : undefined}
+                    >
                         {isDeterminate ? (
                             <View style={[styles.progressFill, { width: `${progressValue}%` }]} />
                         ) : (
                             <Animated.View style={[styles.progressFill, { width: PROGRESS_FILL_WIDTH }, glideStyle]} />
                         )}
                     </View>
+                    {isDeterminate && (
+                        <Text style={styles.timeLeft} accessibilityLiveRegion="polite">
+                            {timeLeftText}
+                        </Text>
+                    )}
                 </View>
             </View>
         </Modal>
@@ -205,6 +245,13 @@ const styles = createStyles(() => ({
         borderRadius: 999,
         backgroundColor: colors.backgroundSecondary,
         overflow: 'hidden',
+    },
+    timeLeft: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        marginTop: spacing.s,
+        minHeight: 18,
     },
     progressFill: {
         height: 6,

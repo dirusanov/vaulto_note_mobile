@@ -28,6 +28,15 @@ test('stack replaced meanwhile (terms acceptance): rebuild library + Ask', () =>
     );
 });
 
+test('sign-in asked by an AI action in a note returns to that note, or the library', () => {
+    assert.deepStrictEqual(
+        authReturn.planAfterSignIn('NoteEdit', ['NotesList', 'NoteEdit', 'SignIn']),
+        { kind: 'back', screen: 'NoteEdit' },
+    );
+    // Which note is unknown once the stack was replaced: never an empty editor.
+    assert.deepStrictEqual(authReturn.planAfterSignIn('NoteEdit', ['LegalAcceptance']), { kind: 'default' });
+});
+
 test('no remembered screen, or the user backed out: usual destination', () => {
     assert.deepStrictEqual(authReturn.planAfterSignIn(null, ['NotesList', 'SignIn']), { kind: 'default' });
     authReturn.rememberAuthReturn('AskNotes', 'q');

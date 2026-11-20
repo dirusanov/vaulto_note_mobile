@@ -123,6 +123,7 @@ import {
     setOnDeviceTranscription,
     getOnDeviceTranscription,
     setAIProvider,
+    setLocalModelsEnabled,
 } from '../utils/storage';
 import { MarkdownToolbar, MarkdownFormatType } from '../components/MarkdownToolbar';
 import { TextAppearanceModal } from '../components/TextAppearanceModal';
@@ -130,8 +131,9 @@ import { AIProcessingIndicator, AIActiveTask } from '../components/AIProcessingI
 import { TranscriptionIndicator } from '../components/TranscriptionIndicator';
 import { LimitModal } from '../components/LimitModal';
 import { InlineNotice, InlineNoticeAction } from '../components/InlineNotice';
-import { isAiLimitKnown, noteAccountPlan, takeAiLimitNotice } from '../utils/aiLimitState';
-import { isLimitSheetOpen } from '../utils/limitEvents';
+import { isAiLimitKnown, LLM_LIMIT_REASON, noteAccountPlan, takeAiLimitNotice } from '../utils/aiLimitState';
+import { isLimitSheetOpen, onLimitReached } from '../utils/limitEvents';
+import { clearAuthReturn, rememberAuthReturn } from '../utils/authReturn';
 import { looksLikeVoiceCommand, shouldHintAiForRequest, voiceRequestKind } from '../utils/voiceCommand';
 import { ErrorModal } from '../components/ErrorModal';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
@@ -212,6 +214,8 @@ import { takeSlowTranscriptionHint } from '../services/localSpeechSpeed';
 import NetInfo from '@react-native-community/netinfo';
 import { scheduleTaskReminder } from '../services/notifications';
 import { appAlert } from '../components/AppAlert';
+import { showMicPermissionDenied } from '../utils/micPermission';
+import { isSessionExpiredError } from '../utils/sessionErrors';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
 const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
@@ -1748,6 +1752,8 @@ export const NoteEditScreen = () => {
     /** The AI result against the text it was made from, opened from the preview. */
     const [showPreviewCompare, setShowPreviewCompare] = useState(false);
     const showPrettyQuotaNotification = useCallback((errorValue: unknown, fallback: string): boolean => {
+        // The app-wide "sign in again" prompt is already up (api/sessionFetch).
+        if (isSessionExpiredError(errorValue)) return true;
         const originalErrorMsg = getErrorMessage(errorValue, '');
         const raw = originalErrorMsg.toLowerCase();
 
@@ -1907,14 +1913,18 @@ export const NoteEditScreen = () => {
     );
 
     const handleAiAccess = async (callback: () => void) => {
+        // Decided now, not from the last focus: a model downloaded or a sign-in
+        // finished meanwhile changes who answers.
+        const provider = await getEffectiveAIProvider().catch(() => currentAIProvider);
+        if (provider !== currentAIProvider) setCurrentAIProvider(provider);
         const isLocalAiProvider =
-            currentAIProvider === 'local_llm' ||
-            currentAIProvider === 'local_whisper' ||
-            currentAIProvider === 'local';
+            provider === 'local_llm' ||
+            provider === 'local_whisper' ||
+            provider === 'local';
 
         const needsLocalLLMRuntime =
-            currentAIProvider === 'local_llm' ||
-            currentAIProvider === 'local';
+            provider === 'local_llm' ||
+            provider === 'local';
 
         if (needsLocalLLMRuntime && !isLocalLLMRuntimeAvailable()) {
             appAlert(
@@ -1935,7 +1945,14 @@ export const NoteEditScreen = () => {
                     }),
                     [
                         { text: t('common.cancel'), style: 'cancel' },
-                        { text: t('localAI.openSettings', 'Open Settings'), onPress: () => navigation.navigate('Settings') },
+                        {
+                            text: t('localAI.openSettings', 'Open Settings'),
+                            onPress: () => {
+                                // Back with the model downloaded, the tapped action goes on.
+                                pendingAiActionRef.current = callback;
+                                navigation.navigate('Settings');
+                            },
+                        },
                     ],
                 );
                 return;
@@ -1943,25 +1960,22 @@ export const NoteEditScreen = () => {
         }
 
         if (isGuest && !isLocalAiProvider) {
-            // A guest who already downloaded the on-device model gets it in one
-            // tap instead of a sign-in prompt that sends them round in a circle.
+            // A guest's downloaded model answers by itself (effectiveProvider). Only
+            // when the downloaded models were switched off is one tap left: turn
+            // them back on, and the tapped action goes on.
             const offline = await getOfflineStatus().catch(() => null);
             if (offline?.aiReady && isLocalLLMRuntimeAvailable()) {
                 appAlert(
                     t('settings.models.aiReadyTitle', 'AI on this device is ready'),
-                    t('settings.models.aiReadyGuest', 'Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.', {
-                        option: t('settings.voice.private', 'Only on this device'),
-                    }),
+                    t('settings.models.aiReadyGuestOff', 'Without an account, AI runs on this device. Downloaded models are switched off; turn them on to use it.'),
                     [
                         { text: t('common.notNow', 'Not now'), style: 'cancel' },
                         {
                             text: t('settings.models.turnOn', 'Turn on'),
                             onPress: () => {
                                 void (async () => {
-                                    await setOnDeviceTranscription(true);
-                                    await setAIProvider('local');
-                                    setCurrentAIProvider('local');
-                                    callback();
+                                    await setLocalModelsEnabled(true);
+                                    void handleAiAccessRef.current(callback);
                                 })();
                             },
                         },
@@ -1969,7 +1983,15 @@ export const NoteEditScreen = () => {
                 );
                 return;
             }
+            // After the sign-in the editor comes back and the tapped action goes on.
+            pendingAiActionRef.current = callback;
             setShowAiAuthModal(true);
+            return;
+        }
+        // The allowance is known to be used up: the limit sheet (with its reset
+        // date) right away, not after a request that can only be refused.
+        if (provider === 'vaulto_ai' && isAiLimitKnown()) {
+            onLimitReached.emit(LLM_LIMIT_REASON);
             return;
         }
         const consentGranted = await requestPrivateAIConsent();
@@ -1978,6 +2000,31 @@ export const NoteEditScreen = () => {
         }
         callback();
     };
+
+    // An AI action held back by a gate (sign in, model download). It resumes when
+    // the editor is back in front and the gate is passed; otherwise it is dropped.
+    const pendingAiActionRef = useRef<(() => void) | null>(null);
+    const handleAiAccessRef = useRef(handleAiAccess);
+    handleAiAccessRef.current = handleAiAccess;
+    useFocusEffect(
+        useCallback(() => {
+            const pending = pendingAiActionRef.current;
+            if (!pending) return undefined;
+            let active = true;
+            void (async () => {
+                const provider = await getEffectiveAIProvider().catch(() => null);
+                const local = provider === 'local' || provider === 'local_llm';
+                const ready = local
+                    ? !!(await getLocalLLMModelStatus().catch(() => null))?.isDownloaded
+                    : provider === 'vaulto_ai' && isAuthenticated && !isGuest;
+                if (!active || pendingAiActionRef.current !== pending) return;
+                pendingAiActionRef.current = null;
+                if (ready) void handleAiAccessRef.current(pending);
+                else clearAuthReturn();
+            })();
+            return () => { active = false; };
+        }, [isAuthenticated, isGuest]),
+    );
 
 
 
@@ -4266,8 +4313,8 @@ export const NoteEditScreen = () => {
             });
         } catch (error) {
             if (request !== tasksRequestRef.current) return;
-            if (getErrorMessage(error, '').toLowerCase().includes('usage limit')) {
-                // The limit modal takes over.
+            if (getErrorMessage(error, '').toLowerCase().includes('usage limit') || isSessionExpiredError(error)) {
+                // The limit sheet (or the "sign in again" prompt) takes over.
                 setTasksSheet((prev) => ({ ...prev, visible: false, loading: false }));
                 return;
             }
@@ -6522,10 +6569,7 @@ export const NoteEditScreen = () => {
     const startRealtimeDictationSession = useCallback(async () => {
         const hasPermission = await AudioService.requestPermissions();
         if (!hasPermission) {
-            appAlert(
-                t('common.errorTitle'),
-                t('edit.dictation.permissionDenied', 'Microphone access is required for dictation.'),
-            );
+            showMicPermissionDenied();
             return;
         }
 
@@ -8839,9 +8883,14 @@ export const NoteEditScreen = () => {
                 visible={showAiAuthModal}
                 title={t('alerts.aiLockedTitle', 'Sign in to use AI')}
                 message={t('alerts.aiLockedText', 'Cloud AI features are available after signing in. On-device AI works without an account.')}
-                onClose={() => setShowAiAuthModal(false)}
+                onClose={() => {
+                    setShowAiAuthModal(false);
+                    pendingAiActionRef.current = null;
+                }}
                 onSignIn={() => {
                     setShowAiAuthModal(false);
+                    // Back to this note after the sign-in, where the action goes on.
+                    rememberAuthReturn('NoteEdit');
                     navigation.navigate('SignIn');
                 }}
                 secondaryLabel={LOCAL_MODELS_ENABLED ? t('alerts.aiSetUpOnDevice', 'Set up AI on this device') : undefined}

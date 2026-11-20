@@ -207,3 +207,51 @@ test('the master key is held only in memory and can be cleared', () => {
 test('the cipher version the notes are tagged with is v3', () => {
     assert.equal(CIPHER_VERSION, 'v3');
 });
+
+// --- the specialised PBKDF2 ---------------------------------------------------
+
+test('the fast PBKDF2 gives the same bytes as Node and noble', async () => {
+    const { pbkdf2Sha256Async } = require('../.test-build/crypto/pbkdf2Sha256.js');
+    const { pbkdf2 } = require('@noble/hashes/pbkdf2');
+    const { sha256 } = require('@noble/hashes/sha256');
+    const cases = [
+        ['claude e2e test passphrase', '00112233445566778899aabbccddeeff', 1, 32],
+        ['p', 's', 2, 32],
+        ['пароль из трёх слов', 'salt', 1000, 32],
+        ['x'.repeat(100), 'a long key is hashed first', 50, 32],
+        ['password', 'salt', 3, 70],
+        ['', 'empty password', 10, 32],
+    ];
+    for (const [password, salt, iterations, dkLen] of cases) {
+        const P = Buffer.from(password);
+        const S = Buffer.from(salt);
+        const fast = Buffer.from(await pbkdf2Sha256Async(P, S, iterations, dkLen));
+        assert.ok(fast.equals(nodeCrypto.pbkdf2Sync(P, S, iterations, dkLen, 'sha256')), `${password}/${iterations}`);
+        assert.ok(fast.equals(Buffer.from(pbkdf2(sha256, P, S, { c: iterations, dkLen }))));
+    }
+});
+
+test('the fast PBKDF2 pauses for the UI and reports progress up to 1', async () => {
+    const { pbkdf2Sha256Async } = require('../.test-build/crypto/pbkdf2Sha256.js');
+    let clock = 0;
+    let pauses = 0;
+    const seen = [];
+    await pbkdf2Sha256Async(Buffer.from('p'), Buffer.from('s'), 5000, 32, {
+        onProgress: (p) => seen.push(p),
+        pause: async () => { pauses++; },
+        sliceMs: 10,
+        now: () => (clock += 5),
+    });
+    assert.ok(pauses > 0, 'expected pauses');
+    assert.equal(seen[seen.length - 1], 1);
+    for (let i = 1; i < seen.length; i++) assert.ok(seen[i] >= seen[i - 1]);
+});
+
+test('unlock progress spans every spelling of the secret without going back', async () => {
+    const bundle = await wrapMasterKey(masterKey, PASSPHRASE, 'passphrase');
+    const seen = [];
+    // Three spellings (raw, trimmed, normalized): a wrong secret tries them all.
+    await assert.rejects(() => unwrapMasterKeyAsync(bundle, ' wrong   passphrase here ', (p) => seen.push(p)));
+    for (let i = 1; i < seen.length; i++) assert.ok(seen[i] >= seen[i - 1], `went back at ${i}`);
+    assert.ok(seen[seen.length - 1] > 0.99);
+});
