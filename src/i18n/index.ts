@@ -4,6 +4,10 @@ import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { applyLayoutDirection } from './direction';
 import { setErrorMessageTranslator } from '../utils/errorMessage';
+import { installPluralRulesIfMissing } from './pluralRules';
+
+// Hermes has no Intl.PluralRules: without it every plural used the `_other` form.
+installPluralRulesIfMissing();
 
 import en from './locales/en.json';
 import ru from './locales/ru.json';
