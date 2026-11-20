@@ -82,6 +82,7 @@ import { UNDO_WINDOW_MS, UndoSnackbar } from '../components/UndoSnackbar';
 import { notesPendingDelete } from '../utils/notesPendingDelete';
 
 import { AudioService, AudioRecording } from '../services/AudioService';
+import { forgetSilentRecording, markRecordingSilent, silentRecordingPaths } from '../services/silentRecordings';
 import { enqueuePendingTranscription, getPendingTranscriptions, removePendingTranscription } from '../services/pendingTranscriptions';
 import { persistMeetingParts, transcribeMeetingParts, type MeetingTranscriptionResult } from '../services/meetingTranscription';
 import { transcribeAudio, processVoiceNote, isOnDeviceTranscriptionActive, ON_DEVICE_MODEL_REQUIRED } from '../services/TranscriptionService';
@@ -102,9 +103,8 @@ import {
     extractTasks,
 } from '../services/AIService';
 import { isDeviceAgentCandidate, resolveVoiceAgentRoute, VoiceAgentRoute } from '../services/voiceAgent';
-import { getVoiceInputMode, setVoiceInputMode } from '../services/micRouteState';
 import { DEFAULT_VOICE_INPUT_MODE, VoiceInputMode } from '../utils/micRoute';
-import { VoiceModePill } from '../components/MicModeControls';
+import { VoiceEditStateChip } from '../components/MicModeControls';
 import {
     AIProvider,
     getTranscriptionEnabled,
@@ -185,6 +185,7 @@ import {
     isDerivedLabel,
     markUserVariantName,
     variantTitleAfterAction,
+    voiceEditVersionName,
     plainVariantTitle,
     userVariantName,
     PREVIOUS_ORIGINAL_OPTION_ID,
@@ -1638,23 +1639,16 @@ export const NoteEditScreen = () => {
     const rawSourceContentRef = useRef<string | null>(null);
     const pendingMicInputModeRef = useRef<MicInputMode>('agent');
     const micLongPressHandledRef = useRef(false);
-    // "Dictate" or "Edit by voice", shown at the mic and remembered between notes.
-    // A tap records in this mode; holding the mic still dictates once.
+    // "Dictate" or "Edit by voice". The microphone always starts out dictating;
+    // editing by voice is chosen in the recorder and lasts while this note is
+    // open (voice edits come in bursts on one note). It never carries over to
+    // another note or the next visit, so the mic cannot silently mean
+    // something else later. Holding the mic dictates once.
     const [voiceInputMode, setVoiceInputModeState] = useState<VoiceInputMode>(DEFAULT_VOICE_INPUT_MODE);
     const voiceInputModeRef = useRef<VoiceInputMode>(DEFAULT_VOICE_INPUT_MODE);
-    useEffect(() => {
-        let active = true;
-        void getVoiceInputMode().then((mode) => {
-            if (!active) return;
-            voiceInputModeRef.current = mode;
-            setVoiceInputModeState(mode);
-        });
-        return () => { active = false; };
-    }, []);
     const changeVoiceInputMode = useCallback((mode: VoiceInputMode) => {
         voiceInputModeRef.current = mode;
         setVoiceInputModeState(mode);
-        void setVoiceInputMode(mode);
     }, []);
     const visualSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
@@ -2156,6 +2150,18 @@ export const NoteEditScreen = () => {
     const visualKeyboardHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [visualPlainText, setVisualPlainText] = useState(() => richContentToPlainText(content));
     const embeddedAudioPaths = useMemo(() => extractEmbeddedAudioPaths(content), [content]);
+    // Recordings kept although nothing was heard (services/silentRecordings).
+    const [silentMarks, setSilentMarks] = useState(0);
+    const [silentAudioPaths, setSilentAudioPaths] = useState<string[]>([]);
+    useEffect(() => {
+        let active = true;
+        void silentRecordingPaths(embeddedAudioPaths).then((found) => {
+            if (!active) return;
+            const next = embeddedAudioPaths.filter((path) => found.has(path));
+            setSilentAudioPaths((prev) => (prev.join('\n') === next.join('\n') ? prev : next));
+        });
+        return () => { active = false; };
+    }, [embeddedAudioPaths, silentMarks]);
 
     // Markdown round-trips drop an audio card's length, so a card could read
     // 0:00 until played. Fill it from the recordings stored for this note.
@@ -2170,15 +2176,20 @@ export const NoteEditScreen = () => {
         if (mainPath && existingNote?.audio_duration && !durations.has(mainPath)) {
             durations.set(mainPath, existingNote.audio_duration);
         }
+        const silent = new Set(silentAudioPaths);
         const push = () => embeddedAudioPaths.forEach((path) => {
             const duration = durations.get(normalizeAttachedAudioPath(path) || '');
-            if (duration) editorRef.current?.setAudioEmbedState({ path, duration });
+            // Silence is drawn as a flat line instead of a made-up waveform.
+            if (duration || silent.has(path)) {
+                editorRef.current?.setAudioEmbedState({ path, ...(duration ? { duration } : {}), ...(silent.has(path) ? { silent: true } : {}) });
+            }
         });
         push();
-        // The page may still be loading on open; repeat once it has settled.
-        const timer = setTimeout(push, 1200);
-        return () => clearTimeout(timer);
-    }, [appearanceReady, noteViewReady, embeddedAudioPaths, voiceRecordings, existingNote?.audio_file_path, existingNote?.audio_duration]);
+        // The page may still be loading on open; repeat once it has settled
+        // (a slow phone can take a few seconds to lay out the note).
+        const timers = [1200, 3500].map((delay) => setTimeout(push, delay));
+        return () => timers.forEach(clearTimeout);
+    }, [appearanceReady, noteViewReady, embeddedAudioPaths, silentAudioPaths, voiceRecordings, existingNote?.audio_file_path, existingNote?.audio_duration]);
 
     const improvementDraftsRef = useRef<Record<string, string>>({});
     const improvementSavedRef = useRef<Record<string, string>>({});
@@ -5380,8 +5391,16 @@ export const NoteEditScreen = () => {
                                         suggestedTitle,
                                         currentTitleRef.current || title || (existingNote?.title || ''),
                                     );
-                                    const improvementTitle = generatedLabel || (existingNote?.title || '');
                                     const agentOptionId = agentOptionIdForMode(agentResult.mode);
+                                    // A checklist, list or formatting has its step name; any other
+                                    // edit is named after what was asked ("Remove the eggs"), not
+                                    // "AI agent 2". Kept like a name the user gave it.
+                                    const spokenName = agentOptionId === 'agent'
+                                        ? voiceEditVersionName(originalText || normalizedTaskText)
+                                        : '';
+                                    const improvementTitle = spokenName
+                                        ? markUserVariantName(spokenName)
+                                        : generatedLabel || (existingNote?.title || '');
                                     const improvement = await createImprovement(targetNoteId, {
                                         content: newText,
                                         title: improvementTitle,
@@ -6044,6 +6063,12 @@ export const NoteEditScreen = () => {
                 } finally {
                     isCreatingNote.current = false;
                 }
+            }
+
+            // Kept although only silence was heard: the note says so.
+            if (recording.noSpeech) {
+                await markRecordingSilent(savedPath);
+                setSilentMarks((count) => count + 1);
             }
 
             // Save Metadata to DB
@@ -7416,6 +7441,11 @@ export const NoteEditScreen = () => {
         if (!recordingToDelete) return;
         const { id, path } = recordingToDelete;
         setRecordingToDelete(null);
+        await deleteRecordingNow(id, path);
+    };
+
+    const deleteRecordingNow = async (id: string, path: string) => {
+        void forgetSilentRecording(path);
 
         // 1. Cancel any pending auto-saves to prevent race condition overwriting our changes
         if (saveTimeoutRef.current) {
@@ -7655,6 +7685,30 @@ export const NoteEditScreen = () => {
         void flushVisualEditorContent().finally(() => setShowCompareVersions(true));
     }, [flushVisualEditorContent]);
 
+    // A recording kept although nothing was heard, in a note with no text:
+    // say so plainly, with the two things worth doing next.
+    const noSpeechPath = silentAudioPaths.length > 0 && !plainContent.trim() && !isTranscribing
+        ? silentAudioPaths[silentAudioPaths.length - 1]
+        : null;
+    const noSpeechActionsRef = useRef<{ play: (path: string) => void; recordAgain: (path: string) => void }>({
+        play: () => undefined,
+        recordAgain: () => undefined,
+    });
+    noSpeechActionsRef.current = {
+        play: (path) => {
+            const recording = voiceRecordings.find((item) => normalizeAttachedAudioPath(item.file_path) === normalizeAttachedAudioPath(path));
+            void handleAudioActionFromEditor({ path, action: 'toggle', duration: recording?.duration });
+        },
+        recordAgain: (path) => {
+            const recording = voiceRecordings.find((item) => normalizeAttachedAudioPath(item.file_path) === normalizeAttachedAudioPath(path));
+            void (async () => {
+                // The silent take is replaced, not kept beside the new one.
+                if (recording) await deleteRecordingNow(recording.id, recording.file_path);
+                openVoiceRecorderForMode('agent');
+            })();
+        },
+    };
+
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
@@ -7688,6 +7742,36 @@ export const NoteEditScreen = () => {
                     >
                         <MaterialIcons name="close" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
+                </View>
+            )}
+            {noSpeechPath && (
+                <View style={styles.noSpeech} accessibilityLiveRegion="polite">
+                    <View style={styles.noSpeechLine}>
+                        <MaterialIcons name="hearing-disabled" size={18} color={colors.textSecondary} />
+                        <Text style={styles.noSpeechText}>
+                            {t('voice.noSpeechInRecording', 'No speech in this recording')}
+                        </Text>
+                    </View>
+                    <View style={styles.noSpeechActions}>
+                        <TouchableOpacity
+                            onPress={() => noSpeechActionsRef.current.play(noSpeechPath)}
+                            style={styles.noSpeechButton}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('voice.playRecording', 'Play the recording')}
+                        >
+                            <MaterialIcons name="play-arrow" size={20} color={colors.primary} />
+                            <Text style={styles.noSpeechButtonText}>{t('listen.play', 'Play')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => noSpeechActionsRef.current.recordAgain(noSpeechPath)}
+                            style={styles.noSpeechButton}
+                            accessibilityRole="button"
+                            accessibilityHint={t('voice.recordAgainHint', 'Deletes this silent recording and starts a new one')}
+                        >
+                            <MaterialIcons name="mic" size={20} color={colors.primary} />
+                            <Text style={styles.noSpeechButtonText}>{t('voice.recordAgain', 'Record again')}</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
             {topPlayer && (
@@ -7758,6 +7842,7 @@ export const NoteEditScreen = () => {
         topPlayer,
         toggleTopPlayer,
         closeTopPlayer,
+        noSpeechPath,
     ]);
 
     return (
@@ -8637,12 +8722,10 @@ export const NoteEditScreen = () => {
             {
                 !showVoiceRecorder && !(LOCAL_WHISPER_ENABLED && editMode === 'visual' && keyboardVisibleState) && (
                     <View style={[styles.micFloatingContainer, styles.micFloatingRow, { bottom: floatingMicBottomOffset }]}>
-                        {/* The mode the next recording uses, readable before recording. */}
-                        {agentModeIndicatorEnabled && (
-                            <VoiceModePill
-                                mode={voiceInputMode}
-                                onToggle={() => changeVoiceInputMode(voiceInputMode === 'edit' ? 'dictate' : 'edit')}
-                            />
+                        {/* Only when editing by voice was chosen for this note: a state
+                            with a way back, never a command. Dictation shows nothing. */}
+                        {agentModeIndicatorEnabled && voiceInputMode === 'edit' && (
+                            <VoiceEditStateChip onReset={() => changeVoiceInputMode('dictate')} />
                         )}
                         <TouchableOpacity
                             style={styles.micButton}
@@ -9043,18 +9126,28 @@ export const NoteEditScreen = () => {
                                                         </View>
 
                                                         <View style={styles.recordingCompactActions}>
-                                                            <TouchableOpacity
-                                                                style={[styles.recordingActionChip, isInsertActionDisabled && styles.recordingActionDisabled]}
-                                                                disabled={isInsertActionDisabled}
-                                                                onPress={() => {
-                                                                    void handleInsertRecordingIntoNote(rec);
-                                                                }}
-                                                            >
-                                                                <MaterialIcons name={insertActionIcon} size={16} color={colors.textSecondary} />
-                                                                <Text style={styles.recordingActionChipText}>
-                                                                    {insertActionLabel}
-                                                                </Text>
-                                                            </TouchableOpacity>
+                                                            {/* Already in the note: a plain statement, not a greyed-out button. */}
+                                                            {isInsertActionDisabled ? (
+                                                                <View style={styles.recordingStatus} accessible>
+                                                                    <MaterialIcons name="check" size={16} color={colors.textSecondary} />
+                                                                    <Text style={styles.recordingStatusText}>
+                                                                        {t('edit.recordings.alreadyInNote', 'In the note')}
+                                                                    </Text>
+                                                                </View>
+                                                            ) : (
+                                                                <TouchableOpacity
+                                                                    style={styles.recordingActionChip}
+                                                                    onPress={() => {
+                                                                        void handleInsertRecordingIntoNote(rec);
+                                                                    }}
+                                                                    accessibilityRole="button"
+                                                                >
+                                                                    <MaterialIcons name={insertActionIcon} size={16} color={colors.primary} />
+                                                                    <Text style={styles.recordingActionChipText}>
+                                                                        {insertActionLabel}
+                                                                    </Text>
+                                                                </TouchableOpacity>
+                                                            )}
 
                                                             {canTranscribeThisRecording && !hasRecognizedText && (
                                                                 <TouchableOpacity
@@ -9068,7 +9161,7 @@ export const NoteEditScreen = () => {
                                                                         <ActivityIndicator size="small" color={colors.textSecondary} />
                                                                     ) : (
                                                                         <>
-                                                                            <MaterialIcons name="subject" size={16} color={colors.textSecondary} />
+                                                                            <MaterialIcons name="subject" size={16} color={colors.primary} />
                                                                             <Text style={styles.recordingActionChipText}>{t('edit.recordings.transcribe', 'Transcribe')}</Text>
                                                                         </>
                                                                     )}
@@ -9079,9 +9172,9 @@ export const NoteEditScreen = () => {
                                                                 <TouchableOpacity
                                                                     style={styles.recordingActionChip}
                                                                     onPress={() => openRecordingTextView(rec)}
+                                                                    accessibilityRole="button"
                                                                 >
-                                                                    <MaterialIcons name="visibility" size={16} color={colors.textSecondary} />
-                                                                    <Text style={styles.recordingActionChipText}>{t('edit.recordings.view', 'View')}</Text>
+                                                                    <Text style={styles.recordingActionChipText}>{t('edit.recordings.showText', 'Show text')}</Text>
                                                                 </TouchableOpacity>
                                                             )}
 
@@ -9393,6 +9486,46 @@ const styles = createStyles(() => ({
     },
     recordingPillTextIcon: {
         marginLeft: 2,
+    },
+    noSpeech: {
+        marginTop: -spacing.xs,
+        marginBottom: spacing.s,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.m,
+        borderRadius: 14,
+        backgroundColor: colors.backgroundSecondary,
+        gap: spacing.xs,
+    },
+    noSpeechLine: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+    },
+    noSpeechText: {
+        flex: 1,
+        fontSize: 15,
+        lineHeight: 20,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    noSpeechActions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.s,
+        // Button text lines up with the sentence above (icon 18 + gap).
+        marginLeft: 18,
+    },
+    noSpeechButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 44,
+        paddingHorizontal: spacing.s,
+        gap: 4,
+    },
+    noSpeechButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.primary,
     },
     listenTip: {
         flexDirection: 'row',
@@ -10320,19 +10453,29 @@ const styles = createStyles(() => ({
         // Kept at the row's end even when wrapped, so every bin lines up.
         marginStart: 'auto',
     },
+    // Actions read as links; a state ("In the note") as plain text.
     recordingActionChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.backgroundSecondary,
-        minHeight: 36,
-        paddingHorizontal: 12,
-        borderRadius: 18,
-        gap: 6,
+        minHeight: 44,
+        paddingHorizontal: spacing.s,
+        gap: 4,
     },
     recordingActionChipText: {
         fontSize: 14,
-        fontWeight: '500',
-        color: colors.text,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    recordingStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 44,
+        paddingHorizontal: spacing.s,
+        gap: 4,
+    },
+    recordingStatusText: {
+        fontSize: 14,
+        color: colors.textSecondary,
     },
     recordingDeleteIcon: {
         width: 44,

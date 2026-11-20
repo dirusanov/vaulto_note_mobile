@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAIProvider, getLocalModelsEnabled, getOnDeviceTranscription } from '../utils/storage';
 import { isDeviceOffline } from '../utils/connectivity';
 import { LOCAL_WHISPER_ENABLED } from '../utils/featureFlags';
@@ -11,14 +10,12 @@ import {
     cloudFallsBackToDevice,
     MicProvider,
     MicRouteInputs,
-    parseVoiceInputMode,
     pickTranscriptionRoute,
     pickVoiceAgentRoute,
     ProcessingSummary,
     summarizeProcessing,
     TranscriptionRoute,
     VoiceAgentRouteValue,
-    VoiceInputMode,
 } from '../utils/micRoute';
 
 export type MicRoute = {
@@ -79,23 +76,4 @@ export const readProcessingSummary = async (options: {
         deviceAgentCapable: local.deviceAgentReady,
         ...options,
     });
-};
-
-const VOICE_INPUT_MODE_KEY = 'vaulto_voice_input_mode_v1';
-
-/** The editor microphone's last chosen mode ("Dictate" or "Edit by voice"). */
-export const getVoiceInputMode = async (): Promise<VoiceInputMode> => {
-    try {
-        return parseVoiceInputMode(await AsyncStorage.getItem(VOICE_INPUT_MODE_KEY));
-    } catch {
-        return parseVoiceInputMode(null);
-    }
-};
-
-export const setVoiceInputMode = async (mode: VoiceInputMode): Promise<void> => {
-    try {
-        await AsyncStorage.setItem(VOICE_INPUT_MODE_KEY, mode);
-    } catch {
-        // Only a convenience: the next session starts from the default.
-    }
 };

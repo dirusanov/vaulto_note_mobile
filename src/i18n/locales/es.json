@@ -762,8 +762,9 @@
       "inNote": "En la nota",
       "add": "Añadir",
       "transcribe": "Transcribir",
-      "view": "Ver",
-      "addAudio": "Añadir audio"
+      "addAudio": "Añadir audio",
+      "alreadyInNote": "En la nota",
+      "showText": "Mostrar texto"
     },
     "toast": {
       "audioUnavailable": "No se pudo reproducir esta grabación",
@@ -841,8 +842,6 @@
     "savedUnreachable": "Grabación guardada. No se pudo conectar con el servidor; se transcribirá cuando vuelvas a abrir esta nota.",
     "noSpeechDetected": "No se detectó voz. Grabación guardada.",
     "quietTitle": "Casi no se oyó nada",
-    "quietDesc": "El micrófono solo captó silencio. Si está silenciado u ocupado por una llamada, deténla y vuelve a grabar. ¿Guardar la grabación de todos modos?",
-    "keepRecording": "Guardar",
     "exitTitle": "¿Conservar la grabación?",
     "exitDesc": "Si vuelves atrás, se borrará lo grabado.",
     "continueRecording": "Seguir grabando",
@@ -872,10 +871,11 @@
       "label": "Modo del micrófono",
       "dictateHint": "Las palabras entran en la nota tal como se dicen",
       "editHint": "Las peticiones cambian la nota; lo demás entra como texto",
-      "current": "Modo del micrófono: {{mode}}",
-      "switchTo": "Toca dos veces para cambiar a «{{mode}}»",
       "micHintEdit": "Editar por voz: las peticiones cambian la nota. Mantén pulsado para dictar una vez.",
-      "micHintDictate": "Dictar: las palabras entran en la nota tal como se dicen."
+      "micHintDictate": "Dictar: las palabras entran en la nota tal como se dicen.",
+      "dictateOnce": "Dictar una vez",
+      "stateOn": "Editar con la voz está activado para esta nota",
+      "stateOffHint": "Toca dos veces para volver a dictar"
     },
     "routeShort": {
       "audioOnly": "Solo audio",
@@ -888,7 +888,14 @@
       "cloud": "Nube de Vaulto"
     },
     "routeDetailsHint": "Muestra qué pasará con la grabación",
-    "moreOptions": "Opciones de grabación"
+    "moreOptions": "Opciones de grabación",
+    "starting": "Iniciando…",
+    "quietDescAgain": "El micrófono solo captó silencio. Si está silenciado u ocupado en una llamada, termina eso y vuelve a grabar.",
+    "keepAnyway": "Guardar igualmente",
+    "recordAgain": "Grabar de nuevo",
+    "recordAgainHint": "Elimina esta grabación en silencio y empieza una nueva",
+    "noSpeechInRecording": "No hay voz en esta grabación",
+    "playRecording": "Reproducir la grabación"
   },
   "aux": {
     "emailVerified": "¡Correo verificado!",
@@ -1387,15 +1394,15 @@
   "listen": {
     "title": "Texto y audio",
     "hint": "Toca una frase para escucharla.",
-    "hintWithEdits": "Toca una frase para escucharla. Las frases que cambiaste no tienen tiempo.",
     "rewritten": "Esta versión se reescribió, así que se muestra el texto de la propia grabación.",
     "playHint": "Reproduce la grabación desde esta frase",
-    "unlinked": "Cambiada después de grabar, sin enlace al audio",
     "play": "Reproducir",
     "pause": "Pausa",
     "position": "{{position}} de {{duration}}",
     "failed": "No se pudo reproducir la grabación",
     "follow": "Mostrar la frase actual",
-    "entryHint": "Toca una frase para escucharla"
+    "entryHint": "Toca una frase para escucharla",
+    "unlinkedLine": "Editada, no se puede reproducir",
+    "hintEdited": "Toca una frase para escucharla. Las líneas editadas no se pueden reproducir."
   }
 }

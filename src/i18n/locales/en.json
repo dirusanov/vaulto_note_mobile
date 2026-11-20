@@ -761,8 +761,9 @@
       "inNote": "In note",
       "add": "Add",
       "transcribe": "Transcribe",
-      "view": "View",
-      "addAudio": "Add audio"
+      "addAudio": "Add audio",
+      "alreadyInNote": "In the note",
+      "showText": "Show text"
     },
     "toast": {
       "audioUnavailable": "Could not play this recording",
@@ -840,8 +841,6 @@
     "savedUnreachable": "Recording saved. The server could not be reached; it will be transcribed when you reopen this note.",
     "noSpeechDetected": "No speech detected. Recording saved.",
     "quietTitle": "Almost nothing was heard",
-    "quietDesc": "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again. Keep this recording anyway?",
-    "keepRecording": "Keep",
     "exitTitle": "Keep this recording?",
     "exitDesc": "Going back would delete what you have recorded.",
     "continueRecording": "Continue recording",
@@ -871,10 +870,11 @@
       "label": "Microphone mode",
       "dictateHint": "Words go into the note as spoken",
       "editHint": "Requests change the note; other speech goes in as text",
-      "current": "Microphone mode: {{mode}}",
-      "switchTo": "Double tap to switch to {{mode}}",
       "micHintEdit": "Edit by voice: requests change the note. Hold to dictate once.",
-      "micHintDictate": "Dictate: words go into the note as spoken."
+      "micHintDictate": "Dictate: words go into the note as spoken.",
+      "dictateOnce": "Dictate once",
+      "stateOn": "Edit by voice is on for this note",
+      "stateOffHint": "Double tap to dictate again"
     },
     "routeShort": {
       "audioOnly": "Audio only",
@@ -887,7 +887,14 @@
       "cloud": "Vaulto cloud"
     },
     "routeDetailsHint": "Shows what happens to the recording",
-    "moreOptions": "Recording options"
+    "moreOptions": "Recording options",
+    "starting": "Starting…",
+    "quietDescAgain": "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again.",
+    "keepAnyway": "Keep anyway",
+    "recordAgain": "Record again",
+    "recordAgainHint": "Deletes this silent recording and starts a new one",
+    "noSpeechInRecording": "No speech in this recording",
+    "playRecording": "Play the recording"
   },
   "aux": {
     "emailVerified": "Email verified!",
@@ -1384,15 +1391,15 @@
   "listen": {
     "title": "Text and audio",
     "hint": "Tap a sentence to hear it.",
-    "hintWithEdits": "Tap a sentence to hear it. Sentences you changed have no time.",
     "rewritten": "This version was rewritten, so here is the recording’s own text.",
     "playHint": "Plays the recording from this sentence",
-    "unlinked": "Changed after recording, no audio link",
     "play": "Play",
     "pause": "Pause",
     "position": "{{position}} of {{duration}}",
     "failed": "Could not play this recording",
     "follow": "Show the current sentence",
-    "entryHint": "Tap a sentence to hear it"
+    "entryHint": "Tap a sentence to hear it",
+    "unlinkedLine": "Edited, can’t be played",
+    "hintEdited": "Tap a sentence to hear it. Edited lines can’t be played."
   }
 }

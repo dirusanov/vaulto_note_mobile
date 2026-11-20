@@ -758,8 +758,9 @@
       "inNote": "已在笔记中",
       "add": "插入",
       "transcribe": "转文字",
-      "view": "查看",
-      "addAudio": "插入音频"
+      "addAudio": "插入音频",
+      "alreadyInNote": "已在笔记中",
+      "showText": "显示文字"
     },
     "toast": {
       "audioUnavailable": "无法播放此录音",
@@ -837,8 +838,6 @@
     "savedUnreachable": "录音已保存。服务器暂时无法连接，下次打开此笔记时会自动转写。",
     "noSpeechDetected": "未检测到语音。录音已保存。",
     "quietTitle": "几乎没有录到声音",
-    "quietDesc": "麦克风只录到了静音。如果它被静音或正在通话，请结束后重新录制。仍要保留这段录音吗？",
-    "keepRecording": "保留",
     "exitTitle": "保留这段录音吗？",
     "exitDesc": "返回将删除已录制的内容。",
     "continueRecording": "继续录音",
@@ -868,10 +867,11 @@
       "label": "麦克风模式",
       "dictateHint": "原样写入笔记",
       "editHint": "指令会修改笔记，其他内容写为文字",
-      "current": "麦克风模式：{{mode}}",
-      "switchTo": "轻点两下切换到“{{mode}}”",
       "micHintEdit": "语音修改：指令会修改笔记。长按可单次听写。",
-      "micHintDictate": "听写：原样写入笔记。"
+      "micHintDictate": "听写：原样写入笔记。",
+      "dictateOnce": "仅听写一次",
+      "stateOn": "此笔记已开启语音编辑",
+      "stateOffHint": "点按两次恢复听写"
     },
     "routeShort": {
       "audioOnly": "仅音频",
@@ -884,7 +884,14 @@
       "cloud": "Vaulto 云端"
     },
     "routeDetailsHint": "显示录音将如何处理",
-    "moreOptions": "录音选项"
+    "moreOptions": "录音选项",
+    "starting": "正在启动…",
+    "quietDescAgain": "麦克风只录到了静音。如果它被静音或正在通话中，请先结束，然后重新录音。",
+    "keepAnyway": "仍然保留",
+    "recordAgain": "重新录音",
+    "recordAgainHint": "删除这段静音录音并开始新的录音",
+    "noSpeechInRecording": "这段录音中没有语音",
+    "playRecording": "播放录音"
   },
   "aux": {
     "emailVerified": "邮箱已验证！",
@@ -1375,15 +1382,15 @@
   "listen": {
     "title": "文字与音频",
     "hint": "点按一句话即可收听。",
-    "hintWithEdits": "点按一句话即可收听。修改过的句子没有时间点。",
     "rewritten": "此版本已被改写，因此显示录音本身的文字。",
     "playHint": "从这句话开始播放录音",
-    "unlinked": "录音后已修改，未关联音频",
     "play": "播放",
     "pause": "暂停",
     "position": "{{position}} / {{duration}}",
     "failed": "无法播放此录音",
     "follow": "显示当前句子",
-    "entryHint": "点按一句话即可收听"
+    "entryHint": "点按一句话即可收听",
+    "unlinkedLine": "已编辑，无法播放",
+    "hintEdited": "点按句子即可收听。已编辑的行无法播放。"
   }
 }

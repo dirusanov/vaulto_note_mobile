@@ -2,6 +2,7 @@ import {
     AudioModule,
     RecordingPresets,
     requestRecordingPermissionsAsync,
+    getRecordingPermissionsAsync,
     setAudioModeAsync,
     type AudioRecorder,
     type RecorderState,
@@ -30,6 +31,11 @@ export interface AudioRecording {
     meeting?: boolean;
     /** Meeting mode: the short files `uri` was joined from, in order (for transcription). */
     segments?: string[];
+    /**
+     * The microphone heard (almost) only silence and the user kept it anyway:
+     * the note says so instead of showing an empty page.
+     */
+    noSpeech?: boolean;
 }
 
 /**
@@ -62,6 +68,7 @@ class AudioServiceClass {
     private activeClock = new ActiveClock();
     private completedSegmentsMs = 0;
     private meteringTimer: ReturnType<typeof setInterval> | null = null;
+    private micPermissionGranted = false;
 
     private stopMetering(): void {
         if (this.meteringTimer) {
@@ -141,7 +148,15 @@ class AudioServiceClass {
     async requestPermissions(): Promise<boolean> {
         if (Platform.OS === 'web') return false;
         try {
-            const { granted } = await requestRecordingPermissionsAsync();
+            // Asking goes through the system's permission flow every time
+            // (6 s on an emulator before the recorder could start); reading a
+            // granted permission is quicker, and once granted it holds for the
+            // life of the process (Android and iOS restart the app when it is
+            // revoked), so later recordings start without either call.
+            if (this.micPermissionGranted) return true;
+            const current = await getRecordingPermissionsAsync().catch(() => null);
+            const granted = current?.granted || (await requestRecordingPermissionsAsync()).granted;
+            this.micPermissionGranted = granted;
             return granted;
         } catch (error) {
             console.error('Error requesting audio permissions:', error);
@@ -161,6 +176,7 @@ class AudioServiceClass {
     async startRecording(
         onMeteringUpdate?: (level: number) => void,
         mode: 'note' | 'meeting' = 'note',
+        options: { permissionGranted?: boolean } = {},
     ): Promise<void> {
         this.lastMeteringCallback = onMeteringUpdate;
         this.lastRecordingMode = mode;
@@ -169,8 +185,9 @@ class AudioServiceClass {
             return;
         }
         try {
-            // Request permissions
-            const hasPermission = await this.requestPermissions();
+            // The recorder asked already; asking again is a native round trip
+            // on every start (and every meeting segment).
+            const hasPermission = options.permissionGranted || await this.requestPermissions();
             if (!hasPermission) {
                 throw new Error('Audio recording permission not granted');
             }
@@ -277,6 +294,15 @@ class AudioServiceClass {
         }
     }
 
+    /**
+     * Time recorded so far without pauses (all meeting parts included): the
+     * recorder's timer reads this, so what it shows is what gets stored.
+     */
+    getRecordedMs(): number {
+        if (!this.recording) return 0;
+        return this.completedSegmentsMs + this.activeClock.elapsedMs(Date.now());
+    }
+
     private readNativeDurationMs(recorder: AudioRecorder): number | null {
         try {
             const value = recorder.getStatus()?.durationMillis;
@@ -303,7 +329,7 @@ class AudioServiceClass {
         this.recording = null;
         const startedAt = this.recordingStartTime;
         try {
-            await this.startRecording(this.lastMeteringCallback, this.lastRecordingMode);
+            await this.startRecording(this.lastMeteringCallback, this.lastRecordingMode, { permissionGranted: true });
         } catch (error) {
             // The finished segment is still good: hand it back so the meeting
             // can be saved with what was recorded so far.

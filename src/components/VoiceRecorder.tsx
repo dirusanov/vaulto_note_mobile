@@ -7,8 +7,12 @@ import {
     TouchableOpacity,
     Modal,
     Animated,
+    Easing,
+    ScrollView,
+    useWindowDimensions,
     type LayoutChangeEvent,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -27,11 +31,25 @@ import { createStyles } from '../theme/createStyles';
 import { haptics } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { appAlert } from './AppAlert';
-import { DISCARD_CONFIRM_AFTER_SECONDS, recorderBackAction } from '../utils/recordingClock';
+import {
+    DISCARD_CONFIRM_AFTER_SECONDS,
+    DISCARD_CONFIRM_WINDOW_MS,
+    recorderBackAction,
+    shownRecordingSeconds,
+} from '../utils/recordingClock';
 import NetInfo from '@react-native-community/netinfo';
 import { MicRoute, readMicRoute } from '../services/micRouteState';
 import type { VoiceInputMode } from '../utils/micRoute';
-import { MicRouteNote, micHintKind, routeLabel, routeShortLabel, VoiceModeSwitch } from './MicModeControls';
+import {
+    MicRouteNote,
+    micHintKind,
+    modeLabel,
+    OptionSwitchRow,
+    outcomeText,
+    routeLabel,
+    routeShortLabel,
+    VoiceModeSwitch,
+} from './MicModeControls';
 
 interface VoiceRecorderProps {
     visible: boolean;
@@ -71,9 +89,13 @@ const QUIET_KEEP_MIN_SECONDS = 3;
 const MAX_RECORDING_DURATION_SECONDS = Math.floor(MAX_RECORDING_DURATION_MS / 1000);
 const MAX_MEETING_DURATION_SECONDS = Math.floor(MAX_MEETING_DURATION_MS / 1000);
 const MEETING_SEGMENT_SECONDS = Math.floor(MEETING_SEGMENT_MS / 1000);
-// Longer recordings ask for a second tap on the bin before they are thrown away
-// (DISCARD_CONFIRM_AFTER_SECONDS, shared with the system Back rule).
-const DISCARD_CONFIRM_WINDOW_MS = 4000;
+/** The timer reads the recorder's clock this often (it shows whole seconds). */
+const TIMER_TICK_MS = 250;
+const DISCARD_RING_SIZE = 40;
+const DISCARD_RING_STROKE = 2.5;
+const DISCARD_RING_RADIUS = (DISCARD_RING_SIZE - DISCARD_RING_STROKE) / 2;
+const DISCARD_RING_LENGTH = 2 * Math.PI * DISCARD_RING_RADIUS;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     visible,
@@ -91,17 +113,19 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const isInstruction = purpose === 'instruction';
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
+    const { height: windowHeight, fontScale } = useWindowDimensions();
+    const bigText = fontScale >= 1.3;
     const [isRecording, setIsRecording] = useState(false);
     const [confirmDiscard, setConfirmDiscard] = useState(false);
     const confirmDiscardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const discardRing = useRef(new Animated.Value(0)).current;
     const [duration, setDuration] = useState(0);
+    // Done freezes the timer at once; what it shows then is what is stored,
+    // whatever the native recorder and the silence check take afterwards.
+    const [frozenSeconds, setFrozenSeconds] = useState<number | null>(null);
     const [isPaused, setIsPaused] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const [isStartPending, setIsStartPending] = useState(false);
-    // With autoStart the panel stays hidden until the microphone permission is
-    // settled, instead of showing a live-looking 0:00 recorder behind the
-    // system permission dialog.
-    const [permissionSettled, setPermissionSettled] = useState(false);
     const [transcribe, setTranscribe] = useState(true);
     const [aiProvider, setAiProvider] = useState<AIProvider>('vaulto_ai');
     const [showModelMissingWarning, setShowModelMissingWarning] = useState(false);
@@ -122,6 +146,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     const maxDurationHandledRef = useRef(false);
     const interruptionHandledRef = useRef(false);
     const recordingStartAtRef = useRef<number | null>(null);
+    // The bin works while the microphone is still starting: the start that
+    // lands afterwards is cancelled instead of recording into a closed panel.
+    const startCancelledRef = useRef(false);
     const INTERRUPTION_GRACE_MS = 1800;
 
     // Waveform animations
@@ -139,12 +166,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     useEffect(() => {
         if (visible) {
-            getAIProvider().then(provider => {
-                if (provider) setAiProvider(provider);
-            });
-
             getAIProvider().then(async (provider) => {
-
+                if (provider) setAiProvider(provider);
                 // Check model status if local
                 if (provider === 'local' || provider === 'local_whisper') {
                     const status = await getLocalWhisperModelStatus();
@@ -153,7 +176,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         return;
                     }
                 }
-
                 getTranscriptionEnabled().then(enabled => {
                     setTranscribe(enabled);
                 });
@@ -168,12 +190,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             setIsPaused(false);
             setIsStopping(false);
             setIsStartPending(false);
-            setPermissionSettled(false);
             setDuration(0);
+            setFrozenSeconds(null);
             setConfirmDiscard(false);
             if (confirmDiscardTimerRef.current) {
                 clearTimeout(confirmDiscardTimerRef.current);
             }
+            discardRing.stopAnimation();
             setShowModelMissingWarning(false);
             warningOpacity.setValue(0);
             if (warningTimeoutRef.current) {
@@ -191,15 +214,15 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     // Where this recording will be processed. Read again when "To text" or the
     // connection changes, so the line never promises a route that no longer applies.
     const [route, setRoute] = useState<MicRoute | null>(null);
-    // Details under a tap; the first recording of each kind explains itself once.
-    const [detailsOpen, setDetailsOpen] = useState(false);
-    const [optionsOpen, setOptionsOpen] = useState(false);
+    // Everything that is not the bar itself lives in one panel above it,
+    // opened by "⋯" or a tap on the route line. The first recording of each
+    // kind explains itself once.
+    const [panelOpen, setPanelOpen] = useState(false);
     const [firstUseKinds, setFirstUseKinds] = useState<string[]>([]);
     const firstUseCheckedRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         if (visible) return;
-        setDetailsOpen(false);
-        setOptionsOpen(false);
+        setPanelOpen(false);
         setFirstUseKinds([]);
         firstUseCheckedRef.current = new Set();
     }, [visible]);
@@ -230,14 +253,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             const status = await getLocalWhisperModelStatus();
             if (!status.isDownloaded) {
                 setShowModelMissingWarning(true);
-                
+
                 // Reset any existing animation and timeout
                 warningOpacity.setValue(0);
                 if (warningTimeoutRef.current) {
                     clearTimeout(warningTimeoutRef.current);
                 }
 
-                // Show it
                 Animated.timing(warningOpacity, {
                     toValue: 1,
                     duration: 300,
@@ -263,18 +285,26 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         setTranscriptionEnabled(value);
     };
 
+    // The timer reads the recorder's own pause-aware clock instead of counting
+    // ticks, so it cannot drift from the recording or keep running behind a
+    // dialog. It stops the moment Done is tapped (frozenSeconds).
     useEffect(() => {
-        if (!isRecording || isPaused) return;
-        const interval = setInterval(() => {
-            setDuration(d => d + 1);
-        }, 1000);
+        if (!isRecording || isPaused || frozenSeconds !== null) return;
+        const tick = () => {
+            // A meeting segment switch briefly has no recorder.
+            if (rollingRef.current) return;
+            const seconds = shownRecordingSeconds(AudioService.getRecordedMs());
+            setDuration((prev) => (seconds > prev ? seconds : prev));
+        };
+        tick();
+        const interval = setInterval(tick, TIMER_TICK_MS);
         return () => clearInterval(interval);
-    }, [isRecording, isPaused]);
+    }, [isRecording, isPaused, frozenSeconds]);
 
     // Kept apart from the timer: a new bar count restarts only the bars.
     useEffect(() => {
         const bars = animations.slice(0, barCount);
-        if (isRecording && !isPaused) {
+        if (isRecording && !isPaused && frozenSeconds === null) {
             // Animate bars based on metering
             const animateBar = (anim: Animated.Value) => {
                 // Normalize dB (-160 to 0) to (0 to 1)
@@ -331,7 +361,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 }).start();
             });
         }
-    }, [isRecording, isPaused, barCount]);
+    }, [isRecording, isPaused, barCount, frozenSeconds]);
 
     const promptRecordingInterruption = (message: string) => {
         if (interruptionHandledRef.current) {
@@ -362,7 +392,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                     text: t("voice.retry"),
                     onPress: () => {
                         interruptionHandledRef.current = false;
-                        void handleStartRecording();
+                        void latestActionsRef.current.start();
                     },
                 },
                 {
@@ -491,6 +521,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
         haptics.medium();
         setIsStartPending(true);
+        startCancelledRef.current = false;
+        setFrozenSeconds(null);
+        setDuration(0);
         try {
             currentMetering.current = -160;
             meteringSamples.current = 0;
@@ -501,7 +534,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             segmentStartRef.current = 0;
             setMeetingLocked(false);
             const granted = await AudioService.requestPermissions();
-            setPermissionSettled(true);
+            if (startCancelledRef.current) return;
             if (!granted) {
                 appAlert(t("common.permission", "Permission"), t("voice.micPermissionDenied"));
                 onCancel();
@@ -513,14 +546,20 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 if (level > SILENCE_THRESHOLD_DB) {
                     voiceSamples.current += 1;
                 }
-            }, meetingMode ? 'meeting' : 'note');
+            }, meetingMode ? 'meeting' : 'note', { permissionGranted: true });
+            if (startCancelledRef.current) {
+                await AudioService.cancelRecording().catch(() => undefined);
+                return;
+            }
             setIsRecording(true);
             setIsPaused(false);
-            setDuration(0);
             recordingStartAtRef.current = Date.now();
         } catch (error) {
+            if (startCancelledRef.current) return;
             appAlert(t("common.errorTitle"), t("voice.startError", "Could not start recording"));
             console.error(error);
+            // Nothing is recording: the panel would sit at "Starting…" for good.
+            onCancel();
         } finally {
             setIsStartPending(false);
         }
@@ -538,6 +577,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 await AudioService.resumeRecording();
             } else {
                 await AudioService.pauseRecording();
+                // The clock stops with the microphone: show the exact second.
+                setDuration(shownRecordingSeconds(AudioService.getRecordedMs()));
             }
             setIsPaused(!isPaused);
         } catch (error) {
@@ -546,7 +587,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     };
 
     /** Joins the meeting's parts (plus the last one, if any) and hands them on. */
-    const finishMeeting = async (last: AudioRecording | null) => {
+    const finishMeeting = async (last: AudioRecording | null, shownSeconds?: number) => {
         const segments = [...meetingSegmentsRef.current, ...(last?.uri ? [last.uri] : [])];
         meetingSegmentsRef.current = [];
         setIsRecording(false);
@@ -562,7 +603,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             // Joining failed: every part is still transcribed; the card plays the first.
             console.warn('[VoiceRecorder] Could not join meeting parts', error);
         }
-        const totalSeconds = last?.duration || duration;
+        const totalSeconds = shownSeconds || last?.duration || duration;
         recordingStartAtRef.current = null;
         onFinish({ uri, duration: totalSeconds, mimeType: 'audio/m4a', meeting: true, segments }, true);
     };
@@ -572,6 +613,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             return;
         }
         haptics.medium();
+        // Freeze what the timer shows before anything slow happens.
+        const shownSeconds = shownRecordingSeconds(AudioService.getRecordedMs()) || duration;
+        setFrozenSeconds(shownSeconds);
+        setDuration(shownSeconds);
+        setPanelOpen(false);
         setIsStopping(true);
         try {
             while (rollingRef.current) {
@@ -583,13 +629,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 const last = await AudioService.stopRecording().catch(() => null);
                 setIsRecording(false);
                 setIsPaused(false);
-                await finishMeeting(last);
+                await finishMeeting(last, shownSeconds);
                 return;
             }
-            const recording = await AudioService.stopRecording();
+            const stopped = await AudioService.stopRecording();
             setIsRecording(false);
             setIsPaused(false);
-            if (!recording) {
+            if (!stopped) {
                 interruptionHandledRef.current = true;
                 appAlert(
                     t("voice.recordingUnavailable"),
@@ -598,6 +644,8 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 onCancel();
                 return;
             }
+            // Stored as shown: the chip and the player say what the timer said.
+            const recording: AudioRecording = { ...stopped, duration: shownSeconds || stopped.duration };
 
             const hasMetering = meteringSamples.current > 0;
             const hasVoiceSignal = !hasMetering || voiceSamples.current >= MIN_VOICE_SAMPLES;
@@ -616,14 +664,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 }
                 appAlert(
                     t("voice.quietTitle", "Almost nothing was heard"),
-                    t("voice.quietDesc", "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again. Keep this recording anyway?"),
+                    t("voice.quietDescAgain", "The microphone picked up only silence. If it is muted or busy with a call, stop that and record again."),
+                    // The last one is the main action.
                     [
                         { text: t("common.delete"), style: "destructive", onPress: () => { void discard(); } },
                         // Kept as audio only: transcribing silence would only spend
                         // cloud minutes; it can still be transcribed from Voice recordings.
-                        { text: t("voice.keepRecording", "Keep"), onPress: () => onFinish(recording, false) },
+                        { text: t("voice.keepAnyway", "Keep anyway"), onPress: () => onFinish({ ...recording, noSpeech: true }, false) },
+                        {
+                            text: t("voice.recordAgain", "Record again"),
+                            onPress: () => {
+                                void AudioService.deleteAudioFile(recording.uri).catch(() => undefined);
+                                void latestActionsRef.current.start();
+                            },
+                        },
                     ],
-                    // One of the two: dismissed, the recorder would sit there with nothing to do.
+                    // One of the three: dismissed, the recorder would sit there with nothing to do.
                     { cancelable: false }
                 );
                 recordingStartAtRef.current = null;
@@ -656,6 +712,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         if (!confirmDiscard && duration >= DISCARD_CONFIRM_AFTER_SECONDS) {
             haptics.medium();
             setConfirmDiscard(true);
+            // The ring around the bin drains while the second tap is awaited.
+            discardRing.setValue(0);
+            Animated.timing(discardRing, {
+                toValue: 1,
+                duration: DISCARD_CONFIRM_WINDOW_MS,
+                easing: Easing.linear,
+                useNativeDriver: false,
+            }).start();
             confirmDiscardTimerRef.current = setTimeout(() => setConfirmDiscard(false), DISCARD_CONFIRM_WINDOW_MS);
             return;
         }
@@ -667,6 +731,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             return;
         }
         if (confirmDiscardTimerRef.current) clearTimeout(confirmDiscardTimerRef.current);
+        discardRing.stopAnimation();
         setConfirmDiscard(false);
         // The status watchdog would see the recorder stop while we cancel it and
         // report "Recording interrupted" over a deliberate discard.
@@ -674,6 +739,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         while (rollingRef.current) {
             await new Promise((resolve) => setTimeout(resolve, 50));
         }
+        if (isStartPending) startCancelledRef.current = true;
         try {
             if (isRecording) {
                 await AudioService.cancelRecording();
@@ -695,13 +761,17 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
     // The choice offered on Back acts on the state at the time it is tapped,
     // not when it was shown (the recording may have stopped in between).
-    const latestActionsRef = useRef({ stop: handleStopRecording, cancel: handleCancel, finishMeeting, isRecording });
-    latestActionsRef.current = { stop: handleStopRecording, cancel: handleCancel, finishMeeting, isRecording };
+    const latestActionsRef = useRef({ stop: handleStopRecording, cancel: handleCancel, finishMeeting, start: handleStartRecording, isRecording });
+    latestActionsRef.current = { stop: handleStopRecording, cancel: handleCancel, finishMeeting, start: handleStartRecording, isRecording };
 
     // Android Back / back gesture: "close the panel" must not mean "delete the
     // recording". A short take is still just dropped; anything longer, or a
     // meeting with finished parts, asks: continue, save or delete.
     const handleBackRequest = () => {
+        if (panelOpen) {
+            setPanelOpen(false);
+            return;
+        }
         const action = recorderBackAction({
             isRecording,
             isStopping,
@@ -757,9 +827,6 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 ? 'dictate'
                 : null;
 
-    // One calm layer above the bar: the explanation card shows on its own only
-    // when it matters (the first recording of each kind, a warning, the discard
-    // question, a spoken instruction); otherwise it is one tap on the route line.
     const hintKind = micHintKind({
         route,
         mode: shownMode,
@@ -780,18 +847,49 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     }, [visible, hintKind, isInstruction, hasRouteContext, route]);
     const routeInfo = route ? routeLabel(t, route.transcription, route.cloudFallback) : null;
     const showRouteCaption = hasRouteContext && !isInstruction;
-    const detailsShown = !!confirmDiscard
+    // Nothing to choose for a spoken instruction: no "⋯" there.
+    const hasOptions = !isInstruction;
+    const starting = !isRecording && frozenSeconds === null;
+
+    // The line under the timer: where it goes, led by the mode when it is not
+    // plain dictation ("Edit by voice · Vaulto cloud", "Meeting · On this phone").
+    const captionMode = meetingMode
+        ? t("voice.chipMeeting", "Meeting")
+        : shownMode === 'edit'
+            ? modeLabel(t, 'edit')
+            : micMode === 'force_text' && voiceMode === 'edit'
+                ? t('voice.mode.dictateOnce', 'Dictate once')
+                : null;
+    const captionText = [captionMode, route ? routeShortLabel(t, route.transcription) : null]
+        .filter(Boolean)
+        .join(' · ');
+
+    // At most one card above the bar: the options panel, or else an
+    // explanation shown on its own when it matters (the first recording of
+    // each kind, a warning, the discard question, a spoken instruction).
+    const explanationShown = !panelOpen && (
+        !!confirmDiscard
         || isInstruction
-        || detailsOpen
         || (!!hintKind && firstUseKinds.includes(hintKind))
-        || routeInfo?.tone === 'warning';
-    // "Meeting" and "To text" fold away behind one button while the mode switch
-    // is shown; turning either on brings the chips back (the switch then hides).
-    const optionsFolded = showModeSwitch && !optionsOpen;
+        || routeInfo?.tone === 'warning'
+    );
+    // What Done does, in the panel only when the switches below do not say it
+    // already (the mode's effect, or text that has to wait).
+    const genericOutcome = t("voice.toTextHint", "When you finish, the recording becomes text");
+    const panelOutcomeText = route && !meetingMode && transcribe && route.transcription !== 'audio_only'
+        ? outcomeText(t, route, shownMode)
+        : null;
+    const panelOutcome = panelOutcomeText && panelOutcomeText !== genericOutcome ? panelOutcomeText : null;
+    const togglePanel = () => {
+        haptics.selection();
+        setPanelOpen((prev) => !prev);
+    };
+
+    const iconSize = isMainScreen ? 32 : 26;
 
     return (
         <Modal
-            visible={visible && (!autoStart || isRecording || permissionSettled)}
+            visible={visible}
             animationType="slide"
             transparent
             onRequestClose={handleBackRequest}
@@ -802,14 +900,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                 pointerEvents="box-none"
             >
                 <View style={styles.container} pointerEvents="box-none">
-                    {/* Where it is processed and what happens on Done: shown on its own
-                        only when it matters, otherwise one tap on the route line. */}
-                    {detailsShown && (
+                    {explanationShown && (
                         <MicRouteNote
                             route={route}
                             mode={shownMode}
-                            // The bar already names the route; the full line only on request or a warning.
-                            showRoute={hasRouteContext && !isInstruction && (detailsOpen || routeInfo?.tone === 'warning')}
+                            // The bar already names the route; the full line only for a warning.
+                            showRoute={hasRouteContext && !isInstruction && routeInfo?.tone === 'warning'}
                             alert={confirmDiscard ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording") : null}
                             outcome={isInstruction
                                 ? t("voice.instructionHint", "When you finish, the instruction appears in the field")
@@ -823,106 +919,61 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         />
                     )}
 
-                    {/* Meeting / To text */}
-                    {!isInstruction && !optionsFolded && (
-                    <View style={styles.togglesRow}>
-                        {/* Joining meeting parts is Android-only for now (native AudioConcat). */}
-                        {micMode !== 'force_text' && Platform.OS === 'android' && (
-                            <TouchableOpacity
-                                style={[
-                                    styles.badgeToggle,
-                                    isMainScreen && styles.badgeToggleLarge,
-                                    meetingMode ? styles.badgeToggleOn : styles.badgeToggleOff,
-                                ]}
-                                onPress={() => {
-                                    if (meetingLocked) return;
-                                    haptics.selection();
-                                    setMeetingMode((prev) => !prev);
-                                }}
-                                disabled={meetingLocked}
-                                hitSlop={{ top: 4, bottom: 4 }}
-                                activeOpacity={0.7}
-                                accessibilityRole="switch"
-                                accessibilityLabel={t("voice.chipMeeting", "Meeting")}
-                                accessibilityHint={t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")}
-                                accessibilityState={{ checked: meetingMode }}
+                    {panelOpen && (
+                        <View style={styles.panel} accessibilityViewIsModal={false}>
+                            <ScrollView
+                                style={{ maxHeight: windowHeight * 0.55 }}
+                                contentContainerStyle={styles.panelContent}
+                                bounces={false}
                             >
-                                <MaterialIcons
-                                    name={meetingMode ? 'check' : 'groups'}
-                                    size={isMainScreen ? 18 : 14}
-                                    color={meetingMode ? colors.onPrimary : colors.textSecondary}
-                                />
-                                <Text
-                                    style={[
-                                        styles.badgeLabel,
-                                        isMainScreen && styles.badgeLabelLarge,
-                                        { color: meetingMode ? colors.onPrimary : colors.textSecondary },
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {t("voice.chipMeeting", "Meeting")}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                                {/* Where it goes and what Done does, with the same icon as the bar. */}
+                                {hasRouteContext && (
+                                    <View style={styles.panelRoute} accessible accessibilityLiveRegion="polite">
+                                        <View style={styles.panelRouteLine}>
+                                            <MaterialIcons
+                                                name={routeInfo?.icon ?? 'cloud-queue'}
+                                                size={18}
+                                                color={routeInfo?.tone === 'warning' ? colors.warning : colors.primary}
+                                            />
+                                            <Text style={styles.panelRouteText}>{routeInfo?.text ?? ' '}</Text>
+                                        </View>
+                                        {!!panelOutcome && (
+                                            <Text style={styles.panelOutcome}>{panelOutcome}</Text>
+                                        )}
+                                    </View>
+                                )}
 
-                        {!meetingMode && (
-                            <>
-                            <TouchableOpacity
-                                style={[
-                                    styles.badgeToggle,
-                                    isMainScreen && styles.badgeToggleLarge,
-                                    transcribe ? styles.badgeToggleOn : styles.badgeToggleOff,
-                                ]}
-                                onPress={() => handleTranscriptionToggle(!transcribe)}
-                                hitSlop={{ top: 4, bottom: 4 }}
-                                activeOpacity={0.7}
-                                accessibilityRole="switch"
-                                accessibilityLabel={t("common.transcribe", "Transcribe")}
-                                accessibilityState={{ checked: transcribe }}
-                            >
-                                <MaterialIcons
-                                    name={transcribe ? 'check' : 'mic'}
-                                    size={isMainScreen ? 18 : 14}
-                                    color={transcribe ? colors.onPrimary : colors.textSecondary}
-                                />
-                                <Text
-                                    style={[
-                                        styles.badgeLabel,
-                                        isMainScreen && styles.badgeLabelLarge,
-                                        { color: transcribe ? colors.onPrimary : colors.textSecondary },
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {t("voice.chipTranscribe", "To text")}
-                                </Text>
-                            </TouchableOpacity>
-                            </>
-                        )}
-                    </View>
-                    )}
+                                {/* Dictate / Edit by voice: applies when the recording finishes,
+                                    so it can still be switched while speaking. */}
+                                {showModeSwitch && voiceMode && onVoiceModeChange && (
+                                    <View style={styles.panelMode}>
+                                        <VoiceModeSwitch value={voiceMode} onChange={onVoiceModeChange} flat />
+                                    </View>
+                                )}
 
-                    {/* Dictate / Edit by voice (applies when the recording finishes, so it
-                        can still be switched while speaking), with the other options folded. */}
-                    {showModeSwitch && voiceMode && onVoiceModeChange && (
-                        <View style={styles.modeRow}>
-                            <VoiceModeSwitch value={voiceMode} onChange={onVoiceModeChange} />
-                            <TouchableOpacity
-                                style={[styles.optionsButton, optionsOpen && styles.optionsButtonOpen]}
-                                onPress={() => {
-                                    haptics.selection();
-                                    setOptionsOpen((prev) => !prev);
-                                }}
-                                activeOpacity={0.75}
-                                accessibilityRole="button"
-                                accessibilityState={{ expanded: optionsOpen }}
-                                accessibilityLabel={t('voice.moreOptions', 'Recording options')}
-                            >
-                                <MaterialIcons
-                                    name="tune"
-                                    size={20}
-                                    color={optionsOpen ? colors.primary : colors.textSecondary}
-                                />
-                            </TouchableOpacity>
+                                {/* Joining meeting parts is Android-only for now (native AudioConcat). */}
+                                {micMode !== 'force_text' && Platform.OS === 'android' && (
+                                    <OptionSwitchRow
+                                        icon="groups"
+                                        label={t("voice.chipMeeting", "Meeting")}
+                                        description={t("voice.meetingHint", "Up to 60 minutes, then a summary with decisions and tasks")}
+                                        value={meetingMode}
+                                        onChange={(next) => setMeetingMode(next)}
+                                        disabled={meetingLocked}
+                                    />
+                                )}
+                                {!meetingMode && (
+                                    <OptionSwitchRow
+                                        icon="short-text"
+                                        label={t("voice.chipTranscribe", "To text")}
+                                        description={transcribe
+                                            ? t("voice.toTextHint", "When you finish, the recording becomes text")
+                                            : t("voice.audioOnlyHint", "Saved as audio only, without text")}
+                                        value={transcribe}
+                                        onChange={(next) => { void handleTranscriptionToggle(next); }}
+                                    />
+                                )}
+                            </ScrollView>
                         </View>
                     )}
 
@@ -936,10 +987,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                         </Animated.View>
                     )}
 
-                    {/* Main Bar */}
+                    {/* The bar: bin, timer with the route under it, options, pause, done. */}
                     <View style={[styles.mainBar, isMainScreen && styles.mainBarLarge]}>
                         <TouchableOpacity
-                            style={styles.cancelButtonCompact}
+                            style={styles.iconButton}
                             onPress={handleDiscardPress}
                             disabled={isStopping}
                             accessibilityRole="button"
@@ -947,9 +998,33 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                                 ? t("voice.discardConfirmHint", "Tap the bin again to delete the recording")
                                 : t("a11y.deleteRecording", "Delete recording")}
                         >
+                            {confirmDiscard && (
+                                <Svg
+                                    width={DISCARD_RING_SIZE}
+                                    height={DISCARD_RING_SIZE}
+                                    style={styles.discardRing}
+                                    pointerEvents="none"
+                                >
+                                    <AnimatedCircle
+                                        cx={DISCARD_RING_SIZE / 2}
+                                        cy={DISCARD_RING_SIZE / 2}
+                                        r={DISCARD_RING_RADIUS}
+                                        stroke={colors.error}
+                                        strokeWidth={DISCARD_RING_STROKE}
+                                        fill="none"
+                                        strokeLinecap="round"
+                                        strokeDasharray={`${DISCARD_RING_LENGTH} ${DISCARD_RING_LENGTH}`}
+                                        strokeDashoffset={discardRing.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [0, DISCARD_RING_LENGTH],
+                                        })}
+                                        transform={`rotate(-90 ${DISCARD_RING_SIZE / 2} ${DISCARD_RING_SIZE / 2})`}
+                                    />
+                                </Svg>
+                            )}
                             <MaterialIcons
                                 name={confirmDiscard ? 'delete-forever' : 'delete-outline'}
-                                size={isMainScreen ? 36 : 26}
+                                size={confirmDiscard ? 22 : iconSize}
                                 color={confirmDiscard ? colors.error : colors.textTertiary}
                             />
                         </TouchableOpacity>
@@ -958,78 +1033,103 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             tap for what happens on Done. */}
                         <TouchableOpacity
                             style={styles.centerColumn}
-                            onPress={showRouteCaption ? () => {
-                                haptics.selection();
-                                setDetailsOpen((prev) => !prev);
-                            } : undefined}
+                            onPress={showRouteCaption ? togglePanel : undefined}
                             disabled={!showRouteCaption}
                             activeOpacity={0.6}
                             accessibilityRole={showRouteCaption ? 'button' : undefined}
-                            accessibilityState={showRouteCaption ? { expanded: detailsShown } : undefined}
-                            accessibilityLabel={showRouteCaption && routeInfo ? routeInfo.text : undefined}
+                            accessibilityState={showRouteCaption ? { expanded: panelOpen } : undefined}
+                            accessibilityLabel={starting
+                                ? t('voice.starting', 'Starting…')
+                                : showRouteCaption && routeInfo ? `${formatDuration(duration)}, ${captionText}` : undefined}
                             accessibilityHint={showRouteCaption ? t('voice.routeDetailsHint', 'Shows what happens to the recording') : undefined}
                         >
-                        <View style={styles.centerSection}>
-                            <Text style={[styles.timerCompact, isMainScreen && styles.timerCompactLarge, isPaused && { color: colors.error }]}>
-                                {formatDuration(duration)}
-                            </Text>
-                            <View
-                                style={[
-                                    styles.waveformContainerCompact,
-                                    isMainScreen && styles.waveformContainerCompactLarge,
-                                    barCount >= MAX_BAR_COUNT && styles.waveformContainerSpread,
-                                ]}
-                                onLayout={handleWaveformLayout}
-                            >
-                                {animations.slice(0, barCount).map((anim, index) => (
-                                    <Animated.View
-                                        key={index}
-                                        style={[
-                                            styles.barCompact,
-                                            isMainScreen && styles.barCompactLarge,
-                                            barCount >= MAX_BAR_COUNT && (isMainScreen ? styles.barSpreadLarge : styles.barSpread),
-                                            {
-                                                transform: [{ scaleY: anim }],
-                                                opacity: isRecording && !isPaused ? 1 : 0.2,
-                                            },
-                                        ]}
-                                    />
-                                ))}
-                            </View>
-                        </View>
-                        {showRouteCaption && (
-                            // Kept in place while the route is read, so nothing jumps.
-                            <View style={[styles.routeCaption, !routeInfo && styles.invisible]}>
-                                <MaterialIcons
-                                    name={routeInfo?.icon ?? 'cloud-queue'}
-                                    size={13}
-                                    color={routeInfo?.tone === 'warning' ? colors.warning : colors.textTertiary}
-                                />
-                                <Text
-                                    style={[styles.routeCaptionText, routeInfo?.tone === 'warning' && styles.routeCaptionWarning]}
-                                    numberOfLines={1}
+                            <View style={styles.centerSection}>
+                                {starting ? (
+                                    <Text
+                                        style={[styles.startingText, isMainScreen && styles.startingTextLarge]}
+                                        numberOfLines={1}
+                                        accessibilityLiveRegion="polite"
+                                    >
+                                        {t('voice.starting', 'Starting…')}
+                                    </Text>
+                                ) : (
+                                    <Text style={[styles.timerCompact, isMainScreen && styles.timerCompactLarge, isPaused && { color: colors.error }]}>
+                                        {formatDuration(frozenSeconds ?? duration)}
+                                    </Text>
+                                )}
+                                <View
+                                    style={[
+                                        styles.waveformContainerCompact,
+                                        isMainScreen && styles.waveformContainerCompactLarge,
+                                        barCount >= MAX_BAR_COUNT && styles.waveformContainerSpread,
+                                    ]}
+                                    onLayout={handleWaveformLayout}
                                 >
-                                    {route ? routeShortLabel(t, route.transcription) : ' '}
-                                </Text>
-                                <MaterialIcons
-                                    name={detailsShown ? 'expand-more' : 'info-outline'}
-                                    size={13}
-                                    color={colors.textTertiary}
-                                />
+                                    {animations.slice(0, barCount).map((anim, index) => (
+                                        <Animated.View
+                                            key={index}
+                                            style={[
+                                                styles.barCompact,
+                                                isMainScreen && styles.barCompactLarge,
+                                                barCount >= MAX_BAR_COUNT && (isMainScreen ? styles.barSpreadLarge : styles.barSpread),
+                                                {
+                                                    transform: [{ scaleY: anim }],
+                                                    opacity: isRecording && !isPaused && frozenSeconds === null ? 1 : 0.2,
+                                                },
+                                            ]}
+                                        />
+                                    ))}
+                                </View>
                             </View>
-                        )}
+                            {showRouteCaption && (
+                                // Kept in place while the route is read, so nothing jumps.
+                                <View style={[styles.routeCaption, !routeInfo && styles.invisible]}>
+                                    <MaterialIcons
+                                        name={routeInfo?.icon ?? 'cloud-queue'}
+                                        size={13}
+                                        color={routeInfo?.tone === 'warning' ? colors.warning : colors.textSecondary}
+                                    />
+                                    <Text
+                                        style={[styles.routeCaptionText, routeInfo?.tone === 'warning' && styles.routeCaptionWarning]}
+                                        numberOfLines={bigText ? 2 : 1}
+                                    >
+                                        {captionText || ' '}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
 
+                        {hasOptions && (
+                            <TouchableOpacity
+                                style={[styles.iconButton, styles.moreButton, panelOpen && styles.moreButtonOpen]}
+                                onPress={togglePanel}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: panelOpen }}
+                                accessibilityLabel={t('voice.moreOptions', 'Recording options')}
+                            >
+                                <MaterialIcons
+                                    name="more-horiz"
+                                    size={isMainScreen ? 28 : 24}
+                                    color={panelOpen ? colors.primary : colors.textSecondary}
+                                />
+                            </TouchableOpacity>
+                        )}
+
                         <TouchableOpacity
-                            style={styles.pauseButtonCompact}
+                            style={styles.iconButton}
                             onPress={handlePauseResume}
-                            disabled={!isRecording || isStopping}
+                            disabled={!isRecording || isStopping || frozenSeconds !== null}
                             accessibilityRole="button"
                             accessibilityLabel={isPaused
                                 ? t("a11y.resumeRecording", "Resume recording")
                                 : t("a11y.pauseRecording", "Pause recording")}
                         >
-                            <MaterialIcons name={isPaused ? "play-arrow" : "pause"} size={isMainScreen ? 36 : 26} color={colors.textSecondary} />
+                            <MaterialIcons
+                                name={isPaused ? "play-arrow" : "pause"}
+                                size={iconSize}
+                                color={isRecording && frozenSeconds === null ? colors.textSecondary : colors.textTertiary}
+                            />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -1043,7 +1143,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
                             accessibilityRole="button"
                             accessibilityLabel={t("a11y.sendRecording", "Finish and send recording")}
                         >
-                            <MaterialIcons name="check" size={isMainScreen ? 34 : 22} color="white" />
+                            <MaterialIcons name="check" size={isMainScreen ? 32 : 22} color="white" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1068,58 +1168,55 @@ const styles = createStyles(() => ({
         maxWidth: 560,
         alignSelf: 'center',
     },
-    togglesRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-        marginBottom: spacing.m,
-        width: '100%',
-    },
-    badgeToggle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexShrink: 1,
-        minHeight: 44,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+    panel: {
+        alignSelf: 'stretch',
+        backgroundColor: colors.surface,
         borderRadius: 20,
-        gap: 6,
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: spacing.s,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowRadius: 8,
+        elevation: 6,
+        overflow: 'hidden',
     },
-    badgeToggleOn: {
-        backgroundColor: colors.primary,
-        borderWidth: 1,
-        borderColor: colors.primary,
+    panelContent: {
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.s,
     },
-    badgeToggleOff: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
+    panelRoute: {
+        paddingVertical: spacing.s,
+        gap: 4,
     },
-    badgeToggleLarge: {
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 24,
-        gap: 8,
+    panelRouteLine: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
     },
-    badgeLabel: {
+    panelRouteText: {
         ...typography.captionBold,
-        fontSize: 12,
-    },
-    badgeLabelLarge: {
         fontSize: 14,
+        lineHeight: 20,
+        color: colors.text,
+        flexShrink: 1,
+    },
+    panelOutcome: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+        marginLeft: 26,
+    },
+    panelMode: {
+        paddingVertical: spacing.s,
     },
     mainBar: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.surface,
         borderRadius: 30,
-        paddingHorizontal: spacing.s,
+        paddingHorizontal: spacing.xs,
         paddingVertical: spacing.s,
         width: '100%',
         shadowColor: '#000',
@@ -1129,15 +1226,27 @@ const styles = createStyles(() => ({
         elevation: 10,
     },
     mainBarLarge: {
-        paddingHorizontal: spacing.l,
-        paddingVertical: spacing.m * 1.2,
+        paddingHorizontal: spacing.s,
+        paddingVertical: spacing.m,
         borderRadius: 44,
     },
-    cancelButtonCompact: {
+    iconButton: {
         width: 48,
         height: 48,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    moreButton: {
+        width: 44,
+    },
+    moreButtonOpen: {
+        borderRadius: 22,
+        backgroundColor: colors.primaryLight,
+    },
+    discardRing: {
+        position: 'absolute',
+        top: (48 - DISCARD_RING_SIZE) / 2,
+        left: (48 - DISCARD_RING_SIZE) / 2,
     },
     centerColumn: {
         flex: 1,
@@ -1165,32 +1274,6 @@ const styles = createStyles(() => ({
     invisible: {
         opacity: 0,
     },
-    modeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.s,
-        alignSelf: 'stretch',
-        marginBottom: spacing.s,
-    },
-    optionsButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    optionsButtonOpen: {
-        borderColor: colors.primary,
-    },
     centerSection: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1205,6 +1288,14 @@ const styles = createStyles(() => ({
     },
     timerCompactLarge: {
         fontSize: 28,
+    },
+    startingText: {
+        ...typography.bodyBold,
+        color: colors.textSecondary,
+        flexShrink: 1,
+    },
+    startingTextLarge: {
+        fontSize: 20,
     },
     waveformContainerCompact: {
         flex: 1,
@@ -1241,12 +1332,6 @@ const styles = createStyles(() => ({
         width: 5,
         borderRadius: 2.5,
     },
-    pauseButtonCompact: {
-        width: 48,
-        height: 48,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     finishButtonCompact: {
         width: 48,
         height: 48,
@@ -1257,9 +1342,9 @@ const styles = createStyles(() => ({
         marginLeft: spacing.xs,
     },
     finishButtonCompactLarge: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
     },
     buttonDisabled: {
         opacity: 0.45,

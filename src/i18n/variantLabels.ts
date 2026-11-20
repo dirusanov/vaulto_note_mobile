@@ -156,6 +156,30 @@ export const customInstructionVersionName = (instruction: string | null | undefi
     return shortened ? `${name}…` : name;
 };
 
+/** Words that open or close a spoken request without saying what it does. */
+const SPOKEN_FILLERS = new Set([
+    'please', 'pls', 'can', 'could', 'would', 'will', 'you', 'ok', 'okay', 'now', 'and', 'so', 'then', 'hey', 'just', 'also',
+    'пожалуйста', 'теперь', 'можешь', 'можете', 'давай', 'давайте', 'ну', 'ок', 'окей', 'так', 'и', 'а', 'ещё', 'еще', 'просто',
+]);
+
+/**
+ * A short name for a version made by a voice edit ("Remove the eggs",
+ * "Убери яйца"), taken from what was said, minus "please", "can you",
+ * "а теперь"... Like a custom instruction's name it is stored in the
+ * end-to-end encrypted title, never in the synced label. '' when nothing
+ * usable is left (the step name is shown then).
+ */
+export const voiceEditVersionName = (spoken: string | null | undefined): string => {
+    const words = (spoken || '')
+        .replace(/[\r\n]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+    const bare = (word: string) => word.toLocaleLowerCase().replace(/[.,!?…:;"«»“”]+/gu, '');
+    while (words.length > 0 && SPOKEN_FILLERS.has(bare(words[0]))) words.shift();
+    while (words.length > 0 && SPOKEN_FILLERS.has(bare(words[words.length - 1]))) words.pop();
+    return customInstructionVersionName(words.join(' '));
+};
+
 /** Visible title without the user-name marker. */
 export const plainVariantTitle = (title: string | null | undefined): string =>
     (title || '').split(USER_NAMED_MARKER).join('').trim();

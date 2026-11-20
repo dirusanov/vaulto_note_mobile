@@ -6,6 +6,8 @@ const {
     msToStoredSeconds,
     recorderBackAction,
     DISCARD_CONFIRM_AFTER_SECONDS,
+    DISCARD_CONFIRM_WINDOW_MS,
+    shownRecordingSeconds,
 } = require('../.test-build/recorderAudio/recordingClock.js');
 const { accessibleSeekStepSeconds, accessibleSeekTarget, formatClock } = require('../.test-build/recorderAudio/audioSeek.js');
 
@@ -68,4 +70,19 @@ test('screen-reader seek steps 10 s on long recordings and 5 % on short ones, cl
     assert.equal(accessibleSeekTarget(0, 0, 1), 0);
     assert.equal(formatClock(83), '1:23');
     assert.equal(formatClock(300), '5:00');
+});
+
+test('Done stores the seconds the timer shows; the bin waits 6 s for a second tap (review 2026-11-20)', () => {
+    // The timer shows whole elapsed seconds and freezes on Done.
+    assert.equal(shownRecordingSeconds(25_900), 25);
+    assert.equal(shownRecordingSeconds(999), 0);
+    assert.equal(shownRecordingSeconds(NaN), 0);
+    assert.equal(shownRecordingSeconds(-5), 0);
+    // A silence check or a slow stop after Done cannot add time: the stored
+    // length is taken at the tap, not at the native stop.
+    const clock = new ActiveClock();
+    clock.start(0);
+    assert.equal(shownRecordingSeconds(clock.elapsedMs(25_400)), 25);
+    assert.equal(shownRecordingSeconds(clock.elapsedMs(30_400)), 30, 'the clock itself keeps going until the native stop');
+    assert.equal(DISCARD_CONFIRM_WINDOW_MS, 6000);
 });

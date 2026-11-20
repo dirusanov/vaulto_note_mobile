@@ -16,11 +16,14 @@ export interface PhrasePlayerState {
     position: number;
     duration: number;
     isPlaying: boolean;
+    /** Loading or buffering: asked to play, no sound yet. */
     isLoading: boolean;
+    /** Sound has actually come out since this recording was loaded (paused keeps it). */
+    hasPlayed: boolean;
     failed: boolean;
 }
 
-const IDLE: PhrasePlayerState = { recordingId: null, position: 0, duration: 0, isPlaying: false, isLoading: false, failed: false };
+const IDLE: PhrasePlayerState = { recordingId: null, position: 0, duration: 0, isPlaying: false, isLoading: false, hasPlayed: false, failed: false };
 /** A phrase played on its own ends a moment after its last word. */
 const PHRASE_TAIL_SECONDS = 0.45;
 
@@ -71,11 +74,16 @@ export const usePhrasePlayer = (sources: PhraseAudio[], active: boolean) => {
             setState((prev) => ({ ...prev, position, isPlaying: false }));
             return;
         }
+        const playing = status.isPlaying && !status.didJustFinish;
         setState((prev) => ({
             ...prev,
             position: status.didJustFinish ? (status.durationMillis ?? status.positionMillis) / 1000 : position,
             duration: status.durationMillis ? status.durationMillis / 1000 : prev.duration,
-            isPlaying: status.isPlaying && !status.didJustFinish,
+            isPlaying: playing,
+            // Buffering ends when the player reports it is playing, not when it
+            // was told to: until then nothing is highlighted.
+            isLoading: playing || status.didJustFinish ? false : prev.isLoading,
+            hasPlayed: prev.hasPlayed || playing,
         }));
     }, []);
 
@@ -116,10 +124,9 @@ export const usePhrasePlayer = (sources: PhraseAudio[], active: boolean) => {
             loadedIdRef.current = recordingId;
             await sound.setPositionAsync(from * 1000);
             await sound.playAsync();
+            // Still loading: the status listener clears it once sound comes out.
             setState((prev) => ({
                 ...prev,
-                isLoading: false,
-                isPlaying: true,
                 duration: status.durationMillis ? status.durationMillis / 1000 : prev.duration,
             }));
         } catch (error) {

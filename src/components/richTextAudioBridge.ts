@@ -54,6 +54,8 @@ export type AudioEmbedRuntimeState = {
     isPlaying?: boolean;
     playbackSpeed?: number;
     isLoading?: boolean;
+    /** Kept although the microphone heard only silence: drawn as a flat line. */
+    silent?: boolean;
 };
 
 export enum AudioEmbedActionType {
@@ -140,6 +142,7 @@ const buildAudioEmbedRuntimeJs = () => `
         isPlaying: !!parsed.isPlaying,
         playbackSpeed: typeof parsed.playbackSpeed === 'number' && Number.isFinite(parsed.playbackSpeed) ? parsed.playbackSpeed : 1,
         isLoading: !!parsed.isLoading,
+        silent: !!parsed.silent,
       };
     } catch {
       return null;
@@ -156,6 +159,7 @@ const buildAudioEmbedRuntimeJs = () => `
     const playbackSpeed = typeof payload.playbackSpeed === 'number' && Number.isFinite(payload.playbackSpeed) ? payload.playbackSpeed : 1;
     const isPlaying = !!payload.isPlaying;
     const isLoading = !!payload.isLoading;
+    const silent = !!payload.silent;
     // Drawn shapes, not text: a ">" glyph looked like a typo, not a play button.
     const iconSvg = isLoading
       ? '<circle cx="78" cy="88" r="6" fill="#FFFFFF"/><circle cx="94" cy="88" r="6" fill="#FFFFFF"/><circle cx="110" cy="88" r="6" fill="#FFFFFF"/>'
@@ -175,11 +179,13 @@ const buildAudioEmbedRuntimeJs = () => `
     ));
     const waveBars = ${JSON.stringify(AUDIO_PREVIEW_WAVE_HEIGHTS)}.map((height, index) => {
       const x = waveStartX + index * (waveBarWidth + waveGap);
-      const y = waveBaseY - Math.round(height / 2);
+      // Silence is a flat line, not a made-up waveform.
+      const barHeight = silent ? 4 : height;
+      const y = waveBaseY - Math.round(barHeight / 2);
       const fill = isLoading
         ? '${AUDIO_PREVIEW_WAVE_LOADING}'
         : (index < playedWaveCount ? '${AUDIO_PREVIEW_ACCENT}' : '${AUDIO_PREVIEW_WAVE_IDLE}');
-      return '<rect x="' + x + '" y="' + y + '" width="' + waveBarWidth + '" height="' + height + '" rx="5" fill="' + fill + '"/>';
+      return '<rect x="' + x + '" y="' + y + '" width="' + waveBarWidth + '" height="' + barHeight + '" rx="' + (silent ? 2 : 5) + '" fill="' + fill + '"/>';
     }).join('');
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + WIDTH + '" height="' + HEIGHT + '" viewBox="0 0 ' + WIDTH + ' ' + HEIGHT + '">' +
       '<rect x="8" y="10" width="664" height="156" rx="32" fill="${AUDIO_PREVIEW_CARD_BACKGROUND}" stroke="${AUDIO_PREVIEW_CARD_BORDER}" stroke-width="2"/>' +
@@ -204,6 +210,7 @@ const buildAudioEmbedRuntimeJs = () => `
       isPlaying,
       playbackSpeed,
       isLoading,
+      ...(silent ? { silent: true } : {}),
     };
 
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + MARKER + encodeURIComponent(JSON.stringify(nextPayload));
