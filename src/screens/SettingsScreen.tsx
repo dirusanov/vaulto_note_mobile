@@ -30,7 +30,7 @@ import {
     setLocalModelsEnabled,
 } from '../utils/storage';
 import { formatModelSize } from '../components/OnDeviceModelSection';
-import { attachOfflineDownload, cancelOfflineDownload, downloadOfflineModels, getModelChoices, getOfflineDownloadProgress, getOfflineStatus, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
+import { attachOfflineDownload, cancelOfflineDownload, downloadOfflineModels, getModelChoices, getOfflineDownloadProgress, getOfflineStatus, ModelTier, OfflinePlan, OfflineStatus, planOfflineModels, removeOfflineModels } from '../services/offlineMode';
 import { ModelPickerSheet } from '../components/ModelPickerSheet';
 import { testOpenAIConnection } from '../services/TranscriptionService';
 import { SignInRequiredModal } from '../components/SignInRequiredModal';
@@ -515,8 +515,10 @@ export const SettingsScreen = () => {
     const [localModelsEnabled, setLocalModelsEnabledState] = useState(true);
     const [showRemoveModelsConfirm, setShowRemoveModelsConfirm] = useState(false);
     const [showModelPicker, setShowModelPicker] = useState(false);
-    // "Whisper Turbo · Qwen3.5 2B": the models in use, under the Models row.
+    // The models in use, by plain name ("Speech: Balanced · AI: Fast"), under
+    // the Models row; model file names meant nothing (P3-9).
     const [modelSummary, setModelSummary] = useState('');
+    const [modelTiers, setModelTiers] = useState<{ speech?: ModelTier; ai?: ModelTier }>({});
     const offlineStartingRef = useRef(false);
 
     const usingOpenAI = aiProvider === 'openai';
@@ -543,6 +545,15 @@ export const SettingsScreen = () => {
     const offlineAIMissing = offlineOn && !!offlineStatus?.aiSupported && !offlineStatus?.aiReady
         && !!offlinePlan?.llmKey && offlinePlan.downloadBytes > 0;
     const privateMode = usingLocalWhisper || onDeviceTranscription;
+    const tierName = (kind: 'speech' | 'ai', tier: ModelTier): string => (
+        tier === 'fast' ? t('settings.models.fast', 'Fast')
+            : tier === 'balanced' ? t('settings.models.balanced', 'Balanced')
+                : kind === 'speech' ? t('settings.models.accurate', 'Most accurate') : t('settings.models.smartest', 'Smartest')
+    );
+    const modelSummaryText = [
+        modelTiers.speech ? t('settings.models.summarySpeech', 'Speech: {{tier}}', { tier: tierName('speech', modelTiers.speech) }) : '',
+        modelTiers.ai ? t('settings.models.summaryAI', 'AI: {{tier}}', { tier: tierName('ai', modelTiers.ai) }) : '',
+    ].filter(Boolean).join(' · ');
     const privateVoiceOnly = !offlineStatus?.aiReady;
     const offlineDescription = offlineDownloading
         ? [
@@ -670,6 +681,10 @@ export const SettingsScreen = () => {
             setOfflineStatus(status);
             setOfflinePlan(plan);
             setModelSummary([...choices.speech, ...choices.ai].filter((c) => c.current).map((c) => c.name).join(' · '));
+            setModelTiers({
+                speech: choices.speech.find((c) => c.current)?.tier,
+                ai: choices.ai.find((c) => c.current)?.tier,
+            });
         } catch (error) {
             console.warn('Failed to read offline mode state', error);
         } finally {
@@ -1432,16 +1447,17 @@ export const SettingsScreen = () => {
 
                 {/* Voice & AI: works out of the box (cloud), one switch for offline */}
                 <View onLayout={(event) => { voiceSectionYRef.current = event.nativeEvent.layout.y; scrollToRequestedSection(); }}>
-                <Section
-                    label={t("settings.voice.title", "Voice & AI")}
-                    footer={privateMode ? undefined : t('settings.voice.routingHint', 'Cloud when online, downloaded models when offline. Switching is automatic. Cloud processing sends the selected audio or text to the service.')}
-                >
+                {/* No footer: the card above the switches already says where
+                    speech and AI run (UX review 2026-11-20, P2-14). */}
+                <Section label={t("settings.voice.title", "Voice & AI")}>
                     {/* "Does my recording leave the phone?" answered from the settings below. */}
                     <ProcessingSummaryCard
                         signedIn={!isGuestOrAnonymous}
-                        // A locked vault does not sync: notes stay on the phone until it is unlocked.
+                        // A locked vault does not sync, but the notes already on the
+                        // server are there, encrypted: the card says both, as Sync does.
                         syncEnabled={syncEnabled && !(hasConfiguredKey && encryptionStatus === 'locked')}
                         e2ee={hasConfiguredKey}
+                        vaultLocked={hasConfiguredKey && encryptionStatus === 'locked'}
                         refreshKey={[
                             aiProvider,
                             onDeviceTranscription,
@@ -1451,6 +1467,10 @@ export const SettingsScreen = () => {
                             modelSummary,
                         ].join('|')}
                         onChangeStorage={isGuestOrAnonymous ? undefined : () => {
+                            if (hasConfiguredKey && encryptionStatus === 'locked') {
+                                setShowUnlockSyncModal(true);
+                                return;
+                            }
                             const y = syncSectionYRef.current;
                             if (y !== null) scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.m), animated: true });
                         }}
@@ -1509,7 +1529,7 @@ export const SettingsScreen = () => {
                                     <Divider />
                                     <Row
                                         title={t("settings.models.row", "Models")}
-                                        detail={modelSummary || null}
+                                        detail={modelSummaryText || null}
                                         onPress={() => setShowModelPicker(true)}
                                     />
                                 </>

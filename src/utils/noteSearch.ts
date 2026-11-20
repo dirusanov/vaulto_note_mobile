@@ -197,12 +197,66 @@ export const renderAnswerCitations = (answer: string, sourceCount: number): { te
 
 const normalizeForMatch = (text: string): string => (text || '').toLowerCase().replace(/ё/g, 'е');
 
+// Inflectional endings a list-search word may lose, longest first. Only a real
+// ending is cut: cutting any two letters made "annazz" find "Anna" (P3-13).
+const LIST_SEARCH_ENDINGS = [
+    // Russian (nouns, adjectives, verbs)
+    'ями', 'ами', 'ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ость', 'ться', 'тся',
+    'ах', 'ях', 'ам', 'ям', 'ом', 'ем', 'ой', 'ей', 'ий', 'ый', 'ая', 'яя', 'ое', 'ее', 'ые', 'ие', 'ую', 'юю', 'ов', 'ев',
+    'ть', 'ет', 'ит', 'ют', 'ут', 'ат', 'ят',
+    'а', 'я', 'ы', 'и', 'у', 'ю', 'е', 'о', 'ь',
+    // English and other Latin-script plurals and verb forms
+    'ings', 'ing', 'ies', 'es', 'ed', 's',
+];
+const MIN_LIST_STEM = 4;
+
+const listSearchStem = (word: string): string => {
+    if (word.length < 6) return word;
+    for (const ending of LIST_SEARCH_ENDINGS) {
+        if (word.endsWith(ending) && word.length - ending.length >= MIN_LIST_STEM) {
+            return word.slice(0, -ending.length);
+        }
+    }
+    return word;
+};
+
 /**
- * Query words the list search looks for. A long word loses its last two letters so
- * inflected forms still match ("запуска" finds "запуск", "meetings" finds "meeting").
+ * Query words the list search looks for. A long word loses an inflectional
+ * ending so other forms still match ("запуска" finds "запуск", "meetings"
+ * finds "meeting"); a word without one is looked for whole.
  */
 export const listSearchTerms = (query: string): string[] =>
-    Array.from(new Set(tokenize(query).map((word) => (word.length >= 6 ? word.slice(0, -2) : word))));
+    Array.from(new Set(tokenize(query).map(listSearchStem)));
+
+/**
+ * Text cut into plain and matching pieces, for highlighting the search words in
+ * results. Case and ё/е do not matter; the pieces join back to the text.
+ */
+export const splitSearchHighlights = (text: string, terms: string[]): { text: string; match: boolean }[] => {
+    const source = text || '';
+    const wanted = terms.filter((term) => term.length > 0);
+    if (!source || wanted.length === 0) return [{ text: source, match: false }];
+    const lower = normalizeForMatch(source);
+    // Lower-casing can change a string's length (rare scripts): no highlight then.
+    if (lower.length !== source.length) return [{ text: source, match: false }];
+    const marks = new Array<boolean>(source.length).fill(false);
+    for (const term of wanted) {
+        let from = 0;
+        for (;;) {
+            const at = lower.indexOf(term, from);
+            if (at < 0) break;
+            for (let index = at; index < at + term.length; index += 1) marks[index] = true;
+            from = at + term.length;
+        }
+    }
+    const pieces: { text: string; match: boolean }[] = [];
+    for (let index = 0; index < source.length; index += 1) {
+        const last = pieces[pieces.length - 1];
+        if (last && last.match === marks[index]) last.text += source[index];
+        else pieces.push({ text: source[index], match: marks[index] });
+    }
+    return pieces;
+};
 
 /**
  * The list search: every query word must occur somewhere in the note (title, text,

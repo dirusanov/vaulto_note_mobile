@@ -77,7 +77,8 @@
     "tagNoResults": "Nichts gefunden in #{{tag}}",
     "tagEmpty": "Keine Notizen in #{{tag}}",
     "tagSearchAll": "Alle Notizen durchsuchen",
-    "tagShowAll": "Alle Notizen anzeigen"
+    "tagShowAll": "Alle Notizen anzeigen",
+    "tagsHint": "Tipp: Schreib #arbeit in eine Notiz, um Notizen nach Tag zu filtern."
   },
   "settings": {
     "title": "Einstellungen",
@@ -390,7 +391,9 @@
       "remove": "Von diesem Gerät entfernen · {{size}}",
       "aiReadyTitle": "KI auf dem Gerät ist bereit",
       "aiReadyGuest": "Ohne Konto läuft KI auf diesem Gerät. Schalte „{{option}}“ ein, um sie zu nutzen: Sprache und KI bleiben dann auf dem Gerät.",
-      "turnOn": "Einschalten"
+      "turnOn": "Einschalten",
+      "summarySpeech": "Sprache: {{tier}}",
+      "summaryAI": "KI: {{tier}}"
     },
     "privacySummary": {
       "title": "Verlässt meine Aufnahme das Telefon?",
@@ -418,7 +421,9 @@
       "aiSignIn": "Aus · für Cloud-KI anmelden oder KI auf dem Telefon nutzen",
       "aiNone": "Aus",
       "change": "Ändern",
-      "changeStorageHint": "Öffnet die Sync-Einstellungen"
+      "changeStorageHint": "Öffnet die Sync-Einstellungen",
+      "answerNoLocked": "Nein. Neue Aufnahmen bleiben auf diesem Telefon, bis du die Synchronisierung entsperrst.",
+      "storageLocked": "Auf dem Server, Ende-zu-Ende-verschlüsselt · auf diesem Telefon gesperrt, neue Notizen warten hier"
     }
   },
   "languages": {
@@ -512,7 +517,7 @@
     "improveText": "Text mit KI verbessern",
     "customInstruction": "Benutzerdefinierte Anweisung",
     "applyInstruction": "Anweisung anwenden",
-    "newPrompt": "Neuer Prompt",
+    "newPrompt": "Neue Aktion",
     "preview": "Vorschau",
     "create": "Erstellen",
     "original": "Original",
@@ -597,8 +602,8 @@
     "charactersCount_other": "{{count}} Zeichen",
     "placeholderVisual": "Schreib los ...",
     "placeholderMarkdown": "Markdown eingeben ...",
-    "promptNamePlaceholder": "Prompt-Name",
-    "promptTextPlaceholder": "Prompt-Text",
+    "promptNamePlaceholder": "Name der Aktion",
+    "promptTextPlaceholder": "Was mit der Notiz geschehen soll",
     "deleteImprovementTitle": "Verbesserung löschen?",
     "deleteImprovementDesc": "Diese Version wird entfernt. Du kannst sie jederzeit neu erzeugen.",
     "deleteRecordingTitle": "Aufnahme löschen?",
@@ -660,7 +665,7 @@
         "formatted": "Formatiert",
         "agent": "KI-Agent",
         "previousOriginal": "Früheres Original",
-        "customPrompt": "Eigener Prompt"
+        "customPrompt": "Eigene Anweisung"
       },
       "rename": "Umbenennen",
       "renameTitle": "Version umbenennen",
@@ -687,7 +692,10 @@
       "nextChange": "Nächste Änderung",
       "previousShort": "Zurück",
       "nextShort": "Weiter",
-      "compareWithOriginal": "Mit Original vergleichen"
+      "compareWithOriginal": "Mit Original vergleichen",
+      "position": "{{index}} von {{count}}",
+      "barA11y": "Version: {{name}}, {{position}}",
+      "barHint": "Zeigt alle Versionen"
     },
     "tasks": {
       "find": "Aufgaben finden",
@@ -712,7 +720,8 @@
       "reviewHint": "Prüfe Aufgaben und Termine vor dem Hinzufügen anhand der Notiz.",
       "quoted": "„{{quote}}“",
       "listen": "Anhören",
-      "listenA11y": "Anhören, wo das gesagt wurde: {{quote}}"
+      "listenA11y": "Anhören, wo das gesagt wurde: {{quote}}",
+      "chip": "Aufgaben"
     },
     "protected": {
       "protectNote": "Notiz schützen",
@@ -801,7 +810,16 @@
       "checkedIn": "Punkte in „{{version}}“ abgehakt",
       "undoStale": "Die Notiz hat sich inzwischen geändert. Nutzen Sie Rückgängig im Editor."
     },
-    "improveAction": "Verbessern"
+    "improveAction": "Verbessern",
+    "share": {
+      "menu": "Teilen…",
+      "title": "Teilen",
+      "copyText": "Text kopieren",
+      "copyMarkdown": "Als Markdown kopieren",
+      "sendText": "Text senden…",
+      "markdownFile": "Als Markdown-Datei senden…",
+      "image": "Als Bild senden…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Modell nicht heruntergeladen. Prüfe die Einstellungen.",
@@ -1032,7 +1050,10 @@
     "aiLimitDescNoDate": "Dein KI-Kontingent für diesen Monat ist aufgebraucht. Es wird zu Beginn des nächsten Zeitraums zurückgesetzt.",
     "aiLimitGuestDesc": "Melde dich an, um ein eigenes monatliches KI-Kontingent zu erhalten.",
     "verificationSentTo": "Wir haben einen Bestätigungslink gesendet an",
-    "verificationCheckFailed": "Es konnte nicht geprüft werden, ob deine E-Mail bestätigt ist. Prüfe deine Verbindung und versuche es erneut."
+    "verificationCheckFailed": "Es konnte nicht geprüft werden, ob deine E-Mail bestätigt ist. Prüfe deine Verbindung und versuche es erneut.",
+    "cloudMinutes": "Cloud-Spracherkennung",
+    "cloudMinutesMonth": "Cloud-Spracherkennung diesen Monat",
+    "minutesUsedOf": "{{used}} von {{total}} Min. genutzt"
   },
   "a11y": {
     "checked": "erledigt",
@@ -1202,7 +1223,7 @@
     "localLlmUnavailableText": "Diese App-Version kann keine KI auf dem Gerät ausführen. Aktualisiere die App oder schalte „Nur auf diesem Gerät“ in den Einstellungen aus.",
     "aiLockedTitle": "Melde dich an, um KI zu nutzen",
     "aiLockedText": "Cloud-KI ist nach der Anmeldung verfügbar. KI auf dem Gerät funktioniert ohne Konto.",
-    "deletePromptTitle": "Diesen Prompt löschen?",
+    "deletePromptTitle": "Diese Aktion löschen?",
     "deletePromptText": "Er wird aus deiner Liste entfernt.",
     "recordingsEmpty": "Noch keine Aufnahmen.",
     "promptIcon": "Symbol",

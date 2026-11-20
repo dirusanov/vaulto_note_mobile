@@ -27,7 +27,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Sound } from '../services/audioPlayback';
 import { captureRef } from 'react-native-view-shot';
-import { GestureHandlerRootView, ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { RichTextEditor, RichTextEditorHandle } from '../components/RichTextEditor';
@@ -48,7 +48,6 @@ import { LocalWhisperDownloadModal } from '../components/LocalWhisperDownloadMod
 import { AudioPlayer } from '../components/AudioPlayer';
 import { PrivacyWarningModal } from '../components/PrivacyWarningModal';
 import { DeleteConfirmationDialog } from '../components/DeleteConfirmationDialog';
-import { EdgeFade } from '../components/EdgeFade';
 import { VersionsSheet, VersionListItem } from '../components/VersionsSheet';
 import { TasksSheet, TaskSheetItem } from '../components/TasksSheet';
 import { ListenSheet } from '../components/ListenSheet';
@@ -156,6 +155,7 @@ import {
     richContentToMarkdown,
     richContentToPlainText,
     richContentToTaskAwarePlainText,
+    richContentToReadableText,
     stripAudioEmbedsFromRichContent,
     titleMatchesContextScript,
 } from '../utils/richContent';
@@ -182,7 +182,6 @@ import {
     chipTextForLabel,
     customInstructionVersionName,
     englishStepName,
-    isDerivedLabel,
     markUserVariantName,
     variantTitleAfterAction,
     plainVariantTitle,
@@ -214,7 +213,6 @@ import { scheduleTaskReminder } from '../services/notifications';
 import { appAlert } from '../components/AppAlert';
 
 // Chips stay 40dp tall to keep the row compact; the slop makes the target 48dp.
-const CHIP_HIT_SLOP = { top: 4, bottom: 4 };
 
 type NoteEditScreenRouteProp = RouteProp<RootStackParamList, 'NoteEdit'>;
 type NoteEditScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'NoteEdit'>;
@@ -548,15 +546,16 @@ const formatClock = (seconds: number) => {
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
-const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, onPlayRecording, withText }: {
+const HeaderMeta = memo(({ dateStr, recordingDuration, playerOpen, onPlayRecording, withText, onTasks }: {
     dateStr: string;
-    charCount: number;
     /** Length of the note's latest recording; null when it has none. */
     recordingDuration?: number | null;
     playerOpen?: boolean;
     onPlayRecording?: () => void;
     /** The recording knows when each phrase was said: play opens it with its text. */
     withText?: boolean;
+    /** "Tasks" next to the recording: what was said to do, one tap away. */
+    onTasks?: () => void;
 }) => {
     const { t } = useTranslation();
     // Icons grow with the text beside them (large font sizes).
@@ -565,9 +564,9 @@ const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, on
 
     return (
         <View style={[styles.metaInfo, styles.metaRow]}>
-            <Text style={styles.metaText}>
-                {dateStr}  ·  {t('edit.charactersCount', '{{count}} characters', { count: charCount })}
-            </Text>
+            {/* No character count: it read as noise and went stale on versions
+                (UX review 2026-11-20, P3-5). */}
+            <Text style={styles.metaText}>{dateStr}</Text>
             {recordingDuration != null && onPlayRecording && (
                 // The recording a voice note was made from stays one tap away
                 // once its text is in: the player shown while it was transcribed
@@ -591,333 +590,94 @@ const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, on
                     )}
                 </TouchableOpacity>
             )}
-        </View>
-    );
-});
-
-const MemoizedImprovementChips = memo(({
-    noteImprovements,
-    activeVariantId,
-    handleVariantSelect,
-    onOpenAllVersions,
-    optionIcons,
-    displayLabels,
-    source,
-    unknownSourceCaption,
-    onCompare,
-}: {
-    noteImprovements: any[],
-    activeVariantId: string,
-    handleVariantSelect: (id: string) => void,
-    onOpenAllVersions: () => void,
-    /** option id -> Material icon, so a chip shows which action produced it. */
-    optionIcons: Record<string, string>,
-    /** variant id -> localized step label ("Summarize", "Professional → Summarize"). */
-    displayLabels: Record<string, string>,
-    /**
-     * What the open version was made from: a version id or 'original' (tappable),
-     * or only a name when that version is gone. Null on the original.
-     */
-    source: { id: string | null; label: string } | null,
-    /** Said instead of a source for a version that has none (the previous main text). */
-    unknownSourceCaption: string | null,
-    onCompare: () => void,
-}) => {
-    const { t } = useTranslation();
-    const scrollRef = useRef<any>(null);
-    /** variant id -> chip offset/width, so the active tab can be revealed. */
-    const chipLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
-    const viewportWidthRef = useRef(0);
-    /** Last variant we actually scrolled to, so onLayout does not fight the user. */
-    const revealedForRef = useRef<string | null>(null);
-
-    const revealChip = useCallback((variantId: string, force = false) => {
-        if (!force && revealedForRef.current === variantId) return;
-        // Original is pinned outside the scroll row: show the versions from the
-        // start, the way they read next to it, instead of a half-cut chip.
-        if (variantId === 'original') {
-            if (typeof scrollRef.current?.scrollTo !== 'function') return;
-            revealedForRef.current = variantId;
-            scrollRef.current.scrollTo({ x: 0, animated: true });
-            return;
-        }
-
-        const layout = chipLayoutsRef.current[variantId];
-        const viewportWidth = viewportWidthRef.current;
-        // Measurements can still be missing right after mount; leave the marker
-        // untouched so the next onLayout retries.
-        if (!layout || !viewportWidth) return;
-        if (typeof scrollRef.current?.scrollTo !== 'function') return;
-
-        // Centre the active chip so neighbours stay visible on both sides and it
-        // stays obvious that there are more variants past the edge.
-        const target = layout.x + layout.width / 2 - viewportWidth / 2;
-        revealedForRef.current = variantId;
-        scrollRef.current.scrollTo({ x: Math.max(0, target), animated: true });
-    }, []);
-
-    // Switching a variant first flushes the editor and saves the draft, so the
-    // real active id lands a few hundred ms after the tap. The highlight stays on
-    // the version whose text is on screen until then; the tapped chip shows a
-    // small spinner in place of its icon, so the row still answers the tap.
-    const [pendingVariantId, setPendingVariantId] = useState<string | null>(null);
-    const selectedVariantId = activeVariantId;
-    const pendingId = pendingVariantId !== activeVariantId ? pendingVariantId : null;
-    // Fades on the edges where versions are scrolled out of view, so a chip
-    // cut by the edge reads as "more this way" rather than as a broken label.
-    const [hiddenEdges, setHiddenEdges] = useState({ start: false, end: false });
-    const contentWidthRef = useRef(0);
-    const scrollXRef = useRef(0);
-    const updateHiddenEdges = useCallback(() => {
-        const viewport = viewportWidthRef.current;
-        const start = scrollXRef.current > 4;
-        const end = contentWidthRef.current - viewport - scrollXRef.current > 4;
-        setHiddenEdges((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
-    }, []);
-
-    useEffect(() => {
-        if (pendingVariantId === null) return undefined;
-        if (pendingVariantId === activeVariantId) {
-            setPendingVariantId(null);
-            return undefined;
-        }
-        // Safety net: never leave a stale highlight if the switch never lands.
-        const timer = setTimeout(() => setPendingVariantId(null), 4000);
-        return () => clearTimeout(timer);
-    }, [activeVariantId, pendingVariantId]);
-
-    // Switching from anywhere (chip tap, agent creating a variant) should bring
-    // the active tab into view instead of leaving it off-screen.
-    useEffect(() => {
-        const timer = setTimeout(() => revealChip(selectedVariantId, true), 60);
-        return () => clearTimeout(timer);
-    }, [selectedVariantId, noteImprovements.length, revealChip]);
-
-    const selectVariant = useCallback((variantId: string) => {
-        if (variantId === selectedVariantId || variantId === pendingVariantId) return;
-        void Haptics.selectionAsync().catch(() => undefined);
-        setPendingVariantId(variantId);
-        handleVariantSelect(variantId);
-    }, [selectedVariantId, pendingVariantId, handleVariantSelect]);
-
-    if (noteImprovements.length === 0) return null;
-    const originalActive = selectedVariantId === 'original';
-    const versionCount = noteImprovements.length + 1;
-    const sourceTappable = !!source?.id && source.id !== 'original' && source.id !== pendingId;
-    // Content first: the line under the chips appears only on a version, and
-    // names the source only when it is another version (Original is implied).
-    const sourceIsOriginal = source?.id === 'original';
-    return (
-        <View style={styles.variantContainer}>
-        <View style={styles.variantRow}>
-            {/* One segmented track, like the theme switch in Settings: the open
-                version is the raised white segment. */}
-            <View style={styles.variantTrack}>
-            {/* Original stays pinned: it is the reference every version is read against. */}
-            <TouchableOpacity
-                style={[styles.variantChip, styles.variantOriginalChip, originalActive && styles.variantChipActive]}
-                onPress={() => selectVariant('original')}
-                hitSlop={CHIP_HIT_SLOP}
-                accessibilityRole="button"
-                accessibilityState={{ selected: originalActive, busy: pendingId === 'original' }}
-                accessibilityLabel={t("a11y.originalVersion", "Original version")}
-            >
-                {pendingId === 'original' ? (
-                    <ChipSpinner />
-                ) : (
-                    <MaterialIcons
-                        name="article"
-                        size={14}
-                        color={originalActive ? colors.text : colors.textSecondary}
-                        style={styles.variantChipIcon}
-                    />
-                )}
-                <Text style={[styles.variantChipText, originalActive && styles.variantChipTextActive]}>
-                    {t("edit.original")}
-                </Text>
-            </TouchableOpacity>
-            <View style={styles.variantScroll}>
-            <GestureHandlerScrollView
-                ref={scrollRef}
-                horizontal
-                nestedScrollEnabled
-                directionalLockEnabled
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.variantScrollContent}
-                keyboardShouldPersistTaps="always"
-                scrollEventThrottle={32}
-                onScroll={(event) => {
-                    scrollXRef.current = event.nativeEvent.contentOffset.x;
-                    updateHiddenEdges();
-                }}
-                onContentSizeChange={(width) => {
-                    contentWidthRef.current = width;
-                    updateHiddenEdges();
-                }}
-                onLayout={(event) => {
-                    // Chips can be measured before the row is, so retry the reveal
-                    // once the viewport width is finally known.
-                    viewportWidthRef.current = event.nativeEvent.layout.width;
-                    revealChip(selectedVariantId);
-                    updateHiddenEdges();
-                }}
-            >
-                {noteImprovements.map((imp: any, index: number) => {
-                    const isActive = selectedVariantId === imp.id;
-                    const isPending = pendingId === imp.id;
-                    const chipIcon = variantIconFor(imp, optionIcons);
-                    const chipLabel = displayLabels[imp.id] || `${t("edit.improvement")} ${index + 1}`;
-                    const hasCustomName = !!userVariantName(imp.title);
-                    const chipText = hasCustomName ? chipLabel : chipTextForLabel(chipLabel);
-                    return (
-                        <View
-                            style={styles.variantChipWrapper}
-                            key={imp.id}
-                            onLayout={(event) => {
-                                const { x, width } = event.nativeEvent.layout;
-                                chipLayoutsRef.current[imp.id] = { x, width };
-                                revealChip(selectedVariantId);
-                            }}
-                        >
-                            <TouchableOpacity
-                                style={[styles.variantChip, isActive && styles.variantChipActive]}
-                                onPress={() => selectVariant(imp.id)}
-                                hitSlop={CHIP_HIT_SLOP}
-                                onLongPress={onOpenAllVersions}
-                                delayLongPress={400}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: isActive, busy: isPending }}
-                                accessibilityLabel={chipLabel}
-                            >
-                                {!hasCustomName && isDerivedLabel(chipLabel) && (
-                                    // Made from another version, not from the original.
-                                    <MaterialIcons
-                                        name="subdirectory-arrow-right"
-                                        size={14}
-                                        color={isActive ? colors.text : colors.textSecondary}
-                                    />
-                                )}
-                                {isPending ? (
-                                    <ChipSpinner />
-                                ) : (
-                                    <MaterialIcons
-                                        name={chipIcon as any}
-                                        size={14}
-                                        color={isActive ? colors.text : colors.textSecondary}
-                                        style={styles.variantChipIcon}
-                                    />
-                                )}
-                                <Text
-                                    numberOfLines={1}
-                                    style={[
-                                        styles.variantChipText,
-                                        isActive && styles.variantChipTextActive,
-                                    ]}
-                                >
-                                    {chipText}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    );
-                })}
-            </GestureHandlerScrollView>
-            {hiddenEdges.start && <EdgeFade side="start" color={colors.backgroundSecondary} width={24} />}
-            {hiddenEdges.end && <EdgeFade side="end" color={colors.backgroundSecondary} width={24} />}
-            </View>
-            </View>
-            {/* Renaming and deleting live in the full list (with undo), not on the
-                chips, where a stray tap could remove a version. */}
-            <TouchableOpacity
-                style={styles.variantAllButton}
-                onPress={onOpenAllVersions}
-                hitSlop={CHIP_HIT_SLOP}
-                accessibilityRole="button"
-                accessibilityLabel={t('edit.versions.showAllA11y', 'Show all {{count}} versions', { count: versionCount })}
-            >
-                <MaterialIcons name="view-list" size={20} color={colors.textSecondary} />
-                <Text style={styles.variantAllCount}>{versionCount}</Text>
-            </TouchableOpacity>
-        </View>
-        {/* On a version only: what it was made from and a way to compare. */}
-        {!originalActive && (
-        <View style={styles.variantSourceRow}>
-            {(source && sourceIsOriginal) || (!source && !unknownSourceCaption) ? (
+            {onTasks && (
+                // Find tasks used to hide in the ⋮ menu (UX review 2026-11-20, P2-13).
                 <TouchableOpacity
-                    onPress={onCompare}
-                    style={[styles.variantLinkButton, styles.variantLinkStart]}
-                    hitSlop={VERSION_LINK_HIT_SLOP}
+                    onPress={onTasks}
+                    style={styles.recordingPill}
+                    hitSlop={12}
                     accessibilityRole="button"
-                    accessibilityLabel={t('edit.versions.compareWithOriginal', 'Compare with original')}
+                    accessibilityLabel={t('edit.tasks.find', 'Find tasks')}
                 >
-                    <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
-                    <Text style={styles.variantLinkText} numberOfLines={1}>
-                        {t('edit.versions.compareWithOriginal', 'Compare with original')}
-                    </Text>
+                    <MaterialIcons name="task-alt" size={iconSize} color={colors.primary} />
+                    <Text style={styles.recordingPillText}>{t('edit.tasks.chip', 'Tasks')}</Text>
                 </TouchableOpacity>
-            ) : source ? (
-                <>
-                    <TouchableOpacity
-                        style={styles.variantSourceMain}
-                        onPress={sourceTappable ? () => selectVariant(source.id as string) : undefined}
-                        disabled={!sourceTappable}
-                        hitSlop={VERSION_LINK_HIT_SLOP}
-                        accessibilityRole={sourceTappable ? 'button' : 'text'}
-                        accessibilityLabel={t('edit.versions.basedOnA11y', 'Based on: {{name}}', { name: source.label })}
-                        accessibilityHint={sourceTappable ? t('edit.versions.basedOnHint', 'Opens that version') : undefined}
-                    >
-                        <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textTertiary} style={rtlFlip} />
-                        <Text style={styles.variantSourceText} numberOfLines={1}>
-                            {t('edit.versions.basedOn', 'Based on:')}{' '}
-                            <Text style={sourceTappable ? styles.variantSourceName : styles.variantSourceNameStatic}>{source.label}</Text>
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={onCompare}
-                        style={styles.variantLinkButton}
-                        hitSlop={VERSION_LINK_HIT_SLOP}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('edit.versions.compareA11y', 'Compare this version with its source')}
-                    >
-                        <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
-                        <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
-                    </TouchableOpacity>
-                </>
-            ) : (
-                <>
-                    <View style={styles.variantSourceMain}>
-                        <MaterialIcons name="history" size={16} color={colors.textTertiary} />
-                        <Text style={styles.variantSourceText} numberOfLines={1}>
-                            {unknownSourceCaption}
-                        </Text>
-                    </View>
-                    <TouchableOpacity
-                        onPress={onCompare}
-                        style={styles.variantLinkButton}
-                        hitSlop={VERSION_LINK_HIT_SLOP}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('edit.versions.compareWithOriginal', 'Compare with original')}
-                    >
-                        <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
-                        <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
-                    </TouchableOpacity>
-                </>
             )}
         </View>
-        )}
+    );
+});
+
+/**
+ * The note's versions in one row above the text (UX review 2026-11-20, P2-9):
+ * "[▤ Checklist 2/3 ⌄]  ⇄ Compare". The button names the version being read and
+ * opens the full list as a sheet; a tapped version shows at once (optimistic),
+ * while the switch saves first. The row is the same height on every version,
+ * so switching never moves the text.
+ */
+const VersionBar = memo(({
+    versionCount,
+    shownIndex,
+    shownLabel,
+    shownIcon,
+    pending,
+    onOpenAllVersions,
+    onCompare,
+}: {
+    /** Original included. */
+    versionCount: number;
+    /** 0-based place of the version shown (the tapped one while it loads). */
+    shownIndex: number;
+    shownLabel: string;
+    shownIcon: string;
+    /** The tapped version is still being switched to (saving first). */
+    pending: boolean;
+    onOpenAllVersions: () => void;
+    /** Null on the original: there is nothing to compare it with. */
+    onCompare: (() => void) | null;
+}) => {
+    const { t } = useTranslation();
+    const { fontScale } = useWindowDimensions();
+    const iconSize = Math.round(16 * Math.min(Math.max(fontScale, 1), 1.6));
+    if (versionCount < 2) return null;
+    const position = t('edit.versions.position', '{{index}} of {{count}}', { index: shownIndex + 1, count: versionCount });
+    return (
+        <View style={styles.versionBar}>
+            <TouchableOpacity
+                style={styles.versionButton}
+                onPress={onOpenAllVersions}
+                accessibilityRole="button"
+                accessibilityState={{ busy: pending }}
+                accessibilityLabel={t('edit.versions.barA11y', 'Version: {{name}}, {{position}}', { name: shownLabel, position })}
+                accessibilityHint={t('edit.versions.barHint', 'Shows all versions')}
+            >
+                {pending ? (
+                    <View style={[styles.versionButtonIconBox, { width: iconSize, height: iconSize }]}>
+                        <ActivityIndicator size="small" color={colors.textSecondary} style={{ transform: [{ scale: 0.7 }] }} />
+                    </View>
+                ) : (
+                    <MaterialIcons name={shownIcon as any} size={iconSize} color={colors.textSecondary} />
+                )}
+                <Text style={styles.versionButtonText} numberOfLines={1}>{shownLabel}</Text>
+                <Text style={styles.versionButtonCount}>{`${shownIndex + 1}/${versionCount}`}</Text>
+                <MaterialIcons name="expand-more" size={iconSize + 2} color={colors.textSecondary} />
+            </TouchableOpacity>
+            {onCompare && (
+                <TouchableOpacity
+                    onPress={onCompare}
+                    // Stays in place while a version loads (no blink), usable once it is there.
+                    disabled={pending}
+                    style={styles.versionCompare}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('edit.versions.compareA11y', 'Compare this version with its source')}
+                >
+                    <MaterialIcons name="compare-arrows" size={iconSize + 2} color={colors.primary} />
+                    <Text style={styles.variantLinkText} numberOfLines={1}>{t('edit.versions.compareShort', 'Compare')}</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 });
 
-/** Same footprint as a chip icon, so a pending chip does not change width. */
-const ChipSpinner = () => (
-    <View style={[styles.variantChipIcon, styles.variantChipSpinner]}>
-        {/* "small" is 20pt on both platforms (a numeric size is Android-only). */}
-        <ActivityIndicator size="small" color={colors.textSecondary} style={{ transform: [{ scale: 0.65 }] }} />
-    </View>
-);
-
-/** Small text links reach a 44pt target without a taller row. */
-const VERSION_LINK_HIT_SLOP = { top: 8, bottom: 8, left: 4, right: 4 };
 
 const buildAgentImprovementLabel = (
     primaryTitle?: string | null,
@@ -1192,6 +952,8 @@ export const NoteEditScreen = () => {
         return improvement?.title || improvement?.label || existingNote?.title || '';
     });
     const [showVersionsSheet, setShowVersionsSheet] = useState(false);
+    /** Writes of the "opens next time" version flag, kept in tap order. */
+    const activeFlagWriteRef = useRef<Promise<unknown>>(Promise.resolve());
     const [showCompareVersions, setShowCompareVersions] = useState(false);
     const [tasksSheet, setTasksSheet] = useState<{ visible: boolean; loading: boolean; error: string | null; tasks: TaskSheetItem[] }>({
         visible: false, loading: false, error: null, tasks: [],
@@ -1213,7 +975,6 @@ export const NoteEditScreen = () => {
         if (slowDeviceHintTimerRef.current) clearTimeout(slowDeviceHintTimerRef.current);
     }, []);
     const [renameTarget, setRenameTarget] = useState<{ id: string; value: string } | null>(null);
-    const [showSwipeHint, setShowSwipeHint] = useState(false);
     const pendingVariantDeleteRef = useRef<{ id: string; noteId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
     const visibleImprovements = useMemo(
         () => noteImprovements.filter((imp: any) => !hiddenVariantIds.includes(imp.id)),
@@ -1230,6 +991,8 @@ export const NoteEditScreen = () => {
         return stripAudioEmbedsFromRichContent(imp?.content || existingNote?.content || '');
     });
     const [showMenu, setShowMenu] = useState(false);
+    /** Copy, share and export in one sheet, out of the ⋮ menu (UX review 2026-11-20, P2-13). */
+    const [showShareSheet, setShowShareSheet] = useState(false);
     const [, setIsSaving] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editMode, setEditMode] = useState<'visual' | 'raw'>('visual');
@@ -1608,12 +1371,6 @@ export const NoteEditScreen = () => {
         return parentName ? { id: null, label: parentName } : null;
     }, [aiOptionsById, knownVersionSources, variantDisplayLabels, versionLabelOf, visibleImprovements]);
     const activeVersionSource = useMemo(() => sourceOfVersion(activeVariantId), [activeVariantId, sourceOfVersion]);
-    const activeVersionUnknownCaption = useMemo(() => {
-        const imp = visibleImprovements.find((item: any) => item.id === activeVariantId);
-        return imp?.option_id === PREVIOUS_ORIGINAL_OPTION_ID
-            ? t('edit.versions.previousOriginalCaption', 'The main text before another version replaced it')
-            : null;
-    }, [activeVariantId, t, visibleImprovements]);
     const [aiOptionsLoading, setAiOptionsLoading] = useState(false);
     const [showPromptBuilder, setShowPromptBuilder] = useState(false);
     const [newPromptTitle, setNewPromptTitle] = useState('');
@@ -4382,9 +4139,9 @@ export const NoteEditScreen = () => {
         showRawMarkdown(richContentToMarkdown(content), content);
     }, [content, editMode, showRawMarkdown, t]);
 
-    const handleVariantSelect = useCallback(async (variantId: string) => {
+    const handleVariantSelect = useCallback(async (variantId: string): Promise<boolean> => {
         if (variantId === activeVariantId) {
-            return;
+            return false;
         }
         // Save current content before switching; a failed save keeps the
         // version (and its unsaved text) on screen.
@@ -4394,18 +4151,7 @@ export const NoteEditScreen = () => {
             (error) => showSaveFailedAlert(error, () => { void handleVariantSelectRef.current(variantId); }),
         );
         if (!saved) {
-            return;
-        }
-        try {
-            // Update is_active flags in database
-            if (localNoteId) {
-                await setActiveVariant(
-                    localNoteId,
-                    variantId === 'original' ? null : variantId
-                );
-            }
-        } catch (error) {
-            console.error('Failed to mark the selected version active:', error);
+            return false;
         }
 
         // What the version shows once selected.
@@ -4449,9 +4195,38 @@ export const NoteEditScreen = () => {
         }
         syncVisibleContent(visibleContent);
         setReparseTrigger(prev => prev + 1);
+        // Which version opens next time: written after the text is on screen
+        // (it used to delay every switch), in tap order.
+        if (localNoteId) {
+            const noteIdForFlag = localNoteId;
+            activeFlagWriteRef.current = activeFlagWriteRef.current
+                .then(() => setActiveVariant(noteIdForFlag, variantId === 'original' ? null : variantId))
+                .catch((error) => console.error('Failed to mark the selected version active:', error));
+        }
+        return true;
     }, [activeVariantId, existingNote?.content, existingNote?.title, flushNoteTitleSave, noteImprovements, resolveImprovementVariantTitle, saveNote, localNoteId, setActiveVariant, showSaveFailedAlert, syncVisibleContent, syncVisibleTitle]);
     const handleVariantSelectRef = useRef(handleVariantSelect);
     handleVariantSelectRef.current = handleVariantSelect;
+
+    // A tapped version answers at once (UX review 2026-11-20, P2-10): the bar
+    // names it and the text dims, then fades in once the switch has saved and
+    // landed. A failed save (saveThenProceed) brings the old text back at full
+    // strength, and its alert still offers Retry.
+    const [pendingVariantId, setPendingVariantId] = useState<string | null>(null);
+    const editorFade = useRef(new Animated.Value(1)).current;
+    const requestVariantSwitch = useCallback(async (variantId: string): Promise<boolean> => {
+        if (variantId === activeVariantIdRef.current) return false;
+        setPendingVariantId(variantId);
+        Animated.timing(editorFade, { toValue: 0.3, duration: 90, useNativeDriver: true }).start();
+        let switched = false;
+        try {
+            switched = await handleVariantSelectRef.current(variantId);
+        } finally {
+            setPendingVariantId((current) => (current === variantId ? null : current));
+            Animated.timing(editorFade, { toValue: 1, duration: switched ? 180 : 120, useNativeDriver: true }).start();
+        }
+        return switched;
+    }, [editorFade]);
 
     // ---- Versions: undoable delete, promote, copy, swipe -------------------------
 
@@ -4641,22 +4416,20 @@ export const NoteEditScreen = () => {
 
     // Swiping is invisible until someone tells you: show it once, the first time a
     // note has versions.
+    // Said once in passing (a toast), not as a row that pushes the text down;
+    // the versions sheet repeats it for later.
+    const swipeHintShownRef = useRef(false);
     useEffect(() => {
-        if (visibleImprovements.length === 0 || showSwipeHint) return;
+        if (visibleImprovements.length === 0 || swipeHintShownRef.current) return;
         let cancelled = false;
         void getVersionSwipeHintSeen().then((seen) => {
             if (cancelled || seen) return;
-            // Counted as seen once shown: it stays for this visit, never again.
-            setShowSwipeHint(true);
+            swipeHintShownRef.current = true;
             void setVersionSwipeHintSeen();
+            showToast(t("edit.versions.swipeHint", "Swipe the text to switch versions"), 4000);
         });
         return () => { cancelled = true; };
-    }, [showSwipeHint, visibleImprovements.length]);
-
-    const dismissSwipeHint = useCallback(() => {
-        setShowSwipeHint(false);
-        void setVersionSwipeHintSeen();
-    }, []);
+    }, [t, visibleImprovements.length]);
 
     const openVersionsSheet = useCallback(() => {
         Keyboard.dismiss();
@@ -4673,11 +4446,10 @@ export const NoteEditScreen = () => {
         if (!next) return;
         swipeTargetRef.current = next;
         void Haptics.selectionAsync().catch(() => undefined);
-        if (showSwipeHint) dismissSwipeHint();
-        void handleVariantSelect(next).finally(() => {
+        void requestVariantSwitch(next).finally(() => {
             if (swipeTargetRef.current === next) swipeTargetRef.current = null;
         });
-    }, [dismissSwipeHint, handleVariantSelect, showSwipeHint, variantOrder]);
+    }, [requestVariantSwitch, variantOrder]);
     switchVariantBySwipeRef.current = switchVariantBySwipe;
     // Stable identity for the memoized editor; reads the latest state via the ref.
     const handleEditorHorizontalSwipe = useCallback((direction: 1 | -1) => {
@@ -7031,7 +6803,6 @@ export const NoteEditScreen = () => {
         });
 
     const plainContent = editMode === 'visual' ? visualPlainText : richContentToPlainText(content);
-    const charCount = plainContent.replace(/\r?\n/g, '').length;
     const canUseAI = plainContent.length > 0;
     const effectiveStorageScope: StorageScope = normalizeScope(storageScope);
     const canShareOrExport = effectiveStorageScope !== 'local_only' && !isProtected;
@@ -7599,7 +7370,22 @@ export const NoteEditScreen = () => {
     const latestRecordingInText = !!latestRecording && embeddedAudioPaths.some(
         (path) => normalizeAttachedAudioPath(path) === normalizeAttachedAudioPath(latestRecording.file_path)
     );
-    const recordingPillShown = !!latestRecording && !isTranscribing && !latestRecordingInText;
+    // With versions the pill stays on every one of them (the original may hold
+    // the recording's own card): the line above the text never jumps (P2-9).
+    const recordingPillShown = !!latestRecording && !isTranscribing
+        && (!latestRecordingInText || visibleImprovements.length > 0);
+    // Tasks where the eyes already are: a voice note, or tasks already found.
+    const tasksFound = tasksSheet.tasks.length > 0 && !tasksSheet.loading;
+    const tasksChipShown = !isProtected && !isTranscribing
+        && (tasksFound || (!!latestRecording && plainContent.trim().length > 0));
+    const openTasksFromChip = useCallback(() => {
+        if (tasksFound) {
+            setTasksSheet((prev) => ({ ...prev, visible: true }));
+            return;
+        }
+        void handleAiAccess(() => { void runFindTasks(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [runFindTasks, tasksFound]);
     // The note's speech knows its times: the pill is the one place to listen,
     // with the text alongside (tap a sentence to hear it from there).
     const listenWithText = timingSources.length > 0;
@@ -7610,7 +7396,7 @@ export const NoteEditScreen = () => {
     }, []);
     // Said once, the first time such a note is open (after the swipe hint, never with it).
     useEffect(() => {
-        if (!recordingPillShown || !listenWithText || showListenTip || showSwipeHint) return;
+        if (!recordingPillShown || !listenWithText || showListenTip) return;
         let cancelled = false;
         void getListenTipSeen().then((seen) => {
             if (cancelled || seen) return;
@@ -7618,7 +7404,7 @@ export const NoteEditScreen = () => {
             void setListenTipSeen();
         });
         return () => { cancelled = true; };
-    }, [listenWithText, recordingPillShown, showListenTip, showSwipeHint]);
+    }, [listenWithText, recordingPillShown, showListenTip]);
 
     const toggleTopPlayer = useCallback(() => {
         if (topPlayer) {
@@ -7655,6 +7441,7 @@ export const NoteEditScreen = () => {
         void flushVisualEditorContent().finally(() => setShowCompareVersions(true));
     }, [flushVisualEditorContent]);
 
+    const shownVariantId = pendingVariantId ?? activeVariantId;
     const editorHeader = useMemo(() => (
         <View>
             <HeaderTitle
@@ -7668,7 +7455,7 @@ export const NoteEditScreen = () => {
 
             <HeaderMeta
                 dateStr={dateStr}
-                charCount={charCount}
+                onTasks={tasksChipShown ? openTasksFromChip : undefined}
                 recordingDuration={recordingPillShown && latestRecording ? latestRecording.duration : null}
                 playerOpen={!!topPlayer}
                 onPlayRecording={toggleTopPlayer}
@@ -7702,51 +7489,39 @@ export const NoteEditScreen = () => {
                 </View>
             )}
 
-            <MemoizedImprovementChips
-                noteImprovements={visibleImprovements}
-                activeVariantId={activeVariantId}
-                handleVariantSelect={handleVariantSelect}
+            <VersionBar
+                versionCount={visibleImprovements.length + 1}
+                shownIndex={Math.max(0, variantOrder.indexOf(shownVariantId))}
+                shownLabel={shownVariantId === 'original'
+                    ? t('edit.original', 'Original')
+                    : chipTextForLabel(versionLabelOf(shownVariantId))}
+                shownIcon={shownVariantId === 'original'
+                    ? 'article'
+                    : variantIconFor(visibleImprovements.find((imp: any) => imp.id === shownVariantId) || { id: shownVariantId }, improvementOptionIcons)}
+                pending={!!pendingVariantId && pendingVariantId !== activeVariantId}
                 onOpenAllVersions={openVersionsSheet}
-                optionIcons={improvementOptionIcons}
-                displayLabels={variantDisplayLabels}
-                source={activeVersionSource}
-                unknownSourceCaption={activeVersionUnknownCaption}
-                onCompare={openCompareForActive}
+                onCompare={shownVariantId !== 'original' ? openCompareForActive : null}
             />
-            {showSwipeHint && visibleImprovements.length > 0 && (
-                <View style={styles.swipeHint}>
-                    <MaterialIcons name="swipe" size={16} color={colors.textTertiary} />
-                    <Text style={styles.swipeHintText}>{t('edit.versions.swipeHint', 'Swipe the text to switch versions')}</Text>
-                    <TouchableOpacity
-                        onPress={dismissSwipeHint}
-                        style={styles.swipeHintClose}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('a11y.close', 'Close')}
-                    >
-                        <MaterialIcons name="close" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                </View>
-            )}
         </View>
     ), [
         activeVariantId,
-        activeVersionSource,
-        activeVersionUnknownCaption,
+        pendingVariantId,
+        shownVariantId,
+        variantOrder,
+        versionLabelOf,
         openCompareForActive,
-        charCount,
+        tasksChipShown,
+        openTasksFromChip,
         dateStr,
         handleHeaderTitleFocus,
         handleHeaderTitleBlur,
         handleHeaderTitleChange,
         titleHandoffShown,
-        handleVariantSelect,
         improvementOptionIcons,
         noteTitle,
         openVersionsSheet,
-        requestDeleteVariant,
-        dismissSwipeHint,
         focusBodyFromTitle,
-        showSwipeHint,
+        t,
         title,
         variantDisplayLabels,
         visibleImprovements,
@@ -7907,7 +7682,8 @@ export const NoteEditScreen = () => {
                                     </TouchableOpacity>
                                 </View>
 
-                                {improvementPreview && (
+                                {/* Named only when there is a choice of source (P3-6). */}
+                                {improvementPreview && visibleImprovements.length > 0 && (
                                     <View style={styles.previewSourceLine}>
                                         <MaterialIcons name="subdirectory-arrow-right" size={16} color={colors.textSecondary} style={rtlFlip} />
                                         <Text style={styles.previewSourceText} numberOfLines={2}>
@@ -7949,7 +7725,7 @@ export const NoteEditScreen = () => {
                                         >
                                             <MaterialIcons name="compare-arrows" size={18} color={colors.primary} />
                                             <Text style={styles.previewButtonOutlineText} numberOfLines={2}>
-                                                {t('edit.improvePreview.compare', 'Compare with source')}
+                                                {t('edit.versions.compareShort', 'Compare')}
                                             </Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
@@ -8002,9 +7778,9 @@ export const NoteEditScreen = () => {
                     bases={improvementPreview ? [{
                         id: improvementPreview.variantId,
                         label: versionLabelOf(improvementPreview.variantId),
-                        text: improvementPreview.sourceText,
+                        text: richContentToReadableText(improvementPreview.sourceText),
                     }] : []}
-                    versionText={improvementPreview ? richContentToTaskAwarePlainText(normalizeModelMarkdownForEditor(improvementPreview.resultText)) : ''}
+                    versionText={improvementPreview ? richContentToReadableText(normalizeModelMarkdownForEditor(improvementPreview.resultText)) : ''}
                     onClose={() => setShowPreviewCompare(false)}
                 />
             </Modal>
@@ -8344,13 +8120,13 @@ export const NoteEditScreen = () => {
                                     <Text style={styles.menuItemText}>{t('edit.pinShortcut')}</Text>
                                 </TouchableOpacity>
                             )}
-                            <TouchableOpacity onPress={handleCopyPlainText} style={styles.menuItem}>
-                                <MaterialIcons name="content-copy" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                <Text style={styles.menuItemText}>{t("edit.copyPlainText", "Copy Plain Text")}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleCopyMarkdown} style={styles.menuItem}>
-                                <MaterialIcons name="code" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                <Text style={styles.menuItemText}>{t("edit.copyMarkdown", "Copy Markdown")}</Text>
+                            <TouchableOpacity
+                                onPress={() => { setShowMenu(false); setShowShareSheet(true); }}
+                                style={styles.menuItem}
+                                accessibilityRole="button"
+                            >
+                                <MaterialIcons name="ios-share" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
+                                <Text style={styles.menuItemText}>{t("edit.share.menu", "Share…")}</Text>
                             </TouchableOpacity>
 
                             {!isProtected && (
@@ -8394,67 +8170,6 @@ export const NoteEditScreen = () => {
                                     )}
                                 </>
                             )}
-                            {visibleImprovements.length > 0 && (
-                                <>
-                                    <View style={styles.menuDivider} />
-                                    <TouchableOpacity
-                                        onPress={() => { setShowMenu(false); openVersionsSheet(); }}
-                                        style={styles.menuItem}
-                                    >
-                                        <MaterialIcons name="view-list" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                        <Text style={styles.menuItemText}>{t("edit.versions.all", "All versions")}</Text>
-                                    </TouchableOpacity>
-                                    {activeVariantId !== 'original' && (
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                setShowMenu(false);
-                                                openCompareForActive();
-                                            }}
-                                            style={styles.menuItem}
-                                        >
-                                            <MaterialIcons name="compare-arrows" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                            <Text style={styles.menuItemText}>
-                                                {activeVersionSource?.id && activeVersionSource.id !== 'original'
-                                                    ? t("edit.versions.compareWithSource", "Compare with source")
-                                                    : t("edit.versions.compare", "Compare with Original")}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </>
-                            )}
-
-                            {canShareOrExport ? (
-                                <>
-                                    <View style={styles.menuDivider} />
-
-                                    <TouchableOpacity onPress={handleShareText} style={styles.menuItem}>
-                                        <MaterialIcons name="share" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                        <Text style={styles.menuItemText}>{t("edit.shareText", "Share Text")}</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleExportMarkdownFile} style={styles.menuItem}>
-                                        <MaterialIcons name="file-present" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                        <Text style={styles.menuItemText}>{t("edit.exportMarkdown", "Export Markdown File")}</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleExportImage} style={styles.menuItem}>
-                                        <MaterialIcons name="image" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                        <Text style={styles.menuItemText}>{t("edit.exportImage", "Export as Image")}</Text>
-                                    </TouchableOpacity>
-                                </>
-                            ) : (
-                                <>
-                                    <View style={styles.menuDivider} />
-
-                                    <View style={styles.menuItem}>
-                                        <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
-                                        <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>
-                                            {isProtected
-                                                ? t('edit.protected.shareDisabled', 'Off for protected notes')
-                                                : t('edit.disabledPrivate', 'Disabled for private notes')}
-                                        </Text>
-                                    </View>
-                                </>
-                            )}
-
                             <View style={styles.menuDivider} />
 
                             <TouchableOpacity
@@ -8512,6 +8227,59 @@ export const NoteEditScreen = () => {
                             </TouchableOpacity>
                         </ScrollView>
                         </View>
+                    </View>
+                </TouchableWithoutFeedback>
+            </Modal>
+
+
+            {/* Share: copy, send or save the version being read. */}
+            <Modal
+                visible={showShareSheet}
+                transparent
+                animationType="slide"
+                statusBarTranslucent
+                navigationBarTranslucent
+                onRequestClose={() => setShowShareSheet(false)}
+            >
+                <TouchableWithoutFeedback onPress={() => setShowShareSheet(false)}>
+                    <View style={styles.shareOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={[styles.shareSheet, { paddingBottom: Math.max(insets.bottom, spacing.m) }]}>
+                                <Text style={styles.shareTitle} accessibilityRole="header">{t('edit.share.title', 'Share')}</Text>
+                                <ScrollView bounces={false} style={styles.shareList}>
+                                    {[
+                                        { key: 'copy', icon: 'content-copy', label: t('edit.share.copyText', 'Copy text'), run: handleCopyPlainText, allowed: true },
+                                        { key: 'copyMd', icon: 'code', label: t('edit.share.copyMarkdown', 'Copy as Markdown'), run: handleCopyMarkdown, allowed: true },
+                                        { key: 'share', icon: 'share', label: t('edit.share.sendText', 'Send text…'), run: handleShareText, allowed: canShareOrExport },
+                                        { key: 'md', icon: 'file-present', label: t('edit.share.markdownFile', 'Send as Markdown file…'), run: handleExportMarkdownFile, allowed: canShareOrExport },
+                                        { key: 'image', icon: 'image', label: t('edit.share.image', 'Send as image…'), run: handleExportImage, allowed: canShareOrExport },
+                                    ].filter((item) => item.allowed).map((item) => (
+                                        <TouchableOpacity
+                                            key={item.key}
+                                            style={styles.menuItem}
+                                            accessibilityRole="button"
+                                            onPress={() => {
+                                                setShowShareSheet(false);
+                                                void item.run();
+                                            }}
+                                        >
+                                            <MaterialIcons name={item.icon as any} size={20} color={colors.textSecondary} style={styles.menuItemIcon} />
+                                            <Text style={styles.menuItemText}>{item.label}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                    {!canShareOrExport && (
+                                        <View style={styles.menuItem}>
+                                            <MaterialIcons name="privacy-tip" size={20} color={colors.textTertiary} style={styles.menuItemIcon} />
+                                            <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>
+                                                {isProtected
+                                                    ? t('edit.protected.shareDisabled', 'Off for protected notes')
+                                                    : t('edit.disabledPrivate', 'Disabled for private notes')}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </ScrollView>
+                            </View>
+                        </TouchableWithoutFeedback>
                     </View>
                 </TouchableWithoutFeedback>
             </Modal>
@@ -8585,6 +8353,8 @@ export const NoteEditScreen = () => {
                             autoCapitalize="sentences"
                         />
                     ) : (
+                        // Dims while another version loads, then fades in (P2-10).
+                        <Animated.View style={{ flex: 1, opacity: editorFade }}>
                         <RichTextEditor
                             ref={editorRef}
                             initialContent={content}
@@ -8607,6 +8377,7 @@ export const NoteEditScreen = () => {
                             onDrawingOpen={DRAWING_ENABLED ? setDrawingDocument : undefined}
                             autoFocus={opensAsBlankNoteRef.current}
                         />
+                        </Animated.View>
                     )}
                 </View>
             </KeyboardAvoidingView>
@@ -8716,7 +8487,7 @@ export const NoteEditScreen = () => {
                 items={versionListItems}
                 activeId={activeVariantId}
                 onClose={() => setShowVersionsSheet(false)}
-                onSelect={(id) => { void handleVariantSelect(id); }}
+                onSelect={(id) => { void requestVariantSwitch(id); }}
                 onDelete={(id) => { void requestDeleteVariant(id); }}
                 onMakeMain={handleMakeVariantMain}
                 onCopyToNewNote={(id) => { void handleCopyVariantToNewNote(id); }}
@@ -8763,10 +8534,10 @@ export const NoteEditScreen = () => {
                     ? compareBasesFor(activeVariantId, activeVersionSource?.id ?? null).map((id) => ({
                         id,
                         label: versionLabelOf(id),
-                        text: richContentToTaskAwarePlainText(resolveVariantContent(id)),
+                        text: richContentToReadableText(resolveVariantContent(id)),
                     }))
                     : []}
-                versionText={showCompareVersions ? richContentToTaskAwarePlainText(content) : ''}
+                versionText={showCompareVersions ? richContentToReadableText(content) : ''}
                 onClose={() => setShowCompareVersions(false)}
             />
 
@@ -9456,8 +9227,78 @@ const styles = createStyles(() => ({
         color: colors.textSecondary,
         fontWeight: '600',
     },
-    variantContainer: {
+    // One row before the text, the same height on every version.
+    shareOverlay: {
+        flex: 1,
+        backgroundColor: colors.overlay,
+        justifyContent: 'flex-end',
+    },
+    shareSheet: {
+        width: '100%',
+        maxWidth: 640,
+        maxHeight: '80%',
+        alignSelf: 'center',
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: spacing.l,
+        paddingHorizontal: spacing.s,
+    },
+    shareTitle: {
+        fontSize: 20,
+        lineHeight: 26,
+        fontWeight: '700',
+        letterSpacing: -0.3,
+        color: colors.text,
+        paddingHorizontal: spacing.m,
         marginBottom: spacing.s,
+    },
+    shareList: {
+        flexGrow: 0,
+    },
+    versionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        columnGap: spacing.m,
+        marginBottom: spacing.s,
+    },
+    versionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flexShrink: 1,
+        maxWidth: '100%',
+        minHeight: 44,
+        paddingStart: spacing.s + 2,
+        paddingEnd: spacing.xs + 2,
+        marginStart: -2,
+        borderRadius: 12,
+        backgroundColor: colors.backgroundSecondary,
+    },
+    versionButtonIconBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    versionButtonText: {
+        flexShrink: 1,
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    versionButtonCount: {
+        fontSize: 13,
+        color: colors.textTertiary,
+        fontVariant: ['tabular-nums'],
+    },
+    versionCompare: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        minHeight: 44,
+        paddingHorizontal: spacing.xs,
+        marginStart: 'auto',
+        marginEnd: -spacing.xs,
     },
     variantRow: {
         flexDirection: 'row',

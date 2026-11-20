@@ -223,6 +223,15 @@ test('settings summary answers "does my recording leave the phone?" from the con
   assert.equal(s({ provider: 'local', aiDownloaded: true, speechDownloaded: true }).ai, 'device');
   assert.equal(s({ provider: 'local', aiDownloaded: false }).ai, 'device_needs_model');
   assert.equal(s({ provider: 'local_whisper', speechDownloaded: true }).ai, 'none');
+  // A locked E2EE vault: the card must not say "this phone only" while the
+  // notes are on the server, encrypted (review 2026-11-20, P2-14).
+  const locked = s({ e2ee: true, syncEnabled: false, vaultLocked: true, privateMode: true, speechDownloaded: true });
+  assert.equal(locked.storage, 'sync_locked');
+  assert.equal(locked.audioLeaves, 'no');
+  assert.equal(s({ e2ee: true, vaultLocked: true }).audioLeaves, 'for_text');
+  // Without E2EE there is no vault to lock; a guest has no server copy.
+  assert.equal(s({ e2ee: false, vaultLocked: true }).storage, 'device');
+  assert.equal(s({ signedIn: false, e2ee: true, vaultLocked: true }).storage, 'device');
 });
 
 // ─── On-device request gate: RU + EN regression set ─────────────────────────

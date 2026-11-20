@@ -92,14 +92,21 @@ export const UsageCard: React.FC<UsageCardProps> = ({ user, aiProvider, isGuest,
 
     // Inside the settings account group: one line of text and a hairline bar.
     if (embedded) {
+        // Plain words, not "Trial balance 6:13 / 30:00" (UX review 2026-11-20, P3-9).
         const title = isUnlimited
             ? t("aux.vaultoAIPlan", "Vaulto AI Plan")
-            : isGuest
-                ? t('settings.ai.transcription', 'Transcription')
-                : trialTitle ?? (isPro ? t('settings.ui.transcriptionBalance', 'Transcription Balance') : t('aux.trialBalance', 'Trial Balance'));
+            : trialTitle ?? (isPro && !isGuest
+                ? t('aux.cloudMinutesMonth', 'Cloud speech-to-text this month')
+                : t('aux.cloudMinutes', 'Cloud speech-to-text'));
         const value = isUnlimited
             ? t("aux.unlimitedAccess", "Unlimited Access")
-            : isGuest ? `\u2066${formatTimeMMSS(remainingSeconds)}\u2069` : `\u2066${formatTimeMMSS(usedSeconds)} / ${formatTimeMMSS(totalSeconds)}\u2069`;
+            : t('aux.minutesUsedOf', '{{used}} of {{total}} min used', {
+                used: Math.min(
+                    Math.round((user.transcription_total_used_seconds ?? Math.max(0, totalSeconds - remainingSeconds)) / 60),
+                    Math.round(totalSeconds / 60),
+                ),
+                total: Math.round(totalSeconds / 60),
+            });
         const note = isGuest
             ? guestNote
             : isUnlimited ? null

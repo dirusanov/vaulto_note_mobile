@@ -11,7 +11,9 @@ import type { AISummary, LeavesPhone, ProcessingSummary, SpeechSummary, StorageS
 
 export const answerText = (t: TFunction, s: ProcessingSummary): string => {
     const answers: Record<LeavesPhone, string> = {
-        no: t('settings.privacySummary.answerNo', 'No. Recordings stay on this phone.'),
+        no: s.storage === 'sync_locked'
+            ? t('settings.privacySummary.answerNoLocked', 'No. New recordings stay on this phone until you unlock sync.')
+            : t('settings.privacySummary.answerNo', 'No. Recordings stay on this phone.'),
         sync_only: s.storage === 'sync_e2ee'
             ? t('settings.privacySummary.answerSyncE2ee', 'Only as your sync copy, end-to-end encrypted.')
             : t('settings.privacySummary.answerSync', 'Only as your sync copy.'),
@@ -26,6 +28,7 @@ const storageText = (t: TFunction, v: StorageSummary): string => ({
     device: t('settings.privacySummary.storageDevice', 'On this phone only'),
     sync_e2ee: t('settings.privacySummary.storageSyncE2ee', 'Synced, end-to-end encrypted'),
     sync: t('settings.privacySummary.storageSync', 'Synced to Vaulto cloud'),
+    sync_locked: t('settings.privacySummary.storageLocked', 'End-to-end encrypted on the server · locked on this phone, new notes wait here'),
 }[v]);
 
 const speechText = (t: TFunction, v: SpeechSummary): string => ({
@@ -56,12 +59,15 @@ export const ProcessingSummaryCard = ({
     signedIn,
     syncEnabled,
     e2ee,
+    vaultLocked = false,
     refreshKey,
     onChangeStorage,
 }: {
     signedIn: boolean;
     syncEnabled: boolean;
     e2ee: boolean;
+    /** Encrypted notes on the server, this phone's vault locked. */
+    vaultLocked?: boolean;
     /** Changes whenever a setting below changes. */
     refreshKey: string;
     /** Opens the sync controls; absent when there is nothing to change (guests). */
@@ -74,11 +80,11 @@ export const ProcessingSummaryCard = ({
     useEffect(() => {
         if (!focused) return;
         let active = true;
-        readProcessingSummary({ signedIn, syncEnabled, e2ee })
+        readProcessingSummary({ signedIn, syncEnabled, e2ee, vaultLocked })
             .then((next) => { if (active) setSummary(next); })
             .catch(() => undefined);
         return () => { active = false; };
-    }, [focused, signedIn, syncEnabled, e2ee, refreshKey]);
+    }, [focused, signedIn, syncEnabled, e2ee, vaultLocked, refreshKey]);
 
     // Labels show at once; values fill in without moving anything.
     const lines: { key: string; label: string; value: string; onPress?: () => void }[] = [
@@ -112,7 +118,11 @@ export const ProcessingSummaryCard = ({
                                 <Text style={styles.lineValue}>{line.value}</Text>
                             </View>
                             {line.onPress && (
-                                <Text style={styles.change}>{t('settings.privacySummary.change', 'Change')}</Text>
+                                <Text style={styles.change}>
+                                    {line.key === 'storage' && summary?.storage === 'sync_locked'
+                                        ? t('settings.ui.unlock', 'Unlock')
+                                        : t('settings.privacySummary.change', 'Change')}
+                                </Text>
                             )}
                         </>
                     );

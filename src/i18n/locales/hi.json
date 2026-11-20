@@ -77,7 +77,8 @@
     "tagNoResults": "#{{tag}} में कुछ नहीं मिला",
     "tagEmpty": "#{{tag}} में कोई नोट नहीं",
     "tagSearchAll": "सभी नोट्स में खोजें",
-    "tagShowAll": "सभी नोट्स दिखाएँ"
+    "tagShowAll": "सभी नोट्स दिखाएँ",
+    "tagsHint": "सुझाव: नोट में #काम लिखें, फिर टैग से नोट छांटें।"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -390,7 +391,9 @@
       "remove": "इस डिवाइस से हटाएं · {{size}}",
       "aiReadyTitle": "डिवाइस पर AI तैयार है",
       "aiReadyGuest": "बिना खाते के AI इसी डिवाइस पर चलता है। इसे इस्तेमाल करने के लिए “{{option}}” चालू करें: तब आवाज़ और AI डिवाइस पर ही रहते हैं।",
-      "turnOn": "चालू करें"
+      "turnOn": "चालू करें",
+      "summarySpeech": "आवाज़: {{tier}}",
+      "summaryAI": "AI: {{tier}}"
     },
     "privacySummary": {
       "title": "क्या मेरी रिकॉर्डिंग फ़ोन से बाहर जाती है?",
@@ -418,7 +421,9 @@
       "aiSignIn": "बंद · क्लाउड AI के लिए साइन इन करें, या फ़ोन पर AI इस्तेमाल करें",
       "aiNone": "बंद",
       "change": "बदलें",
-      "changeStorageHint": "सिंक सेटिंग खोलता है"
+      "changeStorageHint": "सिंक सेटिंग खोलता है",
+      "answerNoLocked": "नहीं। सिंक अनलॉक करने तक नई रिकॉर्डिंग इसी फ़ोन पर रहती हैं।",
+      "storageLocked": "सर्वर पर एंड-टू-एंड एन्क्रिप्टेड · इस फ़ोन पर लॉक, नए नोट यहीं रुके हैं"
     }
   },
   "languages": {
@@ -512,7 +517,7 @@
     "improveText": "AI के साथ पाठ सुधारें",
     "customInstruction": "कस्टम निर्देश",
     "applyInstruction": "निर्देश लागू करें",
-    "newPrompt": "नया संकेत",
+    "newPrompt": "नई कार्रवाई",
     "preview": "पूर्वावलोकन",
     "create": "बनाएं",
     "original": "मूल",
@@ -597,8 +602,8 @@
     "charactersCount_other": "{{count}} अक्षर",
     "placeholderVisual": "लिखना शुरू करें...",
     "placeholderMarkdown": "मार्कडाउन लिखना शुरू करें...",
-    "promptNamePlaceholder": "प्रॉम्प्ट नाम",
-    "promptTextPlaceholder": "प्रॉम्प्ट टेक्स्ट",
+    "promptNamePlaceholder": "कार्रवाई का नाम",
+    "promptTextPlaceholder": "नोट के साथ क्या करना है",
     "deleteImprovementTitle": "सुधार हटाएं?",
     "deleteImprovementDesc": "यह संस्करण हटा दिया जाएगा। आप इसे बाद में फिर से बना सकते हैं।",
     "deleteRecordingTitle": "रिकॉर्डिंग हटाएं?",
@@ -660,7 +665,7 @@
         "formatted": "फ़ॉर्मैट किया गया",
         "agent": "AI एजेंट",
         "previousOriginal": "पिछला मूल",
-        "customPrompt": "कस्टम प्रॉम्प्ट"
+        "customPrompt": "अपना निर्देश"
       },
       "rename": "नाम बदलें",
       "renameTitle": "संस्करण का नाम बदलें",
@@ -687,7 +692,10 @@
       "nextChange": "अगला बदलाव",
       "previousShort": "पिछला",
       "nextShort": "अगला",
-      "compareWithOriginal": "मूल से तुलना करें"
+      "compareWithOriginal": "मूल से तुलना करें",
+      "position": "{{count}} में से {{index}}",
+      "barA11y": "संस्करण: {{name}}, {{position}}",
+      "barHint": "सभी संस्करण दिखाता है"
     },
     "tasks": {
       "find": "काम खोजें",
@@ -712,7 +720,8 @@
       "reviewHint": "जोड़ने से पहले कार्यों और तारीखों को नोट से मिलाएँ।",
       "quoted": "“{{quote}}”",
       "listen": "सुनें",
-      "listenA11y": "सुनें कि यह कहाँ कहा गया: {{quote}}"
+      "listenA11y": "सुनें कि यह कहाँ कहा गया: {{quote}}",
+      "chip": "काम"
     },
     "protected": {
       "protectNote": "नोट सुरक्षित करें",
@@ -801,7 +810,16 @@
       "checkedIn": "“{{version}}” में आइटम पर निशान लगाए",
       "undoStale": "तब से नोट बदल चुका है। संपादक में Undo का उपयोग करें।"
     },
-    "improveAction": "बेहतर करें"
+    "improveAction": "बेहतर करें",
+    "share": {
+      "menu": "शेयर करें…",
+      "title": "शेयर करें",
+      "copyText": "टेक्स्ट कॉपी करें",
+      "copyMarkdown": "Markdown के रूप में कॉपी करें",
+      "sendText": "टेक्स्ट भेजें…",
+      "markdownFile": "Markdown फ़ाइल के रूप में भेजें…",
+      "image": "इमेज के रूप में भेजें…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "मॉडल डाउनलोड नहीं हुआ है। सेटिंग्स जांचें।",
@@ -1032,7 +1050,10 @@
     "aiLimitDescNoDate": "आपने इस महीने का AI कोटा इस्तेमाल कर लिया है। यह अगली अवधि की शुरुआत में फिर से शुरू होगा।",
     "aiLimitGuestDesc": "अपना मासिक AI कोटा पाने के लिए साइन इन करें।",
     "verificationSentTo": "हमने सत्यापन लिंक भेजा है",
-    "verificationCheckFailed": "यह जाँचा नहीं जा सका कि आपका ईमेल सत्यापित है या नहीं। अपना कनेक्शन जाँचें और फिर कोशिश करें।"
+    "verificationCheckFailed": "यह जाँचा नहीं जा सका कि आपका ईमेल सत्यापित है या नहीं। अपना कनेक्शन जाँचें और फिर कोशिश करें।",
+    "cloudMinutes": "क्लाउड स्पीच-टू-टेक्स्ट",
+    "cloudMinutesMonth": "इस महीने क्लाउड स्पीच-टू-टेक्स्ट",
+    "minutesUsedOf": "{{total}} में से {{used}} मिनट इस्तेमाल"
   },
   "a11y": {
     "checked": "पूरा",
@@ -1202,7 +1223,7 @@
     "localLlmUnavailableText": "ऐप का यह संस्करण डिवाइस पर AI नहीं चला सकता। ऐप अपडेट करें या सेटिंग्स में \"सिर्फ़ इस डिवाइस पर\" बंद करें।",
     "aiLockedTitle": "AI इस्तेमाल करने के लिए साइन इन करें",
     "aiLockedText": "क्लाउड AI साइन इन के बाद मिलता है। डिवाइस पर AI बिना खाते के काम करता है।",
-    "deletePromptTitle": "यह प्रॉम्प्ट हटाएँ?",
+    "deletePromptTitle": "यह कार्रवाई हटाएं?",
     "deletePromptText": "इसे आपकी सूची से हटा दिया जाएगा।",
     "recordingsEmpty": "अभी कोई रिकॉर्डिंग नहीं।",
     "promptIcon": "आइकन",

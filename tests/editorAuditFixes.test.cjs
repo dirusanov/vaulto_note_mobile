@@ -31,6 +31,7 @@ const {
     isEditorRenderingOf,
     richContentToPlainText,
     richContentToTaskAwarePlainText,
+    richContentToReadableText,
 } = require('../.test-build/editor/utils/richContent');
 const { diffWords, hasDifferences } = require('../.test-build/editor/utils/textDiff');
 
@@ -116,6 +117,22 @@ test('Compare shows a status change of a checklist item', () => {
     const added = segments.filter((s) => s.type === 'added').map((s) => s.text).join('');
     assert.equal(removed, '[ ]');
     assert.equal(added, '[x]');
+});
+
+test('Compare reads tasks as ☐/☑ and shows no Markdown syntax (review 2026-11-20, P2-8)', () => {
+    assert.equal(richContentToReadableText(richChecklist(true)), '☑ Buy milk\n☐ Call Ira');
+    const markdown = '# Shopping\n- [ ] **Buy** milk\n- [X] Bread\n- plain bullet\n1. first\nSome _text_';
+    const readable = richContentToReadableText(markdown);
+    assert.equal(readable, 'Shopping\n☐ Buy milk\n☑ Bread\n• plain bullet\n1. first\nSome text');
+    assert.doesNotMatch(readable, /\[[ xX]\]|\*\*|^#/m);
+    const segments = diffWords(
+        richContentToReadableText(richChecklist(false)),
+        richContentToReadableText(richChecklist(true)),
+    );
+    const removed = segments.filter((s) => s.type === 'removed').map((s) => s.text).join('');
+    const added = segments.filter((s) => s.type === 'added').map((s) => s.text).join('');
+    assert.equal(removed, '☐');
+    assert.equal(added, '☑');
 });
 
 // ---- Undo across a version switch ----------------------------------------------

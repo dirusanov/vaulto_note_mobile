@@ -18,6 +18,7 @@ import { getAudioEmbedAttributesFromHtml } from '../utils/audioEmbeds';
 import { DRAWING_MARKER, firstDrawingSvg } from '../drawing/drawingFormat';
 import { DrawingThumbnail } from '../drawing/DrawingThumbnail';
 import { CHECKED_LINE, layoutCardPreview, uncheckedFirst } from '../utils/cardPreview';
+import { splitSearchHighlights } from '../utils/noteSearch';
 
 const VOICE_WAVE = [6, 12, 8, 16, 10, 14, 6, 18, 9, 13, 7, 15, 8, 11, 5, 12, 9, 6];
 
@@ -42,9 +43,11 @@ interface NoteCardProps {
     onLongPress?: () => void;
     isSelectionMode?: boolean;
     isSelected?: boolean;
+    /** Search words to mark in the title and preview. */
+    highlightTerms?: string[];
 }
 
-export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false }: NoteCardProps) => {
+export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, isSelected = false, highlightTerms }: NoteCardProps) => {
     const { t, i18n } = useTranslation();
     // Dates follow the app language, not the device's.
     const dateLocale = i18n.language || undefined;
@@ -148,13 +151,28 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
     const shownPreviewLines = foldedChecked ? previewLines.slice(0, previewLineBudget - 1) : previewLines;
 
     /** A preview line with its #tags coloured; a ticked item is struck through and muted. */
+    // What the search found is marked, as in Notes and Bear (P3-13).
+    const highlighted = (text: string, key: string | number) => {
+        if (!highlightTerms || highlightTerms.length === 0) return text;
+        const pieces = splitSearchHighlights(text, highlightTerms);
+        if (pieces.length === 1 && !pieces[0].match) return text;
+        return (
+            <React.Fragment key={key}>
+                {pieces.map((piece, index) => (
+                    piece.match
+                        ? <Text key={index} style={styles.searchMatch}>{piece.text}</Text>
+                        : piece.text
+                ))}
+            </React.Fragment>
+        );
+    };
     const renderLine = (line: string, key: string | number) => {
         const checked = line.match(CHECKED_LINE);
         const body = checked ? checked[3] : line;
         const parts = splitTags(body).map((part, index) => (
             part.tag
-                ? <Text key={index} style={styles.tagText}>{part.text}</Text>
-                : part.text
+                ? <Text key={index} style={styles.tagText}>{highlighted(part.text, index)}</Text>
+                : highlighted(part.text, index)
         ));
         if (!checked) return <React.Fragment key={key}>{parts}</React.Fragment>;
         return (
@@ -262,7 +280,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                     </Text>
                 ) : isChecklistOnly ? null : (
                     <Text style={[styles.title, textAlignFor(title), isSelectionMode && { paddingEnd: 28 }]} numberOfLines={2}>
-                        {title || ' '}
+                        {title ? highlighted(title, 'title') : ' '}
                     </Text>
                 )}
                 {(!isEmpty && previewString && (titleIsCutFirstLine || isChecklistOnly || previewString !== title)) && (
@@ -403,21 +421,32 @@ const styles = createStyles(() => ({
         color: colors.textTertiary,
         marginTop: 2,
     },
+    // Large text: the date and the badges wrap onto two lines instead of
+    // overlapping (UX review 2026-11-20, P2-16).
+    searchMatch: {
+        backgroundColor: colors.primaryLight,
+        color: colors.text,
+    },
     footer: {
         paddingHorizontal: 14,
         paddingBottom: 12,
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
+        columnGap: spacing.s,
+        rowGap: 4,
     },
     iconsRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginStart: 'auto',
     },
     footerIcon: {
         marginStart: 4,
     },
     date: {
+        flexShrink: 1,
         fontSize: 12,
         color: colors.textTertiary,
     },
@@ -454,8 +483,9 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         gap: 3,
         paddingHorizontal: 7,
-        height: 22,
-        borderRadius: 11,
+        minHeight: 22,
+        paddingVertical: 1,
+        borderRadius: 999,
         backgroundColor: colors.backgroundSecondary,
     },
     audioChipText: {

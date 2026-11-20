@@ -77,7 +77,8 @@
     "tagNoResults": "Nothing found in #{{tag}}",
     "tagEmpty": "No notes in #{{tag}}",
     "tagSearchAll": "Search all notes",
-    "tagShowAll": "Show all notes"
+    "tagShowAll": "Show all notes",
+    "tagsHint": "Tip: write #work in a note to filter notes by tag."
   },
   "settings": {
     "title": "Settings",
@@ -390,7 +391,9 @@
       "remove": "Remove from this device · {{size}}",
       "aiReadyTitle": "AI on this device is ready",
       "aiReadyGuest": "Without an account, AI runs on this device. Turn on “{{option}}” to use it: voice and AI then stay on the device.",
-      "turnOn": "Turn on"
+      "turnOn": "Turn on",
+      "summarySpeech": "Speech: {{tier}}",
+      "summaryAI": "AI: {{tier}}"
     },
     "privacySummary": {
       "title": "Does my recording leave the phone?",
@@ -418,7 +421,9 @@
       "aiSignIn": "Off · sign in for cloud AI, or use AI on this phone",
       "aiNone": "Off",
       "change": "Change",
-      "changeStorageHint": "Opens sync settings"
+      "changeStorageHint": "Opens sync settings",
+      "answerNoLocked": "No. New recordings stay on this phone until you unlock sync.",
+      "storageLocked": "End-to-end encrypted on the server · locked on this phone, new notes wait here"
     }
   },
   "languages": {
@@ -512,7 +517,7 @@
     "improveText": "Improve text with AI",
     "customInstruction": "Custom instruction",
     "applyInstruction": "Apply instruction",
-    "newPrompt": "New prompt",
+    "newPrompt": "New action",
     "preview": "Preview",
     "create": "Create",
     "original": "Original",
@@ -597,8 +602,8 @@
     "charactersCount_other": "{{count}} characters",
     "placeholderVisual": "Start typing...",
     "placeholderMarkdown": "Start typing markdown...",
-    "promptNamePlaceholder": "Prompt name",
-    "promptTextPlaceholder": "Prompt text",
+    "promptNamePlaceholder": "Action name",
+    "promptTextPlaceholder": "What to do with the note",
     "deleteImprovementTitle": "Delete improvement?",
     "deleteImprovementDesc": "This version will be removed. You can always regenerate it later.",
     "deleteRecordingTitle": "Delete recording?",
@@ -660,7 +665,7 @@
         "formatted": "Formatted",
         "agent": "AI agent",
         "previousOriginal": "Previous original",
-        "customPrompt": "Custom prompt"
+        "customPrompt": "Custom instruction"
       },
       "rename": "Rename",
       "renameTitle": "Rename version",
@@ -687,7 +692,10 @@
       "nextChange": "Next change",
       "previousShort": "Previous",
       "nextShort": "Next",
-      "compareWithOriginal": "Compare with original"
+      "compareWithOriginal": "Compare with original",
+      "position": "{{index}} of {{count}}",
+      "barA11y": "Version: {{name}}, {{position}}",
+      "barHint": "Shows all versions"
     },
     "tasks": {
       "find": "Find tasks",
@@ -712,7 +720,8 @@
       "reviewHint": "Check tasks and dates against the note before adding them.",
       "quoted": "“{{quote}}”",
       "listen": "Listen",
-      "listenA11y": "Listen to where this was said: {{quote}}"
+      "listenA11y": "Listen to where this was said: {{quote}}",
+      "chip": "Tasks"
     },
     "protected": {
       "protectNote": "Protect note",
@@ -801,7 +810,16 @@
       "checkedIn": "Items checked off in “{{version}}”",
       "undoStale": "The note has changed since. Use Undo in the editor instead."
     },
-    "improveAction": "Improve"
+    "improveAction": "Improve",
+    "share": {
+      "menu": "Share…",
+      "title": "Share",
+      "copyText": "Copy text",
+      "copyMarkdown": "Copy as Markdown",
+      "sendText": "Send text…",
+      "markdownFile": "Send as Markdown file…",
+      "image": "Send as image…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Model not downloaded. Check Settings.",
@@ -1034,7 +1052,10 @@
     "aiLimitDescNoDate": "You have used this month's AI allowance. It resets at the start of your next period.",
     "aiLimitGuestDesc": "Sign in to get your own monthly AI allowance.",
     "verificationSentTo": "We sent a verification link to",
-    "verificationCheckFailed": "Could not check whether your email is verified. Check your connection and try again."
+    "verificationCheckFailed": "Could not check whether your email is verified. Check your connection and try again.",
+    "cloudMinutes": "Cloud speech-to-text",
+    "cloudMinutesMonth": "Cloud speech-to-text this month",
+    "minutesUsedOf": "{{used}} of {{total}} min used"
   },
   "a11y": {
     "checked": "checked",
@@ -1204,7 +1225,7 @@
     "localLlmUnavailableText": "This version of the app cannot run AI on the device. Update the app or turn off \"Only on this device\" in Settings.",
     "aiLockedTitle": "Sign in to use AI",
     "aiLockedText": "Cloud AI features are available after signing in. On-device AI works without an account.",
-    "deletePromptTitle": "Delete this prompt?",
+    "deletePromptTitle": "Delete this action?",
     "deletePromptText": "It will be removed from your list.",
     "recordingsEmpty": "No recordings yet.",
     "promptIcon": "Icon",

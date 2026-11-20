@@ -59,7 +59,31 @@ test('list search matches every word, in any order and inflection, not markup', 
     assert.ok(!matchesListQuery(text, listSearchTerms('четверг пятница')));
     assert.ok(!matchesListQuery(text, listSearchTerms('strong')));
     assert.ok(matchesListQuery(text, listSearchTerms('   ')));
-    assert.deepEqual(listSearchTerms('Meetings meetings'), ['meetin']);
+    assert.deepEqual(listSearchTerms('Meetings meetings'), ['meet']);
+});
+
+test('list search cuts only real endings: a typo does not match a shorter name (P3-13)', () => {
+    const { listSearchTerms, matchesListQuery } = require('../.test-build/search/noteSearch');
+    const text = 'Call Anna about the meeting. Встреча с командой, запуск в четверг';
+    assert.ok(!matchesListQuery(text, listSearchTerms('annazz')));
+    assert.ok(matchesListQuery(text, listSearchTerms('Anna')));
+    assert.ok(matchesListQuery(text, listSearchTerms('meetings')));
+    assert.ok(matchesListQuery(text, listSearchTerms('командами')));
+    assert.ok(matchesListQuery(text, listSearchTerms('запуска')));
+    assert.ok(matchesListQuery(text, listSearchTerms('четверга')));
+    assert.ok(!matchesListQuery(text, listSearchTerms('командировка')));
+});
+
+test('search highlights split the text into matching pieces', () => {
+    const { splitSearchHighlights } = require('../.test-build/search/noteSearch');
+    assert.deepEqual(splitSearchHighlights('Call Anna, anna', ['anna']), [
+        { text: 'Call ', match: false },
+        { text: 'Anna', match: true },
+        { text: ', ', match: false },
+        { text: 'anna', match: true },
+    ]);
+    assert.deepEqual(splitSearchHighlights('Ёлка', ['елк']), [{ text: 'Ёлк', match: true }, { text: 'а', match: false }]);
+    assert.deepEqual(splitSearchHighlights('text', []), [{ text: 'text', match: false }]);
 });
 
 test('answer citations become superscripts that match the source chips', () => {

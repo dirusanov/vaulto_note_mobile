@@ -65,7 +65,8 @@ export const AIProcessingIndicator: React.FC<AIProcessingIndicatorProps> = ({
                             </Text>
                             {!!task.text && (
                                 <Text style={styles.subtitle} numberOfLines={2}>
-                                    "{task.text}"
+                                    {/* The language's own quotes: «…» in Russian (P3-3). */}
+                                    {t('edit.tasks.quoted', '“{{quote}}”', { quote: task.text })}
                                 </Text>
                             )}
                         </View>

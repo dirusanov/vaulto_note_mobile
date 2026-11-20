@@ -77,7 +77,8 @@
     "tagNoResults": "لم يُعثر على شيء في #{{tag}}",
     "tagEmpty": "لا توجد ملاحظات في #{{tag}}",
     "tagSearchAll": "البحث في كل الملاحظات",
-    "tagShowAll": "عرض كل الملاحظات"
+    "tagShowAll": "عرض كل الملاحظات",
+    "tagsHint": "نصيحة: اكتب #عمل في ملاحظة لتصفية الملاحظات حسب الوسم."
   },
   "settings": {
     "title": "الإعدادات",
@@ -390,7 +391,9 @@
       "remove": "إزالة من هذا الجهاز · {{size}}",
       "aiReadyTitle": "الذكاء الاصطناعي على الجهاز جاهز",
       "aiReadyGuest": "بدون حساب، يعمل الذكاء الاصطناعي على هذا الجهاز. فعّل «{{option}}» لاستخدامه: يبقى الصوت والذكاء الاصطناعي على الجهاز.",
-      "turnOn": "تفعيل"
+      "turnOn": "تفعيل",
+      "summarySpeech": "الكلام: {{tier}}",
+      "summaryAI": "الذكاء الاصطناعي: {{tier}}"
     },
     "privacySummary": {
       "title": "هل يغادر تسجيلي الهاتف؟",
@@ -418,7 +421,9 @@
       "aiSignIn": "متوقف · سجّل الدخول للذكاء السحابي أو استخدم الذكاء على الهاتف",
       "aiNone": "متوقف",
       "change": "تغيير",
-      "changeStorageHint": "يفتح إعدادات المزامنة"
+      "changeStorageHint": "يفتح إعدادات المزامنة",
+      "answerNoLocked": "لا. تبقى التسجيلات الجديدة على هذا الهاتف حتى تفتح قفل المزامنة.",
+      "storageLocked": "على الخادم بتشفير تام · مقفل على هذا الهاتف، والملاحظات الجديدة تنتظر هنا"
     }
   },
   "languages": {
@@ -512,7 +517,7 @@
     "improveText": "تحسين النص بالذكاء",
     "customInstruction": "تعليمات مخصصة",
     "applyInstruction": "تطبيق التعليمات",
-    "newPrompt": "موجّه جديد",
+    "newPrompt": "إجراء جديد",
     "preview": "معاينة",
     "create": "إنشاء",
     "original": "النص الأصلي",
@@ -601,8 +606,8 @@
     "charactersCount_other": "{{count}} حرف",
     "placeholderVisual": "ابدأ الكتابة...",
     "placeholderMarkdown": "ابدأ كتابة markdown...",
-    "promptNamePlaceholder": "اسم الموجّه",
-    "promptTextPlaceholder": "نص الموجّه",
+    "promptNamePlaceholder": "اسم الإجراء",
+    "promptTextPlaceholder": "ما المطلوب فعله بالملاحظة",
     "deleteImprovementTitle": "حذف التحسين؟",
     "deleteImprovementDesc": "سيتم حذف هذه النسخة. يمكنك إنشاؤها مجددًا في أي وقت.",
     "deleteRecordingTitle": "حذف التسجيل؟",
@@ -664,7 +669,7 @@
         "formatted": "منسّق",
         "agent": "وكيل الذكاء الاصطناعي",
         "previousOriginal": "الأصل السابق",
-        "customPrompt": "موجّه مخصص"
+        "customPrompt": "تعليمات مخصصة"
       },
       "rename": "إعادة تسمية",
       "renameTitle": "إعادة تسمية النسخة",
@@ -695,7 +700,10 @@
       "nextChange": "التغيير التالي",
       "previousShort": "السابق",
       "nextShort": "التالي",
-      "compareWithOriginal": "قارن بالنص الأصلي"
+      "compareWithOriginal": "قارن بالنص الأصلي",
+      "position": "{{index}} من {{count}}",
+      "barA11y": "الإصدار: {{name}}، {{position}}",
+      "barHint": "يعرض كل الإصدارات"
     },
     "tasks": {
       "find": "البحث عن المهام",
@@ -720,7 +728,8 @@
       "reviewHint": "تحقق من المهام والتواريخ في الملاحظة قبل إضافتها.",
       "quoted": "«{{quote}}»",
       "listen": "استمع",
-      "listenA11y": "استمع إلى موضع قول هذا: {{quote}}"
+      "listenA11y": "استمع إلى موضع قول هذا: {{quote}}",
+      "chip": "المهام"
     },
     "protected": {
       "protectNote": "حماية الملاحظة",
@@ -809,7 +818,16 @@
       "checkedIn": "وُضعت علامة على عناصر في «{{version}}»",
       "undoStale": "تغيّرت الملاحظة منذ ذلك الحين. استخدم التراجع في المحرر."
     },
-    "improveAction": "تحسين"
+    "improveAction": "تحسين",
+    "share": {
+      "menu": "مشاركة…",
+      "title": "مشاركة",
+      "copyText": "نسخ النص",
+      "copyMarkdown": "نسخ بتنسيق Markdown",
+      "sendText": "إرسال النص…",
+      "markdownFile": "إرسال كملف Markdown…",
+      "image": "إرسال كصورة…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "النموذج غير مُنزَّل. تحقق من الإعدادات.",
@@ -1040,7 +1058,10 @@
     "aiLimitDescNoDate": "لقد استخدمت حصة الذكاء الاصطناعي لهذا الشهر. ستتجدد في بداية الفترة التالية.",
     "aiLimitGuestDesc": "سجّل الدخول لتحصل على حصتك الشهرية الخاصة من الذكاء الاصطناعي.",
     "verificationSentTo": "أرسلنا رابط التحقق إلى",
-    "verificationCheckFailed": "تعذّر التحقق مما إذا كان بريدك الإلكتروني مؤكدًا. تحقّق من الاتصال وحاول مرة أخرى."
+    "verificationCheckFailed": "تعذّر التحقق مما إذا كان بريدك الإلكتروني مؤكدًا. تحقّق من الاتصال وحاول مرة أخرى.",
+    "cloudMinutes": "تحويل الكلام إلى نص في السحابة",
+    "cloudMinutesMonth": "تحويل الكلام إلى نص في السحابة هذا الشهر",
+    "minutesUsedOf": "استُخدمت {{used}} من {{total}} دقيقة"
   },
   "a11y": {
     "checked": "مكتمل",
@@ -1210,7 +1231,7 @@
     "localLlmUnavailableText": "لا يمكن لهذا الإصدار من التطبيق تشغيل الذكاء الاصطناعي على الجهاز. حدّث التطبيق أو أوقف «على هذا الجهاز فقط» في الإعدادات.",
     "aiLockedTitle": "سجّل الدخول لاستخدام الذكاء الاصطناعي",
     "aiLockedText": "يتاح الذكاء الاصطناعي السحابي بعد تسجيل الدخول. الذكاء الاصطناعي على الجهاز يعمل دون حساب.",
-    "deletePromptTitle": "حذف هذا الأمر؟",
+    "deletePromptTitle": "حذف هذا الإجراء؟",
     "deletePromptText": "ستتم إزالته من قائمتك.",
     "recordingsEmpty": "لا توجد تسجيلات بعد.",
     "promptIcon": "أيقونة",

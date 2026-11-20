@@ -247,6 +247,8 @@ export const richContentToPlainText = (content: string): string => {
 // Private-use sentinels for a checklist marker while the rest of the Markdown is stripped.
 const TASK_OPEN_TOKEN = '';
 const TASK_DONE_TOKEN = '';
+const BULLET_TOKEN = '\uf8fd';
+const NUMBER_TOKEN = '\uf8fc';
 
 /**
  * Plain text like richContentToPlainText, but a checklist item keeps its state
@@ -256,7 +258,10 @@ const TASK_DONE_TOKEN = '';
  * done. Used where the state matters (version compare, text sent to the AI);
  * search, previews and tags keep using the plain text.
  */
-export const richContentToTaskAwarePlainText = (content: string): string => {
+const taskAwareText = (
+    content: string,
+    marks: { open: string; done: string; bullet?: string },
+): string => {
     if (!content) {
         return '';
     }
@@ -264,18 +269,37 @@ export const richContentToTaskAwarePlainText = (content: string): string => {
     const markdown = isRichHtmlContent(sanitized)
         ? richContentToAgentMarkdown(sanitized)
         : sanitized;
-    const marked = markdown.replace(
+    let marked = markdown.replace(
         /^([ \t]*)[-*+][ \t]*\[([ xX])?\](?:[ \t]+|$)/gm,
         (_match, indent: string, mark?: string) => `${indent}${mark && mark.toLowerCase() === 'x' ? TASK_DONE_TOKEN : TASK_OPEN_TOKEN}`
     );
+    if (marks.bullet) {
+        marked = marked
+            .replace(/^([ \t]*)[-*+][ \t]+(?=\S)/gm, (_match, indent: string) => `${indent}${BULLET_TOKEN}`)
+            // "1." numbers stay: they are what the reader sees in a numbered list.
+            .replace(/^([ \t]*)(\d+)[.)][ \t]+(?=\S)/gm, (_match, indent: string, number: string) => `${indent}${NUMBER_TOKEN}${number}${NUMBER_TOKEN}`);
+    }
     return stripMarkdownSyntax(marked.replace(/!\[audio\]\([^)]+\)/gi, ' '))
-        .split(TASK_OPEN_TOKEN).join('- [ ] ')
-        .split(TASK_DONE_TOKEN).join('- [x] ')
-        .replace(/ /g, ' ')
+        .split(TASK_OPEN_TOKEN).join(marks.open)
+        .split(TASK_DONE_TOKEN).join(marks.done)
+        .split(BULLET_TOKEN).join(marks.bullet || '')
+        .replace(new RegExp(`${NUMBER_TOKEN}(\\d+)${NUMBER_TOKEN}`, 'g'), '$1. ')
+        .replace(/\u00a0/g, ' ')
         .replace(/[ \t]+$/gm, '')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
 };
+
+export const richContentToTaskAwarePlainText = (content: string): string =>
+    taskAwareText(content, { open: '- [ ] ', done: '- [x] ' });
+
+/**
+ * The text as a reader sees it, for Compare: a task reads "☐ milk" / "☑ milk"
+ * and a bullet "• milk", never "- [ ]" or other Markdown (UX review
+ * 2026-11-20, P2-8). Ticking an item still shows as ☐ → ☑.
+ */
+export const richContentToReadableText = (content: string): string =>
+    taskAwareText(content, { open: '☐ ', done: '☑ ', bullet: '• ' });
 
 export const richContentToAgentMarkdown = (content: string): string => {
     if (!content) {
@@ -467,8 +491,9 @@ export const deriveAutoTitleFromPlainText = (plainText: string, maxWords: number
 /**
  * A title for a guest's voice note, made on the device (guests have no cloud
  * LLM). Unlike deriveAutoTitleFromPlainText it prefers a natural break - the
- * first sentence, else its first clause - over words cut mid-phrase, and only
- * falls back to an ellipsis when the opening runs on.
+ * first sentence, else its first clause - over words cut mid-phrase. When the
+ * opening runs on, the note stays untitled (the list shows its text): the
+ * first words cut with "…" only repeated the text below (review 2026-11-20, P3-4).
  */
 export const deriveTitleFromTranscript = (text: string, maxWords: number = 8): string => {
     const firstLine = (text || '')
@@ -496,7 +521,7 @@ export const deriveTitleFromTranscript = (text: string, maxWords: number = 8): s
     // Scripts without spaces (Chinese, Japanese) arrive as one long token.
     if (words.length === 1 && words[0].length > 30) {
         const clause = clean(words[0].split(/[，、：；,;:]/)[0] || '');
-        return clause.length <= 30 ? clause : `${clause.slice(0, 20)}…`;
+        return clause.length <= 30 ? clause : '';
     }
     if (words.length <= maxWords && sentence.length <= 60) {
         return capitalize(words.join(' '));
@@ -505,7 +530,7 @@ export const deriveTitleFromTranscript = (text: string, maxWords: number = 8): s
     if (clause.length >= 2 && clause.length <= maxWords) {
         return capitalize(clause.join(' '));
     }
-    return `${capitalize(words.slice(0, Math.min(6, maxWords)).join(' ').replace(/[,;:]+$/, ''))}…`;
+    return '';
 };
 
 const SCRIPT_RANGES: Array<[string, RegExp]> = [

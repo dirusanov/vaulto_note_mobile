@@ -137,9 +137,19 @@ export type ProcessingSummaryInputs = {
     signedIn: boolean;
     syncEnabled: boolean;
     e2ee: boolean;
+    /**
+     * The account's notes are end-to-end encrypted on the server but this
+     * phone's vault is locked: nothing new syncs until it is unlocked.
+     */
+    vaultLocked?: boolean;
 };
 
-export type StorageSummary = 'device' | 'sync_e2ee' | 'sync';
+/**
+ * sync_locked: notes already on the server stay there, encrypted; new ones
+ * wait on this phone until the vault is unlocked (UX review 2026-11-20, P2-14:
+ * the card said "on this phone only" while Sync said "encrypted on the server").
+ */
+export type StorageSummary = 'device' | 'sync_e2ee' | 'sync' | 'sync_locked';
 /** Settled behaviour, independent of whether the phone happens to be online now. */
 export type SpeechSummary =
     | 'device_always'
@@ -167,7 +177,11 @@ export type ProcessingSummary = {
 };
 
 export const summarizeProcessing = (i: ProcessingSummaryInputs): ProcessingSummary => {
-    const storage: StorageSummary = !i.signedIn || !i.syncEnabled ? 'device' : i.e2ee ? 'sync_e2ee' : 'sync';
+    const storage: StorageSummary = !i.signedIn
+        ? 'device'
+        : i.e2ee && i.vaultLocked
+            ? 'sync_locked'
+            : !i.syncEnabled ? 'device' : i.e2ee ? 'sync_e2ee' : 'sync';
     const localSpeech = i.speechSupported && i.localModelsEnabled && i.speechDownloaded;
 
     let speech: SpeechSummary;
@@ -189,6 +203,9 @@ export const summarizeProcessing = (i: ProcessingSummaryInputs): ProcessingSumma
     else ai = i.aiDownloaded ? 'cloud_device_offline' : 'cloud';
 
     const speechUploads = speech === 'cloud' || speech === 'cloud_device_offline' || speech === 'custom';
-    const audioLeaves: LeavesPhone = speechUploads ? 'for_text' : storage !== 'device' ? 'sync_only' : 'no';
+    // A locked vault uploads nothing: new recordings stay here until unlocked.
+    const audioLeaves: LeavesPhone = speechUploads
+        ? 'for_text'
+        : storage === 'sync_e2ee' || storage === 'sync' ? 'sync_only' : 'no';
     return { storage, speech, ai, audioLeaves };
 };

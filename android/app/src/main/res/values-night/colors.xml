@@ -1,5 +1,6 @@
 <resources>
   <color name="splashscreen_background">#0F1113</color>
+  <color name="colorAccent">#3D8BFF</color>
   <color name="widget_surface">#181B1F</color>
   <color name="widget_text">#ECEEF1</color>
   <color name="widget_primary">#3D8BFF</color>

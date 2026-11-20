@@ -71,6 +71,7 @@ export const readProcessingSummary = async (options: {
     signedIn: boolean;
     syncEnabled: boolean;
     e2ee: boolean;
+    vaultLocked?: boolean;
 }): Promise<ProcessingSummary> => {
     const local = await readLocalState();
     return summarizeProcessing({

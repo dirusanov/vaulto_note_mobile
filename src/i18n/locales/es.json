@@ -77,7 +77,8 @@
     "tagNoResults": "No se encontró nada en #{{tag}}",
     "tagEmpty": "No hay notas en #{{tag}}",
     "tagSearchAll": "Buscar en todas las notas",
-    "tagShowAll": "Mostrar todas las notas"
+    "tagShowAll": "Mostrar todas las notas",
+    "tagsHint": "Consejo: escribe #trabajo en una nota para filtrar por etiqueta."
   },
   "settings": {
     "title": "Ajustes",
@@ -390,7 +391,9 @@
       "remove": "Eliminar de este dispositivo · {{size}}",
       "aiReadyTitle": "La IA en el dispositivo está lista",
       "aiReadyGuest": "Sin cuenta, la IA funciona en este dispositivo. Activa «{{option}}» para usarla: la voz y la IA no saldrán del dispositivo.",
-      "turnOn": "Activar"
+      "turnOn": "Activar",
+      "summarySpeech": "Voz: {{tier}}",
+      "summaryAI": "IA: {{tier}}"
     },
     "privacySummary": {
       "title": "¿Sale mi grabación del teléfono?",
@@ -418,7 +421,9 @@
       "aiSignIn": "Desactivado · inicia sesión para la IA en la nube o usa la IA del teléfono",
       "aiNone": "Desactivado",
       "change": "Cambiar",
-      "changeStorageHint": "Abre los ajustes de sincronización"
+      "changeStorageHint": "Abre los ajustes de sincronización",
+      "answerNoLocked": "No. Las grabaciones nuevas se quedan en este teléfono hasta que desbloquees la sincronización.",
+      "storageLocked": "En el servidor, con cifrado de extremo a extremo · bloqueado en este teléfono, las notas nuevas esperan aquí"
     }
   },
   "languages": {
@@ -512,7 +517,7 @@
     "improveText": "Mejorar texto con IA",
     "customInstruction": "Instrucción personalizada",
     "applyInstruction": "Aplicar instrucción",
-    "newPrompt": "Nuevo aviso",
+    "newPrompt": "Nueva acción",
     "preview": "Vista previa",
     "create": "Crear",
     "original": "Original",
@@ -598,8 +603,8 @@
     "charactersCount_other": "{{count}} caracteres",
     "placeholderVisual": "Empieza a escribir...",
     "placeholderMarkdown": "Empieza a escribir markdown...",
-    "promptNamePlaceholder": "Nombre del prompt",
-    "promptTextPlaceholder": "Texto del prompt",
+    "promptNamePlaceholder": "Nombre de la acción",
+    "promptTextPlaceholder": "Qué hacer con la nota",
     "deleteImprovementTitle": "¿Eliminar la mejora?",
     "deleteImprovementDesc": "Esta versión se eliminará. Siempre puedes generarla de nuevo.",
     "deleteRecordingTitle": "¿Eliminar la grabación?",
@@ -688,7 +693,10 @@
       "nextChange": "Cambio siguiente",
       "previousShort": "Anterior",
       "nextShort": "Siguiente",
-      "compareWithOriginal": "Comparar con el original"
+      "compareWithOriginal": "Comparar con el original",
+      "position": "{{index}} de {{count}}",
+      "barA11y": "Versión: {{name}}, {{position}}",
+      "barHint": "Muestra todas las versiones"
     },
     "tasks": {
       "find": "Buscar tareas",
@@ -713,7 +721,8 @@
       "reviewHint": "Comprueba las tareas y fechas con la nota antes de añadirlas.",
       "quoted": "«{{quote}}»",
       "listen": "Escuchar",
-      "listenA11y": "Escuchar dónde se dijo: {{quote}}"
+      "listenA11y": "Escuchar dónde se dijo: {{quote}}",
+      "chip": "Tareas"
     },
     "protected": {
       "protectNote": "Proteger nota",
@@ -802,7 +811,16 @@
       "checkedIn": "Elementos marcados en «{{version}}»",
       "undoStale": "La nota cambió desde entonces. Usa Deshacer en el editor."
     },
-    "improveAction": "Mejorar"
+    "improveAction": "Mejorar",
+    "share": {
+      "menu": "Compartir…",
+      "title": "Compartir",
+      "copyText": "Copiar texto",
+      "copyMarkdown": "Copiar como Markdown",
+      "sendText": "Enviar texto…",
+      "markdownFile": "Enviar como archivo Markdown…",
+      "image": "Enviar como imagen…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "Modelo no descargado. Revisa los ajustes.",
@@ -1033,7 +1051,10 @@
     "aiLimitDescNoDate": "Has usado tu cupo de IA de este mes. Se renueva al inicio del próximo periodo.",
     "aiLimitGuestDesc": "Inicia sesión para tener tu propio cupo mensual de IA.",
     "verificationSentTo": "Enviamos un enlace de verificación a",
-    "verificationCheckFailed": "No se pudo comprobar si tu correo está verificado. Revisa tu conexión y vuelve a intentarlo."
+    "verificationCheckFailed": "No se pudo comprobar si tu correo está verificado. Revisa tu conexión y vuelve a intentarlo.",
+    "cloudMinutes": "Voz a texto en la nube",
+    "cloudMinutesMonth": "Voz a texto en la nube este mes",
+    "minutesUsedOf": "{{used}} de {{total}} min usados"
   },
   "a11y": {
     "checked": "marcado",
@@ -1203,7 +1224,7 @@
     "localLlmUnavailableText": "Esta versión de la app no puede ejecutar IA en el dispositivo. Actualiza la app o desactiva «Solo en este dispositivo» en Ajustes.",
     "aiLockedTitle": "Inicia sesión para usar la IA",
     "aiLockedText": "La IA en la nube está disponible tras iniciar sesión. La IA en el dispositivo funciona sin cuenta.",
-    "deletePromptTitle": "¿Eliminar este prompt?",
+    "deletePromptTitle": "¿Eliminar esta acción?",
     "deletePromptText": "Se quitará de tu lista.",
     "recordingsEmpty": "Aún no hay grabaciones.",
     "promptIcon": "Icono",

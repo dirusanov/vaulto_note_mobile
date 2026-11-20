@@ -17,6 +17,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useEncryption } from '../context/EncryptionContext';
 import { useNavigation, useIsFocused, useFocusEffect, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { listSearchTerms } from '../utils/noteSearch';
+import { getEffectiveAIProvider } from '../services/effectiveProvider';
 import { AudioRecording } from '../services/AudioService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { UnlockSyncModal } from '../components/UnlockSyncModal';
@@ -59,9 +61,12 @@ export const NotesListScreen = () => {
     const signedIn = isAuthenticated && !isGuest;
     // Live window size: tablets rotate (Android 16 ignores the portrait lock
     // on large screens), so nothing may be measured once at import time.
-    const { width: windowWidth, height: screenHeight } = useWindowDimensions();
+    const { width: windowWidth, height: screenHeight, fontScale } = useWindowDimensions();
     const insets = useSafeAreaInsets();
-    const columnCount = windowWidth >= 1100 ? 4 : windowWidth >= 700 ? 3 : 2;
+    // Large text gets room: one column on a phone, one fewer on a tablet
+    // (UX review 2026-11-20, P2-16: two squeezed columns at 200%).
+    const largeText = fontScale >= 1.3;
+    const columnCount = Math.max(1, (windowWidth >= 1100 ? 4 : windowWidth >= 700 ? 3 : 2) - (largeText ? 1 : 0));
     const netInfo = useNetInfo();
     // `null` means not known yet; only a definite "no" shows the offline note.
     const isOffline = netInfo.isConnected === false;
@@ -538,6 +543,31 @@ export const NotesListScreen = () => {
     const tagEmptyReason = !loading ? tagFilterEmptyReason(activeTag, filteredNotes.length, tagFilteredNotes.length) : null;
 
     const canShowEmptyState = !!userId && !loading && filteredNotes.length === 0;
+    // Asking needs something to ask about: with fewer than two notes the button
+    // only led to a wall (UX review 2026-11-20, P2-17).
+    const askableCount = useMemo(
+        () => getAllNotes().filter(n => !n.deleted && !n.locked).length,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [notes],
+    );
+    const askShown = askableCount >= 2;
+    // A guest has no cloud AI: "Ask AI" in the search is offered only when a
+    // model on the phone can answer (P3-14).
+    const [askNeedsAccount, setAskNeedsAccount] = useState(false);
+    useFocusEffect(
+        useCallback(() => {
+            let active = true;
+            if (signedIn) {
+                setAskNeedsAccount(false);
+            } else {
+                void getEffectiveAIProvider()
+                    .then((provider) => { if (active) setAskNeedsAccount(provider === 'vaulto_ai'); })
+                    .catch(() => undefined);
+            }
+            return () => { active = false; };
+        }, [signedIn])
+    );
+    const searchHighlightTerms = useMemo(() => listSearchTerms(searchQuery), [searchQuery]);
     // First launch: nothing to search yet, so the bar keeps only the avatar.
     const isWelcomeEmpty = canShowEmptyState && !searchQuery.trim() && lockedCount === 0 && !syncLocked;
 
@@ -787,7 +817,8 @@ export const NotesListScreen = () => {
                             <Text style={styles.lockBannerTitle}>
                                 {t("notes.syncLocked")}
                             </Text>
-                            <Text style={styles.lockBannerText}>
+                            {/* Large text: a few lines, not half the screen (P2-16). */}
+                            <Text style={styles.lockBannerText} numberOfLines={largeText ? 2 : undefined}>
                                 {encryptionBundle?.secret_mode === 'recovery_code'
                                     ? t("notes.unlockWithKey", "Enter your recovery key to show them on this device.")
                                     : t("notes.unlockToRestore")}
@@ -929,19 +960,26 @@ export const NotesListScreen = () => {
                     <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                 }
             >
-                {searchQuery.trim().length > 0 && (
+                {searchQuery.trim().length > 0 && !askNeedsAccount && (
                     <TouchableOpacity
                         style={styles.askRow}
                         disabled={isSelectionMode}
                         onPress={() => navigation.navigate('AskNotes', { question: searchQuery.trim() })}
                         accessibilityRole="button"
                     >
-                        <MaterialIcons name="auto-awesome" size={18} color={colors.primary} />
+                        <MaterialIcons name="question-answer" size={18} color={colors.primary} />
                         <Text style={styles.askRowText} numberOfLines={1}>
                             {t("ask.askAbout", "Ask AI: “{{query}}”", { query: searchQuery.trim() })}
                         </Text>
                         <MaterialIcons name="chevron-right" size={20} color={colors.textTertiary} style={rtlFlip} />
                     </TouchableOpacity>
+                )}
+                {/* Tags are found only by those who know: said once, where people
+                    look for a way to narrow the list (P3-15). */}
+                {searchQuery.trim().length > 0 && allTags.length === 0 && filteredNotes.length > 0 && (
+                    <Text style={styles.tagsHint}>
+                        {t('notes.tagsHint', 'Tip: write #work in a note to filter notes by tag.')}
+                    </Text>
                 )}
                 {canShowEmptyState ? (
                     <View style={styles.emptyContainer}>
@@ -1006,6 +1044,7 @@ export const NotesListScreen = () => {
                                                 onLongPress={() => handleNoteLongPress(note)}
                                                 isSelectionMode={isSelectionMode}
                                                 isSelected={selectedNoteIds.has(note.id)}
+                                                highlightTerms={searchQuery.trim() ? searchHighlightTerms : undefined}
                                             />
                                         ))}
                                     </View>
@@ -1070,17 +1109,20 @@ export const NotesListScreen = () => {
             {/* Floating dock: hidden in selection mode and while the recorder takes its place. */}
             {!isSelectionMode && !isVoiceRecorderVisible && (
                 <View style={[styles.dockContainer, { bottom: Math.max(insets.bottom, spacing.m) + spacing.m }]} key={dockInstanceKey} pointerEvents="box-none">
-                    <View style={styles.dock}>
+                    <View style={[styles.dock, !askShown && styles.dockCompact]}>
                         <View style={styles.dockButtonRow}>
-                            <TouchableOpacity
-                                style={styles.dockButton}
-                                onPress={() => navigation.navigate('AskNotes')}
-                                activeOpacity={0.7}
-                                accessibilityRole="button"
-                                accessibilityLabel={t("ask.title", "Ask your notes")}
-                            >
-                                <MaterialIcons name="auto-awesome" size={22} color={colors.text} />
-                            </TouchableOpacity>
+                            {/* Its own glyph: the sparkle is Improve in the editor (P2-17). */}
+                            {askShown && (
+                                <TouchableOpacity
+                                    style={styles.dockButton}
+                                    onPress={() => navigation.navigate('AskNotes')}
+                                    activeOpacity={0.7}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t("ask.title", "Ask your notes")}
+                                >
+                                    <MaterialIcons name="question-answer" size={22} color={colors.text} />
+                                </TouchableOpacity>
+                            )}
 
                             {/* Center Primary Button */}
                             <PrimaryButton />
@@ -1203,6 +1245,14 @@ const styles = createStyles(() => ({
         paddingHorizontal: 14,
         borderRadius: 14,
         backgroundColor: colors.primaryLight,
+    },
+    tagsHint: {
+        marginHorizontal: spacing.s,
+        marginTop: -4,
+        marginBottom: 12,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
     },
     askRowText: {
         flex: 1,
@@ -1532,6 +1582,10 @@ const styles = createStyles(() => ({
         elevation: 8,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: isDarkScheme() ? colors.borderHover : colors.border,
+    },
+    // Two buttons until there is something to ask about.
+    dockCompact: {
+        width: 176,
     },
     dockButtonRow: {
         flexDirection: 'row',

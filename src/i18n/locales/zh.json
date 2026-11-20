@@ -76,7 +76,8 @@
     "tagNoResults": "在 #{{tag}} 中未找到结果",
     "tagEmpty": "#{{tag}} 中没有笔记",
     "tagSearchAll": "搜索全部笔记",
-    "tagShowAll": "显示全部笔记"
+    "tagShowAll": "显示全部笔记",
+    "tagsHint": "提示：在笔记里写 #工作，即可按标签筛选。"
   },
   "settings": {
     "title": "设置",
@@ -389,7 +390,9 @@
       "remove": "从此设备删除 · {{size}}",
       "aiReadyTitle": "设备端 AI 已就绪",
       "aiReadyGuest": "未登录时，AI 在本设备上运行。开启“{{option}}”即可使用：语音和 AI 都不会离开设备。",
-      "turnOn": "开启"
+      "turnOn": "开启",
+      "summarySpeech": "语音：{{tier}}",
+      "summaryAI": "AI：{{tier}}"
     },
     "privacySummary": {
       "title": "我的录音会离开手机吗？",
@@ -417,7 +420,9 @@
       "aiSignIn": "关闭 · 登录以使用云端 AI，或使用本机 AI",
       "aiNone": "关闭",
       "change": "更改",
-      "changeStorageHint": "打开同步设置"
+      "changeStorageHint": "打开同步设置",
+      "answerNoLocked": "不会。在你解锁同步之前，新录音只保存在这部手机上。",
+      "storageLocked": "服务器上端到端加密 · 本机已锁定，新笔记暂存在这里"
     }
   },
   "languages": {
@@ -511,7 +516,7 @@
     "improveText": "使用 AI 改进文本",
     "customInstruction": "自定义指令",
     "applyInstruction": "应用指令",
-    "newPrompt": "新提示",
+    "newPrompt": "新建操作",
     "preview": "预览",
     "create": "创建",
     "original": "原文",
@@ -595,8 +600,8 @@
     "charactersCount_other": "{{count}} 个字符",
     "placeholderVisual": "开始输入…",
     "placeholderMarkdown": "开始输入 Markdown…",
-    "promptNamePlaceholder": "提示词名称",
-    "promptTextPlaceholder": "提示词内容",
+    "promptNamePlaceholder": "操作名称",
+    "promptTextPlaceholder": "要对笔记做什么",
     "deleteImprovementTitle": "删除该改进版本？",
     "deleteImprovementDesc": "该版本将被删除，你随时可以重新生成。",
     "deleteRecordingTitle": "删除录音？",
@@ -658,7 +663,7 @@
         "formatted": "已排版",
         "agent": "AI 助手",
         "previousOriginal": "之前的原文",
-        "customPrompt": "自定义提示"
+        "customPrompt": "自定义指令"
       },
       "rename": "重命名",
       "renameTitle": "重命名版本",
@@ -684,7 +689,10 @@
       "nextChange": "下一处改动",
       "previousShort": "上一处",
       "nextShort": "下一处",
-      "compareWithOriginal": "与原文对比"
+      "compareWithOriginal": "与原文对比",
+      "position": "第 {{index}} 个，共 {{count}} 个",
+      "barA11y": "版本：{{name}}，{{position}}",
+      "barHint": "显示所有版本"
     },
     "tasks": {
       "find": "查找任务",
@@ -709,7 +717,8 @@
       "reviewHint": "添加前，请对照笔记核对任务和日期。",
       "quoted": "“{{quote}}”",
       "listen": "收听",
-      "listenA11y": "收听说这句话的地方：{{quote}}"
+      "listenA11y": "收听说这句话的地方：{{quote}}",
+      "chip": "任务"
     },
     "protected": {
       "protectNote": "保护笔记",
@@ -798,7 +807,16 @@
       "checkedIn": "已在“{{version}}”中勾选项目",
       "undoStale": "笔记已有新的改动，请使用编辑器中的撤销。"
     },
-    "improveAction": "改进"
+    "improveAction": "改进",
+    "share": {
+      "menu": "分享…",
+      "title": "分享",
+      "copyText": "复制文本",
+      "copyMarkdown": "复制为 Markdown",
+      "sendText": "发送文本…",
+      "markdownFile": "以 Markdown 文件发送…",
+      "image": "以图片发送…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "模型尚未下载，请检查设置。",
@@ -1029,7 +1047,10 @@
     "aiLimitDescNoDate": "本月的 AI 额度已用完，将在下一个周期开始时重置。",
     "aiLimitGuestDesc": "登录即可获得属于你自己的每月 AI 额度。",
     "verificationSentTo": "我们已将验证链接发送至",
-    "verificationCheckFailed": "无法检查你的邮箱是否已验证。请检查网络连接后重试。"
+    "verificationCheckFailed": "无法检查你的邮箱是否已验证。请检查网络连接后重试。",
+    "cloudMinutes": "云端语音转文字",
+    "cloudMinutesMonth": "本月云端语音转文字",
+    "minutesUsedOf": "已用 {{used}}/{{total}} 分钟"
   },
   "a11y": {
     "checked": "已完成",
@@ -1199,7 +1220,7 @@
     "localLlmUnavailableText": "此版本的应用无法在设备上运行 AI。请更新应用，或在设置中关闭“仅在本机”。",
     "aiLockedTitle": "登录后即可使用 AI",
     "aiLockedText": "登录后可使用云端 AI。设备上的 AI 无需账号。",
-    "deletePromptTitle": "删除此提示词？",
+    "deletePromptTitle": "删除此操作？",
     "deletePromptText": "它将从列表中移除。",
     "recordingsEmpty": "还没有录音。",
     "promptIcon": "图标",

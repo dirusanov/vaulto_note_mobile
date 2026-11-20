@@ -76,7 +76,8 @@
     "tagNoResults": "#{{tag}} には見つかりませんでした",
     "tagEmpty": "#{{tag}} にノートはありません",
     "tagSearchAll": "すべてのノートを検索",
-    "tagShowAll": "すべてのノートを表示"
+    "tagShowAll": "すべてのノートを表示",
+    "tagsHint": "ヒント：メモに #仕事 と書くと、タグで絞り込めます。"
   },
   "settings": {
     "title": "設定",
@@ -389,7 +390,9 @@
       "remove": "このデバイスから削除 · {{size}}",
       "aiReadyTitle": "端末上の AI の準備ができました",
       "aiReadyGuest": "アカウントなしでは、AI はこの端末で動作します。使うには「{{option}}」をオンにしてください。音声と AI は端末の外に出ません。",
-      "turnOn": "オンにする"
+      "turnOn": "オンにする",
+      "summarySpeech": "音声：{{tier}}",
+      "summaryAI": "AI：{{tier}}"
     },
     "privacySummary": {
       "title": "録音は端末の外に出ますか？",
@@ -417,7 +420,9 @@
       "aiSignIn": "オフ · クラウドAIはログイン、または端末のAIを使用",
       "aiNone": "オフ",
       "change": "変更",
-      "changeStorageHint": "同期の設定を開きます"
+      "changeStorageHint": "同期の設定を開きます",
+      "answerNoLocked": "いいえ。同期のロックを解除するまで、新しい録音はこの端末に残ります。",
+      "storageLocked": "サーバー上でエンドツーエンド暗号化 · この端末ではロック中、新しいメモはここで待機"
     }
   },
   "languages": {
@@ -511,7 +516,7 @@
     "improveText": "AIでテキストを改善",
     "customInstruction": "カスタム指示",
     "applyInstruction": "指示を適用",
-    "newPrompt": "新しいプロンプト",
+    "newPrompt": "新しいアクション",
     "preview": "プレビュー",
     "create": "作成",
     "original": "元のテキスト",
@@ -595,8 +600,8 @@
     "charactersCount_other": "{{count}} 文字",
     "placeholderVisual": "入力を始めましょう…",
     "placeholderMarkdown": "Markdown を入力…",
-    "promptNamePlaceholder": "プロンプト名",
-    "promptTextPlaceholder": "プロンプト本文",
+    "promptNamePlaceholder": "アクション名",
+    "promptTextPlaceholder": "メモをどうするか",
     "deleteImprovementTitle": "改善版を削除しますか？",
     "deleteImprovementDesc": "このバージョンは削除されます。あとでいつでも再生成できます。",
     "deleteRecordingTitle": "録音を削除しますか？",
@@ -658,7 +663,7 @@
         "formatted": "整形済み",
         "agent": "AIエージェント",
         "previousOriginal": "以前のオリジナル",
-        "customPrompt": "カスタムプロンプト"
+        "customPrompt": "カスタム指示"
       },
       "rename": "名前を変更",
       "renameTitle": "バージョン名を変更",
@@ -684,7 +689,10 @@
       "nextChange": "次の変更",
       "previousShort": "前へ",
       "nextShort": "次へ",
-      "compareWithOriginal": "元のテキストと比較"
+      "compareWithOriginal": "元のテキストと比較",
+      "position": "{{count}}件中{{index}}件目",
+      "barA11y": "バージョン：{{name}}、{{position}}",
+      "barHint": "すべてのバージョンを表示します"
     },
     "tasks": {
       "find": "タスクを探す",
@@ -709,7 +717,8 @@
       "reviewHint": "追加する前に、タスクと日付を元のノートと照合してください。",
       "quoted": "「{{quote}}」",
       "listen": "聞く",
-      "listenA11y": "この内容が話された箇所を聞く：{{quote}}"
+      "listenA11y": "この内容が話された箇所を聞く：{{quote}}",
+      "chip": "タスク"
     },
     "protected": {
       "protectNote": "ノートを保護",
@@ -798,7 +807,16 @@
       "checkedIn": "「{{version}}」の項目にチェックしました",
       "undoStale": "その後メモが変更されました。エディタの元に戻すを使ってください。"
     },
-    "improveAction": "改善"
+    "improveAction": "改善",
+    "share": {
+      "menu": "共有…",
+      "title": "共有",
+      "copyText": "テキストをコピー",
+      "copyMarkdown": "Markdownでコピー",
+      "sendText": "テキストを送信…",
+      "markdownFile": "Markdownファイルで送信…",
+      "image": "画像で送信…"
+    }
   },
   "voice": {
     "modelNotDownloaded": "モデルがダウンロードされていません。設定を確認してください。",
@@ -1029,7 +1047,10 @@
     "aiLimitDescNoDate": "今月の AI 利用枠を使い切りました。次の期間の開始時にリセットされます。",
     "aiLimitGuestDesc": "サインインすると、毎月の AI 利用枠を自分用に使えます。",
     "verificationSentTo": "確認用リンクを次のアドレスに送信しました",
-    "verificationCheckFailed": "メールが確認済みかどうかを確認できませんでした。接続を確認して、もう一度お試しください。"
+    "verificationCheckFailed": "メールが確認済みかどうかを確認できませんでした。接続を確認して、もう一度お試しください。",
+    "cloudMinutes": "クラウド文字起こし",
+    "cloudMinutesMonth": "今月のクラウド文字起こし",
+    "minutesUsedOf": "{{total}}分中{{used}}分使用"
   },
   "a11y": {
     "checked": "完了",
@@ -1199,7 +1220,7 @@
     "localLlmUnavailableText": "このバージョンのアプリは端末上でAIを実行できません。アプリを更新するか、設定で「この端末のみ」をオフにしてください。",
     "aiLockedTitle": "AI を使うにはサインイン",
     "aiLockedText": "クラウド AI はサインイン後に使えます。端末上の AI はアカウントなしで使えます。",
-    "deletePromptTitle": "このプロンプトを削除しますか？",
+    "deletePromptTitle": "このアクションを削除しますか？",
     "deletePromptText": "リストから削除されます。",
     "recordingsEmpty": "まだ録音はありません。",
     "promptIcon": "アイコン",

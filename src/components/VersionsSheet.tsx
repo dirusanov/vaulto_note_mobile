@@ -44,7 +44,7 @@ export const VersionsSheet = ({
     };
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
             <TouchableWithoutFeedback onPress={close}>
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
@@ -82,7 +82,7 @@ export const VersionsSheet = ({
                                                 />
                                                 <View style={styles.rowText}>
                                                     <View style={styles.rowTopLine}>
-                                                        <Text style={styles.rowLabel} numberOfLines={1}>{item.label}</Text>
+                                                        <Text style={styles.rowLabel} numberOfLines={2}>{item.label}</Text>
                                                         {item.timeLabel ? <Text style={styles.rowTime}>{item.timeLabel}</Text> : null}
                                                     </View>
                                                     {/* No per-version title line: the note has one title, so it only repeated it. */}
@@ -130,6 +130,13 @@ export const VersionsSheet = ({
                                     );
                                 })}
                             </ScrollView>
+                            {/* The swipe used to be a hint row above the note's text. */}
+                            <View style={styles.tip}>
+                                <MaterialIcons name="swipe" size={16} color={colors.textTertiary} />
+                                <Text style={styles.tipText}>
+                                    {t('edit.versions.swipeHint', 'Swipe the text to switch versions')}
+                                </Text>
+                            </View>
                         </View>
                     </TouchableWithoutFeedback>
                 </View>
@@ -255,6 +262,19 @@ const styles = createStyles(() => ({
         gap: spacing.s,
         minHeight: 48,
         paddingHorizontal: spacing.m,
+    },
+    tip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        paddingHorizontal: spacing.l,
+        paddingTop: spacing.s,
+    },
+    tipText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
     },
     actionText: {
         fontSize: 15,

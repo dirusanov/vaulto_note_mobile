@@ -158,9 +158,9 @@ test('a guest voice note is titled from its first sentence or clause, on the dev
     );
     assert.equal(
         deriveTitleFromTranscript('So yesterday I was thinking that maybe we should finally move the whole team offsite somewhere'),
-        'So yesterday I was thinking that…',
+        '',
     );
-    assert.equal(deriveTitleFromTranscript('明天下午三点和产品团队开会讨论新版本的发布计划以及市场推广的安排，还要准备演示'), '明天下午三点和产品团队开会讨论新版本的发…');
+    assert.equal(deriveTitleFromTranscript('明天下午三点和产品团队开会讨论新版本的发布计划以及市场推广的安排，还要准备演示'), '');
     assert.equal(deriveTitleFromTranscript('明天开会，讨论发布'), '明天开会，讨论发布');
     assert.equal(deriveTitleFromTranscript('#work Ship the beta?'), 'Ship the beta');
     assert.equal(deriveTitleFromTranscript('   '), '');
