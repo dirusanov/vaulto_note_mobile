@@ -1991,7 +1991,9 @@ export const NoteEditScreen = () => {
         // The allowance is known to be used up: the limit sheet (with its reset
         // date) right away, not after a request that can only be refused.
         if (provider === 'vaulto_ai' && isAiLimitKnown()) {
-            onLimitReached.emit(LLM_LIMIT_REASON);
+            // After the menu that asked has closed: a sheet opened while another
+            // one is still closing never shows on Android.
+            setTimeout(() => onLimitReached.emit(LLM_LIMIT_REASON), 350);
             return;
         }
         const consentGranted = await requestPrivateAIConsent();

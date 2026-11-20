@@ -241,7 +241,7 @@ export const NoteCard = ({ note, onPress, onLongPress, isSelectionMode = false, 
                         <View style={styles.lockedIcon}>
                             <MaterialIcons name="lock-outline" size={18} color={colors.textSecondary} />
                         </View>
-                        <Text style={styles.drawingLabel} numberOfLines={2}>{t('notes.lockedNote', 'Locked note')}</Text>
+                        <Text style={[styles.drawingLabel, styles.lockedLabel]} numberOfLines={3}>{t('notes.lockedNote', 'Locked note')}</Text>
                     </View>
                 ) : isVoiceOnly ? (
                     // A recording without text yet: show it as audio (icon, wave,
@@ -460,6 +460,11 @@ const styles = createStyles(() => ({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.backgroundSecondary,
+    },
+    lockedLabel: {
+        flex: 1,
+        flexShrink: 1,
+        color: colors.textSecondary,
     },
     voiceWave: {
         flex: 1,
