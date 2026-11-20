@@ -668,6 +668,9 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
         if (confirmDiscardTimerRef.current) clearTimeout(confirmDiscardTimerRef.current);
         setConfirmDiscard(false);
+        // The status watchdog would see the recorder stop while we cancel it and
+        // report "Recording interrupted" over a deliberate discard.
+        interruptionHandledRef.current = true;
         while (rollingRef.current) {
             await new Promise((resolve) => setTimeout(resolve, 50));
         }
