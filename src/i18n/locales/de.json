@@ -784,6 +784,8 @@
     "textStyleSubheading": "Untertitel",
     "textStyleBody": "Text",
     "playRecording": "Aufnahme abspielen",
+    "listenWithText": "Mit Text anhören",
+    "listenTip": "Tippe auf ▶, um mit dem Text zu hören. Tippe auf einen Satz, um ab dort zu hören.",
     "saveFailed": {
       "title": "Nicht gespeichert",
       "message": "Deine letzten Änderungen konnten nicht gespeichert werden. Sie sind noch hier: versuche es erneut oder bleib und kopiere den Text.",

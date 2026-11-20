@@ -781,6 +781,8 @@
     "textStyleSubheading": "副标题",
     "textStyleBody": "正文",
     "playRecording": "播放录音",
+    "listenWithText": "边听边看文字",
+    "listenTip": "点按 ▶ 即可边听边看文字。点按任意句子，从那里开始播放。",
     "saveFailed": {
       "title": "未保存",
       "message": "无法保存你最近的更改。更改仍在这里：请重试，或留在此处复制文本。",

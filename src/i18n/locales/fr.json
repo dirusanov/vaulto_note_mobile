@@ -785,6 +785,8 @@
     "textStyleSubheading": "Sous-titre",
     "textStyleBody": "Texte",
     "playRecording": "Lire l'enregistrement",
+    "listenWithText": "Écouter avec le texte",
+    "listenTip": "Touchez ▶ pour écouter avec le texte. Touchez une phrase pour l’entendre à partir de là.",
     "saveFailed": {
       "title": "Non enregistré",
       "message": "Vos dernières modifications n'ont pas pu être enregistrées. Elles sont toujours là : réessayez, ou restez et copiez le texte.",

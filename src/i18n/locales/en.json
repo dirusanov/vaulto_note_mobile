@@ -784,6 +784,8 @@
     "textStyleSubheading": "Subheading",
     "textStyleBody": "Body",
     "playRecording": "Play recording",
+    "listenWithText": "Listen with the text",
+    "listenTip": "Tap ▶ to listen with the text. Tap any sentence to hear it from there.",
     "saveFailed": {
       "title": "Not saved",
       "message": "Your latest changes could not be saved. They are still here: try again, or stay and copy the text.",

@@ -65,6 +65,7 @@ const LOCAL_WHISPER_MODEL_KEY = 'vaulto_local_whisper_model_v1';
 const TRANSCRIPTION_LANGUAGE_KEY = 'vaulto_transcription_language_v1';
 const LOCAL_LLM_MODEL_KEY = 'vaulto_local_llm_model_v1';
 const VERSION_SWIPE_HINT_SEEN_KEY = 'vaulto_version_swipe_hint_seen_v1';
+const LISTEN_TIP_SEEN_KEY = 'vaulto_listen_tip_seen_v1';
 const MIC_HINT_SEEN_KEY_PREFIX = 'vaulto_mic_hint_seen_v1_';
 // NOTE: legacy App Lock keys may still exist on user devices, but the feature was removed.
 
@@ -1157,5 +1158,22 @@ export const setVersionSwipeHintSeen = async (): Promise<void> => {
         await AsyncStorage.setItem(VERSION_SWIPE_HINT_SEEN_KEY, '1');
     } catch {
         // Not worth surfacing: the hint may simply show once more.
+    }
+};
+
+/** One-time "the play button shows the text too: tap a sentence" tip. */
+export const getListenTipSeen = async (): Promise<boolean> => {
+    try {
+        return (await AsyncStorage.getItem(LISTEN_TIP_SEEN_KEY)) === '1';
+    } catch {
+        return true;
+    }
+};
+
+export const setListenTipSeen = async (): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(LISTEN_TIP_SEEN_KEY, '1');
+    } catch {
+        // The tip may simply show once more.
     }
 };

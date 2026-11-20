@@ -39,6 +39,8 @@ interface ListenSheetProps {
     title?: string;
     /** Extra actions under the transcript (e.g. Insert / Copy for one recording). */
     footer?: React.ReactNode;
+    /** Start playing from the first sentence on opening (opened from a play button). */
+    autoPlay?: boolean;
 }
 
 interface PhraseRowProps {
@@ -96,7 +98,7 @@ const PhraseRow = memo(({ phrase, active, onPress, onLayoutY, playHint, unlinked
  * sentence being heard is tinted and kept in view. Sentences changed since the
  * recording have no time and are not tappable.
  */
-export const ListenSheet = ({ visible, onClose, text, sources, audio, title, footer }: ListenSheetProps) => {
+export const ListenSheet = ({ visible, onClose, text, sources, audio, title, footer, autoPlay }: ListenSheetProps) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const { state, playFrom, toggle, stop } = usePhrasePlayer(audio, visible);
@@ -151,6 +153,19 @@ export const ListenSheet = ({ visible, onClose, text, sources, audio, title, foo
     };
 
     const firstLinked = phrases.find((phrase) => phrase.link);
+
+    // Opened from the note's play button: it plays, as the button promises,
+    // and the text follows along. Once per opening.
+    const autoPlayedRef = useRef(false);
+    useEffect(() => {
+        if (!visible) {
+            autoPlayedRef.current = false;
+            return;
+        }
+        if (!autoPlay || autoPlayedRef.current || !firstLinked) return;
+        autoPlayedRef.current = true;
+        handlePress(firstLinked);
+    }, [autoPlay, firstLinked, handlePress, visible]);
     const handlePlayPause = () => {
         if (state.recordingId && !state.failed) {
             void toggle();

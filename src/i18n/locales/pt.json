@@ -785,6 +785,8 @@
     "textStyleSubheading": "Subtítulo",
     "textStyleBody": "Texto",
     "playRecording": "Reproduzir gravação",
+    "listenWithText": "Ouvir com o texto",
+    "listenTip": "Toque em ▶ para ouvir com o texto. Toque numa frase para ouvir a partir dela.",
     "saveFailed": {
       "title": "Não salvo",
       "message": "Não foi possível salvar suas últimas alterações. Elas continuam aqui: tente novamente ou fique e copie o texto.",

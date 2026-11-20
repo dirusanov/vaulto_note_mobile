@@ -781,6 +781,8 @@
     "textStyleSubheading": "小見出し",
     "textStyleBody": "本文",
     "playRecording": "録音を再生",
+    "listenWithText": "テキストと一緒に聴く",
+    "listenTip": "▶ をタップすると、テキストと一緒に聴けます。文をタップすると、そこから再生します。",
     "saveFailed": {
       "title": "保存されていません",
       "message": "最新の変更を保存できませんでした。変更はまだここにあります。もう一度試すか、このままテキストをコピーしてください。",

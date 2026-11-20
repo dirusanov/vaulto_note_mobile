@@ -174,7 +174,7 @@ import {
     type VariantHistory,
 } from '../utils/editHistory';
 import { getLocalizedPresetDescription, getLocalizedPresetLabel } from '../i18n/presetLabels';
-import { getVersionSwipeHintSeen, setVersionSwipeHintSeen } from '../utils/storage';
+import { getListenTipSeen, getVersionSwipeHintSeen, setListenTipSeen, setVersionSwipeHintSeen } from '../utils/storage';
 import {
     agentOptionIdForMode,
     buildLineageLabel,
@@ -511,17 +511,29 @@ const HeaderTitle = memo(({
     }, [onChange, onSubmit, title]);
 
     // A plain "Title" hint: echoing the first line here in grey read as a
-    // second copy of the text right above it.
+    // second copy of the text right above it. Untitled and not being edited,
+    // it stays a small quiet line (as in Keep); focused, it takes the title's
+    // size so typing does not jump.
+    const [focused, setFocused] = useState(false);
+    const handleFocus = useCallback(() => {
+        setFocused(true);
+        onFocus();
+    }, [onFocus]);
+    const handleBlur = useCallback(() => {
+        setFocused(false);
+        onBlur();
+    }, [onBlur]);
+    const quiet = !title && !focused;
     return (
         <TextInput
             ref={inputRef}
-            style={styles.titleInput}
+            style={[styles.titleInput, quiet && styles.titleInputEmpty]}
             placeholder={t('edit.titlePlaceholder', 'Title')}
             placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={handleChange}
-            onFocus={onFocus}
-            onBlur={onBlur}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             onSubmitEditing={onSubmit}
             submitBehavior="submit"
             returnKeyType="next"
@@ -536,15 +548,20 @@ const formatClock = (seconds: number) => {
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
-const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, onPlayRecording }: {
+const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, onPlayRecording, withText }: {
     dateStr: string;
     charCount: number;
     /** Length of the note's latest recording; null when it has none. */
     recordingDuration?: number | null;
     playerOpen?: boolean;
     onPlayRecording?: () => void;
+    /** The recording knows when each phrase was said: play opens it with its text. */
+    withText?: boolean;
 }) => {
     const { t } = useTranslation();
+    // Icons grow with the text beside them (large font sizes).
+    const { fontScale } = useWindowDimensions();
+    const iconSize = Math.round(14 * Math.min(Math.max(fontScale, 1), 1.8));
 
     return (
         <View style={[styles.metaInfo, styles.metaRow]}>
@@ -555,15 +572,23 @@ const HeaderMeta = memo(({ dateStr, charCount, recordingDuration, playerOpen, on
                 // The recording a voice note was made from stays one tap away
                 // once its text is in: the player shown while it was transcribed
                 // gives way to the text, and the audio must not seem gone.
+                // With phrase times it plays in "Text and audio", where any
+                // sentence can be tapped: the lines icon says the text comes along.
                 <TouchableOpacity
                     onPress={onPlayRecording}
                     style={[styles.recordingPill, playerOpen && styles.recordingPillActive]}
-                    hitSlop={8}
+                    hitSlop={12}
                     accessibilityRole="button"
-                    accessibilityLabel={t('edit.playRecording', 'Play recording')}
+                    accessibilityLabel={withText
+                        ? t('edit.listenWithText', 'Listen with the text')
+                        : t('edit.playRecording', 'Play recording')}
+                    accessibilityHint={withText ? t('listen.entryHint', 'Tap a sentence to hear it') : undefined}
                 >
-                    <MaterialIcons name={playerOpen ? 'close' : 'play-arrow'} size={14} color={colors.primary} />
+                    <MaterialIcons name={playerOpen ? 'close' : 'play-arrow'} size={iconSize} color={colors.primary} />
                     <Text style={styles.recordingPillText}>{formatClock(recordingDuration)}</Text>
+                    {withText && !playerOpen && (
+                        <MaterialIcons name="subject" size={iconSize} color={colors.primary} style={styles.recordingPillTextIcon} />
+                    )}
                 </TouchableOpacity>
             )}
         </View>
@@ -1600,8 +1625,8 @@ export const NoteEditScreen = () => {
     const [showRecordingsList, setShowRecordingsList] = useState(false);
     const [showRecordingTextModal, setShowRecordingTextModal] = useState(false);
     // "Text and audio": the note (or one recording) with tap-to-hear phrases.
-    const [listenSheet, setListenSheet] = useState<{ visible: boolean; text: string; recordingId: string | null }>({
-        visible: false, text: '', recordingId: null,
+    const [listenSheet, setListenSheet] = useState<{ visible: boolean; text: string; recordingId: string | null; autoPlay: boolean }>({
+        visible: false, text: '', recordingId: null, autoPlay: false,
     });
     const [selectedRecordingForText, setSelectedRecordingForText] = useState<VoiceRecording | null>(null);
     const [pendingMicInputMode, setPendingMicInputMode] = useState<MicInputMode>('agent');
@@ -4199,7 +4224,7 @@ export const NoteEditScreen = () => {
         ? timingSources.filter((source) => source.recordingId === listenSheet.recordingId)
         : timingSources), [listenSheet.recordingId, timingSources]);
 
-    const openListenSheet = useCallback(async (recording?: VoiceRecording) => {
+    const openListenSheet = useCallback(async (recording?: VoiceRecording, autoPlay = false) => {
         void clearInlineEditorAudio();
         closeTopPlayer();
         clearRecordingsPreview();
@@ -4207,7 +4232,7 @@ export const NoteEditScreen = () => {
         const text = recording
             ? recording.transcription || ''
             : richContentToPlainText(await currentNoteMarkdown());
-        setListenSheet({ visible: true, text, recordingId: recording?.id ?? null });
+        setListenSheet({ visible: true, text, recordingId: recording?.id ?? null, autoPlay });
     }, [clearInlineEditorAudio, clearRecordingsPreview, closeTopPlayer, currentNoteMarkdown]);
 
     // Bumped when a search starts or the sheet closes, so a late answer cannot reopen it.
@@ -7574,15 +7599,41 @@ export const NoteEditScreen = () => {
     const latestRecordingInText = !!latestRecording && embeddedAudioPaths.some(
         (path) => normalizeAttachedAudioPath(path) === normalizeAttachedAudioPath(latestRecording.file_path)
     );
+    const recordingPillShown = !!latestRecording && !isTranscribing && !latestRecordingInText;
+    // The note's speech knows its times: the pill is the one place to listen,
+    // with the text alongside (tap a sentence to hear it from there).
+    const listenWithText = timingSources.length > 0;
+    const [showListenTip, setShowListenTip] = useState(false);
+    const dismissListenTip = useCallback(() => {
+        setShowListenTip(false);
+        void setListenTipSeen();
+    }, []);
+    // Said once, the first time such a note is open (after the swipe hint, never with it).
+    useEffect(() => {
+        if (!recordingPillShown || !listenWithText || showListenTip || showSwipeHint) return;
+        let cancelled = false;
+        void getListenTipSeen().then((seen) => {
+            if (cancelled || seen) return;
+            setShowListenTip(true);
+            void setListenTipSeen();
+        });
+        return () => { cancelled = true; };
+    }, [listenWithText, recordingPillShown, showListenTip, showSwipeHint]);
+
     const toggleTopPlayer = useCallback(() => {
         if (topPlayer) {
             setTopPlayer(null);
             return;
         }
+        if (listenWithText) {
+            setShowListenTip(false);
+            void openListenSheet(undefined, true);
+            return;
+        }
         if (!latestRecording) return;
         void clearInlineEditorAudio();
         setTopPlayer({ uri: latestRecording.file_path, duration: latestRecording.duration });
-    }, [clearInlineEditorAudio, latestRecording, topPlayer]);
+    }, [clearInlineEditorAudio, latestRecording, listenWithText, openListenSheet, topPlayer]);
 
     // Improve starts from the version being read, never silently from the original.
     const openImprove = () => {
@@ -7618,10 +7669,27 @@ export const NoteEditScreen = () => {
             <HeaderMeta
                 dateStr={dateStr}
                 charCount={charCount}
-                recordingDuration={latestRecording && !isTranscribing && !latestRecordingInText ? latestRecording.duration : null}
+                recordingDuration={recordingPillShown && latestRecording ? latestRecording.duration : null}
                 playerOpen={!!topPlayer}
                 onPlayRecording={toggleTopPlayer}
+                withText={listenWithText}
             />
+            {showListenTip && recordingPillShown && !topPlayer && (
+                <View style={styles.listenTip}>
+                    <MaterialIcons name="record-voice-over" size={16} color={colors.primary} style={styles.listenTipIcon} />
+                    <Text style={styles.listenTipText}>
+                        {t('edit.listenTip', 'Tap ▶ to listen with the text. Tap any sentence to hear it from there.')}
+                    </Text>
+                    <TouchableOpacity
+                        onPress={dismissListenTip}
+                        style={styles.listenTipClose}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('a11y.close', 'Close')}
+                    >
+                        <MaterialIcons name="close" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                </View>
+            )}
             {topPlayer && (
                 <View style={styles.topPlayer}>
                     <AudioPlayer
@@ -7683,8 +7751,10 @@ export const NoteEditScreen = () => {
         variantDisplayLabels,
         visibleImprovements,
         latestRecording,
-        latestRecordingInText,
-        isTranscribing,
+        recordingPillShown,
+        listenWithText,
+        showListenTip,
+        dismissListenTip,
         topPlayer,
         toggleTopPlayer,
         closeTopPlayer,
@@ -8617,6 +8687,7 @@ export const NoteEditScreen = () => {
                 sources={listenSheetSources}
                 audio={phraseAudio}
                 title={listenSheet.recordingId ? t('edit.recognizedText', 'Recognized text') : undefined}
+                autoPlay={listenSheet.autoPlay}
                 footer={listenSheet.recordingId ? (
                     <View style={styles.listenFooter}>
                         <TouchableOpacity
@@ -9289,6 +9360,13 @@ const styles = createStyles(() => ({
         marginBottom: spacing.xs,
         padding: 0,
     },
+    titleInputEmpty: {
+        fontSize: 17,
+        lineHeight: 24,
+        fontWeight: '600',
+        letterSpacing: 0,
+        marginBottom: 2,
+    },
     metaInfo: {
         marginBottom: spacing.m,
     },
@@ -9312,6 +9390,34 @@ const styles = createStyles(() => ({
         backgroundColor: colors.surface,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
+    },
+    recordingPillTextIcon: {
+        marginLeft: 2,
+    },
+    listenTip: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing.s,
+        marginTop: -spacing.s,
+        marginBottom: spacing.s,
+    },
+    listenTipIcon: {
+        marginTop: 1,
+    },
+    listenTipText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textSecondary,
+    },
+    listenTipClose: {
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: -12,
+        marginBottom: -12,
+        marginRight: -12,
     },
     recordingPillText: {
         fontSize: 12,
