@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [1.0.111] - 2026-11-20
+
+### Added
+- Tap ▶ next to a voice note's date to hear it with its text: tap any sentence to play from there.
+- Tasks found in a recording show the words they came from, with a button to hear that moment.
+- A "Tasks" button next to the date; versions you make by voice are named after what you asked.
+- Settings answer "Does my recording leave the phone?" in one place.
+
+### Changed
+- The microphone always dictates. Editing a note by voice is a choice in the recorder's ⋯ menu.
+- The recorder is one calm bar that shows where the recording is processed; it starts faster.
+- Improve starts from the version you're reading; versions fit one row; Compare can compare with the source and step through changes, without Markdown symbols.
+- A shorter note menu with one Share sheet; Ask your notes has its own icon.
+- Large text: the notes list switches to one column and labels no longer get cut off.
+
+### Fixed
+- Deleting a recording no longer says "Recording interrupted".
+- The timer stops when you tap Done, so the saved length matches what you saw.
+- An expired session asks you to sign in again instead of showing "Invalid credentials".
+- Unlocking encrypted notes is faster and always ends with a clear result.
+- If the microphone is blocked, the app offers to open settings.
+- The AI limit is shown right away instead of after a long wait.
+- Russian and other languages use the correct plural forms; dates follow the app language.
+- The keyboard no longer covers the sign-in fields.
+
 ## [1.0.110] - 2026-11-19
 
 ### Fixed
